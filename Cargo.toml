@@ -1,9 +1,19 @@
 [package]
 name = "sesamoid"
 version = "0.1.0"
-authors = ["Andreas Dzialocha <x12@adz.garden>"]
+authors = [
+  "sophiiistika <sophiiistika@mailbox.org>",
+  "adz <x12@adz.garden>",
+  "cafca <cafca@001.land>"
+]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib"]
 
 [dependencies]
+wasm-bindgen = "0.2.68"
+
+# Fixes https://github.com/rustwasm/wasm-pack/issues/886
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz", "--enable-mutable-globals"]
