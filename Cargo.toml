@@ -7,6 +7,9 @@ authors = [
   "cafca <cafca@001.land>"
 ]
 edition = "2018"
+description = "Utility library for p2panda applications "
+repository = "git@github.com:p2panda/sesamoid.git"
+license = "AGPL-3.0"
 
 [lib]
 crate-type = ["cdylib"]
