@@ -2,13 +2,18 @@
 
 Utility library for p2panda applications.
 
+## Requirements
+
+* [Rust](https://www.rust-lang.org/learn/get-started)
+* [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
+
 ## Development
 
 ```
 # Run tests
 cargo test
 
-# Export as npm browser package into `pkg` folder
+# Compile wasm as npm browser package into `pkg` folder
 wasm-pack build
 
 # Link package for usage in other projects during development
