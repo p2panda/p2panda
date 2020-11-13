@@ -15,7 +15,14 @@ license = "AGPL-3.0"
 crate-type = ["cdylib"]
 
 [dependencies]
-wasm-bindgen = "0.2.68"
+bamboo-core = { git = "https://github.com/pietgeursen/bamboo-rs", branch = "master" }
+console_error_panic_hook = "0.1.6"
+ed25519-dalek = { version = "1.0.1", default-features = false, features = ["u64_backend", "alloc", "serde"] }
+rand = { version = "0.7.3", features = ["wasm-bindgen"] }
+wasm-bindgen = { version = "0.2.68", features = ["serde-serialize"] }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.2"
 
 [package.metadata.wasm-pack.profile.release]
 # Fixes https://github.com/rustwasm/wasm-pack/issues/886
