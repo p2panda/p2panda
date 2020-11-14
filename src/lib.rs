@@ -3,8 +3,8 @@ use rand::rngs::OsRng;
 use std::panic;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-#[wasm_bindgen]
-pub fn set_panic_hook() {
+#[wasm_bindgen(js_name = setWasmPanicHook)]
+pub fn set_wasm_panic_hook() {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 }
 
@@ -27,12 +27,12 @@ impl KeyPair {
         }
     }
 
-    #[wasm_bindgen]
+    #[wasm_bindgen(js_name = publicKeyBytes)]
     pub fn public_key_bytes(&self) -> Box<[u8]> {
         Box::from(self.public.to_bytes())
     }
 
-    #[wasm_bindgen]
+    #[wasm_bindgen(js_name = privateKeyBytes)]
     pub fn private_key_bytes(&self) -> Box<[u8]> {
         Box::from(self.private.to_bytes())
     }
