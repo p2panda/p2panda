@@ -7,7 +7,7 @@ authors = [
   "cafca <cafca@001.land>"
 ]
 edition = "2018"
-description = "Utility library for p2panda applications "
+description = "Utility library for p2panda applications"
 repository = "git@github.com:p2panda/sesamoid.git"
 license = "AGPL-3.0"
 
@@ -17,9 +17,9 @@ crate-type = ["cdylib"]
 [dependencies]
 bamboo-core = { git = "https://github.com/pietgeursen/bamboo-rs", branch = "master" }
 console_error_panic_hook = "0.1.6"
-ed25519-dalek = { version = "1.0.1", default-features = false, features = ["u64_backend", "alloc", "serde"] }
+ed25519-dalek = { version = "1.0.1" }
 rand = { version = "0.7.3", features = ["wasm-bindgen"] }
-wasm-bindgen = { version = "0.2.68", features = ["serde-serialize"] }
+wasm-bindgen = "0.2.68"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.2"

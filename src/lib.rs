@@ -1,10 +1,7 @@
-extern crate wasm_bindgen;
-extern crate console_error_panic_hook;
-
-use ed25519_dalek::{Keypair as DalekKeypair, SecretKey, PublicKey, PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
-use std::panic;
+use ed25519_dalek::{Keypair as Ed25519Keypair, PublicKey, SecretKey};
 use rand::rngs::OsRng;
-use wasm_bindgen::prelude::*;
+use std::panic;
+use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 pub fn set_panic_hook() {
@@ -12,54 +9,43 @@ pub fn set_panic_hook() {
 }
 
 #[wasm_bindgen]
-pub fn hello() -> String {
-    "Hallo, hier ist alles schön".into()
-}
-
-
-#[wasm_bindgen]
-pub struct PandaKeyPair {
+pub struct KeyPair {
     public: PublicKey,
-    private: SecretKey
+    private: SecretKey,
 }
 
 #[wasm_bindgen]
-impl PandaKeyPair {
+impl KeyPair {
     #[wasm_bindgen(constructor)]
-    pub fn new () -> PandaKeyPair {
+    pub fn new() -> Self {
         let mut csprng: OsRng = OsRng {};
-        let key_pair: DalekKeypair = DalekKeypair::generate(&mut csprng);
-        println!("{:?}", key_pair.to_bytes().to_vec());
-        PandaKeyPair {
+        let key_pair = Ed25519Keypair::generate(&mut csprng);
+
+        Self {
             public: key_pair.public,
-            private: key_pair.secret
+            private: key_pair.secret,
         }
     }
 
     #[wasm_bindgen]
-    pub fn public_key_bytes(&self) -> Vec<u8> {
-        Vec::from(&self.public.as_bytes()[..])
+    pub fn public_key_bytes(&self) -> Box<[u8]> {
+        Box::from(self.public.to_bytes())
     }
 
     #[wasm_bindgen]
-    pub fn private_key_bytes(&self) -> Vec<u8> {
-        Vec::from(&self.private.as_bytes()[..])
+    pub fn private_key_bytes(&self) -> Box<[u8]> {
+        Box::from(self.private.to_bytes())
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        assert_eq!(hello(), "Hallo, hier ist alles schön");
-    }
+    use super::KeyPair;
+    use ed25519_dalek::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
 
     #[test]
     fn makes_keypair() {
-        let key_pair = PandaKeyPair::new();
+        let key_pair = KeyPair::new();
         assert_eq!(key_pair.public_key_bytes().len(), PUBLIC_KEY_LENGTH);
         assert_eq!(key_pair.private_key_bytes().len(), SECRET_KEY_LENGTH);
     }
