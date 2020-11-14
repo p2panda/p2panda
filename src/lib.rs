@@ -1,3 +1,4 @@
+use console_error_panic_hook::hook as panic_hook;
 use ed25519_dalek::{Keypair as Ed25519Keypair, PublicKey, SecretKey};
 use rand::rngs::OsRng;
 use std::panic;
@@ -5,7 +6,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen(js_name = setWasmPanicHook)]
 pub fn set_wasm_panic_hook() {
-    panic::set_hook(Box::new(console_error_panic_hook::hook));
+    panic::set_hook(Box::new(panic_hook));
 }
 
 #[wasm_bindgen]
