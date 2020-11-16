@@ -37,6 +37,16 @@ impl KeyPair {
     pub fn private_key_bytes(&self) -> Box<[u8]> {
         Box::from(self.private.to_bytes())
     }
+
+    #[wasm_bindgen(js_name = publicKeyHex)]
+    pub fn public_key_hex(&self) -> String {
+        hex::encode(self.public.to_bytes())
+    }
+
+    #[wasm_bindgen(js_name = privateKeyHex)]
+    pub fn private_key_hex(&self) -> String {
+        hex::encode(self.private.to_bytes())
+    }
 }
 
 #[cfg(test)]
@@ -49,5 +59,7 @@ mod tests {
         let key_pair = KeyPair::new();
         assert_eq!(key_pair.public_key_bytes().len(), PUBLIC_KEY_LENGTH);
         assert_eq!(key_pair.private_key_bytes().len(), SECRET_KEY_LENGTH);
+        assert_eq!(key_pair.public_key_hex().len(), PUBLIC_KEY_LENGTH * 2);
+        assert_eq!(key_pair.private_key_hex().len(), PUBLIC_KEY_LENGTH * 2);
     }
 }

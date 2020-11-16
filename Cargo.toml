@@ -18,6 +18,7 @@ crate-type = ["cdylib"]
 bamboo-core = { git = "https://github.com/pietgeursen/bamboo-rs", branch = "master" }
 console_error_panic_hook = "0.1.6"
 ed25519-dalek = { version = "1.0.1" }
+hex = "0.4.2"
 rand = { version = "0.7.3", features = ["wasm-bindgen"] }
 # Pin to v0.2.65 as wasm-opt fails with global exports. See:
 # https://github.com/rustwasm/wasm-pack/issues/886
