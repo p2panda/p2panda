@@ -7,6 +7,21 @@ Utility library for p2panda applications.
 * [Rust](https://www.rust-lang.org/learn/get-started)
 * [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
 
+## Usage
+
+Use this in a Webpack 5 setup by enabling the [experimental `syncWebAssembly`
+option](https://webpack.js.org/configuration/experiments/).
+
+Create a key pair:
+
+```
+import('sesamoid').then(({ KeyPair }) => {
+  const keyPair = new KeyPair();
+  const public = keypair.publicKeyBytes(); // UInt8Array
+  const private = keypair.privateKeyBytes();
+});
+```
+
 ## Development
 
 ```
