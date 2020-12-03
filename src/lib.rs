@@ -28,6 +28,18 @@ impl KeyPair {
         }
     }
 
+    #[wasm_bindgen(js_name = fromPrivateKeyHex)]
+    pub fn from_hex(private_key: String) -> Self {
+        let bytes = hex::decode(private_key).unwrap();
+        let secret_key = SecretKey::from_bytes(&bytes).unwrap();
+        let public_key: PublicKey = (&secret_key).into();
+
+        Self {
+            public: public_key,
+            private: secret_key,
+        }
+    }
+
     #[wasm_bindgen(js_name = publicKeyBytes)]
     pub fn public_key_bytes(&self) -> Box<[u8]> {
         Box::from(self.public.to_bytes())
@@ -61,5 +73,13 @@ mod tests {
         assert_eq!(key_pair.private_key_bytes().len(), SECRET_KEY_LENGTH);
         assert_eq!(key_pair.public_key_hex().len(), PUBLIC_KEY_LENGTH * 2);
         assert_eq!(key_pair.private_key_hex().len(), PUBLIC_KEY_LENGTH * 2);
+    }
+
+    #[test]
+    fn key_pair_from_bytes() {
+        let key_pair = KeyPair::new();
+        let key_pair2 = KeyPair::from_hex(key_pair.private_key_hex());
+        assert_eq!(key_pair.public_key_bytes(), key_pair2.public_key_bytes());
+        assert_eq!(key_pair.private_key_bytes(), key_pair2.private_key_bytes());
     }
 }
