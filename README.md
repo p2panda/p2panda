@@ -12,13 +12,24 @@ Utility library for p2panda applications.
 Use this in a Webpack 5 setup by enabling the [experimental `syncWebAssembly`
 option](https://webpack.js.org/configuration/experiments/).
 
-Create a key pair:
+### Create Ed25519 key pair
 
-```
+```js
 import('sesamoid').then(({ KeyPair }) => {
+  // Generates a new Ed25519 key pair using Crypto.getRandomBytes as a
+  // pseudorandom number generator:
   const keyPair = new KeyPair();
-  const public = keypair.publicKeyBytes(); // UInt8Array
-  const private = keypair.privateKeyBytes();
+
+  // Returns public and private keys as hex-encoded strings:
+  const publicKey = keypair.publicKey();
+  const privateKey = keypair.privateKey();
+
+  // Returns public and private keys as byte arrays (Uint8Array):
+  const publicKey = keypair.publicKeyBytes();
+  const privateKey = keypair.privateKeyBytes();
+
+  // Derive an Ed25510 key pair from a hex-encoded private key:
+  const keyPair = KeyPair.fromPrivateKey(privateKey);
 });
 ```
 
