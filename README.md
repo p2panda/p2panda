@@ -17,7 +17,7 @@ option](https://webpack.js.org/configuration/experiments/).
 ```js
 import('sesamoid').then(({ KeyPair }) => {
   // Generates a new Ed25519 key pair using Crypto.randomBytes as
-  // Cryptographically secure pseudorandom number generator:
+  // cryptographically secure pseudorandom number generator:
   const keyPair = new KeyPair();
 
   // Returns public and private keys as hex-encoded strings:
@@ -28,7 +28,7 @@ import('sesamoid').then(({ KeyPair }) => {
   const publicKey = keypair.publicKeyBytes();
   const privateKey = keypair.privateKeyBytes();
 
-  // Derive an Ed25510 key pair from a hex-encoded private key:
+  // Derive an Ed25519 key pair from a hex-encoded private key:
   const keyPair = KeyPair.fromPrivateKey(privateKey);
 });
 ```
