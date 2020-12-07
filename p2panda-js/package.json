@@ -4,6 +4,7 @@
   "description": "All the things a panda needs",
   "main": "src/index.ts",
   "scripts": {
+    "start": "npm run build",
     "build": "npm run clear && webpack --mode production",
     "clear": "rimraf ./dist",
     "lint": "standardx ./src/**/*.{ts,tsx}",
