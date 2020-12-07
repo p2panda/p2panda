@@ -1,0 +1,33 @@
+[package]
+name = "p2panda-rs"
+version = "0.1.0"
+authors = [
+  "sophiiistika <sophiiistika@mailbox.org>",
+  "adz <x12@adz.garden>",
+  "cafca <cafca@001.land>"
+]
+edition = "2018"
+description = "Utility library for p2panda applications"
+repository = "git@github.com:p2panda/p2panda.git"
+license = "AGPL-3.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+bamboo-core = { git = "https://github.com/pietgeursen/bamboo-rs", branch = "master" }
+console_error_panic_hook = "0.1.6"
+ed25519-dalek = { version = "1.0.1" }
+hex = "0.4.2"
+rand = { version = "0.7.3", features = ["wasm-bindgen"] }
+# Pin to v0.2.65 as wasm-opt fails with global exports. See:
+# https://github.com/rustwasm/wasm-pack/issues/886
+wasm-bindgen = "=0.2.65"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.2"
+
+[package.metadata.wasm-pack.profile.release.wasm-bindgen]
+debug-js-glue = false
+demangle-name-section = true
+dwarf-debug-info = false
