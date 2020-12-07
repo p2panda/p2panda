@@ -12,14 +12,13 @@ const getPath = () => {
 
 module.exports = (env, argv) => {
   const isDevelopment = argv.mode === "development";
-  const filename = isDevelopment ? "[name]" : "[name]-[contenthash:6]";
 
   return {
     entry: {
       app: path.resolve(__dirname, "src", "index.ts"),
     },
     output: {
-      filename: `${filename}.js`,
+      filename: `p2panda.js`,
     },
     resolve: {
       alias: {
