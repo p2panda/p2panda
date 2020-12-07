@@ -7,7 +7,7 @@ authors = [
   "cafca <cafca@001.land>"
 ]
 edition = "2018"
-description = "Utility library for p2panda applications"
+description = "All the things a panda needs"
 repository = "git@github.com:p2panda/p2panda.git"
 license = "AGPL-3.0"
 
