@@ -1,36 +1,40 @@
 const path = require('path');
 const WasmPackPlugin = require('@wasm-tool/wasm-pack-plugin');
 
-// const PATH_DIST = "./build";
+const PATH_DIST = './lib';
 const PATH_DIST_WASM = './wasm';
-// const PATH_SRC = "./src";
+const PATH_SRC = './src';
 const PATH_SRC_WASM = '../p2panda-rs';
+
+function getPath (...args) {
+  return path.resolve(__dirname, ...args);
+}
 
 module.exports = () => {
   return {
-    entry: {
-      app: path.resolve(__dirname, 'src', 'index.ts'),
-    },
+    entry: getPath(PATH_SRC, 'index.ts'),
     output: {
-      filename: 'p2panda.js',
+      filename: 'index.js',
+      path: getPath(PATH_DIST),
     },
     resolve: {
       alias: {
-        '~': path.resolve(__dirname, 'src'),
-        wasm: path.resolve(__dirname, 'wasm'),
+        '~': getPath(PATH_SRC),
+        wasm: getPath(PATH_DIST_WASM),
       },
-      extensions: ['.js', '.ts', '.tsx'],
+      extensions: ['.ts'],
     },
     experiments: {
-      // Support the new WebAssembly according to the updated specification, it
-      // makes a WebAssembly module an async module.
-      // See: https://webpack.js.org/configuration/experiments/
-      asyncWebAssembly: true,
+      // Use `syncWebAssembly` for now as the new WebAssembly
+      // `asyncWebAssembly` import does not work due to a bug in wasm-bindgen
+      // builds. See: https://github.com/rustwasm/wasm-bindgen/issues/2343 and
+      // https://webpack.js.org/configuration/experiments/
+      syncWebAssembly: true,
     },
     module: {
       rules: [
         {
-          test: /\.tsx?/,
+          test: /\.ts/,
           exclude: /node_modules/,
           use: [
             {
@@ -48,8 +52,8 @@ module.exports = () => {
     },
     plugins: [
       new WasmPackPlugin({
-        crateDirectory: path.resolve(__dirname, PATH_SRC_WASM),
-        outDir: path.resolve(__dirname, PATH_DIST_WASM),
+        crateDirectory: getPath(PATH_SRC_WASM),
+        outDir: getPath(PATH_DIST_WASM),
       }),
     ],
     devtool: 'source-map',
