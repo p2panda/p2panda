@@ -1,0 +1,52 @@
+name: tests
+
+on: pull_request
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: rust build and test
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build
+        working-directory: p2panda-rs
+        run: cargo build --verbose
+
+      - name: Run tests
+        working-directory: p2panda-rs
+        run: cargo test --verbose
+  js:
+    name: js build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Read node version from .nvmrc
+        working-directory: p2panda-js
+        id: nvmrc
+        uses: browniebroke/read-nvmrc-action@v1
+
+      - uses: actions/setup-node@v1
+        with:
+          node-version: "${{ steps.nvmrc.outputs.node_version }}"
+
+      - name: Cache node modules
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-node-modules
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+
+      - run: npm ci
+      - run: npm run build
