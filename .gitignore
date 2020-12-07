@@ -15,3 +15,4 @@ Cargo.lock
 
 node_modules
 dist
+wasm
