@@ -37,6 +37,7 @@ jobs:
           node-version: "${{ steps.nvmrc.outputs.NODE_VERSION }}"
 
       - name: Cache node modules
+        working-directory: p2panda-js
         uses: actions/cache@v2
         env:
           cache-name: cache-node-modules
@@ -49,4 +50,6 @@ jobs:
             ${{ runner.os }}-
 
       - run: npm ci
+        working-directory: p2panda-js
       - run: npm run build
+        working-directory: p2panda-js
