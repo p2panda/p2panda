@@ -1,6 +1,6 @@
 name: tests
 
-on: pull_request
+on: push
 
 env:
   CARGO_TERM_COLOR: always
