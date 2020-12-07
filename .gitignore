@@ -1,5 +1,18 @@
+# General
+
+.DS_Store
+
+# Rust
+
 pkg
 target
 
 # https://doc.rust-lang.org/stable/cargo/faq.html#why-do-binaries-have-cargolock-in-version-control-but-not-libraries
 Cargo.lock
+
+
+# Javascript
+
+node_modules
+dist
+wasm

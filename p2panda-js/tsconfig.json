@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./",
+    "esModuleInterop": true,
+    "module": "ES2020",
+    "moduleResolution": "node",
+    "noImplicitAny": false,
+    "paths": {
+      "~/*": ["./src/*"]
+    },
+    "sourceMap": true,
+    "target": "es5"
+  },
+  "include": ["src/**/*", "wasm/index.d.ts"]
+}

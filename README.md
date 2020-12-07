@@ -1,6 +1,9 @@
-# sesamoid
+# p2panda
 
-Utility library for p2panda applications.
+All the things a panda needs
+
+* p2panda-rs for using p2panda in your Rust application or library
+* p2panda-js for using p2panda in Javascript/Typescript projects
 
 ## Requirements
 
@@ -15,7 +18,7 @@ option](https://webpack.js.org/configuration/experiments/).
 ### Create Ed25519 key pair
 
 ```js
-import('sesamoid').then(({ KeyPair }) => {
+import('p2panda-js').then(({ KeyPair }) => {
   // Generates a new Ed25519 key pair using Crypto.randomBytes as
   // cryptographically secure pseudorandom number generator:
   const keyPair = new KeyPair();

@@ -1,5 +1,5 @@
 [package]
-name = "sesamoid"
+name = "p2panda-rs"
 version = "0.1.0"
 authors = [
   "sophiiistika <sophiiistika@mailbox.org>",
@@ -8,7 +8,7 @@ authors = [
 ]
 edition = "2018"
 description = "Utility library for p2panda applications"
-repository = "git@github.com:p2panda/sesamoid.git"
+repository = "git@github.com:p2panda/p2panda.git"
 license = "AGPL-3.0"
 
 [lib]
