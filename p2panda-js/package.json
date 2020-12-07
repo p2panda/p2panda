@@ -1,0 +1,52 @@
+{
+  "name": "p2panda-js",
+  "version": "1.0.0",
+  "description": "All the things a panda needs",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "npm run clear && webpack --mode production",
+    "clear": "rimraf ./dist",
+    "lint": "standardx ./src/**/*.{ts,tsx}",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/p2panda/p2panda.git"
+  },
+  "contributors": [
+    "sophiiistika <sophiiistika@mailbox.org>",
+    "adz <x1d@adz.garden>",
+    "cafca <cafca@001.land>"
+  ],
+  "keywords": [
+    "p2p",
+    "p2panda",
+    "h4ck1ng"
+  ],
+  "author": "",
+  "license": "AGPL-3.0",
+  "bugs": {
+    "url": "https://github.com/p2panda/p2panda/issues"
+  },
+  "homepage": "https://github.com/p2panda/p2panda#readme",
+  "devDependencies": {
+    "@babel/cli": "^7.12.1",
+    "@babel/core": "^7.12.3",
+    "@babel/preset-env": "^7.12.1",
+    "@babel/preset-typescript": "^7.12.1",
+    "@typescript-eslint/eslint-plugin": "^4.7.0",
+    "@typescript-eslint/parser": "^4.7.0",
+    "babel-loader": "^8.2.1",
+    "core-js": "^3.7.0",
+    "eslint-loader": "^4.0.2",
+    "rimraf": "^3.0.2",
+    "standardx": "^7.0.0",
+    "ts-loader": "^8.0.11",
+    "typescript": "^4.0.5",
+    "webpack": "^5.4.0",
+    "webpack-cli": "^4.2.0"
+  },
+  "engines": {
+    "node": ">= v12.0.0"
+  }
+}
