@@ -1,25 +1,32 @@
-const path = require('path');
+const path = require("path");
+const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
 
-const getPath = (file) => {
-  return path.resolve(__dirname, 'src', file);
+// const PATH_DIST = "./build";
+const PATH_DIST_WASM = "./wasm";
+// const PATH_SRC = "./src";
+const PATH_SRC_WASM = "../p2panda-rs";
+
+const getPath = () => {
+  return path.resolve(__dirname, ...arguments);
 };
 
 module.exports = (env, argv) => {
-  const isDevelopment = argv.mode === 'development';
-  const filename = isDevelopment ? '[name]' : '[name]-[contenthash:6]';
+  const isDevelopment = argv.mode === "development";
+  const filename = isDevelopment ? "[name]" : "[name]-[contenthash:6]";
 
   return {
     entry: {
-      app: getPath('index.ts'),
+      app: path.resolve(__dirname, "src", "index.ts"),
     },
     output: {
       filename: `${filename}.js`,
     },
     resolve: {
       alias: {
-        '~': path.resolve(__dirname, 'src'),
+        "~": path.resolve(__dirname, "src"),
+        wasm: path.resolve(__dirname, "wasm"),
       },
-      extensions: ['.js', '.ts', '.tsx'],
+      extensions: [".js", ".ts", ".tsx"],
     },
     experiments: {
       // Support the new WebAssembly according to the updated specification, it
@@ -34,21 +41,24 @@ module.exports = (env, argv) => {
           exclude: /node_modules/,
           use: [
             {
-              loader: 'babel-loader',
+              loader: "babel-loader",
             },
             {
-              loader: 'eslint-loader',
+              loader: "eslint-loader",
             },
             {
-              loader: 'ts-loader',
+              loader: "ts-loader",
             },
           ],
         },
       ],
     },
     plugins: [
-      
+      new WasmPackPlugin({
+        crateDirectory: path.resolve(__dirname, PATH_SRC_WASM),
+        outDir: path.resolve(__dirname, PATH_DIST_WASM),
+      }),
     ],
-    devtool: 'source-map',
+    devtool: "source-map",
   };
 };

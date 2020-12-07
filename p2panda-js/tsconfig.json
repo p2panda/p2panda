@@ -11,5 +11,5 @@
     "sourceMap": true,
     "target": "es5"
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "wasm/index.d.ts"]
 }
