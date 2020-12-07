@@ -46,12 +46,15 @@ jobs:
         with:
           node-version: "${{ steps.nvmrc.outputs.NODE_VERSION }}"
 
-      - name: Cache node modules
+      - name: Cache node modules and cargo registry
         uses: actions/cache@v2
         env:
           cache-name: cache-node-modules
         with:
-          path: ~/.npm
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.npm
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ env.cache-name }}-
@@ -61,5 +64,6 @@ jobs:
       - run: npm ci
         working-directory: p2panda-js
 
-      - run: npm run build
+      - name: build
+        run: npm run build
         working-directory: p2panda-js
