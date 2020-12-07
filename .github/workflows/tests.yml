@@ -7,12 +7,20 @@ env:
 
 jobs:
   rust:
-    name: rust build and test
+    name: rust build
 
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v2
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build
         working-directory: p2panda-rs
@@ -22,8 +30,10 @@ jobs:
         working-directory: p2panda-rs
         run: cargo test --verbose
   js:
-    name: js build and test
+    name: js build
+
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v2
 
@@ -37,7 +47,6 @@ jobs:
           node-version: "${{ steps.nvmrc.outputs.NODE_VERSION }}"
 
       - name: Cache node modules
-        working-directory: p2panda-js
         uses: actions/cache@v2
         env:
           cache-name: cache-node-modules
@@ -51,5 +60,6 @@ jobs:
 
       - run: npm ci
         working-directory: p2panda-js
+
       - run: npm run build
         working-directory: p2panda-js
