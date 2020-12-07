@@ -7,14 +7,15 @@ env:
 
 jobs:
   build:
-    name: Build and test
-    
+    name: build and test
+
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - run: cd p2panda-rs
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v2
+      - name: Build
+        working-directory: p2panda-rs
+        run: cargo build --verbose
+      - name: Run tests
+        working-directory: p2panda-rs
+        run: cargo test --verbose
