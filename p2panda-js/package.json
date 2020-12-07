@@ -7,7 +7,7 @@
     "start": "npm run build",
     "build": "npm run clear && webpack --mode production",
     "clear": "rimraf ./dist",
-    "lint": "standardx ./src/**/*.{ts,tsx}",
+    "lint": "standardx ./src/**/*.ts webpack.config.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

@@ -1,4 +1,4 @@
-const wasm = import("wasm").then(({ setWasmPanicHook, ...rest }) => {
+const wasm = import('wasm').then(({ setWasmPanicHook, ...rest }) => {
   // Set panic hooks for better logging of wasm errors. See:
   // https://github.com/rustwasm/console_error_panic_hook
   setWasmPanicHook();
