@@ -1,9 +1,9 @@
 # p2panda
 
-All the things a panda needs
+All the things a panda needs.
 
-* p2panda-rs for using p2panda in your Rust application or library
-* p2panda-js for using p2panda in Javascript/Typescript projects
+* `p2panda-rs` for using p2panda in your Rust application or library
+* `p2panda-js` for using p2panda in Javascript/Typescript projects
 
 ## Requirements
 
