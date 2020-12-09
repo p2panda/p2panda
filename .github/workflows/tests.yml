@@ -40,7 +40,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: p2panda-rs
+        working-directory: p2panda-js
 
     steps:
       - name: Checkout repository
