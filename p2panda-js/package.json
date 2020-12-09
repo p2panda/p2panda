@@ -8,7 +8,7 @@
     "clear": "rimraf ./lib",
     "lint": "standardx ./src/**/*.ts webpack.config.js",
     "start": "npm run build",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 0"
   },
   "engines": {
     "node": ">= v12.0.0"
