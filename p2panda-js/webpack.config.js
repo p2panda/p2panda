@@ -54,8 +54,10 @@ module.exports = () => {
       new WasmPackPlugin({
         crateDirectory: getPath(PATH_SRC_WASM),
         outDir: getPath(PATH_DIST_WASM),
+        pluginLogLevel: 'error',
       }),
     ],
     devtool: 'source-map',
+    stats: 'minimal',
   };
 };
