@@ -11,6 +11,10 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: p2panda-rs
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -25,23 +29,24 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run Build
-        working-directory: p2panda-rs
         run: cargo build --verbose
 
       - name: Run tests
-        working-directory: p2panda-rs
         run: cargo test --verbose
   js:
     name: p2panda-js
 
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: p2panda-rs
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
 
       - name: Read node version from .nvmrc
-        working-directory: p2panda-js
         id: nvmrc
         run: echo ::set-output name=NODE_VERSION::$(cat .nvmrc)
 
@@ -67,12 +72,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        working-directory: p2panda-js
 
       - name: Run build
         run: npm run build
-        working-directory: p2panda-js
 
       - name: Run tests
         run: npm run test
-        working-directory: p2panda-js
