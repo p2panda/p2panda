@@ -22,11 +22,6 @@
     "adz <x1d@adz.garden>",
     "cafca <cafca@001.land>"
   ],
-  "keywords": [
-    "p2p",
-    "p2panda",
-    "h4ck1ng"
-  ],
   "license": "AGPL-3.0",
   "bugs": {
     "url": "https://github.com/p2panda/p2panda/issues"
