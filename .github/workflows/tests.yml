@@ -1,4 +1,4 @@
-name: tests
+name: Build and test
 
 on: push
 
@@ -7,14 +7,16 @@ env:
 
 jobs:
   rust:
-    name: rust build
+    name: p2panda-rs
 
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-      - uses: actions/cache@v2
+      - name: Restore from cargo cache
+        uses: actions/cache@v2
         with:
           path: |
             ~/.cargo/registry
@@ -22,7 +24,7 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build
+      - name: Run Build
         working-directory: p2panda-rs
         run: cargo build --verbose
 
@@ -30,23 +32,25 @@ jobs:
         working-directory: p2panda-rs
         run: cargo test --verbose
   js:
-    name: js build
+    name: p2panda-js
 
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
       - name: Read node version from .nvmrc
         working-directory: p2panda-js
         id: nvmrc
         run: echo ::set-output name=NODE_VERSION::$(cat .nvmrc)
 
-      - uses: actions/setup-node@v1
+      - name: Setup node
+        uses: actions/setup-node@v1
         with:
           node-version: "${{ steps.nvmrc.outputs.NODE_VERSION }}"
 
-      - name: Cache node modules and cargo registry
+      - name: Restore from cargo and npm cache
         uses: actions/cache@v2
         env:
           cache-name: cache-node-modules
@@ -61,13 +65,14 @@ jobs:
             ${{ runner.os }}-build-
             ${{ runner.os }}-
 
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci
         working-directory: p2panda-js
 
-      - name: build
+      - name: Run build
         run: npm run build
         working-directory: p2panda-js
 
-      - name: test
+      - name: Run tests
         run: npm run test
         working-directory: p2panda-js
