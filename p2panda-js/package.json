@@ -8,7 +8,10 @@
     "clear": "rimraf ./lib",
     "lint": "eslint '*/**/*.{js,ts}'",
     "start": "npm run build",
-    "test": "wasm-pack build ../p2panda-rs --out-dir ../p2panda-js/wasm --target nodejs && cross-env TS_NODE_COMPILER_OPTIONS='{\"module\": \"commonjs\" }' mocha --require ts-node/register --require @babel/register src/**/*.test.ts"
+    "test": "npm run test:compile-wasm && npm run test:run-mocha",
+    "test:watch": "nodemon --watch ../p2panda-rs/src/* --watch src/* --exec 'npm run test'",
+    "test:compile-wasm": "wasm-pack build ../p2panda-rs --out-dir ../p2panda-js/wasm --target nodejs",
+    "test:run-mocha": "cross-env TS_NODE_COMPILER_OPTIONS='{\"module\": \"commonjs\" }' mocha --require ts-node/register --require @babel/register src/**/*.test.ts"
   },
   "engines": {
     "node": ">= v12.0.0"
@@ -47,6 +50,7 @@
     "eslint-loader": "^4.0.2",
     "eslint-plugin-prettier": "^3.2.0",
     "mocha": "^8.2.1",
+    "nodemon": "^2.0.6",
     "prettier": "^2.2.1",
     "rimraf": "^3.0.2",
     "ts-loader": "^8.0.11",
