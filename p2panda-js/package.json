@@ -8,7 +8,7 @@
     "clear": "rimraf ./lib",
     "lint": "eslint '*/**/*.{js,ts}'",
     "start": "npm run build",
-    "test": "cross-env TS_NODE_COMPILER_OPTIONS='{\"module\": \"commonjs\" }' mocha --require @babel/register --require ts-node/register src/**/*.test.ts"
+    "test": "wasm-pack build ../p2panda-rs --out-dir ../p2panda-js/wasm --target nodejs && cross-env TS_NODE_COMPILER_OPTIONS='{\"module\": \"commonjs\" }' mocha --require ts-node/register --require @babel/register src/**/*.test.ts"
   },
   "engines": {
     "node": ">= v12.0.0"
