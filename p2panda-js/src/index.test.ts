@@ -1,16 +1,10 @@
 import { expect } from 'chai';
+import p2panda from '.';
 
 describe('KeyPair', () => {
-  it('creates a key pair', (done) => {
-    import('../wasm')
-      .then(({ KeyPair }) => {
-        const kp = new KeyPair();
-        expect(kp.privateKey().length).to.eq(64);
-        done();
-      })
-      .catch((err) => {
-        console.error(err);
-        throw err;
-      });
+  it('creates a key pair', async () => {
+    const { KeyPair } = await p2panda;
+    const kp = new KeyPair();
+    expect(kp.privateKey().length).to.eq(64);
   });
 });
