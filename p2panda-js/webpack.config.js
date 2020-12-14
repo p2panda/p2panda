@@ -6,7 +6,7 @@ const PATH_DIST_WASM = './wasm';
 const PATH_SRC = './src';
 const PATH_SRC_WASM = '../p2panda-rs';
 
-function getPath (...args) {
+function getPath(...args) {
   return path.resolve(__dirname, ...args);
 }
 
@@ -41,10 +41,10 @@ module.exports = () => {
               loader: 'babel-loader',
             },
             {
-              loader: 'eslint-loader',
+              loader: 'ts-loader',
             },
             {
-              loader: 'ts-loader',
+              loader: 'eslint-loader',
             },
           ],
         },
