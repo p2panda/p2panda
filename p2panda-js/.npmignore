@@ -1,6 +1,9 @@
+.eslintignore
 .eslintrc.js
 .nvmrc
+.prettierrc.js
 src
 test
 tsconfig.json
+wasm
 webpack.config.js
