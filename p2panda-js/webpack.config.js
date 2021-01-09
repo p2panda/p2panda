@@ -12,10 +12,12 @@ function getPath(...args) {
 
 module.exports = () => {
   return {
-    entry: getPath(PATH_SRC, 'index.ts'),
+    entry: {
+      index: getPath(PATH_SRC, 'index.ts'),
+    },
     output: {
-      filename: 'index.js',
       path: getPath(PATH_DIST),
+      libraryTarget: 'umd',
     },
     resolve: {
       alias: {
