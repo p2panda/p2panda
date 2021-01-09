@@ -6,13 +6,13 @@
   "types": "lib/index.d.ts",
   "scripts": {
     "build": "npm run clear && webpack --mode production",
-    "clear": "rimraf ./lib",
+    "clear": "rimraf ./lib && rimraf ./wasm",
     "lint": "eslint '*/**/*.{js,ts}'",
     "start": "npm run build",
     "test": "npm run test:compile-wasm && npm run test:run-mocha",
     "test:watch": "nodemon --watch ../p2panda-rs/src/* --watch src/* --exec 'npm run test'",
     "test:compile-wasm": "wasm-pack build ../p2panda-rs --out-dir ../p2panda-js/wasm --target nodejs",
-    "test:run-mocha": "cross-env TS_NODE_COMPILER_OPTIONS='{\"module\": \"commonjs\" }' mocha -r ts-node/register -r tsconfig-paths/register -r @babel/register src/**/*.test.ts"
+    "test:run-mocha": "cross-env TS_NODE_COMPILER_OPTIONS='{\"module\": \"commonjs\"}' mocha -r ts-node/register -r tsconfig-paths/register -r @babel/register src/**/*.test.ts"
   },
   "engines": {
     "node": ">= v12.0.0"
