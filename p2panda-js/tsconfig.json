@@ -6,8 +6,12 @@
     "moduleResolution": "node",
     "noImplicitAny": false,
     "paths": {
-      "~/*": ["./src/*"],
-      "wasm": ["./wasm"]
+      "~/*": [
+        "./src/*"
+      ],
+      "wasm": [
+        "./wasm"
+      ]
     },
     "sourceMap": true,
     "target": "es5",
@@ -15,5 +19,11 @@
     "declarationMap": true,
     "outDir": "lib"
   },
-  "include": ["src/**/*", "wasm/*"]
+  "include": [
+    "src/**/*",
+    "wasm/*"
+  ],
+  "exclude": [
+    "src/**/*.test.ts"
+  ]
 }
