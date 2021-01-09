@@ -10,7 +10,10 @@
       "wasm": ["./wasm"]
     },
     "sourceMap": true,
-    "target": "es5"
+    "target": "es5",
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "lib"
   },
   "include": ["src/**/*", "wasm/*"]
 }

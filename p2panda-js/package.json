@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "All the things a panda needs",
   "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "scripts": {
     "build": "npm run clear && webpack --mode production",
     "clear": "rimraf ./lib",
