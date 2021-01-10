@@ -5,12 +5,14 @@ import initializeWasm from 'wasm-init-adapter';
 // automatically for better debugging.
 const wasm = new Promise((resolve, reject) => {
   initializeWasm
-    .then(({ setWasmPanicHook, ...rest }) => {
+    .then(({ setWasmPanicHook, KeyPair }) => {
       // Set panic hooks for better logging of wasm errors. See:
       // https://github.com/rustwasm/console_error_panic_hook
       setWasmPanicHook();
 
-      resolve(rest);
+      resolve({
+        KeyPair,
+      });
     })
     .catch((err) => {
       reject(err);
