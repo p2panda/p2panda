@@ -1,42 +1,37 @@
 # p2panda-js
 
-Use `p2panda-js` to build cool applications using the p2panda protocol. This
-library incorporates web assembly exported from the sibling `p2panda-rs` project.
-Use webpack to build and combine *everything*!
-
-## Requirements
-
-* [Node.js](https://nodejs.org)
-* [Rust](https://www.rust-lang.org/learn/get-started)
-* [wasm-pack](https://rustwasm.github.io/wasm-pack/installer)
+Use `p2panda-js` to build cool applications using the p2panda protocol running in NodeJS or modern browsers. This library incorporates WebAssembly exported from the sibling `p2panda-rs` project.
 
 ## Usage
 
-Use this in a Webpack 5 setup by enabling the [experimental `syncWebAssembly`
-option](https://webpack.js.org/configuration/experiments/).
-
-### Create Ed25519 key pair
-
 ```js
-import('p2panda-js').then(({ KeyPair }) => {
-  // Generates a new Ed25519 key pair using Crypto.randomBytes as
-  // cryptographically secure pseudorandom number generator:
-  const keyPair = new KeyPair();
+import p2panda from 'p2panda-js';
 
-  // Returns public and private keys as hex-encoded strings:
-  const publicKey = keypair.publicKey();
-  const privateKey = keypair.privateKey();
+// Wait until libray got initialized
+const { KeyPair } = await p2panda;
 
-  // Returns public and private keys as byte arrays (Uint8Array):
-  const publicKey = keypair.publicKeyBytes();
-  const privateKey = keypair.privateKeyBytes();
+// Generates a new Ed25519 key pair using `Crypto.randomBytes` as
+// cryptographically secure pseudorandom number generator:
+const keyPair = new KeyPair();
 
-  // Derive an Ed25519 key pair from a hex-encoded private key:
-  const keyPair = KeyPair.fromPrivateKey(privateKey);
-});
+// Returns public and private keys as hex-encoded strings:
+const publicKey = keypair.publicKey();
+const privateKey = keypair.privateKey();
+
+// Returns public and private keys as byte arrays (Uint8Array):
+const publicKey = keypair.publicKeyBytes();
+const privateKey = keypair.privateKeyBytes();
+
+// Derive an Ed25519 key pair from a hex-encoded private key:
+const keyPair = KeyPair.fromPrivateKey(privateKey);
 ```
 
 ## Development
+
+For development you will need:
+
+* [Rust](https://www.rust-lang.org/learn/get-started)
+* [wasm-pack](https://rustwasm.github.io/wasm-pack/installer)
 
 ```bash
 # Install dependencies
@@ -48,7 +43,7 @@ npm run lint
 # Run tests
 npm test
 
-# Compile to wasm and bundle js package
+# Compile wasm and bundle js package
 npm run build
 ```
 
