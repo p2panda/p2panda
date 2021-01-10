@@ -2,12 +2,15 @@
   "compilerOptions": {
     "baseUrl": "./",
     "esModuleInterop": true,
-    "module": "ES2020",
+    "module": "commonjs",
     "moduleResolution": "node",
     "noImplicitAny": false,
     "paths": {
       "~/*": [
         "./src/*"
+      ],
+      "wasm-init-adapter": [
+        "./src/wasm"
       ],
       "wasm": [
         "./wasm"
@@ -22,8 +25,5 @@
   "include": [
     "src/**/*",
     "wasm/*"
-  ],
-  "exclude": [
-    "src/**/*.test.ts"
   ]
 }

@@ -1,5 +1,6 @@
 import { expect } from 'chai';
-import p2panda from '.';
+
+import p2panda from '../lib';
 
 describe('KeyPair', () => {
   it('creates a key pair', async () => {
