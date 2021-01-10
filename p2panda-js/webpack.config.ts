@@ -153,7 +153,7 @@ const configNode: webpack.Configuration = {
           from: getPath(PATH_DIST_WASM),
           to: getPath(PATH_DIST, 'wasm'),
           globOptions: {
-            ignore: ['**/*.json', '**/*.ts', '**/*.md'],
+            ignore: ['**/*.json', '**/*.ts', '**/*.md', '**/.gitignore'],
           },
         },
       ],
