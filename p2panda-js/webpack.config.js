@@ -26,15 +26,22 @@ module.exports = () => {
       },
       extensions: ['.ts'],
     },
-    experiments: {
-      // Use `syncWebAssembly` for now as the new WebAssembly
-      // `asyncWebAssembly` import does not work due to a bug in wasm-bindgen
-      // builds. See: https://github.com/rustwasm/wasm-bindgen/issues/2343 and
-      // https://webpack.js.org/configuration/experiments/
-      syncWebAssembly: true,
-    },
     module: {
       rules: [
+        {
+          test: /\.wasm/,
+          exclude: /node_modules/,
+          use: [
+            {
+              loader: 'url-loader',
+              options: {
+                generator: (content, mimetype, encoding) => {
+                  return content.toString(encoding);
+                },
+              },
+            },
+          ],
+        },
         {
           test: /\.ts/,
           exclude: /node_modules/,
@@ -54,6 +61,7 @@ module.exports = () => {
     },
     plugins: [
       new WasmPackPlugin({
+        extraArgs: '--target web',
         crateDirectory: getPath(PATH_SRC_WASM),
         outDir: getPath(PATH_DIST_WASM),
         pluginLogLevel: 'error',
