@@ -2,10 +2,12 @@
   "extends": "@tsconfig/node12/tsconfig.json",
   "compilerOptions": {
     "baseUrl": ".",
+    "declaration": true,
+    "outDir": "./lib",
     "paths": {
       "~/*": ["./src/*"],
-      "wasm": ["./wasm"],
-      "wasm-adapter": ["./src/wasm-adapter"]
+      "wasm-web": ["./wasm-web"],
+      "wasm-node": ["./wasm-node"]
     },
     "lib": ["dom"],
     "sourceMap": true,

@@ -9,7 +9,7 @@
     "build": "npm run clear && npm run build:browser && npm run build:node",
     "build:browser": "webpack --mode production --config-name browser",
     "build:node": "webpack --mode production --config-name node",
-    "clear": "rimraf ./lib && rimraf ./wasm",
+    "clear": "rimraf ./lib ./wasm-web ./wasm-node",
     "lint": "eslint ./src/**/*.ts",
     "start": "npm run build",
     "test": "npm run test:prepare && npm run test:mocha",

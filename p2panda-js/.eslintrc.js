@@ -8,6 +8,10 @@ module.exports = {
     'plugin:prettier/recommended',
   ],
   rules: {
+    '@typescript-eslint/no-unused-vars': [
+      'error',
+      { ignoreRestSiblings: true },
+    ],
     // Warn on prettier violations and continue with build
     'prettier/prettier': 1,
   },

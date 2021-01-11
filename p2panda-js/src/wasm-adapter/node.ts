@@ -1,13 +1,7 @@
-import { WebAssembly } from 'wasm-adapter';
-
-// WebAssembly code loaded dynamically from external file
-const wasm: Promise<WebAssembly> = import('wasm').then(
-  ({ KeyPair, setWasmPanicHook }) => {
-    return {
-      KeyPair,
-      setWasmPanicHook,
-    };
-  },
-);
+const wasm: Promise<typeof import('wasm-node') & { target: string }> = import(
+  'wasm-node'
+).then((lib) => {
+  return { target: 'node', ...lib };
+});
 
 export default wasm;
