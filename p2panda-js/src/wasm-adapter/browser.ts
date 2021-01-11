@@ -3,14 +3,17 @@
 import wasmBase64 from 'wasm/index_bg.wasm';
 import wasmInit, { setWasmPanicHook, KeyPair } from 'wasm';
 
+import { WebAssembly } from 'wasm-adapter';
+
 // The WebAssembly code is encoded to base64 and bundled by Webpack to be able
 // to use this library directly in the browser without any further build steps.
-export default new Promise((resolve, reject) => {
+const wasm: Promise<WebAssembly> = new Promise((resolve, reject) => {
   // Decode base64-encoded WebAssembly to bytes and initialize
-  const bytes = Uint8Array.from(
-    atob(wasmBase64)
+  const bytes: BufferSource = Uint8Array.from(
+    window
+      .atob(wasmBase64)
       .split('')
-      .map((c) => c.charCodeAt(0)),
+      .map((char: string) => char.charCodeAt(0)),
   );
 
   // eslint-disable-next-line
@@ -22,7 +25,9 @@ export default new Promise((resolve, reject) => {
         setWasmPanicHook,
       });
     })
-    .catch((err) => {
+    .catch((err: Error) => {
       reject(err);
     });
 });
+
+export default wasm;

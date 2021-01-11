@@ -10,7 +10,7 @@ const PATH_SRC = './src';
 const PATH_SRC_WASM = '../p2panda-rs';
 
 // Helper method to get absolute path of file or folder
-function getPath(...args) {
+function getPath(...args: Array<string>) {
   return path.resolve(__dirname, ...args);
 }
 
@@ -23,6 +23,25 @@ function getWasmPlugin(target = 'bundler') {
     pluginLogLevel: 'error',
   });
 }
+
+const tsRule = {
+  test: /\.ts/,
+  exclude: /node_modules/,
+  use: [
+    {
+      loader: 'babel-loader',
+    },
+    {
+      loader: 'ts-loader',
+      options: {
+        onlyCompileBundledFiles: true,
+      },
+    },
+    {
+      loader: 'eslint-loader',
+    },
+  ],
+};
 
 // Base Webpack configuration
 const config: webpack.Configuration = {
@@ -41,25 +60,9 @@ const config: webpack.Configuration = {
     },
   },
   module: {
-    rules: [
-      {
-        test: /\.ts/,
-        exclude: /node_modules/,
-        use: [
-          {
-            loader: 'babel-loader',
-          },
-          {
-            loader: 'ts-loader',
-          },
-          {
-            loader: 'eslint-loader',
-          },
-        ],
-      },
-    ],
+    rules: [tsRule],
   },
-  devtool: 'source-map',
+  devtool: 'inline-source-map',
   stats: 'minimal',
 };
 
@@ -81,9 +84,9 @@ const configBrowser: webpack.Configuration = {
   resolve: {
     ...config.resolve,
     alias: {
-      ...config.resolve.alias,
+      ...config.resolve?.alias,
       // Use browser adapter to load embedded base64 wasm string
-      'wasm-init-adapter': getPath(PATH_SRC, 'wasm', 'browser.ts'),
+      'wasm-adapter': getPath(PATH_SRC, 'wasm-adapter', 'browser.ts'),
     },
   },
   module: {
@@ -108,7 +111,7 @@ const configBrowser: webpack.Configuration = {
           },
         ],
       },
-      ...config.module.rules,
+      tsRule,
     ],
   },
   // eslint-disable-next-line
@@ -138,23 +141,30 @@ const configNode: webpack.Configuration = {
   resolve: {
     ...config.resolve,
     alias: {
-      ...config.resolve.alias,
+      ...config.resolve?.alias,
       // Use dynamically imported wasm file
-      'wasm-init-adapter': getPath(PATH_SRC, 'wasm', 'node.ts'),
+      'wasm-adapter': getPath(PATH_SRC, 'wasm-adapter', 'node.ts'),
     },
   },
   plugins: [
+    // eslint-disable-next-line
+    // @ts-ignore
     getWasmPlugin('nodejs'),
-    // Copy exported wasm package into library folder where it gets imported as
-    // an external module
     new CopyWebpackPlugin({
       patterns: [
+        // Copy exported wasm package into library folder where it gets imported as
+        // an external module
         {
           from: getPath(PATH_DIST_WASM),
           to: getPath(PATH_DIST, 'wasm'),
           globOptions: {
             ignore: ['**/*.json', '**/*.ts', '**/*.md', '**/.gitignore'],
           },
+        },
+        // Copy typescript definitions
+        {
+          from: getPath(PATH_SRC, 'index.d.ts'),
+          to: getPath(PATH_DIST),
         },
       ],
     }),

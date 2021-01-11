@@ -1,29 +1,14 @@
 {
+  "extends": "@tsconfig/node14/tsconfig.json",
   "compilerOptions": {
-    "baseUrl": "./",
-    "esModuleInterop": true,
-    "module": "commonjs",
-    "moduleResolution": "node",
-    "noImplicitAny": false,
+    "baseUrl": ".",
     "paths": {
-      "~/*": [
-        "./src/*"
-      ],
-      "wasm-init-adapter": [
-        "./src/wasm"
-      ],
-      "wasm": [
-        "./wasm"
-      ]
+      "~/*": ["./src/*"],
+      "wasm": ["./wasm"],
+      "wasm-adapter": ["./src/wasm-adapter"]
     },
+    "lib": ["dom"],
     "sourceMap": true,
-    "target": "es5",
-    "declaration": true,
-    "declarationMap": true,
-    "outDir": "lib"
-  },
-  "include": [
-    "src/**/*",
-    "wasm/*"
-  ]
+    "target": "es5"
+  }
 }
