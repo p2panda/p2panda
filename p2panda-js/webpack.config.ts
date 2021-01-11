@@ -62,7 +62,7 @@ const config: webpack.Configuration = {
   module: {
     rules: [tsRule],
   },
-  devtool: 'inline-source-map',
+  devtool: 'source-map',
   stats: 'minimal',
 };
 
@@ -158,7 +158,13 @@ const configNode: webpack.Configuration = {
           from: getPath(PATH_DIST_WASM),
           to: getPath(PATH_DIST, 'wasm'),
           globOptions: {
-            ignore: ['**/*.json', '**/*.ts', '**/*.md', '**/.gitignore'],
+            ignore: [
+              '**/*.json',
+              '**/*.md',
+              '**/*.ts',
+              '**/.gitignore',
+              '**/LICENSE',
+            ],
           },
         },
         // Copy typescript definitions
