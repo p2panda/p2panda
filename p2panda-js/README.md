@@ -7,23 +7,27 @@ Use `p2panda-js` to build cool applications using the p2panda protocol running i
 ```js
 import p2panda from 'p2panda-js';
 
-// Wait until libray got initialized
-const { KeyPair } = await p2panda;
+async function main() {
+  // Wait until libray got initialized
+  const { KeyPair } = await p2panda;
 
-// Generates a new Ed25519 key pair using `Crypto.randomBytes` as
-// cryptographically secure pseudorandom number generator:
-const keyPair = new KeyPair();
+  // Generates a new Ed25519 key pair using `Crypto.randomBytes` as
+  // cryptographically secure pseudorandom number generator:
+  const keyPair = new KeyPair();
 
-// Returns public and private keys as hex-encoded strings:
-const publicKey = keypair.publicKey();
-const privateKey = keypair.privateKey();
+  // Returns public and private keys as hex-encoded strings:
+  const publicKey = keypair.publicKey();
+  const privateKey = keypair.privateKey();
 
-// Returns public and private keys as byte arrays (Uint8Array):
-const publicKey = keypair.publicKeyBytes();
-const privateKey = keypair.privateKeyBytes();
+  // Returns public and private keys as byte arrays (Uint8Array):
+  const publicKey = keypair.publicKeyBytes();
+  const privateKey = keypair.privateKeyBytes();
 
-// Derive an Ed25519 key pair from a hex-encoded private key:
-const keyPair = KeyPair.fromPrivateKey(privateKey);
+  // Derive an Ed25519 key pair from a hex-encoded private key:
+  const keyPair = KeyPair.fromPrivateKey(privateKey);
+}
+
+main();
 ```
 
 ## Development
