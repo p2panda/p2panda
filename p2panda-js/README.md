@@ -8,7 +8,7 @@ Use `p2panda-js` to build cool applications using the p2panda protocol running i
 import p2panda from 'p2panda-js';
 
 async function main() {
-  // Wait until libray got initialized
+  // Wait until library (WebAssembly) got initialized
   const { KeyPair } = await p2panda;
 
   // Generates a new Ed25519 key pair using `Crypto.randomBytes` as
