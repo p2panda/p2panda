@@ -1,11 +1,11 @@
 import * as webpack from 'webpack';
-
 import CopyWebpackPlugin from 'copy-webpack-plugin';
+
 import config, {
-  getPath,
-  getWasmPlugin,
   PATH_DIST,
   PATH_DIST_WASM_NODE,
+  getPath,
+  getWasmPlugin,
 } from './webpack.common';
 
 /*

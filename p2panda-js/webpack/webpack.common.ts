@@ -1,7 +1,5 @@
-// Helper method to get absolute path of file or folder
 import * as path from 'path';
 import * as webpack from 'webpack';
-
 import WasmPackPlugin from '@wasm-tool/wasm-pack-plugin';
 
 export const PATH_DIST = '../lib';
@@ -10,6 +8,7 @@ export const PATH_DIST_WASM_NODE = '../wasm-node';
 export const PATH_SRC = '../src';
 export const PATH_SRC_WASM = '../../p2panda-rs';
 
+// Helper method to get absolute path of file or folder
 export function getPath(...args: Array<string>): string {
   return path.resolve(__dirname, ...args);
 }

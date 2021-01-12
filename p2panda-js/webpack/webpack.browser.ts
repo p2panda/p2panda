@@ -2,7 +2,7 @@ import * as webpack from 'webpack';
 import config, { getWasmPlugin, tsRule } from './webpack.common';
 
 /*
- * Extended configuration to buildesModuleInteropesModuleInterop library targeting modern browsers:
+ * Extended configuration to build library targeting modern browsers:
  *
  * - Output is minified for smaller library size
  * - Rust compiles wasm with `web` target
