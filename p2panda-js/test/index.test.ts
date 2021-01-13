@@ -1,5 +1,8 @@
 import { expect } from 'chai';
 
+// @TODO: Fix TypeScript definitions
+// eslint-disable-next-line
+// @ts-ignore
 import p2panda from '../lib';
 
 describe('KeyPair', () => {

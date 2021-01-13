@@ -1,6 +1,6 @@
-const wasm: Promise<typeof import('wasm-node') & { target: string }> = import(
-  'wasm-node'
-).then((lib) => {
+type WasmNode = typeof import('wasm-node') & { target: string };
+
+const wasm: Promise<WasmNode> = import('wasm-node').then((lib) => {
   return { target: 'node', ...lib };
 });
 

@@ -5,4 +5,4 @@ const adapter = BUILD_TARGET_WEB
   ? require('~/wasm-adapter/browser')
   : require('~/wasm-adapter/node');
 
-export default adapter;
+export default adapter.default;

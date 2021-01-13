@@ -1,4 +1,4 @@
-import initializeWasm from './wasm-adapter';
+import initializeWasm from '~/wasm-adapter';
 
 // Helper to extract resolved promise
 type Resolved<T> = T extends PromiseLike<infer U> ? Resolved<U> : T;
@@ -14,6 +14,9 @@ type P2Panda = Omit<
 // automatically for better debugging.
 const wasm = new Promise<P2Panda>((resolve, reject) => {
   initializeWasm
+    // @TODO: Fix TypeScript definitions
+    // eslint-disable-next-line
+    // @ts-ignore
     .then(({ setWasmPanicHook, target, ...wasm }) => {
       // Set panic hooks for better logging of wasm errors. See:
       // https://github.com/rustwasm/console_error_panic_hook
