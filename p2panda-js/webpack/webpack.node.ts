@@ -25,7 +25,7 @@ const configNode: webpack.Configuration = {
   target: 'node',
   externals: {
     // Treat exported wasm as external module
-    wasm: './wasm',
+    'wasm-node': './wasm',
   },
   plugins: [
     getWasmPlugin('nodejs'),
