@@ -5,6 +5,7 @@
 /wasm
 /wasm-node
 /wasm-web
+lib/wasm-adapter
 src
 test
 tsconfig.json
