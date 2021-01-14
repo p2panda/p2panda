@@ -42,6 +42,7 @@ const configBrowser: webpack.Configuration = {
     ],
   },
   plugins: [
+    getWasmPlugin('nodejs'),
     getWasmPlugin('web'),
     new webpack.IgnorePlugin({
       resourceRegExp: /wasm-node/,
