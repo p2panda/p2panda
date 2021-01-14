@@ -1,4 +1,4 @@
-import initializeWasm from '~/wasm-adapter';
+import { initializeWasm } from '~/wasm-adapter';
 
 // Helper to extract resolved promise
 type Resolved<T> = T extends PromiseLike<infer U> ? Resolved<U> : T;
@@ -14,9 +14,6 @@ type P2Panda = Omit<
 // automatically for better debugging.
 const wasm = new Promise<P2Panda>((resolve, reject) => {
   initializeWasm
-    // @TODO: Fix TypeScript definitions
-    // eslint-disable-next-line
-    // @ts-ignore
     .then(({ setWasmPanicHook, target, ...wasm }) => {
       // Set panic hooks for better logging of wasm errors. See:
       // https://github.com/rustwasm/console_error_panic_hook
@@ -26,7 +23,7 @@ const wasm = new Promise<P2Panda>((resolve, reject) => {
       switch (target) {
         case 'web':
           // `default` field is destructured from `wasm`, which throws an error
-          // because it's not used afterwards.
+          // because _default is not used afterwards.
           // eslint-disable-next-line
           // @ts-ignore
           ({ default: _default, ...rest } = wasm);
