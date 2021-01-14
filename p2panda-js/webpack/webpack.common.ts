@@ -12,24 +12,38 @@ export function getPath(...args: Array<string>): string {
   return path.resolve(__dirname, ...args);
 }
 
-export const tsRule = {
-  test: /\.ts/,
-  exclude: /node_modules/,
-  use: [
-    {
-      loader: 'babel-loader',
-    },
-    {
-      loader: 'ts-loader',
-      options: {
-        onlyCompileBundledFiles: true,
-        configFile: 'tsconfig.json',
+// Helper method which builds a typescript module rule
+export const tsRule = (target: 'node' | 'browser'): webpack.RuleSetRule => {
+  return {
+    test: /\.ts/,
+    exclude: /node_modules/,
+    use: [
+      {
+        loader: 'babel-loader',
       },
-    },
-    {
-      loader: 'eslint-loader',
-    },
-  ],
+      {
+        loader: 'ts-loader',
+        options: {
+          configFile: 'tsconfig.json',
+          onlyCompileBundledFiles: true,
+          // Overwrite `wasm-node` path for NodeJS builds, otherwise TypeScript
+          // will export declaration files with wrong import paths in library
+          ...(target === 'node'
+            ? {
+                compilerOptions: {
+                  paths: {
+                    'wasm-node': ['./lib/wasm'],
+                  },
+                },
+              }
+            : {}),
+        },
+      },
+      {
+        loader: 'eslint-loader',
+      },
+    ],
+  };
 };
 
 // Base Webpack configuration
@@ -48,9 +62,6 @@ const config: webpack.Configuration = {
       'wasm-web': getPath(PATH_DIST_WASM_WEB),
       'wasm-node': getPath(PATH_DIST_WASM_NODE),
     },
-  },
-  module: {
-    rules: [tsRule],
   },
   devtool: 'source-map',
   stats: 'minimal',

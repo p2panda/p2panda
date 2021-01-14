@@ -39,7 +39,7 @@ const configBrowser: webpack.Configuration = {
           },
         ],
       },
-      tsRule,
+      tsRule('browser'),
     ],
   },
   plugins: [

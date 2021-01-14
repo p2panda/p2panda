@@ -1,11 +1,6 @@
 import * as webpack from 'webpack';
-import CopyWebpackPlugin from 'copy-webpack-plugin';
 
-import config, {
-  PATH_DIST,
-  PATH_DIST_WASM_NODE,
-  getPath,
-} from './webpack.common';
+import config, { tsRule } from './webpack.common';
 
 /*
  * Extended configuration to build library targeting node applications:
@@ -26,20 +21,10 @@ const configNode: webpack.Configuration = {
     // Treat exported wasm as external module
     'wasm-node': './wasm',
   },
+  module: {
+    rules: [tsRule('node')],
+  },
   plugins: [
-    new CopyWebpackPlugin({
-      patterns: [
-        // Copy exported wasm package into library folder where it gets imported as
-        // an external module
-        {
-          from: getPath(PATH_DIST_WASM_NODE),
-          to: getPath(PATH_DIST, 'wasm'),
-          globOptions: {
-            ignore: ['**/*.json', '**/*.md', '**/.gitignore', '**/LICENSE'],
-          },
-        },
-      ],
-    }),
     new webpack.DefinePlugin({
       BUILD_TARGET_WEB: JSON.stringify(false),
     }),
