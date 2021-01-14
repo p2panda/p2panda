@@ -17,7 +17,7 @@
     "wasm": "npm run wasm:browser && npm run wasm:node",
     "wasm:browser": "wasm-pack build ../p2panda-rs --target web --out-dir ../p2panda-js/wasm-web --release --out-name index",
     "wasm:node": "wasm-pack build ../p2panda-rs --target nodejs --out-dir ../p2panda-js/wasm-node --release --out-name index",
-    "wasm:copy": "mkdir -p ./lib/wasm && cp ./wasm-node/*.{ts,js,wasm} ./lib/wasm",
+    "wasm:copy": "mkdir -p ./lib/wasm && cp ./wasm-node/index.js ./lib/wasm && cp ./wasm-node/index.d.ts ./lib/wasm && cp ./wasm-node/index_bg.wasm ./lib/wasm",
     "webpack": "npm run webpack:browser && npm run webpack:node",
     "webpack:browser": "webpack --mode production --config-name browser",
     "webpack:node": "npm run wasm:copy && webpack --mode production --config-name node"
