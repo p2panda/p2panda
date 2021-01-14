@@ -3,7 +3,10 @@
 .nvmrc
 .prettierrc.js
 /wasm
+/wasm-node
+/wasm-web
 src
 test
 tsconfig.json
+webpack
 webpack.config.ts
