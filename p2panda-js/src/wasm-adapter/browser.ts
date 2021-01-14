@@ -1,5 +1,5 @@
-//eslint-disable-next-line
-//@ts-ignore
+// eslint-disable-next-line
+// @ts-ignore
 import wasmBase64 from 'wasm-web/index_bg.wasm';
 import wasmInit, * as wasmLib from 'wasm-web';
 

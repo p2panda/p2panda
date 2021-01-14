@@ -27,9 +27,6 @@ const configNode: webpack.Configuration = {
     'wasm-node': './wasm',
   },
   plugins: [
-    new webpack.IgnorePlugin({
-      resourceRegExp: /wasm-web/,
-    }),
     new CopyWebpackPlugin({
       patterns: [
         // Copy exported wasm package into library folder where it gets imported as

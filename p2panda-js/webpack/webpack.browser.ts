@@ -1,4 +1,5 @@
 import * as webpack from 'webpack';
+
 import config, { tsRule } from './webpack.common';
 
 /*
@@ -42,9 +43,6 @@ const configBrowser: webpack.Configuration = {
     ],
   },
   plugins: [
-    new webpack.IgnorePlugin({
-      resourceRegExp: /wasm-node/,
-    }),
     new webpack.DefinePlugin({
       BUILD_TARGET_WEB: JSON.stringify(true),
     }),
