@@ -1,5 +1,5 @@
 import * as webpack from 'webpack';
-import config, { getWasmPlugin, tsRule } from './webpack.common';
+import config, { tsRule } from './webpack.common';
 
 /*
  * Extended configuration to build library targeting modern browsers:
@@ -42,8 +42,6 @@ const configBrowser: webpack.Configuration = {
     ],
   },
   plugins: [
-    getWasmPlugin('nodejs'),
-    getWasmPlugin('web'),
     new webpack.IgnorePlugin({
       resourceRegExp: /wasm-node/,
     }),

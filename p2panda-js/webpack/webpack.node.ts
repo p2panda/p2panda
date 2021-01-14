@@ -5,7 +5,6 @@ import config, {
   PATH_DIST,
   PATH_DIST_WASM_NODE,
   getPath,
-  getWasmPlugin,
 } from './webpack.common';
 
 /*
@@ -28,8 +27,6 @@ const configNode: webpack.Configuration = {
     'wasm-node': './wasm',
   },
   plugins: [
-    getWasmPlugin('nodejs'),
-    getWasmPlugin('web'),
     new webpack.IgnorePlugin({
       resourceRegExp: /wasm-web/,
     }),

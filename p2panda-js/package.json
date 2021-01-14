@@ -6,16 +6,20 @@
   "browser": "lib/index.min.js",
   "types": "lib/index.d.ts",
   "scripts": {
-    "build": "npm run clear && npm run build:browser && npm run build:node",
-    "build:browser": "webpack --mode production --config-name browser",
-    "build:node": "webpack --mode production --config-name node",
+    "build": "npm run clear && npm run wasm && npm run webpack",
     "clear": "rimraf ./lib ./wasm-web ./wasm-node",
-    "lint": "eslint ./src/**/*.ts",
+    "lint": "eslint --ext .ts .",
     "start": "npm run build",
     "test": "npm run test:prepare && npm run test:mocha",
-    "test:prepare": "webpack --mode development --config-name node",
-    "test:watch": "nodemon --watch ../p2panda-rs/src/* --watch src/* --exec 'npm run test'",
-    "test:mocha": "mocha -r ts-node/register -r tsconfig-paths/register -r @babel/register ./test/**/*.test.ts"
+    "test:prepare": "npm run wasm && npm run webpack:node",
+    "test:mocha": "mocha -r ts-node/register -r tsconfig-paths/register -r @babel/register ./test/**/*.test.ts",
+    "test:watch": "nodemon --watch ../p2panda-rs/src/* --watch ./src/* --exec 'npm run test'",
+    "wasm": "npm run wasm:browser && npm run wasm:node",
+    "wasm:browser": "wasm-pack build ../p2panda-rs --target web --out-dir ../p2panda-js/wasm-web --release --out-name index",
+    "wasm:node": "wasm-pack build ../p2panda-rs --target nodejs --out-dir ../p2panda-js/wasm-node --release --out-name index",
+    "webpack": "npm run webpack:browser && npm run webpack:node",
+    "webpack:browser": "webpack --mode production --config-name browser",
+    "webpack:node": "webpack --mode production --config-name node"
   },
   "engines": {
     "node": ">= v12.0.0"
@@ -45,7 +49,6 @@
     "@types/node": "^12.19.12",
     "@typescript-eslint/eslint-plugin": "^4.12.0",
     "@typescript-eslint/parser": "^4.12.0",
-    "@wasm-tool/wasm-pack-plugin": "^1.3.1",
     "babel-loader": "^8.2.2",
     "chai": "^4.2.0",
     "copy-webpack-plugin": "^7.0.0",

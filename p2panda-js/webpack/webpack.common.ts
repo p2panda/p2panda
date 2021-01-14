@@ -1,6 +1,5 @@
 import * as path from 'path';
 import * as webpack from 'webpack';
-import WasmPackPlugin from '@wasm-tool/wasm-pack-plugin';
 
 export const PATH_DIST = '../lib';
 export const PATH_DIST_WASM_WEB = '../wasm-web';
@@ -32,21 +31,6 @@ export const tsRule = {
     },
   ],
 };
-
-// Returns WasmPackPlugin instance with configured target
-export function getWasmPlugin(
-  target = 'bundler',
-): webpack.WebpackPluginInstance {
-  return new WasmPackPlugin({
-    extraArgs: `--target ${target} --mode normal`,
-    crateDirectory: getPath(PATH_SRC_WASM),
-    outDir:
-      target === 'web'
-        ? getPath(PATH_DIST_WASM_WEB)
-        : getPath(PATH_DIST_WASM_NODE),
-    pluginLogLevel: 'error',
-  }) as webpack.WebpackPluginInstance;
-}
 
 // Base Webpack configuration
 const config: webpack.Configuration = {
