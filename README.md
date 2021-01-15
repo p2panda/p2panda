@@ -82,13 +82,13 @@ If you are using `p2panda` in web browsers or NodeJS applications run:
 $ npm i p2panda-js
 ```
 
-For Rust environments and with [cargo-edit](https://github.com/killercup/cargo-edit) installed run:
+For Rust environments and with [cargo-edit] installed run:
 
 ```sh
 $ cargo add p2panda-rs
 ```
 
-[cargo-add]: https://github.com/killercup/cargo-edit
+[cargo-edit]: https://github.com/killercup/cargo-edit
 
 ## License
 
