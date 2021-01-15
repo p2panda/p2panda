@@ -94,7 +94,7 @@ impl MessageFields {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-// #[serde(untagged)]
+#[serde(untagged)]
 pub enum MessageValue {
     Text(String),
 }
