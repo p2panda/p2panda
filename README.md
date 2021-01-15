@@ -23,8 +23,8 @@
 
 <div align="center">
   <h3>
-    <a href="https://github.com/p2panda/design-document/tree/master/spec">
-      Specification
+    <a href="#installation">
+      Installation
     </a>
     <span> | </span>
     <a href="https://github.com/p2panda/p2panda/releases">
@@ -47,10 +47,10 @@ This library provides all tools required to write a client for the [`p2panda`] n
 
 ## Features
 
-- Generate Ed25519 author key pairs
-- Create and encode [`bamboo`] entries
-- Send messages to [`node`] servers via RPC API calls
-- Query and filter data in the network
+- Generate Ed25519 author key pairs.
+- Create and encode [`bamboo`] entries.
+- Send messages to [`node`] servers via JSON RPC calls.
+- Query and filter data in the network.
 
 [`bamboo`]: https://github.com/AljoschaMeyer/bamboo
 [`node`]: https://github.com/p2panda/node
@@ -59,6 +59,7 @@ This library provides all tools required to write a client for the [`p2panda`] n
 
 ```js
 import p2panda from 'p2panda-js';
+
 const { KeyPair } = await p2panda;
 const keyPair = new KeyPair();
 console.log(keyPair.publicKey());
@@ -66,6 +67,7 @@ console.log(keyPair.publicKey());
 
 ```rust
 use p2panda_rs::KeyPair;
+
 let key_pair = KeyPair::new();
 println!("{}", key_pair.publicKey());
 ```
@@ -80,7 +82,7 @@ If you are using `p2panda` in web browsers or NodeJS applications run:
 $ npm i p2panda-js
 ```
 
-For Rust environments and [cargo-edit](https://github.com/killercup/cargo-edit) installed run:
+For Rust environments and with [cargo-edit](https://github.com/killercup/cargo-edit) installed run:
 
 ```sh
 $ cargo add p2panda-rs
