@@ -6,20 +6,20 @@
   "browser": "lib/index.min.js",
   "types": "lib/index.d.ts",
   "scripts": {
-    "build": "npm run clear && npm run wasm && npm run webpack",
+    "build": "run-s clear wasm webpack",
     "clear": "rimraf ./lib ./wasm-web ./wasm-node",
     "lint": "eslint --ext .ts .",
-    "test": "npm run test:prepare && npm run test:mocha",
-    "test:prepare": "npm run wasm && npm run webpack:node",
+    "test": "run-s test:prepare test:mocha",
+    "test:prepare": "run-s --silent wasm webpack:node",
     "test:mocha": "mocha -r ts-node/register --noImplicitAny -r tsconfig-paths/register -r @babel/register ./test/**/*.test.ts",
     "test:watch": "nodemon --watch ../p2panda-rs/src/* --watch ./src/* --exec 'npm run test'",
-    "wasm": "rustup target add wasm32-unknown-unknown && run-p wasm:browser wasm:node",
-    "wasm:browser": "wasm-pack build ../p2panda-rs --target web --out-dir ../p2panda-js/wasm-web --release --out-name index",
-    "wasm:node": "wasm-pack build ../p2panda-rs --target nodejs --out-dir ../p2panda-js/wasm-node --release --out-name index",
-    "wasm:copy": "mkdir -p ./lib/wasm && cp ./wasm-node/index.js ./lib/wasm && cp ./wasm-node/index.d.ts ./lib/wasm && cp ./wasm-node/index_bg.wasm ./lib/wasm",
-    "webpack": "run-p webpack:browser webpack:node",
-    "webpack:browser": "webpack --mode production --config-name browser",
-    "webpack:node": "npm run wasm:copy && webpack --mode production --config-name node"
+    "wasm": "run-s --silent wasm:browser wasm:node",
+    "wasm:browser": "wasm-pack --log-level warn build ../p2panda-rs --target web --out-dir ../p2panda-js/wasm-web --release --out-name index",
+    "wasm:node": "wasm-pack --log-level warn build ../p2panda-rs --target nodejs --out-dir ../p2panda-js/wasm-node --release --out-name index",
+    "wasm:copy": "mkdir -p ./lib/wasm; cp ./wasm-node/index.js ./lib/wasm; cp ./wasm-node/index.d.ts ./lib/wasm; cp ./wasm-node/index_bg.wasm ./lib/wasm",
+    "webpack": "run-p --aggregate-output webpack:browser webpack:node",
+    "webpack:browser": "webpack --mode production --config-name browser --color",
+    "webpack:node": "npm run wasm:copy && webpack --mode production --config-name node --color"
   },
   "engines": {
     "node": ">= v12.0.0"
