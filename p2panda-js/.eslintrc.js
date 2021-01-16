@@ -3,11 +3,15 @@ module.exports = {
   extends: [
     // Applies the recommended rules from @typescript-eslint/eslint-plugin
     'plugin:@typescript-eslint/recommended',
-    // Keep prettier last to make sure its style changes are not overwritten
-    // by other rules
+    // Keep prettier last to make sure its style changes are not overwritten by
+    // other rules
     'plugin:prettier/recommended',
   ],
   rules: {
+    '@typescript-eslint/no-unused-vars': [
+      'error',
+      { ignoreRestSiblings: true },
+    ],
     // Warn on prettier violations and continue with build
     'prettier/prettier': 1,
   },
