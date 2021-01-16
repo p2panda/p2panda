@@ -13,7 +13,7 @@
     "test:prepare": "npm run wasm && npm run webpack:node",
     "test:mocha": "mocha -r ts-node/register --noImplicitAny -r tsconfig-paths/register -r @babel/register ./test/**/*.test.ts",
     "test:watch": "nodemon --watch ../p2panda-rs/src/* --watch ./src/* --exec 'npm run test'",
-    "wasm": "run-p wasm:browser wasm:node",
+    "wasm": "rustup target add wasm32-unknown-unknown && run-p wasm:browser wasm:node",
     "wasm:browser": "wasm-pack build ../p2panda-rs --target web --out-dir ../p2panda-js/wasm-web --release --out-name index",
     "wasm:node": "wasm-pack build ../p2panda-rs --target nodejs --out-dir ../p2panda-js/wasm-node --release --out-name index",
     "wasm:copy": "mkdir -p ./lib/wasm && cp ./wasm-node/index.js ./lib/wasm && cp ./wasm-node/index.d.ts ./lib/wasm && cp ./wasm-node/index_bg.wasm ./lib/wasm",
