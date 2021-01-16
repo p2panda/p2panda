@@ -157,7 +157,7 @@ impl Message {
         }
     }
 
-    pub fn from_encoded(message_encoded: MessageEncoded) -> Result<Self> {
+    pub fn from_encoded(_message_encoded: MessageEncoded) -> Result<Self> {
         todo!();
     }
 

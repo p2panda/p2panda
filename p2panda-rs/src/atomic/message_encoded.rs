@@ -3,6 +3,9 @@ use validator::{Validate, ValidationError, ValidationErrors};
 use crate::error::{Result, ValidationResult};
 
 // CDDL Schema
+//
+// @TODO: This schema accepts maps as values in `message-fields` even though it should only accept
+// `tstr`? See discussion here: https://github.com/anweiss/cddl/issues/82
 const MESSAGE_SCHEMA: &str = r#"
     message = {
         schema: entry-hash,
@@ -11,7 +14,7 @@ const MESSAGE_SCHEMA: &str = r#"
     }
 
     entry-hash = tstr .regexp "[0-9a-fa-f]{128}"
-    message-fields = (+ tstr => any)
+    message-fields = (+ tstr => tstr)
 
     ; Create message
     message-body = (
@@ -55,6 +58,7 @@ impl Validate for MessageEncoded {
             Ok(bytes) => {
                 match cddl::validate_cbor_from_slice(MESSAGE_SCHEMA, &bytes) {
                     Err(err) => {
+                        // @TODO: Pass CDDL errors over as JSON RPC response
                         errors.add(
                             "encoded_message",
                             ValidationError::new("invalid message schema"),
