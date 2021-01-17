@@ -2,7 +2,7 @@ use anyhow::bail;
 use cddl::validator::cbor;
 use thiserror::Error;
 
-use crate::atomic::{Validation, Message};
+use crate::atomic::{Message, Validation};
 use crate::error::Result;
 
 /// Concise Data Definition Language (CDDL) Schema of p2panda messages. See:
@@ -143,8 +143,14 @@ mod tests {
 
         let fields = message.fields().unwrap();
 
-        assert_eq!(fields.get("username").unwrap(), &MessageValue::Text("bubu".to_owned()));
+        assert_eq!(
+            fields.get("username").unwrap(),
+            &MessageValue::Text("bubu".to_owned())
+        );
         assert_eq!(fields.get("age").unwrap(), &MessageValue::Integer(28));
-        assert_eq!(fields.get("is_admin").unwrap(), &MessageValue::Boolean(false));
+        assert_eq!(
+            fields.get("is_admin").unwrap(),
+            &MessageValue::Boolean(false)
+        );
     }
 }
