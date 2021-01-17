@@ -4,7 +4,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
 use thiserror::Error;
 
-use crate::atomic::{Hash, MessageEncoded};
+use crate::atomic::{Hash, MessageEncoded, Validation};
 use crate::error::Result;
 
 /// Message format versions to introduce API changes in the future.
@@ -20,11 +20,15 @@ impl Copy for MessageVersion {}
 
 /// Messages are categorized by their `action` type.
 ///
-/// An action defines the message format and if a data instance gets created, updated or deleted.
+/// An action defines the message format and if this message creates, updates or deletes a data
+/// instance.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MessageAction {
+    /// Message creates a new data instance.
     Create,
+    /// Message updates an existing data instance.
     Update,
+    /// Message deletes an existing data instance.
     Delete,
 }
 
@@ -63,9 +67,13 @@ impl Copy for MessageAction {}
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MessageValue {
+    /// Basic `boolean` value.
     Boolean(bool),
+    /// Basic signed `float` value.
     Float(f64),
+    /// Basic signed `integer` value.
     Integer(i64),
+    /// Basic `string` value.
     Text(String),
 }
 
@@ -76,11 +84,15 @@ pub enum MessageValue {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MessageFields(HashMap<String, MessageValue>);
 
+/// Error types for methods of `MessageFields` struct.
+#[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
 pub enum MessageFieldsError {
+    /// Detected duplicate field when adding a new one.
     #[error("field already exists")]
     FieldDuplicate,
 
+    /// Tried to interact with an unknown field.
     #[error("field does not exist")]
     UnknownField,
 }
@@ -169,8 +181,11 @@ pub struct Message {
     fields: Option<MessageFields>,
 }
 
+/// Error types for methods of `Message` struct.
+#[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
 pub enum MessageError {
+    /// Invalid attempt to create a message without any fields data.
     #[error("message fields can not be empty")]
     EmptyFields,
 }
@@ -178,43 +193,47 @@ pub enum MessageError {
 impl Message {
     /// Returns new create message.
     pub fn create(schema: Hash, fields: MessageFields) -> Result<Self> {
-        if fields.is_empty() {
-            bail!(MessageError::EmptyFields);
-        }
-
-        Ok(Self {
+        let message = Self {
             action: MessageAction::Create,
             version: MessageVersion::Default,
             schema,
             id: None,
             fields: Some(fields),
-        })
+        };
+
+        message.validate()?;
+
+        Ok(message)
     }
 
     /// Returns new update message.
     pub fn update(schema: Hash, id: Hash, fields: MessageFields) -> Result<Self> {
-        if fields.is_empty() {
-            bail!(MessageError::EmptyFields);
-        }
-
-        Ok(Self {
+        let message = Self {
             action: MessageAction::Update,
             version: MessageVersion::Default,
             schema,
             id: Some(id),
             fields: Some(fields),
-        })
+        };
+
+        message.validate()?;
+
+        Ok(message)
     }
 
     /// Returns new delete message.
     pub fn delete(schema: Hash, id: Hash) -> Result<Self> {
-        Ok(Self {
+        let message = Self {
             action: MessageAction::Delete,
             version: MessageVersion::Default,
             schema,
             id: Some(id),
             fields: None,
-        })
+        };
+
+        message.validate()?;
+
+        Ok(message)
     }
 
     /// Decodes an encoded message and returns it.
@@ -292,6 +311,17 @@ impl Message {
         let encoded = hex::encode(&self.as_cbor());
 
         Ok(MessageEncoded::new(&encoded)?)
+    }
+}
+
+impl Validation for Message {
+    fn validate(&self) -> Result<()> {
+        // Create and update messages can not have empty fields.
+        if !self.is_delete() && (!self.has_fields() || self.fields().unwrap().is_empty()) {
+            bail!(MessageError::EmptyFields);
+        }
+
+        Ok(())
     }
 }
 
