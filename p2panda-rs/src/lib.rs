@@ -20,12 +20,16 @@ pub use crate::error::Result;
 pub use crate::keypair::KeyPair;
 
 // This crate improves debugging by forwarding panic messages to console.error
+#[cfg(target_arch = "wasm32")]
 use console_error_panic_hook::hook as panic_hook;
+#[cfg(target_arch = "wasm32")]
 use std::panic;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Sets a panic hook for better error messages in NodeJS or web browser. See:
 /// https://crates.io/crates/console_error_panic_hook
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(js_name = setWasmPanicHook)]
 pub fn set_wasm_panic_hook() {
     panic::set_hook(Box::new(panic_hook));
