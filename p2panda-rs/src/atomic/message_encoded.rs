@@ -16,6 +16,7 @@ use crate::error::Result;
 /// @TODO: Fix issue with schema:
 /// This schema accepts maps as values in `message-fields` even though it should only accept
 /// `tstr`. See: https://github.com/anweiss/cddl/issues/82
+#[cfg(not(target_arch = "wasm32"))]
 const MESSAGE_SCHEMA: &str = r#"
     message = {
         schema: hash,
