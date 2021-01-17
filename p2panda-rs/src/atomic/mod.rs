@@ -20,9 +20,10 @@ pub use seq_num::SeqNum;
 
 pub mod errors {
     pub use super::message::{MessageError, MessageFieldsError};
+    pub use super::message_encoded::MessageEncodedError;
 }
 
 pub trait Validation {
-    /// Validates data types instance.
+    /// Validates atomic data types instance.
     fn validate(&self) -> Result<()>;
 }
