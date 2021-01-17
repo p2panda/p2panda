@@ -105,8 +105,11 @@ impl Validation for MessageEncoded {
 
                 bail!(MessageEncodedError::InvalidSchema(err_str))
             }
-            Err(_) => {
+            Err(cbor::Error::CBORParsing(_err)) => {
                 bail!(MessageEncodedError::InvalidCBOR)
+            }
+            Err(cbor::Error::CDDLParsing(err)) => {
+                panic!(err);
             }
             _ => Ok(()),
         }
