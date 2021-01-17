@@ -1,17 +1,19 @@
 use ed25519_dalek::{Keypair as Ed25519Keypair, PublicKey, SecretKey};
 use rand::rngs::OsRng;
+
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[derive(Debug)]
 pub struct KeyPair {
     public: PublicKey,
     private: SecretKey,
 }
 
-#[wasm_bindgen]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 impl KeyPair {
-    #[wasm_bindgen(constructor)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(constructor))]
     pub fn new() -> Self {
         let mut csprng: OsRng = OsRng {};
         let key_pair = Ed25519Keypair::generate(&mut csprng);
@@ -22,7 +24,7 @@ impl KeyPair {
         }
     }
 
-    #[wasm_bindgen(js_name = fromPrivateKey)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = fromPrivateKey))]
     pub fn from_private_key(private_key: String) -> Self {
         let bytes = hex::decode(private_key).unwrap();
         let secret_key = SecretKey::from_bytes(&bytes).unwrap();
@@ -34,22 +36,22 @@ impl KeyPair {
         }
     }
 
-    #[wasm_bindgen(js_name = publicKey)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = publicKey))]
     pub fn public_key(&self) -> String {
         hex::encode(self.public.to_bytes())
     }
 
-    #[wasm_bindgen(js_name = privateKey)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = privateKey))]
     pub fn private_key(&self) -> String {
         hex::encode(self.private.to_bytes())
     }
 
-    #[wasm_bindgen(js_name = publicKeyBytes)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = publicKeyBytes))]
     pub fn public_key_bytes(&self) -> Box<[u8]> {
         Box::from(self.public.to_bytes())
     }
 
-    #[wasm_bindgen(js_name = privateKeyBytes)]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = privateKeyBytes))]
     pub fn private_key_bytes(&self) -> Box<[u8]> {
         Box::from(self.private.to_bytes())
     }

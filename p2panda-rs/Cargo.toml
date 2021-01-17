@@ -26,10 +26,8 @@ crate-type = ["cdylib"]
 anyhow = "1.0.38"
 bamboo-rs-core = { git = "https://github.com/pietgeursen/bamboo-rs", branch = "master" }
 cddl = "0.8.5"
-console_error_panic_hook = "0.1.6"
 ed25519-dalek = { version = "1.0.1" }
 hex = "0.4.2"
-rand = { version = "0.7.3", features = ["wasm-bindgen"] }
 serde = { version = "1.0.119", features = ["derive"] }
 serde_cbor = "0.11.1"
 serde_repr = "0.1.6"
@@ -37,10 +35,15 @@ thiserror = "1.0.23"
 validator = "0.12.0"
 yamf-hash = "0.1.2"
 
-[dependencies.wasm-bindgen]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rand = "0.7.3"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.6"
+rand = { version = "0.7.3", features = ["wasm-bindgen"] }
 # Pin to v0.2.65 as wasm-opt fails with global exports. See:
 # https://github.com/rustwasm/wasm-pack/issues/886
-version = "=0.2.65"
+wasm-bindgen = { version = "=0.2.65" }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.2"

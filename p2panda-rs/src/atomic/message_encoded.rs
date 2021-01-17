@@ -1,4 +1,5 @@
 use anyhow::bail;
+#[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
 use thiserror::Error;
 
@@ -87,6 +88,7 @@ impl MessageEncoded {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Validation for MessageEncoded {
     /// Checks encoded message value against hex format and CDDL schema.
     ///
@@ -113,6 +115,18 @@ impl Validation for MessageEncoded {
             }
             _ => Ok(()),
         }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl Validation for MessageEncoded {
+    /// Checks encoded message value against hex format.
+    ///
+    /// Skips CDDL schema validation as this is not supported for wasm targets. See:
+    /// https://github.com/anweiss/cddl/issues/83
+    fn validate(&self) -> Result<()> {
+        hex::decode(&self.0).map_err(|_| MessageEncodedError::InvalidHexEncoding)?;
+        Ok(())
     }
 }
 
