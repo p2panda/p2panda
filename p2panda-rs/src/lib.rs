@@ -11,26 +11,26 @@
     unused_qualifications
 )]
 
-mod atomic;
-mod error;
-mod keypair;
+/// Basic structs and methods to interact with p2panda data structures
+pub mod atomic;
+/// Special error types from this crate
+pub mod error;
+/// Author identities to sign data with
+pub mod keypair;
 
-pub use crate::atomic::{Entry, EntryEncoded, Hash, LogId, Message, MessageEncoded, SeqNum};
-pub use crate::error::Result;
-pub use crate::keypair::KeyPair;
+#[cfg(target_arch = "wasm32")]
+mod wasm_utils {
+    use console_error_panic_hook::hook as panic_hook;
+    use std::panic;
+    use wasm_bindgen::prelude::wasm_bindgen;
 
-// This crate improves debugging by forwarding panic messages to console.error
-#[cfg(target_arch = "wasm32")]
-use console_error_panic_hook::hook as panic_hook;
-#[cfg(target_arch = "wasm32")]
-use std::panic;
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::wasm_bindgen;
-
-/// Sets a panic hook for better error messages in NodeJS or web browser. See:
-/// https://crates.io/crates/console_error_panic_hook
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(js_name = setWasmPanicHook)]
-pub fn set_wasm_panic_hook() {
-    panic::set_hook(Box::new(panic_hook));
+    /// Sets a panic hook for better error messages in NodeJS or web browser. See:
+    /// https://crates.io/crates/console_error_panic_hook
+    #[wasm_bindgen(js_name = setWasmPanicHook)]
+    pub fn set_wasm_panic_hook() {
+        panic::set_hook(Box::new(panic_hook));
+    }
 }
+
+#[cfg(target_arch = "wasm32")]
+pub use wasm_utils::set_wasm_panic_hook;
