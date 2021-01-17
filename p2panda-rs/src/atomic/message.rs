@@ -26,8 +26,10 @@ impl Copy for MessageVersion {}
 pub enum MessageAction {
     /// Message creates a new data instance.
     Create,
+
     /// Message updates an existing data instance.
     Update,
+
     /// Message deletes an existing data instance.
     Delete,
 }
@@ -69,10 +71,13 @@ impl Copy for MessageAction {}
 pub enum MessageValue {
     /// Basic `boolean` value.
     Boolean(bool),
+
     /// Basic signed `float` value.
     Float(f64),
+
     /// Basic signed `integer` value.
     Integer(i64),
+
     /// Basic `string` value.
     Text(String),
 }
