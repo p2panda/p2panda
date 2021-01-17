@@ -9,7 +9,7 @@ use crate::error::{Result, ValidationResult};
 ///
 /// This uses the BLAKE2b algorithm wrapped in YAMF "Yet-Another-Multi-Format" according to the
 /// Bamboo specification.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Hash(String);
 
 impl Hash {
