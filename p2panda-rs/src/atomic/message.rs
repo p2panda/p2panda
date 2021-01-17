@@ -1,11 +1,26 @@
+use anyhow::bail;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
+use thiserror::Error;
 
 use crate::atomic::{Hash, MessageEncoded};
 use crate::error::Result;
 
-const MESSAGE_VERSION: u64 = 1;
+/// Message format versions to introduce API changes in the future.
+#[derive(Clone, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
+#[serde(untagged)]
+#[repr(u8)]
+pub enum MessageVersion {
+    /// All messages are currently implemented against this first version.
+    Default = 1,
+}
 
+impl Copy for MessageVersion {}
+
+/// Messages are categorized by their `action` type.
+///
+/// An action defines the message format and if a data instance gets created, updated or deleted.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MessageAction {
     Create,
@@ -32,37 +47,66 @@ impl<'de> Deserialize<'de> for MessageAction {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Ok(match s.as_str() {
-            "create" => MessageAction::Create,
-            "update" => MessageAction::Update,
-            "delete" => MessageAction::Delete,
-            _ => panic!("meh"),
-        })
+
+        match s.as_str() {
+            "create" => Ok(MessageAction::Create),
+            "update" => Ok(MessageAction::Update),
+            "delete" => Ok(MessageAction::Delete),
+            _ => Err(serde::de::Error::custom("unknown message action")),
+        }
     }
 }
 
 impl Copy for MessageAction {}
 
+/// Enum of possible data types which can be added to the messages fields as values.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MessageValue {
+    Boolean(bool),
+    Float(f64),
+    Integer(i64),
+    Text(String),
+}
+
+/// The actual user data is contained in form of message fields, a simple key/value store of data
+/// with a limited amount of value types.
+///
+/// MessageFields are created separately and get attached to a Message before it is used.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MessageFields(HashMap<String, MessageValue>);
 
+#[derive(Error, Debug)]
+pub enum MessageFieldsError {
+    #[error("field already exists")]
+    FieldDuplicate,
+
+    #[error("field does not exist")]
+    UnknownField,
+}
+
 impl MessageFields {
+    /// Creates a new fields instance to add data to.
     pub fn new() -> Self {
         Self(HashMap::new())
     }
 
+    /// Returns the number of added fields.
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    /// Returns true when no field is given.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
+    /// Adds a new field to this instance.
+    ///
+    /// A field is a simple key/value pair.
     pub fn add(&mut self, name: &str, value: MessageValue) -> Result<()> {
         if self.0.contains_key(name) {
-            // @TODO: Correct error handling
-            panic!("Field name already exists");
+            bail!(MessageFieldsError::FieldDuplicate);
         }
 
         self.0.insert(name.to_owned(), value);
@@ -70,10 +114,10 @@ impl MessageFields {
         Ok(())
     }
 
+    /// Overwrites an already existing field with a new value.
     pub fn update(&mut self, name: &str, value: MessageValue) -> Result<()> {
         if !self.0.contains_key(name) {
-            // @TODO: Correct error handling
-            panic!("Field name does not exist");
+            bail!(MessageFieldsError::UnknownField);
         }
 
         self.0.insert(name.to_owned(), value);
@@ -81,29 +125,31 @@ impl MessageFields {
         Ok(())
     }
 
+    /// Removes an existing field from this instance.
     pub fn remove(&mut self, name: &str) -> Result<()> {
         if !self.0.contains_key(name) {
-            // @TODO: Correct error handling
-            panic!("Field name does not exist");
+            bail!(MessageFieldsError::UnknownField);
         }
 
         self.0.remove(name);
 
         Ok(())
     }
-}
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum MessageValue {
-    Text(String),
-}
+    /// Returns a field value.
+    pub fn get(&self, name: &str) -> Option<&MessageValue> {
+        if !self.0.contains_key(name) {
+            return None;
+        }
 
+        self.0.get(name)
+    }
+}
 /// Messages describe data mutations in the p2panda network. Authors send messages to create,
 /// update or delete instances or collections of data.
 ///
 /// The data itself lives in the `fields` object and is formed after a message schema.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Message {
     /// Describes if this message creates, updates or deletes data.
     action: MessageAction,
@@ -112,7 +158,7 @@ pub struct Message {
     schema: Hash,
 
     /// Version schema of this message.
-    version: u64,
+    version: MessageVersion,
 
     /// Optional id referring to the data instance.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -123,50 +169,127 @@ pub struct Message {
     fields: Option<MessageFields>,
 }
 
+#[derive(Error, Debug)]
+pub enum MessageError {
+    #[error("message fields can not be empty")]
+    EmptyFields,
+}
+
 impl Message {
     /// Returns new create message.
-    pub fn create(schema: Hash, fields: MessageFields) -> Self {
-        Self {
+    pub fn create(schema: Hash, fields: MessageFields) -> Result<Self> {
+        if fields.is_empty() {
+            bail!(MessageError::EmptyFields);
+        }
+
+        Ok(Self {
             action: MessageAction::Create,
-            version: MESSAGE_VERSION,
+            version: MessageVersion::Default,
             schema,
             id: None,
             fields: Some(fields),
-        }
+        })
     }
 
     /// Returns new update message.
-    pub fn update(schema: Hash, id: Hash, fields: MessageFields) -> Self {
-        Self {
+    pub fn update(schema: Hash, id: Hash, fields: MessageFields) -> Result<Self> {
+        if fields.is_empty() {
+            bail!(MessageError::EmptyFields);
+        }
+
+        Ok(Self {
             action: MessageAction::Update,
-            version: MESSAGE_VERSION,
+            version: MessageVersion::Default,
             schema,
             id: Some(id),
             fields: Some(fields),
-        }
+        })
     }
 
     /// Returns new delete message.
-    pub fn delete(schema: Hash, id: Hash) -> Self {
-        Self {
+    pub fn delete(schema: Hash, id: Hash) -> Result<Self> {
+        Ok(Self {
             action: MessageAction::Delete,
-            version: MESSAGE_VERSION,
+            version: MessageVersion::Default,
             schema,
             id: Some(id),
             fields: None,
-        }
+        })
     }
 
-    pub fn from_encoded(_message_encoded: MessageEncoded) -> Result<Self> {
-        todo!();
+    /// Decodes an encoded message and returns it.
+    pub fn from_encoded(message_encoded: MessageEncoded) -> Self {
+        message_encoded.decode()
     }
 
-    pub fn encode(&self) -> Result<MessageEncoded> {
+    /// Encodes message in CBOR format and returns bytes.
+    pub fn as_cbor(&self) -> Vec<u8> {
         // Serialize data to binary CBOR format
-        let cbor = serde_cbor::to_vec(&self)?;
+        serde_cbor::to_vec(&self).unwrap()
+    }
 
+    /// Returns action type of message.
+    pub fn action(&self) -> MessageAction {
+        self.action
+    }
+
+    /// Returns true when instance is create message.
+    pub fn is_create(&self) -> bool {
+        self.action == MessageAction::Create
+    }
+
+    /// Returns true when instance is update message.
+    pub fn is_update(&self) -> bool {
+        self.action == MessageAction::Update
+    }
+
+    /// Returns true when instance is delete message.
+    pub fn is_delete(&self) -> bool {
+        self.action == MessageAction::Delete
+    }
+
+    /// Returns version of message.
+    pub fn version(&self) -> MessageVersion {
+        self.version
+    }
+
+    /// Returns schema of message.
+    pub fn schema(&self) -> Hash {
+        self.schema.clone()
+    }
+
+    /// Returns id of message.
+    pub fn id(&self) -> Option<Hash> {
+        if self.id.is_none() {
+            return None;
+        }
+
+        self.id.clone()
+    }
+
+    /// Returns true when message contains an id.
+    pub fn has_id(&self) -> bool {
+        self.id.is_some()
+    }
+
+    /// Returns user data fields of message.
+    pub fn fields(&self) -> Option<MessageFields> {
+        if self.fields.is_none() {
+            return None;
+        }
+
+        self.fields.clone()
+    }
+
+    /// Returns true if message contains fields.
+    pub fn has_fields(&self) -> bool {
+        self.fields.is_some()
+    }
+
+    /// Returns an encoded version of this message.
+    pub fn encode(&self) -> Result<MessageEncoded> {
         // Encode bytes as hex string
-        let encoded = hex::encode(cbor);
+        let encoded = hex::encode(&self.as_cbor());
 
         Ok(MessageEncoded::new(&encoded)?)
     }
@@ -179,8 +302,29 @@ mod tests {
     use super::{Message, MessageFields, MessageValue};
 
     #[test]
-    fn encode() {
+    fn message_fields() {
         let mut fields = MessageFields::new();
+
+        // Detect duplicate
+        fields
+            .add("test", MessageValue::Text("Hello, Panda!".to_owned()))
+            .unwrap();
+
+        assert!(fields
+            .add("test", MessageValue::Text("Huhu".to_owned()))
+            .is_err());
+
+        // Bail when key does not exist
+        assert!(fields
+            .update("imagine", MessageValue::Text("Pandaparty".to_owned()))
+            .is_err());
+    }
+
+    #[test]
+    fn encode_and_decode() {
+        // Create test message
+        let mut fields = MessageFields::new();
+
         fields
             .add("test", MessageValue::Text("Hello, Message!".to_owned()))
             .unwrap();
@@ -189,12 +333,17 @@ mod tests {
             Hash::from_bytes(vec![1, 255, 0]).unwrap(),
             Hash::from_bytes(vec![62, 128]).unwrap(),
             fields,
-        );
+        )
+        .unwrap();
 
-        println!("{:#?}", message);
+        assert!(message.is_update());
 
+        // Encode message ...
         let encoded = message.encode().unwrap();
 
-        println!("{:#?}", encoded);
+        // ... and decode it again
+        let message_restored = Message::from_encoded(encoded);
+
+        assert_eq!(message, message_restored);
     }
 }

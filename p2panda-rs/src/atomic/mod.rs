@@ -1,3 +1,5 @@
+use crate::error::Result;
+
 mod author;
 mod entry;
 mod entry_encoded;
@@ -12,6 +14,15 @@ pub use entry::Entry;
 pub use entry_encoded::EntryEncoded;
 pub use hash::Hash;
 pub use log_id::LogId;
-pub use message::Message;
+pub use message::{Message, MessageAction, MessageFields, MessageValue, MessageVersion};
 pub use message_encoded::MessageEncoded;
 pub use seq_num::SeqNum;
+
+pub mod errors {
+    pub use super::message::{MessageError, MessageFieldsError};
+}
+
+pub trait Validation {
+    /// Validates data types instance.
+    fn validate(&self) -> Result<()>;
+}

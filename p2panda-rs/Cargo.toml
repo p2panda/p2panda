@@ -32,6 +32,8 @@ hex = "0.4.2"
 rand = { version = "0.7.3", features = ["wasm-bindgen"] }
 serde = { version = "1.0.119", features = ["derive"] }
 serde_cbor = "0.11.1"
+serde_repr = "0.1.6"
+thiserror = "1.0.23"
 validator = "0.12.0"
 yamf-hash = "0.1.2"
 
