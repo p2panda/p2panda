@@ -48,14 +48,6 @@ Read the library [`documentation`] for installation guides and examples.
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
 [`p2panda`]: https://github.com/p2panda/design-document
 
-## Development
-
-For development you need the following tools:
-
-* [Node.js](https://nodejs.org)
-* [Rust](https://www.rust-lang.org/learn/get-started)
-* [wasm-pack](https://rustwasm.github.io/wasm-pack/installer)
-
 ```bash
 # Install dependencies
 npm install
@@ -66,7 +58,7 @@ npm run lint
 # Run tests
 npm test
 
-# Compile to wasm and bundle js package
+# Compile wasm and bundle js package
 npm run build
 ```
 

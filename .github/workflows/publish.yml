@@ -1,6 +1,8 @@
-name: Build and test
+name: Publish
 
-on: push
+on:
+  release:
+    types: [published]
 
 env:
   CARGO_TERM_COLOR: always
@@ -28,11 +30,10 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Run Build
-        run: cargo build --verbose
+      - name: Run publish
+        run: cargo publish
+        env:
 
-      - name: Run tests
-        run: cargo test --verbose
   js:
     name: p2panda-js
 
@@ -76,8 +77,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run build
-        run: npm run build
-
-      - name: Run tests
-        run: npm run test
+      - name: Publish to NPM
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

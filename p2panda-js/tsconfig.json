@@ -1,19 +1,16 @@
 {
+  "extends": "@tsconfig/node12/tsconfig.json",
   "compilerOptions": {
-    "baseUrl": "./",
-    "esModuleInterop": true,
-    "module": "ES2020",
-    "moduleResolution": "node",
-    "noImplicitAny": false,
+    "baseUrl": ".",
+    "outDir": "./lib",
     "paths": {
       "~/*": ["./src/*"],
-      "wasm": ["./wasm"]
+      "wasm-web": ["./wasm-web"],
+      "wasm-node": ["./wasm-node"]
     },
+    "lib": ["dom"],
     "sourceMap": true,
     "target": "es5",
-    "declaration": true,
-    "declarationMap": true,
-    "outDir": "lib"
-  },
-  "include": ["src/**/*", "wasm/*"]
+    "types": ["mocha", "node"]
+  }
 }
