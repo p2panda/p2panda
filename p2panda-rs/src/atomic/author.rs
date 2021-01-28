@@ -1,7 +1,19 @@
+use anyhow::bail;
 use ed25519_dalek::PUBLIC_KEY_LENGTH;
-use validator::{Validate, ValidationError, ValidationErrors};
+use thiserror::Error;
 
-use crate::error::{Result, ValidationResult};
+use crate::atomic::Validation;
+use crate::error::Result;
+
+/// Custom error types for `Author`
+#[derive(Error, Debug)]
+pub enum AuthorError {
+    #[error("invalid author key length")]
+    InvalidLength,
+
+    #[error("invalid hex encoding in author string")]
+    InvalidHexEncoding,
+}
 
 /// Authors are hex encoded ed25519 public key strings.
 #[derive(Clone, Debug)]
@@ -17,28 +29,22 @@ impl Author {
     }
 }
 
-impl Validate for Author {
-    fn validate(&self) -> ValidationResult {
-        let mut errors = ValidationErrors::new();
-
+impl Validation for Author {
+    fn validate(&self) -> Result<()> {
         // Check if author is hex encoded
         match hex::decode(self.0.to_owned()) {
             Ok(bytes) => {
                 // Check if length is correct
                 if bytes.len() != PUBLIC_KEY_LENGTH {
-                    errors.add("author", ValidationError::new("invalid string length"));
+                    bail!(AuthorError::InvalidLength)
                 }
             }
             Err(_) => {
-                errors.add("author", ValidationError::new("invalid hex string"));
+                bail!(AuthorError::InvalidHexEncoding)
             }
         }
 
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
-        }
+        Ok(())
     }
 }
 

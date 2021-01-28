@@ -1,9 +1,24 @@
+use anyhow::bail;
 use bamboo_rs_core::yamf_hash::new_blake2b;
 use serde::{Deserialize, Serialize};
-use validator::{Validate, ValidationError, ValidationErrors};
+use thiserror::Error;
 use yamf_hash::{YamfHash, MAX_YAMF_HASH_SIZE};
 
-use crate::error::{Result, ValidationResult};
+use crate::atomic::Validation;
+use crate::error::Result;
+
+/// Custom error types for `Hash`
+#[derive(Error, Debug)]
+pub enum HashError {
+    #[error("invalid hash length")]
+    InvalidLength,
+
+    #[error("invalid hex encoding in hash string")]
+    InvalidHexEncoding,
+
+    #[error("can not decode YAMF BLAKE2b hash")]
+    DecodingFailed,
+}
 
 /// Hash of entry or message encoded as hex string.
 ///
@@ -49,39 +64,26 @@ impl Hash {
     }
 }
 
-impl Validate for Hash {
-    fn validate(&self) -> ValidationResult {
-        let mut errors = ValidationErrors::new();
-
+impl Validation for Hash {
+    fn validate(&self) -> Result<()> {
         // Check if hash is a hex string
         match hex::decode(self.0.to_owned()) {
             Ok(bytes) => {
                 // Check if length is correct
                 if bytes.len() != MAX_YAMF_HASH_SIZE {
-                    errors.add("hash", ValidationError::new("invalid hash length"));
+                    bail!(HashError::InvalidLength)
                 }
 
                 // Check if YAMF BLAKE2b hash is valid
                 match YamfHash::<&[u8]>::decode(&bytes) {
                     Ok((YamfHash::Blake2b(_), _)) => {}
-                    _ => {
-                        errors.add(
-                            "hash",
-                            ValidationError::new("can't decode YAMF BLAKE2b hash"),
-                        );
-                    }
+                    _ => bail!(HashError::DecodingFailed),
                 }
             }
-            Err(_) => {
-                errors.add("hash", ValidationError::new("invalid hex string"));
-            }
+            Err(_) => bail!(HashError::InvalidHexEncoding),
         }
 
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
-        }
+        Ok(())
     }
 }
 
