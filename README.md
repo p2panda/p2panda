@@ -57,7 +57,7 @@ This library provides all tools required to write a client for the [`p2panda`] n
 
 ## Examples
 
-```js
+```javascript
 import p2panda from 'p2panda-js';
 
 const { KeyPair } = await p2panda;
@@ -78,13 +78,13 @@ More examples can be found in the [`p2panda-rs`] and [`p2panda-js`] directories.
 
 If you are using `p2panda` in web browsers or NodeJS applications run:
 
-```sh
+```bash
 $ npm i p2panda-js
 ```
 
 For Rust environments and with [cargo-edit] installed run:
 
-```sh
+```bash
 $ cargo add p2panda-rs
 ```
 
