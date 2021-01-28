@@ -1,42 +1,85 @@
-# p2panda-js
+<h1 align="center">p2panda-js</h1>
 
-Use `p2panda-js` to build cool applications using the p2panda protocol. This
-library incorporates web assembly exported from the sibling `p2panda-rs` project.
-Use webpack to build and combine *everything*!
+<div align="center">
+  <strong>All the things a panda needs (for JavaScript)</strong>
+</div>
 
-## Requirements
+<br />
+
+<div align="center">
+  <!-- CI status -->
+  <a href="https://github.com/p2panda/p2panda/actions">
+    <img src="https://img.shields.io/github/workflow/status/p2panda/p2panda/Build%20and%20test?style=flat-square" alt="CI Status" />
+  </a>
+  <!-- Crates version -->
+  <a href="https://crates.io/crates/p2panda-rs">
+    <img src="https://img.shields.io/crates/v/p2panda-rs.svg?style=flat-square" alt="Crates.io version" />
+  </a>
+  <!-- NPM version -->
+  <a href="https://www.npmjs.com/package/p2panda-js">
+    <img src="https://img.shields.io/npm/v/p2panda-js?style=flat-square" alt="NPM version" />
+  </a>
+</div>
+
+<div align="center">
+  <h3>
+    <a href="#installation">
+      Installation
+    </a>
+    <span> | </span>
+    <a href="https://github.com/p2panda/p2panda/releases">
+      Releases
+    </a>
+    <span> | </span>
+    <a href="https://github.com/p2panda/design-document#get-involved">
+      Contributing
+    </a>
+  </h3>
+</div>
+
+<br/>
+
+This library provides all tools required to write a client for the [`p2panda`] network. It is shipped both as a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web browser.
+
+[`p2panda`]: https://github.com/p2panda/design-document
+[`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
+[`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
+
+## Features
+
+- Generate Ed25519 author key pairs.
+- Create and encode [`bamboo`] entries.
+- Send messages to [`node`] servers via JSON RPC calls.
+- Query and filter data in the network.
+
+[`bamboo`]: https://github.com/AljoschaMeyer/bamboo
+[`node`]: https://github.com/p2panda/node
+
+## Example
+
+```js
+import p2panda from 'p2panda-js';
+
+const { KeyPair } = await p2panda;
+const keyPair = new KeyPair();
+console.log(keyPair.publicKey());
+```
+
+## Installation
+
+If you are using `p2panda` in web browsers or NodeJS applications run:
+
+```sh
+$ npm i p2panda-js
+```
+
+## Development
+
+For development you need the following tools:
 
 * [Node.js](https://nodejs.org)
 * [Rust](https://www.rust-lang.org/learn/get-started)
 * [wasm-pack](https://rustwasm.github.io/wasm-pack/installer)
-
-## Usage
-
-Use this in a Webpack 5 setup by enabling the [experimental `syncWebAssembly`
-option](https://webpack.js.org/configuration/experiments/).
-
-### Create Ed25519 key pair
-
-```js
-import('p2panda-js').then(({ KeyPair }) => {
-  // Generates a new Ed25519 key pair using Crypto.randomBytes as
-  // cryptographically secure pseudorandom number generator:
-  const keyPair = new KeyPair();
-
-  // Returns public and private keys as hex-encoded strings:
-  const publicKey = keypair.publicKey();
-  const privateKey = keypair.privateKey();
-
-  // Returns public and private keys as byte arrays (Uint8Array):
-  const publicKey = keypair.publicKeyBytes();
-  const privateKey = keypair.privateKeyBytes();
-
-  // Derive an Ed25519 key pair from a hex-encoded private key:
-  const keyPair = KeyPair.fromPrivateKey(privateKey);
-});
-```
-
-## Development
 
 ```bash
 # Install dependencies
