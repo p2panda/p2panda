@@ -8,7 +8,7 @@ authors = [
 ]
 edition = "2018"
 description = "All the things a panda needs"
-repository = "git@github.com:p2panda/p2panda.git"
+repository = "https://github.com/p2panda/p2panda"
 license = "AGPL-3.0"
 readme = "README.md"
 exclude = [".gitignore"]
