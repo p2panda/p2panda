@@ -16,7 +16,6 @@ readme = "README.md"
 crate-type = ["cdylib"]
 
 [dependencies]
-bamboo-rs-core = { git = "https://github.com/pietgeursen/bamboo-rs", branch = "master" }
 console_error_panic_hook = "0.1.6"
 ed25519-dalek = { version = "1.0.1" }
 hex = "0.4.2"
