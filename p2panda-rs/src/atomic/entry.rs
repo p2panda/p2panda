@@ -15,15 +15,6 @@ use crate::keypair::KeyPair;
 /// stored for easier access.
 #[derive(Debug)]
 pub struct Entry {
-    /// Public key of the author.
-    author: Author,
-
-    /// Actual encoded Bamboo entry data.
-    entry_encoded: EntryEncoded,
-
-    /// Hash of Bamboo entry data.
-    entry_hash: Hash,
-
     /// Hash of previous Bamboo entry.
     entry_hash_backlink: Option<Hash>,
 
@@ -34,10 +25,7 @@ pub struct Entry {
     log_id: LogId,
 
     /// Encoded message payload of entry, can be deleted.
-    message_encoded: Option<MessageEncoded>,
-
-    /// Hash of message data.
-    message_hash: Hash,
+    message: Option<Message>,
 
     /// Sequence number of this entry.
     seq_num: Option<SeqNum>,
@@ -45,14 +33,29 @@ pub struct Entry {
 
 impl Entry {
     pub fn new(
-        key_pair: &KeyPair,
         log_id: &LogId,
         message: &Message,
         entry_hash_skiplink: Option<&Hash>,
         entry_hash_backlink: Option<&Hash>,
         previous_seq_num: Option<&SeqNum>,
     ) -> Result<Self> {
-        todo!();
+        let entry = Self {
+            log_id: log_id.clone().to_owned(),
+            message: Some(message.clone().to_owned()),
+            entry_hash_skiplink: entry_hash_skiplink.cloned(),
+            entry_hash_backlink: entry_hash_backlink.cloned(),
+            seq_num: previous_seq_num.map(|seq_num| seq_num.next().unwrap()),
+        };
+        entry.validate()?;
+        Ok(entry)
+    }
+
+    pub fn backlink_hash(&self) -> Option<Hash> {
+        if self.entry_hash_backlink.is_none() {
+            return None;
+        }
+
+        Some(self.entry_hash_backlink.clone().unwrap())
     }
 
     pub fn encode(&self) -> EntryEncoded {
@@ -81,14 +84,6 @@ impl Entry {
 
     pub fn hash(&self) -> Hash {
         self.entry_hash.clone()
-    }
-
-    pub fn backlink_hash(&self) -> Option<Hash> {
-        if self.entry_hash_backlink.is_none() {
-            return None;
-        }
-
-        Some(self.entry_hash_backlink.clone().unwrap())
     }
 
     pub fn skiplink_hash(&self) -> Option<Hash> {

@@ -60,6 +60,14 @@ impl Validation for SeqNum {
     }
 }
 
+impl Iterator for SeqNum {
+    type Item = SeqNum;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(Self(self.0 + 1))
+    }
+}
+
 impl PartialEq for SeqNum {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
