@@ -10,12 +10,15 @@ edition = "2018"
 description = "All the things a panda needs"
 repository = "git@github.com:p2panda/p2panda.git"
 license = "AGPL-3.0"
+readme = "README.md"
+exclude = [
+  ".gitignore"
+]
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
-bamboo-rs-core = { git = "https://github.com/pietgeursen/bamboo-rs", branch = "master" }
 console_error_panic_hook = "0.1.6"
 ed25519-dalek = { version = "1.0.1" }
 hex = "0.4.2"
