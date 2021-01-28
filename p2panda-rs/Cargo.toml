@@ -11,9 +11,8 @@ description = "All the things a panda needs"
 repository = "git@github.com:p2panda/p2panda.git"
 license = "AGPL-3.0"
 readme = "README.md"
-exclude = [
-  ".gitignore"
-]
+exclude = [".gitignore"]
+categories = ["web-programming", "wasm", "cryptography"]
 
 [lib]
 crate-type = ["cdylib"]
