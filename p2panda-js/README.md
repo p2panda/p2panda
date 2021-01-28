@@ -1,37 +1,52 @@
-# p2panda-js
+<h1 align="center">p2panda-js</h1>
 
-Use `p2panda-js` to build cool applications using the p2panda protocol running in NodeJS or modern browsers. This library incorporates WebAssembly exported from the sibling `p2panda-rs` project.
+<div align="center">
+  <strong>All the things a panda needs (for JavaScript)</strong>
+</div>
 
-## Usage
+<br />
 
-```js
-import p2panda from 'p2panda-js';
+<div align="center">
+  <!-- CI status -->
+  <a href="https://github.com/p2panda/p2panda/actions">
+    <img src="https://img.shields.io/github/workflow/status/p2panda/p2panda/Build%20and%20test?style=flat-square" alt="CI Status" />
+  </a>
+  <!-- Crates version -->
+  <a href="https://crates.io/crates/p2panda-rs">
+    <img src="https://img.shields.io/crates/v/p2panda-rs.svg?style=flat-square" alt="Crates.io version" />
+  </a>
+  <!-- NPM version -->
+  <a href="https://www.npmjs.com/package/p2panda-js">
+    <img src="https://img.shields.io/npm/v/p2panda-js?style=flat-square" alt="NPM version" />
+  </a>
+</div>
 
-async function main() {
-  // Wait until library (WebAssembly) got initialized
-  const { KeyPair } = await p2panda;
+<div align="center">
+  <h3>
+    <a href="https://github.com/p2panda/p2panda">
+      Installation
+    </a>
+    <span> | </span>
+    <a href="https://github.com/p2panda/p2panda/releases">
+      Releases
+    </a>
+    <span> | </span>
+    <a href="https://github.com/p2panda/design-document#get-involved">
+      Contributing
+    </a>
+  </h3>
+</div>
 
-  // Generates a new Ed25519 key pair using `Crypto.randomBytes` as
-  // cryptographically secure pseudorandom number generator:
-  const keyPair = new KeyPair();
+<br />
 
-  // Returns public and private keys as hex-encoded strings:
-  const publicKey = keypair.publicKey();
-  const privateKey = keypair.privateKey();
+This library provides all tools required to write a client for the [`p2panda`] network. It is shipped both as a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web browser.
 
-  // Derive an Ed25519 key pair from a hex-encoded private key:
-  const keyPairClone = KeyPair.fromPrivateKey(privateKey);
-}
+Read the library [`documentation`] for installation guides and examples.
 
-main();
-```
-
-## Development
-
-For development you will need:
-
-* [Rust](https://www.rust-lang.org/learn/get-started)
-* [wasm-pack](https://rustwasm.github.io/wasm-pack/installer)
+[`documentation`]: https://github.com/p2panda/p2panda
+[`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
+[`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
+[`p2panda`]: https://github.com/p2panda/design-document
 
 ```bash
 # Install dependencies
