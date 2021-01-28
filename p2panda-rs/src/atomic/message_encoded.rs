@@ -47,6 +47,7 @@ const MESSAGE_SCHEMA: &str = r#"
     )
 "#;
 
+/// Custom error types for `MessageEncoded`
 #[derive(Error, Debug)]
 pub enum MessageEncodedError {
     #[error("invalid message schema: {0}")]

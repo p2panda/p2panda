@@ -1,21 +1,27 @@
+use anyhow::bail;
 use bamboo_rs_core::lipmaa;
-use validator::{Validate, ValidationError, ValidationErrors};
+use thiserror::Error;
 
-use crate::error::{Result, ValidationResult};
+use crate::atomic::Validation;
+use crate::error::Result;
+
+/// Custom error types for `SeqNum`
+#[derive(Error, Debug)]
+pub enum SeqNumError {
+    #[error("sequence number can not be zero or negative")]
+    NotZeroOrNegative,
+}
 
 /// Start counting entries from here.
-pub const FIRST_SEQ_NUM: i64 = 1;
+pub const FIRST_SEQ_NUM: u64 = 1;
 
 /// Sequence number describing the position of an entry in its append-only log.
-///
-/// By specification the `seq_num` is an u64 integer but since this is not supported by sqlx we use
-/// the signed variant i64.
 #[derive(Clone, Debug)]
-pub struct SeqNum(i64);
+pub struct SeqNum(u64);
 
 impl SeqNum {
     /// Validates and returns a new sequence number when correct.
-    pub fn new(value: i64) -> Result<Self> {
+    pub fn new(value: u64) -> Result<Self> {
         let seq_num = Self(value);
         seq_num.validate()?;
         Ok(seq_num)
@@ -31,7 +37,7 @@ impl SeqNum {
     ///
     /// See Bamboo specification for more details about how skiplinks are calculated.
     pub fn skiplink_seq_num(&self) -> Self {
-        Self(lipmaa(self.0 as u64) as i64 + FIRST_SEQ_NUM)
+        Self(lipmaa(self.0) + FIRST_SEQ_NUM)
     }
 }
 
@@ -43,20 +49,14 @@ impl Default for SeqNum {
 
 impl Copy for SeqNum {}
 
-impl Validate for SeqNum {
-    fn validate(&self) -> ValidationResult {
-        let mut errors = ValidationErrors::new();
-
+impl Validation for SeqNum {
+    fn validate(&self) -> Result<()> {
         // Numbers have to be larger than zero
         if self.0 < FIRST_SEQ_NUM {
-            errors.add("logId", ValidationError::new("can't be zero or negative"));
+            bail!(SeqNumError::NotZeroOrNegative)
         }
 
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
-        }
+        Ok(())
     }
 }
 
@@ -72,7 +72,6 @@ mod tests {
 
     #[test]
     fn validate() {
-        assert!(SeqNum::new(-1).is_err());
         assert!(SeqNum::new(0).is_err());
         assert!(SeqNum::new(100).is_ok());
     }
