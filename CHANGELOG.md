@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Atomic data types like `Message`, `Entry`, `LogId`, `SeqNum`, etc. [#23](https://github.com/p2panda/p2panda/pull/23) `rs`
 
-## [0.1.0] - :package: 2021-01-18 `p2panda-js` - :package: 2021-01-28 `p2panda-rs`
+## [0.1.0]
+
+Released: :package: 2021-01-18 `p2panda-js` - :package: 2021-01-28 `p2panda-rs`
 
 ### Added
 
