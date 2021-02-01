@@ -1,11 +1,10 @@
-use crate::atomic::{
-    Author, EntryEncoded, Hash, LogId, Message, MessageEncoded, SeqNum, Validation,
-};
+use anyhow::bail;
+use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
+use thiserror::Error;
+
+use crate::atomic::{EntryEncoded, Hash, LogId, Message, SeqNum, Validation};
 use crate::error::Result;
 use crate::keypair::KeyPair;
-use anyhow::bail;
-use bamboo_rs_core::Entry as BambooEntry;
-use thiserror::Error;
 
 /// Entry of an append-only log based on Bamboo specification. It describes the actual data in the
 /// p2p network and is shared between nodes.
@@ -40,9 +39,7 @@ pub struct Entry {
 #[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
 pub enum EntryError {
-    /// Invalid attempt to create an entry without a message.
-    #[error("message fields can not be empty")]
-    EmptyMessage,
+    /// Entries have to contain backlinks when sequence number is given.
     #[error("backlink and skiplink not valid for this sequence number")]
     InvalidLinks,
 }
@@ -55,34 +52,61 @@ impl Entry {
         entry_hash_backlink: Option<&Hash>,
         previous_seq_num: Option<&SeqNum>,
     ) -> Result<Self> {
+        // If it is the first entry set sequence number to 1, otherwise increment
+        let seq_num = match previous_seq_num {
+            None => SeqNum::default(),
+            Some(s) => {
+                let mut next_seq_num = s.clone();
+                next_seq_num.next().unwrap()
+            }
+        };
+
         let entry = Self {
             log_id: log_id.clone().to_owned(),
             message: Some(message.clone().to_owned()),
             entry_hash_skiplink: entry_hash_skiplink.cloned(),
             entry_hash_backlink: entry_hash_backlink.cloned(),
-            // If it is the first entry set sequence number to 1, otherwise increment.
-            seq_num: previous_seq_num
-                .map_or_else(|seq_num| seq_num.next().unwrap(), || SeqNum::default()),
+            seq_num,
         };
+
         entry.validate()?;
+
         Ok(entry)
     }
 
-    pub fn sign_and_encode(&self, keypair: &KeyPair) -> EntryEncoded {
-        let message_encoded = self.message.encode().unwrap();
+    pub fn sign_and_encode(&self, key_pair: &KeyPair) -> Result<EntryEncoded> {
+        // Generate message hash
+        // @TODO: Handle case where message is not set
+        let message_encoded = self.message.clone().unwrap().encode().unwrap();
         let message_hash = message_encoded.hash();
+        let message_size = message_encoded.size();
 
+        // Convert entry links to Bamboo structs
+        let backlink = self
+            .entry_hash_backlink
+            .clone()
+            .map(|link| YamfHash::Blake2b(link.to_bytes()));
+
+        let lipmaa_link = self
+            .entry_hash_skiplink
+            .clone()
+            .map(|link| YamfHash::Blake2b(link.to_bytes()));
+
+        // Create bamboo entry
         let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
             log_id: self.log_id.as_integer(),
             is_end_of_feed: false,
-            payload_hash: message_hash,
-            payload_size: message_encoded.size(),
-            author: keypair.public,
+            payload_hash: YamfHash::Blake2b(message_hash.to_bytes()),
+            payload_size: message_size,
+            author: key_pair.public,
             seq_num: self.seq_num.as_integer(),
-            backlink: self.entry_hash_backlink.to_bytes(),
-            lipmaa_link: self.entry_hash_skiplink.to_bytes(),
+            backlink,
+            lipmaa_link,
             sig: None,
         };
+
+        // @TODO: Sign BambooEntry and encode it
+        EntryEncoded::new(String::from("dummy"))
     }
 
     pub fn backlink_hash(&self) -> Option<Hash> {
@@ -105,12 +129,8 @@ impl Entry {
         Some(self.entry_hash_skiplink.clone().unwrap())
     }
 
-    pub fn seq_num(&self) -> Option<SeqNum> {
-        if self.seq_num.is_none() {
-            return None;
-        }
-
-        Some(self.seq_num.clone().unwrap())
+    pub fn seq_num(&self) -> SeqNum {
+        self.seq_num.clone()
     }
 
     pub fn seq_num_backlink(&self) -> Option<SeqNum> {
@@ -132,10 +152,10 @@ impl Validation for Entry {
         // First entries do not contain any sequence number or links. Every other entry has to contain all information.
         if (self.entry_hash_backlink.is_none()
             && self.entry_hash_skiplink.is_none()
-            && self.seq_num.is_none())
+            && self.seq_num.is_first())
             || (self.entry_hash_backlink.is_some()
                 && self.entry_hash_skiplink.is_some()
-                && self.seq_num.is_some())
+                && !self.seq_num.is_first())
         {
             bail!(EntryError::InvalidLinks);
         }
