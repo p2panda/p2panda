@@ -39,6 +39,10 @@ impl SeqNum {
     pub fn skiplink_seq_num(&self) -> Self {
         Self(lipmaa(self.0) + FIRST_SEQ_NUM)
     }
+
+    pub fn as_integer(&self) -> u64 {
+        self.0
+    }
 }
 
 impl Default for SeqNum {

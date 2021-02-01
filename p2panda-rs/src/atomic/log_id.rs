@@ -20,6 +20,10 @@ impl LogId {
         // Log ids for system schemas are even numbers
         self.0 % 2 == 0
     }
+
+    pub fn as_integer(&self) -> u64 {
+        self.0
+    }
 }
 
 impl Default for LogId {

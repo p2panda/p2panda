@@ -3,7 +3,7 @@ use anyhow::bail;
 use cddl::validator::cbor;
 use thiserror::Error;
 
-use crate::atomic::{Message, Validation};
+use crate::atomic::{Hash, Message, Validation};
 use crate::error::Result;
 
 /// Concise Data Definition Language (CDDL) Schema of p2panda messages. See:
@@ -72,6 +72,17 @@ impl MessageEncoded {
         Ok(inner)
     }
 
+    /// Returns the decoded version of this message.
+    pub fn decode(&self) -> Message {
+        // Deserialize from CBOR
+        serde_cbor::from_slice(&self.as_bytes()).unwrap()
+    }
+
+    /// Returns the hash of MessageEncoded.
+    pub fn hash(&self) -> Hash {
+        Hash::from_bytes(self.as_bytes())
+    }
+
     /// Returns encoded message as string.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
@@ -83,10 +94,8 @@ impl MessageEncoded {
         hex::decode(&self.0).unwrap()
     }
 
-    /// Returns the decoded version of this message.
-    pub fn decode(&self) -> Message {
-        // Deserialize from CBOR
-        serde_cbor::from_slice(&self.as_bytes()).unwrap()
+    pub fn size(&self) -> u64 {
+        self.0.len() / 2
     }
 }
 
@@ -109,9 +118,7 @@ impl Validation for MessageEncoded {
 
                 bail!(MessageEncodedError::InvalidSchema(err_str))
             }
-            Err(cbor::Error::CBORParsing(_err)) => {
-                bail!(MessageEncodedError::InvalidCBOR)
-            }
+            Err(cbor::Error::CBORParsing(_err)) => bail!(MessageEncodedError::InvalidCBOR),
             Err(cbor::Error::CDDLParsing(err)) => {
                 panic!(err);
             }
