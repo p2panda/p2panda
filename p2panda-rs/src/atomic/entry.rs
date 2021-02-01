@@ -1,5 +1,6 @@
 use anyhow::bail;
 use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
+use ed25519_dalek::PublicKey;
 use thiserror::Error;
 
 use crate::atomic::{EntryEncoded, Hash, LogId, Message, SeqNum, Validation};
@@ -99,7 +100,7 @@ impl Entry {
             is_end_of_feed: false,
             payload_hash: YamfHash::Blake2b(message_hash.to_bytes()),
             payload_size: message_size,
-            author: key_pair.public,
+            author: PublicKey::from_bytes(&key_pair.public_key_bytes())?,
             seq_num: self.seq_num.as_integer(),
             backlink,
             lipmaa_link,
