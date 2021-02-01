@@ -69,7 +69,7 @@ console.log(keyPair.publicKey());
 use p2panda_rs::KeyPair;
 
 let key_pair = KeyPair::new();
-println!("{}", key_pair.publicKey());
+println!("{}", key_pair.public_key());
 ```
 
 More examples can be found in the [`p2panda-rs`] and [`p2panda-js`] directories.
