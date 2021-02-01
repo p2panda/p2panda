@@ -40,6 +40,10 @@ impl SeqNum {
         Self(lipmaa(self.0) + FIRST_SEQ_NUM)
     }
 
+    pub fn is_first(&self) -> bool {
+        self.0 == FIRST_SEQ_NUM
+    }
+
     pub fn as_integer(&self) -> u64 {
         self.0
     }

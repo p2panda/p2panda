@@ -78,9 +78,11 @@ impl MessageEncoded {
         serde_cbor::from_slice(&self.as_bytes()).unwrap()
     }
 
-    /// Returns the hash of MessageEncoded.
+    /// Returns the hash of this message.
+    // @TODO: Use std Hash trait instead
     pub fn hash(&self) -> Hash {
-        Hash::from_bytes(self.as_bytes())
+        // Unwrap as we already know that the inner value is valid
+        Hash::from_bytes(self.as_bytes()).unwrap()
     }
 
     /// Returns encoded message as string.
@@ -95,7 +97,7 @@ impl MessageEncoded {
     }
 
     pub fn size(&self) -> u64 {
-        self.0.len() / 2
+        self.0.len() as u64 / 2
     }
 }
 
