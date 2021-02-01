@@ -81,7 +81,7 @@ impl Entry {
         let message_hash = message_encoded.hash();
         let message_size = message_encoded.size();
 
-        // Convert entry links to Bamboo structs
+        // Convert entry links to Bamboo crate types
         let backlink = self
             .entry_hash_backlink
             .clone()
@@ -92,7 +92,8 @@ impl Entry {
             .clone()
             .map(|link| YamfHash::Blake2b(link.to_bytes()));
 
-        // Create bamboo entry
+        // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
+        // details and definition of entry fields.
         let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
             log_id: self.log_id.as_integer(),
             is_end_of_feed: false,
