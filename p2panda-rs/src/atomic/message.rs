@@ -241,6 +241,14 @@ impl Message {
         Ok(message)
     }
 
+    /// Returns an encoded version of this message.
+    pub fn encode(&self) -> Result<MessageEncoded> {
+        // Encode bytes as hex string
+        let encoded = hex::encode(&self.as_cbor());
+
+        Ok(MessageEncoded::new(&encoded)?)
+    }
+
     /// Decodes an encoded message and returns it.
     pub fn from_encoded(message_encoded: MessageEncoded) -> Self {
         message_encoded.decode()
@@ -308,14 +316,6 @@ impl Message {
     /// Returns true if message contains fields.
     pub fn has_fields(&self) -> bool {
         self.fields.is_some()
-    }
-
-    /// Returns an encoded version of this message.
-    pub fn encode(&self) -> Result<MessageEncoded> {
-        // Encode bytes as hex string
-        let encoded = hex::encode(&self.as_cbor());
-
-        Ok(MessageEncoded::new(&encoded)?)
     }
 }
 

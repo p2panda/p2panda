@@ -4,6 +4,7 @@ use crate::atomic::{
 use crate::error::Result;
 use crate::keypair::KeyPair;
 use anyhow::bail;
+use bamboo_rs_core::Entry as BambooEntry;
 use thiserror::Error;
 
 /// Entry of an append-only log based on Bamboo specification. It describes the actual data in the
@@ -32,7 +33,7 @@ pub struct Entry {
     message: Option<Message>,
 
     /// Sequence number of this entry.
-    seq_num: Option<SeqNum>,
+    seq_num: SeqNum,
 }
 
 /// Error types for methods of `Entry` struct.
@@ -42,6 +43,8 @@ pub enum EntryError {
     /// Invalid attempt to create an entry without a message.
     #[error("message fields can not be empty")]
     EmptyMessage,
+    #[error("backlink and skiplink not valid for this sequence number")]
+    InvalidLinks,
 }
 
 impl Entry {
@@ -57,10 +60,29 @@ impl Entry {
             message: Some(message.clone().to_owned()),
             entry_hash_skiplink: entry_hash_skiplink.cloned(),
             entry_hash_backlink: entry_hash_backlink.cloned(),
-            seq_num: previous_seq_num.map(|seq_num| seq_num.next().unwrap()),
+            // If it is the first entry set sequence number to 1, otherwise increment.
+            seq_num: previous_seq_num
+                .map_or_else(|seq_num| seq_num.next().unwrap(), || SeqNum::default()),
         };
         entry.validate()?;
         Ok(entry)
+    }
+
+    pub fn sign_and_encode(&self, keypair: &KeyPair) -> EntryEncoded {
+        let message_encoded = self.message.encode().unwrap();
+        let message_hash = message_encoded.hash();
+
+        let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
+            log_id: self.log_id.as_integer(),
+            is_end_of_feed: false,
+            payload_hash: message_hash,
+            payload_size: message_encoded.size(),
+            author: keypair.public,
+            seq_num: self.seq_num.as_integer(),
+            backlink: self.entry_hash_backlink.to_bytes(),
+            lipmaa_link: self.entry_hash_skiplink.to_bytes(),
+            sig: None,
+        };
     }
 
     pub fn backlink_hash(&self) -> Option<Hash> {
@@ -71,32 +93,8 @@ impl Entry {
         Some(self.entry_hash_backlink.clone().unwrap())
     }
 
-    pub fn encode(&self) -> EntryEncoded {
-        self.entry_encoded.clone()
-    }
-
-    pub fn message(&self) -> Option<Message> {
-        if self.message_encoded.is_none() {
-            return None;
-        }
-
-        Some(self.message_encoded.clone().unwrap().decode())
-    }
-
-    pub fn message_encoded(&self) -> Option<MessageEncoded> {
-        if self.message_encoded.is_none() {
-            return None;
-        }
-
-        Some(self.message_encoded.clone().unwrap())
-    }
-
-    pub fn author(&self) -> Author {
-        self.author.clone()
-    }
-
     pub fn hash(&self) -> Hash {
-        self.entry_hash.clone()
+        todo!();
     }
 
     pub fn skiplink_hash(&self) -> Option<Hash> {
@@ -105,10 +103,6 @@ impl Entry {
         }
 
         Some(self.entry_hash_skiplink.clone().unwrap())
-    }
-
-    pub fn message_hash(&self) -> Hash {
-        self.message_hash.clone()
     }
 
     pub fn seq_num(&self) -> Option<SeqNum> {
@@ -135,9 +129,15 @@ impl Entry {
 
 impl Validation for Entry {
     fn validate(&self) -> Result<()> {
-        // Create and update entries cannot have empty messages.
-        if !self.has_message() || self.message().fields().unwrap().is_empty() {
-            bail!(EntryError::EmptyMessage);
+        // First entries do not contain any sequence number or links. Every other entry has to contain all information.
+        if (self.entry_hash_backlink.is_none()
+            && self.entry_hash_skiplink.is_none()
+            && self.seq_num.is_none())
+            || (self.entry_hash_backlink.is_some()
+                && self.entry_hash_skiplink.is_some()
+                && self.seq_num.is_some())
+        {
+            bail!(EntryError::InvalidLinks);
         }
 
         Ok(())
