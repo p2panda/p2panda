@@ -1,6 +1,10 @@
-use crate::atomic::{Author, EntryEncoded, Hash, LogId, Message, MessageEncoded, SeqNum};
+use crate::atomic::{
+    Author, EntryEncoded, Hash, LogId, Message, MessageEncoded, SeqNum, Validation,
+};
 use crate::error::Result;
 use crate::keypair::KeyPair;
+use anyhow::bail;
+use thiserror::Error;
 
 /// Entry of an append-only log based on Bamboo specification. It describes the actual data in the
 /// p2p network and is shared between nodes.
@@ -29,6 +33,15 @@ pub struct Entry {
 
     /// Sequence number of this entry.
     seq_num: Option<SeqNum>,
+}
+
+/// Error types for methods of `Entry` struct.
+#[allow(missing_copy_implementations)]
+#[derive(Error, Debug)]
+pub enum EntryError {
+    /// Invalid attempt to create an entry without a message.
+    #[error("message fields can not be empty")]
+    EmptyMessage,
 }
 
 impl Entry {
@@ -112,5 +125,21 @@ impl Entry {
 
     pub fn seq_num_skiplink(&self) -> Option<SeqNum> {
         todo!();
+    }
+
+    /// Returns true if entry contains message.
+    pub fn has_message(&self) -> bool {
+        self.message.is_some()
+    }
+}
+
+impl Validation for Entry {
+    fn validate(&self) -> Result<()> {
+        // Create and update entries cannot have empty messages.
+        if !self.has_message() || self.message().fields().unwrap().is_empty() {
+            bail!(EntryError::EmptyMessage);
+        }
+
+        Ok(())
     }
 }
