@@ -22,6 +22,7 @@ pub use seq_num::SeqNum;
 pub mod errors {
     pub use super::author::AuthorError;
     pub use super::entry::EntryError;
+    pub use super::entry_encoded::EntryEncodedError;
     pub use super::hash::HashError;
     pub use super::message::{MessageError, MessageFieldsError};
     pub use super::message_encoded::MessageEncodedError;

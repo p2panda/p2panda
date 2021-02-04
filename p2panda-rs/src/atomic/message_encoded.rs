@@ -71,7 +71,7 @@ impl MessageEncoded {
         Ok(inner)
     }
 
-    /// Returns the decoded version of this message.
+    /// Returns the decoded version of message.
     pub fn decode(&self) -> Message {
         // Deserialize from CBOR
         serde_cbor::from_slice(&self.as_bytes()).unwrap()

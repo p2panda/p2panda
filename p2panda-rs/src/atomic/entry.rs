@@ -110,17 +110,12 @@ impl Entry {
         };
 
         // @TODO: Sign BambooEntry and encode it
-        EntryEncoded::new(String::from("dummy"))
+        EntryEncoded::new("dummy")
     }
 
     /// Decodes an encoded entry and returns it.
     pub fn from_encoded(entry_encoded: EntryEncoded) -> Self {
         entry_encoded.decode()
-    }
-
-    /// Returns YAMF BLAKE2b hash of entry.
-    pub fn hash(&self) -> Hash {
-        todo!();
     }
 
     /// Returns hash of backlink entry when given.
