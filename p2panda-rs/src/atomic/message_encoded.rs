@@ -3,8 +3,8 @@ use anyhow::bail;
 use cddl::validator::cbor;
 use thiserror::Error;
 
+use crate::Result;
 use crate::atomic::{Hash, Message, Validation};
-use crate::error::Result;
 
 /// Concise Data Definition Language (CDDL) Schema of p2panda messages. See:
 /// https://tools.ietf.org/html/rfc8610

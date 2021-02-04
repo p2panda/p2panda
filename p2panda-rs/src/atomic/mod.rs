@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::Result;
 
 mod author;
 mod entry;
@@ -18,15 +18,18 @@ pub use message::{Message, MessageAction, MessageFields, MessageValue, MessageVe
 pub use message_encoded::MessageEncoded;
 pub use seq_num::SeqNum;
 
+/// Custom error types of all atomic structs.
 pub mod errors {
     pub use super::author::AuthorError;
+    pub use super::entry::EntryError;
     pub use super::hash::HashError;
     pub use super::message::{MessageError, MessageFieldsError};
     pub use super::message_encoded::MessageEncodedError;
     pub use super::seq_num::SeqNumError;
 }
 
-pub trait Validation {
+/// Trait used by atomic structs to validate arguments.
+trait Validation {
     /// Validates atomic data types instance.
     fn validate(&self) -> Result<()>;
 }
