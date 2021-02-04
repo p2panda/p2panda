@@ -16,10 +16,10 @@ type Result<T> = anyhow::Result<T>;
 
 /// Basic structs and methods to interact with p2panda data structures.
 pub mod atomic;
-/// Validations and definitions of system schemas and message payloads.
-pub mod schema;
 /// Author identities to sign data with.
 pub mod keypair;
+/// Validations and definitions of system schemas and message payloads.
+pub mod schema;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm_utils {

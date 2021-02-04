@@ -1,7 +1,7 @@
 use thiserror::Error;
 
-use crate::Result;
 use crate::atomic::{Entry, Hash, Validation};
+use crate::Result;
 
 /// Custom error types for `EntryEncoded`
 #[derive(Error, Debug)]
