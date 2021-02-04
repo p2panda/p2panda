@@ -29,7 +29,7 @@ pub struct Entry {
     /// Used log for this entry.
     log_id: LogId,
 
-    /// Encoded message payload of entry, can be deleted.
+    /// Message payload of entry, can be deleted.
     message: Option<Message>,
 
     /// Sequence number of this entry.
@@ -40,12 +40,13 @@ pub struct Entry {
 #[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
 pub enum EntryError {
-    /// Entries have to contain backlinks when sequence number is given.
+    /// Links should not be set when first entry in log.
     #[error("backlink and skiplink not valid for this sequence number")]
     InvalidLinks,
 }
 
 impl Entry {
+    /// Validates and returns a new instance of `Entry`.
     pub fn new(
         log_id: &LogId,
         message: &Message,
@@ -75,6 +76,7 @@ impl Entry {
         Ok(entry)
     }
 
+    /// Signs the Bamboo entry via Ed25519 key pair and returns the hex-encoded representation.
     pub fn sign_and_encode(&self, key_pair: &KeyPair) -> Result<EntryEncoded> {
         // Generate message hash
         // @TODO: Handle case where message is not set
@@ -96,12 +98,12 @@ impl Entry {
         // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
         // details and definition of entry fields.
         let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
-            log_id: self.log_id.as_integer(),
+            log_id: self.log_id.as_u64(),
             is_end_of_feed: false,
             payload_hash: YamfHash::Blake2b(message_hash.to_bytes()),
             payload_size: message_size,
             author: PublicKey::from_bytes(&key_pair.public_key_bytes())?,
-            seq_num: self.seq_num.as_integer(),
+            seq_num: self.seq_num.as_u64(),
             backlink,
             lipmaa_link,
             sig: None,
@@ -151,7 +153,8 @@ impl Entry {
 
 impl Validation for Entry {
     fn validate(&self) -> Result<()> {
-        // First entries do not contain any sequence number or links. Every other entry has to contain all information.
+        // First entries do not contain any sequence number or links. Every other entry has to
+        // contain all information.
         if (self.entry_hash_backlink.is_none()
             && self.entry_hash_skiplink.is_none()
             && self.seq_num.is_first())

@@ -90,8 +90,8 @@ pub enum MessageValue {
 pub struct MessageFields(HashMap<String, MessageValue>);
 
 /// Error types for methods of `MessageFields` struct.
-#[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
 pub enum MessageFieldsError {
     /// Detected duplicate field when adding a new one.
     #[error("field already exists")]
