@@ -2,8 +2,8 @@ use anyhow::bail;
 use bamboo_rs_core::lipmaa;
 use thiserror::Error;
 
-use crate::Result;
 use crate::atomic::Validation;
+use crate::Result;
 
 /// Start counting entries from here.
 pub const FIRST_SEQ_NUM: u64 = 1;

@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use yamf_hash::{YamfHash, MAX_YAMF_HASH_SIZE};
 
-use crate::Result;
 use crate::atomic::Validation;
+use crate::Result;
 
 /// Custom error types for `Hash`
 #[derive(Error, Debug)]

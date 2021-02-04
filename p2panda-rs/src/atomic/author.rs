@@ -2,8 +2,8 @@ use anyhow::bail;
 use ed25519_dalek::PUBLIC_KEY_LENGTH;
 use thiserror::Error;
 
-use crate::Result;
 use crate::atomic::Validation;
+use crate::Result;
 
 /// Custom error types for `Author`
 #[derive(Error, Debug)]

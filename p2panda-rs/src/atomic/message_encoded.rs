@@ -1,9 +1,9 @@
 use thiserror::Error;
 
-use crate::Result;
 use crate::atomic::{Hash, Message, Validation};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::schema::{MESSAGE_SCHEMA, validate_schema};
+use crate::schema::{validate_schema, MESSAGE_SCHEMA};
+use crate::Result;
 
 /// Custom error types for `MessageEncoded`
 #[derive(Error, Debug)]

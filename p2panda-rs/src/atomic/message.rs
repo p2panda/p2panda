@@ -4,8 +4,8 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
 use thiserror::Error;
 
-use crate::Result;
 use crate::atomic::{Hash, MessageEncoded, Validation};
+use crate::Result;
 
 /// Message format versions to introduce API changes in the future.
 #[derive(Clone, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
