@@ -1,7 +1,9 @@
+#[cfg(not(target_arch = "wasm32"))]
 use anyhow::bail;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::Result;
 
 mod message;
