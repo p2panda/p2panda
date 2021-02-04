@@ -18,7 +18,7 @@ pub use message::{Message, MessageAction, MessageFields, MessageValue, MessageVe
 pub use message_encoded::MessageEncoded;
 pub use seq_num::SeqNum;
 
-/// Custom error types of all atomic structs.
+/// Custom error types of atomic structs.
 pub mod error {
     pub use super::author::AuthorError;
     pub use super::entry::EntryError;

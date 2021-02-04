@@ -1,12 +1,14 @@
 use anyhow::bail;
+#[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
-
-mod message;
 
 use crate::Result;
 
+mod message;
+
 pub use message::MESSAGE_SCHEMA;
 
+/// Custom error types of schema validation.
 pub mod error {
     use thiserror::Error;
 
@@ -27,6 +29,7 @@ pub mod error {
 ///
 /// This helper method also converts validation errors coming from the cddl crate into an
 /// concatenated error message and returns it.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<()> {
     match cddl::validate_cbor_from_slice(cddl_schema, &bytes) {
         Err(cbor::Error::Validation(err)) => {
