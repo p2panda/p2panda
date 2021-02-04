@@ -292,10 +292,6 @@ impl Message {
 
     /// Returns id of message.
     pub fn id(&self) -> Option<Hash> {
-        if self.id.is_none() {
-            return None;
-        }
-
         self.id.clone()
     }
 
@@ -306,10 +302,6 @@ impl Message {
 
     /// Returns user data fields of message.
     pub fn fields(&self) -> Option<MessageFields> {
-        if self.fields.is_none() {
-            return None;
-        }
-
         self.fields.clone()
     }
 

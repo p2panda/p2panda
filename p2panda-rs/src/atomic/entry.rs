@@ -113,36 +113,39 @@ impl Entry {
         EntryEncoded::new(String::from("dummy"))
     }
 
-    pub fn backlink_hash(&self) -> Option<Hash> {
-        if self.entry_hash_backlink.is_none() {
-            return None;
-        }
-
-        Some(self.entry_hash_backlink.clone().unwrap())
+    /// Decodes an encoded entry and returns it.
+    pub fn from_encoded(entry_encoded: EntryEncoded) -> Self {
+        entry_encoded.decode()
     }
 
+    /// Returns YAMF BLAKE2b hash of entry.
     pub fn hash(&self) -> Hash {
         todo!();
     }
 
-    pub fn skiplink_hash(&self) -> Option<Hash> {
-        if self.entry_hash_skiplink.is_none() {
-            return None;
-        }
-
-        Some(self.entry_hash_skiplink.clone().unwrap())
+    /// Returns hash of backlink entry when given.
+    pub fn backlink_hash(&self) -> Option<Hash> {
+        self.entry_hash_backlink.clone()
     }
 
+    /// Returns hash of skiplink entry when given.
+    pub fn skiplink_hash(&self) -> Option<Hash> {
+        self.entry_hash_skiplink.clone()
+    }
+
+    /// Returns sequence number of entry.
     pub fn seq_num(&self) -> SeqNum {
         self.seq_num.clone()
     }
 
+    /// Calculates sequence number of backlink entry.
     pub fn seq_num_backlink(&self) -> Option<SeqNum> {
-        todo!();
+        self.seq_num.backlink_seq_num()
     }
 
+    /// Calculates sequence number of skiplink entry.
     pub fn seq_num_skiplink(&self) -> Option<SeqNum> {
-        todo!();
+        self.seq_num.skiplink_seq_num()
     }
 
     /// Returns true if entry contains message.
