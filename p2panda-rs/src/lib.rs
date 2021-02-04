@@ -11,11 +11,12 @@
     unused_qualifications
 )]
 
-/// Basic structs and methods to interact with p2panda data structures
+/// A specialized `Result` type for p2panda-rs.
+type Result<T> = anyhow::Result<T>;
+
+/// Basic structs and methods to interact with p2panda data structures.
 pub mod atomic;
-/// Special error types from this crate
-pub mod error;
-/// Author identities to sign data with
+/// Author identities to sign data with.
 pub mod keypair;
 
 #[cfg(target_arch = "wasm32")]

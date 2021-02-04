@@ -3,8 +3,8 @@ use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
 use ed25519_dalek::PublicKey;
 use thiserror::Error;
 
+use crate::Result;
 use crate::atomic::{EntryEncoded, Hash, LogId, Message, SeqNum, Validation};
-use crate::error::Result;
 use crate::keypair::KeyPair;
 
 /// Entry of an append-only log based on Bamboo specification. It describes the actual data in the
