@@ -4,7 +4,6 @@
 /// This schema is used to verify the data integrity of all incoming messages. This does only
 /// validate the "meta" message schema and does not check against user data fields as this is part
 /// of an additional process called user schema validation.
-#[cfg(not(target_arch = "wasm32"))]
 pub const MESSAGE_SCHEMA: &str = r#"
     message = {
         schema: hash,
