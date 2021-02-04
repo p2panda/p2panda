@@ -7,10 +7,13 @@ use crate::error::Result;
 
 /// Custom error types for `Author`
 #[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
 pub enum AuthorError {
+    /// Author string does not have the right length.
     #[error("invalid author key length")]
     InvalidLength,
 
+    /// Author string contains invalid hex characters.
     #[error("invalid hex encoding in author string")]
     InvalidHexEncoding,
 }
@@ -21,7 +24,6 @@ pub struct Author(String);
 
 impl Author {
     /// Validates and returns an author when correct.
-    #[allow(dead_code)]
     pub fn new(value: &str) -> Result<Self> {
         let author = Self(String::from(value));
         author.validate()?;

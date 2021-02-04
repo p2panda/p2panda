@@ -5,15 +5,17 @@ use thiserror::Error;
 use crate::atomic::Validation;
 use crate::error::Result;
 
+/// Start counting entries from here.
+pub const FIRST_SEQ_NUM: u64 = 1;
+
 /// Custom error types for `SeqNum`
 #[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
 pub enum SeqNumError {
+    /// Sequence numbers are always positive.
     #[error("sequence number can not be zero or negative")]
     NotZeroOrNegative,
 }
-
-/// Start counting entries from here.
-pub const FIRST_SEQ_NUM: u64 = 1;
 
 /// Sequence number describing the position of an entry in its append-only log.
 #[derive(Clone, Debug)]
@@ -28,23 +30,25 @@ impl SeqNum {
     }
 
     /// Return sequence number of the previous entry (backlink).
-    #[allow(dead_code)]
     pub fn backlink_seq_num(&self) -> Result<Self> {
         Self::new(self.0 - 1)
     }
 
     /// Return sequence number of the lipmaa entry (skiplink).
     ///
-    /// See Bamboo specification for more details about how skiplinks are calculated.
+    /// See Bamboo specification for more details about how skiplinks are calculated:
+    /// https://github.com/AljoschaMeyer/bamboo#links-and-entry-verification
     pub fn skiplink_seq_num(&self) -> Self {
         Self(lipmaa(self.0) + FIRST_SEQ_NUM)
     }
 
+    /// Returns true when sequence number marks first entry in log.
     pub fn is_first(&self) -> bool {
         self.0 == FIRST_SEQ_NUM
     }
 
-    pub fn as_integer(&self) -> u64 {
+    /// Returns `SeqNum` as u64 integer.
+    pub fn as_u64(&self) -> u64 {
         self.0
     }
 }

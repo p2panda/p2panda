@@ -15,13 +15,13 @@ impl LogId {
     }
 
     /// Returns true when LogId is for a system schema.
-    #[allow(dead_code)]
     pub fn is_system_log(&self) -> bool {
         // Log ids for system schemas are even numbers
         self.0 % 2 == 0
     }
 
-    pub fn as_integer(&self) -> u64 {
+    /// Returns `LogId` as u64 integer.
+    pub fn as_u64(&self) -> u64 {
         self.0
     }
 }

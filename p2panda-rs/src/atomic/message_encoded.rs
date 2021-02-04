@@ -12,10 +12,6 @@ use crate::error::Result;
 /// This schema is used to verify the data integrity of all incoming messages. This does only
 /// validate the "meta" message schema and does not check against user data fields as this is part
 /// of an additional process called user schema validation.
-///
-/// @TODO: Fix issue with schema:
-/// This schema accepts maps as values in `message-fields` even though it should only accept
-/// `tstr`. See: https://github.com/anweiss/cddl/issues/82
 #[cfg(not(target_arch = "wasm32"))]
 const MESSAGE_SCHEMA: &str = r#"
     message = {
@@ -50,12 +46,15 @@ const MESSAGE_SCHEMA: &str = r#"
 /// Custom error types for `MessageEncoded`
 #[derive(Error, Debug)]
 pub enum MessageEncodedError {
+    /// Message contains invalid fields.
     #[error("invalid message schema: {0}")]
     InvalidSchema(String),
 
+    /// Encoded message string contains invalid hex characters.
     #[error("invalid hex encoding in message")]
     InvalidHexEncoding,
 
+    /// Message can't be deserialized from invalid CBOR encoding.
     #[error("invalid CBOR format")]
     InvalidCBOR,
 }
@@ -96,6 +95,7 @@ impl MessageEncoded {
         hex::decode(&self.0).unwrap()
     }
 
+    /// Returns payload size (number of bytes) of encoded message.
     pub fn size(&self) -> u64 {
         self.0.len() as u64 / 2
     }

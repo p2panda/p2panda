@@ -9,13 +9,17 @@ use crate::error::Result;
 
 /// Custom error types for `Hash`
 #[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
 pub enum HashError {
+    /// Hash string has an invalid length.
     #[error("invalid hash length")]
     InvalidLength,
 
+    /// Hash string contains invalid hex characters.
     #[error("invalid hex encoding in hash string")]
     InvalidHexEncoding,
 
+    /// Hash is not a valid YAMF BLAKE2b hash.
     #[error("can not decode YAMF BLAKE2b hash")]
     DecodingFailed,
 }
@@ -36,7 +40,6 @@ impl Hash {
     }
 
     /// Hashes byte data and returns it as hash instance.
-    #[allow(dead_code)]
     pub fn from_bytes(value: Vec<u8>) -> Result<Self> {
         // Generate Blake2b hash
         let blake2b_hash = new_blake2b(&value);
@@ -58,7 +61,6 @@ impl Hash {
     }
 
     /// Returns hash as hex string.
-    #[allow(dead_code)]
     pub fn to_hex(&self) -> &str {
         self.0.as_str()
     }
