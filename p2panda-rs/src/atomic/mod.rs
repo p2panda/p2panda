@@ -19,7 +19,7 @@ pub use message_encoded::MessageEncoded;
 pub use seq_num::SeqNum;
 
 /// Custom error types of all atomic structs.
-pub mod errors {
+pub mod error {
     pub use super::author::AuthorError;
     pub use super::entry::EntryError;
     pub use super::entry_encoded::EntryEncodedError;
