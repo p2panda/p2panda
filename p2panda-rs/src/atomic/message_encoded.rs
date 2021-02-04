@@ -1,47 +1,9 @@
-use anyhow::bail;
-#[cfg(not(target_arch = "wasm32"))]
-use cddl::validator::cbor;
 use thiserror::Error;
 
 use crate::Result;
 use crate::atomic::{Hash, Message, Validation};
-
-/// Concise Data Definition Language (CDDL) Schema of p2panda messages. See:
-/// https://tools.ietf.org/html/rfc8610
-///
-/// This schema is used to verify the data integrity of all incoming messages. This does only
-/// validate the "meta" message schema and does not check against user data fields as this is part
-/// of an additional process called user schema validation.
 #[cfg(not(target_arch = "wasm32"))]
-const MESSAGE_SCHEMA: &str = r#"
-    message = {
-        schema: hash,
-        version: 1,
-        message-body,
-    }
-
-    hash = tstr .regexp "[0-9a-fa-f]{128}"
-    message-fields = { + tstr => tstr / int / float / bool }
-
-    ; Create message
-    message-body = (
-        action: "create",
-        fields: message-fields
-    )
-
-    ; Update message
-    message-body //= (
-        action: "update",
-        fields: message-fields,
-        id: hash,
-    )
-
-    ; Delete message
-    message-body //= (
-        action: "delete",
-        id: hash,
-    )
-"#;
+use crate::schema::{MESSAGE_SCHEMA, validate_schema};
 
 /// Custom error types for `MessageEncoded`
 #[derive(Error, Debug)]
@@ -104,28 +66,14 @@ impl MessageEncoded {
 #[cfg(not(target_arch = "wasm32"))]
 impl Validation for MessageEncoded {
     /// Checks encoded message value against hex format and CDDL schema.
-    ///
-    /// This helper method also converts validation errors coming from the cddl crate into an
-    /// concatenated error message and returns it.
     fn validate(&self) -> Result<()> {
+        // Validate hex encoding
         let bytes = hex::decode(&self.0).map_err(|_| MessageEncodedError::InvalidHexEncoding)?;
 
-        match cddl::validate_cbor_from_slice(MESSAGE_SCHEMA, &bytes) {
-            Err(cbor::Error::Validation(err)) => {
-                let err_str = err
-                    .iter()
-                    .map(|fe| format!("{}: \"{}\"", fe.cbor_location, fe.reason))
-                    .collect::<Vec<String>>()
-                    .join(", ");
+        // Validate CDDL schema
+        validate_schema(MESSAGE_SCHEMA, bytes)?;
 
-                bail!(MessageEncodedError::InvalidSchema(err_str))
-            }
-            Err(cbor::Error::CBORParsing(_err)) => bail!(MessageEncodedError::InvalidCBOR),
-            Err(cbor::Error::CDDLParsing(err)) => {
-                panic!(err);
-            }
-            _ => Ok(()),
-        }
+        Ok(())
     }
 }
 
