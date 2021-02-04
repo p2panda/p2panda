@@ -30,16 +30,16 @@ impl SeqNum {
     }
 
     /// Return sequence number of the previous entry (backlink).
-    pub fn backlink_seq_num(&self) -> Result<Self> {
-        Self::new(self.0 - 1)
+    pub fn backlink_seq_num(&self) -> Option<Self> {
+        Self::new(self.0 - 1).ok()
     }
 
     /// Return sequence number of the lipmaa entry (skiplink).
     ///
     /// See Bamboo specification for more details about how skiplinks are calculated:
     /// https://github.com/AljoschaMeyer/bamboo#links-and-entry-verification
-    pub fn skiplink_seq_num(&self) -> Self {
-        Self(lipmaa(self.0) + FIRST_SEQ_NUM)
+    pub fn skiplink_seq_num(&self) -> Option<Self> {
+        Some(Self(lipmaa(self.0) + FIRST_SEQ_NUM))
     }
 
     /// Returns true when sequence number marks first entry in log.
@@ -99,7 +99,7 @@ mod tests {
     #[test]
     fn skiplink_seq_num() {
         assert_eq!(
-            SeqNum::new(13).unwrap().skiplink_seq_num(),
+            SeqNum::new(13).unwrap().skiplink_seq_num().unwrap(),
             SeqNum::new(5).unwrap()
         );
     }
@@ -111,6 +111,6 @@ mod tests {
             SeqNum::new(11).unwrap()
         );
 
-        assert!(SeqNum::new(1).unwrap().backlink_seq_num().is_err());
+        assert!(SeqNum::new(1).unwrap().backlink_seq_num().is_none());
     }
 }
