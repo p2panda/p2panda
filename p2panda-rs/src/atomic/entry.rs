@@ -168,3 +168,53 @@ impl Validation for Entry {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Entry;
+    use crate::atomic::{Hash, LogId, Message, MessageFields, MessageValue, SeqNum};
+
+    #[test]
+    fn validation() {
+        // Prepare sample values
+        let mut fields = MessageFields::new();
+        fields
+            .add("test", MessageValue::Text("Hello".to_owned()))
+            .unwrap();
+        let message =
+            Message::create(Hash::from_bytes(vec![1, 2, 3]).unwrap(), fields.clone()).unwrap();
+        let skiplink = &Hash::from_bytes(vec![4, 5, 6]).unwrap();
+        let backlink = &Hash::from_bytes(vec![7, 8, 9]).unwrap();
+
+        // The first entry in a log doesn't need and cannot have references to previous entries
+        assert!(Entry::new(&LogId::default(), &message.to_owned(), None, None, None).is_ok());
+
+        assert!(Entry::new(
+            &LogId::default(),
+            &message.to_owned(),
+            Some(skiplink),
+            Some(backlink),
+            None
+        )
+        .is_err());
+
+        // Any following entry requires backreferences
+        assert!(Entry::new(
+            &LogId::default(),
+            &message.to_owned(),
+            Some(skiplink),
+            Some(backlink),
+            Some(&SeqNum::new(1).unwrap())
+        )
+        .is_ok());
+
+        assert!(Entry::new(
+            &LogId::default(),
+            &message.to_owned(),
+            None,
+            None,
+            Some(&SeqNum::new(1).unwrap())
+        )
+        .is_err());
+    }
+}
