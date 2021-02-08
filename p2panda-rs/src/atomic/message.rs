@@ -353,7 +353,10 @@ mod tests {
         let mut fields = MessageFields::new();
 
         fields
-            .add("test", MessageValue::Text("Hello, Message!".to_owned()))
+            .add(
+                "status",
+                MessageValue::Text("System went down right now".to_owned()),
+            )
             .unwrap();
 
         let message = Message::update(
