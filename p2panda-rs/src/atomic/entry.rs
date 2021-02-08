@@ -1,5 +1,6 @@
 use anyhow::bail;
-use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
+use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
+use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature, YamfHash};
 use ed25519_dalek::PublicKey;
 use thiserror::Error;
 
@@ -88,19 +89,19 @@ impl Entry {
         let backlink = self
             .entry_hash_backlink
             .clone()
-            .map(|link| YamfHash::Blake2b(link.to_bytes()));
+            .map(|link| YamfHash::decode(&link.to_bytes()).unwrap().0);
 
         let lipmaa_link = self
             .entry_hash_skiplink
             .clone()
-            .map(|link| YamfHash::Blake2b(link.to_bytes()));
+            .map(|link| YamfHash::decode(&link.to_bytes()).unwrap().0);
 
         // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
         // details and definition of entry fields.
         let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
             log_id: self.log_id.as_u64(),
             is_end_of_feed: false,
-            payload_hash: YamfHash::Blake2b(message_hash.to_bytes()),
+            payload_hash: YamfHash::decode(&message_hash.to_bytes()).unwrap().0,
             payload_size: message_size,
             author: PublicKey::from_bytes(&key_pair.public_key_bytes())?,
             seq_num: self.seq_num.as_u64(),
@@ -108,6 +109,16 @@ impl Entry {
             lipmaa_link,
             sig: None,
         };
+
+        let mut entry_bytes = [0u8; 1024];
+        let unsigned_entry_size = entry.encode(&mut entry_bytes).unwrap();
+        let signature = key_pair.sign(&entry_bytes[..unsigned_entry_size]);
+        let sig_bytes = &signature.to_bytes()[..];
+        let signature = BambooSignature(sig_bytes.into());
+        entry.sig = Some(signature);
+
+        let signed_entry_size = entry.encode(&mut entry_bytes).unwrap();
+        println!("{:?}", entry_bytes);
 
         // @TODO: Sign BambooEntry and encode it
         EntryEncoded::new("dummy")
@@ -173,6 +184,7 @@ impl Validation for Entry {
 mod tests {
     use super::Entry;
     use crate::atomic::{Hash, LogId, Message, MessageFields, MessageValue, SeqNum};
+    use crate::keypair::KeyPair;
 
     #[test]
     fn validation() {
@@ -216,5 +228,9 @@ mod tests {
             Some(&SeqNum::new(1).unwrap())
         )
         .is_err());
+
+        let key_pair = KeyPair::new();
+        let entry = Entry::new(&LogId::default(), &message.to_owned(), None, None, None).unwrap();
+        entry.sign_and_encode(&key_pair);
     }
 }
