@@ -1,4 +1,6 @@
-use ed25519_dalek::Keypair as Ed25519Keypair;
+use ed25519_dalek::{Keypair as Ed25519Keypair, Signer};
+#[cfg(not(target_arch = "wasm32"))]
+use ed25519_dalek::{Signature, SignatureError};
 use rand::rngs::OsRng;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -63,6 +65,18 @@ impl KeyPair {
     pub fn public_key_bytes(&self) -> Box<[u8]> {
         Box::from(self.0.public.to_bytes())
     }
+
+    /// Sign data using this key pair.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn sign(&self, data: &[u8]) -> Signature {
+        self.0.sign(data)
+    }
+
+    /// Verify a signature for a message.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), SignatureError> {
+        self.0.verify(data, signature)
+    }
 }
 
 #[cfg(test)]
@@ -86,5 +100,13 @@ mod tests {
         let key_pair2 = KeyPair::from_hex(key_pair.to_hex());
         assert_eq!(key_pair.public_key_bytes(), key_pair2.public_key_bytes());
         assert_eq!(key_pair.to_bytes(), key_pair2.to_bytes());
+    }
+
+    #[test]
+    fn signing() {
+        let key_pair = KeyPair::new();
+        let message = b"test";
+        let signature = key_pair.sign(message);
+        assert!(key_pair.verify(message, &signature).is_ok())
     }
 }
