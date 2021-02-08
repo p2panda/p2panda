@@ -24,7 +24,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow = "1.0.38"
-bamboo-rs-core = { git = "https://github.com/pietgeursen/bamboo-rs", branch = "master" }
+bamboo-rs-core = { git = "https://github.com/pietgeursen/bamboo-rs", tag = "v0.1.0-pre-31" }
 cddl = "0.8.6"
 ed25519-dalek = { version = "1.0.1" }
 hex = "0.4.2"
