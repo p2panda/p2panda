@@ -8,6 +8,8 @@ use yamf_hash::{YamfHash, MAX_YAMF_HASH_SIZE};
 use crate::atomic::Validation;
 use crate::Result;
 
+type OwnedHashBytes = ArrayVec<[u8; 64]>;
+
 /// Custom error types for `Hash`
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
@@ -58,10 +60,14 @@ impl Hash {
     /// Returns Yet-Another-Multiformat Hash struct from the `yamf-hash` crate.
     ///
     /// This comes in handy when interacting with the `bamboo-rs` crate.
-    pub fn to_yamf_hash(&self) -> YamfHash<ArrayVec<[u8; 64]>> {
-        let bytes = &self.to_bytes();
-        let result = YamfHash::<ArrayVec<[u8; 64]>>::decode_owned(bytes);
-        result.unwrap().0
+    pub fn to_yamf_hash(&self) -> YamfHash<OwnedHashBytes> {
+        let bytes = self.to_bytes();
+
+        // Unwrap result as we already validated the value
+        let yamf_hash = YamfHash::<OwnedHashBytes>::decode_owned(&bytes).unwrap();
+
+        // Return first entry in tuple as this is the actual hash
+        yamf_hash.0
     }
 
     /// Returns hash as bytes.
