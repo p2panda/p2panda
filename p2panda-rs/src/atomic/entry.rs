@@ -89,19 +89,19 @@ impl Entry {
         let backlink = self
             .entry_hash_backlink
             .clone()
-            .map(|link| YamfHash::decode(&link.to_bytes()).unwrap().0);
+            .map(|link| link.to_yamf_hash());
 
         let lipmaa_link = self
             .entry_hash_skiplink
             .clone()
-            .map(|link| YamfHash::decode(&link.to_bytes()).unwrap().0);
+            .map(|link| link.to_yamf_hash());
 
         // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
         // details and definition of entry fields.
         let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
             log_id: self.log_id.as_u64(),
             is_end_of_feed: false,
-            payload_hash: YamfHash::decode(&message_hash.to_bytes()).unwrap().0,
+            payload_hash: message_hash.to_yamf_hash(),
             payload_size: message_size,
             author: PublicKey::from_bytes(&key_pair.public_key_bytes())?,
             seq_num: self.seq_num.as_u64(),
@@ -110,7 +110,7 @@ impl Entry {
             sig: None,
         };
 
-        let mut entry_bytes = [0u8; 1024];
+        let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
         let unsigned_entry_size = entry.encode(&mut entry_bytes).unwrap();
         let signature = key_pair.sign(&entry_bytes[..unsigned_entry_size]);
         let sig_bytes = &signature.to_bytes()[..];
@@ -118,7 +118,7 @@ impl Entry {
         entry.sig = Some(signature);
 
         let signed_entry_size = entry.encode(&mut entry_bytes).unwrap();
-        println!("{:?}", entry_bytes);
+        println!("{:?}", &entry_bytes[..signed_entry_size]);
 
         // @TODO: Sign BambooEntry and encode it
         EntryEncoded::new("dummy")

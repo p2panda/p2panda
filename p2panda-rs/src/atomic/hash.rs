@@ -1,4 +1,5 @@
 use anyhow::bail;
+use arrayvec::ArrayVec;
 use bamboo_rs_core::yamf_hash::new_blake2b;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -52,6 +53,15 @@ impl Hash {
         let hex_str = hex::encode(&bytes);
 
         Ok(Self(hex_str))
+    }
+
+    /// Returns Yet-Another-Multiformat Hash struct from the `yamf-hash` crate.
+    ///
+    /// This comes in handy when interacting with the `bamboo-rs` crate.
+    pub fn to_yamf_hash(&self) -> YamfHash<ArrayVec<[u8; 64]>> {
+        let bytes = &self.to_bytes();
+        let result = YamfHash::<ArrayVec<[u8; 64]>>::decode_owned(bytes);
+        result.unwrap().0
     }
 
     /// Returns hash as bytes.
