@@ -44,7 +44,6 @@ impl KeyPair {
 
         // Assemble key pair from both parts
         let bytes = [secret_key.to_bytes(), public_key.to_bytes()].concat();
-        println!("{:?}", bytes);
         let key_pair = Ed25519Keypair::from_bytes(&bytes).unwrap();
 
         Self(key_pair)
