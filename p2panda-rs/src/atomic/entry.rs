@@ -1,6 +1,6 @@
 use anyhow::bail;
 use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
-use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature, YamfHash};
+use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature};
 use ed25519_dalek::PublicKey;
 use thiserror::Error;
 
@@ -121,7 +121,7 @@ impl Entry {
         println!("{:?}", &entry_bytes[..signed_entry_size]);
 
         // @TODO: Sign BambooEntry and encode it
-        EntryEncoded::new("dummy")
+        EntryEncoded::new("1234")
     }
 
     /// Decodes an encoded entry and returns it.
@@ -199,11 +199,11 @@ mod tests {
         let backlink = &Hash::from_bytes(vec![7, 8, 9]).unwrap();
 
         // The first entry in a log doesn't need and cannot have references to previous entries
-        assert!(Entry::new(&LogId::default(), &message.to_owned(), None, None, None).is_ok());
+        assert!(Entry::new(&LogId::default(), &message, None, None, None).is_ok());
 
         assert!(Entry::new(
             &LogId::default(),
-            &message.to_owned(),
+            &message,
             Some(skiplink),
             Some(backlink),
             None
@@ -213,7 +213,7 @@ mod tests {
         // Any following entry requires backreferences
         assert!(Entry::new(
             &LogId::default(),
-            &message.to_owned(),
+            &message,
             Some(skiplink),
             Some(backlink),
             Some(&SeqNum::new(1).unwrap())
@@ -222,15 +222,28 @@ mod tests {
 
         assert!(Entry::new(
             &LogId::default(),
-            &message.to_owned(),
+            &message,
             None,
             None,
             Some(&SeqNum::new(1).unwrap())
         )
         .is_err());
+    }
 
+    #[test]
+    fn sign_and_encode() {
         let key_pair = KeyPair::new();
-        let entry = Entry::new(&LogId::default(), &message.to_owned(), None, None, None).unwrap();
-        entry.sign_and_encode(&key_pair);
+
+        // Prepare sample values
+        let mut fields = MessageFields::new();
+        fields
+            .add("test", MessageValue::Text("Hello".to_owned()))
+            .unwrap();
+        let message =
+            Message::create(Hash::from_bytes(vec![1, 2, 3]).unwrap(), fields.clone()).unwrap();
+
+        // Test encoding
+        let entry = Entry::new(&LogId::default(), &message, None, None, None).unwrap();
+        entry.sign_and_encode(&key_pair).unwrap();
     }
 }
