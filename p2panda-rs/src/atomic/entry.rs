@@ -232,6 +232,7 @@ mod tests {
 
     #[test]
     fn sign_and_encode() {
+        // Generate Ed25519 key pair to sign entry with
         let key_pair = KeyPair::new();
 
         // Prepare sample values
@@ -240,7 +241,7 @@ mod tests {
             .add("test", MessageValue::Text("Hello".to_owned()))
             .unwrap();
         let message =
-            Message::create(Hash::from_bytes(vec![1, 2, 3]).unwrap(), fields.clone()).unwrap();
+            Message::create(Hash::from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
 
         // Test encoding
         let entry = Entry::new(&LogId::default(), &message, None, None, None).unwrap();
