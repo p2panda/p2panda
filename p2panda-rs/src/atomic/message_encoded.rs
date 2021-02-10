@@ -58,6 +58,7 @@ impl MessageEncoded {
 
     /// Returns payload size (number of bytes) of encoded message.
     pub fn size(&self) -> u64 {
+        // Divide by 2 as every byte is represented by 2 hex chars.
         self.0.len() as u64 / 2
     }
 }

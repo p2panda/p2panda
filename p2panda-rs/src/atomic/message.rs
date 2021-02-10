@@ -241,6 +241,11 @@ impl Message {
         Ok(message)
     }
 
+    /// Decodes an encoded message and returns it.
+    pub fn from_encoded(message_encoded: MessageEncoded) -> Self {
+        message_encoded.decode()
+    }
+
     /// Returns an encoded version of this message.
     pub fn encode(&self) -> Result<MessageEncoded> {
         // Encode bytes as hex string
@@ -248,20 +253,10 @@ impl Message {
         Ok(MessageEncoded::new(&encoded)?)
     }
 
-    /// Decodes an encoded message and returns it.
-    pub fn from_encoded(message_encoded: MessageEncoded) -> Self {
-        message_encoded.decode()
-    }
-
     /// Encodes message in CBOR format and returns bytes.
     pub fn to_cbor(&self) -> Vec<u8> {
         // Serialize data to binary CBOR format
         serde_cbor::to_vec(&self).unwrap()
-    }
-
-    /// Returns action type of message.
-    pub fn action(&self) -> MessageAction {
-        self.action
     }
 
     /// Returns true when instance is create message.
@@ -279,9 +274,14 @@ impl Message {
         self.action == MessageAction::Delete
     }
 
+    /// Returns action type of message.
+    pub fn action(&self) -> &MessageAction {
+        &self.action
+    }
+
     /// Returns version of message.
-    pub fn version(&self) -> MessageVersion {
-        self.version
+    pub fn version(&self) -> &MessageVersion {
+        &self.version
     }
 
     /// Returns schema of message.
@@ -290,18 +290,18 @@ impl Message {
     }
 
     /// Returns id of message.
-    pub fn id(&self) -> Option<Hash> {
-        self.id.clone()
+    pub fn id(&self) -> Option<&Hash> {
+        self.id.as_ref()
+    }
+
+    /// Returns user data fields of message.
+    pub fn fields(&self) -> Option<&MessageFields> {
+        self.fields.as_ref()
     }
 
     /// Returns true when message contains an id.
     pub fn has_id(&self) -> bool {
         self.id.is_some()
-    }
-
-    /// Returns user data fields of message.
-    pub fn fields(&self) -> Option<MessageFields> {
-        self.fields.clone()
     }
 
     /// Returns true if message contains fields.
