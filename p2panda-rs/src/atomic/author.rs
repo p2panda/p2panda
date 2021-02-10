@@ -5,7 +5,7 @@ use thiserror::Error;
 use crate::atomic::Validation;
 use crate::Result;
 
-/// Custom error types for `Author`
+/// Custom error types for `Author`.
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum AuthorError {

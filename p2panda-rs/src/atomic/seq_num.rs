@@ -8,7 +8,7 @@ use crate::Result;
 /// Start counting entries from here.
 pub const FIRST_SEQ_NUM: u64 = 1;
 
-/// Custom error types for `SeqNum`
+/// Custom error types for `SeqNum`.
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum SeqNumError {
