@@ -5,7 +5,7 @@ use crate::atomic::{Hash, Message, Validation};
 use crate::schema::{validate_schema, MESSAGE_SCHEMA};
 use crate::Result;
 
-/// Custom error types for `MessageEncoded`
+/// Custom error types for `MessageEncoded`.
 #[derive(Error, Debug)]
 pub enum MessageEncodedError {
     /// Message contains invalid fields.

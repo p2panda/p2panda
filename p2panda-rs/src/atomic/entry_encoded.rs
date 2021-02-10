@@ -3,7 +3,7 @@ use thiserror::Error;
 use crate::atomic::{Entry, Hash, Validation};
 use crate::Result;
 
-/// Custom error types for `EntryEncoded`
+/// Custom error types for `EntryEncoded`.
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum EntryEncodedError {
