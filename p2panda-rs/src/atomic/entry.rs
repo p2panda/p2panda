@@ -80,12 +80,12 @@ impl Entry {
     /// Signs the Bamboo entry via Ed25519 key pair and returns the hex-encoded representation.
     pub fn sign_and_encode(&self, key_pair: &KeyPair) -> Result<EntryEncoded> {
         // Generate message hash
-        // @TODO: Handle case where message is not set
+        // @TODO: Handle error case where message is not set
         let message_encoded = self.message.clone().unwrap().encode().unwrap();
         let message_hash = message_encoded.hash();
         let message_size = message_encoded.size();
 
-        // Convert entry links to Bamboo crate types
+        // Convert entry links to Bamboo crate `YamfHash` type
         let backlink = self
             .entry_hash_backlink
             .clone()
@@ -110,18 +110,22 @@ impl Entry {
             sig: None,
         };
 
+        // Get entry bytes first for signing them with key pair
         let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
         let unsigned_entry_size = entry.encode(&mut entry_bytes).unwrap();
+
+        // Sign and add signature to entry
         let signature = key_pair.sign(&entry_bytes[..unsigned_entry_size]);
         let sig_bytes = &signature.to_bytes()[..];
         let signature = BambooSignature(sig_bytes.into());
         entry.sig = Some(signature);
 
+        // Get entry bytes again, now with signature included
         let signed_entry_size = entry.encode(&mut entry_bytes).unwrap();
         println!("{:?}", &entry_bytes[..signed_entry_size]);
 
-        // @TODO: Sign BambooEntry and encode it
-        EntryEncoded::new("1234")
+        // @TODO: Pass over bytes to `EntryEncoded`
+        EntryEncoded::from_bytes(entry_bytes.to_owned().to_vec())
     }
 
     /// Decodes an encoded entry and returns it.
