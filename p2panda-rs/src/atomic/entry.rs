@@ -130,18 +130,18 @@ impl Entry {
     }
 
     /// Returns hash of backlink entry when given.
-    pub fn backlink_hash(&self) -> Option<Hash> {
-        self.entry_hash_backlink.clone()
+    pub fn backlink_hash(&self) -> Option<&Hash> {
+        self.entry_hash_backlink.as_ref()
     }
 
     /// Returns hash of skiplink entry when given.
-    pub fn skiplink_hash(&self) -> Option<Hash> {
-        self.entry_hash_skiplink.clone()
+    pub fn skiplink_hash(&self) -> Option<&Hash> {
+        self.entry_hash_skiplink.as_ref()
     }
 
     /// Returns sequence number of entry.
-    pub fn seq_num(&self) -> SeqNum {
-        self.seq_num.clone()
+    pub fn seq_num(&self) -> &SeqNum {
+        &self.seq_num
     }
 
     /// Calculates sequence number of backlink entry.
