@@ -24,6 +24,11 @@ impl EntryEncoded {
         Ok(inner)
     }
 
+    /// Take bytes from entry, validates and returns them as new `EntryEncoded` instance.
+    pub fn from_bytes(value: Vec<u8>) -> Result<Self> {
+        todo!();
+    }
+
     /// Returns decoded version of this entry.
     pub fn decode(&self) -> Entry {
         todo!();
@@ -54,7 +59,7 @@ impl EntryEncoded {
 impl Validation for EntryEncoded {
     fn validate(&self) -> Result<()> {
         hex::decode(&self.0).map_err(|_| EntryEncodedError::InvalidHexEncoding)?;
-
+        // @TODO: Validate Bamboo entry
         Ok(())
     }
 }
