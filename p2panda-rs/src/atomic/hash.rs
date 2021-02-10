@@ -3,14 +3,14 @@ use arrayvec::ArrayVec;
 use bamboo_rs_core::yamf_hash::new_blake2b;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use yamf_hash::{YamfHash, MAX_YAMF_HASH_SIZE};
+use yamf_hash::{YamfHash, BLAKE2B_HASH_SIZE};
 
 use crate::atomic::Validation;
 use crate::Result;
 
-type OwnedHashBytes = ArrayVec<[u8; 64]>;
+type OwnedHashBytes = ArrayVec<[u8; BLAKE2B_HASH_SIZE]>;
 
-/// Custom error types for `Hash`
+/// Custom error types for `Hash`.
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum HashError {
@@ -88,7 +88,7 @@ impl Validation for Hash {
         match hex::decode(self.0.to_owned()) {
             Ok(bytes) => {
                 // Check if length is correct
-                if bytes.len() != MAX_YAMF_HASH_SIZE {
+                if bytes.len() != BLAKE2B_HASH_SIZE + 2 {
                     bail!(HashError::InvalidLength)
                 }
 
