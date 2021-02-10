@@ -244,8 +244,7 @@ impl Message {
     /// Returns an encoded version of this message.
     pub fn encode(&self) -> Result<MessageEncoded> {
         // Encode bytes as hex string
-        let encoded = hex::encode(&self.as_cbor());
-
+        let encoded = hex::encode(&self.to_cbor());
         Ok(MessageEncoded::new(&encoded)?)
     }
 
@@ -255,7 +254,7 @@ impl Message {
     }
 
     /// Encodes message in CBOR format and returns bytes.
-    pub fn as_cbor(&self) -> Vec<u8> {
+    pub fn to_cbor(&self) -> Vec<u8> {
         // Serialize data to binary CBOR format
         serde_cbor::to_vec(&self).unwrap()
     }

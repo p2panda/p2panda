@@ -77,7 +77,7 @@ impl Hash {
     }
 
     /// Returns hash as hex string.
-    pub fn to_hex(&self) -> &str {
+    pub fn as_hex(&self) -> &str {
         self.0.as_str()
     }
 }

@@ -36,14 +36,13 @@ impl MessageEncoded {
     /// Returns the decoded version of message.
     pub fn decode(&self) -> Message {
         // Deserialize from CBOR
-        serde_cbor::from_slice(&self.as_bytes()).unwrap()
+        serde_cbor::from_slice(&self.to_bytes()).unwrap()
     }
 
     /// Returns the hash of this message.
-    // @TODO: Use std Hash trait instead
     pub fn hash(&self) -> Hash {
         // Unwrap as we already know that the inner value is valid
-        Hash::from_bytes(self.as_bytes()).unwrap()
+        Hash::from_bytes(self.to_bytes()).unwrap()
     }
 
     /// Returns encoded message as string.
@@ -52,7 +51,7 @@ impl MessageEncoded {
     }
 
     /// Decodes hex encoding and returns message as bytes.
-    pub fn as_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Vec<u8> {
         // Unwrap as we already know that the inner value is valid
         hex::decode(&self.0).unwrap()
     }
@@ -115,7 +114,7 @@ mod tests {
 
         assert!(message.is_create());
         assert!(!message.has_id());
-        assert_eq!(message.schema().to_hex(), "00402dc25d32dfb400bb295b663d4706bc47f0cb4f1edff277c737afc8a9232330ae9884fcf6d02141a785c5fd82c196b973e8427efc0c04d0444dcc3059220b9eda");
+        assert_eq!(message.schema().as_hex(), "00402dc25d32dfb400bb295b663d4706bc47f0cb4f1edff277c737afc8a9232330ae9884fcf6d02141a785c5fd82c196b973e8427efc0c04d0444dcc3059220b9eda");
 
         let fields = message.fields().unwrap();
 
