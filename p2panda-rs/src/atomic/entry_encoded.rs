@@ -31,7 +31,7 @@ impl EntryEncoded {
 
     /// Returns YAMF BLAKE2b hash of encoded entry.
     pub fn hash(&self) -> Hash {
-        Hash::from_bytes(self.as_bytes()).unwrap()
+        Hash::from_bytes(self.to_bytes()).unwrap()
     }
 
     /// Returns encoded entry as string.
@@ -40,7 +40,7 @@ impl EntryEncoded {
     }
 
     /// Decodes hex encoding and returns entry as bytes.
-    pub fn as_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Vec<u8> {
         // Unwrap as we already know that the inner value is valid
         hex::decode(&self.0).unwrap()
     }
