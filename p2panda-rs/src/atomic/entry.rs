@@ -85,7 +85,7 @@ impl Entry {
         let message_hash = message_encoded.hash();
         let message_size = message_encoded.size();
 
-        // Convert entry links to Bamboo crate `YamfHash` type
+        // Convert entry links to bamboo-rs `YamfHash` type
         let backlink = self
             .entry_hash_backlink
             .clone()
@@ -115,9 +115,8 @@ impl Entry {
         let unsigned_entry_size = entry.encode(&mut entry_bytes).unwrap();
 
         // Sign and add signature to entry
-        let signature = key_pair.sign(&entry_bytes[..unsigned_entry_size]);
-        let sig_bytes = &signature.to_bytes()[..];
-        let signature = BambooSignature(sig_bytes.into());
+        let sig_bytes = key_pair.sign(&entry_bytes[..unsigned_entry_size]);
+        let signature = BambooSignature(&*sig_bytes);
         entry.sig = Some(signature);
 
         // Get entry bytes again, now with signature included
@@ -125,7 +124,7 @@ impl Entry {
         println!("{:?}", &entry_bytes[..signed_entry_size]);
 
         // @TODO: Pass over bytes to `EntryEncoded`
-        EntryEncoded::from_bytes(entry_bytes.to_owned().to_vec())
+        EntryEncoded::new("1234")
     }
 
     /// Decodes an encoded entry and returns it.
@@ -233,20 +232,20 @@ mod tests {
         .is_err());
     }
 
-    // #[test]
-    // fn sign_and_encode() {
-    //     // Generate Ed25519 key pair to sign entry with
-    //     let key_pair = KeyPair::new();
+    #[test]
+    fn sign_and_encode() {
+        // Generate Ed25519 key pair to sign entry with
+        let key_pair = KeyPair::new();
 
-    //     // Prepare sample values
-    //     let mut fields = MessageFields::new();
-    //     fields
-    //         .add("test", MessageValue::Text("Hello".to_owned()))
-    //         .unwrap();
-    //     let message = Message::create(Hash::from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
+        // Prepare sample values
+        let mut fields = MessageFields::new();
+        fields
+            .add("test", MessageValue::Text("Hello".to_owned()))
+            .unwrap();
+        let message = Message::create(Hash::from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
 
-    //     // Test encoding
-    //     let entry = Entry::new(&LogId::default(), &message, None, None, None).unwrap();
-    //     entry.sign_and_encode(&key_pair).unwrap();
-    // }
+        // Test encoding
+        let entry = Entry::new(&LogId::default(), &message, None, None, None).unwrap();
+        let entry_signed_encoded = entry.sign_and_encode(&key_pair).unwrap();
+    }
 }

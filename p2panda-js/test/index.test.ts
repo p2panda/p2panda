@@ -15,4 +15,14 @@ describe('KeyPair', () => {
     const keyPairSecond = KeyPair.fromPrivateKey(keyPair.privateKey());
     expect(keyPair.publicKey()).to.eq(keyPairSecond.publicKey());
   });
+
+  it('signs and validates', async () => {
+    const { KeyPair } = await p2panda;
+    const keyPair = new KeyPair();
+    const message = 'hello panda';
+    const sig = keyPair.sign(message);
+    expect(keyPair.verify(message, sig)).to.be.undefined;
+    expect(() => keyPair.verify(message, sig)).to.not.throw();
+    expect(() => keyPair.verify('hello aquadoggo', sig)).to.throw();
+  });
 });

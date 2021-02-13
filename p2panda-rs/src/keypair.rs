@@ -1,9 +1,12 @@
-use ed25519_dalek::{Keypair as Ed25519Keypair, PublicKey, SecretKey, Signer};
-#[cfg(not(target_arch = "wasm32"))]
-use ed25519_dalek::{Signature, SignatureError};
+use ed25519_dalek::{
+    Keypair as Ed25519Keypair, PublicKey, SecretKey, Signature, SignatureError, Signer,
+};
 use rand::rngs::OsRng;
+use std::convert::TryFrom;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::JsValue;
 
 /// Ed25519 key pair for authors to sign bamboo entries with.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -73,16 +76,25 @@ impl KeyPair {
         Box::from(self.0.secret.to_bytes())
     }
 
-    /// Sign data using this key pair.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn sign(&self, data: &[u8]) -> Signature {
-        self.0.sign(data)
+    /// Sign a message using this key pair.
+    pub fn sign(&self, message: &[u8]) -> Box<[u8]> {
+        Box::from(self.0.sign(message).to_bytes())
     }
 
     /// Verify a signature for a message.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), SignatureError> {
-        self.0.verify(data, signature)
+    pub fn verify(&self, message: &[u8], signature: &[u8]) -> Result<(), SignatureError> {
+        self.0
+            .verify(message, &Signature::try_from(signature).unwrap())
+    }
+
+    /// Verify a signature for a message.
+    #[cfg(target_arch = "wasm32")]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = verify))]
+    pub fn verify_js(&self, message: &[u8], signature: &[u8]) -> Result<(), JsValue> {
+        self.0
+            .verify(message, &Signature::try_from(signature).unwrap())
+            .map_err(|_| JsValue::from_str("invalid signature"))
     }
 }
 
