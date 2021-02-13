@@ -67,7 +67,6 @@ impl Copy for MessageAction {}
 
 /// Enum of possible data types which can be added to the messages fields as values.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
 pub enum MessageValue {
     /// Basic `boolean` value.
     Boolean(bool),
@@ -80,6 +79,9 @@ pub enum MessageValue {
 
     /// Basic `string` value.
     Text(String),
+
+    /// Reference to an instance.
+    Relation(Hash),
 }
 
 /// The actual user data is contained in form of message fields, a simple key/value store of data
@@ -352,11 +354,19 @@ mod tests {
         let mut fields = MessageFields::new();
 
         fields
-            .add(
-                "status",
-                MessageValue::Text("System went down right now".to_owned()),
-            )
+            .add("username", MessageValue::Text("bubu".to_owned()))
             .unwrap();
+
+        fields.add("age", MessageValue::Integer(28)).unwrap();
+
+        fields
+            .add("is_admin", MessageValue::Boolean(false))
+            .unwrap();
+
+        fields.add(
+            "profile_picture",
+            MessageValue::Relation(Hash::from_bytes(vec![1, 2, 3]).unwrap()),
+        );
 
         let message = Message::update(
             Hash::from_bytes(vec![1, 255, 0]).unwrap(),
