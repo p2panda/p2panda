@@ -25,7 +25,7 @@ impl EntryEncoded {
     }
 
     /// Take bytes from entry, validates and returns them as new `EntryEncoded` instance.
-    pub fn from_bytes(value: Vec<u8>) -> Result<Self> {
+    pub fn from_bytes(_value: Vec<u8>) -> Result<Self> {
         todo!();
     }
 
