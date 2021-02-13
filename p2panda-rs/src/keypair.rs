@@ -84,8 +84,7 @@ impl KeyPair {
     /// Verify a signature for a message.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn verify(&self, message: &[u8], signature: &[u8]) -> Result<(), SignatureError> {
-        self.0
-            .verify(message, &Signature::try_from(signature).unwrap())
+        self.0.verify(message, &Signature::try_from(signature)?)
     }
 
     /// Verify a signature for a message.
