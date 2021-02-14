@@ -21,7 +21,7 @@ describe('KeyPair', () => {
     const keyPair = new KeyPair();
     const message = 'hello panda';
     const sig = keyPair.sign(message);
-    expect(keyPair.verify(message, sig)).to.be.undefined;
+    expect(keyPair.verify(message, sig)).to.be.true;
     expect(() => keyPair.verify(message, sig)).to.not.throw();
     expect(() => keyPair.verify('hello aquadoggo', sig)).to.throw();
   });
