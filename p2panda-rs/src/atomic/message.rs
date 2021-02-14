@@ -78,6 +78,9 @@ pub enum MessageValue {
 
     /// Basic `string` value.
     Text(String),
+
+    /// Reference to an instance.
+    Relation(Hash),
 }
 
 /// The actual user data is contained in form of message fields, a simple key/value store of data
@@ -360,6 +363,11 @@ mod tests {
         fields
             .add("is_admin", MessageValue::Boolean(false))
             .unwrap();
+
+        fields.add(
+            "profile_picture",
+            MessageValue::Relation(Hash::from_bytes(vec![1, 2, 3]).unwrap()),
+        );
 
         let message = Message::new_update(
             Hash::new_from_bytes(vec![1, 255, 0]).unwrap(),
