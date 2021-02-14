@@ -131,6 +131,10 @@ mod tests {
         let key_pair = KeyPair::new();
         let message = b"test";
         let signature = key_pair.sign(message);
-        assert!(key_pair.verify(message, &signature).is_ok())
+        assert!(key_pair.verify(message, &signature).is_ok());
+        assert!(key_pair.verify(b"not test", &signature).is_err());
+
+        let key_pair2 = KeyPair::new();
+        assert!(key_pair2.verify(message, &signature).is_err());
     }
 }
