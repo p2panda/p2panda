@@ -1,6 +1,6 @@
-use ed25519_dalek::{
-    Keypair as Ed25519Keypair, PublicKey, SecretKey, Signature, SignatureError, Signer,
-};
+#[cfg(not(target_arch = "wasm32"))]
+use ed25519_dalek::SignatureError;
+use ed25519_dalek::{Keypair as Ed25519Keypair, PublicKey, SecretKey, Signature, Signer};
 #[cfg(target_arch = "wasm32")]
 use js_sys::Error as JsError;
 use rand::rngs::OsRng;
@@ -91,8 +91,8 @@ impl KeyPair {
 
     /// Verify a signature for a message.
     #[cfg(target_arch = "wasm32")]
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = verify))]
-    pub fn verify_js(&self, message: &[u8], signature: &[u8]) -> Result<(bool), JsValue> {
+    #[wasm_bindgen(js_name = verify)]
+    pub fn verify(&self, message: &[u8], signature: &[u8]) -> Result<bool, JsValue> {
         match self
             .0
             .verify(message, &Signature::try_from(signature).unwrap())
