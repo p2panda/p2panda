@@ -91,7 +91,6 @@ impl KeyPair {
 
     /// Verify a signature for a message.
     #[cfg(target_arch = "wasm32")]
-    #[wasm_bindgen(js_name = verify)]
     pub fn verify(&self, message: &[u8], signature: &[u8]) -> Result<bool, JsValue> {
         match self
             .0
