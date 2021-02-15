@@ -1,11 +1,7 @@
 use anyhow::bail;
-use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
-use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature};
-use ed25519_dalek::PublicKey;
 use thiserror::Error;
 
-use crate::atomic::{EntryEncoded, Hash, LogId, Message, SeqNum, Validation};
-use crate::keypair::KeyPair;
+use crate::atomic::{EntrySigned, Hash, LogId, Message, SeqNum, Validation};
 use crate::Result;
 
 /// Entry of an append-only log based on Bamboo specification. It describes the actual data in the
@@ -77,58 +73,8 @@ impl Entry {
         Ok(entry)
     }
 
-    /// Signs the Bamboo entry via Ed25519 key pair and returns the hex-encoded representation.
-    pub fn sign_and_encode(&self, key_pair: &KeyPair) -> Result<EntryEncoded> {
-        // Generate message hash
-        // @TODO: Handle error case where message is not set
-        let message_encoded = self.message.clone().unwrap().encode().unwrap();
-        let message_hash = message_encoded.hash();
-        let message_size = message_encoded.size();
-
-        // Convert entry links to bamboo-rs `YamfHash` type
-        let backlink = self
-            .entry_hash_backlink
-            .clone()
-            .map(|link| link.to_yamf_hash());
-
-        let lipmaa_link = self
-            .entry_hash_skiplink
-            .clone()
-            .map(|link| link.to_yamf_hash());
-
-        // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
-        // details and definition of entry fields.
-        let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
-            log_id: self.log_id.as_u64(),
-            is_end_of_feed: false,
-            payload_hash: message_hash.to_yamf_hash(),
-            payload_size: message_size,
-            author: PublicKey::from_bytes(&key_pair.public_key_bytes())?,
-            seq_num: self.seq_num.as_u64(),
-            backlink,
-            lipmaa_link,
-            sig: None,
-        };
-
-        // Get entry bytes first for signing them with key pair
-        let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
-        let unsigned_entry_size = entry.encode(&mut entry_bytes).unwrap();
-
-        // Sign and add signature to entry
-        let sig_bytes = key_pair.sign(&entry_bytes[..unsigned_entry_size]);
-        let signature = BambooSignature(&*sig_bytes);
-        entry.sig = Some(signature);
-
-        // Get entry bytes again, now with signature included
-        let signed_entry_size = entry.encode(&mut entry_bytes).unwrap();
-        println!("{:?}", &entry_bytes[..signed_entry_size]);
-
-        // @TODO: Pass over bytes to `EntryEncoded`
-        EntryEncoded::new("1234")
-    }
-
     /// Decodes an encoded entry and returns it.
-    pub fn from_encoded(entry_encoded: EntryEncoded) -> Self {
+    pub fn from_encoded(entry_encoded: EntrySigned) -> Self {
         entry_encoded.decode()
     }
 
@@ -155,6 +101,16 @@ impl Entry {
     /// Calculates sequence number of skiplink entry.
     pub fn seq_num_skiplink(&self) -> Option<SeqNum> {
         self.seq_num.skiplink_seq_num()
+    }
+
+    /// Returns message of entry.
+    pub fn message(&self) -> Option<&Message> {
+        self.message.as_ref()
+    }
+
+    /// Returns log_id of entry.
+    pub fn log_id(&self) -> &LogId {
+        &self.log_id
     }
 
     /// Returns true if entry contains message.
@@ -187,7 +143,6 @@ impl Validation for Entry {
 mod tests {
     use super::Entry;
     use crate::atomic::{Hash, LogId, Message, MessageFields, MessageValue, SeqNum};
-    use crate::keypair::KeyPair;
 
     #[test]
     fn validation() {
@@ -230,22 +185,5 @@ mod tests {
             Some(&SeqNum::new(1).unwrap())
         )
         .is_err());
-    }
-
-    #[test]
-    fn sign_and_encode() {
-        // Generate Ed25519 key pair to sign entry with
-        let key_pair = KeyPair::new();
-
-        // Prepare sample values
-        let mut fields = MessageFields::new();
-        fields
-            .add("test", MessageValue::Text("Hello".to_owned()))
-            .unwrap();
-        let message = Message::create(Hash::from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
-
-        // Test encoding
-        let entry = Entry::new(&LogId::default(), &message, None, None, None).unwrap();
-        let entry_signed_encoded = entry.sign_and_encode(&key_pair).unwrap();
     }
 }

@@ -1,0 +1,171 @@
+use std::convert::TryFrom;
+
+use thiserror::Error;
+use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
+use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature};
+use ed25519_dalek::PublicKey;
+
+use crate::atomic::{Entry, Hash, Validation};
+use crate::Result;
+use crate::keypair::KeyPair;
+
+/// Custom error types for `EntrySigned`.
+#[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
+pub enum EntrySignedError {
+    /// Encoded message string contains invalid hex characters.
+    #[error("invalid hex encoding in message")]
+    InvalidHexEncoding,
+}
+
+/// Bamboo entry bytes represented in hex encoding format.
+#[derive(Clone, Debug)]
+pub struct EntrySigned(String);
+
+impl EntrySigned {
+    /// Validates and returns a new encoded entry instance.
+    pub fn new(value: &str) -> Result<Self> {
+        let inner = Self(value.to_owned());
+        inner.validate()?;
+        Ok(inner)
+    }
+
+    /// Take bytes from entry, validates and returns them as new `EntrySigned` instance.
+    pub fn from_bytes(_value: Vec<u8>) -> Result<Self> {
+        todo!();
+    }
+
+    /// Returns decoded version of this entry.
+    pub fn decode(&self) -> Entry {
+        todo!();
+    }
+
+    /// Returns YAMF BLAKE2b hash of encoded entry.
+    pub fn hash(&self) -> Hash {
+        Hash::from_bytes(self.to_bytes()).unwrap()
+    }
+
+    /// Returns encoded entry as string.
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    /// Decodes hex encoding and returns entry as bytes.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        // Unwrap as we already know that the inner value is valid
+        hex::decode(&self.0).unwrap()
+    }
+
+    /// Returns payload size (number of bytes) of total encoded entry.
+    pub fn size(&self) -> u64 {
+        self.0.len() as u64 / 2
+    }
+}
+
+impl TryFrom<&[u8]> for EntrySigned {
+    type Error = anyhow::Error;
+
+    fn try_from(bytes:&[u8]) -> std::result::Result<Self, Self::Error> {
+        Self::new(&hex::encode(bytes))
+    }
+}
+
+impl TryFrom<(&Entry, &KeyPair)> for EntrySigned {
+    type Error = anyhow::Error;
+
+    fn try_from((entry, key_pair):(&Entry, &KeyPair)) -> std::result::Result<Self, Self::Error> {
+        // Generate message hash
+        // @TODO: Handle error case where message is not set
+        let message_encoded = entry.message().clone().unwrap().encode().unwrap();
+        let message_hash = message_encoded.hash();
+        let message_size = message_encoded.size();
+
+        // Convert entry links to bamboo-rs `YamfHash` type
+        let backlink = entry
+            .backlink_hash()
+            .map(|link| link.to_yamf_hash());
+
+        let lipmaa_link = entry
+            .skiplink_hash()
+            .map(|link| link.to_yamf_hash());
+
+        // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
+        // details and definition of entry fields.
+        let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
+            log_id: entry.log_id().as_u64(),
+            is_end_of_feed: false,
+            payload_hash: message_hash.to_yamf_hash(),
+            payload_size: message_size,
+            author: PublicKey::from_bytes(&key_pair.public_key_bytes())?,
+            seq_num: entry.seq_num().as_u64(),
+            backlink,
+            lipmaa_link,
+            sig: None,
+        };
+
+        // Get entry bytes first for signing them with key pair
+        let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
+        let unsigned_entry_size = entry.encode(&mut entry_bytes).unwrap();
+
+        // Sign and add signature to entry
+        let sig_bytes = key_pair.sign(&entry_bytes[..unsigned_entry_size]);
+        let signature = BambooSignature(&*sig_bytes);
+        entry.sig = Some(signature);
+
+        // Get entry bytes again, now with signature included
+        let signed_entry_size = entry.encode(&mut entry_bytes).unwrap();
+
+        EntrySigned::try_from(&entry_bytes[..signed_entry_size])
+    }
+}
+
+impl PartialEq for EntrySigned {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Validation for EntrySigned {
+    fn validate(&self) -> Result<()> {
+        hex::decode(&self.0).map_err(|_| EntrySignedError::InvalidHexEncoding)?;
+        // @TODO: Validate Bamboo entry
+        Ok(())
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::EntrySigned;
+    use crate::atomic::{Entry, Hash, LogId, Message, MessageFields, MessageValue};
+    use crate::keypair::KeyPair;
+    use std::convert::{TryFrom, TryInto};
+
+    #[test]
+    fn validate() {
+        // Invalid hex string
+        assert!(EntrySigned::new("123456789Z").is_err());
+    }
+
+
+    #[test]
+    fn sign_and_encode() {
+        // Generate Ed25519 key pair to sign entry with
+        let key_pair = KeyPair::new();
+
+        // Prepare sample values
+        let mut fields = MessageFields::new();
+        fields
+            .add("test", MessageValue::Text("Hello".to_owned()))
+            .unwrap();
+        let message = Message::create(Hash::from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
+
+        // Test encoding
+        let entry = Entry::new(&LogId::default(), &message, None, None, None).unwrap();
+        let entry_signed_encoded = EntrySigned::try_from((&entry, &key_pair)).unwrap();
+        // TODO
+        // let entry_decoded: Entry = entry_signed_encoded.try_into().unwrap();
+        // let test_entry_signed_encoded = EntrySigned::try_from((&entry_decoded, &key_pair)).unwrap();
+        // assert_eq!(entry_signed_encoded, test_entry_signed_encoded);
+    }
+}
