@@ -23,8 +23,9 @@ pub mod schema;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm_utils {
-    use console_error_panic_hook::hook as panic_hook;
     use std::panic;
+
+    use console_error_panic_hook::hook as panic_hook;
     use wasm_bindgen::prelude::wasm_bindgen;
 
     /// Sets a panic hook for better error messages in NodeJS or web browser. See:

@@ -91,9 +91,9 @@ impl Validation for MessageEncoded {
 
 #[cfg(test)]
 mod tests {
-    use super::MessageEncoded;
-
     use crate::atomic::MessageValue;
+
+    use super::MessageEncoded;
 
     #[test]
     fn validate() {

@@ -1,10 +1,11 @@
+use std::convert::TryFrom;
+
 #[cfg(not(target_arch = "wasm32"))]
 use ed25519_dalek::SignatureError;
 use ed25519_dalek::{Keypair as Ed25519Keypair, PublicKey, SecretKey, Signature, Signer};
 #[cfg(target_arch = "wasm32")]
 use js_sys::Error as JsError;
 use rand::rngs::OsRng;
-use std::convert::TryFrom;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 #[cfg(target_arch = "wasm32")]

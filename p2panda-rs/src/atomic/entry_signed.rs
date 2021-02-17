@@ -1,13 +1,13 @@
 use std::convert::TryFrom;
 
-use thiserror::Error;
 use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
 use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature};
 use ed25519_dalek::PublicKey;
+use thiserror::Error;
 
 use crate::atomic::{Entry, Hash, Validation};
-use crate::Result;
 use crate::keypair::KeyPair;
+use crate::Result;
 
 /// Custom error types for `EntrySigned`.
 #[derive(Error, Debug)]
@@ -28,11 +28,6 @@ impl EntrySigned {
         let inner = Self(value.to_owned());
         inner.validate()?;
         Ok(inner)
-    }
-
-    /// Take bytes from entry, validates and returns them as new `EntrySigned` instance.
-    pub fn from_bytes(_value: Vec<u8>) -> Result<Self> {
-        todo!();
     }
 
     /// Returns decoded version of this entry.
@@ -65,7 +60,7 @@ impl EntrySigned {
 impl TryFrom<&[u8]> for EntrySigned {
     type Error = anyhow::Error;
 
-    fn try_from(bytes:&[u8]) -> std::result::Result<Self, Self::Error> {
+    fn try_from(bytes: &[u8]) -> std::result::Result<Self, Self::Error> {
         Self::new(&hex::encode(bytes))
     }
 }
@@ -73,7 +68,7 @@ impl TryFrom<&[u8]> for EntrySigned {
 impl TryFrom<(&Entry, &KeyPair)> for EntrySigned {
     type Error = anyhow::Error;
 
-    fn try_from((entry, key_pair):(&Entry, &KeyPair)) -> std::result::Result<Self, Self::Error> {
+    fn try_from((entry, key_pair): (&Entry, &KeyPair)) -> std::result::Result<Self, Self::Error> {
         // Generate message hash
         // @TODO: Handle error case where message is not set
         let message_encoded = entry.message().clone().unwrap().encode().unwrap();
@@ -81,13 +76,9 @@ impl TryFrom<(&Entry, &KeyPair)> for EntrySigned {
         let message_size = message_encoded.size();
 
         // Convert entry links to bamboo-rs `YamfHash` type
-        let backlink = entry
-            .backlink_hash()
-            .map(|link| link.to_yamf_hash());
+        let backlink = entry.backlink_hash().map(|link| link.to_yamf_hash());
 
-        let lipmaa_link = entry
-            .skiplink_hash()
-            .map(|link| link.to_yamf_hash());
+        let lipmaa_link = entry.skiplink_hash().map(|link| link.to_yamf_hash());
 
         // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
         // details and definition of entry fields.
@@ -133,20 +124,20 @@ impl Validation for EntrySigned {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use super::EntrySigned;
+    use std::convert::TryFrom;
+
     use crate::atomic::{Entry, Hash, LogId, Message, MessageFields, MessageValue};
     use crate::keypair::KeyPair;
-    use std::convert::{TryFrom, TryInto};
+
+    use super::EntrySigned;
 
     #[test]
     fn validate() {
         // Invalid hex string
         assert!(EntrySigned::new("123456789Z").is_err());
     }
-
 
     #[test]
     fn sign_and_encode() {
@@ -162,8 +153,9 @@ mod tests {
 
         // Test encoding
         let entry = Entry::new(&LogId::default(), &message, None, None, None).unwrap();
-        let entry_signed_encoded = EntrySigned::try_from((&entry, &key_pair)).unwrap();
-        // TODO
+        let _entry_signed_encoded = EntrySigned::try_from((&entry, &key_pair)).unwrap();
+
+        // @TODO
         // let entry_decoded: Entry = entry_signed_encoded.try_into().unwrap();
         // let test_entry_signed_encoded = EntrySigned::try_from((&entry_decoded, &key_pair)).unwrap();
         // assert_eq!(entry_signed_encoded, test_entry_signed_encoded);

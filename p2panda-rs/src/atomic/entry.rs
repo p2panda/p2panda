@@ -141,8 +141,9 @@ impl Validation for Entry {
 
 #[cfg(test)]
 mod tests {
-    use super::Entry;
     use crate::atomic::{Hash, LogId, Message, MessageFields, MessageValue, SeqNum};
+
+    use super::Entry;
 
     #[test]
     fn validation() {

@@ -1,7 +1,8 @@
+use std::collections::HashMap;
+
 use anyhow::bail;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::atomic::{Hash, MessageEncoded, Validation};
