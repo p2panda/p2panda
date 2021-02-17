@@ -17,7 +17,7 @@ type Result<T> = anyhow::Result<T>;
 /// Basic structs and methods to interact with p2panda data structures.
 pub mod atomic;
 /// Author identities to sign data with.
-pub mod keypair;
+pub mod key_pair;
 /// Validations and definitions of system schemas and message payloads.
 pub mod schema;
 

@@ -6,7 +6,7 @@ use ed25519_dalek::PublicKey;
 use thiserror::Error;
 
 use crate::atomic::{Entry, Hash, Validation};
-use crate::keypair::KeyPair;
+use crate::key_pair::KeyPair;
 use crate::Result;
 
 /// Custom error types for `EntrySigned`.
@@ -129,7 +129,7 @@ mod tests {
     use std::convert::TryFrom;
 
     use crate::atomic::{Entry, Hash, LogId, Message, MessageFields, MessageValue};
-    use crate::keypair::KeyPair;
+    use crate::key_pair::KeyPair;
 
     use super::EntrySigned;
 
