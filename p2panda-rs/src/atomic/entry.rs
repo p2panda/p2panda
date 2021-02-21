@@ -3,6 +3,8 @@ use thiserror::Error;
 
 use crate::atomic::{EntrySigned, Hash, LogId, Message, SeqNum, Validation};
 use crate::Result;
+use bamboo_rs_core::Entry as BambooEntry;
+use std::convert::{TryFrom, TryInto};
 
 /// Entry of an append-only log based on Bamboo specification. It describes the actual data in the
 /// p2p network and is shared between nodes.
@@ -73,11 +75,6 @@ impl Entry {
         Ok(entry)
     }
 
-    /// Decodes an encoded entry and returns it.
-    pub fn from_encoded(entry_encoded: EntrySigned) -> Self {
-        entry_encoded.decode()
-    }
-
     /// Returns hash of backlink entry when given.
     pub fn backlink_hash(&self) -> Option<&Hash> {
         self.entry_hash_backlink.as_ref()
@@ -116,6 +113,21 @@ impl Entry {
     /// Returns true if entry contains message.
     pub fn has_message(&self) -> bool {
         self.message.is_some()
+    }
+}
+
+impl TryFrom<&EntrySigned> for Entry {
+    type Error = anyhow::Error;
+
+    fn try_from(signed_entry: &EntrySigned) -> Result<Self> {
+        let entry: BambooEntry<&[u8], &[u8]> = signed_entry.try_into()?;
+        Ok(Entry {
+            entry_hash_backlink: Some(entry.backlink.unwrap().into()),
+            entry_hash_skiplink: Some(entry.lipmaa_link.unwrap().into()),
+            log_id: LogId::new(entry.log_id),
+            message: None,
+            seq_num: SeqNum::new(entry.seq_num)?,
+        })
     }
 }
 

@@ -57,6 +57,14 @@ impl EntrySigned {
     }
 }
 
+impl TryFrom<&EntrySigned> for BambooEntry<&[u8], &[u8]> {
+    type Error = anyhow::Error;
+
+    fn try_from(signed: &EntrySigned) -> Result<Self> {
+        todo!();
+    }
+}
+
 impl TryFrom<&[u8]> for EntrySigned {
     type Error = anyhow::Error;
 
@@ -76,9 +84,9 @@ impl TryFrom<(&Entry, &KeyPair)> for EntrySigned {
         let message_size = message_encoded.size();
 
         // Convert entry links to bamboo-rs `YamfHash` type
-        let backlink = entry.backlink_hash().map(|link| link.to_yamf_hash());
+        let backlink = entry.backlink_hash().map(|link| link.into());
 
-        let lipmaa_link = entry.skiplink_hash().map(|link| link.to_yamf_hash());
+        let lipmaa_link = entry.skiplink_hash().map(|link| link.into());
 
         // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
         // details and definition of entry fields.
@@ -156,7 +164,11 @@ mod tests {
         let _entry_signed_encoded = EntrySigned::try_from((&entry, &key_pair)).unwrap();
 
         // @TODO
-        // let entry_decoded: Entry = entry_signed_encoded.try_into().unwrap();
+
+        // uncomment for debugging:
+        // let entry_decoded: Entry = TryInto::<Entry>::try_into(&entry_signed_encoded);
+
+        // let entry_decoded = entry_signed_encoded.try_into().unwrap(();
         // let test_entry_signed_encoded = EntrySigned::try_from((&entry_decoded, &key_pair)).unwrap();
         // assert_eq!(entry_signed_encoded, test_entry_signed_encoded);
     }
