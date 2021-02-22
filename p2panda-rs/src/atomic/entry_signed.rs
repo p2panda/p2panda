@@ -1,5 +1,6 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
+use anyhow::bail;
 use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
 use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature};
 use ed25519_dalek::PublicKey;
@@ -57,11 +58,12 @@ impl EntrySigned {
     }
 }
 
-impl TryFrom<&EntrySigned> for BambooEntry<&[u8], &[u8]> {
-    type Error = anyhow::Error;
-
-    fn try_from(signed: &EntrySigned) -> Result<Self> {
+impl<'a> From<&'a EntrySigned> for BambooEntry<&'a [u8], &'a [u8]> {
+    fn from(_signed_entry: &'a EntrySigned) -> Self {
         todo!();
+        // let test = signed_entry.clone();
+        // let bytes = test.to_bytes().as_slice();
+        // TryInto::<BambooEntry<&'a[u8], &'a[u8]>>::try_into(bytes).unwrap()
     }
 }
 
@@ -135,6 +137,7 @@ impl Validation for EntrySigned {
 #[cfg(test)]
 mod tests {
     use std::convert::TryFrom;
+    use std::convert::Into;
 
     use crate::atomic::{Entry, Hash, LogId, Message, MessageFields, MessageValue};
     use crate::key_pair::KeyPair;
@@ -159,16 +162,11 @@ mod tests {
             .unwrap();
         let message = Message::create(Hash::from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
 
-        // Test encoding
         let entry = Entry::new(&LogId::default(), &message, None, None, None).unwrap();
         let _entry_signed_encoded = EntrySigned::try_from((&entry, &key_pair)).unwrap();
 
         // @TODO
-
-        // uncomment for debugging:
-        // let entry_decoded: Entry = TryInto::<Entry>::try_into(&entry_signed_encoded);
-
-        // let entry_decoded = entry_signed_encoded.try_into().unwrap(();
+        // let entry_decoded: Entry = Into::<Entry>::into(&entry_signed_encoded);
         // let test_entry_signed_encoded = EntrySigned::try_from((&entry_decoded, &key_pair)).unwrap();
         // assert_eq!(entry_signed_encoded, test_entry_signed_encoded);
     }
