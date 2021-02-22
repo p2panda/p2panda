@@ -1,9 +1,11 @@
+use std::convert::TryFrom;
+
 use anyhow::bail;
 use arrayvec::ArrayVec;
 use bamboo_rs_core::yamf_hash::new_blake2b;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use yamf_hash::{YamfHash, BLAKE2B_HASH_SIZE};
+use yamf_hash::{YamfHash, BLAKE2B_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
 use crate::atomic::Validation;
 use crate::Result;
@@ -82,9 +84,13 @@ impl Hash {
     }
 }
 
-impl From<YamfHash<&[u8]>> for Hash {
-    fn from(_yamf_hash: YamfHash<&[u8]>) -> Self {
-        todo!();
+impl<T: core::borrow::Borrow<[u8]>> TryFrom<YamfHash<T>> for Hash {
+    type Error = anyhow::Error;
+
+    fn try_from(yamf_hash: YamfHash<T>) -> std::result::Result<Self, Self::Error> {
+        let mut out = [0u8; MAX_YAMF_HASH_SIZE];
+        let _ = yamf_hash.encode(&mut out)?;
+        Self::new(&hex::encode(out))
     }
 }
 
@@ -127,9 +133,11 @@ impl PartialEq for Hash {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryInto;
+
     use yamf_hash::YamfHash;
 
-    use super::Hash;
+    use super::{Hash, OwnedHashBytes};
 
     #[test]
     fn validate() {
@@ -148,13 +156,11 @@ mod tests {
         assert_eq!(Hash::from_bytes(vec![1, 2, 3]).unwrap(), Hash::new("0040cf94f6d605657e90c543b0c919070cdaaf7209c5e1ea58acb8f3568fa2114268dc9ac3bafe12af277d286fce7dc59b7c0c348973c4e9dacbe79485e56ac2a702").unwrap());
     }
 
-    // @TODO implement tests for hash <-> yamf hash conversion
-
-    // #[test]
-    // fn convert_yamf_hash() {
-    //     let hash = Hash::from_bytes(vec![1, 2, 3]).unwrap();
-    //     let yamf_hash = Into::<YamfHash<&u8>>::into(&hash);
-    //     let hash_restored = Into::<Hash>::into(yamf_hash);
-    //     assert_eq!(hash, hash_restored);
-    // }
+    #[test]
+    fn convert_yamf_hash() {
+        let hash = Hash::from_bytes(vec![1, 2, 3]).unwrap();
+        let yamf_hash = Into::<YamfHash<OwnedHashBytes>>::into(&hash);
+        let hash_restored = TryInto::<Hash>::try_into(yamf_hash).unwrap();
+        assert_eq!(hash, hash_restored);
+    }
 }

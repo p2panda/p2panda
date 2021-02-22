@@ -1,10 +1,11 @@
+use std::convert::TryInto;
+
 use anyhow::bail;
 use thiserror::Error;
 
 use crate::atomic::{EntrySigned, Hash, LogId, Message, SeqNum, Validation};
 use crate::Result;
 use bamboo_rs_core::Entry as BambooEntry;
-use std::convert::{TryFrom, TryInto};
 
 /// Entry of an append-only log based on Bamboo specification. It describes the actual data in the
 /// p2p network and is shared between nodes.
@@ -116,18 +117,27 @@ impl Entry {
     }
 }
 
-impl TryFrom<&EntrySigned> for Entry {
-    type Error = anyhow::Error;
+impl From<&EntrySigned> for Entry {
+    fn from(signed_entry: &EntrySigned) -> Self {
+        let entry: BambooEntry<&[u8], &[u8]> = signed_entry.try_into().unwrap();
 
-    fn try_from(signed_entry: &EntrySigned) -> Result<Self> {
-        let entry: BambooEntry<&[u8], &[u8]> = signed_entry.try_into()?;
-        Ok(Entry {
-            entry_hash_backlink: Some(entry.backlink.unwrap().into()),
-            entry_hash_skiplink: Some(entry.lipmaa_link.unwrap().into()),
+        let entry_hash_backlink: Option<Hash> = match entry.backlink {
+            Some(link) => Some(link.try_into().unwrap()),
+            None => None,
+        };
+
+        let entry_hash_skiplink: Option<Hash> = match entry.lipmaa_link {
+            Some(link) => Some(link.try_into().unwrap()),
+            None => None,
+        };
+
+        Entry {
+            entry_hash_backlink,
+            entry_hash_skiplink,
             log_id: LogId::new(entry.log_id),
             message: None,
-            seq_num: SeqNum::new(entry.seq_num)?,
-        })
+            seq_num: SeqNum::new(entry.seq_num).unwrap(),
+        }
     }
 }
 
