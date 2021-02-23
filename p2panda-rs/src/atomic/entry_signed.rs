@@ -17,6 +17,10 @@ pub enum EntrySignedError {
     /// Encoded message string contains invalid hex characters.
     #[error("invalid hex encoding in message")]
     InvalidHexEncoding,
+
+    /// Can not sign and encode an entry without a message.
+    #[error("entry does not contain any message")]
+    MessageMissing,
 }
 
 /// Bamboo entry bytes represented in hex encoding format.
@@ -80,14 +84,15 @@ impl TryFrom<(&Entry, &KeyPair)> for EntrySigned {
 
     fn try_from((entry, key_pair): (&Entry, &KeyPair)) -> std::result::Result<Self, Self::Error> {
         // Generate message hash
-        // @TODO: Handle error case where message is not set
-        let message_encoded = entry.message().clone().unwrap().encode().unwrap();
+        let message_encoded = match entry.message() {
+            Some(message) => message.encode()?,
+            None => bail!(EntrySignedError::MessageMissing),
+        };
         let message_hash = message_encoded.hash();
         let message_size = message_encoded.size();
 
         // Convert entry links to bamboo-rs `YamfHash` type
         let backlink = entry.backlink_hash().map(|link| link.into());
-
         let lipmaa_link = entry.skiplink_hash().map(|link| link.into());
 
         // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
@@ -95,6 +100,7 @@ impl TryFrom<(&Entry, &KeyPair)> for EntrySigned {
         let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
             log_id: entry.log_id().as_u64(),
             is_end_of_feed: false,
+            // @TODO: Use conversion trait instead of `to_yamf_hash` method
             payload_hash: message_hash.to_yamf_hash(),
             payload_size: message_size,
             author: PublicKey::from_bytes(&key_pair.public_key_bytes())?,
@@ -106,7 +112,7 @@ impl TryFrom<(&Entry, &KeyPair)> for EntrySigned {
 
         // Get entry bytes first for signing them with key pair
         let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
-        let unsigned_entry_size = entry.encode(&mut entry_bytes).unwrap();
+        let unsigned_entry_size = entry.encode(&mut entry_bytes)?;
 
         // Sign and add signature to entry
         let sig_bytes = key_pair.sign(&entry_bytes[..unsigned_entry_size]);
@@ -114,7 +120,7 @@ impl TryFrom<(&Entry, &KeyPair)> for EntrySigned {
         entry.sig = Some(signature);
 
         // Get entry bytes again, now with signature included
-        let signed_entry_size = entry.encode(&mut entry_bytes).unwrap();
+        let signed_entry_size = entry.encode(&mut entry_bytes)?;
 
         EntrySigned::try_from(&entry_bytes[..signed_entry_size])
     }
@@ -136,8 +142,8 @@ impl Validation for EntrySigned {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryFrom;
     use std::convert::Into;
+    use std::convert::TryFrom;
 
     use crate::atomic::{Entry, Hash, LogId, Message, MessageFields, MessageValue};
     use crate::key_pair::KeyPair;

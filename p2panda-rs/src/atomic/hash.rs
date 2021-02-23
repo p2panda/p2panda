@@ -62,6 +62,8 @@ impl Hash {
     /// Returns Yet-Another-Multiformat Hash struct from the `yamf-hash` crate.
     ///
     /// This comes in handy when interacting with the `bamboo-rs` crate.
+    ///
+    /// @TODO: Remove this method as we use conversion trait instead.
     pub fn to_yamf_hash(&self) -> YamfHash<OwnedHashBytes> {
         let bytes = self.to_bytes();
 
