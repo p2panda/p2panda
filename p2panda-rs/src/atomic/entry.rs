@@ -47,6 +47,7 @@ pub enum EntryError {
     #[error("backlink and skiplink not valid for this sequence number")]
     InvalidLinks,
 
+    /// Message needs to match payload hash of encoded entry
     #[error("message needs to match payload hash of encoded entry")]
     MessageHashMismatch,
 }

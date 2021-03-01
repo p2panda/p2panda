@@ -10,6 +10,7 @@ use yamf_hash::{YamfHash, BLAKE2B_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 use crate::atomic::Validation;
 use crate::Result;
 
+/// This is the type used for `bamboo-rs-core` entries that own their bytes
 pub type Blake2BArrayVec = ArrayVec<[u8; BLAKE2B_HASH_SIZE]>;
 
 /// Custom error types for `Hash`.
