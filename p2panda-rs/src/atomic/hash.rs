@@ -10,7 +10,7 @@ use yamf_hash::{YamfHash, BLAKE2B_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 use crate::atomic::Validation;
 use crate::Result;
 
-type OwnedHashBytes = ArrayVec<[u8; BLAKE2B_HASH_SIZE]>;
+pub type Blake2BArrayVec = ArrayVec<[u8; BLAKE2B_HASH_SIZE]>;
 
 /// Custom error types for `Hash`.
 #[derive(Error, Debug)]
@@ -64,11 +64,11 @@ impl Hash {
     /// This comes in handy when interacting with the `bamboo-rs` crate.
     ///
     /// @TODO: Remove this method as we use conversion trait instead.
-    pub fn to_yamf_hash(&self) -> YamfHash<OwnedHashBytes> {
+    pub fn to_yamf_hash(&self) -> YamfHash<Blake2BArrayVec> {
         let bytes = self.to_bytes();
 
         // Unwrap result as we already validated the value
-        let yamf_hash = YamfHash::<OwnedHashBytes>::decode_owned(&bytes).unwrap();
+        let yamf_hash = YamfHash::<Blake2BArrayVec>::decode_owned(&bytes).unwrap();
 
         // Return first entry in tuple as this is the actual hash
         yamf_hash.0
@@ -96,10 +96,10 @@ impl<T: core::borrow::Borrow<[u8]>> TryFrom<YamfHash<T>> for Hash {
     }
 }
 
-impl From<&Hash> for YamfHash<OwnedHashBytes> {
-    fn from(hash: &Hash) -> YamfHash<OwnedHashBytes> {
+impl From<&Hash> for YamfHash<Blake2BArrayVec> {
+    fn from(hash: &Hash) -> YamfHash<Blake2BArrayVec> {
         let bytes = hash.to_bytes();
-        let yamf_hash = YamfHash::<OwnedHashBytes>::decode_owned(&bytes).unwrap();
+        let yamf_hash = YamfHash::<Blake2BArrayVec>::decode_owned(&bytes).unwrap();
         yamf_hash.0
     }
 }
@@ -139,7 +139,7 @@ mod tests {
 
     use yamf_hash::YamfHash;
 
-    use super::{Hash, OwnedHashBytes};
+    use super::{Blake2BArrayVec, Hash};
 
     #[test]
     fn validate() {
@@ -161,7 +161,7 @@ mod tests {
     #[test]
     fn convert_yamf_hash() {
         let hash = Hash::from_bytes(vec![1, 2, 3]).unwrap();
-        let yamf_hash = Into::<YamfHash<OwnedHashBytes>>::into(&hash);
+        let yamf_hash = Into::<YamfHash<Blake2BArrayVec>>::into(&hash);
         let hash_restored = TryInto::<Hash>::try_into(yamf_hash).unwrap();
         assert_eq!(hash, hash_restored);
     }

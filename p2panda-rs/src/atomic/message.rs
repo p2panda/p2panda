@@ -243,7 +243,7 @@ impl Message {
     }
 
     /// Decodes an encoded message and returns it.
-    pub fn from_encoded(message_encoded: MessageEncoded) -> Self {
+    pub fn from_encoded(message_encoded: &MessageEncoded) -> Self {
         message_encoded.decode()
     }
 
@@ -377,7 +377,7 @@ mod tests {
         println!("{:?}", encoded);
 
         // ... and decode it again
-        let message_restored = Message::from_encoded(encoded);
+        let message_restored = Message::from_encoded(&encoded);
 
         assert_eq!(message, message_restored);
     }

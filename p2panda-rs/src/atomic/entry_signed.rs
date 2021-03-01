@@ -1,6 +1,7 @@
 use std::convert::{TryFrom, TryInto};
 
 use anyhow::bail;
+use arrayvec::ArrayVec;
 use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
 use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature};
 use ed25519_dalek::PublicKey;
@@ -62,12 +63,12 @@ impl EntrySigned {
     }
 }
 
-impl<'a> From<&'a EntrySigned> for BambooEntry<&'a [u8], &'a [u8]> {
-    fn from(_signed_entry: &'a EntrySigned) -> Self {
-        todo!();
-        // let test = signed_entry.clone();
-        // let bytes = test.to_bytes().as_slice();
-        // TryInto::<BambooEntry<&'a[u8], &'a[u8]>>::try_into(bytes).unwrap()
+impl From<&EntrySigned> for BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> {
+    fn from(signed_entry: &EntrySigned) -> Self {
+        let entry_bytes = signed_entry.clone().to_bytes();
+        let entry_ref =
+            TryInto::<BambooEntry<&[u8], &[u8]>>::try_into(entry_bytes.as_slice()).unwrap();
+        bamboo_rs_core::entry::into_owned(&entry_ref)
     }
 }
 
@@ -142,7 +143,6 @@ impl Validation for EntrySigned {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::Into;
     use std::convert::TryFrom;
 
     use crate::atomic::{Entry, Hash, LogId, Message, MessageFields, MessageValue};
@@ -168,12 +168,19 @@ mod tests {
             .unwrap();
         let message = Message::create(Hash::from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
 
+        // Create a p2panda entry, then sign it. For this encoding, the entry is converted into a
+        // bamboo-rs-core entry, which means that it also doesn't contain the message anymore.
         let entry = Entry::new(&LogId::default(), &message, None, None, None).unwrap();
-        let _entry_signed_encoded = EntrySigned::try_from((&entry, &key_pair)).unwrap();
+        let entry_signed_encoded = EntrySigned::try_from((&entry, &key_pair)).unwrap();
 
-        // @TODO
-        // let entry_decoded: Entry = Into::<Entry>::into(&entry_signed_encoded);
-        // let test_entry_signed_encoded = EntrySigned::try_from((&entry_decoded, &key_pair)).unwrap();
-        // assert_eq!(entry_signed_encoded, test_entry_signed_encoded);
+        // Make an unsigned, decoded p2panda entry from the signed and encoded form. This is adding
+        // the message back.
+        let message_encoded = message.encode().unwrap();
+        let entry_decoded: Entry =
+            Entry::try_from((&entry_signed_encoded, Some(&message_encoded))).unwrap();
+
+        // Re-encode the recovered entry to be able to check that we still have the same data.
+        let test_entry_signed_encoded = EntrySigned::try_from((&entry_decoded, &key_pair)).unwrap();
+        assert_eq!(entry_signed_encoded, test_entry_signed_encoded);
     }
 }

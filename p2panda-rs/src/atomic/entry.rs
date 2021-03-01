@@ -1,11 +1,14 @@
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 
 use anyhow::bail;
+use arrayvec::ArrayVec;
 use thiserror::Error;
 
-use crate::atomic::{EntrySigned, Hash, LogId, Message, SeqNum, Validation};
+use crate::atomic::{
+    Blake2BArrayVec, EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum, Validation,
+};
 use crate::Result;
-use bamboo_rs_core::Entry as BambooEntry;
+use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
 
 /// Entry of an append-only log based on Bamboo specification. It describes the actual data in the
 /// p2p network and is shared between nodes.
@@ -43,6 +46,9 @@ pub enum EntryError {
     /// Links should not be set when first entry in log.
     #[error("backlink and skiplink not valid for this sequence number")]
     InvalidLinks,
+
+    #[error("message needs to match payload hash of encoded entry")]
+    MessageHashMismatch,
 }
 
 impl Entry {
@@ -117,9 +123,27 @@ impl Entry {
     }
 }
 
-impl From<&EntrySigned> for Entry {
-    fn from(signed_entry: &EntrySigned) -> Self {
-        let entry: BambooEntry<&[u8], &[u8]> = signed_entry.try_into().unwrap();
+impl TryFrom<(&EntrySigned, Option<&MessageEncoded>)> for Entry {
+    type Error = anyhow::Error;
+
+    fn try_from(
+        (signed_entry, message_encoded): (&EntrySigned, Option<&MessageEncoded>),
+    ) -> std::result::Result<Self, Self::Error> {
+        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> =
+            signed_entry.try_into().unwrap();
+
+        // Messages may be omitted because the entry still contains the message hash. If the
+        // message is explicitly included we require its hash to match.
+        let message = match message_encoded {
+            Some(m) => {
+                let yamf_hash = TryInto::<YamfHash<Blake2BArrayVec>>::try_into(&m.hash())?;
+                if yamf_hash != entry.payload_hash {
+                    bail!(EntryError::MessageHashMismatch);
+                }
+                Some(Message::from_encoded(&m))
+            }
+            None => None,
+        };
 
         let entry_hash_backlink: Option<Hash> = match entry.backlink {
             Some(link) => Some(link.try_into().unwrap()),
@@ -131,13 +155,13 @@ impl From<&EntrySigned> for Entry {
             None => None,
         };
 
-        Entry {
+        Ok(Entry {
             entry_hash_backlink,
             entry_hash_skiplink,
             log_id: LogId::new(entry.log_id),
-            message: None,
+            message,
             seq_num: SeqNum::new(entry.seq_num).unwrap(),
-        }
+        })
     }
 }
 
