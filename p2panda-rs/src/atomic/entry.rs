@@ -137,7 +137,7 @@ impl TryFrom<(&EntrySigned, Option<&MessageEncoded>)> for Entry {
         // message is explicitly included we require its hash to match.
         let message = match message_encoded {
             Some(m) => {
-                let yamf_hash = TryInto::<YamfHash<Blake2BArrayVec>>::try_into(&m.hash())?;
+                let yamf_hash: YamfHash<Blake2BArrayVec> = (&m.hash()).try_into()?;
                 if yamf_hash != entry.payload_hash {
                     bail!(EntryError::MessageHashMismatch);
                 }

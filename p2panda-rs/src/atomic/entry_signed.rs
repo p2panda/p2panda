@@ -66,8 +66,7 @@ impl EntrySigned {
 impl From<&EntrySigned> for BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> {
     fn from(signed_entry: &EntrySigned) -> Self {
         let entry_bytes = signed_entry.clone().to_bytes();
-        let entry_ref =
-            TryInto::<BambooEntry<&[u8], &[u8]>>::try_into(entry_bytes.as_slice()).unwrap();
+        let entry_ref: BambooEntry<&[u8], &[u8]> = entry_bytes.as_slice().try_into().unwrap();
         bamboo_rs_core::entry::into_owned(&entry_ref)
     }
 }
