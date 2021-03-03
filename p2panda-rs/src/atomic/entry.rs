@@ -123,8 +123,8 @@ impl TryFrom<(&EntrySigned, Option<&MessageEncoded>)> for Entry {
     fn try_from(
         (signed_entry, message_encoded): (&EntrySigned, Option<&MessageEncoded>),
     ) -> std::result::Result<Self, Self::Error> {
-        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> =
-            signed_entry.try_into().unwrap();
+        // Convert to Entry from bamboo_rs_core first
+        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = signed_entry.try_into()?;
 
         // Messages may be omitted because the entry still contains the message hash. If the
         // message is explicitly included we require its hash to match.
@@ -143,12 +143,12 @@ impl TryFrom<(&EntrySigned, Option<&MessageEncoded>)> for Entry {
         };
 
         let entry_hash_backlink: Option<Hash> = match entry.backlink {
-            Some(link) => Some(link.try_into().unwrap()),
+            Some(link) => Some(link.try_into()?),
             None => None,
         };
 
         let entry_hash_skiplink: Option<Hash> = match entry.lipmaa_link {
-            Some(link) => Some(link.try_into().unwrap()),
+            Some(link) => Some(link.try_into()?),
             None => None,
         };
 
@@ -157,7 +157,7 @@ impl TryFrom<(&EntrySigned, Option<&MessageEncoded>)> for Entry {
             entry_hash_skiplink,
             log_id: LogId::new(entry.log_id),
             message,
-            seq_num: SeqNum::new(entry.seq_num).unwrap(),
+            seq_num: SeqNum::new(entry.seq_num)?,
         })
     }
 }
