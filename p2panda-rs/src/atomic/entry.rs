@@ -8,12 +8,16 @@ use thiserror::Error;
 use crate::atomic::{EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum, Validation};
 use crate::Result;
 
-/// Entry of an append-only log based on Bamboo specification. It describes the actual data in the
+/// Entry of an append-only log based on [Bamboo specification](https://github.com/AljoschaMeyer/bamboo). It describes the actual data in the
 /// p2p network and is shared between nodes.
 ///
 /// Bamboo entries are the main data type of p2panda. Entries are organized in a distributed,
 /// single-writer append-only log structure, created and signed by holders of private keys and
 /// stored inside the node database.
+///
+/// Entries are separated from the actual (off-chain) data to be able to delete user data without
+/// loosing the integrity of the log. Each entry only holds a hash of the message payload, this is
+/// why a message instance is required during entry signing.
 #[derive(Debug)]
 pub struct Entry {
     /// Hash of previous Bamboo entry.
@@ -117,6 +121,14 @@ impl Entry {
     }
 }
 
+/// Takes an encoded and signed [`EntrySigned`] and converts it back to its original, unsigned and
+/// decoded `Entry` state.
+///
+/// This conversion is lossy as the Signature will be removed.
+///
+/// Entries are separated from the messages they refer to. Since messages can independently be
+/// deleted they can be passed on optionally during the conversion. When a [`Message`] exists this
+/// conversion will automatically check its integrity with this Entry by comparing their hashes.
 impl TryFrom<(&EntrySigned, Option<&MessageEncoded>)> for Entry {
     type Error = anyhow::Error;
 

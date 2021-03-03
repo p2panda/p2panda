@@ -1,4 +1,41 @@
 //! # p2panda-rs
+//!
+//! This library provides all tools required to write a client for the [p2panda] network. It is
+//! shipped both as a Rust crate `p2panda-rs` with WebAssembly bindings and a NPM package
+//! `p2panda-js` with TypeScript definitions running in NodeJS or any modern web browser.
+//!
+//! [p2panda]: https://p2panda.org
+//!
+//! ## Example
+//!
+//! Creates and signs data which can be sent to a p2panda node.
+//!
+//! ```
+//! # extern crate p2panda_rs;
+//! # extern crate anyhow;
+//! # fn main() -> Result<(), anyhow::Error> {
+//! # use std::convert::TryFrom;
+//! # use p2panda_rs::key_pair::KeyPair;
+//! # use p2panda_rs::atomic::{Entry, EntrySigned, Hash, LogId, SeqNum, Message, MessageFields, MessageValue};
+//! # let PROFILE_SCHEMA = Hash::new_from_bytes(vec![1, 2, 3])?;
+//! // Generate new Ed25519 key pair
+//! let key_pair = KeyPair::new();
+//!
+//! // Create message fields which contain the data we want to send
+//! let mut fields = MessageFields::new();
+//! fields.add("username", MessageValue::Text("panda".to_owned()))?;
+//!
+//! // Add field data to "create" message
+//! let message = Message::new_create(PROFILE_SCHEMA, fields)?;
+//!
+//! // Wrap message into Bamboo entry (append-only log data type)
+//! let entry = Entry::new(&LogId::default(), &message, None, None, None)?;
+//!
+//! // Sign entry with private key
+//! let entry_signed = EntrySigned::try_from((&entry, &key_pair))?;
+//! # Ok(())
+//! # }
+//! ```
 #![warn(
     missing_copy_implementations,
     missing_debug_implementations,
@@ -11,14 +48,14 @@
     unused_qualifications
 )]
 
-/// A specialized `Result` type for p2panda-rs.
+/// A special `Result` type for p2panda-rs handling errors dynamically.
 type Result<T> = anyhow::Result<T>;
 
 /// Basic structs and methods to interact with p2panda data structures.
 pub mod atomic;
-/// Author identities to sign data with.
+/// Methods to generate key pairs or "authors" to sign data with.
 pub mod key_pair;
-/// Validations and definitions of system schemas and message payloads.
+/// Validations for message payloads and definitions of system schemas.
 pub mod schema;
 
 #[cfg(target_arch = "wasm32")]

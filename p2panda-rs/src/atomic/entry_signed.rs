@@ -15,11 +15,11 @@ use crate::Result;
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum EntrySignedError {
-    /// Encoded message string contains invalid hex characters.
-    #[error("invalid hex encoding in message")]
+    /// Encoded entry string contains invalid hex characters.
+    #[error("invalid hex encoding in entry")]
     InvalidHexEncoding,
 
-    /// Can not sign and encode an entry without a message.
+    /// Can not sign and encode an entry without a [`Message`].
     #[error("entry does not contain any message")]
     MessageMissing,
 }
@@ -29,7 +29,7 @@ pub enum EntrySignedError {
 pub struct EntrySigned(String);
 
 impl EntrySigned {
-    /// Validates and returns a new encoded entry instance.
+    /// Validates and wraps encoded entry string into a new `EntrySigned` instance.
     pub fn new(value: &str) -> Result<Self> {
         let inner = Self(value.to_owned());
         inner.validate()?;
@@ -58,6 +58,7 @@ impl EntrySigned {
     }
 }
 
+/// Converts an `EntrySigned` into a Bamboo Entry to interact with the `bamboo_rs` crate.
 impl From<&EntrySigned> for BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> {
     fn from(signed_entry: &EntrySigned) -> Self {
         let entry_bytes = signed_entry.clone().to_bytes();
@@ -74,6 +75,10 @@ impl TryFrom<&[u8]> for EntrySigned {
     }
 }
 
+/// Takes an Entry, signs it with private key and returns signed and encoded version in form of an
+/// [`EntrySigned`] instance.
+///
+/// After conversion the result is ready to be sent to a p2panda node.
 impl TryFrom<(&Entry, &KeyPair)> for EntrySigned {
     type Error = anyhow::Error;
 
@@ -129,7 +134,6 @@ impl PartialEq for EntrySigned {
 impl Validation for EntrySigned {
     fn validate(&self) -> Result<()> {
         hex::decode(&self.0).map_err(|_| EntrySignedError::InvalidHexEncoding)?;
-        // @TODO: Validate Bamboo entry
         Ok(())
     }
 }

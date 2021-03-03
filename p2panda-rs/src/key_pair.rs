@@ -20,12 +20,14 @@ pub struct KeyPair(Ed25519Keypair);
 impl KeyPair {
     /// Generates a new key pair using the systems random number generator (CSPRNG) as a seed.
     ///
-    /// For random number generation this uses `getrandom` internally. See the following link for
-    /// supported platforms: https://docs.rs/getrandom/0.2.1/getrandom/.
+    /// This uses `getrandom` for random number generation internally. See [`getrandom`] crate for
+    /// supported platforms.
     ///
-    /// WARNING: Depending on the context this does not guarantee the random number generator
+    /// **WARNING:** Depending on the context this does not guarantee the random number generator
     /// to be cryptographically secure (eg. broken / hijacked browser or system implementations),
     /// so make sure to only run this in trusted environments.
+    ///
+    /// [`getrandom`]: https://docs.rs/getrandom/0.2.1/getrandom/
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(constructor))]
     pub fn new() -> Self {
         let mut csprng: OsRng = OsRng {};
@@ -33,12 +35,13 @@ impl KeyPair {
         Self(key_pair)
     }
 
-    /// Derives a key pair from a private key (encoded as hex string).
+    /// Derives a key pair from a private key (encoded as hex string for better handling in browser
+    /// contexts).
     ///
-    /// WARNING: "Absolutely no validation is done on the key. If you give this function bytes
+    /// **WARNING:** "Absolutely no validation is done on the key. If you give this function bytes
     /// which do not represent a valid point, or which do not represent corresponding parts of the
-    /// key, then your Keypair will be broken and it will be your fault."
-    /// https://docs.rs/ed25519-dalek/1.0.1/ed25519_dalek/struct.Keypair.html#warning
+    /// key, then your Keypair will be broken and it will be your fault." See:
+    /// [ed25519-dalek](https://docs.rs/ed25519-dalek/1.0.1/ed25519_dalek/struct.Keypair.html#warning) crate
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = fromPrivateKey))]
     pub fn from_private_key(private_key: String) -> Self {
         // Decode private key
