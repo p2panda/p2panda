@@ -5,9 +5,7 @@ use arrayvec::ArrayVec;
 use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
 use thiserror::Error;
 
-use crate::atomic::{
-    Blake2BArrayVec, EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum, Validation,
-};
+use crate::atomic::{EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum, Validation};
 use crate::Result;
 
 /// Entry of an append-only log based on Bamboo specification. It describes the actual data in the
@@ -132,7 +130,7 @@ impl TryFrom<(&EntrySigned, Option<&MessageEncoded>)> for Entry {
         // message is explicitly included we require its hash to match.
         let message = match message_encoded {
             Some(msg) => {
-                let yamf_hash: YamfHash<Blake2BArrayVec> = (&msg.hash()).to_owned().try_into()?;
+                let yamf_hash: YamfHash<super::hash::Blake2BArrayVec> = (&msg.hash()).to_owned().try_into()?;
 
                 if yamf_hash != entry.payload_hash {
                     bail!(EntryError::MessageHashMismatch);
