@@ -10,7 +10,7 @@ use yamf_hash::{YamfHash, BLAKE2B_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 use crate::atomic::Validation;
 use crate::Result;
 
-/// This is the type used for `bamboo-rs-core` entries that own their bytes
+/// This is the type used for `bamboo-rs-core` entries that own their bytes.
 pub type Blake2BArrayVec = ArrayVec<[u8; BLAKE2B_HASH_SIZE]>;
 
 /// Custom error types for `Hash`.
@@ -30,22 +30,22 @@ pub enum HashError {
     DecodingFailed,
 }
 
-/// Hash of entry or message encoded as hex string.
+/// Hash of `Entry` or `Message` encoded as hex string.
 ///
-/// This uses the BLAKE2b algorithm wrapped in YAMF "Yet-Another-Multi-Format" according to the
+/// This uses the BLAKE2b algorithm wrapped in [YAMF](https://github.com/bamboo-rs/yamf-hash) "Yet-Another-Multi-Format" according to the
 /// Bamboo specification.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Hash(String);
 
 impl Hash {
-    /// Validates and returns new hash instance when correct.
+    /// Validates and wraps encoded hash string into new `Hash` instance.
     pub fn new(value: &str) -> Result<Self> {
         let hash = Self(String::from(value));
         hash.validate()?;
         Ok(hash)
     }
 
-    /// Hashes byte data and returns it as hash instance.
+    /// Hashes byte data and returns it as `Hash` instance.
     pub fn new_from_bytes(value: Vec<u8>) -> Result<Self> {
         // Generate Blake2b hash
         let blake2b_hash = new_blake2b(&value);
@@ -72,6 +72,7 @@ impl Hash {
     }
 }
 
+/// Converts YAMF hash from `yamf-hash` crate to p2panda `Hash` instance.
 impl<T: core::borrow::Borrow<[u8]>> TryFrom<YamfHash<T>> for Hash {
     type Error = anyhow::Error;
 

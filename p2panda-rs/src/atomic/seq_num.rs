@@ -22,7 +22,7 @@ pub enum SeqNumError {
 pub struct SeqNum(u64);
 
 impl SeqNum {
-    /// Validates and returns a new sequence number when correct.
+    /// Validates and wraps value into a new `SeqNum` instance.
     pub fn new(value: u64) -> Result<Self> {
         let seq_num = Self(value);
         seq_num.validate()?;
@@ -36,8 +36,9 @@ impl SeqNum {
 
     /// Return sequence number of the lipmaa entry (skiplink).
     ///
-    /// See Bamboo specification for more details about how skiplinks are calculated:
-    /// https://github.com/AljoschaMeyer/bamboo#links-and-entry-verification
+    /// See [Bamboo
+    /// specification](https://github.com/AljoschaMeyer/bamboo#links-and-entry-verification) for
+    /// more details about how skiplinks are calculated.
     pub fn skiplink_seq_num(&self) -> Option<Self> {
         Some(Self(lipmaa(self.0) + FIRST_SEQ_NUM))
     }

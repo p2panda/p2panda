@@ -19,7 +19,7 @@ pub enum EntrySignedError {
     #[error("invalid hex encoding in entry")]
     InvalidHexEncoding,
 
-    /// Can not sign and encode an entry without a [`Message`].
+    /// Can not sign and encode an entry without a `Message`.
     #[error("entry does not contain any message")]
     MessageMissing,
 }

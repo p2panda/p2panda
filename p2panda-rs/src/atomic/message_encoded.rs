@@ -28,7 +28,7 @@ pub enum MessageEncodedError {
 pub struct MessageEncoded(String);
 
 impl MessageEncoded {
-    /// Validates and returns a new encoded message instance.
+    /// Validates and wraps encoded message string into a new `MessageEncoded` instance.
     pub fn new(value: &str) -> Result<MessageEncoded> {
         let inner = Self(value.to_owned());
         inner.validate()?;
