@@ -36,11 +36,6 @@ impl EntrySigned {
         Ok(inner)
     }
 
-    /// Returns decoded version of this entry.
-    pub fn decode(&self) -> Entry {
-        todo!();
-    }
-
     /// Returns YAMF BLAKE2b hash of encoded entry.
     pub fn hash(&self) -> Hash {
         Hash::new_from_bytes(self.to_bytes()).unwrap()
