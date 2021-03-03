@@ -23,7 +23,7 @@ pub enum AuthorError {
 pub struct Author(String);
 
 impl Author {
-    /// Validates and returns an author when correct.
+    /// Validates and wraps author string into a new `Author` instance.
     pub fn new(value: &str) -> Result<Self> {
         let author = Self(String::from(value));
         author.validate()?;

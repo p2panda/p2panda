@@ -56,6 +56,9 @@ pub mod atomic;
 /// Methods to generate key pairs or "authors" to sign data with.
 pub mod key_pair;
 /// Validations for message payloads and definitions of system schemas.
+///
+/// This uses [Concise Data Definition Language (CDDL)](https://tools.ietf.org/html/rfc8610)
+/// internally to verify CBOR data of p2panda messages.
 pub mod schema;
 
 #[cfg(target_arch = "wasm32")]

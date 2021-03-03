@@ -3,18 +3,18 @@
 pub struct LogId(u64);
 
 impl LogId {
-    /// Returns a new LogId instance.
+    /// Validates and wraps log id value into a new `LogId` instance.
     pub fn new(value: u64) -> Self {
         Self(value)
     }
 
-    /// Returns true when LogId is for a user schema.
+    /// Returns true when `LogId` is for a user schema.
     pub fn is_user_log(&self) -> bool {
         // Log ids for user schemas are odd numbers
         self.0 % 2 == 1
     }
 
-    /// Returns true when LogId is for a system schema.
+    /// Returns true when `LogId` is for a system schema.
     pub fn is_system_log(&self) -> bool {
         // Log ids for system schemas are even numbers
         self.0 % 2 == 0
