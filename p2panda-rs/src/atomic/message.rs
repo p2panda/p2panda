@@ -242,18 +242,6 @@ impl Message {
         Ok(message)
     }
 
-    /// Decodes an encoded message and returns it.
-    pub fn from_encoded(message_encoded: &MessageEncoded) -> Self {
-        message_encoded.decode()
-    }
-
-    /// Returns an encoded version of this message.
-    pub fn encode(&self) -> Result<MessageEncoded> {
-        // Encode bytes as hex string
-        let encoded = hex::encode(&self.to_cbor());
-        Ok(MessageEncoded::new(&encoded)?)
-    }
-
     /// Encodes message in CBOR format and returns bytes.
     pub fn to_cbor(&self) -> Vec<u8> {
         // Serialize data to binary CBOR format
@@ -311,6 +299,13 @@ impl Message {
     }
 }
 
+/// Decodes an encoded message and returns it.
+impl From<&MessageEncoded> for Message {
+    fn from(message_encoded: &MessageEncoded) -> Self {
+        serde_cbor::from_slice(&message_encoded.to_bytes()).unwrap()
+    }
+}
+
 impl Validation for Message {
     fn validate(&self) -> Result<()> {
         // Create and update messages can not have empty fields.
@@ -324,7 +319,9 @@ impl Validation for Message {
 
 #[cfg(test)]
 mod tests {
-    use crate::atomic::Hash;
+    use std::convert::TryFrom;
+
+    use crate::atomic::{Hash, MessageEncoded};
 
     use super::{Message, MessageFields, MessageValue};
 
@@ -372,12 +369,10 @@ mod tests {
         assert!(message.is_update());
 
         // Encode message ...
-        let encoded = message.encode().unwrap();
-
-        println!("{:?}", encoded);
+        let encoded = MessageEncoded::try_from(&message).unwrap();
 
         // ... and decode it again
-        let message_restored = Message::from_encoded(&encoded);
+        let message_restored = Message::try_from(&encoded).unwrap();
 
         assert_eq!(message, message_restored);
     }

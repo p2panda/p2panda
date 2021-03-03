@@ -7,7 +7,7 @@ use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature};
 use ed25519_dalek::PublicKey;
 use thiserror::Error;
 
-use crate::atomic::{Entry, Hash, Validation};
+use crate::atomic::{Entry, Hash, MessageEncoded, Validation};
 use crate::key_pair::KeyPair;
 use crate::Result;
 
@@ -85,7 +85,7 @@ impl TryFrom<(&Entry, &KeyPair)> for EntrySigned {
     fn try_from((entry, key_pair): (&Entry, &KeyPair)) -> std::result::Result<Self, Self::Error> {
         // Generate message hash
         let message_encoded = match entry.message() {
-            Some(message) => message.encode()?,
+            Some(message) => MessageEncoded::try_from(message)?,
             None => bail!(EntrySignedError::MessageMissing),
         };
         let message_hash = message_encoded.hash();
@@ -143,7 +143,7 @@ impl Validation for EntrySigned {
 mod tests {
     use std::convert::TryFrom;
 
-    use crate::atomic::{Entry, Hash, LogId, Message, MessageFields, MessageValue};
+    use crate::atomic::{Entry, Hash, LogId, Message, MessageEncoded, MessageFields, MessageValue};
     use crate::key_pair::KeyPair;
 
     use super::EntrySigned;
@@ -174,7 +174,7 @@ mod tests {
 
         // Make an unsigned, decoded p2panda entry from the signed and encoded form. This is adding
         // the message back.
-        let message_encoded = message.encode().unwrap();
+        let message_encoded = MessageEncoded::try_from(&message).unwrap();
         let entry_decoded: Entry =
             Entry::try_from((&entry_signed_encoded, Some(&message_encoded))).unwrap();
 

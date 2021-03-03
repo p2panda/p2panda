@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use thiserror::Error;
 
 use crate::atomic::{Hash, Message, Validation};
@@ -33,12 +35,6 @@ impl MessageEncoded {
         Ok(inner)
     }
 
-    /// Returns the decoded version of message.
-    pub fn decode(&self) -> Message {
-        // Deserialize from CBOR
-        serde_cbor::from_slice(&self.to_bytes()).unwrap()
-    }
-
     /// Returns the hash of this message.
     pub fn hash(&self) -> Hash {
         // Unwrap as we already know that the inner value is valid
@@ -60,6 +56,17 @@ impl MessageEncoded {
     pub fn size(&self) -> u64 {
         // Divide by 2 as every byte is represented by 2 hex chars.
         self.0.len() as u64 / 2
+    }
+}
+
+/// Returns an encoded version of this message.
+impl TryFrom<&Message> for MessageEncoded {
+    type Error = anyhow::Error;
+
+    fn try_from(message: &Message) -> std::result::Result<Self, Self::Error> {
+        // Encode bytes as hex string
+        let encoded = hex::encode(&message.to_cbor());
+        Ok(MessageEncoded::new(&encoded)?)
     }
 }
 
@@ -91,7 +98,9 @@ impl Validation for MessageEncoded {
 
 #[cfg(test)]
 mod tests {
-    use crate::atomic::MessageValue;
+    use std::convert::TryFrom;
+
+    use crate::atomic::{Message, MessageValue};
 
     use super::MessageEncoded;
 
@@ -111,7 +120,7 @@ mod tests {
     fn decode() {
         let message_encoded = MessageEncoded::new("a566616374696f6e6675706461746566736368656d6178843030343032646332356433326466623430306262323935623636336434373036626334376630636234663165646666323737633733376166633861393233323333306165393838346663663664303231343161373835633566643832633139366239373365383432376566633063303464303434346463633330353932323062396564616776657273696f6e016269647884303034303564343933303465323964316439333538333134653130383364303564353631356137366636346330393834663531653336353961353361336535643637613262386536396239316533333539373836323765346363616663633534393231316132383363363135346433616634373036393863666332353666626638373030666669656c6473a363616765181c68757365726e616d6564627562756869735f61646d696ef4").unwrap();
 
-        let message = message_encoded.decode();
+        let message = Message::try_from(&message_encoded).unwrap();
 
         assert!(message.is_update());
         assert!(message.has_id());
