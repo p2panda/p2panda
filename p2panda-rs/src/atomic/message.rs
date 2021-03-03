@@ -198,7 +198,7 @@ pub enum MessageError {
 
 impl Message {
     /// Returns new create message.
-    pub fn create(schema: Hash, fields: MessageFields) -> Result<Self> {
+    pub fn new_create(schema: Hash, fields: MessageFields) -> Result<Self> {
         let message = Self {
             action: MessageAction::Create,
             version: MessageVersion::Default,
@@ -213,7 +213,7 @@ impl Message {
     }
 
     /// Returns new update message.
-    pub fn update(schema: Hash, id: Hash, fields: MessageFields) -> Result<Self> {
+    pub fn new_update(schema: Hash, id: Hash, fields: MessageFields) -> Result<Self> {
         let message = Self {
             action: MessageAction::Update,
             version: MessageVersion::Default,
@@ -228,7 +228,7 @@ impl Message {
     }
 
     /// Returns new delete message.
-    pub fn delete(schema: Hash, id: Hash) -> Result<Self> {
+    pub fn new_delete(schema: Hash, id: Hash) -> Result<Self> {
         let message = Self {
             action: MessageAction::Delete,
             version: MessageVersion::Default,
@@ -359,7 +359,7 @@ mod tests {
             .add("is_admin", MessageValue::Boolean(false))
             .unwrap();
 
-        let message = Message::update(
+        let message = Message::new_update(
             Hash::new_from_bytes(vec![1, 255, 0]).unwrap(),
             Hash::new_from_bytes(vec![62, 128]).unwrap(),
             fields,
