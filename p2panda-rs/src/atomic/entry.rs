@@ -136,12 +136,14 @@ impl TryFrom<(&EntrySigned, Option<&MessageEncoded>)> for Entry {
         // Messages may be omitted because the entry still contains the message hash. If the
         // message is explicitly included we require its hash to match.
         let message = match message_encoded {
-            Some(m) => {
-                let yamf_hash: YamfHash<Blake2BArrayVec> = (&m.hash()).try_into()?;
+            Some(msg) => {
+                let yamf_hash: YamfHash<Blake2BArrayVec> = (&msg.hash()).to_owned().try_into()?;
+
                 if yamf_hash != entry.payload_hash {
                     bail!(EntryError::MessageHashMismatch);
                 }
-                Some(Message::from_encoded(&m))
+
+                Some(Message::from_encoded(&msg))
             }
             None => None,
         };

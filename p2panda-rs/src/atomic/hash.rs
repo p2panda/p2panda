@@ -60,21 +60,6 @@ impl Hash {
         Ok(Self(hex_str))
     }
 
-    /// Returns Yet-Another-Multiformat Hash struct from the `yamf-hash` crate.
-    ///
-    /// This comes in handy when interacting with the `bamboo-rs` crate.
-    ///
-    /// @TODO: Remove this method as we use conversion trait instead.
-    pub fn to_yamf_hash(&self) -> YamfHash<Blake2BArrayVec> {
-        let bytes = self.to_bytes();
-
-        // Unwrap result as we already validated the value
-        let yamf_hash = YamfHash::<Blake2BArrayVec>::decode_owned(&bytes).unwrap();
-
-        // Return first entry in tuple as this is the actual hash
-        yamf_hash.0
-    }
-
     /// Returns hash as bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
         // Unwrap as we already validated the hash
@@ -97,8 +82,11 @@ impl<T: core::borrow::Borrow<[u8]>> TryFrom<YamfHash<T>> for Hash {
     }
 }
 
-impl From<&Hash> for YamfHash<Blake2BArrayVec> {
-    fn from(hash: &Hash) -> YamfHash<Blake2BArrayVec> {
+/// Returns Yet-Another-Multiformat Hash struct from the `yamf-hash` crate.
+///
+/// This comes in handy when interacting with the `bamboo-rs` crate.
+impl From<Hash> for YamfHash<Blake2BArrayVec> {
+    fn from(hash: Hash) -> YamfHash<Blake2BArrayVec> {
         let bytes = hash.to_bytes();
         let yamf_hash = YamfHash::<Blake2BArrayVec>::decode_owned(&bytes).unwrap();
         yamf_hash.0
@@ -162,7 +150,7 @@ mod tests {
     #[test]
     fn convert_yamf_hash() {
         let hash = Hash::from_bytes(vec![1, 2, 3]).unwrap();
-        let yamf_hash = Into::<YamfHash<Blake2BArrayVec>>::into(&hash);
+        let yamf_hash = Into::<YamfHash<Blake2BArrayVec>>::into(hash.to_owned());
         let hash_restored = TryInto::<Hash>::try_into(yamf_hash).unwrap();
         assert_eq!(hash, hash_restored);
     }

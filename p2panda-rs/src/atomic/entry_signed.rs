@@ -92,16 +92,15 @@ impl TryFrom<(&Entry, &KeyPair)> for EntrySigned {
         let message_size = message_encoded.size();
 
         // Convert entry links to bamboo-rs `YamfHash` type
-        let backlink = entry.backlink_hash().map(|link| link.into());
-        let lipmaa_link = entry.skiplink_hash().map(|link| link.into());
+        let backlink = entry.backlink_hash().map(|link| link.to_owned().into());
+        let lipmaa_link = entry.skiplink_hash().map(|link| link.to_owned().into());
 
         // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
         // details and definition of entry fields.
         let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
             log_id: entry.log_id().as_u64(),
             is_end_of_feed: false,
-            // @TODO: Use conversion trait instead of `to_yamf_hash` method
-            payload_hash: message_hash.to_yamf_hash(),
+            payload_hash: message_hash.into(),
             payload_size: message_size,
             author: PublicKey::from_bytes(&key_pair.public_key_bytes())?,
             seq_num: entry.seq_num().as_u64(),
