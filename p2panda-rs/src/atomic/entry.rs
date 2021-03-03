@@ -2,13 +2,13 @@ use std::convert::{TryFrom, TryInto};
 
 use anyhow::bail;
 use arrayvec::ArrayVec;
+use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
 use thiserror::Error;
 
 use crate::atomic::{
     Blake2BArrayVec, EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum, Validation,
 };
 use crate::Result;
-use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
 
 /// Entry of an append-only log based on Bamboo specification. It describes the actual data in the
 /// p2p network and is shared between nodes.
@@ -16,11 +16,6 @@ use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
 /// Bamboo entries are the main data type of p2panda. Entries are organized in a distributed,
 /// single-writer append-only log structure, created and signed by holders of private keys and
 /// stored inside the node database.
-///
-/// The actual entry data is kept in `entry_encoded` and separated from the `message_encoded` as
-/// the payload can be deleted without affecting the data structures integrity. All other fields
-/// like `author`, `message_hash` etc. can be retrieved from `entry_encoded` but are separately
-/// stored for easier access.
 #[derive(Debug)]
 pub struct Entry {
     /// Hash of previous Bamboo entry.
