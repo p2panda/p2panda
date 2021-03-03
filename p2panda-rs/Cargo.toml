@@ -19,7 +19,7 @@ debug-js-glue = false
 demangle-name-section = true
 dwarf-debug-info = false
 
-[target.'cfg(target_arch = "wasm32")'.lib]
+[lib]
 crate-type = ["cdylib"]
 
 [dependencies]
