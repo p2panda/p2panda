@@ -42,7 +42,7 @@ impl MessageEncoded {
     /// Returns the hash of this message.
     pub fn hash(&self) -> Hash {
         // Unwrap as we already know that the inner value is valid
-        Hash::from_bytes(self.to_bytes()).unwrap()
+        Hash::new_from_bytes(self.to_bytes()).unwrap()
     }
 
     /// Returns encoded message as string.

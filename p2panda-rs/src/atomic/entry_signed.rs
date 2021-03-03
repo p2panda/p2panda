@@ -43,7 +43,7 @@ impl EntrySigned {
 
     /// Returns YAMF BLAKE2b hash of encoded entry.
     pub fn hash(&self) -> Hash {
-        Hash::from_bytes(self.to_bytes()).unwrap()
+        Hash::new_from_bytes(self.to_bytes()).unwrap()
     }
 
     /// Returns encoded entry as string.
@@ -164,7 +164,8 @@ mod tests {
         fields
             .add("test", MessageValue::Text("Hello".to_owned()))
             .unwrap();
-        let message = Message::create(Hash::from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
+        let message =
+            Message::create(Hash::new_from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
 
         // Create a p2panda entry, then sign it. For this encoding, the entry is converted into a
         // bamboo-rs-core entry, which means that it also doesn't contain the message anymore.

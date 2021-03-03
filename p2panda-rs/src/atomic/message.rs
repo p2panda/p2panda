@@ -363,8 +363,8 @@ mod tests {
             .unwrap();
 
         let message = Message::update(
-            Hash::from_bytes(vec![1, 255, 0]).unwrap(),
-            Hash::from_bytes(vec![62, 128]).unwrap(),
+            Hash::new_from_bytes(vec![1, 255, 0]).unwrap(),
+            Hash::new_from_bytes(vec![62, 128]).unwrap(),
             fields,
         )
         .unwrap();

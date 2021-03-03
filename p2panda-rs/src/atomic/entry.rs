@@ -201,9 +201,10 @@ mod tests {
         fields
             .add("test", MessageValue::Text("Hello".to_owned()))
             .unwrap();
-        let message = Message::create(Hash::from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
-        let skiplink = Hash::from_bytes(vec![4, 5, 6]).unwrap();
-        let backlink = Hash::from_bytes(vec![7, 8, 9]).unwrap();
+        let message =
+            Message::create(Hash::new_from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
+        let skiplink = Hash::new_from_bytes(vec![4, 5, 6]).unwrap();
+        let backlink = Hash::new_from_bytes(vec![7, 8, 9]).unwrap();
 
         // The first entry in a log doesn't need and cannot have references to previous entries
         assert!(Entry::new(&LogId::default(), &message, None, None, None).is_ok());
