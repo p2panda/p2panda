@@ -32,8 +32,10 @@ pub enum HashError {
 
 /// Hash of `Entry` or `Message` encoded as hex string.
 ///
-/// This uses the BLAKE2b algorithm wrapped in [YAMF](https://github.com/bamboo-rs/yamf-hash) "Yet-Another-Multi-Format" according to the
+/// This uses the BLAKE2b algorithm wrapped in [`YAMF`] "Yet-Another-Multi-Format" according to the
 /// Bamboo specification.
+///
+/// [`YAMF`]: https://github.com/bamboo-rs/yamf-hash
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Hash(String);
 

@@ -48,7 +48,7 @@
     unused_qualifications
 )]
 
-/// A special `Result` type for p2panda-rs handling errors dynamically.
+/// A special [`Result`] type for p2panda-rs handling errors dynamically.
 type Result<T> = anyhow::Result<T>;
 
 /// Basic structs and methods to interact with p2panda data structures.
@@ -57,8 +57,10 @@ pub mod atomic;
 pub mod key_pair;
 /// Validations for message payloads and definitions of system schemas.
 ///
-/// This uses [Concise Data Definition Language (CDDL)](https://tools.ietf.org/html/rfc8610)
-/// internally to verify CBOR data of p2panda messages.
+/// This uses [`Concise Data Definition Language`] (CDDL) internally to verify CBOR data of p2panda
+/// messages.
+///
+/// [`Concise Data Definition Language`]: https://tools.ietf.org/html/rfc8610
 pub mod schema;
 
 #[cfg(target_arch = "wasm32")]
@@ -68,8 +70,9 @@ mod wasm_utils {
     use console_error_panic_hook::hook as panic_hook;
     use wasm_bindgen::prelude::wasm_bindgen;
 
-    /// Sets a panic hook for better error messages in NodeJS or web browser. See:
-    /// https://crates.io/crates/console_error_panic_hook
+    /// Sets a [`panic hook`] for better error messages in NodeJS or web browser.
+    ///
+    /// [`panic hook`]: https://crates.io/crates/console_error_panic_hook
     #[wasm_bindgen(js_name = setWasmPanicHook)]
     pub fn set_wasm_panic_hook() {
         panic::set_hook(Box::new(panic_hook));
