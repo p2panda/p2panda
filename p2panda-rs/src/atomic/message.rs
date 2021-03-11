@@ -73,11 +73,11 @@ pub enum MessageValue {
     /// Basic `boolean` value.
     Boolean(bool),
 
-    /// Basic signed `float` value.
-    Float(f64),
-
     /// Basic signed `integer` value.
     Integer(i64),
+
+    /// Basic signed `float` value.
+    Float(f64),
 
     /// Basic `string` value.
     Text(String),
