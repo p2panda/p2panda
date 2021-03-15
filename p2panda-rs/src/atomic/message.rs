@@ -68,7 +68,6 @@ impl Copy for MessageAction {}
 
 /// Enum of possible data types which can be added to the messages fields as values.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
 pub enum MessageValue {
     /// Basic `boolean` value.
     Boolean(bool),
