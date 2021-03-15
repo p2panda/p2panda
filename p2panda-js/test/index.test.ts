@@ -22,7 +22,6 @@ describe('KeyPair', () => {
     const message = 'hello panda';
     const sig = keyPair.sign(message);
     expect(keyPair.verify(message, sig)).to.be.true;
-    expect(() => keyPair.verify(message, sig)).to.not.throw();
-    expect(() => keyPair.verify('hello aquadoggo', sig)).to.throw();
+    expect(keyPair.verify('hello aquadoggo', sig)).to.be.false;
   });
 });

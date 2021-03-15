@@ -3,8 +3,6 @@ use std::convert::TryFrom;
 #[cfg(not(target_arch = "wasm32"))]
 use ed25519_dalek::SignatureError;
 use ed25519_dalek::{Keypair as Ed25519Keypair, PublicKey, SecretKey, Signature, Signer};
-#[cfg(target_arch = "wasm32")]
-use js_sys::Error as JsError;
 use rand::rngs::OsRng;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -97,13 +95,13 @@ impl KeyPair {
 
     /// Verify a signature for a message.
     #[cfg(target_arch = "wasm32")]
-    pub fn verify(&self, message: &[u8], signature: &[u8]) -> Result<bool, JsValue> {
+    pub fn verify(&self, message: &[u8], signature: &[u8]) -> JsValue {
         match self
             .0
             .verify(message, &Signature::try_from(signature).unwrap())
         {
-            Ok(_) => Ok(true),
-            Err(_) => Err(JsError::new("invalid signature for this key pair").into()),
+            Ok(_) => JsValue::TRUE,
+            Err(_) => JsValue::FALSE,
         }
     }
 }
