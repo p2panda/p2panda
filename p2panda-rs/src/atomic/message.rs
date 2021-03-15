@@ -349,9 +349,12 @@ mod tests {
         // Create test message
         let mut fields = MessageFields::new();
 
+        // Add one field for every kind of MessageValue
         fields
             .add("username", MessageValue::Text("bubu".to_owned()))
             .unwrap();
+
+        fields.add("height", MessageValue::Float(3.5)).unwrap();
 
         fields.add("age", MessageValue::Integer(28)).unwrap();
 
@@ -370,6 +373,8 @@ mod tests {
 
         // Encode message ...
         let encoded = MessageEncoded::try_from(&message).unwrap();
+
+        println!("{:?}", encoded);
 
         // ... and decode it again
         let message_restored = Message::try_from(&encoded).unwrap();
