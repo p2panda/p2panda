@@ -1,85 +1,83 @@
-use console_error_panic_hook::hook as panic_hook;
-use ed25519_dalek::{Keypair as Ed25519Keypair, PublicKey, SecretKey};
-use rand::rngs::OsRng;
-use std::panic;
-use wasm_bindgen::prelude::wasm_bindgen;
+//! # p2panda-rs
+//!
+//! This library provides all tools required to write a client for the [p2panda] network. It is
+//! shipped both as a Rust crate `p2panda-rs` with WebAssembly bindings and a NPM package
+//! `p2panda-js` with TypeScript definitions running in NodeJS or any modern web browser.
+//!
+//! [p2panda]: https://p2panda.org
+//!
+//! ## Example
+//!
+//! Creates and signs data which can be sent to a p2panda node.
+//!
+//! ```
+//! # extern crate p2panda_rs;
+//! # extern crate anyhow;
+//! # fn main() -> Result<(), anyhow::Error> {
+//! # use std::convert::TryFrom;
+//! # use p2panda_rs::key_pair::KeyPair;
+//! # use p2panda_rs::atomic::{Entry, EntrySigned, Hash, LogId, SeqNum, Message, MessageFields, MessageValue};
+//! # let PROFILE_SCHEMA = Hash::new_from_bytes(vec![1, 2, 3])?;
+//! // Generate new Ed25519 key pair
+//! let key_pair = KeyPair::new();
+//!
+//! // Create message fields which contain the data we want to send
+//! let mut fields = MessageFields::new();
+//! fields.add("username", MessageValue::Text("panda".to_owned()))?;
+//!
+//! // Add field data to "create" message
+//! let message = Message::new_create(PROFILE_SCHEMA, fields)?;
+//!
+//! // Wrap message into Bamboo entry (append-only log data type)
+//! let entry = Entry::new(&LogId::default(), &message, None, None, None)?;
+//!
+//! // Sign entry with private key
+//! let entry_signed = EntrySigned::try_from((&entry, &key_pair))?;
+//! # Ok(())
+//! # }
+//! ```
+#![warn(
+    missing_copy_implementations,
+    missing_debug_implementations,
+    missing_docs,
+    trivial_casts,
+    trivial_numeric_casts,
+    unsafe_code,
+    unstable_features,
+    unused_import_braces,
+    unused_qualifications
+)]
 
-#[wasm_bindgen(js_name = setWasmPanicHook)]
-pub fn set_wasm_panic_hook() {
-    panic::set_hook(Box::new(panic_hook));
-}
+/// A special [`Result`] type for p2panda-rs handling errors dynamically.
+type Result<T> = anyhow::Result<T>;
 
-#[wasm_bindgen]
-pub struct KeyPair {
-    public: PublicKey,
-    private: SecretKey,
-}
+/// Basic structs and methods to interact with p2panda data structures.
+pub mod atomic;
+/// Methods to generate key pairs or "authors" to sign data with.
+pub mod key_pair;
+/// Validations for message payloads and definitions of system schemas.
+///
+/// This uses [`Concise Data Definition Language`] (CDDL) internally to verify CBOR data of p2panda
+/// messages.
+///
+/// [`Concise Data Definition Language`]: https://tools.ietf.org/html/rfc8610
+pub mod schema;
 
-#[wasm_bindgen]
-impl KeyPair {
-    #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
-        let mut csprng: OsRng = OsRng {};
-        let key_pair = Ed25519Keypair::generate(&mut csprng);
+#[cfg(target_arch = "wasm32")]
+mod wasm_utils {
+    use std::panic;
 
-        Self {
-            public: key_pair.public,
-            private: key_pair.secret,
-        }
-    }
+    use console_error_panic_hook::hook as panic_hook;
+    use wasm_bindgen::prelude::wasm_bindgen;
 
-    #[wasm_bindgen(js_name = fromPrivateKey)]
-    pub fn from_private_key(private_key: String) -> Self {
-        let bytes = hex::decode(private_key).unwrap();
-        let secret_key = SecretKey::from_bytes(&bytes).unwrap();
-        let public_key: PublicKey = (&secret_key).into();
-
-        Self {
-            public: public_key,
-            private: secret_key,
-        }
-    }
-
-    #[wasm_bindgen(js_name = publicKey)]
-    pub fn public_key(&self) -> String {
-        hex::encode(self.public.to_bytes())
-    }
-
-    #[wasm_bindgen(js_name = privateKey)]
-    pub fn private_key(&self) -> String {
-        hex::encode(self.private.to_bytes())
-    }
-
-    #[wasm_bindgen(js_name = publicKeyBytes)]
-    pub fn public_key_bytes(&self) -> Box<[u8]> {
-        Box::from(self.public.to_bytes())
-    }
-
-    #[wasm_bindgen(js_name = privateKeyBytes)]
-    pub fn private_key_bytes(&self) -> Box<[u8]> {
-        Box::from(self.private.to_bytes())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::KeyPair;
-    use ed25519_dalek::{PUBLIC_KEY_LENGTH, SECRET_KEY_LENGTH};
-
-    #[test]
-    fn makes_keypair() {
-        let key_pair = KeyPair::new();
-        assert_eq!(key_pair.public_key().len(), PUBLIC_KEY_LENGTH * 2);
-        assert_eq!(key_pair.private_key().len(), PUBLIC_KEY_LENGTH * 2);
-        assert_eq!(key_pair.public_key_bytes().len(), PUBLIC_KEY_LENGTH);
-        assert_eq!(key_pair.private_key_bytes().len(), SECRET_KEY_LENGTH);
-    }
-
-    #[test]
-    fn key_pair_from_private_key() {
-        let key_pair = KeyPair::new();
-        let key_pair2 = KeyPair::from_private_key(key_pair.private_key());
-        assert_eq!(key_pair.public_key_bytes(), key_pair2.public_key_bytes());
-        assert_eq!(key_pair.private_key_bytes(), key_pair2.private_key_bytes());
+    /// Sets a [`panic hook`] for better error messages in NodeJS or web browser.
+    ///
+    /// [`panic hook`]: https://crates.io/crates/console_error_panic_hook
+    #[wasm_bindgen(js_name = setWasmPanicHook)]
+    pub fn set_wasm_panic_hook() {
+        panic::set_hook(Box::new(panic_hook));
     }
 }
+
+#[cfg(target_arch = "wasm32")]
+pub use wasm_utils::set_wasm_panic_hook;

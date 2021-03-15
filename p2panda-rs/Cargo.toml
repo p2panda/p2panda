@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = [
   "sophiiistika <sophiiistika@mailbox.org>",
   "adz <x12@adz.garden>",
+  "sandreae <contact@samandreae.com>",
   "cafca <cafca@001.land>"
 ]
 edition = "2018"
@@ -14,22 +15,37 @@ readme = "README.md"
 exclude = [".gitignore"]
 categories = ["web-programming", "wasm", "cryptography"]
 
-[lib]
-crate-type = ["cdylib"]
-
-[dependencies]
-console_error_panic_hook = "0.1.6"
-ed25519-dalek = { version = "1.0.1" }
-hex = "0.4.2"
-rand = { version = "0.7.3", features = ["wasm-bindgen"] }
-# Pin to v0.2.65 as wasm-opt fails with global exports. See:
-# https://github.com/rustwasm/wasm-pack/issues/886
-wasm-bindgen = "=0.2.65"
-
-[dev-dependencies]
-wasm-bindgen-test = "0.2"
-
 [package.metadata.wasm-pack.profile.release.wasm-bindgen]
 debug-js-glue = false
 demangle-name-section = true
 dwarf-debug-info = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1.0.38"
+arrayvec = "0.5.2"
+bamboo-rs-core = { git = "https://github.com/pietgeursen/bamboo-rs", tag = "v0.1.0-pre-31" }
+cddl = "0.8.6"
+ed25519-dalek = { version = "1.0.1" }
+hex = "0.4.2"
+serde = { version = "1.0.119", features = ["derive"] }
+serde_cbor = "0.11.1"
+serde_repr = "0.1.6"
+thiserror = "1.0.23"
+yamf-hash = "0.1.2"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rand = "0.7.3"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.6"
+js-sys = "~0.3"
+rand = { version = "0.7.3", features = ["wasm-bindgen"] }
+# Pin to v0.2.65 as wasm-opt fails with global exports. See:
+# https://github.com/rustwasm/wasm-pack/issues/886
+wasm-bindgen = { version = "=0.2.65" }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.2"
