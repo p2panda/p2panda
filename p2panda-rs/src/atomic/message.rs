@@ -374,8 +374,6 @@ mod tests {
         // Encode message ...
         let encoded = MessageEncoded::try_from(&message).unwrap();
 
-        println!("{:?}", encoded);
-
         // ... and decode it again
         let message_restored = Message::try_from(&encoded).unwrap();
 
