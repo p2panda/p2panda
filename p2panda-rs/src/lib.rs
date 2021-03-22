@@ -48,6 +48,9 @@
     unused_qualifications
 )]
 
+use std::convert::TryInto;
+use wasm_bindgen::prelude::wasm_bindgen;
+
 /// A special [`Result`] type for p2panda-rs handling errors dynamically.
 type Result<T> = anyhow::Result<T>;
 
@@ -77,6 +80,35 @@ mod wasm_utils {
     pub fn set_wasm_panic_hook() {
         panic::set_hook(Box::new(panic_hook));
     }
+}
+
+#[wasm_bindgen(js_name = signEncode)]
+pub fn sign_encode(private_key: String, current_message: String) -> String {
+    // make key pair
+    let key_pair = key_pair::KeyPair::from_private_key(private_key);
+
+    // make entry
+    let mut fields = atomic::MessageFields::new();
+    fields
+        .add("message", atomic::MessageValue::Text(current_message))
+        .unwrap();
+    let message =
+        atomic::Message::new_create(atomic::Hash::new_from_bytes(vec![1, 2, 3]).unwrap(), fields)
+            .unwrap();
+
+    // The first entry in a log doesn't need and cannot have references to previous entries
+    let entry = atomic::Entry::new(&atomic::LogId::default(), &message, None, None, None).unwrap();
+
+    // sign and encode
+    let entry_signed: atomic::EntrySigned = (&entry, &key_pair).try_into().unwrap();
+    entry_signed.as_str().into()
+}
+
+#[wasm_bindgen(js_name = decodeEntry)]
+pub fn decode_entry(entry_encoded: String) -> String {
+    let entry_signed = atomic::EntrySigned::new(&entry_encoded).unwrap();
+    let entry: atomic::Entry = (&entry_signed, None).try_into().unwrap();
+    format!("{:#?}", entry)
 }
 
 #[cfg(target_arch = "wasm32")]
