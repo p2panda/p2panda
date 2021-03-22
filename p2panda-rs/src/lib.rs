@@ -48,7 +48,9 @@
     unused_qualifications
 )]
 
-use std::convert::TryInto;
+use serde::{Serialize, Deserialize};
+use std::convert::{TryInto, TryFrom};
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// A special [`Result`] type for p2panda-rs handling errors dynamically.
@@ -82,8 +84,16 @@ mod wasm_utils {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+struct SignEncodeResult {
+    pub encoded_entry: String,
+    pub encoded_message: String,
+    pub entry_hash: String,
+}
+
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(js_name = signEncode)]
-pub fn sign_encode(private_key: String, current_message: String) -> String {
+pub fn sign_encode(private_key: String, current_message: String) -> wasm_bindgen::JsValue {
     // make key pair
     let key_pair = key_pair::KeyPair::from_private_key(private_key);
 
@@ -96,14 +106,24 @@ pub fn sign_encode(private_key: String, current_message: String) -> String {
         atomic::Message::new_create(atomic::Hash::new_from_bytes(vec![1, 2, 3]).unwrap(), fields)
             .unwrap();
 
+    let message_encoded = atomic::MessageEncoded::try_from(&message).unwrap();
+
     // The first entry in a log doesn't need and cannot have references to previous entries
     let entry = atomic::Entry::new(&atomic::LogId::default(), &message, None, None, None).unwrap();
 
     // sign and encode
     let entry_signed: atomic::EntrySigned = (&entry, &key_pair).try_into().unwrap();
-    entry_signed.as_str().into()
+
+    wasm_bindgen::JsValue::from_serde(
+        &SignEncodeResult {
+            encoded_entry: entry_signed.as_str().into(),
+            encoded_message: message_encoded.as_str().into(),
+            entry_hash: entry_signed.hash().as_hex().into(),
+        }
+    ).unwrap()
 }
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(js_name = decodeEntry)]
 pub fn decode_entry(entry_encoded: String) -> String {
     let entry_signed = atomic::EntrySigned::new(&entry_encoded).unwrap();
