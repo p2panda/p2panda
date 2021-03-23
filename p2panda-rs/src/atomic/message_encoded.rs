@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::atomic::{Hash, Message, Validation};
@@ -8,7 +9,7 @@ use crate::schema::{validate_schema, MESSAGE_SCHEMA};
 use crate::Result;
 
 /// Custom error types for `MessageEncoded`.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum MessageEncodedError {
     /// Message contains invalid fields.
     #[error("invalid message schema: {0}")]
@@ -24,7 +25,7 @@ pub enum MessageEncodedError {
 }
 
 /// Message represented in hex encoded CBOR format.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MessageEncoded(String);
 
 impl MessageEncoded {

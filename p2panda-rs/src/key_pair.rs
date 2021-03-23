@@ -4,6 +4,7 @@ use std::convert::TryFrom;
 use ed25519_dalek::SignatureError;
 use ed25519_dalek::{Keypair as Ed25519Keypair, PublicKey, SecretKey, Signature, Signer};
 use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 #[cfg(target_arch = "wasm32")]
@@ -11,7 +12,7 @@ use wasm_bindgen::JsValue;
 
 /// Ed25519 key pair for authors to sign bamboo entries with.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct KeyPair(Ed25519Keypair);
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
