@@ -5,15 +5,10 @@ use thiserror::Error;
 use crate::atomic::{Hash, Message, Validation};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::schema::{validate_schema, MESSAGE_SCHEMA};
-use crate::Result;
 
 /// Custom error types for `MessageEncoded`.
 #[derive(Error, Debug)]
 pub enum MessageEncodedError {
-    /// Message contains invalid fields.
-    #[error("invalid message schema: {0}")]
-    InvalidSchema(String),
-
     /// Encoded message string contains invalid hex characters.
     #[error("invalid hex encoding in message")]
     InvalidHexEncoding,
@@ -21,6 +16,10 @@ pub enum MessageEncodedError {
     /// Message can't be deserialized from invalid CBOR encoding.
     #[error("invalid CBOR format")]
     InvalidCBOR,
+
+    /// Handle errors from validating CBOR schemas.
+    #[error(transparent)]
+    SchemaError(#[from] crate::schema::error::SchemaError),
 }
 
 /// Message represented in hex encoded CBOR format.
@@ -29,7 +28,7 @@ pub struct MessageEncoded(String);
 
 impl MessageEncoded {
     /// Validates and wraps encoded message string into a new `MessageEncoded` instance.
-    pub fn new(value: &str) -> Result<MessageEncoded> {
+    pub fn new(value: &str) -> Result<MessageEncoded, MessageEncodedError> {
         let inner = Self(value.to_owned());
         inner.validate()?;
         Ok(inner)
@@ -61,9 +60,9 @@ impl MessageEncoded {
 
 /// Returns an encoded version of this message.
 impl TryFrom<&Message> for MessageEncoded {
-    type Error = anyhow::Error;
+    type Error = MessageEncodedError;
 
-    fn try_from(message: &Message) -> std::result::Result<Self, Self::Error> {
+    fn try_from(message: &Message) -> Result<Self, Self::Error> {
         // Encode bytes as hex string
         let encoded = hex::encode(&message.to_cbor());
         Ok(MessageEncoded::new(&encoded)?)
@@ -72,8 +71,10 @@ impl TryFrom<&Message> for MessageEncoded {
 
 #[cfg(not(target_arch = "wasm32"))]
 impl Validation for MessageEncoded {
+    type Error = MessageEncodedError;
+
     /// Checks encoded message value against hex format and CDDL schema.
-    fn validate(&self) -> Result<()> {
+    fn validate(&self) -> Result<(), Self::Error> {
         // Validate hex encoding
         let bytes = hex::decode(&self.0).map_err(|_| MessageEncodedError::InvalidHexEncoding)?;
 
@@ -86,11 +87,13 @@ impl Validation for MessageEncoded {
 
 #[cfg(target_arch = "wasm32")]
 impl Validation for MessageEncoded {
+    type Error = MessageEncodedError;
+
     /// Checks encoded message value against hex format.
     ///
     /// Skips CDDL schema validation as this is not supported for wasm targets. See:
     /// https://github.com/anweiss/cddl/issues/83
-    fn validate(&self) -> Result<()> {
+    fn validate(&self) -> Result<(), Self::Error> {
         hex::decode(&self.0).map_err(|_| MessageEncodedError::InvalidHexEncoding)?;
         Ok(())
     }

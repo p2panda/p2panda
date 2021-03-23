@@ -1,12 +1,10 @@
 use std::collections::HashMap;
 
-use anyhow::bail;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use thiserror::Error;
 
 use crate::atomic::{Hash, MessageEncoded, Validation};
-use crate::Result;
 
 /// Message format versions to introduce API changes in the future.
 #[derive(Clone, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
@@ -36,7 +34,7 @@ pub enum MessageAction {
 }
 
 impl Serialize for MessageAction {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -49,7 +47,7 @@ impl Serialize for MessageAction {
 }
 
 impl<'de> Deserialize<'de> for MessageAction {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -121,9 +119,9 @@ impl MessageFields {
     /// Adds a new field to this instance.
     ///
     /// A field is a simple key/value pair.
-    pub fn add(&mut self, name: &str, value: MessageValue) -> Result<()> {
+    pub fn add(&mut self, name: &str, value: MessageValue) -> Result<(), MessageFieldsError> {
         if self.0.contains_key(name) {
-            bail!(MessageFieldsError::FieldDuplicate);
+            return Err(MessageFieldsError::FieldDuplicate);
         }
 
         self.0.insert(name.to_owned(), value);
@@ -132,9 +130,9 @@ impl MessageFields {
     }
 
     /// Overwrites an already existing field with a new value.
-    pub fn update(&mut self, name: &str, value: MessageValue) -> Result<()> {
+    pub fn update(&mut self, name: &str, value: MessageValue) -> Result<(), MessageFieldsError> {
         if !self.0.contains_key(name) {
-            bail!(MessageFieldsError::UnknownField);
+            return Err(MessageFieldsError::UnknownField);
         }
 
         self.0.insert(name.to_owned(), value);
@@ -143,9 +141,9 @@ impl MessageFields {
     }
 
     /// Removes an existing field from this instance.
-    pub fn remove(&mut self, name: &str) -> Result<()> {
+    pub fn remove(&mut self, name: &str) -> Result<(), MessageFieldsError> {
         if !self.0.contains_key(name) {
-            bail!(MessageFieldsError::UnknownField);
+            return Err(MessageFieldsError::UnknownField);
         }
 
         self.0.remove(name);
@@ -197,7 +195,7 @@ pub enum MessageError {
 
 impl Message {
     /// Returns new create message.
-    pub fn new_create(schema: Hash, fields: MessageFields) -> Result<Self> {
+    pub fn new_create(schema: Hash, fields: MessageFields) -> Result<Self, MessageError> {
         let message = Self {
             action: MessageAction::Create,
             version: MessageVersion::Default,
@@ -212,7 +210,7 @@ impl Message {
     }
 
     /// Returns new update message.
-    pub fn new_update(schema: Hash, id: Hash, fields: MessageFields) -> Result<Self> {
+    pub fn new_update(schema: Hash, id: Hash, fields: MessageFields) -> Result<Self, MessageError> {
         let message = Self {
             action: MessageAction::Update,
             version: MessageVersion::Default,
@@ -227,7 +225,7 @@ impl Message {
     }
 
     /// Returns new delete message.
-    pub fn new_delete(schema: Hash, id: Hash) -> Result<Self> {
+    pub fn new_delete(schema: Hash, id: Hash) -> Result<Self, MessageError> {
         let message = Self {
             action: MessageAction::Delete,
             version: MessageVersion::Default,
@@ -306,10 +304,12 @@ impl From<&MessageEncoded> for Message {
 }
 
 impl Validation for Message {
-    fn validate(&self) -> Result<()> {
+    type Error = MessageError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
         // Create and update messages can not have empty fields.
         if !self.is_delete() && (!self.has_fields() || self.fields().unwrap().is_empty()) {
-            bail!(MessageError::EmptyFields);
+            return Err(MessageError::EmptyFields);
         }
 
         Ok(())

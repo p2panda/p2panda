@@ -1,9 +1,7 @@
-use anyhow::bail;
 use bamboo_rs_core::lipmaa;
 use thiserror::Error;
 
 use crate::atomic::Validation;
-use crate::Result;
 
 /// Start counting entries from here.
 pub const FIRST_SEQ_NUM: u64 = 1;
@@ -23,7 +21,7 @@ pub struct SeqNum(u64);
 
 impl SeqNum {
     /// Validates and wraps value into a new `SeqNum` instance.
-    pub fn new(value: u64) -> Result<Self> {
+    pub fn new(value: u64) -> Result<Self, SeqNumError> {
         let seq_num = Self(value);
         seq_num.validate()?;
         Ok(seq_num)
@@ -63,10 +61,12 @@ impl Default for SeqNum {
 impl Copy for SeqNum {}
 
 impl Validation for SeqNum {
-    fn validate(&self) -> Result<()> {
+    type Error = SeqNumError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
         // Numbers have to be larger than zero
         if self.0 < FIRST_SEQ_NUM {
-            bail!(SeqNumError::NotZeroOrNegative)
+            return Err(SeqNumError::NotZeroOrNegative);
         }
 
         Ok(())

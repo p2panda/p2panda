@@ -1,12 +1,31 @@
 use std::convert::{TryFrom, TryInto};
 
-use anyhow::bail;
 use arrayvec::ArrayVec;
 use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
 use thiserror::Error;
 
 use crate::atomic::{EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum, Validation};
-use crate::Result;
+
+/// Error types for methods of `Entry` struct.
+#[allow(missing_copy_implementations)]
+#[derive(Error, Debug)]
+pub enum EntryError {
+    /// Links should not be set when first entry in log.
+    #[error("backlink and skiplink not valid for this sequence number")]
+    InvalidLinks,
+
+    /// Message needs to match payload hash of encoded entry
+    #[error("message needs to match payload hash of encoded entry")]
+    MessageHashMismatch,
+
+    /// Handle errors from [`atomic::Hash`] struct.
+    #[error(transparent)]
+    HashError(#[from] crate::atomic::error::HashError),
+
+    /// Handle errors from [`atomic::SeqNum`] struct.
+    #[error(transparent)]
+    SeqNumError(#[from] crate::atomic::error::SeqNumError),
+}
 
 /// Entry of an append-only log based on [`Bamboo specification`]. It describes the actual data in
 /// the p2p network and is shared between nodes.
@@ -38,19 +57,6 @@ pub struct Entry {
     seq_num: SeqNum,
 }
 
-/// Error types for methods of `Entry` struct.
-#[allow(missing_copy_implementations)]
-#[derive(Error, Debug)]
-pub enum EntryError {
-    /// Links should not be set when first entry in log.
-    #[error("backlink and skiplink not valid for this sequence number")]
-    InvalidLinks,
-
-    /// Message needs to match payload hash of encoded entry
-    #[error("message needs to match payload hash of encoded entry")]
-    MessageHashMismatch,
-}
-
 impl Entry {
     /// Validates and returns a new instance of `Entry`.
     pub fn new(
@@ -59,7 +65,7 @@ impl Entry {
         entry_hash_skiplink: Option<&Hash>,
         entry_hash_backlink: Option<&Hash>,
         previous_seq_num: Option<&SeqNum>,
-    ) -> Result<Self> {
+    ) -> Result<Self, EntryError> {
         // If it is the first entry set sequence number to 1, otherwise increment
         let seq_num = match previous_seq_num {
             None => SeqNum::default(),
@@ -132,26 +138,26 @@ impl Entry {
 /// deleted they can be passed on optionally during the conversion. When a [`Message`] exists this
 /// conversion will automatically check its integrity with this Entry by comparing their hashes.
 impl TryFrom<(&EntrySigned, Option<&MessageEncoded>)> for Entry {
-    type Error = anyhow::Error;
+    type Error = EntryError;
 
     fn try_from(
         (signed_entry, message_encoded): (&EntrySigned, Option<&MessageEncoded>),
-    ) -> std::result::Result<Self, Self::Error> {
+    ) -> Result<Self, Self::Error> {
         // Convert to Entry from bamboo_rs_core first
-        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = signed_entry.try_into()?;
+        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = signed_entry.into();
 
         // Messages may be omitted because the entry still contains the message hash. If the
         // message is explicitly included we require its hash to match.
         let message = match message_encoded {
             Some(msg) => {
                 let yamf_hash: YamfHash<super::hash::Blake2BArrayVec> =
-                    (&msg.hash()).to_owned().try_into()?;
+                    (&msg.hash()).to_owned().into();
 
                 if yamf_hash != entry.payload_hash {
-                    bail!(EntryError::MessageHashMismatch);
+                    return Err(EntryError::MessageHashMismatch);
                 }
 
-                Some(Message::try_from(msg)?)
+                Some(Message::from(msg))
             }
             None => None,
         };
@@ -177,7 +183,9 @@ impl TryFrom<(&EntrySigned, Option<&MessageEncoded>)> for Entry {
 }
 
 impl Validation for Entry {
-    fn validate(&self) -> Result<()> {
+    type Error = EntryError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
         // First entries do not contain any sequence number or links. Every other entry has to
         // contain all information.
         let is_valid_first_entry = self.entry_hash_backlink.is_none()
@@ -189,7 +197,7 @@ impl Validation for Entry {
             && !self.seq_num.is_first();
 
         if !is_valid_first_entry && !is_valid_other_entry {
-            bail!(EntryError::InvalidLinks);
+            return Err(EntryError::InvalidLinks);
         }
 
         Ok(())
