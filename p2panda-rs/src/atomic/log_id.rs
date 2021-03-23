@@ -1,5 +1,7 @@
 /// Authors can write entries to multiple logs identified by log ids.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::Type))]
+#[cfg_attr(feature = "sqlx", sqlx(transparent))]
 pub struct LogId(u64);
 
 impl LogId {

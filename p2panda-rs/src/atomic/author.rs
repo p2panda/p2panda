@@ -20,6 +20,8 @@ pub enum AuthorError {
 
 /// Authors are hex encoded ed25519 public key strings.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::Type))]
+#[cfg_attr(feature = "sqlx", sqlx(transparent))]
 pub struct Author(String);
 
 impl Author {

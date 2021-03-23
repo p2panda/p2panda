@@ -37,6 +37,8 @@ pub enum HashError {
 ///
 /// [`YAMF`]: https://github.com/bamboo-rs/yamf-hash
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::Type))]
+#[cfg_attr(feature = "sqlx", sqlx(transparent))]
 pub struct Hash(String);
 
 impl Hash {
