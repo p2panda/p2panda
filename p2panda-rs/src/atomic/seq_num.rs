@@ -19,8 +19,8 @@ pub enum SeqNumError {
 
 /// Sequence number describing the position of an entry in its append-only log.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "sqlx", derive(sqlx::Type))]
-#[cfg_attr(feature = "sqlx", sqlx(transparent))]
+#[cfg_attr(feature = "db-sqlx", derive(sqlx::Type))]
+#[cfg_attr(feature = "db-sqlx", sqlx(transparent))]
 pub struct SeqNum(u64);
 
 impl SeqNum {

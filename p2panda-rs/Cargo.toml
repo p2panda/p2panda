@@ -21,7 +21,9 @@ demangle-name-section = true
 dwarf-debug-info = false
 
 [features]
-default = ["sqlx"]
+default = []
+# Adds sql database support for atomic structs via sqlx crate.
+db-sqlx = ["sqlx"]
 
 [lib]
 crate-type = ["cdylib"]
@@ -36,9 +38,11 @@ hex = "0.4.2"
 serde = { version = "1.0.119", features = ["derive"] }
 serde_cbor = "0.11.1"
 serde_repr = "0.1.6"
-sqlx = { version = "0.5.1", features = ["runtime-async-std-native-tls", "any", "sqlite", "mysql", "postgres"], optional = true }
 thiserror = "1.0.23"
 yamf-hash = "0.1.2"
+
+# Optional dependencies (behind feature flags)
+sqlx = { version = "0.5.1", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rand = "0.7.3"
