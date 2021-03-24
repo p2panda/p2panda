@@ -9,7 +9,7 @@ use crate::schema::{validate_schema, MESSAGE_SCHEMA};
 use crate::Result;
 
 /// Custom error types for `MessageEncoded`.
-#[derive(Error, Debug, Serialize, Deserialize)]
+#[derive(Error, Debug)]
 pub enum MessageEncodedError {
     /// Message contains invalid fields.
     #[error("invalid message schema: {0}")]
