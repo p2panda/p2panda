@@ -28,7 +28,8 @@ pub mod error {
 }
 
 /// Trait used by atomic structs to validate arguments.
-trait Validation {
+pub trait Validation {
+    /// Validation error type.
     type Error;
 
     /// Validates atomic data types instance.
