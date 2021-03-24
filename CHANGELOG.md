@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Change all result types to return `std::Result` and custom p2panda-rs errors [#41](https://github.com/p2panda/p2panda/pull/41) `rs`
+
 ### Added
 
 - Atomic data types like `Message`, `Entry`, `LogId`, `SeqNum`, etc. [#23](https://github.com/p2panda/p2panda/pull/23) `rs`
+- `sqlx` [Type](https://docs.rs/sqlx/0.5.1/sqlx/trait.Type.html) traits to atomic structs, introduce `db-sqlx` feature flag [#43](https://github.com/p2panda/p2panda/pull/43) `rs`
+- `serde` serialization and deserialization for all atomic structs [#42](https://github.com/p2panda/p2panda/pull/42) `rs`
 
 ## [0.1.0]
 
