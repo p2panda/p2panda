@@ -21,7 +21,7 @@ demangle-name-section = true
 dwarf-debug-info = false
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow = "1.0.38"
