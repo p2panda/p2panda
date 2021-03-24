@@ -48,8 +48,8 @@
     unused_qualifications
 )]
 
-use serde::{Serialize, Deserialize};
-use std::convert::{TryInto, TryFrom};
+use serde::{Deserialize, Serialize};
+use std::convert::{TryFrom, TryInto};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -114,20 +114,20 @@ pub fn sign_encode(private_key: String, current_message: String) -> wasm_bindgen
     // sign and encode
     let entry_signed: atomic::EntrySigned = (&entry, &key_pair).try_into().unwrap();
 
-    wasm_bindgen::JsValue::from_serde(
-        &SignEncodeResult {
-            encoded_entry: entry_signed.as_str().into(),
-            encoded_message: message_encoded.as_str().into(),
-            entry_hash: entry_signed.hash().as_hex().into(),
-        }
-    ).unwrap()
+    wasm_bindgen::JsValue::from_serde(&SignEncodeResult {
+        encoded_entry: entry_signed.as_str().into(),
+        encoded_message: message_encoded.as_str().into(),
+        entry_hash: entry_signed.hash().as_hex().into(),
+    })
+    .unwrap()
 }
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(js_name = decodeEntry)]
-pub fn decode_entry(entry_encoded: String) -> String {
+pub fn decode_entry(entry_encoded: String, message_encoded_string: String) -> String {
+    let message_encoded = atomic::MessageEncoded::new(&message_encoded_string).unwrap();
     let entry_signed = atomic::EntrySigned::new(&entry_encoded).unwrap();
-    let entry: atomic::Entry = (&entry_signed, None).try_into().unwrap();
+    let entry: atomic::Entry = (&entry_signed, Some(&message_encoded)).try_into().unwrap();
     format!("{:#?}", entry)
 }
 
