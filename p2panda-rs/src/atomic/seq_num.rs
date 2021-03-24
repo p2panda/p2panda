@@ -24,7 +24,7 @@ pub struct SeqNum(i64);
 
 impl SeqNum {
     /// Validates and wraps value into a new `SeqNum` instance.
-    pub fn new(value: i64) -> Result<Self, SeqNumError> {
+    pub fn new(value: i64) -> Result<Self> {
         let seq_num = Self(value);
         seq_num.validate()?;
         Ok(seq_num)
