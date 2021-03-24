@@ -26,7 +26,7 @@ default = []
 db-sqlx = ["sqlx"]
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow = "1.0.38"
