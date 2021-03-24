@@ -22,7 +22,7 @@ dwarf-debug-info = false
 
 [features]
 default = []
-# Adds sql database support for atomic structs via sqlx crate.
+# Adds sql database support for atomic structs via sqlx crate
 db-sqlx = ["sqlx"]
 
 [lib]

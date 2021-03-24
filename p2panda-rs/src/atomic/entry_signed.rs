@@ -26,6 +26,7 @@ pub enum EntrySignedError {
 
 /// Bamboo entry bytes represented in hex encoding format.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "db-sqlx", derive(sqlx::Type), sqlx(transparent))]
 pub struct EntrySigned(String);
 
 impl EntrySigned {
