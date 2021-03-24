@@ -26,7 +26,7 @@ pub enum EntrySignedError {
 
 /// Bamboo entry bytes represented in hex encoding format.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "db-sqlx", derive(sqlx::Type), sqlx(transparent))]
+#[cfg_attr(feature = "db-sqlx", derive(sqlx::Type, sqlx::FromRow), sqlx(transparent))]
 pub struct EntrySigned(String);
 
 impl EntrySigned {
@@ -54,8 +54,8 @@ impl EntrySigned {
     }
 
     /// Returns payload size (number of bytes) of total encoded entry.
-    pub fn size(&self) -> u64 {
-        self.0.len() as u64 / 2
+    pub fn size(&self) -> i64 {
+        self.0.len() as i64 / 2
     }
 }
 
@@ -99,12 +99,12 @@ impl TryFrom<(&Entry, &KeyPair)> for EntrySigned {
         // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
         // details and definition of entry fields.
         let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
-            log_id: entry.log_id().as_u64(),
+            log_id: entry.log_id().as_i64() as u64,
             is_end_of_feed: false,
             payload_hash: message_hash.into(),
-            payload_size: message_size,
+            payload_size: message_size as u64,
             author: PublicKey::from_bytes(&key_pair.public_key_bytes())?,
-            seq_num: entry.seq_num().as_u64(),
+            seq_num: entry.seq_num().as_i64() as u64,
             backlink,
             lipmaa_link,
             sig: None,

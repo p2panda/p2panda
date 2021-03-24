@@ -169,9 +169,9 @@ impl TryFrom<(&EntrySigned, Option<&MessageEncoded>)> for Entry {
         Ok(Entry {
             entry_hash_backlink,
             entry_hash_skiplink,
-            log_id: LogId::new(entry.log_id),
+            log_id: LogId::new(entry.log_id as i64),
             message,
-            seq_num: SeqNum::new(entry.seq_num)?,
+            seq_num: SeqNum::new(entry.seq_num as i64)?,
         })
     }
 }
