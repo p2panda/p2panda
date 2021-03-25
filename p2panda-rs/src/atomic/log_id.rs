@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
+
 /// Authors can write entries to multiple logs identified by log ids.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LogId(u64);
 
 impl LogId {

@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::atomic::{Hash, Message, Validation};
@@ -24,7 +25,7 @@ pub enum MessageEncodedError {
 }
 
 /// Message represented in hex encoded CBOR format.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MessageEncoded(String);
 
 impl MessageEncoded {
