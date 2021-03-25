@@ -20,8 +20,13 @@ debug-js-glue = false
 demangle-name-section = true
 dwarf-debug-info = false
 
+[features]
+default = []
+# Adds sql database support for atomic structs via sqlx crate
+db-sqlx = ["sqlx"]
+
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 arrayvec = "0.5.2"
@@ -33,6 +38,9 @@ serde_cbor = "0.11.1"
 serde_repr = "0.1.6"
 thiserror = "1.0.23"
 yamf-hash = "0.1.2"
+
+# Optional dependencies (behind feature flags)
+sqlx = { version = "0.5.1", features = ["runtime-async-std-native-tls", "all-databases"], optional = true }
 
 # @TODO: Change this as soon as `bamboo-rs` gets published
 [dependencies.bamboo-rs-core]

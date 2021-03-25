@@ -2,6 +2,7 @@ use std::convert::{TryFrom, TryInto};
 
 use arrayvec::ArrayVec;
 use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::atomic::{EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum, Validation};
@@ -39,7 +40,7 @@ pub enum EntryError {
 /// why a message instance is required during entry signing.
 ///
 /// [`Bamboo specification`]: https://github.com/AljoschaMeyer/bamboo
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Entry {
     /// Hash of previous Bamboo entry.
     entry_hash_backlink: Option<Hash>,
@@ -175,9 +176,9 @@ impl TryFrom<(&EntrySigned, Option<&MessageEncoded>)> for Entry {
         Ok(Entry {
             entry_hash_backlink,
             entry_hash_skiplink,
-            log_id: LogId::new(entry.log_id),
+            log_id: LogId::new(entry.log_id as i64),
             message,
-            seq_num: SeqNum::new(entry.seq_num)?,
+            seq_num: SeqNum::new(entry.seq_num as i64)?,
         })
     }
 }

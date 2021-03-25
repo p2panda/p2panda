@@ -1,10 +1,11 @@
 use bamboo_rs_core::lipmaa;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::atomic::Validation;
 
 /// Start counting entries from here.
-pub const FIRST_SEQ_NUM: u64 = 1;
+pub const FIRST_SEQ_NUM: i64 = 1;
 
 /// Custom error types for `SeqNum`.
 #[derive(Error, Debug)]
@@ -16,12 +17,13 @@ pub enum SeqNumError {
 }
 
 /// Sequence number describing the position of an entry in its append-only log.
-#[derive(Clone, Debug)]
-pub struct SeqNum(u64);
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "db-sqlx", derive(sqlx::Type), sqlx(transparent))]
+pub struct SeqNum(i64);
 
 impl SeqNum {
     /// Validates and wraps value into a new `SeqNum` instance.
-    pub fn new(value: u64) -> Result<Self, SeqNumError> {
+    pub fn new(value: i64) -> Result<Self, SeqNumError> {
         let seq_num = Self(value);
         seq_num.validate()?;
         Ok(seq_num)
@@ -38,7 +40,7 @@ impl SeqNum {
     ///
     /// [`Bamboo specification`]: https://github.com/AljoschaMeyer/bamboo#links-and-entry-verification
     pub fn skiplink_seq_num(&self) -> Option<Self> {
-        Some(Self(lipmaa(self.0) + FIRST_SEQ_NUM))
+        Some(Self(lipmaa(self.0 as u64) as i64 + FIRST_SEQ_NUM))
     }
 
     /// Returns true when sequence number marks first entry in log.
@@ -46,8 +48,8 @@ impl SeqNum {
         self.0 == FIRST_SEQ_NUM
     }
 
-    /// Returns `SeqNum` as u64 integer.
-    pub fn as_u64(&self) -> u64 {
+    /// Returns `SeqNum` as i64 integer.
+    pub fn as_i64(&self) -> i64 {
         self.0
     }
 }
