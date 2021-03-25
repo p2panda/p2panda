@@ -5,6 +5,7 @@ use arrayvec::ArrayVec;
 use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
 use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature};
 use ed25519_dalek::PublicKey;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::atomic::{Entry, Hash, MessageEncoded, Validation};
@@ -25,7 +26,7 @@ pub enum EntrySignedError {
 }
 
 /// Bamboo entry bytes represented in hex encoding format.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "db-sqlx", derive(sqlx::Type, sqlx::FromRow), sqlx(transparent))]
 pub struct EntrySigned(String);
 

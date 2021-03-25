@@ -1,5 +1,6 @@
 use anyhow::bail;
 use bamboo_rs_core::lipmaa;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::atomic::Validation;
@@ -18,7 +19,7 @@ pub enum SeqNumError {
 }
 
 /// Sequence number describing the position of an entry in its append-only log.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "db-sqlx", derive(sqlx::Type), sqlx(transparent))]
 pub struct SeqNum(i64);
 

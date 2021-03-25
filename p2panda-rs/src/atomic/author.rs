@@ -1,5 +1,6 @@
 use anyhow::bail;
 use ed25519_dalek::PUBLIC_KEY_LENGTH;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::atomic::Validation;
@@ -19,7 +20,7 @@ pub enum AuthorError {
 }
 
 /// Authors are hex encoded ed25519 public key strings.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "db-sqlx", derive(sqlx::Type, sqlx::FromRow), sqlx(transparent))]
 pub struct Author(String);
 
