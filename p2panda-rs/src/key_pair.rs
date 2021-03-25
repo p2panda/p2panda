@@ -61,7 +61,7 @@ impl KeyPair {
     /// Derives a key pair from a private key (encoded as hex string for better handling in browser
     /// contexts).
     #[cfg(target_arch = "wasm32")]
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = fromPrivateKey))]
+    #[wasm_bindgen(js_name = fromPrivateKey)]
     pub fn from_private_key(private_key: String) -> Result<KeyPair, JsValue> {
         from_private_key(private_key).map_err(|err| js_sys::Error::new(&format!("{}", err)).into())
     }
