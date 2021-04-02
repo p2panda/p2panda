@@ -1,10 +1,5 @@
 #[cfg(not(target_arch = "wasm32"))]
-use anyhow::bail;
-#[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
-
-#[cfg(not(target_arch = "wasm32"))]
-use crate::Result;
 
 mod message;
 
@@ -32,7 +27,7 @@ pub mod error {
 /// This helper method also converts validation errors coming from the cddl crate into an
 /// concatenated error message and returns it.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<()> {
+pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), error::SchemaError> {
     match cddl::validate_cbor_from_slice(cddl_schema, &bytes) {
         Err(cbor::Error::Validation(err)) => {
             let err_str = err
@@ -41,9 +36,9 @@ pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<()> {
                 .collect::<Vec<String>>()
                 .join(", ");
 
-            bail!(error::SchemaError::InvalidSchema(err_str))
+            return Err(error::SchemaError::InvalidSchema(err_str));
         }
-        Err(cbor::Error::CBORParsing(_err)) => bail!(error::SchemaError::InvalidCBOR),
+        Err(cbor::Error::CBORParsing(_err)) => return Err(error::SchemaError::InvalidCBOR),
         Err(cbor::Error::CDDLParsing(err)) => {
             panic!(err);
         }

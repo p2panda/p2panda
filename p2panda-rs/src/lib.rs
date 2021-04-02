@@ -12,8 +12,7 @@
 //!
 //! ```
 //! # extern crate p2panda_rs;
-//! # extern crate anyhow;
-//! # fn main() -> Result<(), anyhow::Error> {
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! # use std::convert::TryFrom;
 //! # use p2panda_rs::key_pair::KeyPair;
 //! # use p2panda_rs::atomic::{Entry, EntrySigned, Hash, LogId, SeqNum, Message, MessageFields, MessageValue};
@@ -47,9 +46,6 @@
     unused_import_braces,
     unused_qualifications
 )]
-
-/// A special [`Result`] type for p2panda-rs handling errors dynamically.
-type Result<T> = anyhow::Result<T>;
 
 /// Basic structs and methods to interact with p2panda data structures.
 pub mod atomic;

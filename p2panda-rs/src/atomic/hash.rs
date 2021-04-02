@@ -1,6 +1,5 @@
 use std::convert::TryFrom;
 
-use anyhow::bail;
 use arrayvec::ArrayVec;
 use bamboo_rs_core::yamf_hash::new_blake2b;
 use serde::{Deserialize, Serialize};
@@ -8,7 +7,6 @@ use thiserror::Error;
 use yamf_hash::{YamfHash, BLAKE2B_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
 use crate::atomic::Validation;
-use crate::Result;
 
 /// This is the type used for `bamboo-rs-core` entries that own their bytes.
 pub type Blake2BArrayVec = ArrayVec<[u8; BLAKE2B_HASH_SIZE]>;
@@ -28,6 +26,10 @@ pub enum HashError {
     /// Hash is not a valid YAMF BLAKE2b hash.
     #[error("can not decode YAMF BLAKE2b hash")]
     DecodingFailed,
+
+    /// Internal YamfHash crate error.
+    #[error(transparent)]
+    YamfHashError(#[from] yamf_hash::error::Error),
 }
 
 /// Hash of `Entry` or `Message` encoded as hex string.
@@ -42,14 +44,14 @@ pub struct Hash(String);
 
 impl Hash {
     /// Validates and wraps encoded hash string into new `Hash` instance.
-    pub fn new(value: &str) -> Result<Self> {
+    pub fn new(value: &str) -> Result<Self, HashError> {
         let hash = Self(String::from(value));
         hash.validate()?;
         Ok(hash)
     }
 
     /// Hashes byte data and returns it as `Hash` instance.
-    pub fn new_from_bytes(value: Vec<u8>) -> Result<Self> {
+    pub fn new_from_bytes(value: Vec<u8>) -> Result<Self, HashError> {
         // Generate Blake2b hash
         let blake2b_hash = new_blake2b(&value);
 
@@ -77,9 +79,9 @@ impl Hash {
 
 /// Converts YAMF hash from `yamf-hash` crate to p2panda `Hash` instance.
 impl<T: core::borrow::Borrow<[u8]>> TryFrom<YamfHash<T>> for Hash {
-    type Error = anyhow::Error;
+    type Error = HashError;
 
-    fn try_from(yamf_hash: YamfHash<T>) -> std::result::Result<Self, Self::Error> {
+    fn try_from(yamf_hash: YamfHash<T>) -> Result<Self, Self::Error> {
         let mut out = [0u8; MAX_YAMF_HASH_SIZE];
         let _ = yamf_hash.encode(&mut out)?;
         Self::new(&hex::encode(out))
@@ -98,22 +100,24 @@ impl From<Hash> for YamfHash<Blake2BArrayVec> {
 }
 
 impl Validation for Hash {
-    fn validate(&self) -> Result<()> {
+    type Error = HashError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
         // Check if hash is a hex string
         match hex::decode(self.0.to_owned()) {
             Ok(bytes) => {
                 // Check if length is correct
                 if bytes.len() != BLAKE2B_HASH_SIZE + 2 {
-                    bail!(HashError::InvalidLength)
+                    return Err(HashError::InvalidLength);
                 }
 
                 // Check if YAMF BLAKE2b hash is valid
                 match YamfHash::<&[u8]>::decode(&bytes) {
                     Ok((YamfHash::Blake2b(_), _)) => {}
-                    _ => bail!(HashError::DecodingFailed),
+                    _ => return Err(HashError::DecodingFailed),
                 }
             }
-            Err(_) => bail!(HashError::InvalidHexEncoding),
+            Err(_) => return Err(HashError::InvalidHexEncoding),
         }
 
         Ok(())
