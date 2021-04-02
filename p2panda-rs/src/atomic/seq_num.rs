@@ -40,7 +40,7 @@ impl SeqNum {
     ///
     /// [`Bamboo specification`]: https://github.com/AljoschaMeyer/bamboo#links-and-entry-verification
     pub fn skiplink_seq_num(&self) -> Option<Self> {
-        Some(Self(lipmaa(self.0 as u64) as i64 + FIRST_SEQ_NUM))
+        Some(Self(lipmaa(self.0 as u64) as i64))
     }
 
     /// Returns true when sequence number marks first entry in log.
@@ -103,7 +103,7 @@ mod tests {
     fn skiplink_seq_num() {
         assert_eq!(
             SeqNum::new(13).unwrap().skiplink_seq_num().unwrap(),
-            SeqNum::new(5).unwrap()
+            SeqNum::new(4).unwrap()
         );
     }
 
