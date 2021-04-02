@@ -1,14 +1,25 @@
 use std::convert::TryFrom;
 
-#[cfg(not(target_arch = "wasm32"))]
-use ed25519_dalek::SignatureError;
 use ed25519_dalek::{Keypair as Ed25519Keypair, PublicKey, SecretKey, Signature, Signer};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;
+
+/// Custom error types for key-pairs.
+#[derive(Error, Debug)]
+pub enum KeyPairError {
+    /// Handle errors from `ed25519` crate.
+    #[error(transparent)]
+    Ed25519(#[from] ed25519_dalek::ed25519::Error),
+
+    /// Handle errors from `hex` crate.
+    #[error(transparent)]
+    HexEncoding(#[from] hex::FromHexError),
+}
 
 /// Ed25519 key pair for authors to sign bamboo entries with.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -43,20 +54,17 @@ impl KeyPair {
     /// crate.
     ///
     /// [`ed25519-dalek`]: https://docs.rs/ed25519-dalek/1.0.1/ed25519_dalek/struct.Keypair.html#warning
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(js_name = fromPrivateKey))]
-    pub fn from_private_key(private_key: String) -> Self {
-        // Decode private key
-        let secret_key_bytes = hex::decode(private_key).unwrap();
-        let secret_key = SecretKey::from_bytes(&secret_key_bytes).unwrap();
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn from_private_key(private_key: String) -> Result<Self, KeyPairError> {
+        from_private_key(private_key)
+    }
 
-        // Derive public part from secret part
-        let public_key: PublicKey = (&secret_key).into();
-
-        // Assemble key pair from both parts
-        let bytes = [secret_key.to_bytes(), public_key.to_bytes()].concat();
-        let key_pair = Ed25519Keypair::from_bytes(&bytes).unwrap();
-
-        Self(key_pair)
+    /// Derives a key pair from a private key (encoded as hex string for better handling in browser
+    /// contexts).
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen(js_name = fromPrivateKey)]
+    pub fn from_private_key(private_key: String) -> Result<KeyPair, JsValue> {
+        from_private_key(private_key).map_err(|err| js_sys::Error::new(&format!("{}", err)).into())
     }
 
     /// Returns the public half of the key pair, encoded as a hex string.
@@ -90,21 +98,43 @@ impl KeyPair {
 
     /// Verify a signature for a message.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn verify(&self, message: &[u8], signature: &[u8]) -> Result<(), SignatureError> {
-        self.0.verify(message, &Signature::try_from(signature)?)
+    pub fn verify(&self, message: &[u8], signature: &[u8]) -> Result<(), KeyPairError> {
+        self.0.verify(message, &Signature::try_from(signature)?)?;
+        Ok(())
     }
 
     /// Verify a signature for a message.
     #[cfg(target_arch = "wasm32")]
-    pub fn verify(&self, message: &[u8], signature: &[u8]) -> JsValue {
-        match self
-            .0
-            .verify(message, &Signature::try_from(signature).unwrap())
-        {
-            Ok(_) => JsValue::TRUE,
-            Err(_) => JsValue::FALSE,
+    pub fn verify(&self, message: &[u8], signature: &[u8]) -> Result<JsValue, JsValue> {
+        match self.0.verify(
+            message,
+            &Signature::try_from(signature)
+                .map_err(|err| js_sys::Error::new(&format!("{}", err)))?,
+        ) {
+            Ok(_) => Ok(JsValue::TRUE),
+            Err(_) => Ok(JsValue::FALSE),
         }
     }
+}
+
+/// Derives a key pair from a private key (encoded as hex string for better handling in browser
+/// contexts).
+///
+/// This method is shared as an inner method for the public wasm and non-wasm `from_private_key`
+/// methods of `KeyPair`.
+fn from_private_key(private_key: String) -> Result<KeyPair, KeyPairError> {
+    // Decode private key
+    let secret_key_bytes = hex::decode(private_key)?;
+    let secret_key = SecretKey::from_bytes(&secret_key_bytes)?;
+
+    // Derive public part from secret part
+    let public_key: PublicKey = (&secret_key).into();
+
+    // Assemble key pair from both parts
+    let bytes = [secret_key.to_bytes(), public_key.to_bytes()].concat();
+    let key_pair = Ed25519Keypair::from_bytes(&bytes)?;
+
+    Ok(KeyPair(key_pair))
 }
 
 #[cfg(test)]
@@ -125,7 +155,7 @@ mod tests {
     #[test]
     fn key_pair_from_private_key() {
         let key_pair = KeyPair::new();
-        let key_pair2 = KeyPair::from_private_key(key_pair.private_key());
+        let key_pair2 = KeyPair::from_private_key(key_pair.private_key()).unwrap();
         assert_eq!(key_pair.public_key_bytes(), key_pair2.public_key_bytes());
         assert_eq!(key_pair.private_key_bytes(), key_pair2.private_key_bytes());
     }

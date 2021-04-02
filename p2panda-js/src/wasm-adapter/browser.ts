@@ -1,5 +1,3 @@
-// eslint-disable-next-line
-// @ts-ignore
 import wasmBase64 from 'wasm-web/index_bg.wasm';
 import wasmInit, * as wasmLib from 'wasm-web';
 
@@ -9,6 +7,9 @@ export default new Promise<typeof wasmLib>((resolve, reject) => {
   // Decode base64-encoded WebAssembly to bytes and initialize
   const bytes = Uint8Array.from(
     window
+      // `wasmBase64` is a string as it was converted to base64 by Webpack
+      // eslint-disable-next-line
+      // @ts-ignore
       .atob(wasmBase64)
       .split('')
       .map((char) => char.charCodeAt(0)),

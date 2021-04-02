@@ -1,10 +1,8 @@
-use anyhow::bail;
 use ed25519_dalek::PUBLIC_KEY_LENGTH;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::atomic::Validation;
-use crate::Result;
 
 /// Custom error types for `Author`.
 #[derive(Error, Debug)]
@@ -26,7 +24,7 @@ pub struct Author(String);
 
 impl Author {
     /// Validates and wraps author string into a new `Author` instance.
-    pub fn new(value: &str) -> Result<Self> {
+    pub fn new(value: &str) -> Result<Self, AuthorError> {
         let author = Self(String::from(value));
         author.validate()?;
         Ok(author)
@@ -34,17 +32,19 @@ impl Author {
 }
 
 impl Validation for Author {
-    fn validate(&self) -> Result<()> {
+    type Error = AuthorError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
         // Check if author is hex encoded
         match hex::decode(self.0.to_owned()) {
             Ok(bytes) => {
                 // Check if length is correct
                 if bytes.len() != PUBLIC_KEY_LENGTH {
-                    bail!(AuthorError::InvalidLength)
+                    return Err(AuthorError::InvalidLength);
                 }
             }
             Err(_) => {
-                bail!(AuthorError::InvalidHexEncoding)
+                return Err(AuthorError::InvalidHexEncoding);
             }
         }
 
