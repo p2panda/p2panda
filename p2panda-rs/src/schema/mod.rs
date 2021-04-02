@@ -36,11 +36,11 @@ pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), error::S
                 .collect::<Vec<String>>()
                 .join(", ");
 
-            return Err(error::SchemaError::InvalidSchema(err_str));
+            Err(error::SchemaError::InvalidSchema(err_str))
         }
-        Err(cbor::Error::CBORParsing(_err)) => return Err(error::SchemaError::InvalidCBOR),
+        Err(cbor::Error::CBORParsing(_err)) => Err(error::SchemaError::InvalidCBOR),
         Err(cbor::Error::CDDLParsing(err)) => {
-            panic!(err);
+            panic!("Parsing CDDL error: {}", err);
         }
         _ => Ok(()),
     }
