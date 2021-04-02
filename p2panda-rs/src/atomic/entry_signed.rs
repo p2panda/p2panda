@@ -1,6 +1,5 @@
 use std::convert::{TryFrom, TryInto};
 
-use anyhow::bail;
 use arrayvec::ArrayVec;
 use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
 use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature};
@@ -10,7 +9,6 @@ use thiserror::Error;
 
 use crate::atomic::{Author, Entry, Hash, MessageEncoded, Validation};
 use crate::key_pair::KeyPair;
-use crate::Result;
 
 /// Custom error types for `EntrySigned`.
 #[derive(Error, Debug)]
@@ -23,6 +21,18 @@ pub enum EntrySignedError {
     /// Can not sign and encode an entry without a `Message`.
     #[error("entry does not contain any message")]
     MessageMissing,
+
+    /// Handle errors from [`atomic::MessageEncoded`] struct.
+    #[error(transparent)]
+    MessageEncodedError(#[from] crate::atomic::error::MessageEncodedError),
+
+    /// Handle errors from encoding bamboo_rs_core entries.
+    #[error(transparent)]
+    BambooEncodeError(#[from] bamboo_rs_core::entry::encode::Error),
+
+    /// Handle errors from ed25519_dalek crate.
+    #[error(transparent)]
+    Ed25519SignatureError(#[from] ed25519_dalek::SignatureError),
 }
 
 /// Bamboo entry bytes represented in hex encoding format.
@@ -32,7 +42,7 @@ pub struct EntrySigned(String);
 
 impl EntrySigned {
     /// Validates and wraps encoded entry string into a new `EntrySigned` instance.
-    pub fn new(value: &str) -> Result<Self> {
+    pub fn new(value: &str) -> Result<Self, EntrySignedError> {
         let inner = Self(value.to_owned());
         inner.validate()?;
         Ok(inner)
@@ -87,9 +97,9 @@ impl From<&EntrySigned> for BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> 
 }
 
 impl TryFrom<&[u8]> for EntrySigned {
-    type Error = anyhow::Error;
+    type Error = EntrySignedError;
 
-    fn try_from(bytes: &[u8]) -> std::result::Result<Self, Self::Error> {
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         Self::new(&hex::encode(bytes))
     }
 }
@@ -99,13 +109,13 @@ impl TryFrom<&[u8]> for EntrySigned {
 ///
 /// After conversion the result is ready to be sent to a p2panda node.
 impl TryFrom<(&Entry, &KeyPair)> for EntrySigned {
-    type Error = anyhow::Error;
+    type Error = EntrySignedError;
 
-    fn try_from((entry, key_pair): (&Entry, &KeyPair)) -> std::result::Result<Self, Self::Error> {
+    fn try_from((entry, key_pair): (&Entry, &KeyPair)) -> Result<Self, Self::Error> {
         // Generate message hash
         let message_encoded = match entry.message() {
             Some(message) => MessageEncoded::try_from(message)?,
-            None => bail!(EntrySignedError::MessageMissing),
+            None => return Err(EntrySignedError::MessageMissing),
         };
         let message_hash = message_encoded.hash();
         let message_size = message_encoded.size();
@@ -151,7 +161,9 @@ impl PartialEq for EntrySigned {
 }
 
 impl Validation for EntrySigned {
-    fn validate(&self) -> Result<()> {
+    type Error = EntrySignedError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
         hex::decode(&self.0).map_err(|_| EntrySignedError::InvalidHexEncoding)?;
         Ok(())
     }

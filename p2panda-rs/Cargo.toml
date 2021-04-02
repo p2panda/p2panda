@@ -29,9 +29,7 @@ db-sqlx = ["sqlx"]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-anyhow = "1.0.38"
 arrayvec = "0.5.2"
-bamboo-rs-core = { git = "https://github.com/pietgeursen/bamboo-rs", tag = "v0.1.0-pre-31" }
 cddl = "0.8.6"
 ed25519-dalek = { version = "1.0.1" }
 hex = "0.4.2"
@@ -44,16 +42,21 @@ yamf-hash = "0.1.2"
 # Optional dependencies (behind feature flags)
 sqlx = { version = "0.5.1", features = ["runtime-async-std-native-tls", "all-databases"], optional = true }
 
+# @TODO: Change this as soon as `bamboo-rs` gets published
+[dependencies.bamboo-rs-core]
+git = "https://github.com/pietgeursen/bamboo-rs"
+tag = "v0.1.0-pre-31"
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rand = "0.7.3"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"
-js-sys = "~0.3"
+js-sys = "0.3.49"
 rand = { version = "0.7.3", features = ["wasm-bindgen"] }
 # Pin to v0.2.65 as wasm-opt fails with global exports. See:
 # https://github.com/rustwasm/wasm-pack/issues/886
-wasm-bindgen = { version = "=0.2.65" }
+wasm-bindgen = { version = "0.2.72" }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.2"
