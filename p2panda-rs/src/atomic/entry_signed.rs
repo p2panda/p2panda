@@ -3,11 +3,11 @@ use std::convert::{TryFrom, TryInto};
 use arrayvec::ArrayVec;
 use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
 use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature};
-use ed25519_dalek::PublicKey;
+use ed25519_dalek::{PublicKey, Signature};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::atomic::{Entry, Hash, MessageEncoded, Validation};
+use crate::atomic::{Author, Entry, Hash, MessageEncoded, Validation};
 use crate::key_pair::KeyPair;
 
 /// Custom error types for `EntrySigned`.
@@ -51,6 +51,23 @@ impl EntrySigned {
     /// Returns YAMF BLAKE2b hash of encoded entry.
     pub fn hash(&self) -> Hash {
         Hash::new_from_bytes(self.to_bytes()).unwrap()
+    }
+
+    /// Returns `Author` who signed this entry.
+    pub fn author(&self) -> Author {
+        // Unwrap as we already validated entry
+        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.try_into().unwrap();
+        Author::try_from(entry.author).unwrap()
+    }
+
+    /// Returns Ed25519 signature of this entry.
+    pub fn signature(&self) -> Signature {
+        // Unwrap as we already validated entry and know it contains a signature
+        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.try_into().unwrap();
+
+        // Convert into Ed25519 Signature instance
+        let array_vec = entry.sig.unwrap().0;
+        Signature::new(array_vec.into_inner().unwrap())
     }
 
     /// Returns encoded entry as string.

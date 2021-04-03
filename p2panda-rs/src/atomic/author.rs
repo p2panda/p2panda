@@ -1,4 +1,6 @@
-use ed25519_dalek::PUBLIC_KEY_LENGTH;
+use std::convert::TryFrom;
+
+use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -28,6 +30,15 @@ impl Author {
         let author = Self(String::from(value));
         author.validate()?;
         Ok(author)
+    }
+}
+
+/// Convert Ed25519 `PublicKey` to `Author` instance.
+impl TryFrom<PublicKey> for Author {
+    type Error = AuthorError;
+
+    fn try_from(public_key: PublicKey) -> Result<Self, Self::Error> {
+        Self::new(&hex::encode(public_key.to_bytes()))
     }
 }
 
