@@ -1,6 +1,7 @@
 use std::convert::{TryFrom, TryInto};
 
 use arrayvec::ArrayVec;
+use bamboo_rs_core::entry::is_lipmaa_required;
 use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -128,6 +129,11 @@ impl Entry {
     pub fn has_message(&self) -> bool {
         self.message.is_some()
     }
+
+    /// Returns true if skiplink has to be given.
+    pub fn is_skiplink_required(&self) -> bool {
+        is_lipmaa_required(self.seq_num.as_i64() as u64)
+    }
 }
 
 /// Takes an encoded and signed [`EntrySigned`] and converts it back to its original, unsigned and
@@ -193,9 +199,14 @@ impl Validation for Entry {
             && self.entry_hash_skiplink.is_none()
             && self.seq_num.is_first();
 
-        let is_valid_other_entry = self.entry_hash_backlink.is_some()
-            && self.entry_hash_skiplink.is_some()
-            && !self.seq_num.is_first();
+        let is_valid_other_entry = if !self.seq_num.is_first() && self.entry_hash_backlink.is_some()
+        {
+            // Skiplink can be empty when same as backlink
+            (self.is_skiplink_required() && self.entry_hash_skiplink.is_some())
+                || !self.is_skiplink_required()
+        } else {
+            false
+        };
 
         if !is_valid_first_entry && !is_valid_other_entry {
             return Err(EntryError::InvalidLinks);
@@ -220,16 +231,16 @@ mod tests {
             .unwrap();
         let message =
             Message::new_create(Hash::new_from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
-        let skiplink = Hash::new_from_bytes(vec![4, 5, 6]).unwrap();
         let backlink = Hash::new_from_bytes(vec![7, 8, 9]).unwrap();
 
         // The first entry in a log doesn't need and cannot have references to previous entries
         assert!(Entry::new(&LogId::default(), &message, None, None, None).is_ok());
 
+        // Try to pass them over anyways, it will be invalidated
         assert!(Entry::new(
             &LogId::default(),
             &message,
-            Some(&skiplink),
+            Some(&backlink.clone()),
             Some(&backlink),
             None
         )
@@ -239,12 +250,23 @@ mod tests {
         assert!(Entry::new(
             &LogId::default(),
             &message,
-            Some(&skiplink),
+            Some(&backlink.clone()),
             Some(&backlink),
             Some(&SeqNum::new(1).unwrap())
         )
         .is_ok());
 
+        // We can omit the skiplink here as it is the same as the backlink
+        assert!(Entry::new(
+            &LogId::default(),
+            &message,
+            None,
+            Some(&backlink),
+            Some(&SeqNum::new(1).unwrap())
+        )
+        .is_ok());
+
+        // We need a backlink here
         assert!(Entry::new(
             &LogId::default(),
             &message,
