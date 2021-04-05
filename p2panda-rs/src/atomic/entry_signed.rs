@@ -240,17 +240,6 @@ mod tests {
             Some(&SeqNum::new(2).unwrap()),
         )
         .unwrap();
-        let entry_second_encoded = EntrySigned::try_from((&entry_second, &key_pair)).unwrap();
-
-        // Create third p2panda entry with skiplink
-        let entry_third = Entry::new(
-            &LogId::default(),
-            &message,
-            Some(&entry_first_encoded.hash()),
-            Some(&entry_second_encoded.hash()),
-            Some(&SeqNum::new(3).unwrap()),
-        )
-        .unwrap();
-        assert!(EntrySigned::try_from((&entry_third, &key_pair)).is_ok());
+        assert!(EntrySigned::try_from((&entry_second, &key_pair)).is_ok());
     }
 }
