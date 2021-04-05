@@ -2,7 +2,11 @@ use serde::{Deserialize, Serialize};
 
 /// Authors can write entries to multiple logs identified by log ids.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "db-sqlx", derive(sqlx::Type, sqlx::FromRow), sqlx(transparent))]
+#[cfg_attr(
+    feature = "db-sqlx",
+    derive(sqlx::Type, sqlx::FromRow),
+    sqlx(transparent)
+)]
 pub struct LogId(i64);
 
 impl LogId {
