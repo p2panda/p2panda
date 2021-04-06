@@ -165,6 +165,7 @@ impl MessageFields {
 ///
 /// The data itself lives in the `fields` object and is formed after a message schema.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Message {
     /// Describes if this message creates, updates or deletes data.
     action: MessageAction,
