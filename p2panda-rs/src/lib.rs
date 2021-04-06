@@ -58,22 +58,6 @@ pub mod key_pair;
 ///
 /// [`Concise Data Definition Language`]: https://tools.ietf.org/html/rfc8610
 pub mod schema;
-
+/// Methods exported for WebAssembly targets.
 #[cfg(target_arch = "wasm32")]
-mod wasm_utils {
-    use std::panic;
-
-    use console_error_panic_hook::hook as panic_hook;
-    use wasm_bindgen::prelude::wasm_bindgen;
-
-    /// Sets a [`panic hook`] for better error messages in NodeJS or web browser.
-    ///
-    /// [`panic hook`]: https://crates.io/crates/console_error_panic_hook
-    #[wasm_bindgen(js_name = setWasmPanicHook)]
-    pub fn set_wasm_panic_hook() {
-        panic::set_hook(Box::new(panic_hook));
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-pub use wasm_utils::set_wasm_panic_hook;
+pub mod wasm;
