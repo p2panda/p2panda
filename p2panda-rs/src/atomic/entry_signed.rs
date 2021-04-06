@@ -22,6 +22,10 @@ pub enum EntrySignedError {
     #[error("entry does not contain any message")]
     MessageMissing,
 
+    /// Skiplink is required for entry encoding.
+    #[error("entry requires skiplink for encoding")]
+    SkiplinkMissing,
+
     /// Handle errors from [`atomic::MessageEncoded`] struct.
     #[error(transparent)]
     MessageEncodedError(#[from] crate::atomic::error::MessageEncodedError),
@@ -37,7 +41,11 @@ pub enum EntrySignedError {
 
 /// Bamboo entry bytes represented in hex encoding format.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "db-sqlx", derive(sqlx::Type, sqlx::FromRow), sqlx(transparent))]
+#[cfg_attr(
+    feature = "db-sqlx",
+    derive(sqlx::Type, sqlx::FromRow),
+    sqlx(transparent)
+)]
 pub struct EntrySigned(String);
 
 impl EntrySigned {
@@ -122,7 +130,16 @@ impl TryFrom<(&Entry, &KeyPair)> for EntrySigned {
 
         // Convert entry links to bamboo-rs `YamfHash` type
         let backlink = entry.backlink_hash().map(|link| link.to_owned().into());
-        let lipmaa_link = entry.skiplink_hash().map(|link| link.to_owned().into());
+        let lipmaa_link = if entry.is_skiplink_required() {
+            if entry.skiplink_hash().is_none() {
+                return Err(EntrySignedError::SkiplinkMissing);
+            }
+
+            entry.skiplink_hash().map(|link| link.to_owned().into())
+        } else {
+            // Omit skiplink when it is the same as backlink, this saves us some bytes
+            None
+        };
 
         // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
         // details and definition of entry fields.
@@ -173,7 +190,9 @@ impl Validation for EntrySigned {
 mod tests {
     use std::convert::TryFrom;
 
-    use crate::atomic::{Entry, Hash, LogId, Message, MessageEncoded, MessageFields, MessageValue};
+    use crate::atomic::{
+        Entry, Hash, LogId, Message, MessageEncoded, MessageFields, MessageValue, SeqNum,
+    };
     use crate::key_pair::KeyPair;
 
     use super::EntrySigned;
@@ -198,18 +217,29 @@ mod tests {
             Message::new_create(Hash::new_from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
 
         // Create a p2panda entry, then sign it. For this encoding, the entry is converted into a
-        // bamboo-rs-core entry, which means that it also doesn't contain the message anymore.
+        // bamboo-rs-core entry, which means that it also doesn't contain the message anymore
         let entry = Entry::new(&LogId::default(), &message, None, None, None).unwrap();
-        let entry_signed_encoded = EntrySigned::try_from((&entry, &key_pair)).unwrap();
+        let entry_first_encoded = EntrySigned::try_from((&entry, &key_pair)).unwrap();
 
         // Make an unsigned, decoded p2panda entry from the signed and encoded form. This is adding
-        // the message back.
+        // the message back
         let message_encoded = MessageEncoded::try_from(&message).unwrap();
         let entry_decoded: Entry =
-            Entry::try_from((&entry_signed_encoded, Some(&message_encoded))).unwrap();
+            Entry::try_from((&entry_first_encoded, Some(&message_encoded))).unwrap();
 
-        // Re-encode the recovered entry to be able to check that we still have the same data.
+        // Re-encode the recovered entry to be able to check that we still have the same data
         let test_entry_signed_encoded = EntrySigned::try_from((&entry_decoded, &key_pair)).unwrap();
-        assert_eq!(entry_signed_encoded, test_entry_signed_encoded);
+        assert_eq!(entry_first_encoded, test_entry_signed_encoded);
+
+        // Create second p2panda entry without skiplink as it is not required
+        let entry_second = Entry::new(
+            &LogId::default(),
+            &message,
+            None,
+            Some(&entry_first_encoded.hash()),
+            Some(&SeqNum::new(2).unwrap()),
+        )
+        .unwrap();
+        assert!(EntrySigned::try_from((&entry_second, &key_pair)).is_ok());
     }
 }

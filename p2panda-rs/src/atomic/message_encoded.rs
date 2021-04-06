@@ -25,7 +25,11 @@ pub enum MessageEncodedError {
 
 /// Message represented in hex encoded CBOR format.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "db-sqlx", derive(sqlx::Type, sqlx::FromRow), sqlx(transparent))]
+#[cfg_attr(
+    feature = "db-sqlx",
+    derive(sqlx::Type, sqlx::FromRow),
+    sqlx(transparent)
+)]
 pub struct MessageEncoded(String);
 
 impl MessageEncoded {
