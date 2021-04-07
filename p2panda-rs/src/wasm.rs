@@ -66,7 +66,7 @@ struct SignEntryResult {
 
 #[wasm_bindgen(js_name = signEncodeEntry)]
 pub fn sign_encode_entry(
-    key_pair: KeyPair,
+    key_pair: &KeyPair,
     encoded_message: String,
     entry_skiplink_hash: Option<String>,
     entry_backlink_hash: Option<String>,
@@ -105,7 +105,7 @@ pub fn sign_encode_entry(
     ));
 
     // Finally sign and encode entry
-    let entry_signed = jserr!(EntrySigned::try_from((&entry, &key_pair)));
+    let entry_signed = jserr!(EntrySigned::try_from((&entry, key_pair)));
 
     // Serialize result to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&SignEntryResult {
