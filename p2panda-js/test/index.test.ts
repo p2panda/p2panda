@@ -37,7 +37,7 @@ describe('Entries', () => {
       MessageFields,
       decodeEntry,
       encodeCreateMessage,
-      signEntry,
+      signEncodeEntry,
     } = await p2panda;
 
     // Generate new key pair
@@ -50,7 +50,7 @@ describe('Entries', () => {
     const messageEncoded = encodeCreateMessage(TEST_SCHEMA, fields);
 
     // Sign and encode entry
-    const { entryEncoded, entryHash } = signEntry(
+    const { entryEncoded, entryHash } = signEncodeEntry(
       keyPair,
       messageEncoded,
       null,
