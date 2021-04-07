@@ -64,8 +64,8 @@ struct SignEntryResult {
     pub entry_hash: String,
 }
 
-#[wasm_bindgen(js_name = signEntry)]
-pub fn sign_entry(
+#[wasm_bindgen(js_name = signEncodeEntry)]
+pub fn sign_encode_entry(
     key_pair: KeyPair,
     encoded_message: String,
     entry_skiplink_hash: Option<String>,
