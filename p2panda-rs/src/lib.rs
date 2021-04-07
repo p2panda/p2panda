@@ -59,5 +59,10 @@ pub mod key_pair;
 /// [`Concise Data Definition Language`]: https://tools.ietf.org/html/rfc8610
 pub mod schema;
 /// Methods exported for WebAssembly targets.
+///
+/// Wrappers for these methods are available in [p2panda-js], which allows idiomatic
+/// usage of `p2panda-rs` in a Javascript/Typescript environment.
+///
+/// [p2panda-js]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
