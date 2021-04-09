@@ -6,10 +6,9 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
-use crate::atomic;
-use crate::atomic::MessageFields as PandaMessageFields;
 use crate::atomic::{
-    Entry, EntrySigned, Hash, LogId, Message, MessageEncoded, MessageValue, SeqNum,
+    Entry, EntrySigned, Hash, LogId, Message, MessageEncoded,
+    MessageFields as MessageFieldsNonWasm, MessageValue, SeqNum,
 };
 use crate::key_pair::KeyPair;
 
@@ -27,19 +26,19 @@ pub fn set_wasm_panic_hook() {
     panic::set_hook(Box::new(panic_hook));
 }
 
-/// Use a `MessageFields` instance to attach user data to a `Message`.
+/// Use `MessageFields` to attach user data to a [`Message`].
 ///
-/// See [`atomic::MessageFields`] for further documentation.
+/// See [`crate::atomic::MessageFields`] for further documentation.
 #[wasm_bindgen]
 #[derive(Debug)]
-pub struct MessageFields(PandaMessageFields);
+pub struct MessageFields(MessageFieldsNonWasm);
 
 #[wasm_bindgen]
 impl MessageFields {
     /// Returns a `MessageFields` instance
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
-        Self(PandaMessageFields::new())
+        Self(MessageFieldsNonWasm::new())
     }
 
     /// Adds a new field to this `MessageFields` instance.
@@ -63,9 +62,40 @@ impl MessageFields {
 ///
 /// Use `create` messages by attaching them to an entry that you publish.
 #[wasm_bindgen(js_name = encodeCreateMessage)]
-pub fn encode_create_message(schema: String, fields: MessageFields) -> Result<String, JsValue> {
-    let hash = jserr!(Hash::new(&schema));
-    let message = jserr!(Message::new_create(hash, fields.0));
+pub fn encode_create_message(
+    schema_hash: String,
+    fields: MessageFields,
+) -> Result<String, JsValue> {
+    let schema = jserr!(Hash::new(&schema_hash));
+    let message = jserr!(Message::new_create(schema, fields.0));
+    let message_encoded = jserr!(MessageEncoded::try_from(&message));
+    Ok(message_encoded.as_str().to_owned())
+}
+
+/// Returns an encoded `update` message that updates fields of a given instance.
+///
+/// Use `update` messages by attaching them to an entry that you publish.
+#[wasm_bindgen(js_name = encodeUpdateMessage)]
+pub fn encode_update_message(
+    instance_id: String,
+    schema_hash: String,
+    fields: MessageFields,
+) -> Result<String, JsValue> {
+    let instance = jserr!(Hash::new(&instance_id));
+    let schema = jserr!(Hash::new(&schema_hash));
+    let message = jserr!(Message::new_update(schema, instance, fields.0));
+    let message_encoded = jserr!(MessageEncoded::try_from(&message));
+    Ok(message_encoded.as_str().to_owned())
+}
+
+/// Returns an encoded `delete` message that deletes a given instance.
+///
+/// Use `delete` messages by attaching them to an entry that you publish.
+#[wasm_bindgen(js_name = encodeDeleteMessage)]
+pub fn encode_delete_message(instance_id: String, schema_hash: String) -> Result<String, JsValue> {
+    let instance = jserr!(Hash::new(&instance_id));
+    let schema = jserr!(Hash::new(&schema_hash));
+    let message = jserr!(Message::new_delete(schema, instance));
     let message_encoded = jserr!(MessageEncoded::try_from(&message));
     Ok(message_encoded.as_str().to_owned())
 }
