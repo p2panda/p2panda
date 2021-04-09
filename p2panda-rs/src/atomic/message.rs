@@ -364,10 +364,12 @@ mod tests {
             .add("is_admin", MessageValue::Boolean(false))
             .unwrap();
 
-        fields.add(
-            "profile_picture",
-            MessageValue::Relation(Hash::from_bytes(vec![1, 2, 3]).unwrap()),
-        );
+        fields
+            .add(
+                "profile_picture",
+                MessageValue::Relation(Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
+            )
+            .unwrap();
 
         let message = Message::new_update(
             Hash::new_from_bytes(vec![1, 255, 0]).unwrap(),
