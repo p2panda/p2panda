@@ -80,10 +80,24 @@ pub enum MessageValue {
     Text(String),
 }
 
-/// The actual user data is contained in form of message fields, a simple key/value store of data
-/// with a limited amount of value types.
+/// Message fields are used to store user data. They are implemented as a simple key/value store
+/// with support for a limited number of data types (see [`MessageValue`] for further documentation
+/// on this). A `MessageFields` instance can contain any number and types of fields. However, when
+/// a `MessageFields` instance is attached to a `Message`, the message's schema determines which
+/// fields may be used.
 ///
-/// MessageFields are created separately and get attached to a Message before it is used.
+/// # Example
+///
+/// ```
+/// # extern crate p2panda_rs;
+/// # fn main() -> () {
+/// # use p2panda_rs::atomic::{MessageFields, MessageValue};
+/// let mut fields = MessageFields::new();
+/// fields
+///     .add("title", MessageValue::Text("Hello, Panda!".to_owned()))
+///     .unwrap();
+/// }
+/// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MessageFields(HashMap<String, MessageValue>);
 

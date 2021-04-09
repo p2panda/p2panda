@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
+use crate::atomic;
 use crate::atomic::MessageFields as PandaMessageFields;
 use crate::atomic::{
     Entry, EntrySigned, Hash, LogId, Message, MessageEncoded, MessageValue, SeqNum,
@@ -26,16 +27,25 @@ pub fn set_wasm_panic_hook() {
     panic::set_hook(Box::new(panic_hook));
 }
 
+/// Use a `MessageFields` instance to attach user data to a `Message`.
+///
+/// See [`atomic::MessageFields`] for further documentation.
 #[wasm_bindgen]
+#[derive(Debug)]
 pub struct MessageFields(PandaMessageFields);
 
 #[wasm_bindgen]
 impl MessageFields {
+    /// Returns a `MessageFields` instance
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self(PandaMessageFields::new())
     }
 
+    /// Adds a new field to this `MessageFields` instance.
+    ///
+    /// Only `text` fields are currently supported and no schema validation is being done to make
+    /// sure that only fields that are part of a schema can be added.
     pub fn add(&mut self, name: String, value: JsValue) -> Result<(), JsValue> {
         // @TODO: Add more types
         let field = match value.as_string() {
@@ -49,6 +59,9 @@ impl MessageFields {
     }
 }
 
+/// Returns an encoded `create` message that creates an instance of the provided schema.
+///
+/// Use `create` messages by attaching them to an entry that you publish.
 #[wasm_bindgen(js_name = encodeCreateMessage)]
 pub fn encode_create_message(schema: String, fields: MessageFields) -> Result<String, JsValue> {
     let hash = jserr!(Hash::new(&schema));
@@ -57,13 +70,18 @@ pub fn encode_create_message(schema: String, fields: MessageFields) -> Result<St
     Ok(message_encoded.as_str().to_owned())
 }
 
+/// Return value of [`sign_encode_entry`] that holds the encoded entry and its hash
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct SignEntryResult {
+struct SignEncodeEntryResult {
     pub entry_encoded: String,
     pub entry_hash: String,
 }
 
+/// Returns a signed and encoded entry that can be published to a p2panda node.
+///
+/// `entry_backlink_hash`, `entry_skiplink_hash`, `previous_seq_num` and `log_id` are obtained by
+/// querying the `getEntryArguments` method of a p2panda node.
 #[wasm_bindgen(js_name = signEncodeEntry)]
 pub fn sign_encode_entry(
     key_pair: &KeyPair,
@@ -108,13 +126,14 @@ pub fn sign_encode_entry(
     let entry_signed = jserr!(EntrySigned::try_from((&entry, key_pair)));
 
     // Serialize result to JSON
-    let result = jserr!(wasm_bindgen::JsValue::from_serde(&SignEntryResult {
+    let result = jserr!(wasm_bindgen::JsValue::from_serde(&SignEncodeEntryResult {
         entry_encoded: entry_signed.as_str().into(),
         entry_hash: entry_signed.hash().as_hex().into(),
     }));
     Ok(result)
 }
 
+/// Decodes an entry and optional message given their encoded form.
 #[wasm_bindgen(js_name = decodeEntry)]
 pub fn decode_entry(
     entry_encoded: String,
