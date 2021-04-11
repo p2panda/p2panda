@@ -6,7 +6,6 @@ use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::atomic;
 use crate::atomic::{EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum, Validation};
 
 /// Error types for methods of `Entry` struct.

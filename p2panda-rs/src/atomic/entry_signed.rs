@@ -7,7 +7,6 @@ use ed25519_dalek::{PublicKey, Signature};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::atomic;
 use crate::atomic::{Author, Entry, Hash, MessageEncoded, Validation};
 use crate::key_pair::KeyPair;
 
