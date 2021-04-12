@@ -40,7 +40,7 @@ thiserror = "1.0.23"
 yamf-hash = "0.1.2"
 
 # Optional dependencies (behind feature flags)
-sqlx = { version = "0.5.1", features = ["runtime-async-std-native-tls", "all-databases"], optional = true }
+sqlx = { version = "0.5.1", features = ["runtime-async-std-rustls", "all-databases"], optional = true }
 
 # @TODO: Change this as soon as `bamboo-rs` gets published
 [dependencies.bamboo-rs-core]
