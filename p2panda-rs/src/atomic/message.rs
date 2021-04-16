@@ -78,6 +78,9 @@ pub enum MessageValue {
 
     /// Basic `string` value.
     Text(String),
+
+    /// Reference to an instance.
+    Relation(Hash),
 }
 
 /// Message fields are used to store user data. They are implemented as a simple key/value store
@@ -378,6 +381,13 @@ mod tests {
 
         fields
             .add("is_admin", MessageValue::Boolean(false))
+            .unwrap();
+
+        fields
+            .add(
+                "profile_picture",
+                MessageValue::Relation(Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
+            )
             .unwrap();
 
         let message = Message::new_update(
