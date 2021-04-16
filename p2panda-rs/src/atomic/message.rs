@@ -425,7 +425,6 @@ mod tests {
         )
         .unwrap();
 
-
         // Create second test message with same values but different order of fields
         let mut second_fields = MessageFields::new();
         second_fields
