@@ -16,7 +16,7 @@
 //! # use std::convert::TryFrom;
 //! # use p2panda_rs::key_pair::KeyPair;
 //! # use p2panda_rs::atomic::{Entry, EntrySigned, Hash, LogId, SeqNum, Message, MessageFields, MessageValue};
-//! # let PROFILE_SCHEMA = Hash::new_from_bytes(vec![1, 2, 3])?;
+//! # let profile_schema = Hash::new_from_bytes(vec![1, 2, 3])?;
 //! // Generate new Ed25519 key pair
 //! let key_pair = KeyPair::new();
 //!
@@ -25,7 +25,7 @@
 //! fields.add("username", MessageValue::Text("panda".to_owned()))?;
 //!
 //! // Add field data to "create" message
-//! let message = Message::new_create(PROFILE_SCHEMA, fields)?;
+//! let message = Message::new_create(profile_schema, fields)?;
 //!
 //! // Wrap message into Bamboo entry (append-only log data type)
 //! let entry = Entry::new(&LogId::default(), &message, None, None, None)?;
