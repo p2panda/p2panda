@@ -38,7 +38,20 @@ impl KeyPair {
     /// so make sure to only run this in trusted environments.
     ///
     /// [`getrandom`]: https://docs.rs/getrandom/0.2.1/getrandom/
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(constructor))]
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # use p2panda_rs::key_pair::KeyPair;
+    /// // Generate new Ed25519 key pair
+    /// let key_pair = KeyPair::new();
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen(constructor))]
     pub fn new() -> Self {
         let mut csprng: OsRng = OsRng {};
         let key_pair = Ed25519Keypair::generate(&mut csprng);
@@ -54,6 +67,22 @@ impl KeyPair {
     /// crate.
     ///
     /// [`ed25519-dalek`]: https://docs.rs/ed25519-dalek/1.0.1/ed25519_dalek/struct.Keypair.html#warning
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # use p2panda_rs::key_pair::KeyPair;
+    /// // Generate new Ed25519 key pair
+    /// let key_pair = KeyPair::new();
+    /// // Derive a key pair from a private key 
+    /// let new_key_pair = KeyPair::from_private_key(key_pair.private_key());
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_private_key(private_key: String) -> Result<Self, KeyPairError> {
         from_private_key(private_key)
@@ -92,6 +121,23 @@ impl KeyPair {
     }
 
     /// Sign a message using this key pair.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # use p2panda_rs::key_pair::KeyPair;
+    /// // Generate new Ed25519 key pair
+    /// let key_pair = KeyPair::new();
+    /// // Sign a message with this key pair
+    /// let message = b"test";
+    /// let signature = key_pair.sign(message);
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+
     pub fn sign(&self, message: &[u8]) -> Box<[u8]> {
         Box::from(self.0.sign(message).to_bytes())
     }
