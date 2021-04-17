@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -78,6 +78,9 @@ pub enum MessageValue {
 
     /// Basic `string` value.
     Text(String),
+
+    /// Reference to an instance.
+    Relation(Hash),
 }
 
 /// Message fields are used to store user data. They are implemented as a simple key/value store
@@ -85,6 +88,10 @@ pub enum MessageValue {
 /// on this). A `MessageFields` instance can contain any number and types of fields. However, when
 /// a `MessageFields` instance is attached to a `Message`, the message's schema determines which
 /// fields may be used.
+///
+/// Internally message fields use sorted B-Tree maps to assure ordering of the fields.  If the
+/// message fields would not be sorted consistently we would get different hash results for the
+/// same contents.
 ///
 /// # Example
 ///
@@ -99,7 +106,7 @@ pub enum MessageValue {
 /// }
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct MessageFields(HashMap<String, MessageValue>);
+pub struct MessageFields(BTreeMap<String, MessageValue>);
 
 /// Error types for methods of `MessageFields` struct.
 #[derive(Error, Debug)]
@@ -117,7 +124,7 @@ pub enum MessageFieldsError {
 impl MessageFields {
     /// Creates a new fields instance to add data to.
     pub fn new() -> Self {
-        Self(HashMap::new())
+        Self(BTreeMap::new())
     }
 
     /// Returns the number of added fields.
@@ -376,6 +383,13 @@ mod tests {
             .add("is_admin", MessageValue::Boolean(false))
             .unwrap();
 
+        fields
+            .add(
+                "profile_picture",
+                MessageValue::Relation(Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
+            )
+            .unwrap();
+
         let message = Message::new_update(
             Hash::new_from_bytes(vec![1, 255, 0]).unwrap(),
             Hash::new_from_bytes(vec![62, 128]).unwrap(),
@@ -392,5 +406,40 @@ mod tests {
         let message_restored = Message::try_from(&encoded).unwrap();
 
         assert_eq!(message, message_restored);
+    }
+
+    #[test]
+    fn field_ordering() {
+        // Create first test message
+        let mut fields = MessageFields::new();
+        fields
+            .add("a", MessageValue::Text("sloth".to_owned()))
+            .unwrap();
+        fields
+            .add("b", MessageValue::Text("penguin".to_owned()))
+            .unwrap();
+
+        let first_message = Message::new_create(
+            Hash::new_from_bytes(vec![1, 255, 0]).unwrap(),
+            fields,
+        )
+        .unwrap();
+
+        // Create second test message with same values but different order of fields
+        let mut second_fields = MessageFields::new();
+        second_fields
+            .add("b", MessageValue::Text("penguin".to_owned()))
+            .unwrap();
+        second_fields
+            .add("a", MessageValue::Text("sloth".to_owned()))
+            .unwrap();
+
+        let second_message = Message::new_create(
+            Hash::new_from_bytes(vec![1, 255, 0]).unwrap(),
+            second_fields,
+        )
+        .unwrap();
+
+        assert_eq!(first_message.to_cbor(), second_message.to_cbor());
     }
 }
