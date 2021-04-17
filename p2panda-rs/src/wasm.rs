@@ -56,6 +56,12 @@ impl MessageFields {
 
         Ok(())
     }
+
+    /// Returns this instance formatted for debugging
+    #[wasm_bindgen(js_name = toString)]
+    pub fn to_string(&self) -> String {
+        format!("{:?}", self)
+    }
 }
 
 /// Returns an encoded `create` message that creates an instance of the provided schema.
