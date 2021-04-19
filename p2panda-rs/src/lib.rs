@@ -16,7 +16,7 @@
 //! # use std::convert::TryFrom;
 //! # use p2panda_rs::key_pair::KeyPair;
 //! # use p2panda_rs::atomic::{Entry, EntrySigned, Hash, LogId, SeqNum, Message, MessageFields, MessageValue};
-//! # let PROFILE_SCHEMA = Hash::new_from_bytes(vec![1, 2, 3])?;
+//! # let profile_schema = Hash::new_from_bytes(vec![1, 2, 3])?;
 //! // Generate new Ed25519 key pair
 //! let key_pair = KeyPair::new();
 //!
@@ -25,7 +25,7 @@
 //! fields.add("username", MessageValue::Text("panda".to_owned()))?;
 //!
 //! // Add field data to "create" message
-//! let message = Message::new_create(PROFILE_SCHEMA, fields)?;
+//! let message = Message::new_create(profile_schema, fields)?;
 //!
 //! // Wrap message into Bamboo entry (append-only log data type)
 //! let entry = Entry::new(&LogId::default(), &message, None, None, None)?;
@@ -58,22 +58,11 @@ pub mod key_pair;
 ///
 /// [`Concise Data Definition Language`]: https://tools.ietf.org/html/rfc8610
 pub mod schema;
-
+/// Methods exported for WebAssembly targets.
+///
+/// Wrappers for these methods are available in [p2panda-js], which allows idiomatic
+/// usage of `p2panda-rs` in a Javascript/Typescript environment.
+///
+/// [p2panda-js]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 #[cfg(target_arch = "wasm32")]
-mod wasm_utils {
-    use std::panic;
-
-    use console_error_panic_hook::hook as panic_hook;
-    use wasm_bindgen::prelude::wasm_bindgen;
-
-    /// Sets a [`panic hook`] for better error messages in NodeJS or web browser.
-    ///
-    /// [`panic hook`]: https://crates.io/crates/console_error_panic_hook
-    #[wasm_bindgen(js_name = setWasmPanicHook)]
-    pub fn set_wasm_panic_hook() {
-        panic::set_hook(Box::new(panic_hook));
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-pub use wasm_utils::set_wasm_panic_hook;
+pub mod wasm;

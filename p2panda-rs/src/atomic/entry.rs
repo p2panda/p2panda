@@ -42,6 +42,7 @@ pub enum EntryError {
 ///
 /// [`Bamboo specification`]: https://github.com/AljoschaMeyer/bamboo
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Entry {
     /// Hash of previous Bamboo entry.
     entry_hash_backlink: Option<Hash>,

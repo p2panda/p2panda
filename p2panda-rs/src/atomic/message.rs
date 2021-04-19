@@ -83,12 +83,28 @@ pub enum MessageValue {
     Relation(Hash),
 }
 
-/// The actual user data is contained in form of message fields, a simple key/value store of data
-/// with a limited amount of value types.
+/// Message fields are used to store user data. They are implemented as a simple key/value store
+/// with support for a limited number of data types (see [`MessageValue`] for further documentation
+/// on this). A `MessageFields` instance can contain any number and types of fields. However, when
+/// a `MessageFields` instance is attached to a `Message`, the message's schema determines which
+/// fields may be used.
 ///
-/// Internally message fields use sorted B-Tree maps to assure ordering of the fields. If the
+/// Internally message fields use sorted B-Tree maps to assure ordering of the fields.  If the
 /// message fields would not be sorted consistently we would get different hash results for the
 /// same contents.
+///
+/// # Example
+///
+/// ```
+/// # extern crate p2panda_rs;
+/// # fn main() -> () {
+/// # use p2panda_rs::atomic::{MessageFields, MessageValue};
+/// let mut fields = MessageFields::new();
+/// fields
+///     .add("title", MessageValue::Text("Hello, Panda!".to_owned()))
+///     .unwrap();
+/// }
+/// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MessageFields(BTreeMap<String, MessageValue>);
 
@@ -170,6 +186,7 @@ impl MessageFields {
 ///
 /// The data itself lives in the `fields` object and is formed after a message schema.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Message {
     /// Describes if this message creates, updates or deletes data.
     action: MessageAction,
@@ -407,7 +424,6 @@ mod tests {
             fields,
         )
         .unwrap();
-
 
         // Create second test message with same values but different order of fields
         let mut second_fields = MessageFields::new();

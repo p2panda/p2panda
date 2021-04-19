@@ -67,6 +67,5 @@
     "url-loader": "^4.1.1",
     "webpack": "^5.14.0",
     "webpack-cli": "^4.3.1"
-  },
-  "dependencies": {}
+  }
 }
