@@ -12,6 +12,9 @@ use crate::atomic::{
 };
 use crate::key_pair::KeyPair;
 
+// Converts any Rust Error type into js_sys:Error while keeping its error
+// message. This helps propagating errors similar like we do in Rust but in
+// WebAssembly contexts.
 macro_rules! jserr {
     ($l:expr) => {
         $l.map_err::<JsValue, _>(|err| js_sys::Error::new(&format!("{}", err)).into())?;
