@@ -54,7 +54,7 @@ impl KeyPair {
     /// # Ok(())
     /// # }
     /// ```
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen(constructor))]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(constructor))]
     pub fn new() -> Self {
         let mut csprng: OsRng = OsRng {};
         let key_pair = Ed25519Keypair::generate(&mut csprng);
