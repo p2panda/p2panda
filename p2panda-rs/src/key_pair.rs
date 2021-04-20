@@ -82,7 +82,7 @@ impl KeyPair {
     /// let key_pair = KeyPair::new();
     ///
     /// // Derive a key pair from a private key 
-    /// let key_pair_derived = KeyPair::from_private_key(key_pair.private_key());
+    /// let key_pair_derived = KeyPair::from_private_key(key_pair.private_key())?;
     ///
     /// assert_eq!(key_pair.public_key_bytes(), key_pair_derived.public_key_bytes());
     /// assert_eq!(key_pair.private_key_bytes(), key_pair_derived.private_key_bytes());
