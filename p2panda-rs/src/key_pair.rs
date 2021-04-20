@@ -134,13 +134,16 @@ impl KeyPair {
     /// ```
     /// # extern crate p2panda_rs;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # use p2panda_rs::key_pair::KeyPair;
+    /// use p2panda_rs::key_pair::KeyPair;
+    ///
     /// // Generate new Ed25519 key pair
     /// let key_pair = KeyPair::new();
+    ///
     /// // Sign a message with this key pair
     /// let message = b"test";
     /// let signature = key_pair.sign(message);
     ///
+    /// assert!(key_pair.verify(message, &signature).is_ok());
     /// # Ok(())
     /// # }
     /// ```
