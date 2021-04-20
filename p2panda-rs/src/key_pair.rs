@@ -44,10 +44,13 @@ impl KeyPair {
     /// ```
     /// # extern crate p2panda_rs;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # use p2panda_rs::key_pair::KeyPair;
+    /// use p2panda_rs::key_pair::KeyPair;
+    ///
     /// // Generate new Ed25519 key pair
     /// let key_pair = KeyPair::new();
     ///
+    /// println!("{}", key_pair.public_key());
+    /// println!("{}", key_pair.private_key());
     /// # Ok(())
     /// # }
     /// ```
@@ -73,12 +76,16 @@ impl KeyPair {
     /// ```
     /// # extern crate p2panda_rs;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # use p2panda_rs::key_pair::KeyPair;
+    /// use p2panda_rs::key_pair::KeyPair;
+    ///
     /// // Generate new Ed25519 key pair
     /// let key_pair = KeyPair::new();
-    /// // Derive a key pair from a private key 
-    /// let new_key_pair = KeyPair::from_private_key(key_pair.private_key());
     ///
+    /// // Derive a key pair from a private key 
+    /// let key_pair_derived = KeyPair::from_private_key(key_pair.private_key());
+    ///
+    /// assert_eq!(key_pair.public_key_bytes(), key_pair_derived.public_key_bytes());
+    /// assert_eq!(key_pair.private_key_bytes(), key_pair_derived.private_key_bytes());
     /// # Ok(())
     /// # }
     /// ```
