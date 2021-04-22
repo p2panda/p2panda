@@ -116,6 +116,41 @@ impl TryFrom<&[u8]> for EntrySigned {
 /// [`EntrySigned`] instance.
 ///
 /// After conversion the result is ready to be sent to a p2panda node.
+///
+/// ## Example
+///
+/// ```
+/// # extern crate p2panda_rs;
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// use std::convert::TryFrom;
+/// use p2panda_rs::atomic::{Entry, EntrySigned, Hash, LogId, Message, MessageFields, MessageValue};
+/// use p2panda_rs::key_pair::KeyPair;
+/// # let SCHEMA_HASH_STR = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
+///
+/// // Generate Ed25519 key pair to sign entry with
+/// let key_pair = KeyPair::new();
+///
+/// // Create message
+/// let schema_hash = Hash::new(SCHEMA_HASH_STR)?;
+/// let mut fields = MessageFields::new();
+/// fields.add("title", MessageValue::Text("Hello, Panda!".to_owned()))?;
+/// let message = Message::new_create(schema_hash, fields)?;
+///
+/// // Create entry
+/// let entry = Entry::new(
+///     &LogId::default(),
+///     &message,
+///     None,
+///     None,
+///     None,
+/// )?;
+///
+/// // Sign and encode entry
+/// let entry_signed_encoded = EntrySigned::try_from((&entry, &key_pair))?;
+/// # Ok(())
+/// # }
+///```
+
 impl TryFrom<(&Entry, &KeyPair)> for EntrySigned {
     type Error = EntrySignedError;
 
