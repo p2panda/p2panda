@@ -1,13 +1,16 @@
 use std::convert::{TryFrom, TryInto};
 
 use arrayvec::ArrayVec;
+use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
 use bamboo_rs_core::entry::is_lipmaa_required;
-use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
+use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature, YamfHash};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::atomic::{EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum, Validation};
-
+use crate::atomic::entry_signed::EntrySignedError;
+use crate::key_pair::KeyPair;
+use ed25519_dalek::PublicKey;
 /// Error types for methods of `Entry` struct.
 #[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
@@ -134,6 +137,57 @@ impl Entry {
     /// Returns true if skiplink has to be given.
     pub fn is_skiplink_required(&self) -> bool {
         is_lipmaa_required(self.seq_num.as_i64() as u64)
+    }
+    
+    pub fn sign(&self, key_pair: &KeyPair) -> Result<EntrySigned, EntrySignedError> {
+        // Generate message hash
+        let message_encoded = match self.message() {
+            Some(message) => MessageEncoded::try_from(message)?,
+            None => return Err(EntrySignedError::MessageMissing),
+        };
+        let message_hash = message_encoded.hash();
+        let message_size = message_encoded.size();
+
+        // Convert entry links to bamboo-rs `YamfHash` type
+        let backlink = self.backlink_hash().map(|link| link.to_owned().into());
+        let lipmaa_link = if self.is_skiplink_required() {
+            if self.skiplink_hash().is_none() {
+                return Err(EntrySignedError::SkiplinkMissing);
+            }
+
+            self.skiplink_hash().map(|link| link.to_owned().into())
+        } else {
+            // Omit skiplink when it is the same as backlink, this saves us some bytes
+            None
+        };
+
+        // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
+        // details and definition of entry fields.
+        let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
+            log_id: self.log_id().as_i64() as u64,
+            is_end_of_feed: false,
+            payload_hash: message_hash.into(),
+            payload_size: message_size as u64,
+            author: PublicKey::from_bytes(&key_pair.public_key_bytes())?,
+            seq_num: self.seq_num().as_i64() as u64,
+            backlink,
+            lipmaa_link,
+            sig: None,
+        };
+
+        // Get entry bytes first for signing them with key pair
+        let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
+        let unsigned_entry_size = entry.encode(&mut entry_bytes)?;
+
+        // Sign and add signature to entry
+        let sig_bytes = key_pair.sign(&entry_bytes[..unsigned_entry_size]);
+        let signature = BambooSignature(&*sig_bytes);
+        entry.sig = Some(signature);
+
+        // Get entry bytes again, now with signature included
+        let signed_entry_size = entry.encode(&mut entry_bytes)?;
+
+        EntrySigned::try_from(&entry_bytes[..signed_entry_size])
     }
 }
 
