@@ -273,7 +273,10 @@ impl Validation for Entry {
 
 #[cfg(test)]
 mod tests {
-    use crate::atomic::{Hash, LogId, Message, MessageFields, MessageValue, SeqNum};
+    use std::convert::TryFrom;
+
+    use crate::atomic::{Hash, LogId, Message, MessageEncoded, MessageFields, MessageValue, SeqNum,};
+    use crate::key_pair::KeyPair;
 
     use super::Entry;
 
@@ -330,5 +333,44 @@ mod tests {
             Some(&SeqNum::new(1).unwrap())
         )
         .is_err());
+    }
+    #[test]
+    fn sign_and_encode() {
+        // Generate Ed25519 key pair to sign entry with
+        let key_pair = KeyPair::new();
+
+        // Prepare sample values
+        let mut fields = MessageFields::new();
+        fields
+            .add("test", MessageValue::Text("Hello".to_owned()))
+            .unwrap();
+        let message =
+            Message::new_create(Hash::new_from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
+
+        // Create a p2panda entry, then sign it. For this encoding, the entry is converted into a
+        // bamboo-rs-core entry, which means that it also doesn't contain the message anymore
+        let entry = Entry::new(&LogId::default(), &message, None, None, None).unwrap();
+        let entry_first_encoded = entry.sign(&key_pair).unwrap();
+
+        // Make an unsigned, decoded p2panda entry from the signed and encoded form. This is adding
+        // the message back
+        let message_encoded = MessageEncoded::try_from(&message).unwrap();
+        let entry_decoded: Entry =
+            Entry::try_from((&entry_first_encoded, Some(&message_encoded))).unwrap();
+
+        // Re-encode the recovered entry to be able to check that we still have the same data
+        let test_entry_signed_encoded = entry_decoded.sign(&key_pair).unwrap();
+        assert_eq!(entry_first_encoded, test_entry_signed_encoded);
+
+        // Create second p2panda entry without skiplink as it is not required
+        let entry_second = Entry::new(
+            &LogId::default(),
+            &message,
+            None,
+            Some(&entry_first_encoded.hash()),
+            Some(&SeqNum::new(2).unwrap()),
+        )
+        .unwrap();
+        assert!(entry_second.sign(&key_pair).is_ok());
     }
 }
