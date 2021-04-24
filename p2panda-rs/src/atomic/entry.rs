@@ -138,7 +138,11 @@ impl Entry {
     pub fn is_skiplink_required(&self) -> bool {
         is_lipmaa_required(self.seq_num.as_i64() as u64)
     }
-    
+
+    /// Takes an KeyPair, returns signed and encoded entry in form of an
+    /// [`EntrySigned`] instance.
+    ///
+    /// After signing the result is ready to be sent to a p2panda node.
     pub fn sign(&self, key_pair: &KeyPair) -> Result<EntrySigned, EntrySignedError> {
         // Generate message hash
         let message_encoded = match self.message() {

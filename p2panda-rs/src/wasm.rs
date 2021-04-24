@@ -163,7 +163,7 @@ pub fn sign_encode_entry(
     ));
 
     // Finally sign and encode entry
-    let entry_signed = jserr!(EntrySigned::try_from((&entry, key_pair)));
+    let entry_signed = jserr!(entry.sign(&key_pair));
 
     // Serialize result to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&SignEncodeEntryResult {

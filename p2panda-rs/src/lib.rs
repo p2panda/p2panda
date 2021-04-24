@@ -31,7 +31,7 @@
 //! let entry = Entry::new(&LogId::default(), &message, None, None, None)?;
 //!
 //! // Sign entry with private key
-//! let entry_signed = EntrySigned::try_from((&entry, &key_pair))?;
+//! let entry_signed = entry.sign(&key_pair)?;
 //! # Ok(())
 //! # }
 //! ```
