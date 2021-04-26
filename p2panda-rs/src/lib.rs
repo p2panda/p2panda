@@ -27,8 +27,11 @@
 //! // Add field data to "create" message
 //! let message = Message::new_create(profile_schema, fields)?;
 //!
+//! // This is the entry at sequence number 1 (the first entry in the log)
+//! let seq_num = SeqNum::new(1)?;
+//!
 //! // Wrap message into Bamboo entry (append-only log data type)
-//! let entry = Entry::new(&LogId::default(), &message, None, None, None)?;
+//! let entry = Entry::new(&LogId::default(), Some(&message), None, None, &seq_num)?;
 //!
 //! // Sign entry with private key
 //! let entry_signed = entry.sign(&key_pair)?;

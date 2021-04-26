@@ -128,7 +128,7 @@ pub fn sign_encode_entry(
     encoded_message: String,
     entry_skiplink_hash: Option<String>,
     entry_backlink_hash: Option<String>,
-    previous_seq_num: Option<i64>,
+    seq_num: i64,
     log_id: i64,
 ) -> Result<JsValue, JsValue> {
     // If skiplink_hash exists construct Hash
@@ -143,11 +143,8 @@ pub fn sign_encode_entry(
         None => None,
     };
 
-    // If seq_num exists construct SeqNum
-    let seq_num = match previous_seq_num {
-        Some(num) => Some(jserr!(SeqNum::new(num))),
-        None => None,
-    };
+    // Create SeqNum instance
+    let seq_num = jserr!(SeqNum::new(seq_num));
 
     // Convert to Message
     let message_encoded = jserr!(MessageEncoded::new(&encoded_message));
@@ -191,7 +188,7 @@ pub fn decode_entry(
 
     // Convert encoded entry
     let entry_signed = jserr!(EntrySigned::new(&entry_encoded));
-    let entry = jserr!(Entry::try_from((&entry_signed, message_encoded.as_ref())));
+    let entry: jserr!(Entry = entry_signed.decode(message_encoded.as_ref()).unwrap();
 
     // Serialize struct to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&entry));
