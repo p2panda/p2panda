@@ -130,7 +130,7 @@ impl Entry {
     /// [`EntrySigned`] instance.
     ///
     /// After signing the result is ready to be sent to a p2panda node.
-    pub fn sign(&self, key_pair: &KeyPair) -> Result<EntrySigned, EntrySignedError> {
+    pub fn sign_and_encode(&self, key_pair: &KeyPair) -> Result<EntrySigned, EntrySignedError> {
         // Generate message hash
         let message_encoded = match self.message() {
             Some(message) => MessageEncoded::try_from(message)?,
@@ -288,7 +288,7 @@ mod tests {
         // Create a p2panda entry, then sign it. For this encoding, the entry is converted into a
         // bamboo-rs-core entry, which means that it also doesn't contain the message anymore
         let entry = Entry::new(&LogId::default(), Some(&message), None, None, &SeqNum::new(1).unwrap()).unwrap();
-        let entry_first_encoded = entry.sign(&key_pair).unwrap();
+        let entry_first_encoded = entry.sign_and_encode(&key_pair).unwrap();
 
         // Make an unsigned, decoded p2panda entry from the signed and encoded form. This is adding
         // the message back
@@ -296,7 +296,7 @@ mod tests {
         let entry_decoded: Entry = entry_first_encoded.decode(Some(&message_encoded)).unwrap();
 
         // Re-encode the recovered entry to be able to check that we still have the same data
-        let test_entry_signed_encoded = entry_decoded.sign(&key_pair).unwrap();
+        let test_entry_signed_encoded = entry_decoded.sign_and_encode(&key_pair).unwrap();
         assert_eq!(entry_first_encoded, test_entry_signed_encoded);
 
         // Create second p2panda entry without skiplink as it is not required
@@ -308,6 +308,6 @@ mod tests {
             &SeqNum::new(2).unwrap(),
         )
         .unwrap();
-        assert!(entry_second.sign(&key_pair).is_ok());
+        assert!(entry_second.sign_and_encode(&key_pair).is_ok());
     }
 }
