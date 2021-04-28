@@ -11,6 +11,7 @@ use crate::atomic::{
     MessageFields as MessageFieldsNonWasm, MessageValue, SeqNum,
 };
 use crate::key_pair::KeyPair;
+use crate::encoder::{sign_and_encode, decode};
 
 // Converts any Rust Error type into js_sys:Error while keeping its error
 // message. This helps propagating errors similar like we do in Rust but in
@@ -160,7 +161,7 @@ pub fn sign_encode_entry(
     ));
 
     // Finally sign and encode entry
-    let entry_signed = jserr!(entry.sign_and_encode(&key_pair));
+    let entry_signed = jserr!(sign_and_encode(&entry, &key_pair));
 
     // Serialize result to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&SignEncodeEntryResult {
@@ -188,7 +189,7 @@ pub fn decode_entry(
 
     // Convert encoded entry
     let entry_signed = jserr!(EntrySigned::new(&entry_encoded));
-    let entry: jserr!(Entry = entry_signed.decode(message_encoded.as_ref()).unwrap();
+    let entry: jserr!(Entry = decode(&entry_signed, message_encoded.as_ref()).unwrap();
 
     // Serialize struct to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&entry));
