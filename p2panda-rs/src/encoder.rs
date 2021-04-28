@@ -3,13 +3,35 @@ use std::convert::{TryFrom, TryInto};
 use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
 use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature, YamfHash};
 
-use crate::atomic::{Entry, EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum};
+use crate::atomic::{Entry, EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum, error::MessageEncodedError};
 use crate::atomic::error::EntrySignedError;
 use crate::key_pair::KeyPair;
 use crate::atomic::Blake2BArrayVec;
 use arrayvec::ArrayVec;
 use ed25519_dalek::PublicKey;
 
+/// Takes an [`EntrySigned`] and a [`MessageEncoded`]
+///
+/// validates the encoded message against the entry payload hash, returns the decoded message if valid
+/// otherwise throws an error.
+pub fn validate_message(entry_encoded: &EntrySigned, message_encoded: &MessageEncoded) -> Result<Message, EntrySignedError> {
+    // Convert to Entry from bamboo_rs_core first
+    let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = entry_encoded.into();
+    // Messages may be omitted because the entry still contains the message hash. If the
+    // message is explicitly included we require its hash to match.
+    let message = match message_encoded {
+        msg => {
+            let yamf_hash: YamfHash<Blake2BArrayVec> =
+                (&msg.hash()).to_owned().into();
+
+            if yamf_hash != entry.payload_hash {
+                return Err(EntrySignedError::MessageHashMismatch);
+            }
+            Message::from(msg)
+        }
+    };
+    Ok(message)
+}
 
 /// Takes an Entry and a KeyPair, returns signed and encoded entry in form of an
 /// [`EntrySigned`] instance.
@@ -76,19 +98,9 @@ pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned,
 pub fn decode(entry_encoded: &EntrySigned, message_encoded: Option<&MessageEncoded>) -> Result<Entry, EntrySignedError> {
     // Convert to Entry from bamboo_rs_core first
     let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = entry_encoded.into();
-    println!("{:?}", entry);
-    // Messages may be omitted because the entry still contains the message hash. If the
-    // message is explicitly included we require its hash to match.
-    let message = match message_encoded {
-        Some(msg) => {
-            let yamf_hash: YamfHash<Blake2BArrayVec> =
-                (&msg.hash()).to_owned().into();
 
-            if yamf_hash != entry.payload_hash {
-                return Err(EntrySignedError::MessageHashMismatch);
-            }
-            Some(Message::from(msg))
-        }
+    let message = match message_encoded {
+        Some(msg) => Some(validate_message(entry_encoded, msg)?),
         None => None,
     };
 
