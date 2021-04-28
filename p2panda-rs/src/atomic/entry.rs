@@ -1,15 +1,8 @@
-use std::convert::TryFrom;
-
-use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
 use bamboo_rs_core::entry::is_lipmaa_required;
-use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::atomic::{EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum, Validation};
-use crate::atomic::entry_signed::EntrySignedError;
-use crate::key_pair::KeyPair;
-use ed25519_dalek::PublicKey;
+use crate::atomic::{Hash, LogId, Message, SeqNum, Validation};
 /// Error types for methods of `Entry` struct.
 #[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
@@ -125,61 +118,6 @@ impl Entry {
     pub fn is_skiplink_required(&self) -> bool {
         is_lipmaa_required(self.seq_num.as_i64() as u64)
     }
-
-    /// Takes an KeyPair, returns signed and encoded entry in form of an
-    /// [`EntrySigned`] instance.
-    ///
-    /// After signing the result is ready to be sent to a p2panda node.
-    pub fn sign_and_encode(&self, key_pair: &KeyPair) -> Result<EntrySigned, EntrySignedError> {
-        // Generate message hash
-        let message_encoded = match self.message() {
-            Some(message) => MessageEncoded::try_from(message)?,
-            None => return Err(EntrySignedError::MessageMissing),
-        };
-        let message_hash = message_encoded.hash();
-        let message_size = message_encoded.size();
-
-        // Convert entry links to bamboo-rs `YamfHash` type
-        let backlink = self.backlink_hash().map(|link| link.to_owned().into());
-        let lipmaa_link = if self.is_skiplink_required() {
-            if self.skiplink_hash().is_none() {
-                return Err(EntrySignedError::SkiplinkMissing);
-            }
-
-            self.skiplink_hash().map(|link| link.to_owned().into())
-        } else {
-            // Omit skiplink when it is the same as backlink, this saves us some bytes
-            None
-        };
-
-        // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
-        // details and definition of entry fields.
-        let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
-            log_id: self.log_id().as_i64() as u64,
-            is_end_of_feed: false,
-            payload_hash: message_hash.into(),
-            payload_size: message_size as u64,
-            author: PublicKey::from_bytes(&key_pair.public_key_bytes())?,
-            seq_num: self.seq_num().as_i64() as u64,
-            backlink,
-            lipmaa_link,
-            sig: None,
-        };
-
-        // Get entry bytes first for signing them with key pair
-        let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
-        let unsigned_entry_size = entry.encode(&mut entry_bytes)?;
-
-        // Sign and add signature to entry
-        let sig_bytes = key_pair.sign(&entry_bytes[..unsigned_entry_size]);
-        let signature = BambooSignature(&*sig_bytes);
-        entry.sig = Some(signature);
-
-        // Get entry bytes again, now with signature included
-        let signed_entry_size = entry.encode(&mut entry_bytes)?;
-
-        EntrySigned::try_from(&entry_bytes[..signed_entry_size])
-    }
 }
 
 impl Validation for Entry {
@@ -215,6 +153,7 @@ mod tests {
 
     use crate::atomic::{Hash, LogId, Message, MessageEncoded, MessageFields, MessageValue, SeqNum,};
     use crate::key_pair::KeyPair;
+    use crate::encoder::{sign_and_encode, decode};
 
     use super::Entry;
 
@@ -273,7 +212,7 @@ mod tests {
         .is_err());
     }
     #[test]
-    fn sign_and_encode() {
+    fn sign_and_encode_test() {
         // Generate Ed25519 key pair to sign entry with
         let key_pair = KeyPair::new();
 
@@ -288,15 +227,15 @@ mod tests {
         // Create a p2panda entry, then sign it. For this encoding, the entry is converted into a
         // bamboo-rs-core entry, which means that it also doesn't contain the message anymore
         let entry = Entry::new(&LogId::default(), Some(&message), None, None, &SeqNum::new(1).unwrap()).unwrap();
-        let entry_first_encoded = entry.sign_and_encode(&key_pair).unwrap();
+        let entry_first_encoded = sign_and_encode(&entry, &key_pair).unwrap();
 
         // Make an unsigned, decoded p2panda entry from the signed and encoded form. This is adding
         // the message back
         let message_encoded = MessageEncoded::try_from(&message).unwrap();
-        let entry_decoded: Entry = entry_first_encoded.decode(Some(&message_encoded)).unwrap();
+        let entry_decoded: Entry = decode(&entry_first_encoded, Some(&message_encoded)).unwrap();
 
         // Re-encode the recovered entry to be able to check that we still have the same data
-        let test_entry_signed_encoded = entry_decoded.sign_and_encode(&key_pair).unwrap();
+        let test_entry_signed_encoded = sign_and_encode(&entry_decoded, &key_pair).unwrap();
         assert_eq!(entry_first_encoded, test_entry_signed_encoded);
 
         // Create second p2panda entry without skiplink as it is not required
@@ -308,6 +247,6 @@ mod tests {
             &SeqNum::new(2).unwrap(),
         )
         .unwrap();
-        assert!(entry_second.sign_and_encode(&key_pair).is_ok());
+        assert!(sign_and_encode(&entry_second, &key_pair).is_ok());
     }
 }

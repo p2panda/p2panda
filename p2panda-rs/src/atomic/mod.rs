@@ -11,6 +11,7 @@ pub use author::Author;
 pub use entry::Entry;
 pub use entry_signed::EntrySigned;
 pub use hash::Hash;
+pub use hash::Blake2BArrayVec;
 pub use log_id::LogId;
 pub use message::{Message, MessageAction, MessageFields, MessageValue, MessageVersion};
 pub use message_encoded::MessageEncoded;

@@ -15,6 +15,7 @@
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! # use std::convert::TryFrom;
 //! # use p2panda_rs::key_pair::KeyPair;
+//! # use p2panda_rs::encoder::sign_and_encode;
 //! # use p2panda_rs::atomic::{Entry, EntrySigned, Hash, LogId, SeqNum, Message, MessageFields, MessageValue};
 //! # let profile_schema = Hash::new_from_bytes(vec![1, 2, 3])?;
 //! // Generate new Ed25519 key pair
@@ -34,7 +35,7 @@
 //! let entry = Entry::new(&LogId::default(), Some(&message), None, None, &seq_num)?;
 //!
 //! // Sign entry with private key
-//! let entry_signed = entry.sign_and_encode(&key_pair)?;
+//! let entry_signed = sign_and_encode(&entry, &key_pair)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -54,6 +55,8 @@
 pub mod atomic;
 /// Methods to generate key pairs or "authors" to sign data with.
 pub mod key_pair;
+/// Methods methods for signing, encoding and decoding entries.
+pub mod encoder;
 /// Validations for message payloads and definitions of system schemas.
 ///
 /// This uses [`Concise Data Definition Language`] (CDDL) internally to verify CBOR data of p2panda

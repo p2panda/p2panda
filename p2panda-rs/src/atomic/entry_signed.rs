@@ -1,12 +1,12 @@
 use std::convert::{TryFrom, TryInto};
 
 use arrayvec::ArrayVec;
-use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
+use bamboo_rs_core::Entry;
 use ed25519_dalek::Signature;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::atomic::{Author, Entry, Hash, LogId, Message, MessageEncoded, SeqNum, Validation};
+use crate::atomic::{Author, Hash, Validation};
 
 /// Custom error types for `EntrySigned`.
 #[derive(Error, Debug)]
@@ -74,14 +74,14 @@ impl EntrySigned {
     /// Returns `Author` who signed this entry.
     pub fn author(&self) -> Author {
         // Unwrap as we already validated entry
-        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.try_into().unwrap();
+        let entry: Entry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.try_into().unwrap();
         Author::try_from(entry.author).unwrap()
     }
 
     /// Returns Ed25519 signature of this entry.
     pub fn signature(&self) -> Signature {
         // Unwrap as we already validated entry and know it contains a signature
-        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.try_into().unwrap();
+        let entry: Entry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.try_into().unwrap();
 
         // Convert into Ed25519 Signature instance
         let array_vec = entry.sig.unwrap().0;
@@ -102,59 +102,14 @@ impl EntrySigned {
     /// Returns payload size (number of bytes) of total encoded entry.
     pub fn size(&self) -> i64 {
         self.0.len() as i64 / 2
-    }
-    
-    /// Returns a decoded and unsigned [`Entry`].
-    ///
-    /// Takes a [`MessageEncoded`] as an optional argument.
-    ///
-    /// Entries are separated from the messages they refer to. Since messages can independently be
-    /// deleted they can be passed on as an optional argument. When a [`Message`] is passed
-    /// it will automatically check its integrity with this Entry by comparing their hashes.
-    pub fn decode(&self, message_encoded: Option<&MessageEncoded>) -> Result<Entry, EntrySignedError> {
-        // Convert to Entry from bamboo_rs_core first
-        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.into();
-        println!("{:?}", entry);
-        // Messages may be omitted because the entry still contains the message hash. If the
-        // message is explicitly included we require its hash to match.
-        let message = match message_encoded {
-            Some(msg) => {
-                let yamf_hash: YamfHash<super::hash::Blake2BArrayVec> =
-                    (&msg.hash()).to_owned().into();
-
-                if yamf_hash != entry.payload_hash {
-                    return Err(EntrySignedError::MessageHashMismatch);
-                }
-                Some(Message::from(msg))
-            }
-            None => None,
-        };
-
-        let entry_hash_backlink: Option<Hash> = match entry.backlink {
-            Some(link) => Some(link.try_into()?),
-            None => None,
-        };
-
-        let entry_hash_skiplink: Option<Hash> = match entry.lipmaa_link {
-            Some(link) => Some(link.try_into()?),
-            None => None,
-        };
-
-        Ok(Entry::new(
-            &LogId::new(entry.log_id as i64),
-            message.as_ref(),
-            entry_hash_skiplink.as_ref(),
-            entry_hash_backlink.as_ref(),
-            &SeqNum::new(entry.seq_num as i64).unwrap(),
-        ).unwrap())
-    }
+    }    
 }
 
 /// Converts an `EntrySigned` into a Bamboo Entry to interact with the `bamboo_rs` crate.
-impl From<&EntrySigned> for BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> {
+impl From<&EntrySigned> for Entry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> {
     fn from(signed_entry: &EntrySigned) -> Self {
         let entry_bytes = signed_entry.clone().to_bytes();
-        let entry_ref: BambooEntry<&[u8], &[u8]> = entry_bytes.as_slice().try_into().unwrap();
+        let entry_ref: Entry<&[u8], &[u8]> = entry_bytes.as_slice().try_into().unwrap();
         bamboo_rs_core::entry::into_owned(&entry_ref)
     }
 }
