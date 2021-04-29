@@ -189,6 +189,7 @@ pub fn decode_entry(
 
     // Convert encoded entry
     let entry_signed = jserr!(EntrySigned::new(&entry_encoded));
+    // Had to remove the jserr macro here to make this work, need to look at it again
     let entry: Entry = decode(&entry_signed, message_encoded.as_ref()).unwrap();
 
     // Serialize struct to JSON
