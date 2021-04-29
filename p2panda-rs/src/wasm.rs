@@ -154,10 +154,10 @@ pub fn sign_encode_entry(
     // Create Entry instance
     let entry = jserr!(Entry::new(
         &LogId::new(log_id),
-        &message,
+        Some(&message),
         skiplink_hash.as_ref(),
         backlink_hash.as_ref(),
-        seq_num.as_ref(),
+        &seq_num,
     ));
 
     // Finally sign and encode entry
@@ -189,7 +189,7 @@ pub fn decode_entry(
 
     // Convert encoded entry
     let entry_signed = jserr!(EntrySigned::new(&entry_encoded));
-    let entry: jserr!(Entry = decode(&entry_signed, message_encoded.as_ref()).unwrap();
+    let entry: Entry = decode(&entry_signed, message_encoded.as_ref()).unwrap();
 
     // Serialize struct to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&entry));
