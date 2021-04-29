@@ -153,7 +153,7 @@ mod tests {
 
     use crate::atomic::{Hash, LogId, Message, MessageEncoded, MessageFields, MessageValue, SeqNum,};
     use crate::key_pair::KeyPair;
-    use crate::encoder::{sign_and_encode, decode};
+    use crate::encoder::{sign_and_encode, decode_entry};
 
     use super::Entry;
 
@@ -232,7 +232,7 @@ mod tests {
         // Make an unsigned, decoded p2panda entry from the signed and encoded form. This is adding
         // the message back
         let message_encoded = MessageEncoded::try_from(&message).unwrap();
-        let entry_decoded: Entry = decode(&entry_first_encoded, Some(&message_encoded)).unwrap();
+        let entry_decoded: Entry = decode_entry(&entry_first_encoded, Some(&message_encoded)).unwrap();
 
         // Re-encode the recovered entry to be able to check that we still have the same data
         let test_entry_signed_encoded = sign_and_encode(&entry_decoded, &key_pair).unwrap();

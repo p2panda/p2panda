@@ -44,6 +44,10 @@ pub enum EntrySignedError {
     #[error(transparent)]
     BambooEncodeError(#[from] bamboo_rs_core::entry::encode::Error),
 
+    /// Handle errors from decoding bamboo_rs_core entries.
+    #[error(transparent)]
+    BambooDecodeError(#[from] bamboo_rs_core::entry::decode::Error),
+
     /// Handle errors from ed25519_dalek crate.
     #[error(transparent)]
     Ed25519SignatureError(#[from] ed25519_dalek::SignatureError),

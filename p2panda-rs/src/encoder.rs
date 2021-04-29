@@ -1,9 +1,9 @@
 use std::convert::{TryFrom, TryInto};
 
-use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
+use bamboo_rs_core::entry::{decode, MAX_ENTRY_SIZE};
 use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature, YamfHash};
 
-use crate::atomic::{Entry, EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum, error::MessageEncodedError};
+use crate::atomic::{Entry, EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum};
 use crate::atomic::error::EntrySignedError;
 use crate::key_pair::KeyPair;
 use crate::atomic::Blake2BArrayVec;
@@ -33,11 +33,8 @@ pub fn validate_message(entry_encoded: &EntrySigned, message_encoded: &MessageEn
     Ok(message)
 }
 
-/// Takes an Entry and a KeyPair, returns signed and encoded entry in form of an
-/// [`EntrySigned`] instance.
-///
-/// After signing the result is ready to be sent to a p2panda node.
-pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned, EntrySignedError> {
+/// Encode an entry
+pub fn encode_entry(entry: &Entry, public_key: &Box<[u8]>, entry_bytes: &mut [u8; MAX_ENTRY_SIZE]) -> Result<usize, EntrySignedError> {
     // Generate message hash
     let message_encoded = match entry.message() {
         Some(message) => MessageEncoded::try_from(message)?,
@@ -61,12 +58,12 @@ pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned,
 
     // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
     // details and definition of entry fields.
-    let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
+    let entry: BambooEntry<_, &[u8]> = BambooEntry {
         log_id: entry.log_id().as_i64() as u64,
         is_end_of_feed: false,
         payload_hash: message_hash.into(),
         payload_size: message_size as u64,
-        author: PublicKey::from_bytes(&key_pair.public_key_bytes())?,
+        author: PublicKey::from_bytes(public_key)?,
         seq_num: entry.seq_num().as_i64() as u64,
         backlink,
         lipmaa_link,
@@ -74,16 +71,35 @@ pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned,
     };
 
     // Get entry bytes first for signing them with key pair
-    let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
-    let unsigned_entry_size = entry.encode(&mut entry_bytes)?;
+    let unsigned_entry_size = entry.encode(entry_bytes)?;
+    Ok(unsigned_entry_size)
+}
 
+/// Sign an entry
+pub fn sign_entry(entry_bytes: &mut [u8; MAX_ENTRY_SIZE], unsigned_entry_size: usize, key_pair: &KeyPair) -> Result<usize, EntrySignedError>{
+    let entry_bytes_copy = entry_bytes.clone();
+    let mut decoded_entry = decode(&entry_bytes_copy)?;
     // Sign and add signature to entry
     let sig_bytes = key_pair.sign(&entry_bytes[..unsigned_entry_size]);
     let signature = BambooSignature(&*sig_bytes);
-    entry.sig = Some(signature);
+    decoded_entry.sig = Some(signature);
 
     // Get entry bytes again, now with signature included
-    let signed_entry_size = entry.encode(&mut entry_bytes)?;
+    let signed_entry_size = decoded_entry.encode(entry_bytes)?;
+    Ok(signed_entry_size)
+}
+
+/// Takes an Entry and a KeyPair, returns signed and encoded entry in form of an
+/// [`EntrySigned`] instance.
+///
+/// After signing the result is ready to be sent to a p2panda node.
+pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned, EntrySignedError> {
+
+    // Get entry bytes first for signing them with key pair
+    let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
+    let unsigned_entry_size = encode_entry(entry, &key_pair.public_key_bytes(), &mut entry_bytes)?;
+    // Get entry bytes again, now with signature included
+    let signed_entry_size = sign_entry(&mut entry_bytes, unsigned_entry_size, key_pair)?;
 
     EntrySigned::try_from(&entry_bytes[..signed_entry_size])
 }
@@ -95,7 +111,7 @@ pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned,
 /// Entries are separated from the messages they refer to. Since messages can independently be
 /// deleted they can be passed on as an optional argument. When a [`Message`] is passed
 /// it will automatically check its integrity with this Entry by comparing their hashes.
-pub fn decode(entry_encoded: &EntrySigned, message_encoded: Option<&MessageEncoded>) -> Result<Entry, EntrySignedError> {
+pub fn decode_entry(entry_encoded: &EntrySigned, message_encoded: Option<&MessageEncoded>) -> Result<Entry, EntrySignedError> {
     // Convert to Entry from bamboo_rs_core first
     let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = entry_encoded.into();
 
