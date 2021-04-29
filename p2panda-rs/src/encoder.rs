@@ -34,10 +34,7 @@ pub fn validate_message(entry_encoded: &EntrySigned, message_encoded: &MessageEn
     Ok(message)
 }
 
-/// Takes an [`EntrySigned`] and a [`MessageEncoded`]
-///
-/// validates the encoded message against the entry payload hash, returns the decoded message if valid
-/// otherwise throws an error.
+/// Takes an [`Entry`] and a public key, returns encoded entry bytes and size.
 pub fn encode_entry(entry: &Entry, public_key: &Box<[u8]>) -> Result<(usize, [u8; MAX_ENTRY_SIZE]), EntrySignedError> {
     // Generate message hash
     let message_encoded = match entry.message() {
@@ -76,36 +73,42 @@ pub fn encode_entry(entry: &Entry, public_key: &Box<[u8]>) -> Result<(usize, [u8
 
     let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
     
-    // Get entry bytes first for signing them with key pair
+    // Get unsigned entry bytes
     let entry_size = entry.encode(&mut entry_bytes)?;
     Ok((entry_size, entry_bytes))
 }
 
-/// Sign an entry
+/// Takes unsigned entry bytes and size and a KeyPair, returns signed and encoded entry bytes and size
 pub fn sign_entry(entry_bytes: [u8; MAX_ENTRY_SIZE], unsigned_entry_size: usize, key_pair: &KeyPair) -> Result<(usize, [u8; MAX_ENTRY_SIZE]), EntrySignedError>{
+    // Make copy of entry_bytes before passing to decode
     let mut entry_bytes_copy = entry_bytes.clone();
-    let mut decoded_entry = decode(&entry_bytes)?;
+    
+    // Decode unsigned entry bytes
+    let mut entry = decode(&entry_bytes)?;
+    
     // Sign and add signature to entry
     let sig_bytes = key_pair.sign(&entry_bytes_copy[..unsigned_entry_size]);
     let signature = BambooSignature(&*sig_bytes);
-    decoded_entry.sig = Some(signature);
+    entry.sig = Some(signature);
 
-    // Get entry bytes again, now with signature included
-    let signed_entry_size = decoded_entry.encode(&mut entry_bytes_copy)?;
+    // Get signed entry bytes
+    let signed_entry_size = entry.encode(&mut entry_bytes_copy)?;
     Ok((signed_entry_size, entry_bytes_copy))
 }
 
-/// Takes an Entry and a KeyPair, returns signed and encoded entry in form of an
+/// Takes an Entry and a KeyPair, returns signed and encoded entry bytes in form of an
 /// [`EntrySigned`] instance.
 ///
 /// After signing the result is ready to be sent to a p2panda node.
 pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned, EntrySignedError> {
 
-    // Get entry bytes first for signing them with key pair
+    // Get unsigned entry bytes
     let (unsigned_entry_size, unsigned_entry_bytes) = encode_entry(entry, &key_pair.public_key_bytes())?;
-    // Get entry bytes again, now with signature included
+    
+    // Sign entry and get signed entry bytes
     let (signed_entry_size, signed_entry_bytes) = sign_entry(unsigned_entry_bytes, unsigned_entry_size, key_pair)?;
-
+    
+    // Return signed entry bytes in the form of an EntrySigned
     EntrySigned::try_from(&signed_entry_bytes[..signed_entry_size])
 }
 
