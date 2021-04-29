@@ -10,6 +10,7 @@ use crate::atomic::Blake2BArrayVec;
 use arrayvec::ArrayVec;
 use ed25519_dalek::PublicKey;
 
+
 /// Takes an [`EntrySigned`] and a [`MessageEncoded`]
 ///
 /// validates the encoded message against the entry payload hash, returns the decoded message if valid
@@ -33,8 +34,11 @@ pub fn validate_message(entry_encoded: &EntrySigned, message_encoded: &MessageEn
     Ok(message)
 }
 
-/// Encode an entry
-pub fn encode_entry(entry: &Entry, public_key: &Box<[u8]>, entry_bytes: &mut [u8; MAX_ENTRY_SIZE]) -> Result<usize, EntrySignedError> {
+/// Takes an [`EntrySigned`] and a [`MessageEncoded`]
+///
+/// validates the encoded message against the entry payload hash, returns the decoded message if valid
+/// otherwise throws an error.
+pub fn encode_entry(entry: &Entry, public_key: &Box<[u8]>) -> Result<(usize, [u8; MAX_ENTRY_SIZE]), EntrySignedError> {
     // Generate message hash
     let message_encoded = match entry.message() {
         Some(message) => MessageEncoded::try_from(message)?,
@@ -70,23 +74,25 @@ pub fn encode_entry(entry: &Entry, public_key: &Box<[u8]>, entry_bytes: &mut [u8
         sig: None,
     };
 
+    let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
+    
     // Get entry bytes first for signing them with key pair
-    let unsigned_entry_size = entry.encode(entry_bytes)?;
-    Ok(unsigned_entry_size)
+    let entry_size = entry.encode(&mut entry_bytes)?;
+    Ok((entry_size, entry_bytes))
 }
 
 /// Sign an entry
-pub fn sign_entry(entry_bytes: &mut [u8; MAX_ENTRY_SIZE], unsigned_entry_size: usize, key_pair: &KeyPair) -> Result<usize, EntrySignedError>{
-    let entry_bytes_copy = entry_bytes.clone();
-    let mut decoded_entry = decode(&entry_bytes_copy)?;
+pub fn sign_entry(entry_bytes: [u8; MAX_ENTRY_SIZE], unsigned_entry_size: usize, key_pair: &KeyPair) -> Result<(usize, [u8; MAX_ENTRY_SIZE]), EntrySignedError>{
+    let mut entry_bytes_copy = entry_bytes.clone();
+    let mut decoded_entry = decode(&entry_bytes)?;
     // Sign and add signature to entry
-    let sig_bytes = key_pair.sign(&entry_bytes[..unsigned_entry_size]);
+    let sig_bytes = key_pair.sign(&entry_bytes_copy[..unsigned_entry_size]);
     let signature = BambooSignature(&*sig_bytes);
     decoded_entry.sig = Some(signature);
 
     // Get entry bytes again, now with signature included
-    let signed_entry_size = decoded_entry.encode(entry_bytes)?;
-    Ok(signed_entry_size)
+    let signed_entry_size = decoded_entry.encode(&mut entry_bytes_copy)?;
+    Ok((signed_entry_size, entry_bytes_copy))
 }
 
 /// Takes an Entry and a KeyPair, returns signed and encoded entry in form of an
@@ -96,12 +102,11 @@ pub fn sign_entry(entry_bytes: &mut [u8; MAX_ENTRY_SIZE], unsigned_entry_size: u
 pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned, EntrySignedError> {
 
     // Get entry bytes first for signing them with key pair
-    let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
-    let unsigned_entry_size = encode_entry(entry, &key_pair.public_key_bytes(), &mut entry_bytes)?;
+    let (unsigned_entry_size, unsigned_entry_bytes) = encode_entry(entry, &key_pair.public_key_bytes())?;
     // Get entry bytes again, now with signature included
-    let signed_entry_size = sign_entry(&mut entry_bytes, unsigned_entry_size, key_pair)?;
+    let (signed_entry_size, signed_entry_bytes) = sign_entry(unsigned_entry_bytes, unsigned_entry_size, key_pair)?;
 
-    EntrySigned::try_from(&entry_bytes[..signed_entry_size])
+    EntrySigned::try_from(&signed_entry_bytes[..signed_entry_size])
 }
 
 /// Returns a decoded and unsigned [`Entry`].
