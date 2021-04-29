@@ -11,7 +11,7 @@ use crate::atomic::{
     MessageFields as MessageFieldsNonWasm, MessageValue, SeqNum,
 };
 use crate::key_pair::KeyPair;
-use crate::encoder::{sign_and_encode, decode};
+use crate::encoder::{sign_and_encode, decode_entry as decode};
 
 // Converts any Rust Error type into js_sys:Error while keeping its error
 // message. This helps propagating errors similar like we do in Rust but in
