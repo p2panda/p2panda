@@ -11,10 +11,8 @@ use arrayvec::ArrayVec;
 use ed25519_dalek::PublicKey;
 
 
-/// Takes an [`EntrySigned`] and a [`MessageEncoded`]
-///
-/// validates the encoded message against the entry payload hash, returns the decoded message if valid
-/// otherwise throws an error.
+/// Takes an [`EntrySigned`] and a [`MessageEncoded`], validates the encoded message against the entry payload hash, 
+/// returns the decoded message in the form of a [`Message`] if valid otherwise throws an error.
 pub fn validate_message(entry_encoded: &EntrySigned, message_encoded: &MessageEncoded) -> Result<Message, EntrySignedError> {
     // Convert to Entry from bamboo_rs_core first
     let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = entry_encoded.into();
@@ -34,7 +32,7 @@ pub fn validate_message(entry_encoded: &EntrySigned, message_encoded: &MessageEn
     Ok(message)
 }
 
-/// Takes an [`Entry`] and a public key, returns encoded entry bytes and size.
+/// Takes an [`Entry`] and a public key, returns a tuple containing encoded entry bytes and their size.
 pub fn encode_entry(entry: &Entry, public_key: &Box<[u8]>) -> Result<(usize, [u8; MAX_ENTRY_SIZE]), EntrySignedError> {
     // Generate message hash
     let message_encoded = match entry.message() {
@@ -78,7 +76,7 @@ pub fn encode_entry(entry: &Entry, public_key: &Box<[u8]>) -> Result<(usize, [u8
     Ok((entry_size, entry_bytes))
 }
 
-/// Takes unsigned entry bytes and size and a KeyPair, returns signed and encoded entry bytes and size
+/// Takes unsigned entry bytes and their size and a [`KeyPair`], returns a tuple containing signed and encoded entry bytes and their size.
 pub fn sign_entry(entry_bytes: [u8; MAX_ENTRY_SIZE], unsigned_entry_size: usize, key_pair: &KeyPair) -> Result<(usize, [u8; MAX_ENTRY_SIZE]), EntrySignedError>{
     // Make copy of entry_bytes before passing to decode
     let mut entry_bytes_copy = entry_bytes.clone();
@@ -96,7 +94,7 @@ pub fn sign_entry(entry_bytes: [u8; MAX_ENTRY_SIZE], unsigned_entry_size: usize,
     Ok((signed_entry_size, entry_bytes_copy))
 }
 
-/// Takes an Entry and a KeyPair, returns signed and encoded entry bytes in form of an
+/// Takes an [`Entry`] and a [`KeyPair`], returns signed and encoded entry bytes in form of an
 /// [`EntrySigned`] instance.
 ///
 /// After signing the result is ready to be sent to a p2panda node.
@@ -112,10 +110,10 @@ pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned,
     EntrySigned::try_from(&signed_entry_bytes[..signed_entry_size])
 }
 
-/// Returns a decoded and unsigned [`Entry`].
-///
-/// Takes an [`EntrySigned`] and [`MessageEncoded`] as an optional argument.
-///
+/// Takes [`EntrySigned`] and optionally [`MessageEncoded`] as arguments, returns a decoded and unsigned [`Entry`]. When a [`MessageEncoded`] is passed
+/// it will automatically check its integrity with this [`Entry`] by comparing their hashes. Valid messages will be included in the returned 
+/// [`Entry`], if an invalid message is passed an error will be returned.
+/// 
 /// Entries are separated from the messages they refer to. Since messages can independently be
 /// deleted they can be passed on as an optional argument. When a [`Message`] is passed
 /// it will automatically check its integrity with this Entry by comparing their hashes.
