@@ -32,7 +32,7 @@ impl SeqNum {
     /// use p2panda_rs::atomic::SeqNum;
     ///
     /// // Generate new sequence number
-    /// let seq_num = SeqNum::new(2);
+    /// let seq_num = SeqNum::new(2)?;
     ///
     /// # Ok(())
     /// # }
@@ -52,11 +52,11 @@ impl SeqNum {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use p2panda_rs::atomic::SeqNum;
     ///
-    ///
-    ///
     /// // Return backlink (sequence number of the previous entry)
+    /// let seq_num = SeqNum::new(2)?;
+    /// let backlink = seq_num.backlink_seq_num();
     ///
-    ///
+    /// assert_eq!(backlink, Some(SeqNum::new(1)?));
     /// # Ok(())
     /// # }
     /// ```
