@@ -149,12 +149,11 @@ pub fn decode_entry(entry_encoded: &EntrySigned, message_encoded: Option<&Messag
 mod tests {
     use std::convert::TryFrom;
 
-    use crate::atomic::{Entry, Hash, LogId, Message, MessageEncoded, MessageFields, MessageValue, SeqNum};
+    use crate::atomic::MessageEncoded;
     use crate::key_pair::KeyPair;
     use crate::test_helpers::{mock_message, mock_entry};
-    use bamboo_rs_core::entry::decode;
 
-    use super::{encode_entry, decode_entry, sign_and_encode, validate_message};
+    use super::{decode_entry, sign_and_encode, validate_message};
 
     #[test]
     fn message_validation() {
