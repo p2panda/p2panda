@@ -151,7 +151,7 @@ mod tests {
 
     use crate::atomic::MessageEncoded;
     use crate::key_pair::KeyPair;
-    use crate::test_helpers::{mock_message, mock_entry};
+    use crate::test_helpers::{mock_message, mock_first_entry, mock_second_entry};
 
     use super::{decode_entry, sign_and_encode, validate_message};
 
@@ -161,7 +161,7 @@ mod tests {
         let key_pair = KeyPair::new();
         let message = mock_message(String::from("Hello!"));
         let encoded_message = MessageEncoded::try_from(&message).unwrap();
-        let entry = mock_entry(message);
+        let entry = mock_first_entry(message);
         let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
         
         // Correct message should pass validation 
@@ -175,11 +175,12 @@ mod tests {
     }
     #[test]
     fn entry_signing_and_encoding() {
-        // Prepare test values
         let key_pair = KeyPair::new();
+
+        // Prepare test values for first entry
         let message = mock_message(String::from("Hello!"));
         let encoded_message = MessageEncoded::try_from(&message).unwrap();
-        let entry = mock_entry(message);
+        let entry = mock_first_entry(message);
         
         // Sign and encode Entry
         let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
@@ -193,5 +194,27 @@ mod tests {
         assert_eq!(entry.seq_num(), decoded_entry.seq_num());
         assert_eq!(entry.backlink_hash(), decoded_entry.backlink_hash());
         assert_eq!(entry.skiplink_hash(), decoded_entry.skiplink_hash());
+        
+        // Prepare test values for second entry
+        let second_message = mock_message(String::from("Another hello!"));
+        let second_encoded_message = MessageEncoded::try_from(&second_message).unwrap();
+        let second_entry = mock_second_entry(signed_encoded_entry, second_message);
+        
+        // Sign and encode second Entry
+        let second_signed_encoded_entry = sign_and_encode(&second_entry, &key_pair).unwrap();
+
+        // Decode signed and encoded second Entry
+        let second_decoded_entry = decode_entry(
+            &second_signed_encoded_entry, 
+            Some(&second_encoded_message)
+        ).unwrap();
+        
+        // All decoded_entry and second_decoded_entry Entry params should not be equal
+        // except for LogId (1) and skiplink_hash (None) 
+        assert_eq!(decoded_entry.log_id(), second_decoded_entry.log_id());
+        assert_ne!(decoded_entry.message().unwrap(), second_decoded_entry.message().unwrap());
+        assert_ne!(decoded_entry.seq_num(), second_decoded_entry.seq_num());
+        assert_ne!(decoded_entry.backlink_hash(), second_decoded_entry.backlink_hash());
+        assert_eq!(decoded_entry.skiplink_hash(), second_decoded_entry.skiplink_hash());
     }
 }
