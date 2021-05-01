@@ -144,3 +144,55 @@ pub fn decode_entry(entry_encoded: &EntrySigned, message_encoded: Option<&Messag
         &SeqNum::new(entry.seq_num as i64).unwrap(),
     ).unwrap())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::convert::TryFrom;
+
+    use crate::atomic::{Entry, Hash, LogId, Message, MessageEncoded, MessageFields, MessageValue, SeqNum};
+    use crate::key_pair::KeyPair;
+    use crate::test_helpers::{mock_message, mock_entry};
+    use bamboo_rs_core::entry::decode;
+
+    use super::{encode_entry, decode_entry, sign_and_encode, validate_message};
+
+    #[test]
+    fn message_validation() {
+        // Prepare test values
+        let key_pair = KeyPair::new();
+        let message = mock_message(String::from("Hello!"));
+        let encoded_message = MessageEncoded::try_from(&message).unwrap();
+        let entry = mock_entry(message);
+        let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
+        
+        // Correct message should pass validation 
+        assert!(validate_message(&signed_encoded_entry, &encoded_message).is_ok());
+        
+        // A message with different content should fail validation
+        let bad_message = mock_message(String::from("Boo!"));
+        let bad_encoded_message = MessageEncoded::try_from(&bad_message).unwrap();
+        
+        assert!(validate_message(&signed_encoded_entry, &bad_encoded_message).is_err());
+    }
+    #[test]
+    fn entry_signing_and_encoding() {
+        // Prepare test values
+        let key_pair = KeyPair::new();
+        let message = mock_message(String::from("Hello!"));
+        let encoded_message = MessageEncoded::try_from(&message).unwrap();
+        let entry = mock_entry(message);
+        
+        // Sign and encode Entry
+        let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
+        
+        // Decode signed and encoded Entry
+        let decoded_entry = decode_entry(&signed_encoded_entry, Some(&encoded_message)).unwrap();
+        
+        // All Entry and decoded Entry params should be equal 
+        assert_eq!(entry.log_id(), decoded_entry.log_id());
+        assert_eq!(entry.message().unwrap(), decoded_entry.message().unwrap());
+        assert_eq!(entry.seq_num(), decoded_entry.seq_num());
+        assert_eq!(entry.backlink_hash(), decoded_entry.backlink_hash());
+        assert_eq!(entry.skiplink_hash(), decoded_entry.skiplink_hash());
+    }
+}

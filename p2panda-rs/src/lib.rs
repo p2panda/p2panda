@@ -72,3 +72,5 @@ pub mod schema;
 /// [p2panda-js]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
+/// Helper methods for testing
+pub mod test_helpers;
