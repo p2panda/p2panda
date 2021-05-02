@@ -151,7 +151,7 @@ mod tests {
 
     use crate::atomic::MessageEncoded;
     use crate::key_pair::KeyPair;
-    use crate::test_helpers::{mock_message, mock_first_entry, mock_second_entry};
+    use crate::test_helpers::{mock_message, mock_first_entry, mock_entry};
 
     use super::{decode_entry, sign_and_encode, validate_message};
 
@@ -198,7 +198,7 @@ mod tests {
         // Prepare test values for second entry
         let second_message = mock_message(String::from("Another hello!"));
         let second_encoded_message = MessageEncoded::try_from(&second_message).unwrap();
-        let second_entry = mock_second_entry(signed_encoded_entry, second_message);
+        let second_entry = mock_entry(second_message, Some(signed_encoded_entry), None, 2);
         
         // Sign and encode second Entry
         let second_signed_encoded_entry = sign_and_encode(&second_entry, &key_pair).unwrap();

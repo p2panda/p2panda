@@ -22,13 +22,24 @@ pub fn mock_first_entry(message: Message) -> Entry {
 }
 
 /// Returns a mock second entry for log with Id of 1
-pub fn mock_second_entry(first_entry: EntrySigned, message: Message) -> Entry {
+pub fn mock_entry(message: Message, backlink: Option<EntrySigned>, skiplink: Option<EntrySigned>, seq_no: i64) -> Entry {
+    
+    let entry_hash_backlink: Option<Hash> = match backlink {
+        Some(link) => Some(link.hash()),
+        None => None,
+    };
+
+    let entry_hash_skiplink: Option<Hash> = match skiplink {
+        Some(link) => Some(link.hash()),
+        None => None,
+    };
+
     Entry::new(
         &LogId::default(),
         Some(&message),
-        None,
-        Some(&first_entry.hash()),
-        &SeqNum::new(2).unwrap(),
+        entry_hash_skiplink.as_ref(),
+        entry_hash_backlink.as_ref(),
+        &SeqNum::new(seq_no).unwrap(),
     )
     .unwrap()
 }
