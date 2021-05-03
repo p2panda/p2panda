@@ -21,7 +21,7 @@ pub fn mock_first_entry(message: Message) -> Entry {
     .unwrap()
 }
 
-/// Returns a mock second entry for log with Id of 1
+/// Returns a mock entry for log with Id of 1
 pub fn mock_entry(message: Message, backlink: Option<EntrySigned>, skiplink: Option<EntrySigned>, seq_no: i64) -> Entry {
     
     let entry_hash_backlink: Option<Hash> = match backlink {
