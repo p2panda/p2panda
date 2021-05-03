@@ -149,7 +149,7 @@ pub fn decode_entry(entry_encoded: &EntrySigned, message_encoded: Option<&Messag
 mod tests {
     use std::convert::TryFrom;
 
-    use crate::atomic::MessageEncoded;
+    use crate::atomic::{EntrySigned, MessageEncoded, Message, MessageValue, SeqNum};
     use crate::key_pair::KeyPair;
     use crate::test_helpers::{mock_message, mock_first_entry, mock_entry};
 
@@ -216,5 +216,62 @@ mod tests {
         assert_ne!(decoded_entry.seq_num(), second_decoded_entry.seq_num());
         assert_ne!(decoded_entry.backlink_hash(), second_decoded_entry.backlink_hash());
         assert_eq!(decoded_entry.skiplink_hash(), second_decoded_entry.skiplink_hash());
+    }
+    #[test]
+    fn entry_signing_and_encoding_fixtures() {
+        let public_key = "ba07a8da75dd2f922d62eae7e7ac7c081e06bf0c192b2d8ea1b2ab5e9c59013e";
+        let private_key = "31f33f8e6c262f36a0e5397348093a459d66d8cb5946798ad62d5eb8e7645bdb";
+        let author = "ba07a8da75dd2f922d62eae7e7ac7c081e06bf0c192b2d8ea1b2ab5e9c59013e";
+        let entry_bytes= "00ba07a8da75dd2f922d62eae7e7ac7c081e06bf0c192b2d8ea1b2ab5e9c59013e01040040944b4ae2ff31d0adc13cf94ba43b766871b4e56e96d0eebbc1b9e2b8226d448e8bc1f9507a21894579578491ff778a008688c2a3e8a409fc37522d9eabaa114c004054f65f3ac2ccf13f5862eb7c29ac20e830e173d062416dfd03a27e8a2315b69f402cfa4ca741d243b184b1d8ff203cf1f1ec4619f44758263f19a75a3537e780ee00408960c9d4f864aef757d440bc5aa5a5c0d726312eddadad68f25d06fedd10f755d51a87565972f8c3d77ef7ac66531227131b0d8857fef749c3a98cfffae8519d1e8bdb78a27348232671acda6c16aca26148642b0e803e6e2e4dfc01ca0d46ea19546be7b4302b826363a6caa28fced7ef9fd847b35a49eb67b885d65af14305";
+        let entry_hash = "004073412203af4eedbddde3a8183647f3c788667b4e693ebdd38830eeaef10cbdf956587f0f571213ba5a86b2cbc5926c8b6b27e5f721a69ced281aa8ad57aa4404";
+        let log_id: i64 = 1;
+        let payload_bytes = "a466616374696f6e6663726561746566736368656d6178843030343063663934663664363035363537653930633534336230633931393037306364616166373230396335653165613538616362386633353638666132313134323638646339616333626166653132616632373764323836666365376463353962376330633334383937336334653964616362653739343835653536616332613730326776657273696f6e01666669656c6473a26464617465a164546578747818323032312d30352d30325432303a30363a34352e3433305a676d657373616765a164546578746d477574656e204d6f7267656e21";
+        let payload_hash = "00408960c9d4f864aef757d440bc5aa5a5c0d726312eddadad68f25d06fedd10f755d51a87565972f8c3d77ef7ac66531227131b0d8857fef749c3a98cfffae8519d";
+        let seq_num: i64 = 4;
+        let skiplink_hash = "0040944b4ae2ff31d0adc13cf94ba43b766871b4e56e96d0eebbc1b9e2b8226d448e8bc1f9507a21894579578491ff778a008688c2a3e8a409fc37522d9eabaa114c";
+        let backlink_hash = "004054f65f3ac2ccf13f5862eb7c29ac20e830e173d062416dfd03a27e8a2315b69f402cfa4ca741d243b184b1d8ff203cf1f1ec4619f44758263f19a75a3537e780";
+        
+        // Create MessageEncoded from payload_bytes
+        let encoded_message = MessageEncoded::new(&payload_bytes).unwrap();
+        
+        // Encoded message hash should equal payload_hash
+        assert_eq!(encoded_message.hash().as_hex(), payload_hash.to_owned());
+        
+        // Decode MessageEncoded
+        let message = Message::try_from(&encoded_message).unwrap();
+        let message_fields = message.fields().unwrap();
+        let message_value = message_fields.get("message").unwrap();
+        let date_value = message_fields.get("date").unwrap();
+
+        // Decoded message content should match correct values
+        assert_eq!(message_value.to_owned(), MessageValue::Text("Guten Morgen!".to_owned()));
+        assert_eq!(date_value.to_owned(), MessageValue::Text("2021-05-02T20:06:45.430Z".to_owned()));
+        
+        // Decoded message content should NOT match incorrect values
+        assert_ne!(message_value.to_owned(), MessageValue::Text("Guten Abend!".to_owned()));
+        assert_ne!(date_value.to_owned(), MessageValue::Text("2221-05-02T20:06:45.430Z".to_owned()));
+        
+        // Decode entry_bytes
+        let encoded_entry = EntrySigned::new(entry_bytes).unwrap();
+        let entry = decode_entry(&encoded_entry, Some(&encoded_message)).unwrap();
+        
+        // Decoded entry values should equal correct values
+        assert_eq!(entry.message().unwrap().to_owned(), message);
+        assert_eq!(entry.seq_num().to_owned(), SeqNum::new(seq_num).unwrap());
+        assert_eq!(entry.backlink_hash().unwrap().as_hex(), backlink_hash);
+        assert_eq!(entry.skiplink_hash().unwrap().as_hex(), skiplink_hash);
+        assert_eq!(entry.log_id().as_i64(), log_id);
+
+        // Re-sign and encode them using matching KeyPair
+        let key_pair = KeyPair::from_private_key(private_key.to_owned()).unwrap();
+        let re_signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
+        
+        // Public key and author should be correct
+        assert_eq!(key_pair.public_key(), public_key.to_owned());
+        assert_eq!(key_pair.public_key(), author.to_owned());
+
+        // Re-signed entry values should equal original values
+        assert_eq!(re_signed_encoded_entry.as_str(), entry_bytes.to_owned());
+        assert_eq!(re_signed_encoded_entry.hash().as_hex(), entry_hash.to_owned());
     }
 }
