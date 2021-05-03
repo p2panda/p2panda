@@ -68,7 +68,6 @@ impl Entry {
             entry_hash_backlink: entry_hash_backlink.cloned(),
             seq_num: seq_num.clone(),
         };
-        println!("{:?}", entry);
         entry.validate()?;
 
         Ok(entry)
