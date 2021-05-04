@@ -89,7 +89,7 @@ pub enum MessageValue {
 /// a `MessageFields` instance is attached to a `Message`, the message's schema determines which
 /// fields may be used.
 ///
-/// Internally message fields use sorted B-Tree maps to assure ordering of the fields.  If the
+/// Internally message fields use sorted B-Tree maps to assure ordering of the fields. If the
 /// message fields would not be sorted consistently we would get different hash results for the
 /// same contents.
 ///
@@ -217,6 +217,31 @@ pub enum MessageError {
 
 impl Message {
     /// Returns new create message.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use p2panda_rs::atomic::Message;
+    /// use p2panda_rs::atomic::Hash;
+    /// use p2panda_rs::atomic::{MessageFields, MessageValue};
+    ///
+    /// let SCHEMA_HASH_STR = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
+    /// let schema_msg_hash = Hash::new(SCHEMA_HASH_STR)?;
+    /// let mut msg_fields = MessageFields::new();
+    ///
+    /// msg_fields
+    ///     .add("Zoo", MessageValue::Text("Pandas, Doggos, Cats, and Parrots!".to_owned()))
+    ///     .unwrap();
+    ///
+    /// let create_message = Message::new_create(schema_msg_hash, msg_fields)?;
+    ///
+    /// assert_eq!(Message::is_create(&create_message), true);
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new_create(schema: Hash, fields: MessageFields) -> Result<Self, MessageError> {
         let message = Self {
             action: MessageAction::Create,
@@ -419,11 +444,8 @@ mod tests {
             .add("b", MessageValue::Text("penguin".to_owned()))
             .unwrap();
 
-        let first_message = Message::new_create(
-            Hash::new_from_bytes(vec![1, 255, 0]).unwrap(),
-            fields,
-        )
-        .unwrap();
+        let first_message =
+            Message::new_create(Hash::new_from_bytes(vec![1, 255, 0]).unwrap(), fields).unwrap();
 
         // Create second test message with same values but different order of fields
         let mut second_fields = MessageFields::new();
