@@ -32,8 +32,12 @@ pub fn validate_message(entry_encoded: &EntrySigned, message_encoded: &MessageEn
     Ok(message)
 }
 
-/// Takes an [`Entry`] and a public key, returns a tuple containing encoded entry bytes and their size.
-pub fn encode_entry(entry: &Entry, public_key: &Box<[u8]>) -> Result<(usize, [u8; MAX_ENTRY_SIZE]), EntrySignedError> {
+/// Takes an [`Entry`] and a [`KeyPair`], returns signed and encoded entry bytes in form of an
+/// [`EntrySigned`] instance.
+///
+/// After signing the result is ready to be sent to a p2panda node.
+pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned, EntrySignedError> {
+
     // Generate message hash
     let message_encoded = match entry.message() {
         Some(message) => MessageEncoded::try_from(message)?,
@@ -48,7 +52,6 @@ pub fn encode_entry(entry: &Entry, public_key: &Box<[u8]>) -> Result<(usize, [u8
         if entry.skiplink_hash().is_none() {
             return Err(EntrySignedError::SkiplinkMissing);
         }
-
         entry.skiplink_hash().map(|link| link.to_owned().into())
     } else {
         // Omit skiplink when it is the same as backlink, this saves us some bytes
@@ -57,12 +60,12 @@ pub fn encode_entry(entry: &Entry, public_key: &Box<[u8]>) -> Result<(usize, [u8
 
     // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
     // details and definition of entry fields.
-    let entry: BambooEntry<_, &[u8]> = BambooEntry {
+    let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
         log_id: entry.log_id().as_i64() as u64,
         is_end_of_feed: false,
         payload_hash: message_hash.into(),
         payload_size: message_size as u64,
-        author: PublicKey::from_bytes(public_key)?,
+        author: PublicKey::from_bytes(&key_pair.public_key_bytes())?,
         seq_num: entry.seq_num().as_i64() as u64,
         backlink,
         lipmaa_link,
@@ -73,41 +76,17 @@ pub fn encode_entry(entry: &Entry, public_key: &Box<[u8]>) -> Result<(usize, [u8
     
     // Get unsigned entry bytes
     let entry_size = entry.encode(&mut entry_bytes)?;
-    Ok((entry_size, entry_bytes))
-}
-
-/// Takes unsigned entry bytes and their size and a [`KeyPair`], returns a tuple containing signed and encoded entry bytes and their size.
-pub fn sign_entry(entry_bytes: [u8; MAX_ENTRY_SIZE], unsigned_entry_size: usize, key_pair: &KeyPair) -> Result<(usize, [u8; MAX_ENTRY_SIZE]), EntrySignedError>{
-    // Make copy of entry_bytes before passing to decode
-    let mut entry_bytes_copy = entry_bytes.clone();
-    
-    // Decode unsigned entry bytes
-    let mut entry = decode(&entry_bytes)?;
     
     // Sign and add signature to entry
-    let sig_bytes = key_pair.sign(&entry_bytes_copy[..unsigned_entry_size]);
+    let sig_bytes = key_pair.sign(&entry_bytes[..entry_size]);
     let signature = BambooSignature(&*sig_bytes);
     entry.sig = Some(signature);
 
     // Get signed entry bytes
-    let signed_entry_size = entry.encode(&mut entry_bytes_copy)?;
-    Ok((signed_entry_size, entry_bytes_copy))
-}
+    let signed_entry_size = entry.encode(&mut entry_bytes)?;
 
-/// Takes an [`Entry`] and a [`KeyPair`], returns signed and encoded entry bytes in form of an
-/// [`EntrySigned`] instance.
-///
-/// After signing the result is ready to be sent to a p2panda node.
-pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned, EntrySignedError> {
-
-    // Get unsigned entry bytes
-    let (unsigned_entry_size, unsigned_entry_bytes) = encode_entry(entry, &key_pair.public_key_bytes())?;
-    
-    // Sign entry and get signed entry bytes
-    let (signed_entry_size, signed_entry_bytes) = sign_entry(unsigned_entry_bytes, unsigned_entry_size, key_pair)?;
-    
     // Return signed entry bytes in the form of an EntrySigned
-    EntrySigned::try_from(&signed_entry_bytes[..signed_entry_size])
+    EntrySigned::try_from(&entry_bytes[..signed_entry_size])
 }
 
 /// Takes [`EntrySigned`] and optionally [`MessageEncoded`] as arguments, returns a decoded and unsigned [`Entry`]. When a [`MessageEncoded`] is passed
