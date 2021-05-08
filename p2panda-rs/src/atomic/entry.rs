@@ -83,8 +83,6 @@ pub enum EntryError {
 /// # let BACKLINK_HASH_STR = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
 /// # let SKIPLINK_HASH_STR = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
 /// # let SCHEMA_HASH_STR = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
-/// # let LOG_ID: i64 = 1;
-/// # let SEQ_NUM: i64 = 2;
 /// 
 /// // Create schema hash
 /// let schema_hash = Hash::new(SCHEMA_HASH_STR)?;
@@ -97,10 +95,10 @@ pub enum EntryError {
 /// let message = Message::new_create(schema_hash, fields)?;
 ///
 /// // Create log ID from i64
-/// let log_id = LogId::new(LOG_ID);
+/// let log_id = LogId::new(1);
 ///
 /// // Create sequence number from i64
-/// let seq_no = SeqNum::new(SEQ_NUM)?;
+/// let seq_no = SeqNum::new(2)?;
 ///
 /// // Create skiplink hash from string
 /// let skiplink_hash = Hash::new(&SKIPLINK_HASH_STR)?;
