@@ -1,4 +1,6 @@
-use crate::atomic::{Entry, EntrySigned, Hash, LogId, Message, MessageFields, MessageValue, SeqNum,};
+use crate::atomic::{
+    Entry, EntrySigned, Hash, LogId, Message, MessageFields, MessageValue, SeqNum,
+};
 
 /// Returns a Message for testing
 pub fn mock_message(text: String) -> Message {
@@ -12,18 +14,22 @@ pub fn mock_message(text: String) -> Message {
 /// Returns a mock first entry for log with Id of 1
 pub fn mock_first_entry(message: Message) -> Entry {
     Entry::new(
-        &LogId::default(), 
-        Some(&message), 
-        None, 
-        None, 
-        &SeqNum::new(1).unwrap()
+        &LogId::default(),
+        Some(&message),
+        None,
+        None,
+        &SeqNum::new(1).unwrap(),
     )
     .unwrap()
 }
 
 /// Returns a mock entry for log with Id of 1
-pub fn mock_entry(message: Message, backlink: Option<EntrySigned>, skiplink: Option<EntrySigned>, seq_no: i64) -> Entry {
-    
+pub fn mock_entry(
+    message: Message,
+    backlink: Option<EntrySigned>,
+    skiplink: Option<EntrySigned>,
+    seq_no: i64,
+) -> Entry {
     let entry_hash_backlink: Option<Hash> = match backlink {
         Some(link) => Some(link.hash()),
         None => None,

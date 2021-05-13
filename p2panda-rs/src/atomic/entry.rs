@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::atomic::{Hash, LogId, Message, SeqNum, Validation};
+
 /// Error types for methods of `Entry` struct.
 #[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
@@ -60,7 +61,6 @@ impl Entry {
         entry_hash_backlink: Option<&Hash>,
         seq_num: &SeqNum,
     ) -> Result<Self, EntryError> {
-
         let entry = Self {
             log_id: log_id.clone().to_owned(),
             message: message.cloned(),
@@ -150,9 +150,11 @@ impl Validation for Entry {
 mod tests {
     use std::convert::TryFrom;
 
-    use crate::atomic::{Hash, LogId, Message, MessageEncoded, MessageFields, MessageValue, SeqNum,};
+    use crate::atomic::{
+        Hash, LogId, Message, MessageEncoded, MessageFields, MessageValue, SeqNum,
+    };
+    use crate::encoder::{decode_entry, sign_and_encode};
     use crate::key_pair::KeyPair;
-    use crate::encoder::{sign_and_encode, decode_entry};
 
     use super::Entry;
 
@@ -168,7 +170,14 @@ mod tests {
         let backlink = Hash::new_from_bytes(vec![7, 8, 9]).unwrap();
 
         // The first entry in a log doesn't need and cannot have references to previous entries
-        assert!(Entry::new(&LogId::default(), Some(&message), None, None, &SeqNum::new(1).unwrap()).is_ok());
+        assert!(Entry::new(
+            &LogId::default(),
+            Some(&message),
+            None,
+            None,
+            &SeqNum::new(1).unwrap()
+        )
+        .is_ok());
 
         // Try to pass them over anyways, it will be invalidated
         assert!(Entry::new(
@@ -210,6 +219,7 @@ mod tests {
         )
         .is_err());
     }
+
     #[test]
     fn sign_and_encode_test() {
         // Generate Ed25519 key pair to sign entry with
@@ -225,13 +235,21 @@ mod tests {
 
         // Create a p2panda entry, then sign it. For this encoding, the entry is converted into a
         // bamboo-rs-core entry, which means that it also doesn't contain the message anymore
-        let entry = Entry::new(&LogId::default(), Some(&message), None, None, &SeqNum::new(1).unwrap()).unwrap();
+        let entry = Entry::new(
+            &LogId::default(),
+            Some(&message),
+            None,
+            None,
+            &SeqNum::new(1).unwrap(),
+        )
+        .unwrap();
         let entry_first_encoded = sign_and_encode(&entry, &key_pair).unwrap();
 
         // Make an unsigned, decoded p2panda entry from the signed and encoded form. This is adding
         // the message back
         let message_encoded = MessageEncoded::try_from(&message).unwrap();
-        let entry_decoded: Entry = decode_entry(&entry_first_encoded, Some(&message_encoded)).unwrap();
+        let entry_decoded: Entry =
+            decode_entry(&entry_first_encoded, Some(&message_encoded)).unwrap();
 
         // Re-encode the recovered entry to be able to check that we still have the same data
         let test_entry_signed_encoded = sign_and_encode(&entry_decoded, &key_pair).unwrap();

@@ -181,6 +181,7 @@ impl MessageFields {
         self.0.get(name)
     }
 }
+
 /// Messages describe data mutations in the p2panda network. Authors send messages to create,
 /// update or delete instances or collections of data.
 ///
@@ -419,11 +420,8 @@ mod tests {
             .add("b", MessageValue::Text("penguin".to_owned()))
             .unwrap();
 
-        let first_message = Message::new_create(
-            Hash::new_from_bytes(vec![1, 255, 0]).unwrap(),
-            fields,
-        )
-        .unwrap();
+        let first_message =
+            Message::new_create(Hash::new_from_bytes(vec![1, 255, 0]).unwrap(), fields).unwrap();
 
         // Create second test message with same values but different order of fields
         let mut second_fields = MessageFields::new();

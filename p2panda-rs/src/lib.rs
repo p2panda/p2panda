@@ -53,10 +53,10 @@
 
 /// Basic structs and methods to interact with p2panda data structures.
 pub mod atomic;
-/// Methods to generate key pairs or "authors" to sign data with.
-pub mod key_pair;
 /// Methods methods for signing, encoding and decoding entries.
 pub mod encoder;
+/// Methods to generate key pairs or "authors" to sign data with.
+pub mod key_pair;
 /// Validations for message payloads and definitions of system schemas.
 ///
 /// This uses [`Concise Data Definition Language`] (CDDL) internally to verify CBOR data of p2panda
@@ -64,6 +64,8 @@ pub mod encoder;
 ///
 /// [`Concise Data Definition Language`]: https://tools.ietf.org/html/rfc8610
 pub mod schema;
+/// Helper methods for testing
+pub mod test_helpers;
 /// Methods exported for WebAssembly targets.
 ///
 /// Wrappers for these methods are available in [p2panda-js], which allows idiomatic
@@ -72,5 +74,3 @@ pub mod schema;
 /// [p2panda-js]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
-/// Helper methods for testing
-pub mod test_helpers;

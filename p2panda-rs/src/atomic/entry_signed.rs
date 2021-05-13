@@ -19,7 +19,7 @@ pub enum EntrySignedError {
     /// Message needs to match payload hash of encoded entry
     #[error("message needs to match payload hash of encoded entry")]
     MessageHashMismatch,
- 
+
     /// Can not sign and encode an entry without a `Message`.
     #[error("entry does not contain any message")]
     MessageMissing,
@@ -27,15 +27,15 @@ pub enum EntrySignedError {
     /// Skiplink is required for entry encoding.
     #[error("entry requires skiplink for encoding")]
     SkiplinkMissing,
-       
+
     /// Handle errors from [`atomic::SeqNum`] struct.
     #[error(transparent)]
     SeqNumError(#[from] crate::atomic::error::SeqNumError),
-        
+
     /// Handle errors from [`atomic::Hash`] struct.
     #[error(transparent)]
     HashError(#[from] crate::atomic::error::HashError),
-   
+
     /// Handle errors from [`atomic::MessageEncoded`] struct.
     #[error(transparent)]
     MessageEncodedError(#[from] crate::atomic::error::MessageEncodedError),
@@ -106,7 +106,7 @@ impl EntrySigned {
     /// Returns payload size (number of bytes) of total encoded entry.
     pub fn size(&self) -> i64 {
         self.0.len() as i64 / 2
-    }    
+    }
 }
 
 /// Converts an `EntrySigned` into a Bamboo Entry to interact with the `bamboo_rs` crate.
