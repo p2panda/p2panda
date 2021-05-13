@@ -10,8 +10,9 @@ use crate::key_pair::KeyPair;
 use arrayvec::ArrayVec;
 use ed25519_dalek::PublicKey;
 
-/// Takes an [`EntrySigned`] and a [`MessageEncoded`], validates the encoded message against the entry payload hash,
-/// returns the decoded message in the form of a [`Message`] if valid otherwise throws an error.
+/// Takes an [`EntrySigned`] and a [`MessageEncoded`], validates the encoded message against the
+/// entry payload hash, returns the decoded message in the form of a [`Message`] if valid otherwise
+/// throws an error.
 pub fn validate_message(
     entry_encoded: &EntrySigned,
     message_encoded: &MessageEncoded,
@@ -89,13 +90,14 @@ pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned,
     EntrySigned::try_from(&entry_bytes[..signed_entry_size])
 }
 
-/// Takes [`EntrySigned`] and optionally [`MessageEncoded`] as arguments, returns a decoded and unsigned [`Entry`]. When a [`MessageEncoded`] is passed
-/// it will automatically check its integrity with this [`Entry`] by comparing their hashes. Valid messages will be included in the returned
-/// [`Entry`], if an invalid message is passed an error will be returned.
+/// Takes [`EntrySigned`] and optionally [`MessageEncoded`] as arguments, returns a decoded and
+/// unsigned [`Entry`]. When a [`MessageEncoded`] is passed it will automatically check its
+/// integrity with this [`Entry`] by comparing their hashes. Valid messages will be included in the
+/// returned [`Entry`], if an invalid message is passed an error will be returned.
 ///
 /// Entries are separated from the messages they refer to. Since messages can independently be
-/// deleted they can be passed on as an optional argument. When a [`Message`] is passed
-/// it will automatically check its integrity with this Entry by comparing their hashes.
+/// deleted they can be passed on as an optional argument. When a [`Message`] is passed it will
+/// automatically check its integrity with this Entry by comparing their hashes.
 pub fn decode_entry(
     entry_encoded: &EntrySigned,
     message_encoded: Option<&MessageEncoded>,
@@ -156,6 +158,7 @@ mod tests {
 
         assert!(validate_message(&signed_encoded_entry, &bad_encoded_message).is_err());
     }
+
     #[test]
     fn entry_signing_and_encoding() {
         let key_pair = KeyPair::new();
@@ -207,6 +210,7 @@ mod tests {
             second_decoded_entry.skiplink_hash()
         );
     }
+
     #[test]
     fn entry_signing_and_encoding_fixtures() {
         let public_key = "ba07a8da75dd2f922d62eae7e7ac7c081e06bf0c192b2d8ea1b2ab5e9c59013e";
