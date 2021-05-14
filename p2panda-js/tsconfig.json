@@ -2,6 +2,7 @@
   "extends": "@tsconfig/node12/tsconfig.json",
   "compilerOptions": {
     "baseUrl": ".",
+    "noImplicitAny": false,
     "outDir": "./lib",
     "paths": {
       "~/*": ["./src/*"],
