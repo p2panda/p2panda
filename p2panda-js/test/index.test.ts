@@ -56,7 +56,7 @@ describe('Entries', () => {
       null,
       null,
       null,
-      BigInt(LOG_ID),
+      LOG_ID,
     );
 
     expect(entryHash.length).to.eq(132);
