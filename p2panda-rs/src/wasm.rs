@@ -123,14 +123,18 @@ struct SignEncodeEntryResult {
 ///
 /// `entry_backlink_hash`, `entry_skiplink_hash`, `previous_seq_num` and `log_id` are obtained by
 /// querying the `getEntryArguments` method of a p2panda node.
+///
+/// `previous_seq_num` and `log_id` are `i32` parameters even though they
+/// have 64 bits in the bamboo spec. Webkit doesn't support `BigInt` so
+/// it can't handle those large values.
 #[wasm_bindgen(js_name = signEncodeEntry)]
 pub fn sign_encode_entry(
     key_pair: &KeyPair,
     encoded_message: String,
     entry_skiplink_hash: Option<String>,
     entry_backlink_hash: Option<String>,
-    seq_num: i64,
-    log_id: i64,
+    seq_num: i32,
+    log_id: i32,
 ) -> Result<JsValue, JsValue> {
     // If skiplink_hash exists construct Hash
     let skiplink_hash = match entry_skiplink_hash {
@@ -145,7 +149,7 @@ pub fn sign_encode_entry(
     };
 
     // Create SeqNum instance
-    let seq_num = jserr!(SeqNum::new(seq_num));
+    let seq_num = jserr!(SeqNum::new(seq_num.into()));
 
     // Convert to Message
     let message_encoded = jserr!(MessageEncoded::new(&encoded_message));
@@ -153,7 +157,7 @@ pub fn sign_encode_entry(
 
     // Create Entry instance
     let entry = jserr!(Entry::new(
-        &LogId::new(log_id),
+        &LogId::new(log_id.into()),
         Some(&message),
         skiplink_hash.as_ref(),
         backlink_hash.as_ref(),

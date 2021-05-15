@@ -56,8 +56,8 @@ describe('Entries', () => {
       messageEncoded,
       null,
       null,
-      BigInt(SEQ_NO),
-      BigInt(LOG_ID),
+      SEQ_NO,
+      LOG_ID,
     );
 
     expect(entryHash.length).to.eq(132);
