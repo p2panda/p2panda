@@ -2,13 +2,13 @@ use std::convert::{TryFrom, TryInto};
 
 use bamboo_rs_core::entry::{decode, MAX_ENTRY_SIZE};
 use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature, YamfHash};
+use arrayvec::ArrayVec;
+use ed25519_dalek::PublicKey;
 
 use crate::atomic::error::EntrySignedError;
 use crate::atomic::Blake2BArrayVec;
 use crate::atomic::{Entry, EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum};
 use crate::key_pair::KeyPair;
-use arrayvec::ArrayVec;
-use ed25519_dalek::PublicKey;
 
 /// Takes an [`EntrySigned`] and a [`MessageEncoded`], validates the encoded message against the
 /// entry payload hash, returns the decoded message in the form of a [`Message`] if valid otherwise
