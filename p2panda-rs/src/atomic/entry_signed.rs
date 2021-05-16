@@ -1,7 +1,7 @@
 use std::convert::{TryFrom, TryInto};
 
 use arrayvec::ArrayVec;
-use bamboo_rs_core::Entry;
+use bamboo_rs_core::Entry as BambooEntry;
 use ed25519_dalek::Signature;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -78,14 +78,14 @@ impl EntrySigned {
     /// Returns `Author` who signed this entry.
     pub fn author(&self) -> Author {
         // Unwrap as we already validated entry
-        let entry: Entry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.try_into().unwrap();
+        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.try_into().unwrap();
         Author::try_from(entry.author).unwrap()
     }
 
     /// Returns Ed25519 signature of this entry.
     pub fn signature(&self) -> Signature {
         // Unwrap as we already validated entry and know it contains a signature
-        let entry: Entry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.try_into().unwrap();
+        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.try_into().unwrap();
 
         // Convert into Ed25519 Signature instance
         let array_vec = entry.sig.unwrap().0;
@@ -110,10 +110,10 @@ impl EntrySigned {
 }
 
 /// Converts an `EntrySigned` into a Bamboo Entry to interact with the `bamboo_rs` crate.
-impl From<&EntrySigned> for Entry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> {
+impl From<&EntrySigned> for BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> {
     fn from(signed_entry: &EntrySigned) -> Self {
         let entry_bytes = signed_entry.clone().to_bytes();
-        let entry_ref: Entry<&[u8], &[u8]> = entry_bytes.as_slice().try_into().unwrap();
+        let entry_ref: BambooEntry<&[u8], &[u8]> = entry_bytes.as_slice().try_into().unwrap();
         bamboo_rs_core::entry::into_owned(&entry_ref)
     }
 }
