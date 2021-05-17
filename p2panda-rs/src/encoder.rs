@@ -13,25 +13,20 @@ use crate::key_pair::KeyPair;
 /// Takes an [`EntrySigned`] and a [`MessageEncoded`], validates the encoded message against the
 /// entry payload hash, returns the decoded message in the form of a [`Message`] if valid otherwise
 /// throws an error.
-pub fn validate_message(
+pub fn safe_decode_message(
     entry_encoded: &EntrySigned,
     message_encoded: &MessageEncoded,
 ) -> Result<Message, EntrySignedError> {
     // Convert to Entry from bamboo_rs_core first
     let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = entry_encoded.into();
-    // Messages may be omitted because the entry still contains the message hash. If the
-    // message is explicitly included we require its hash to match.
-    let message = match message_encoded {
-        msg => {
-            let yamf_hash: YamfHash<Blake2BArrayVec> = (&msg.hash()).to_owned().into();
 
-            if yamf_hash != entry.payload_hash {
-                return Err(EntrySignedError::MessageHashMismatch);
-            }
-            Message::from(msg)
-        }
-    };
-    Ok(message)
+    // Message hash must match if it doesn't return an error
+    let yamf_hash: YamfHash<Blake2BArrayVec> = (&message_encoded.hash()).to_owned().into();
+    if yamf_hash != entry.payload_hash {
+        return Err(EntrySignedError::MessageHashMismatch);
+    }
+
+    Ok(Message::from(message_encoded))
 }
 
 /// Takes an [`Entry`] and a [`KeyPair`], returns signed and encoded entry bytes in form of an
@@ -106,7 +101,7 @@ pub fn decode_entry(
     let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = entry_encoded.into();
 
     let message = match message_encoded {
-        Some(msg) => Some(validate_message(entry_encoded, msg)?),
+        Some(msg) => Some(safe_decode_message(entry_encoded, msg)?),
         None => None,
     };
 
@@ -142,7 +137,7 @@ mod tests {
     };
     use crate::key_pair::KeyPair;
 
-    use super::{decode_entry, sign_and_encode, validate_message};
+    use super::{decode_entry, safe_decode_message, sign_and_encode};
 
     struct PandaTestFixture {
         entry_signed_encoded: EntrySigned,
@@ -214,7 +209,7 @@ mod tests {
     fn message_validation(entry: Entry, message: Message, key_pair: KeyPair) {
         let encoded_message = MessageEncoded::try_from(&message).unwrap();
         let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
-        assert!(validate_message(&signed_encoded_entry, &encoded_message).is_ok());
+        assert!(safe_decode_message(&signed_encoded_entry, &encoded_message).is_ok());
     }
 
     #[rstest]
