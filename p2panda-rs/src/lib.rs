@@ -13,9 +13,9 @@
 //! ```
 //! # extern crate p2panda_rs;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! # use std::convert::TryFrom;
-//! # use p2panda_rs::key_pair::KeyPair;
-//! # use p2panda_rs::atomic::{Entry, EntrySigned, Hash, LogId, SeqNum, Message, MessageFields, MessageValue};
+//! use std::convert::TryFrom;
+//! use p2panda_rs::key_pair::KeyPair;
+//! use p2panda_rs::atomic::{Entry, EntrySigned, Hash, LogId, SeqNum, Message, MessageFields, MessageValue};
 //! # let profile_schema = Hash::new_from_bytes(vec![1, 2, 3])?;
 //! // Generate new Ed25519 key pair
 //! let key_pair = KeyPair::new();
@@ -39,6 +39,7 @@
     missing_copy_implementations,
     missing_debug_implementations,
     missing_docs,
+    missing_doc_code_examples,
     trivial_casts,
     trivial_numeric_casts,
     unsafe_code,
