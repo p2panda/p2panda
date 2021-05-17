@@ -1,8 +1,8 @@
 use std::convert::{TryFrom, TryInto};
 
-use bamboo_rs_core::entry::{decode, MAX_ENTRY_SIZE};
-use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature, YamfHash};
 use arrayvec::ArrayVec;
+use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
+use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature, YamfHash};
 use ed25519_dalek::PublicKey;
 
 use crate::atomic::error::EntrySignedError;
@@ -134,39 +134,92 @@ pub fn decode_entry(
 mod tests {
     use std::convert::TryFrom;
 
-    use crate::atomic::{EntrySigned, Message, MessageEncoded, MessageValue, SeqNum};
+    use rstest::{fixture, rstest};
+
+    use crate::atomic::{
+        Entry, EntrySigned, Hash, LogId, Message, MessageEncoded, MessageFields, MessageValue,
+        SeqNum,
+    };
     use crate::key_pair::KeyPair;
-    use crate::test_helpers::{mock_entry, mock_first_entry, mock_message};
 
     use super::{decode_entry, sign_and_encode, validate_message};
 
-    #[test]
-    fn message_validation() {
-        // Prepare test values
-        let key_pair = KeyPair::new();
-        let message = mock_message(String::from("Hello!"));
-        let encoded_message = MessageEncoded::try_from(&message).unwrap();
-        let entry = mock_first_entry(message);
-        let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
-
-        // Correct message should pass validation
-        assert!(validate_message(&signed_encoded_entry, &encoded_message).is_ok());
-
-        // A message with different content should fail validation
-        let bad_message = mock_message(String::from("Boo!"));
-        let bad_encoded_message = MessageEncoded::try_from(&bad_message).unwrap();
-
-        assert!(validate_message(&signed_encoded_entry, &bad_encoded_message).is_err());
+    struct PandaTestFixture {
+        entry_signed_encoded: EntrySigned,
+        key_pair: KeyPair,
+        message_encoded: MessageEncoded,
+        entry: Entry,
     }
 
-    #[test]
-    fn entry_signing_and_encoding() {
-        let key_pair = KeyPair::new();
+    fn create_message_fields(keys: Vec<&str>, values: Vec<&str>) -> MessageFields {
+        let mut fields = MessageFields::new();
+        for (pos, key) in keys.iter().enumerate() {
+            fields
+                .add(
+                    key.to_owned(),
+                    MessageValue::Text(values.get(pos).unwrap().to_string()),
+                )
+                .unwrap();
+        }
+        fields
+    }
 
-        // Prepare test values for first entry
-        let message = mock_message(String::from("Hello!"));
+    #[fixture]
+    fn key_pair() -> KeyPair {
+        KeyPair::new()
+    }
+
+    #[fixture(keys=vec!["message", "date"], values=vec!["hello!", "2021-05-02T20:06:45.430Z"])]
+    fn message(keys: Vec<&str>, values: Vec<&str>) -> Message {
+        let fields = create_message_fields(keys, values);
+        Message::new_create(Hash::new_from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap()
+    }
+
+    #[fixture]
+    fn entry(message: Message) -> Entry {
+        Entry::new(
+            &LogId::default(),
+            Some(&message),
+            None,
+            None,
+            &SeqNum::new(1).unwrap(),
+        )
+        .unwrap()
+    }
+
+    #[fixture]
+    fn v0_1_0_fixture() -> PandaTestFixture {
+        PandaTestFixture {
+            entry_signed_encoded: EntrySigned::new("00ba07a8da75dd2f922d62eae7e7ac7c081e06bf0c192b2d8ea1b2ab5e9c59013e01040040944b4ae2ff31d0adc13cf94ba43b766871b4e56e96d0eebbc1b9e2b8226d448e8bc1f9507a21894579578491ff778a008688c2a3e8a409fc37522d9eabaa114c004054f65f3ac2ccf13f5862eb7c29ac20e830e173d062416dfd03a27e8a2315b69f402cfa4ca741d243b184b1d8ff203cf1f1ec4619f44758263f19a75a3537e780ee00408960c9d4f864aef757d440bc5aa5a5c0d726312eddadad68f25d06fedd10f755d51a87565972f8c3d77ef7ac66531227131b0d8857fef749c3a98cfffae8519d1e8bdb78a27348232671acda6c16aca26148642b0e803e6e2e4dfc01ca0d46ea19546be7b4302b826363a6caa28fced7ef9fd847b35a49eb67b885d65af14305").unwrap(),
+            message_encoded: MessageEncoded::new("a466616374696f6e6663726561746566736368656d6178843030343063663934663664363035363537653930633534336230633931393037306364616166373230396335653165613538616362386633353638666132313134323638646339616333626166653132616632373764323836666365376463353962376330633334383937336334653964616362653739343835653536616332613730326776657273696f6e01666669656c6473a26464617465a164546578747818323032312d30352d30325432303a30363a34352e3433305a676d657373616765a164546578746d477574656e204d6f7267656e21").unwrap(),
+            key_pair: KeyPair::from_private_key(String::from("31f33f8e6c262f36a0e5397348093a459d66d8cb5946798ad62d5eb8e7645bdb")).unwrap(),
+            entry: Entry::new(
+                &LogId::new(1),
+                Some(&Message::new_create(Hash::new("0040cf94f6d605657e90c543b0c919070cdaaf7209c5e1ea58acb8f3568fa2114268dc9ac3bafe12af277d286fce7dc59b7c0c348973c4e9dacbe79485e56ac2a702").unwrap(), create_message_fields(vec!["message", "date"], vec!["Guten Morgen!", "2021-05-02T20:06:45.430Z"])).unwrap()),
+                Some(&Hash::new("0040944b4ae2ff31d0adc13cf94ba43b766871b4e56e96d0eebbc1b9e2b8226d448e8bc1f9507a21894579578491ff778a008688c2a3e8a409fc37522d9eabaa114c").unwrap()),
+                Some(&Hash::new("004054f65f3ac2ccf13f5862eb7c29ac20e830e173d062416dfd03a27e8a2315b69f402cfa4ca741d243b184b1d8ff203cf1f1ec4619f44758263f19a75a3537e780").unwrap()),
+                &SeqNum::new(4).unwrap(),
+                ).unwrap(),
+        }
+    }
+    #[rstest(entry, message,
+        case(entry(message(vec!["message"], vec!["Hello!"])), message(vec!["message"], vec!["Hello!"])),
+        #[should_panic]
+        case(entry(message(vec!["message"], vec!["Hello!"])), message(vec!["message"], vec!["Boo!"])),
+        #[should_panic]
+        case(entry(message(vec!["message"], vec!["Hello!"])), message(vec!["date"], vec!["2021-05-02T20:06:45.430Z"])),
+        #[should_panic]
+        case(entry(message(vec!["message"], vec!["Hello!"])), message(vec!["message", "date"], vec!["Hello!", "2021-05-02T20:06:45.430Z"])),
+    )]
+    fn message_validation(entry: Entry, message: Message, key_pair: KeyPair) {
         let encoded_message = MessageEncoded::try_from(&message).unwrap();
-        let entry = mock_first_entry(message);
+        let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
+        assert!(validate_message(&signed_encoded_entry, &encoded_message).is_ok());
+    }
+
+    #[rstest]
+    fn entry_signing_and_encoding(entry: Entry, key_pair: KeyPair) {
+        let encoded_message = MessageEncoded::try_from(entry.message().unwrap()).unwrap();
 
         // Sign and encode Entry
         let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
@@ -180,107 +233,80 @@ mod tests {
         assert_eq!(entry.seq_num(), decoded_entry.seq_num());
         assert_eq!(entry.backlink_hash(), decoded_entry.backlink_hash());
         assert_eq!(entry.skiplink_hash(), decoded_entry.skiplink_hash());
+    }
 
-        // Prepare test values for second entry
-        let second_message = mock_message(String::from("Another hello!"));
-        let second_encoded_message = MessageEncoded::try_from(&second_message).unwrap();
-        let second_entry = mock_entry(second_message, Some(signed_encoded_entry), None, 2);
+    #[rstest(fixture, case::v0_1_0(v0_1_0_fixture()))]
+    fn fixture_sign_encode(fixture: PandaTestFixture) {
+        // Sign and encode fixture Entry
+        let entry_signed_encoded = sign_and_encode(&fixture.entry, &fixture.key_pair).unwrap();
 
-        // Sign and encode second Entry
-        let second_signed_encoded_entry = sign_and_encode(&second_entry, &key_pair).unwrap();
-
-        // Decode signed and encoded second Entry
-        let second_decoded_entry =
-            decode_entry(&second_signed_encoded_entry, Some(&second_encoded_message)).unwrap();
-
-        // All decoded_entry and second_decoded_entry Entry params should not be equal
-        // except for LogId (1) and skiplink_hash (None)
-        assert_eq!(decoded_entry.log_id(), second_decoded_entry.log_id());
-        assert_ne!(
-            decoded_entry.message().unwrap(),
-            second_decoded_entry.message().unwrap()
-        );
-        assert_ne!(decoded_entry.seq_num(), second_decoded_entry.seq_num());
-        assert_ne!(
-            decoded_entry.backlink_hash(),
-            second_decoded_entry.backlink_hash()
-        );
+        // fixture EntrySigned hash should equal newly encoded EntrySigned hash.
         assert_eq!(
-            decoded_entry.skiplink_hash(),
-            second_decoded_entry.skiplink_hash()
+            fixture.entry_signed_encoded.hash().as_hex(),
+            entry_signed_encoded.hash().as_hex()
         );
     }
 
-    #[test]
-    fn entry_signing_and_encoding_fixtures() {
-        let public_key = "ba07a8da75dd2f922d62eae7e7ac7c081e06bf0c192b2d8ea1b2ab5e9c59013e";
-        let private_key = "31f33f8e6c262f36a0e5397348093a459d66d8cb5946798ad62d5eb8e7645bdb";
-        let author = "ba07a8da75dd2f922d62eae7e7ac7c081e06bf0c192b2d8ea1b2ab5e9c59013e";
-        let entry_bytes= "00ba07a8da75dd2f922d62eae7e7ac7c081e06bf0c192b2d8ea1b2ab5e9c59013e01040040944b4ae2ff31d0adc13cf94ba43b766871b4e56e96d0eebbc1b9e2b8226d448e8bc1f9507a21894579578491ff778a008688c2a3e8a409fc37522d9eabaa114c004054f65f3ac2ccf13f5862eb7c29ac20e830e173d062416dfd03a27e8a2315b69f402cfa4ca741d243b184b1d8ff203cf1f1ec4619f44758263f19a75a3537e780ee00408960c9d4f864aef757d440bc5aa5a5c0d726312eddadad68f25d06fedd10f755d51a87565972f8c3d77ef7ac66531227131b0d8857fef749c3a98cfffae8519d1e8bdb78a27348232671acda6c16aca26148642b0e803e6e2e4dfc01ca0d46ea19546be7b4302b826363a6caa28fced7ef9fd847b35a49eb67b885d65af14305";
-        let entry_hash = "004073412203af4eedbddde3a8183647f3c788667b4e693ebdd38830eeaef10cbdf956587f0f571213ba5a86b2cbc5926c8b6b27e5f721a69ced281aa8ad57aa4404";
-        let log_id: i64 = 1;
-        let payload_bytes = "a466616374696f6e6663726561746566736368656d6178843030343063663934663664363035363537653930633534336230633931393037306364616166373230396335653165613538616362386633353638666132313134323638646339616333626166653132616632373764323836666365376463353962376330633334383937336334653964616362653739343835653536616332613730326776657273696f6e01666669656c6473a26464617465a164546578747818323032312d30352d30325432303a30363a34352e3433305a676d657373616765a164546578746d477574656e204d6f7267656e21";
-        let payload_hash = "00408960c9d4f864aef757d440bc5aa5a5c0d726312eddadad68f25d06fedd10f755d51a87565972f8c3d77ef7ac66531227131b0d8857fef749c3a98cfffae8519d";
-        let seq_num: i64 = 4;
-        let skiplink_hash = "0040944b4ae2ff31d0adc13cf94ba43b766871b4e56e96d0eebbc1b9e2b8226d448e8bc1f9507a21894579578491ff778a008688c2a3e8a409fc37522d9eabaa114c";
-        let backlink_hash = "004054f65f3ac2ccf13f5862eb7c29ac20e830e173d062416dfd03a27e8a2315b69f402cfa4ca741d243b184b1d8ff203cf1f1ec4619f44758263f19a75a3537e780";
-
-        // Create MessageEncoded from payload_bytes
-        let encoded_message = MessageEncoded::new(&payload_bytes).unwrap();
-
-        // Encoded message hash should equal payload_hash
-        assert_eq!(encoded_message.hash().as_hex(), payload_hash.to_owned());
-
-        // Decode MessageEncoded
-        let message = Message::try_from(&encoded_message).unwrap();
+    #[rstest(fixture, case::v0_1_0(v0_1_0_fixture()))]
+    fn fixture_decode_message(fixture: PandaTestFixture) {
+        // Decode fixture MessageEncoded
+        let message = Message::try_from(&fixture.message_encoded).unwrap();
         let message_fields = message.fields().unwrap();
-        let message_value = message_fields.get("message").unwrap();
-        let date_value = message_fields.get("date").unwrap();
 
-        // Decoded message content should match correct values
+        let fixture_message_fields = fixture.entry.message().unwrap().fields().unwrap();
+
+        // Decoded fixture MessageEncoded values should match fixture Entry message values
+        // Would be an improvement if we iterate over fields instead of using hard coded keys
         assert_eq!(
-            message_value.to_owned(),
-            MessageValue::Text("Guten Morgen!".to_owned())
+            message_fields.get("message").unwrap(),
+            fixture_message_fields.get("message").unwrap()
         );
+
         assert_eq!(
-            date_value.to_owned(),
-            MessageValue::Text("2021-05-02T20:06:45.430Z".to_owned())
+            message_fields.get("date").unwrap(),
+            fixture_message_fields.get("date").unwrap()
         );
 
-        // Decoded message content should NOT match incorrect values
-        assert_ne!(
-            message_value.to_owned(),
-            MessageValue::Text("Guten Abend!".to_owned())
-        );
-        assert_ne!(
-            date_value.to_owned(),
-            MessageValue::Text("2221-05-02T20:06:45.430Z".to_owned())
-        );
-
-        // Decode entry_bytes
-        let encoded_entry = EntrySigned::new(entry_bytes).unwrap();
-        let entry = decode_entry(&encoded_entry, Some(&encoded_message)).unwrap();
+        // Decode fixture EntrySigned
+        let entry = decode_entry(
+            &fixture.entry_signed_encoded,
+            Some(&fixture.message_encoded),
+        )
+        .unwrap();
 
         // Decoded entry values should equal correct values
-        assert_eq!(entry.message().unwrap().to_owned(), message);
-        assert_eq!(entry.seq_num().to_owned(), SeqNum::new(seq_num).unwrap());
-        assert_eq!(entry.backlink_hash().unwrap().as_hex(), backlink_hash);
-        assert_eq!(entry.skiplink_hash().unwrap().as_hex(), skiplink_hash);
-        assert_eq!(entry.log_id().as_i64(), log_id);
-
-        // Re-sign and encode them using matching KeyPair
-        let key_pair = KeyPair::from_private_key(private_key.to_owned()).unwrap();
-        let re_signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
-
-        // Public key and author should be correct
-        assert_eq!(key_pair.public_key(), public_key.to_owned());
-        assert_eq!(key_pair.public_key(), author.to_owned());
-
-        // Re-signed entry values should equal original values
-        assert_eq!(re_signed_encoded_entry.as_str(), entry_bytes.to_owned());
+        assert_eq!(entry.message().unwrap(), fixture.entry.message().unwrap());
+        assert_eq!(entry.seq_num(), fixture.entry.seq_num());
         assert_eq!(
-            re_signed_encoded_entry.hash().as_hex(),
-            entry_hash.to_owned()
+            entry.backlink_hash().unwrap(),
+            fixture.entry.backlink_hash().unwrap()
         );
+        assert_eq!(
+            entry.skiplink_hash().unwrap(),
+            fixture.entry.skiplink_hash().unwrap()
+        );
+        assert_eq!(entry.log_id(), fixture.entry.log_id());
+    }
+    #[rstest(fixture, case::v0_1_0(v0_1_0_fixture()))]
+    fn fixture_decode_entry(fixture: PandaTestFixture) {
+        // Decode fixture EntrySigned
+        let entry = decode_entry(
+            &fixture.entry_signed_encoded,
+            Some(&fixture.message_encoded),
+        )
+        .unwrap();
+
+        // Decoded Entry values should match fixture Entry values
+        assert_eq!(entry.message().unwrap(), fixture.entry.message().unwrap());
+        assert_eq!(entry.seq_num(), fixture.entry.seq_num());
+        assert_eq!(
+            entry.backlink_hash().unwrap(),
+            fixture.entry.backlink_hash().unwrap()
+        );
+        assert_eq!(
+            entry.skiplink_hash().unwrap(),
+            fixture.entry.skiplink_hash().unwrap()
+        );
+        assert_eq!(entry.log_id(), fixture.entry.log_id());
     }
 }

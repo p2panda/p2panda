@@ -60,3 +60,4 @@ wasm-bindgen = { version = "0.2.72" }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.2"
+rstest = "0.9.0"

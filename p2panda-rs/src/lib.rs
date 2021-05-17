@@ -64,8 +64,6 @@ pub mod key_pair;
 ///
 /// [`Concise Data Definition Language`]: https://tools.ietf.org/html/rfc8610
 pub mod schema;
-/// Helper methods for testing
-pub mod test_helpers;
 /// Methods exported for WebAssembly targets.
 ///
 /// Wrappers for these methods are available in [p2panda-js], which allows idiomatic
