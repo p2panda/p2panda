@@ -261,26 +261,6 @@ mod tests {
             message_fields.get("date").unwrap(),
             fixture_message_fields.get("date").unwrap()
         );
-
-        // Decode fixture EntrySigned
-        let entry = decode_entry(
-            &fixture.entry_signed_encoded,
-            Some(&fixture.message_encoded),
-        )
-        .unwrap();
-
-        // Decoded entry values should equal correct values
-        assert_eq!(entry.message().unwrap(), fixture.entry.message().unwrap());
-        assert_eq!(entry.seq_num(), fixture.entry.seq_num());
-        assert_eq!(
-            entry.backlink_hash().unwrap(),
-            fixture.entry.backlink_hash().unwrap()
-        );
-        assert_eq!(
-            entry.skiplink_hash().unwrap(),
-            fixture.entry.skiplink_hash().unwrap()
-        );
-        assert_eq!(entry.log_id(), fixture.entry.log_id());
     }
     #[rstest(fixture, case::v0_1_0(v0_1_0_fixture()))]
     fn fixture_decode_entry(fixture: PandaTestFixture) {
