@@ -193,7 +193,7 @@ pub fn decode_entry(
 
     // Convert encoded entry
     let entry_signed = jserr!(EntrySigned::new(&entry_encoded));
-    let entry: Entry = jserr!(decode(&entry_signed, message_encoded.as_ref()).unwrap());
+    let entry: Entry = jserr!(decode(&entry_signed, message_encoded.as_ref()));
 
     // Serialize struct to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&entry));
