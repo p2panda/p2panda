@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::btree_map::Iter;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -179,6 +180,16 @@ impl MessageFields {
         }
 
         self.0.get(name)
+    }
+    
+    /// Returns an array of existing message keys.
+    pub fn keys(&self) -> Vec<String> {
+        self.0.keys().cloned().collect()
+    }
+    
+    /// Returns an iterator of existing message fields.
+    pub fn iterator(&self) -> Iter<String, MessageValue> {
+        self.0.iter()
     }
 }
 
@@ -464,5 +475,22 @@ mod tests {
         .unwrap();
 
         assert_eq!(first_message.to_cbor(), second_message.to_cbor());
+    }
+
+    #[test]
+    fn field_iteration() {
+        // Create first test message
+        let mut fields = MessageFields::new();
+        fields
+            .add("a", MessageValue::Text("sloth".to_owned()))
+            .unwrap();
+        fields
+            .add("b", MessageValue::Text("penguin".to_owned()))
+            .unwrap();
+        
+        let mut field_iterator = fields.iterator();
+        
+        assert_eq!(field_iterator.next().unwrap().1, &MessageValue::Text("sloth".to_owned()));
+        assert_eq!(field_iterator.next().unwrap().1, &MessageValue::Text("penguin".to_owned()));
     }
 }
