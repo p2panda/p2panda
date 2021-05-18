@@ -4,7 +4,7 @@
 //! single-writer append-only log structure, created and signed by holders of private keys and
 //! stored inside the node database.
 //!
-/// [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
+//! [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 mod decode;
 mod encode;
 mod entry;

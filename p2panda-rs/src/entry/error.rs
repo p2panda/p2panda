@@ -8,11 +8,11 @@ pub enum EntryError {
     #[error("backlink and skiplink not valid for this sequence number")]
     InvalidLinks,
 
-    /// Handle errors from [`atomic::Hash`] struct.
+    /// Handle errors from [`hash::Hash`] struct.
     #[error(transparent)]
     HashError(#[from] crate::hash::HashError),
 
-    /// Handle errors from [`atomic::SeqNum`] struct.
+    /// Handle errors from [`entry::SeqNum`] struct.
     #[error(transparent)]
     SeqNumError(#[from] SeqNumError),
 }
@@ -37,15 +37,15 @@ pub enum EntrySignedError {
     #[error("entry requires skiplink for encoding")]
     SkiplinkMissing,
 
-    /// Handle errors from [`atomic::SeqNum`] struct.
+    /// Handle errors from [`entry::SeqNum`] struct.
     #[error(transparent)]
     SeqNumError(#[from] SeqNumError),
 
-    /// Handle errors from [`atomic::Hash`] struct.
+    /// Handle errors from [`hash::Hash`] struct.
     #[error(transparent)]
     HashError(#[from] crate::hash::HashError),
 
-    /// Handle errors from [`atomic::MessageEncoded`] struct.
+    /// Handle errors from [`message::MessageEncoded`] struct.
     #[error(transparent)]
     MessageEncodedError(#[from] crate::message::MessageEncodedError),
 
