@@ -6,7 +6,7 @@ use crate::hash::Hash;
 use crate::message::Message;
 use crate::Validate;
 
-/// Entry of an append-only log based on [`Bamboo specification`]. It describes the actual data in
+/// Entry of an append-only log based on [`Bamboo`] specification. It describes the actual data in
 /// the p2p network and is shared between nodes.
 ///
 /// Bamboo entries are the main data type of p2panda. Entries are organized in a distributed,
@@ -17,7 +17,7 @@ use crate::Validate;
 /// loosing the integrity of the log. Each entry only holds a hash of the message payload, this is
 /// why a message instance is required during entry signing.
 ///
-/// [`Bamboo specification`]: https://github.com/AljoschaMeyer/bamboo
+/// [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 ///
 /// ## Example
 ///
