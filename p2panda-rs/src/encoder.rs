@@ -200,6 +200,7 @@ mod tests {
                 ).unwrap(),
         }
     }
+    
     #[rstest(message)]
     #[case(message(vec!["message"], vec!["Hello!"]))]
     #[should_panic]
@@ -264,6 +265,7 @@ mod tests {
             fixture_message_fields.get("date").unwrap()
         );
     }
+    
     #[rstest(fixture, case::v0_1_0(v0_1_0_fixture()))]
     fn fixture_decode_entry(fixture: PandaTestFixture) {
         // Decode fixture EntrySigned
