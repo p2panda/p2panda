@@ -71,6 +71,8 @@
   },
   "dependencies": {
     "@open-rpc/client-js": "^1.6.3",
-    "debug": "^2.6.9"
+    "bufferutil": "^4.0.3",
+    "debug": "^2.6.9",
+    "utf-8-validate": "^5.0.5"
   }
 }
