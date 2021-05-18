@@ -1,12 +1,12 @@
 use std::convert::{TryFrom, TryInto};
 
 use arrayvec::ArrayVec;
-use bamboo_rs_core::Entry as BambooEntry;
+use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
 use ed25519_dalek::Signature;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::atomic::{Author, Hash, Validation};
+use crate::atomic::{Author, Blake2BArrayVec, Hash, MessageEncoded, Validation};
 
 /// Custom error types for `EntrySigned`.
 #[derive(Error, Debug)]
@@ -106,6 +106,23 @@ impl EntrySigned {
     /// Returns payload size (number of bytes) of total encoded entry.
     pub fn size(&self) -> i64 {
         self.0.len() as i64 / 2
+    }
+
+    /// Takes a [`MessageEncoded`] and validates it against the message hash encoded in this `EntrySigned`, returns a result containing the
+    /// [`MessageEncoded`] or an [`EntrySignedError`] if the message hashes didn't match.
+    pub fn validate_message(
+        &self,
+        message_encoded: &MessageEncoded,
+    ) -> Result<MessageEncoded, EntrySignedError> {
+        // Convert to Entry from bamboo_rs_core first
+        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.into();
+
+        // Message hash must match if it doesn't return an error
+        let yamf_hash: YamfHash<Blake2BArrayVec> = (&message_encoded.hash()).to_owned().into();
+        if yamf_hash != entry.payload_hash {
+            return Err(EntrySignedError::MessageHashMismatch);
+        }
+        Ok(message_encoded.to_owned())
     }
 }
 

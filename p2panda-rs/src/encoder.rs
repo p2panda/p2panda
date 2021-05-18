@@ -2,32 +2,12 @@ use std::convert::{TryFrom, TryInto};
 
 use arrayvec::ArrayVec;
 use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
-use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature, YamfHash};
+use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature};
 use ed25519_dalek::PublicKey;
 
 use crate::atomic::error::EntrySignedError;
-use crate::atomic::Blake2BArrayVec;
 use crate::atomic::{Entry, EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum};
 use crate::key_pair::KeyPair;
-
-/// Takes an [`EntrySigned`] and a [`MessageEncoded`], validates the encoded message against the
-/// entry payload hash, returns the decoded message in the form of a [`Message`] if valid otherwise
-/// throws an error.
-pub fn safe_decode_message(
-    entry_encoded: &EntrySigned,
-    message_encoded: &MessageEncoded,
-) -> Result<Message, EntrySignedError> {
-    // Convert to Entry from bamboo_rs_core first
-    let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = entry_encoded.into();
-
-    // Message hash must match if it doesn't return an error
-    let yamf_hash: YamfHash<Blake2BArrayVec> = (&message_encoded.hash()).to_owned().into();
-    if yamf_hash != entry.payload_hash {
-        return Err(EntrySignedError::MessageHashMismatch);
-    }
-
-    Ok(Message::from(message_encoded))
-}
 
 /// Takes an [`Entry`] and a [`KeyPair`], returns signed and encoded entry bytes in form of an
 /// [`EntrySigned`] instance.
@@ -101,7 +81,7 @@ pub fn decode_entry(
     let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = entry_encoded.into();
 
     let message = match message_encoded {
-        Some(msg) => Some(safe_decode_message(entry_encoded, msg)?),
+        Some(msg) => Some(Message::from(&entry_encoded.validate_message(msg)?)),
         None => None,
     };
 
@@ -137,7 +117,7 @@ mod tests {
     };
     use crate::key_pair::KeyPair;
 
-    use super::{decode_entry, safe_decode_message, sign_and_encode};
+    use super::{decode_entry, sign_and_encode};
 
     struct PandaTestFixture {
         entry_signed_encoded: EntrySigned,
@@ -206,6 +186,7 @@ mod tests {
         }
     }
 
+    // TODO: This test should be moved into EntrySigned once we have generalized test fixtures.
     #[rstest(message)]
     #[case(message(vec!["message"], vec!["Hello!"]))]
     #[should_panic]
@@ -217,7 +198,9 @@ mod tests {
     fn message_validation(entry: Entry, message: Message, key_pair: KeyPair) {
         let encoded_message = MessageEncoded::try_from(&message).unwrap();
         let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
-        assert!(safe_decode_message(&signed_encoded_entry, &encoded_message).is_ok());
+        assert!(signed_encoded_entry
+            .validate_message(&encoded_message)
+            .is_ok());
     }
 
     #[rstest]
