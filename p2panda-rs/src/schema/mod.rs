@@ -1,3 +1,9 @@
+//! Validations for message payloads and definitions of system schemas.
+//!
+//! This uses [`Concise Data Definition Language`] (CDDL) internally to verify CBOR data of p2panda
+//! messages.
+//!
+//! [`Concise Data Definition Language`]: https://tools.ietf.org/html/rfc8610
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
 

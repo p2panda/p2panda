@@ -1,20 +1,11 @@
 use bamboo_rs_core::lipmaa;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
-use crate::atomic::Validation;
+use crate::entry::SeqNumError;
+use crate::Validate;
 
 /// Start counting entries from here.
 pub const FIRST_SEQ_NUM: i64 = 1;
-
-/// Custom error types for `SeqNum`.
-#[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
-pub enum SeqNumError {
-    /// Sequence numbers are always positive.
-    #[error("sequence number can not be zero or negative")]
-    NotZeroOrNegative,
-}
 
 /// Sequence number describing the position of an entry in its append-only log.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -29,7 +20,7 @@ impl SeqNum {
     /// ```
     /// # extern crate p2panda_rs;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// use p2panda_rs::atomic::SeqNum;
+    /// use p2panda_rs::entry::SeqNum;
     ///
     /// // Generate new sequence number
     /// let seq_num = SeqNum::new(2)?;
@@ -50,7 +41,7 @@ impl SeqNum {
     /// ```
     /// # extern crate p2panda_rs;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// use p2panda_rs::atomic::SeqNum;
+    /// use p2panda_rs::entry::SeqNum;
     ///
     /// // Return backlink (sequence number of the previous entry)
     /// let seq_num = SeqNum::new(2)?;
@@ -92,7 +83,7 @@ impl Default for SeqNum {
 
 impl Copy for SeqNum {}
 
-impl Validation for SeqNum {
+impl Validate for SeqNum {
     type Error = SeqNumError;
 
     fn validate(&self) -> Result<(), Self::Error> {

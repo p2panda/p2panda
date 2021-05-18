@@ -14,9 +14,10 @@
 //! # extern crate p2panda_rs;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! # use std::convert::TryFrom;
-//! # use p2panda_rs::key_pair::KeyPair;
-//! # use p2panda_rs::encoder::sign_and_encode;
-//! # use p2panda_rs::atomic::{Entry, EntrySigned, Hash, LogId, SeqNum, Message, MessageFields, MessageValue};
+//! # use p2panda_rs::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
+//! # use p2panda_rs::hash::Hash;
+//! # use p2panda_rs::identity::KeyPair;
+//! # use p2panda_rs::message::{Message, MessageFields, MessageValue};
 //! # let profile_schema = Hash::new_from_bytes(vec![1, 2, 3])?;
 //! // Generate new Ed25519 key pair
 //! let key_pair = KeyPair::new();
@@ -52,24 +53,19 @@
     unused_qualifications
 )]
 
-/// Basic structs and methods to interact with p2panda data structures.
-pub mod atomic;
-/// Methods methods for signing, encoding and decoding entries.
-pub mod encoder;
-/// Methods to generate key pairs or "authors" to sign data with.
-pub mod key_pair;
-/// Validations for message payloads and definitions of system schemas.
-///
-/// This uses [`Concise Data Definition Language`] (CDDL) internally to verify CBOR data of p2panda
-/// messages.
-///
-/// [`Concise Data Definition Language`]: https://tools.ietf.org/html/rfc8610
+pub mod entry;
+pub mod hash;
+pub mod identity;
+pub mod message;
 pub mod schema;
-/// Methods exported for WebAssembly targets.
-///
-/// Wrappers for these methods are available in [p2panda-js], which allows idiomatic
-/// usage of `p2panda-rs` in a Javascript/Typescript environment.
-///
-/// [p2panda-js]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
+
+/// Trait used by p2panda structs to validate arguments.
+pub trait Validate {
+    /// Validation error type.
+    type Error;
+
+    /// Validates p2panda data type instance.
+    fn validate(&self) -> Result<(), Self::Error>;
+}

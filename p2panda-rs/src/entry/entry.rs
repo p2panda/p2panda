@@ -1,25 +1,10 @@
 use bamboo_rs_core::entry::is_lipmaa_required;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
-use crate::atomic::{Hash, LogId, Message, SeqNum, Validation};
-
-/// Error types for methods of `Entry` struct.
-#[allow(missing_copy_implementations)]
-#[derive(Error, Debug)]
-pub enum EntryError {
-    /// Links should not be set when first entry in log.
-    #[error("backlink and skiplink not valid for this sequence number")]
-    InvalidLinks,
-
-    /// Handle errors from [`atomic::Hash`] struct.
-    #[error(transparent)]
-    HashError(#[from] crate::atomic::error::HashError),
-
-    /// Handle errors from [`atomic::SeqNum`] struct.
-    #[error(transparent)]
-    SeqNumError(#[from] crate::atomic::error::SeqNumError),
-}
+use crate::entry::{EntryError, LogId, SeqNum};
+use crate::hash::Hash;
+use crate::message::Message;
+use crate::Validate;
 
 /// Entry of an append-only log based on [`Bamboo specification`]. It describes the actual data in
 /// the p2p network and is shared between nodes.
@@ -39,7 +24,9 @@ pub enum EntryError {
 /// ```
 /// # extern crate p2panda_rs;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// use p2panda_rs::atomic::{Entry, Hash, LogId, Message, MessageFields, MessageValue, SeqNum};
+/// use p2panda_rs::entry::{Entry, LogId, SeqNum};
+/// use p2panda_rs::message::{Message, MessageFields, MessageValue};
+/// use p2panda_rs::hash::Hash;
 /// # let SCHEMA_HASH_STR = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
 ///
 /// // == FIRST ENTRY IN NEW LOG == //
@@ -64,18 +51,20 @@ pub enum EntryError {
 /// )?;
 /// # Ok(())
 /// # }
-///```
+/// ```
 /// ## Example
-///```
+/// ```
 /// # extern crate p2panda_rs;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// use p2panda_rs::atomic::{Entry, Hash, LogId, Message, MessageFields, MessageValue, SeqNum};
+/// use p2panda_rs::entry::{Entry, LogId, SeqNum};
+/// use p2panda_rs::message::{Message, MessageFields, MessageValue};
+/// use p2panda_rs::hash::Hash;
 ///
 /// // == ENTRY IN EXISTING LOG ==
 /// # let backlink_hash_string = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
 /// # let skiplink_hash_string = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
 /// # let schema_hash_string = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
-/// 
+///
 /// // Create schema hash
 /// let schema_hash = Hash::new(schema_hash_string)?;
 ///
@@ -109,9 +98,6 @@ pub enum EntryError {
 /// # Ok(())
 /// # }
 /// ```
-///
-
-
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Entry {
@@ -198,7 +184,7 @@ impl Entry {
     }
 }
 
-impl Validation for Entry {
+impl Validate for Entry {
     type Error = EntryError;
 
     fn validate(&self) -> Result<(), Self::Error> {
@@ -227,8 +213,9 @@ impl Validation for Entry {
 
 #[cfg(test)]
 mod tests {
-
-    use crate::atomic::{Hash, LogId, Message, MessageFields, MessageValue, SeqNum};
+    use crate::entry::{LogId, SeqNum};
+    use crate::hash::Hash;
+    use crate::message::{Message, MessageFields, MessageValue};
 
     use super::Entry;
 

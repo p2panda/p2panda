@@ -4,54 +4,12 @@ use arrayvec::ArrayVec;
 use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
 use ed25519_dalek::Signature;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
-use crate::atomic::{Author, Blake2BArrayVec, Hash, MessageEncoded, Validation};
-
-/// Custom error types for `EntrySigned`.
-#[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
-pub enum EntrySignedError {
-    /// Encoded entry string contains invalid hex characters.
-    #[error("invalid hex encoding in entry")]
-    InvalidHexEncoding,
-
-    /// Message needs to match payload hash of encoded entry
-    #[error("message needs to match payload hash of encoded entry")]
-    MessageHashMismatch,
-
-    /// Can not sign and encode an entry without a `Message`.
-    #[error("entry does not contain any message")]
-    MessageMissing,
-
-    /// Skiplink is required for entry encoding.
-    #[error("entry requires skiplink for encoding")]
-    SkiplinkMissing,
-
-    /// Handle errors from [`atomic::SeqNum`] struct.
-    #[error(transparent)]
-    SeqNumError(#[from] crate::atomic::error::SeqNumError),
-
-    /// Handle errors from [`atomic::Hash`] struct.
-    #[error(transparent)]
-    HashError(#[from] crate::atomic::error::HashError),
-
-    /// Handle errors from [`atomic::MessageEncoded`] struct.
-    #[error(transparent)]
-    MessageEncodedError(#[from] crate::atomic::error::MessageEncodedError),
-
-    /// Handle errors from encoding bamboo_rs_core entries.
-    #[error(transparent)]
-    BambooEncodeError(#[from] bamboo_rs_core::entry::encode::Error),
-
-    /// Handle errors from decoding bamboo_rs_core entries.
-    #[error(transparent)]
-    BambooDecodeError(#[from] bamboo_rs_core::entry::decode::Error),
-
-    /// Handle errors from ed25519_dalek crate.
-    #[error(transparent)]
-    Ed25519SignatureError(#[from] ed25519_dalek::SignatureError),
-}
+use crate::entry::EntrySignedError;
+use crate::hash::{Blake2BArrayVec, Hash};
+use crate::identity::Author;
+use crate::message::MessageEncoded;
+use crate::Validate;
 
 /// Bamboo entry bytes represented in hex encoding format.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -108,8 +66,9 @@ impl EntrySigned {
         self.0.len() as i64 / 2
     }
 
-    /// Takes a [`MessageEncoded`] and validates it against the message hash encoded in this `EntrySigned`, returns a result containing the
-    /// [`MessageEncoded`] or an [`EntrySignedError`] if the message hashes didn't match.
+    /// Takes a [`MessageEncoded`] and validates it against the message hash encoded in this
+    /// `EntrySigned`, returns a result containing the [`MessageEncoded`] or an
+    /// [`EntrySignedError`] if the message hashes didn't match.
     pub fn validate_message(
         &self,
         message_encoded: &MessageEncoded,
@@ -149,7 +108,7 @@ impl PartialEq for EntrySigned {
     }
 }
 
-impl Validation for EntrySigned {
+impl Validate for EntrySigned {
     type Error = EntrySignedError;
 
     fn validate(&self) -> Result<(), Self::Error> {
