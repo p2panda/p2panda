@@ -164,8 +164,11 @@ mod tests {
         KeyPair::new()
     }
 
-    #[fixture(keys=vec!["message", "date"], values=vec!["hello!", "2021-05-02T20:06:45.430Z"])]
-    fn message(keys: Vec<&str>, values: Vec<&str>) -> Message {
+    #[fixture]
+    fn message(
+        #[default(vec!["message"])] keys: Vec<&str>,
+        #[default(vec!["Hello!"])] values: Vec<&str>,
+    ) -> Message {
         let fields = create_message_fields(keys, values);
         Message::new_create(Hash::new_from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap()
     }
@@ -197,15 +200,14 @@ mod tests {
                 ).unwrap(),
         }
     }
-    #[rstest(entry, message,
-        case(entry(message(vec!["message"], vec!["Hello!"])), message(vec!["message"], vec!["Hello!"])),
-        #[should_panic]
-        case(entry(message(vec!["message"], vec!["Hello!"])), message(vec!["message"], vec!["Boo!"])),
-        #[should_panic]
-        case(entry(message(vec!["message"], vec!["Hello!"])), message(vec!["date"], vec!["2021-05-02T20:06:45.430Z"])),
-        #[should_panic]
-        case(entry(message(vec!["message"], vec!["Hello!"])), message(vec!["message", "date"], vec!["Hello!", "2021-05-02T20:06:45.430Z"])),
-    )]
+    #[rstest(message)]
+    #[case(message(vec!["message"], vec!["Hello!"]))]
+    #[should_panic]
+    #[case(message(vec!["message"], vec!["Boo!"]))]
+    #[should_panic]
+    #[case(message(vec!["date"], vec!["2021-05-02T20:06:45.430Z"]))]
+    #[should_panic]
+    #[case(message(vec!["message", "date"], vec!["Hello!", "2021-05-02T20:06:45.430Z"]))]
     fn message_validation(entry: Entry, message: Message, key_pair: KeyPair) {
         let encoded_message = MessageEncoded::try_from(&message).unwrap();
         let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
