@@ -1,23 +1,23 @@
 import { expect } from 'chai';
 
-import p2panda from '../lib';
+import { wasm } from '../lib';
 
 describe('KeyPair', () => {
   it('creates a key pair', async () => {
-    const { KeyPair } = await p2panda;
+    const { KeyPair } = await wasm;
     const keyPair = new KeyPair();
     expect(keyPair.privateKey().length).to.eq(64);
   });
 
   it('restores a key pair', async () => {
-    const { KeyPair } = await p2panda;
+    const { KeyPair } = await wasm;
     const keyPair = new KeyPair();
     const keyPairSecond = KeyPair.fromPrivateKey(keyPair.privateKey());
     expect(keyPair.publicKey()).to.eq(keyPairSecond.publicKey());
   });
 
   it('signs and validates', async () => {
-    const { KeyPair } = await p2panda;
+    const { KeyPair } = await wasm;
     const keyPair = new KeyPair();
     const message = 'hello panda';
     const sig = keyPair.sign(message);
@@ -38,7 +38,7 @@ describe('Entries', () => {
       decodeEntry,
       encodeCreateMessage,
       signEncodeEntry,
-    } = await p2panda;
+    } = await wasm;
 
     // Generate new key pair
     const keyPair = new KeyPair();
