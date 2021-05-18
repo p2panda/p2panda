@@ -15,7 +15,7 @@ export function getPath(...args: Array<string>): string {
 // Helper method which builds a typescript module rule
 export const tsRule = (target: 'node' | 'browser'): webpack.RuleSetRule => {
   return {
-    test: /\.ts/,
+    test: /\.ts$/,
     exclude: /node_modules/,
     use: [
       {
@@ -56,7 +56,7 @@ const config: webpack.Configuration = {
     libraryTarget: 'umd',
   },
   resolve: {
-    extensions: ['.ts'],
+    extensions: ['.ts', '.js'],
     alias: {
       '~': getPath(PATH_SRC),
       'wasm-web': getPath(PATH_DIST_WASM_WEB),
