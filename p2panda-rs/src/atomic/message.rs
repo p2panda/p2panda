@@ -180,6 +180,11 @@ impl MessageFields {
 
         self.0.get(name)
     }
+    
+    /// Returns an array of existing message keys.
+    pub fn keys(&self) -> Vec<String> {
+        self.0.keys().cloned().collect()
+    }
 }
 /// Messages describe data mutations in the p2panda network. Authors send messages to create,
 /// update or delete instances or collections of data.
@@ -441,5 +446,22 @@ mod tests {
         .unwrap();
 
         assert_eq!(first_message.to_cbor(), second_message.to_cbor());
+    }
+
+    #[test]
+    fn field_iteration() {
+        // Create first test message
+        let mut fields = MessageFields::new();
+        fields
+            .add("a", MessageValue::Text("sloth".to_owned()))
+            .unwrap();
+        fields
+            .add("b", MessageValue::Text("penguin".to_owned()))
+            .unwrap();
+        
+        let mut keys = fields.keys().into_iter();
+        
+        assert_eq!(fields.get(&keys.next().unwrap()).unwrap(), &MessageValue::Text("sloth".to_owned()));
+        assert_eq!(fields.get(&keys.next().unwrap()).unwrap(), &MessageValue::Text("penguin".to_owned()));
     }
 }
