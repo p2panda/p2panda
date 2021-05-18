@@ -182,7 +182,7 @@ mod tests {
                 Some(&Hash::new("0040944b4ae2ff31d0adc13cf94ba43b766871b4e56e96d0eebbc1b9e2b8226d448e8bc1f9507a21894579578491ff778a008688c2a3e8a409fc37522d9eabaa114c").unwrap()),
                 Some(&Hash::new("004054f65f3ac2ccf13f5862eb7c29ac20e830e173d062416dfd03a27e8a2315b69f402cfa4ca741d243b184b1d8ff203cf1f1ec4619f44758263f19a75a3537e780").unwrap()),
                 &SeqNum::new(4).unwrap(),
-                ).unwrap(),
+            ).unwrap(),
         }
     }
 
