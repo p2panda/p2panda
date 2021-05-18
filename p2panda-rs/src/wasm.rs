@@ -15,7 +15,7 @@ use wasm_bindgen::JsValue;
 use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
-use crate::message::{essage, MessageEncoded, MessageFields as MessageFieldsNonWasm, MessageValue};
+use crate::message::{Message, MessageEncoded, MessageFields as MessageFieldsNonWasm, MessageValue};
 
 // Converts any Rust Error type into js_sys:Error while keeping its error
 // message. This helps propagating errors similar like we do in Rust but in
