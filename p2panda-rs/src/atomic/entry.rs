@@ -1,12 +1,8 @@
-use std::convert::{TryFrom, TryInto};
-
-use arrayvec::ArrayVec;
 use bamboo_rs_core::entry::is_lipmaa_required;
-use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::atomic::{EntrySigned, Hash, LogId, Message, MessageEncoded, SeqNum, Validation};
+use crate::atomic::{Hash, LogId, Message, SeqNum, Validation};
 
 /// Error types for methods of `Entry` struct.
 #[allow(missing_copy_implementations)]
@@ -15,10 +11,6 @@ pub enum EntryError {
     /// Links should not be set when first entry in log.
     #[error("backlink and skiplink not valid for this sequence number")]
     InvalidLinks,
-
-    /// Message needs to match payload hash of encoded entry
-    #[error("message needs to match payload hash of encoded entry")]
-    MessageHashMismatch,
 
     /// Handle errors from [`atomic::Hash`] struct.
     #[error(transparent)]
@@ -65,10 +57,10 @@ pub enum EntryError {
 /// // Create the first Entry in a log
 /// let entry = Entry::new(
 ///     &LogId::default(),
-///     &message,
+///     Some(&message),
 ///     None,
 ///     None,
-///     None,
+///     &SeqNum::new(1)?,
 /// )?;
 /// # Ok(())
 /// # }
@@ -109,10 +101,10 @@ pub enum EntryError {
 /// // Create entry
 /// let next_entry = Entry::new(
 ///     &log_id,
-///     &message,
+///     Some(&message),
 ///     Some(&skiplink_hash),
 ///     Some(&backlink_hash),
-///     Some(&seq_no),
+///     &seq_no,
 /// )?;
 /// # Ok(())
 /// # }
@@ -143,28 +135,18 @@ impl Entry {
     /// Validates and returns a new instance of `Entry`.
     pub fn new(
         log_id: &LogId,
-        message: &Message,
+        message: Option<&Message>,
         entry_hash_skiplink: Option<&Hash>,
         entry_hash_backlink: Option<&Hash>,
-        previous_seq_num: Option<&SeqNum>,
+        seq_num: &SeqNum,
     ) -> Result<Self, EntryError> {
-        // If it is the first entry set sequence number to 1, otherwise increment
-        let seq_num = match previous_seq_num {
-            None => SeqNum::default(),
-            Some(s) => {
-                let mut next_seq_num = s.clone();
-                next_seq_num.next().unwrap()
-            }
-        };
-
         let entry = Self {
             log_id: log_id.clone().to_owned(),
-            message: Some(message.clone().to_owned()),
+            message: message.cloned(),
             entry_hash_skiplink: entry_hash_skiplink.cloned(),
             entry_hash_backlink: entry_hash_backlink.cloned(),
-            seq_num,
+            seq_num: seq_num.clone(),
         };
-
         entry.validate()?;
 
         Ok(entry)
@@ -216,59 +198,6 @@ impl Entry {
     }
 }
 
-/// Takes an encoded and signed [`EntrySigned`] and converts it back to its original, unsigned and
-/// decoded `Entry` state.
-///
-/// This conversion is lossy as the Signature will be removed.
-///
-/// Entries are separated from the messages they refer to. Since messages can independently be
-/// deleted they can be passed on optionally during the conversion. When a [`Message`] exists this
-/// conversion will automatically check its integrity with this Entry by comparing their hashes.
-impl TryFrom<(&EntrySigned, Option<&MessageEncoded>)> for Entry {
-    type Error = EntryError;
-
-    fn try_from(
-        (signed_entry, message_encoded): (&EntrySigned, Option<&MessageEncoded>),
-    ) -> Result<Self, Self::Error> {
-        // Convert to Entry from bamboo_rs_core first
-        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = signed_entry.into();
-
-        // Messages may be omitted because the entry still contains the message hash. If the
-        // message is explicitly included we require its hash to match.
-        let message = match message_encoded {
-            Some(msg) => {
-                let yamf_hash: YamfHash<super::hash::Blake2BArrayVec> =
-                    (&msg.hash()).to_owned().into();
-
-                if yamf_hash != entry.payload_hash {
-                    return Err(EntryError::MessageHashMismatch);
-                }
-
-                Some(Message::from(msg))
-            }
-            None => None,
-        };
-
-        let entry_hash_backlink: Option<Hash> = match entry.backlink {
-            Some(link) => Some(link.try_into()?),
-            None => None,
-        };
-
-        let entry_hash_skiplink: Option<Hash> = match entry.lipmaa_link {
-            Some(link) => Some(link.try_into()?),
-            None => None,
-        };
-
-        Ok(Entry {
-            entry_hash_backlink,
-            entry_hash_skiplink,
-            log_id: LogId::new(entry.log_id as i64),
-            message,
-            seq_num: SeqNum::new(entry.seq_num as i64)?,
-        })
-    }
-}
-
 impl Validation for Entry {
     type Error = EntryError;
 
@@ -298,6 +227,7 @@ impl Validation for Entry {
 
 #[cfg(test)]
 mod tests {
+
     use crate::atomic::{Hash, LogId, Message, MessageFields, MessageValue, SeqNum};
 
     use super::Entry;
@@ -314,45 +244,52 @@ mod tests {
         let backlink = Hash::new_from_bytes(vec![7, 8, 9]).unwrap();
 
         // The first entry in a log doesn't need and cannot have references to previous entries
-        assert!(Entry::new(&LogId::default(), &message, None, None, None).is_ok());
+        assert!(Entry::new(
+            &LogId::default(),
+            Some(&message),
+            None,
+            None,
+            &SeqNum::new(1).unwrap()
+        )
+        .is_ok());
 
         // Try to pass them over anyways, it will be invalidated
         assert!(Entry::new(
             &LogId::default(),
-            &message,
+            Some(&message),
             Some(&backlink.clone()),
             Some(&backlink),
-            None
+            &SeqNum::new(1).unwrap()
         )
         .is_err());
 
         // Any following entry requires backreferences
         assert!(Entry::new(
             &LogId::default(),
-            &message,
+            Some(&message),
             Some(&backlink.clone()),
             Some(&backlink),
-            Some(&SeqNum::new(1).unwrap())
+            &SeqNum::new(2).unwrap()
         )
         .is_ok());
 
         // We can omit the skiplink here as it is the same as the backlink
         assert!(Entry::new(
             &LogId::default(),
-            &message,
+            Some(&message),
             None,
             Some(&backlink),
-            Some(&SeqNum::new(1).unwrap())
+            &SeqNum::new(2).unwrap()
         )
         .is_ok());
 
         // We need a backlink here
         assert!(Entry::new(
             &LogId::default(),
-            &message,
+            Some(&message),
             None,
             None,
-            Some(&SeqNum::new(1).unwrap())
+            &SeqNum::new(2).unwrap()
         )
         .is_err());
     }

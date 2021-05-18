@@ -10,6 +10,7 @@ use crate::atomic::{
     Entry, EntrySigned, Hash, LogId, Message, MessageEncoded,
     MessageFields as MessageFieldsNonWasm, MessageValue, SeqNum,
 };
+use crate::encoder::{decode_entry as decode, sign_and_encode};
 use crate::key_pair::KeyPair;
 
 // Converts any Rust Error type into js_sys:Error while keeping its error
@@ -132,7 +133,7 @@ pub fn sign_encode_entry(
     encoded_message: String,
     entry_skiplink_hash: Option<String>,
     entry_backlink_hash: Option<String>,
-    previous_seq_num: Option<i32>,
+    seq_num: i32,
     log_id: i32,
 ) -> Result<JsValue, JsValue> {
     // If skiplink_hash exists construct Hash
@@ -147,11 +148,8 @@ pub fn sign_encode_entry(
         None => None,
     };
 
-    // If seq_num exists construct SeqNum
-    let seq_num = match previous_seq_num {
-        Some(num) => Some(jserr!(SeqNum::new(num.into()))),
-        None => None,
-    };
+    // Create SeqNum instance
+    let seq_num = jserr!(SeqNum::new(seq_num.into()));
 
     // Convert to Message
     let message_encoded = jserr!(MessageEncoded::new(&encoded_message));
@@ -160,14 +158,14 @@ pub fn sign_encode_entry(
     // Create Entry instance
     let entry = jserr!(Entry::new(
         &LogId::new(log_id.into()),
-        &message,
+        Some(&message),
         skiplink_hash.as_ref(),
         backlink_hash.as_ref(),
-        seq_num.as_ref(),
+        &seq_num,
     ));
 
     // Finally sign and encode entry
-    let entry_signed = jserr!(EntrySigned::try_from((&entry, key_pair)));
+    let entry_signed = jserr!(sign_and_encode(&entry, &key_pair));
 
     // Serialize result to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&SignEncodeEntryResult {
@@ -195,7 +193,7 @@ pub fn decode_entry(
 
     // Convert encoded entry
     let entry_signed = jserr!(EntrySigned::new(&entry_encoded));
-    let entry = jserr!(Entry::try_from((&entry_signed, message_encoded.as_ref())));
+    let entry: Entry = jserr!(decode(&entry_signed, message_encoded.as_ref()));
 
     // Serialize struct to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&entry));

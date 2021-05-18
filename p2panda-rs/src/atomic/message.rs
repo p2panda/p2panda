@@ -181,6 +181,7 @@ impl MessageFields {
         self.0.get(name)
     }
 }
+
 /// Messages describe data mutations in the p2panda network. Authors send messages to create,
 /// update or delete instances or collections of data.
 ///

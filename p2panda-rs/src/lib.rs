@@ -13,9 +13,10 @@
 //! ```
 //! # extern crate p2panda_rs;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! use std::convert::TryFrom;
-//! use p2panda_rs::key_pair::KeyPair;
-//! use p2panda_rs::atomic::{Entry, EntrySigned, Hash, LogId, SeqNum, Message, MessageFields, MessageValue};
+//! # use std::convert::TryFrom;
+//! # use p2panda_rs::key_pair::KeyPair;
+//! # use p2panda_rs::encoder::sign_and_encode;
+//! # use p2panda_rs::atomic::{Entry, EntrySigned, Hash, LogId, SeqNum, Message, MessageFields, MessageValue};
 //! # let profile_schema = Hash::new_from_bytes(vec![1, 2, 3])?;
 //! // Generate new Ed25519 key pair
 //! let key_pair = KeyPair::new();
@@ -27,11 +28,14 @@
 //! // Add field data to "create" message
 //! let message = Message::new_create(profile_schema, fields)?;
 //!
+//! // This is the entry at sequence number 1 (the first entry in the log)
+//! let seq_num = SeqNum::new(1)?;
+//!
 //! // Wrap message into Bamboo entry (append-only log data type)
-//! let entry = Entry::new(&LogId::default(), &message, None, None, None)?;
+//! let entry = Entry::new(&LogId::default(), Some(&message), None, None, &seq_num)?;
 //!
 //! // Sign entry with private key
-//! let entry_signed = EntrySigned::try_from((&entry, &key_pair))?;
+//! let entry_signed = sign_and_encode(&entry, &key_pair)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -50,6 +54,8 @@
 
 /// Basic structs and methods to interact with p2panda data structures.
 pub mod atomic;
+/// Methods methods for signing, encoding and decoding entries.
+pub mod encoder;
 /// Methods to generate key pairs or "authors" to sign data with.
 pub mod key_pair;
 /// Validations for message payloads and definitions of system schemas.
