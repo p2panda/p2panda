@@ -57,10 +57,10 @@ pub enum EntryError {
 /// // Create the first Entry in a log
 /// let entry = Entry::new(
 ///     &LogId::default(),
-///     &message,
+///     Some(&message),
 ///     None,
 ///     None,
-///     None,
+///     &SeqNum::new(1)?,
 /// )?;
 /// # Ok(())
 /// # }
@@ -101,10 +101,10 @@ pub enum EntryError {
 /// // Create entry
 /// let next_entry = Entry::new(
 ///     &log_id,
-///     &message,
+///     Some(&message),
 ///     Some(&skiplink_hash),
 ///     Some(&backlink_hash),
-///     Some(&seq_no),
+///     &seq_no,
 /// )?;
 /// # Ok(())
 /// # }

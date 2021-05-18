@@ -19,7 +19,8 @@ use crate::key_pair::KeyPair;
 /// ```
 /// # extern crate p2panda_rs;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// use p2panda_rs::atomic::{Entry, EntrySigned, Hash, LogId, Message, MessageFields, MessageValue};
+/// use p2panda_rs::atomic::{Entry, EntrySigned, Hash, LogId, Message, MessageFields, MessageValue, SeqNum};
+/// use p2panda_rs::encoder::sign_and_encode;
 /// use p2panda_rs::key_pair::KeyPair;
 ///
 /// // Generate Ed25519 key pair to sign entry with
@@ -34,10 +35,10 @@ use crate::key_pair::KeyPair;
 /// // Create entry
 /// let entry = Entry::new(
 ///     &LogId::default(),
-///     &message,
+///     Some(&message),
 ///     None,
 ///     None,
-///     None,
+///     &SeqNum::new(1)?,
 /// )?;
 ///
 /// // Sign and encode entry
