@@ -148,13 +148,8 @@ impl Validation for Entry {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryFrom;
 
-    use crate::atomic::{
-        Hash, LogId, Message, MessageEncoded, MessageFields, MessageValue, SeqNum,
-    };
-    use crate::encoder::{decode_entry, sign_and_encode};
-    use crate::key_pair::KeyPair;
+    use crate::atomic::{Hash, LogId, Message, MessageFields, MessageValue, SeqNum};
 
     use super::Entry;
 
@@ -218,52 +213,5 @@ mod tests {
             &SeqNum::new(2).unwrap()
         )
         .is_err());
-    }
-
-    #[test]
-    fn sign_and_encode_test() {
-        // Generate Ed25519 key pair to sign entry with
-        let key_pair = KeyPair::new();
-
-        // Prepare sample values
-        let mut fields = MessageFields::new();
-        fields
-            .add("test", MessageValue::Text("Hello".to_owned()))
-            .unwrap();
-        let message =
-            Message::new_create(Hash::new_from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
-
-        // Create a p2panda entry, then sign it. For this encoding, the entry is converted into a
-        // bamboo-rs-core entry, which means that it also doesn't contain the message anymore
-        let entry = Entry::new(
-            &LogId::default(),
-            Some(&message),
-            None,
-            None,
-            &SeqNum::new(1).unwrap(),
-        )
-        .unwrap();
-        let entry_first_encoded = sign_and_encode(&entry, &key_pair).unwrap();
-
-        // Make an unsigned, decoded p2panda entry from the signed and encoded form. This is adding
-        // the message back
-        let message_encoded = MessageEncoded::try_from(&message).unwrap();
-        let entry_decoded: Entry =
-            decode_entry(&entry_first_encoded, Some(&message_encoded)).unwrap();
-
-        // Re-encode the recovered entry to be able to check that we still have the same data
-        let test_entry_signed_encoded = sign_and_encode(&entry_decoded, &key_pair).unwrap();
-        assert_eq!(entry_first_encoded, test_entry_signed_encoded);
-
-        // Create second p2panda entry without skiplink as it is not required
-        let entry_second = Entry::new(
-            &LogId::default(),
-            Some(&message),
-            None,
-            Some(&entry_first_encoded.hash()),
-            &SeqNum::new(2).unwrap(),
-        )
-        .unwrap();
-        assert!(sign_and_encode(&entry_second, &key_pair).is_ok());
     }
 }

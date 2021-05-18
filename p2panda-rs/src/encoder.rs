@@ -174,13 +174,18 @@ mod tests {
     }
 
     #[fixture]
-    fn entry(message: Message) -> Entry {
+    fn entry(
+        message: Message,
+        #[default(SeqNum::new(1).unwrap())] seq_num: SeqNum,
+        #[default(None)] backlink: Option<Hash>,
+        #[default(None)] skiplink: Option<Hash>,
+    ) -> Entry {
         Entry::new(
             &LogId::default(),
             Some(&message),
-            None,
-            None,
-            &SeqNum::new(1).unwrap(),
+            skiplink.as_ref(),
+            backlink.as_ref(),
+            &seq_num,
         )
         .unwrap()
     }
@@ -200,7 +205,7 @@ mod tests {
                 ).unwrap(),
         }
     }
-    
+
     #[rstest(message)]
     #[case(message(vec!["message"], vec!["Hello!"]))]
     #[should_panic]
@@ -216,7 +221,8 @@ mod tests {
     }
 
     #[rstest]
-    fn entry_signing_and_encoding(entry: Entry, key_pair: KeyPair) {
+    fn entry_encoding_decoding(entry: Entry, key_pair: KeyPair) {
+        // Encode Message
         let encoded_message = MessageEncoded::try_from(entry.message().unwrap()).unwrap();
 
         // Sign and encode Entry
@@ -225,12 +231,40 @@ mod tests {
         // Decode signed and encoded Entry
         let decoded_entry = decode_entry(&signed_encoded_entry, Some(&encoded_message)).unwrap();
 
-        // All Entry and decoded Entry params should be equal
+        // All Entry and decoded Entry values should be equal
         assert_eq!(entry.log_id(), decoded_entry.log_id());
         assert_eq!(entry.message().unwrap(), decoded_entry.message().unwrap());
         assert_eq!(entry.seq_num(), decoded_entry.seq_num());
         assert_eq!(entry.backlink_hash(), decoded_entry.backlink_hash());
         assert_eq!(entry.skiplink_hash(), decoded_entry.skiplink_hash());
+    }
+
+    #[rstest]
+    fn sign_and_encode_roundtrip(entry: Entry, key_pair: KeyPair) {
+        // Sign a p2panda entry. For this encoding, the entry is converted into a
+        // bamboo-rs-core entry, which means that it also doesn't contain the message anymore
+        let entry_first_encoded = sign_and_encode(&entry, &key_pair).unwrap();
+
+        // Make an unsigned, decoded p2panda entry from the signed and encoded form. This is adding
+        // the message back
+        let message_encoded = MessageEncoded::try_from(entry.message().unwrap()).unwrap();
+        let entry_decoded: Entry =
+            decode_entry(&entry_first_encoded, Some(&message_encoded)).unwrap();
+
+        // Re-encode the recovered entry to be able to check that we still have the same data
+        let test_entry_signed_encoded = sign_and_encode(&entry_decoded, &key_pair).unwrap();
+        assert_eq!(entry_first_encoded, test_entry_signed_encoded);
+
+        // Create second p2panda entry without skiplink as it is not required
+        let entry_second = Entry::new(
+            &LogId::default(),
+            entry.message(),
+            None,
+            Some(&entry_first_encoded.hash()),
+            &SeqNum::new(2).unwrap(),
+        )
+        .unwrap();
+        assert!(sign_and_encode(&entry_second, &key_pair).is_ok());
     }
 
     #[rstest(fixture, case::v0_1_0(v0_1_0_fixture()))]
@@ -265,7 +299,7 @@ mod tests {
             fixture_message_fields.get("date").unwrap()
         );
     }
-    
+
     #[rstest(fixture, case::v0_1_0(v0_1_0_fixture()))]
     fn fixture_decode_entry(fixture: PandaTestFixture) {
         // Decode fixture EntrySigned
