@@ -30,6 +30,25 @@ pub struct Author(String);
 
 impl Author {
     /// Validates and wraps author string into a new `Author` instance.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use p2panda_rs::key_pair::KeyPair;
+    /// use p2panda_rs::atomic::Author;
+    ///
+    /// // Generate new Ed25519 key pair
+    /// let key_pair = KeyPair::new();
+    /// let public_key = key_pair.public_key();
+    ///
+    /// // Create an `Author` instance from a public key string
+    /// let author = Author::new(&key_pair.public_key())?;
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new(value: &str) -> Result<Self, AuthorError> {
         let author = Self(String::from(value));
         author.validate()?;

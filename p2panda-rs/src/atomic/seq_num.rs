@@ -23,6 +23,20 @@ pub struct SeqNum(i64);
 
 impl SeqNum {
     /// Validates and wraps value into a new `SeqNum` instance.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use p2panda_rs::atomic::SeqNum;
+    ///
+    /// // Generate new sequence number
+    /// let seq_num = SeqNum::new(2)?;
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new(value: i64) -> Result<Self, SeqNumError> {
         let seq_num = Self(value);
         seq_num.validate()?;
@@ -30,6 +44,22 @@ impl SeqNum {
     }
 
     /// Return sequence number of the previous entry (backlink).
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use p2panda_rs::atomic::SeqNum;
+    ///
+    /// // Return backlink (sequence number of the previous entry)
+    /// let seq_num = SeqNum::new(2)?;
+    /// let backlink = seq_num.backlink_seq_num();
+    ///
+    /// assert_eq!(backlink, Some(SeqNum::new(1)?));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn backlink_seq_num(&self) -> Option<Self> {
         Self::new(self.0 - 1).ok()
     }
