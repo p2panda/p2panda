@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::btree_map::Iter;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -184,6 +185,11 @@ impl MessageFields {
     /// Returns an array of existing message keys.
     pub fn keys(&self) -> Vec<String> {
         self.0.keys().cloned().collect()
+    }
+    
+    /// Returns an iterator of existing message fields.
+    pub fn iterator(&self) -> Iter<String, MessageValue> {
+        self.0.iter()
     }
 }
 /// Messages describe data mutations in the p2panda network. Authors send messages to create,
@@ -459,9 +465,9 @@ mod tests {
             .add("b", MessageValue::Text("penguin".to_owned()))
             .unwrap();
         
-        let mut keys = fields.keys().into_iter();
+        let mut field_iterator = fields.iterator();
         
-        assert_eq!(fields.get(&keys.next().unwrap()).unwrap(), &MessageValue::Text("sloth".to_owned()));
-        assert_eq!(fields.get(&keys.next().unwrap()).unwrap(), &MessageValue::Text("penguin".to_owned()));
+        assert_eq!(field_iterator.next().unwrap().1, &MessageValue::Text("sloth".to_owned()));
+        assert_eq!(field_iterator.next().unwrap().1, &MessageValue::Text("penguin".to_owned()));
     }
 }
