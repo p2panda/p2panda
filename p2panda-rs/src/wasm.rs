@@ -4,7 +4,7 @@
 //! `p2panda-rs` in a Javascript/Typescript environment.
 //!
 //! [p2panda-js]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::panic;
 
 use console_error_panic_hook::hook as panic_hook;
@@ -15,7 +15,9 @@ use wasm_bindgen::JsValue;
 use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
-use crate::message::{Message, MessageEncoded, MessageFields as MessageFieldsNonWasm, MessageValue};
+use crate::message::{
+    Message, MessageEncoded, MessageFields as MessageFieldsNonWasm, MessageValue,
+};
 
 // Converts any Rust Error type into js_sys:Error while keeping its error message. This helps
 // propagating errors similar like we do in Rust but in WebAssembly contexts.
@@ -42,29 +44,86 @@ pub struct MessageFields(MessageFieldsNonWasm);
 
 #[wasm_bindgen]
 impl MessageFields {
-    /// Returns a `MessageFields` instance
+    /// Returns a `MessageFields` instance.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self(MessageFieldsNonWasm::new())
     }
 
-    /// Adds a new field to this `MessageFields` instance.
-    ///
-    /// Only `text` fields are currently supported and no schema validation is being done to make
-    /// sure that only fields that are part of a schema can be added.
-    pub fn add(&mut self, name: String, value: JsValue) -> Result<(), JsValue> {
-        // @TODO: Add more types
-        let field = match value.as_string() {
-            Some(text) => Ok(MessageValue::Text(text)),
-            None => Err(js_sys::Error::new(&format!("Invalid value type"))),
-        }?;
-
-        jserr!(self.0.add(&name, field));
-
+    /// Adds a boolean field to this `MessageFields` instance.
+    #[wasm_bindgen(js_name = "addBooleanField")]
+    pub fn add_boolean_field(&mut self, name: String, value: bool) -> Result<(), JsValue> {
+        jserr!(self.0.add(&name, MessageValue::Boolean(value)));
         Ok(())
     }
 
-    /// Returns this instance formatted for debugging
+    /// Adds a new text field to this `MessageFields` instance.
+    #[wasm_bindgen(js_name = "addTextField")]
+    pub fn add_text_field(&mut self, name: String, value: String) -> Result<(), JsValue> {
+        jserr!(self.0.add(&name, MessageValue::Text(value)));
+        Ok(())
+    }
+
+    /// Adds a new signed integer field to this `MessageFields` instance.
+    #[wasm_bindgen(js_name = "addIntegerField")]
+    pub fn add_integer_field(&mut self, name: String, value: i32) -> Result<(), JsValue> {
+        jserr!(self.0.add(&name, MessageValue::Integer(value as i64)));
+        Ok(())
+    }
+
+    /// Adds a new float number field to this `MessageFields` instance.
+    #[wasm_bindgen(js_name = "addFloatField")]
+    pub fn add_float_field(&mut self, name: String, value: f32) -> Result<(), JsValue> {
+        jserr!(self.0.add(&name, MessageValue::Float(value as f64)));
+        Ok(())
+    }
+
+    /// Adds a new relation field to this `MessageFields` instance.
+    #[wasm_bindgen(js_name = "addRelationField")]
+    pub fn add_relation_field(&mut self, name: String, value: String) -> Result<(), JsValue> {
+        let hash = jserr!(Hash::new(&value));
+        jserr!(self.0.add(&name, MessageValue::Relation(hash)));
+        Ok(())
+    }
+
+    /// Removes an existing field from this `MessageFields` instance.
+    ///
+    /// This might throw an error when trying to remove an inexistent field.
+    #[wasm_bindgen(js_name = "removeField")]
+    pub fn remove_field(&mut self, name: String) -> Result<(), JsValue> {
+        jserr!(self.0.remove(&name));
+        Ok(())
+    }
+
+    /// Returns field of this `MessageFields` instance when existing.
+    ///
+    /// When trying to access an integer field the method might throw an error when the internal
+    /// value is larger than an i32 number. The wasm API will use i32 numbers in JavaScript
+    /// contexts instead of i64 / BigInt as long as BigInt support is not given in Safari on MacOS
+    /// and iOS.
+    #[wasm_bindgen(js_name = "getField")]
+    pub fn get_field(&mut self, name: String) -> Result<JsValue, JsValue> {
+        match self.0.get(&name) {
+            Some(MessageValue::Boolean(value)) => Ok(JsValue::from_bool(value.to_owned())),
+            Some(MessageValue::Text(value)) => Ok(JsValue::from_str(value)),
+            Some(MessageValue::Relation(value)) => Ok(JsValue::from_str(&value.as_hex())),
+            Some(MessageValue::Float(value)) => Ok(JsValue::from_f64(value.to_owned())),
+            Some(MessageValue::Integer(value)) => {
+                // Downcast i64 to i32 and throw error when value too large
+                let converted: i32 = jserr!(value.to_owned().try_into());
+                Ok(converted.into())
+            }
+            None => Ok(JsValue::NULL),
+        }
+    }
+
+    /// Returns the number of fields in this instance.
+    #[wasm_bindgen(js_name = length)]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns this instance formatted for debugging.
     #[wasm_bindgen(js_name = toString)]
     pub fn to_string(&self) -> String {
         format!("{:?}", self)
