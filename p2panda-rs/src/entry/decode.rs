@@ -23,7 +23,10 @@ pub fn decode_entry(
     let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = entry_encoded.into();
 
     let message = match message_encoded {
-        Some(msg) => Some(Message::from(&entry_encoded.validate_message(msg)?)),
+        Some(msg) => {
+            entry_encoded.validate_message(msg)?;
+            Some(Message::from(msg))
+        }
         None => None,
     };
 

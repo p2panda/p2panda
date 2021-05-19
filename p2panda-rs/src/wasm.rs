@@ -231,8 +231,8 @@ pub fn sign_encode_entry(
     // Serialize result to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&SignEncodeEntryResult {
         entry_encoded: entry_signed.as_str().into(),
-        entry_hash: entry_signed.hash().as_hex().into(),
-        message_hash: message_encoded.hash().as_hex().into(),
+        entry_hash: entry_signed.hash().as_str().into(),
+        message_hash: message_encoded.hash().as_str().into(),
     }));
     Ok(result)
 }

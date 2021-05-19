@@ -176,7 +176,7 @@ impl MessageFields {
     }
 
     /// Returns an iterator of existing message fields.
-    pub fn iterator(&self) -> Iter<String, MessageValue> {
+    pub fn iter(&self) -> Iter<String, MessageValue> {
         self.0.iter()
     }
 }
@@ -308,8 +308,8 @@ impl Message {
     }
 
     /// Returns schema of message.
-    pub fn schema(&self) -> Hash {
-        self.schema.clone()
+    pub fn schema(&self) -> &Hash {
+        &self.schema
     }
 
     /// Returns id of message.
@@ -467,7 +467,7 @@ mod tests {
             .add("b", MessageValue::Text("penguin".to_owned()))
             .unwrap();
 
-        let mut field_iterator = fields.iterator();
+        let mut field_iterator = fields.iter();
 
         assert_eq!(
             field_iterator.next().unwrap().1,
