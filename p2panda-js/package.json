@@ -73,6 +73,8 @@
     "@open-rpc/client-js": "^1.6.3",
     "bufferutil": "^4.0.3",
     "debug": "^2.6.9",
+    "fetch-headers": "^2.0.0",
+    "node-fetch": "^2.6.1",
     "utf-8-validate": "^5.0.5"
   }
 }

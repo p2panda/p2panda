@@ -20,6 +20,7 @@ const configNode: webpack.Configuration = {
   externals: {
     // Treat exported wasm as external module
     'wasm-node': './wasm',
+    'node-fetch': 'commonjs2 node-fetch',
   },
   module: {
     rules: [tsRule('node')],

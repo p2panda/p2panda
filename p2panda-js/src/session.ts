@@ -83,17 +83,21 @@ export default class Session {
   //
   // Always await this function before using `this.p2panda`. Unfortunately this
   // cannot be handled in the constructor as the contructor cannot be async.
-  async loadWasm(): Promise<Session['p2panda']> {
+  async loadWasm(): Promise<P2Panda> {
     if (this.p2panda == null) {
       this.p2panda = await p2panda;
-      // @ts-expect-error only applies for node context
-      if (this.p2panda.default != null) {
-        log('fallback loader from `p2panda.default`');
-        // @ts-expect-error only applies for node context
-        this.p2panda = await p2panda.default;
-      } else {
-        log('loaded wasm lib');
-      }
+
+      // I am removing this again because it breaks the node build but it may
+      // have to go back in.
+
+      // if (this.p2panda.default != null) {
+      //   log('fallback loader from `p2panda.default`');
+      //   // @ts-expect-error only applies for node context
+      //   this.p2panda = await p2panda.default;
+      // } else {
+      //   log('loaded wasm lib');
+      // }
+      log('loaded wasm lib');
     } else {
       log('access cached wasm lib');
     }
