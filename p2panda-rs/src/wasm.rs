@@ -51,36 +51,36 @@ impl MessageFields {
     }
 
     /// Adds a boolean field to this `MessageFields` instance.
-    #[wasm_bindgen(js_name = "addBooleanField")]
-    pub fn add_boolean_field(&mut self, name: String, value: bool) -> Result<(), JsValue> {
+    #[wasm_bindgen(js_name = "addBoolean")]
+    pub fn add_boolean(&mut self, name: String, value: bool) -> Result<(), JsValue> {
         jserr!(self.0.add(&name, MessageValue::Boolean(value)));
         Ok(())
     }
 
     /// Adds a new text field to this `MessageFields` instance.
-    #[wasm_bindgen(js_name = "addTextField")]
-    pub fn add_text_field(&mut self, name: String, value: String) -> Result<(), JsValue> {
+    #[wasm_bindgen(js_name = "addText")]
+    pub fn add_text(&mut self, name: String, value: String) -> Result<(), JsValue> {
         jserr!(self.0.add(&name, MessageValue::Text(value)));
         Ok(())
     }
 
     /// Adds a new signed integer field to this `MessageFields` instance.
-    #[wasm_bindgen(js_name = "addIntegerField")]
-    pub fn add_integer_field(&mut self, name: String, value: i32) -> Result<(), JsValue> {
+    #[wasm_bindgen(js_name = "addInteger")]
+    pub fn add_integer(&mut self, name: String, value: i32) -> Result<(), JsValue> {
         jserr!(self.0.add(&name, MessageValue::Integer(value as i64)));
         Ok(())
     }
 
     /// Adds a new float number field to this `MessageFields` instance.
-    #[wasm_bindgen(js_name = "addFloatField")]
-    pub fn add_float_field(&mut self, name: String, value: f32) -> Result<(), JsValue> {
+    #[wasm_bindgen(js_name = "addFloat")]
+    pub fn add_float(&mut self, name: String, value: f32) -> Result<(), JsValue> {
         jserr!(self.0.add(&name, MessageValue::Float(value as f64)));
         Ok(())
     }
 
     /// Adds a new relation field to this `MessageFields` instance.
-    #[wasm_bindgen(js_name = "addRelationField")]
-    pub fn add_relation_field(&mut self, name: String, value: String) -> Result<(), JsValue> {
+    #[wasm_bindgen(js_name = "addRelation")]
+    pub fn add_relation(&mut self, name: String, value: String) -> Result<(), JsValue> {
         let hash = jserr!(Hash::new(&value));
         jserr!(self.0.add(&name, MessageValue::Relation(hash)));
         Ok(())
@@ -89,8 +89,8 @@ impl MessageFields {
     /// Removes an existing field from this `MessageFields` instance.
     ///
     /// This might throw an error when trying to remove an inexistent field.
-    #[wasm_bindgen(js_name = "removeField")]
-    pub fn remove_field(&mut self, name: String) -> Result<(), JsValue> {
+    #[wasm_bindgen(js_name = "remove")]
+    pub fn remove(&mut self, name: String) -> Result<(), JsValue> {
         jserr!(self.0.remove(&name));
         Ok(())
     }
@@ -101,8 +101,8 @@ impl MessageFields {
     /// value is larger than an i32 number. The wasm API will use i32 numbers in JavaScript
     /// contexts instead of i64 / BigInt as long as BigInt support is not given in Safari on MacOS
     /// and iOS.
-    #[wasm_bindgen(js_name = "getField")]
-    pub fn get_field(&mut self, name: String) -> Result<JsValue, JsValue> {
+    #[wasm_bindgen(js_name = "get")]
+    pub fn get(&mut self, name: String) -> Result<JsValue, JsValue> {
         match self.0.get(&name) {
             Some(MessageValue::Boolean(value)) => Ok(JsValue::from_bool(value.to_owned())),
             Some(MessageValue::Text(value)) => Ok(JsValue::from_str(value)),

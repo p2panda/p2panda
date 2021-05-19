@@ -31,25 +31,25 @@ describe('MessageFields', () => {
     const { MessageFields } = await p2panda;
 
     const fields = new MessageFields();
-    fields.addTextField('description', 'Hello, Panda');
-    fields.addIntegerField('temperature', 23);
+    fields.addText('description', 'Hello, Panda');
+    fields.addInteger('temperature', 23);
 
     // Returns the correct fields
-    expect(fields.getField('description')).to.eq('Hello, Panda');
-    expect(fields.getField('temperature')).to.eq(23);
+    expect(fields.get('description')).to.eq('Hello, Panda');
+    expect(fields.get('temperature')).to.eq(23);
 
     // Returns the correct length
     expect(fields.length()).to.eq(2);
 
     // Return nothing when field does not exist
-    expect(fields.getField('message')).to.eq(null);
+    expect(fields.get('message')).to.eq(null);
   });
 
   it('throws an error when removing an inexistent field', async () => {
     const { MessageFields } = await p2panda;
 
     const fields = new MessageFields();
-    expect(() => fields.removeField('test')).to.throw();
+    expect(() => fields.remove('test')).to.throw();
   });
 });
 
@@ -73,8 +73,8 @@ describe('Entries', () => {
 
     // Create message
     const fields = new MessageFields();
-    fields.addTextField('description', 'Hello, Panda');
-    expect(fields.getField('description')).to.eq('Hello, Panda');
+    fields.addText('description', 'Hello, Panda');
+    expect(fields.get('description')).to.eq('Hello, Panda');
 
     const messageEncoded = encodeCreateMessage(TEST_SCHEMA, fields);
 
