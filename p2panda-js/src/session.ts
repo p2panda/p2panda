@@ -1,12 +1,13 @@
 import { RequestManager, HTTPTransport, Client } from '@open-rpc/client-js';
 import debug from 'debug';
 
-import p2panda from '~/wasm';
+import p2panda, { P2Panda } from '~/wasm';
 import type { Resolved } from '~/index';
-import Instance from '~/instance';
+import Instance, { Context } from '~/instance';
 import { marshallResponseFields } from '~/utils';
 
 import type { EntryArgs, EntryRecord, EncodedEntry, Fields } from '~/types';
+import { KeyPair } from 'wasm-web';
 
 const log = debug('p2panda-api');
 
@@ -58,9 +59,9 @@ export default class Session {
     return this;
   }
 
-  __keyPair: string | null = null;
+  __keyPair: KeyPair | null = null;
 
-  get _keyPair(): string {
+  get _keyPair(): KeyPair {
     if (!this.__keyPair) {
       throw new Error(
         'Requires a signing key pair. Configure a key pair with ' +
@@ -70,11 +71,11 @@ export default class Session {
     return this._keyPair;
   }
 
-  set _keyPair(val: string) {
+  set _keyPair(val: KeyPair) {
     this.__keyPair = val;
   }
 
-  keyPair(val: string): Session {
+  keyPair(val: KeyPair): Session {
     this._keyPair = val;
     return this;
   }
@@ -187,7 +188,7 @@ export default class Session {
    *   .keyPair(keyPair)
    *   .create(messageFields);
    */
-  async create(fields: Fields, options): Promise<Session> {
+  async create(fields: Fields, options: Partial<Context>): Promise<Session> {
     Instance.create(fields, {
       schema: this._schema,
       keyPair: this._keyPair,
@@ -197,13 +198,11 @@ export default class Session {
     return this;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async update(hash: string, fields: Fields, options): Promise<Session> {
+  async update(): Promise<Session> {
     throw new Error('not implemented');
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async delete(hash: string, options): Promise<Session> {
+  async delete(): Promise<Session> {
     throw new Error('not implemented');
   }
 

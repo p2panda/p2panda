@@ -4,11 +4,11 @@ import { Session } from '~/index';
 import { Fields, FieldsTagged } from '~/types';
 import { marshallRequestFields } from '~/utils';
 
-import type { Resolved } from '~/index';
+import { P2Panda } from './wasm';
+import { KeyPair, MessageFields } from 'wasm-web';
 
-type InstanceArgs = {
-  // @ts-expect requires types exported from rust
-  keyPair: Resolved<Session['p2panda']['KeyPair']>;
+export type Context = {
+  keyPair: KeyPair;
   schema: string;
   session: Session;
 };
@@ -22,7 +22,7 @@ const getMessageFields = async (
   session: Session,
   _schema: string,
   fields: FieldsTagged,
-) => {
+): Promise<MessageFields> => {
   const { MessageFields } = await session.loadWasm();
 
   const messageFields = new MessageFields();
@@ -38,10 +38,10 @@ const getMessageFields = async (
  * Sign and publish an entry given a prepared `Message`, `KeyPair` and `Session`
  */
 const signPublishEntry = async (
-  messageEncoded,
-  { keyPair, schema, session },
+  messageEncoded: string,
+  { keyPair, schema, session }: Context,
 ) => {
-  const { signEncodeEntry } = await session.loadWasm();
+  const { signEncodeEntry } = (await session.loadWasm()) as P2Panda;
 
   const entryArgs = await session.getNextEntryArgs(keyPair.publicKey(), schema);
 
@@ -57,6 +57,7 @@ const signPublishEntry = async (
     messageEncoded,
     entryArgs.entryHashSkiplink,
     entryArgs.entryHashBacklink,
+    // @ts-expect-error need to merge changes
     lastSeqNum,
     BigInt(entryArgs.logId),
   );
@@ -76,7 +77,7 @@ const signPublishEntry = async (
  */
 const create = async (
   fields: Fields,
-  { keyPair, schema, session }: InstanceArgs,
+  { keyPair, schema, session }: Context,
 ): Promise<void> => {
   const { encodeCreateMessage } = await session.loadWasm();
 

@@ -4,7 +4,7 @@ import { initializeWasm } from './wasm-adapter';
 type Resolved<T> = T extends PromiseLike<infer U> ? Resolved<U> : T;
 
 // p2panda is exported without web assembly utilities
-type P2Panda = Omit<
+export type P2Panda = Omit<
   Resolved<typeof initializeWasm>,
   'setWasmPanicHook' | 'init' | 'default'
 >;

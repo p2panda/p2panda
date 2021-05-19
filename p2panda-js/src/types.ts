@@ -2,9 +2,9 @@
  * Arguments for publishing the next entry
  */
 export type EntryArgs = {
-  entryHashSkiplink: string | null;
-  entryHashBacklink: string | null;
-  lastSeqNum: number | null;
+  entryHashSkiplink: string | undefined;
+  entryHashBacklink: string | undefined;
+  lastSeqNum: number | undefined;
   logId: number;
 };
 
