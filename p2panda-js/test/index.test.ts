@@ -32,7 +32,6 @@ describe('MessageFields', () => {
       '0040cf94f6d605657e90c543b0c919070cdaaf7209c5e1ea58acb8f3568fa2114268dc9ac3bafe12af277d286fce7dc59b7c0c348973c4e9dacbe79485e56ac2a702';
 
     const { MessageFields } = await p2panda;
-
     const fields = new MessageFields();
 
     // Set fields of all possible types
@@ -45,6 +44,9 @@ describe('MessageFields', () => {
     // Returns the correct fields
     expect(fields.get('description')).to.eq('Hello, Panda');
     expect(fields.get('temperature')).to.eq(23);
+    expect(fields.get('isCute')).to.eq(true);
+    expect(fields.get('degree')).to.eq(12.322);
+    expect(fields.get('username')).to.eq(TEST_SCHEMA);
 
     // Return nothing when field does not exist
     expect(fields.get('message')).to.eq(null);
