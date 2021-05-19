@@ -72,7 +72,7 @@ impl EntrySigned {
     pub fn validate_message(
         &self,
         message_encoded: &MessageEncoded,
-    ) -> Result<MessageEncoded, EntrySignedError> {
+    ) -> Result<(), EntrySignedError> {
         // Convert to Entry from bamboo_rs_core first
         let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.into();
 
@@ -81,7 +81,8 @@ impl EntrySigned {
         if yamf_hash != entry.payload_hash {
             return Err(EntrySignedError::MessageHashMismatch);
         }
-        Ok(message_encoded.to_owned())
+
+        Ok(())
     }
 }
 
