@@ -50,10 +50,15 @@ impl MessageFields {
         Self(MessageFieldsNonWasm::new())
     }
 
-    /// Sets a field to this `MessageFields` instance.
+    /// Sets a field to a value with a given type.
     ///
-    /// This will throw an error when the field was already set or an invalid type value got
-    /// passed.
+    /// The type is defined by a simple string, similar to an enum. Since Rust enums can not (yet)
+    /// be exported via wasm-bindgen we have to do it like this. Possible type values are "text"
+    /// (String), "boolean" (Boolean), "float" (Number), "relation" (String representing a
+    /// hex-encoded hash) and "integer" (Number).
+    ///
+    /// This method will throw an error when the field was already set, an invalid type value got
+    /// passed or when the value does not reflect the given type.
     #[wasm_bindgen(js_name = "set")]
     pub fn set(&mut self, name: String, value_type: String, value: JsValue) -> Result<(), JsValue> {
         match &value_type[..] {
