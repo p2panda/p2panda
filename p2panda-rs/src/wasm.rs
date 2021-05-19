@@ -1,3 +1,9 @@
+//! Methods exported for WebAssembly targets.
+//!
+//! Wrappers for these methods are available in [p2panda-js], which allows idiomatic
+//! usage of `p2panda-rs` in a Javascript/Typescript environment.
+//!
+//! [p2panda-js]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 use std::convert::TryFrom;
 use std::panic;
 
@@ -6,12 +12,10 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
-use crate::atomic::{
-    Entry, EntrySigned, Hash, LogId, Message, MessageEncoded,
-    MessageFields as MessageFieldsNonWasm, MessageValue, SeqNum,
-};
-use crate::encoder::{decode_entry as decode, sign_and_encode};
-use crate::key_pair::KeyPair;
+use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
+use crate::hash::Hash;
+use crate::identity::KeyPair;
+use crate::message::{Message, MessageEncoded, MessageFields as MessageFieldsNonWasm, MessageValue};
 
 // Converts any Rust Error type into js_sys:Error while keeping its error
 // message. This helps propagating errors similar like we do in Rust but in

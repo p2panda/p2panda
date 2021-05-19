@@ -1,27 +1,12 @@
 use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
-use crate::atomic::{Hash, Message, Validation};
+use crate::hash::Hash;
+use crate::message::{Message, MessageEncodedError};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::schema::{validate_schema, MESSAGE_SCHEMA};
-
-/// Custom error types for `MessageEncoded`.
-#[derive(Error, Debug)]
-pub enum MessageEncodedError {
-    /// Encoded message string contains invalid hex characters.
-    #[error("invalid hex encoding in message")]
-    InvalidHexEncoding,
-
-    /// Message can't be deserialized from invalid CBOR encoding.
-    #[error("invalid CBOR format")]
-    InvalidCBOR,
-
-    /// Handle errors from validating CBOR schemas.
-    #[error(transparent)]
-    SchemaError(#[from] crate::schema::error::SchemaError),
-}
+use crate::Validate;
 
 /// Message represented in hex encoded CBOR format.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -76,7 +61,7 @@ impl TryFrom<&Message> for MessageEncoded {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl Validation for MessageEncoded {
+impl Validate for MessageEncoded {
     type Error = MessageEncodedError;
 
     /// Checks encoded message value against hex format and CDDL schema.
@@ -92,7 +77,7 @@ impl Validation for MessageEncoded {
 }
 
 #[cfg(target_arch = "wasm32")]
-impl Validation for MessageEncoded {
+impl Validate for MessageEncoded {
     type Error = MessageEncodedError;
 
     /// Checks encoded message value against hex format.
@@ -109,7 +94,8 @@ impl Validation for MessageEncoded {
 mod tests {
     use std::convert::TryFrom;
 
-    use crate::atomic::{Hash, Message, MessageValue};
+    use crate::hash::Hash;
+    use crate::message::{Message, MessageValue};
 
     use super::MessageEncoded;
 

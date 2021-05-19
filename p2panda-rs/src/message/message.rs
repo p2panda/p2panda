@@ -1,11 +1,12 @@
-use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use thiserror::Error;
 
-use crate::atomic::{Hash, MessageEncoded, Validation};
+use crate::hash::Hash;
+use crate::message::{MessageEncoded, MessageError, MessageFieldsError};
+use crate::Validate;
 
 /// Message format versions to introduce API changes in the future.
 #[derive(Clone, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
@@ -99,7 +100,7 @@ pub enum MessageValue {
 /// ```
 /// # extern crate p2panda_rs;
 /// # fn main() -> () {
-/// # use p2panda_rs::atomic::{MessageFields, MessageValue};
+/// # use p2panda_rs::message::{MessageFields, MessageValue};
 /// let mut fields = MessageFields::new();
 /// fields
 ///     .add("title", MessageValue::Text("Hello, Panda!".to_owned()))
@@ -108,19 +109,6 @@ pub enum MessageValue {
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MessageFields(BTreeMap<String, MessageValue>);
-
-/// Error types for methods of `MessageFields` struct.
-#[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
-pub enum MessageFieldsError {
-    /// Detected duplicate field when adding a new one.
-    #[error("field already exists")]
-    FieldDuplicate,
-
-    /// Tried to interact with an unknown field.
-    #[error("field does not exist")]
-    UnknownField,
-}
 
 impl MessageFields {
     /// Creates a new fields instance to add data to.
@@ -181,12 +169,12 @@ impl MessageFields {
 
         self.0.get(name)
     }
-    
+
     /// Returns an array of existing message keys.
     pub fn keys(&self) -> Vec<String> {
         self.0.keys().cloned().collect()
     }
-    
+
     /// Returns an iterator of existing message fields.
     pub fn iterator(&self) -> Iter<String, MessageValue> {
         self.0.iter()
@@ -218,15 +206,6 @@ pub struct Message {
     fields: Option<MessageFields>,
 }
 
-/// Error types for methods of `Message` struct.
-#[allow(missing_copy_implementations)]
-#[derive(Error, Debug)]
-pub enum MessageError {
-    /// Invalid attempt to create a message without any fields data.
-    #[error("message fields can not be empty")]
-    EmptyFields,
-}
-
 impl Message {
     /// Returns new create message.
     ///
@@ -235,9 +214,8 @@ impl Message {
     /// ```
     /// # extern crate p2panda_rs;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// use p2panda_rs::atomic::Message;
-    /// use p2panda_rs::atomic::Hash;
-    /// use p2panda_rs::atomic::{MessageFields, MessageValue};
+    /// use p2panda_rs::hash::Hash;
+    /// use p2panda_rs::message::{Message, MessageFields, MessageValue};
     ///
     /// let schema_hash_string = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
     /// let schema_msg_hash = Hash::new(schema_hash_string)?;
@@ -362,7 +340,7 @@ impl From<&MessageEncoded> for Message {
     }
 }
 
-impl Validation for Message {
+impl Validate for Message {
     type Error = MessageError;
 
     fn validate(&self) -> Result<(), Self::Error> {
@@ -379,7 +357,8 @@ impl Validation for Message {
 mod tests {
     use std::convert::TryFrom;
 
-    use crate::atomic::{Hash, MessageEncoded};
+    use crate::hash::Hash;
+    use crate::message::MessageEncoded;
 
     use super::{Message, MessageFields, MessageValue};
 
@@ -487,10 +466,16 @@ mod tests {
         fields
             .add("b", MessageValue::Text("penguin".to_owned()))
             .unwrap();
-        
+
         let mut field_iterator = fields.iterator();
-        
-        assert_eq!(field_iterator.next().unwrap().1, &MessageValue::Text("sloth".to_owned()));
-        assert_eq!(field_iterator.next().unwrap().1, &MessageValue::Text("penguin".to_owned()));
+
+        assert_eq!(
+            field_iterator.next().unwrap().1,
+            &MessageValue::Text("sloth".to_owned())
+        );
+        assert_eq!(
+            field_iterator.next().unwrap().1,
+            &MessageValue::Text("penguin".to_owned())
+        );
     }
 }

@@ -66,7 +66,7 @@ console.log(keyPair.publicKey());
 ```
 
 ```rust
-use p2panda_rs::KeyPair;
+use p2panda_rs::identity::KeyPair;
 
 let key_pair = KeyPair::new();
 println!("{}", key_pair.public_key());
