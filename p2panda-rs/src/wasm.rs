@@ -15,7 +15,9 @@ use wasm_bindgen::JsValue;
 use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
-use crate::message::{Message, MessageEncoded, MessageFields as MessageFieldsNonWasm, MessageValue};
+use crate::message::{
+    Message, MessageEncoded, MessageFields as MessageFieldsNonWasm, MessageValue,
+};
 
 // Converts any Rust Error type into js_sys:Error while keeping its error
 // message. This helps propagating errors similar like we do in Rust but in
@@ -174,8 +176,8 @@ pub fn sign_encode_entry(
     // Serialize result to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&SignEncodeEntryResult {
         entry_encoded: entry_signed.as_str().into(),
-        entry_hash: entry_signed.hash().as_hex().into(),
-        message_hash: message_encoded.hash().as_hex().into(),
+        entry_hash: entry_signed.hash().as_str().into(),
+        message_hash: message_encoded.hash().as_str().into(),
     }));
     Ok(result)
 }

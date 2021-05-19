@@ -144,8 +144,8 @@ fn fixture_sign_encode(fixture: PandaTestFixture) {
 
     // fixture EntrySigned hash should equal newly encoded EntrySigned hash.
     assert_eq!(
-        fixture.entry_signed_encoded.hash().as_hex(),
-        entry_signed_encoded.hash().as_hex()
+        fixture.entry_signed_encoded.hash().as_str(),
+        entry_signed_encoded.hash().as_str()
     );
 }
 

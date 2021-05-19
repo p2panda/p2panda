@@ -119,7 +119,7 @@ mod tests {
 
         assert!(message.is_update());
         assert!(message.has_id());
-        assert_eq!(message.schema().as_hex(), "00402dc25d32dfb400bb295b663d4706bc47f0cb4f1edff277c737afc8a9232330ae9884fcf6d02141a785c5fd82c196b973e8427efc0c04d0444dcc3059220b9eda");
+        assert_eq!(message.schema().as_str(), "00402dc25d32dfb400bb295b663d4706bc47f0cb4f1edff277c737afc8a9232330ae9884fcf6d02141a785c5fd82c196b973e8427efc0c04d0444dcc3059220b9eda");
 
         let fields = message.fields().unwrap();
 
