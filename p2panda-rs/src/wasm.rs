@@ -1,7 +1,7 @@
 //! Methods exported for WebAssembly targets.
 //!
-//! Wrappers for these methods are available in [p2panda-js], which allows idiomatic
-//! usage of `p2panda-rs` in a Javascript/Typescript environment.
+//! Wrappers for these methods are available in [p2panda-js], which allows idiomatic usage of
+//! `p2panda-rs` in a Javascript/Typescript environment.
 //!
 //! [p2panda-js]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 use std::convert::TryFrom;
@@ -17,9 +17,8 @@ use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::message::{Message, MessageEncoded, MessageFields as MessageFieldsNonWasm, MessageValue};
 
-// Converts any Rust Error type into js_sys:Error while keeping its error
-// message. This helps propagating errors similar like we do in Rust but in
-// WebAssembly contexts.
+// Converts any Rust Error type into js_sys:Error while keeping its error message. This helps
+// propagating errors similar like we do in Rust but in WebAssembly contexts.
 macro_rules! jserr {
     ($l:expr) => {
         $l.map_err::<JsValue, _>(|err| js_sys::Error::new(&format!("{}", err)).into())?;
@@ -128,9 +127,8 @@ struct SignEncodeEntryResult {
 /// `entry_backlink_hash`, `entry_skiplink_hash`, `previous_seq_num` and `log_id` are obtained by
 /// querying the `getEntryArguments` method of a p2panda node.
 ///
-/// `previous_seq_num` and `log_id` are `i32` parameters even though they
-/// have 64 bits in the bamboo spec. Webkit doesn't support `BigInt` so
-/// it can't handle those large values.
+/// `previous_seq_num` and `log_id` are `i32` parameters even though they have 64 bits in the
+/// bamboo spec. Webkit doesn't support `BigInt` so it can't handle those large values.
 #[wasm_bindgen(js_name = signEncodeEntry)]
 pub fn sign_encode_entry(
     key_pair: &KeyPair,
