@@ -106,7 +106,7 @@ impl MessageFields {
         match self.0.get(&name) {
             Some(MessageValue::Boolean(value)) => Ok(JsValue::from_bool(value.to_owned())),
             Some(MessageValue::Text(value)) => Ok(JsValue::from_str(value)),
-            Some(MessageValue::Relation(value)) => Ok(JsValue::from_str(&value.as_hex())),
+            Some(MessageValue::Relation(value)) => Ok(JsValue::from_str(&value.as_str())),
             Some(MessageValue::Float(value)) => Ok(JsValue::from_f64(value.to_owned())),
             Some(MessageValue::Integer(value)) => {
                 // Downcast i64 to i32 and throw error when value too large
