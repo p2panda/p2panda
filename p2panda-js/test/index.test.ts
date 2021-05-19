@@ -28,26 +28,67 @@ describe('KeyPair', () => {
 
 describe('MessageFields', () => {
   it('stores and returns the right fields', async () => {
+    const TEST_SCHEMA =
+      '0040cf94f6d605657e90c543b0c919070cdaaf7209c5e1ea58acb8f3568fa2114268dc9ac3bafe12af277d286fce7dc59b7c0c348973c4e9dacbe79485e56ac2a702';
+
     const { MessageFields } = await p2panda;
 
     const fields = new MessageFields();
-    fields.addText('description', 'Hello, Panda');
-    fields.addInteger('temperature', 23);
+
+    // Set fields of all possible types
+    fields.set('description', 'text', 'Hello, Panda');
+    fields.set('temperature', 'integer', 23);
+    fields.set('isCute', 'boolean', true);
+    fields.set('degree', 'float', 12.322);
+    fields.set('username', 'relation', TEST_SCHEMA);
 
     // Returns the correct fields
     expect(fields.get('description')).to.eq('Hello, Panda');
     expect(fields.get('temperature')).to.eq(23);
 
-    // Returns the correct length
-    expect(fields.length()).to.eq(2);
-
     // Return nothing when field does not exist
     expect(fields.get('message')).to.eq(null);
   });
 
-  it('throws an error when removing an inexistent field', async () => {
+  it('returns the correct length', async () => {
     const { MessageFields } = await p2panda;
+    const fields = new MessageFields();
+    expect(fields.length()).to.eq(0);
+    fields.set('message', 'text', 'Good morning');
+    expect(fields.length()).to.eq(1);
+    fields.remove('message');
+    expect(fields.length()).to.eq(0);
+  });
 
+  it('throws when trying to set a field twice', async () => {
+    const { MessageFields } = await p2panda;
+    const fields = new MessageFields();
+    fields.set('description', 'text', 'Good morning, Panda');
+    expect(() =>
+      fields.set('description', 'text', 'Good night, Panda'),
+    ).to.throw('field already exists');
+  });
+
+  it('throws when using invalid types or values', async () => {
+    const { MessageFields } = await p2panda;
+    const fields = new MessageFields();
+
+    // Throw when type is invalid
+    expect(() => fields.set('test', 'lulu', true)).to.throw(
+      'Unknown type value',
+    );
+    expect(() => fields.set('test', 'integer', true)).to.throw(
+      'Invalid integer value',
+    );
+
+    // Throw when relation is an invalid hash
+    expect(() => fields.set('contact', 'relation', 'test')).to.throw(
+      'invalid hex encoding in hash string',
+    );
+  });
+
+  it('throws when removing an inexistent field', async () => {
+    const { MessageFields } = await p2panda;
     const fields = new MessageFields();
     expect(() => fields.remove('test')).to.throw();
   });
@@ -73,7 +114,7 @@ describe('Entries', () => {
 
     // Create message
     const fields = new MessageFields();
-    fields.addText('description', 'Hello, Panda');
+    fields.set('description', 'text', 'Hello, Panda');
     expect(fields.get('description')).to.eq('Hello, Panda');
 
     const messageEncoded = encodeCreateMessage(TEST_SCHEMA, fields);

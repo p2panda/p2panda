@@ -50,40 +50,41 @@ impl MessageFields {
         Self(MessageFieldsNonWasm::new())
     }
 
-    /// Adds a boolean field to this `MessageFields` instance.
-    #[wasm_bindgen(js_name = "addBoolean")]
-    pub fn add_boolean(&mut self, name: String, value: bool) -> Result<(), JsValue> {
-        jserr!(self.0.add(&name, MessageValue::Boolean(value)));
-        Ok(())
-    }
-
-    /// Adds a new text field to this `MessageFields` instance.
-    #[wasm_bindgen(js_name = "addText")]
-    pub fn add_text(&mut self, name: String, value: String) -> Result<(), JsValue> {
-        jserr!(self.0.add(&name, MessageValue::Text(value)));
-        Ok(())
-    }
-
-    /// Adds a new signed integer field to this `MessageFields` instance.
-    #[wasm_bindgen(js_name = "addInteger")]
-    pub fn add_integer(&mut self, name: String, value: i32) -> Result<(), JsValue> {
-        jserr!(self.0.add(&name, MessageValue::Integer(value as i64)));
-        Ok(())
-    }
-
-    /// Adds a new float number field to this `MessageFields` instance.
-    #[wasm_bindgen(js_name = "addFloat")]
-    pub fn add_float(&mut self, name: String, value: f32) -> Result<(), JsValue> {
-        jserr!(self.0.add(&name, MessageValue::Float(value as f64)));
-        Ok(())
-    }
-
-    /// Adds a new relation field to this `MessageFields` instance.
-    #[wasm_bindgen(js_name = "addRelation")]
-    pub fn add_relation(&mut self, name: String, value: String) -> Result<(), JsValue> {
-        let hash = jserr!(Hash::new(&value));
-        jserr!(self.0.add(&name, MessageValue::Relation(hash)));
-        Ok(())
+    /// Sets a field to this `MessageFields` instance.
+    ///
+    /// This will throw an error when the field was already set or an invalid type value got
+    /// passed.
+    #[wasm_bindgen(js_name = "set")]
+    pub fn set(&mut self, name: String, value_type: String, value: JsValue) -> Result<(), JsValue> {
+        match &value_type[..] {
+            "text" => {
+                let value_str = jserr!(value.as_string().ok_or("Invalid string value"));
+                jserr!(self.0.add(&name, MessageValue::Text(value_str)));
+                Ok(())
+            }
+            "boolean" => {
+                let value_bool = jserr!(value.as_bool().ok_or("Invalid boolean value"));
+                jserr!(self.0.add(&name, MessageValue::Boolean(value_bool)));
+                Ok(())
+            }
+            "integer" => {
+                let value_int = jserr!(value.as_f64().ok_or("Invalid integer value")) as i64;
+                jserr!(self.0.add(&name, MessageValue::Integer(value_int)));
+                Ok(())
+            }
+            "float" => {
+                let value_float = jserr!(value.as_f64().ok_or("Invalid float value"));
+                jserr!(self.0.add(&name, MessageValue::Float(value_float)));
+                Ok(())
+            }
+            "relation" => {
+                let value_str = jserr!(value.as_string().ok_or("Invalid string value"));
+                let hash = jserr!(Hash::new(&value_str));
+                jserr!(self.0.add(&name, MessageValue::Relation(hash)));
+                Ok(())
+            }
+            _ => Err(js_sys::Error::new("Unknown type value").into()),
+        }
     }
 
     /// Removes an existing field from this `MessageFields` instance.
