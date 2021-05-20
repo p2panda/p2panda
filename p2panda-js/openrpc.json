@@ -1,0 +1,150 @@
+{
+  "openrpc": "1.0.0-rc1",
+  "info": {
+    "title": "p2panda RPC interface",
+    "version": "0.0.1"
+  },
+  "components": {
+    "schemas": {
+      "EntryArgs": {
+        "type": "object",
+        "properties": {
+          "entryHashSkiplink": {
+            "type": "string"
+          },
+          "entryHashBacklink": {
+            "type": "string"
+          },
+          "seqNum": {
+            "type": "number"
+          },
+          "logId": {
+            "type": "number"
+          }
+        }
+      },
+      "Entry": {
+        "type": "object",
+        "properties": {
+          "author": {
+            "type": "string"
+          },
+          "entryBytes": {
+            "type": "string"
+          },
+          "entryHash": {
+            "type": "string"
+          },
+          "logId": {
+            "type": "number"
+          },
+          "payloadBytes": {
+            "type": "string"
+          },
+          "payloadHash": {
+            "type": "string"
+          },
+          "seqNum": {
+            "type": "number"
+          }
+        }
+      },
+      "Entries": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Entry"
+        }
+      },
+      "QueryEntriesResponse": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Entries"
+            }
+          }
+        }
+      }
+    }
+  },
+  "methods": [
+    {
+      "name": "panda_getEntryArguments",
+      "summary": "Get arguments for building next entry",
+      "params": [
+        {
+          "name": "author",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "schema",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "next entry arguments",
+        "schema": {
+          "$ref": "#/components/schemas/EntryArgs"
+        }
+      }
+    },
+    {
+      "name": "panda_queryEntries",
+      "params": [
+        {
+          "name": "schema",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "examples": [
+        {
+          "name": "testQueryExample",
+          "params": [
+            {
+              "name": "schema",
+              "value": "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437"
+            }
+          ],
+          "result": {
+            "name": "testQueryResult",
+            "value": {
+              "entries": [
+                {
+                  "author": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49",
+                  "entryBytes": "002deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a490101e200406cde0ae5712e776b41881a2d54bd94605c37c592b95694c941e60bf9f7f55ef6d9590d5d810ec275990ffa5983eb10f92d8cd0a07045e0cc6c3a488b01895191f9593fc917e86f697e2736058133324a3a35f4ea5e87d00e23fce84103c3f202c8fe259ba864a2c68facf56cf7a81e23a1583a2ea82584763cb56dfdd6bde607",
+                  "entryHash": "0040b4108a805f2dd688c3589373fce2889093c8c843c482e0aa0d4faf512f381616c632172f73091063b71d715af7d5dd16aca29849c641609539a34db876c37b40",
+                  "logId": 1,
+                  "payloadBytes": "a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a26b6465736372697074696f6ea1645465787471666f7220706c6179696e67206368657373646e616d65a16454657874656368657373",
+                  "payloadHash": "00406cde0ae5712e776b41881a2d54bd94605c37c592b95694c941e60bf9f7f55ef6d9590d5d810ec275990ffa5983eb10f92d8cd0a07045e0cc6c3a488b01895191",
+                  "seqNum": 1
+                },
+                {
+                  "author": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49",
+                  "entryBytes": "002deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a4901020040b4108a805f2dd688c3589373fce2889093c8c843c482e0aa0d4faf512f381616c632172f73091063b71d715af7d5dd16aca29849c641609539a34db876c37b40e200406cde0ae5712e776b41881a2d54bd94605c37c592b95694c941e60bf9f7f55ef6d9590d5d810ec275990ffa5983eb10f92d8cd0a07045e0cc6c3a488b01895191ce2681f7c2b3634d4aee83fd3464d151bdee1e90d08fb9b63108d921f8faa0e8b0fd10ebcbfa21f4d44bcf6fd06f1ef8e5b91f3fafb156141610d406f1b3a10b",
+                  "entryHash": "004075cb5fc21eeda09f7ce4f04ea318e84f8430d9850e1380419c16f1c9684b1f7bc7f2b7a5ba0cb850d8ca446f56b0453132a26e482fcb21d59a0b26a5dde4811c",
+                  "logId": 1,
+                  "payloadBytes": "a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a26b6465736372697074696f6ea1645465787471666f7220706c6179696e67206368657373646e616d65a16454657874656368657373",
+                  "payloadHash": "00406cde0ae5712e776b41881a2d54bd94605c37c592b95694c941e60bf9f7f55ef6d9590d5d810ec275990ffa5983eb10f92d8cd0a07045e0cc6c3a488b01895191",
+                  "seqNum": 2
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "result": {
+        "name": "query response",
+        "schema": {
+          "$ref": "#/components/schemas/QueryEntriesResponse"
+        }
+      }
+    }
+  ]
+}
