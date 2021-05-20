@@ -8,25 +8,51 @@ pub const MESSAGE_SCHEMA: &str = r#"
         message-body,
     }
 
-    hash = tstr .regexp "[0-9a-fa-f]{128}"
-    message-fields = { + tstr => tstr / int / float / bool }
+    hash = tstr .regexp "[0-9a-fa-f]{132}"
 
     ; Create message
-    message-body = (
+    message-body //= (
         action: "create",
         fields: message-fields
     )
 
-    ; Update message
     message-body //= (
         action: "update",
-        fields: message-fields,
         id: hash,
+        fields: message-fields
     )
 
-    ; Delete message
     message-body //= (
         action: "delete",
         id: hash,
+    )
+
+    ; Message fields with key and value
+    message-fields = { + tstr => { message-value } }
+
+    ; Message values
+    message-value //= (
+        type: "text",
+        value: tstr,
+    )
+
+    message-value //= (
+        type: "integer",
+        value: int,
+    )
+
+    message-value //= (
+        type: "float",
+        value: float,
+    )
+
+    message-value //= (
+        type: "boolean",
+        value: bool,
+    )
+
+    message-value //= (
+        type: "relation",
+        value: hash,
     )
 "#;
