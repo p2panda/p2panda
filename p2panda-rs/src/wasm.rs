@@ -19,12 +19,15 @@ use crate::message::{
     Message, MessageEncoded, MessageFields as MessageFieldsNonWasm, MessageValue,
 };
 
-// Converts any Rust Error type into js_sys:Error while keeping its error
-// message. This helps propagating errors similar like we do in Rust but in
-// WebAssembly contexts.
+// Converts any Rust Error type into js_sys:Error while keeping its error message. This helps
+// propagating errors similar like we do in Rust but in WebAssembly contexts.
 macro_rules! jserr {
     ($l:expr) => {
         $l.map_err::<JsValue, _>(|err| js_sys::Error::new(&format!("{}", err)).into())?;
+    };
+
+    ($l:expr, $err:expr) => {
+        $l.map_err::<JsValue, _>(|_| js_sys::Error::new(&format!("{:?}", $err)).into())?;
     };
 }
 
