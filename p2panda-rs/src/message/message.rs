@@ -67,7 +67,9 @@ impl<'de> Deserialize<'de> for MessageAction {
 impl Copy for MessageAction {}
 
 /// Enum of possible data types which can be added to the messages fields as values.
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "lowercase")]
 pub enum MessageValue {
     /// Basic `boolean` value.
     Boolean(bool),
