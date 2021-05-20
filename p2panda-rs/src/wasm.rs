@@ -50,7 +50,7 @@ impl MessageFields {
         Self(MessageFieldsNonWasm::new())
     }
 
-    /// Sets a field to a value with a given type.
+    /// Adds a field with a value and a given value type.
     ///
     /// The type is defined by a simple string, similar to an enum. Since Rust enums can not (yet)
     /// be exported via wasm-bindgen we have to do it like this. Possible type values are "text"
@@ -59,8 +59,8 @@ impl MessageFields {
     ///
     /// This method will throw an error when the field was already set, an invalid type value got
     /// passed or when the value does not reflect the given type.
-    #[wasm_bindgen(js_name = "set")]
-    pub fn set(&mut self, name: String, value_type: String, value: JsValue) -> Result<(), JsValue> {
+    #[wasm_bindgen()]
+    pub fn add(&mut self, name: String, value_type: String, value: JsValue) -> Result<(), JsValue> {
         match &value_type[..] {
             "text" => {
                 let value_str = jserr!(value.as_string().ok_or("Invalid string value"));
@@ -95,7 +95,7 @@ impl MessageFields {
     /// Removes an existing field from this `MessageFields` instance.
     ///
     /// This might throw an error when trying to remove an inexistent field.
-    #[wasm_bindgen(js_name = "remove")]
+    #[wasm_bindgen()]
     pub fn remove(&mut self, name: String) -> Result<(), JsValue> {
         jserr!(self.0.remove(&name));
         Ok(())
@@ -107,7 +107,7 @@ impl MessageFields {
     /// value is larger than an i32 number. The wasm API will use i32 numbers in JavaScript
     /// contexts instead of i64 / BigInt as long as BigInt support is not given in Safari on MacOS
     /// and iOS.
-    #[wasm_bindgen(js_name = "get")]
+    #[wasm_bindgen()]
     pub fn get(&mut self, name: String) -> Result<JsValue, JsValue> {
         match self.0.get(&name) {
             Some(MessageValue::Boolean(value)) => Ok(JsValue::from_bool(value.to_owned())),

@@ -35,11 +35,11 @@ describe('MessageFields', () => {
     const fields = new MessageFields();
 
     // Set fields of all possible types
-    fields.set('description', 'text', 'Hello, Panda');
-    fields.set('temperature', 'integer', 23);
-    fields.set('isCute', 'boolean', true);
-    fields.set('degree', 'float', 12.322);
-    fields.set('username', 'relation', TEST_SCHEMA);
+    fields.add('description', 'text', 'Hello, Panda');
+    fields.add('temperature', 'integer', 23);
+    fields.add('isCute', 'boolean', true);
+    fields.add('degree', 'float', 12.322);
+    fields.add('username', 'relation', TEST_SCHEMA);
 
     // Returns the correct fields
     expect(fields.get('description')).to.eq('Hello, Panda');
@@ -56,7 +56,7 @@ describe('MessageFields', () => {
     const { MessageFields } = await p2panda;
     const fields = new MessageFields();
     expect(fields.length()).to.eq(0);
-    fields.set('message', 'text', 'Good morning');
+    fields.add('message', 'text', 'Good morning');
     expect(fields.length()).to.eq(1);
     fields.remove('message');
     expect(fields.length()).to.eq(0);
@@ -65,9 +65,9 @@ describe('MessageFields', () => {
   it('throws when trying to set a field twice', async () => {
     const { MessageFields } = await p2panda;
     const fields = new MessageFields();
-    fields.set('description', 'text', 'Good morning, Panda');
+    fields.add('description', 'text', 'Good morning, Panda');
     expect(() =>
-      fields.set('description', 'text', 'Good night, Panda'),
+      fields.add('description', 'text', 'Good night, Panda'),
     ).to.throw('field already exists');
   });
 
@@ -76,15 +76,15 @@ describe('MessageFields', () => {
     const fields = new MessageFields();
 
     // Throw when type is invalid
-    expect(() => fields.set('test', 'lulu', true)).to.throw(
+    expect(() => fields.add('test', 'lulu', true)).to.throw(
       'Unknown type value',
     );
-    expect(() => fields.set('test', 'integer', true)).to.throw(
+    expect(() => fields.add('test', 'integer', true)).to.throw(
       'Invalid integer value',
     );
 
     // Throw when relation is an invalid hash
-    expect(() => fields.set('contact', 'relation', 'test')).to.throw(
+    expect(() => fields.add('contact', 'relation', 'test')).to.throw(
       'invalid hex encoding in hash string',
     );
   });
@@ -116,7 +116,7 @@ describe('Entries', () => {
 
     // Create message
     const fields = new MessageFields();
-    fields.set('description', 'text', 'Hello, Panda');
+    fields.add('description', 'text', 'Hello, Panda');
     expect(fields.get('description')).to.eq('Hello, Panda');
 
     const messageEncoded = encodeCreateMessage(TEST_SCHEMA, fields);
