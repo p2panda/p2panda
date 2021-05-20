@@ -11,47 +11,45 @@ pub const MESSAGE_SCHEMA: &str = r#"
     hash = tstr .regexp "[0-9a-fa-f]{132}"
 
     ; Create message
-    message-body //= (
-        action: "create",
-        fields: message-fields
-    )
-
-    message-body //= (
-        action: "update",
-        id: hash,
-        fields: message-fields
-    )
-
-    message-body //= (
-        action: "delete",
-        id: hash,
+    message-body = (
+        action: "create", fields: message-fields //
+        action: "update", id: hash, fields: message-fields //
+        action: "delete", id: hash,
     )
 
     ; Message fields with key and value
-    message-fields = { + tstr => { message-value } }
+    message-fields = {
+        + tstr => {
+            message-value-text //
+            message-value-integer //
+            message-value-float //
+            message-value-boolean //
+            message-value-relation
+        }
+    }
 
     ; Message values
-    message-value //= (
+    message-value-text = (
         type: "text",
         value: tstr,
     )
 
-    message-value //= (
+    message-value-integer = (
         type: "integer",
         value: int,
     )
 
-    message-value //= (
+    message-value-float = (
         type: "float",
         value: float,
     )
 
-    message-value //= (
+    message-value-boolean = (
         type: "boolean",
         value: bool,
     )
 
-    message-value //= (
+    message-value-relation = (
         type: "relation",
         value: hash,
     )
