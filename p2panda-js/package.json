@@ -8,7 +8,7 @@
     "build": "run-s clear wasm webpack",
     "clear": "rimraf ./lib ./wasm-web ./wasm-node",
     "lint": "eslint --ext .ts .",
-    "mock-node-rpc": "open-rpc-mock-server --port 2020 > /dev/null",
+    "mock-node-rpc": "open-rpc-mock-server --port 2020 > ./mock-server.log",
     "test": "run-p --race mock-node-rpc test:run",
     "test:prepare": "run-s --silent wasm webpack:node",
     "test:mocha": "TS_NODE_COMPILER_OPTIONS='{\"strict\": false}' mocha -r ts-node/register -r tsconfig-paths/register -r @babel/register ./test/**/*.test.ts",
@@ -74,6 +74,7 @@
   },
   "dependencies": {
     "@open-rpc/client-js": "^1.6.3",
+    "@open-rpc/typings": "^1.11.3",
     "bufferutil": "^4.0.3",
     "debug": "^2.6.9",
     "fetch-headers": "^2.0.0",
