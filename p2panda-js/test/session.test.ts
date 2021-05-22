@@ -13,4 +13,14 @@ describe('Session', () => {
     );
     expect(entries.length).to.equal(2);
   });
+
+  it('throws when querying without a schema');
+
+  it('can publish entries');
+
+  it('caches next entry args');
+
+  it('throws when publishing without a key pair');
+
+  it('throws without a configured endpoint');
 });
