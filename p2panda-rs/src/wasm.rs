@@ -62,17 +62,17 @@ impl MessageFields {
     #[wasm_bindgen()]
     pub fn add(&mut self, name: String, value_type: String, value: JsValue) -> Result<(), JsValue> {
         match &value_type[..] {
-            "text" => {
+            "str" => {
                 let value_str = jserr!(value.as_string().ok_or("Invalid string value"));
                 jserr!(self.0.add(&name, MessageValue::Text(value_str)));
                 Ok(())
             }
-            "boolean" => {
+            "bool" => {
                 let value_bool = jserr!(value.as_bool().ok_or("Invalid boolean value"));
                 jserr!(self.0.add(&name, MessageValue::Boolean(value_bool)));
                 Ok(())
             }
-            "integer" => {
+            "int" => {
                 let value_int = jserr!(value.as_f64().ok_or("Invalid integer value")) as i64;
                 jserr!(self.0.add(&name, MessageValue::Integer(value_int)));
                 Ok(())

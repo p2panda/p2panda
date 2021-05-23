@@ -35,9 +35,9 @@ describe('MessageFields', () => {
     const fields = new MessageFields();
 
     // Set fields of all possible types
-    fields.add('description', 'text', 'Hello, Panda');
-    fields.add('temperature', 'integer', 23);
-    fields.add('isCute', 'boolean', true);
+    fields.add('description', 'str', 'Hello, Panda');
+    fields.add('temperature', 'int', 23);
+    fields.add('isCute', 'bool', true);
     fields.add('degree', 'float', 12.322);
     fields.add('username', 'relation', TEST_SCHEMA);
 
@@ -56,7 +56,7 @@ describe('MessageFields', () => {
     const { MessageFields } = await p2panda;
     const fields = new MessageFields();
     expect(fields.length()).to.eq(0);
-    fields.add('message', 'text', 'Good morning');
+    fields.add('message', 'str', 'Good morning');
     expect(fields.length()).to.eq(1);
     fields.remove('message');
     expect(fields.length()).to.eq(0);
@@ -65,9 +65,9 @@ describe('MessageFields', () => {
   it('throws when trying to set a field twice', async () => {
     const { MessageFields } = await p2panda;
     const fields = new MessageFields();
-    fields.add('description', 'text', 'Good morning, Panda');
+    fields.add('description', 'str', 'Good morning, Panda');
     expect(() =>
-      fields.add('description', 'text', 'Good night, Panda'),
+      fields.add('description', 'str', 'Good night, Panda'),
     ).to.throw('field already exists');
   });
 
@@ -79,7 +79,7 @@ describe('MessageFields', () => {
     expect(() => fields.add('test', 'lulu', true)).to.throw(
       'Unknown type value',
     );
-    expect(() => fields.add('test', 'integer', true)).to.throw(
+    expect(() => fields.add('test', 'int', true)).to.throw(
       'Invalid integer value',
     );
 
@@ -116,7 +116,7 @@ describe('Entries', () => {
 
     // Create message
     const fields = new MessageFields();
-    fields.add('description', 'text', 'Hello, Panda');
+    fields.add('description', 'str', 'Hello, Panda');
     expect(fields.get('description')).to.eq('Hello, Panda');
 
     const messageEncoded = encodeCreateMessage(TEST_SCHEMA, fields);
