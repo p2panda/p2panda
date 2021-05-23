@@ -14,7 +14,19 @@ describe('Session', () => {
     expect(entries.length).to.equal(2);
   });
 
-  it('throws when querying without a schema');
+  it('throws when querying without a schema', async () => {
+    const session = new Session('http://localhost:2020');
+    let error;
+    try {
+      await session.queryEntries();
+    } catch (e) {
+      error = e;
+    }
+    expect(error.message).to.equal(
+      "Cannot read property 'length' of undefined",
+    );
+  });
+
 
   it('can publish entries');
 
