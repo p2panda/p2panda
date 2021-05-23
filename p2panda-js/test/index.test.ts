@@ -141,7 +141,8 @@ describe('Entries', () => {
     expect(decodedEntry.logId).to.eq(LOG_ID);
     expect(decodedEntry.message.action).to.eq('create');
     expect(decodedEntry.message.schema).to.eq(TEST_SCHEMA);
-    expect(decodedEntry.message.fields.description.Text).to.eq('Hello, Panda');
+    expect(decodedEntry.message.fields.description.value).to.eq('Hello, Panda');
+    expect(decodedEntry.message.fields.description.type).to.eq('str');
 
     // Test decoding entry without message
     expect(() => decodeEntry(entryEncoded)).not.to.throw();
