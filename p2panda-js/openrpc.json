@@ -86,6 +86,29 @@
           }
         }
       ],
+      "examples": [
+        {
+          "name": "testEntryArgumentsExample",
+          "params": [
+            {
+              "name": "author",
+              "value": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49"},
+            {
+              "name": "schema",
+              "value": "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437"
+            }
+          ],
+          "result": {
+            "name": "testEntryArgumentsResult",
+            "value": {
+              "entryHashSkiplink": "SKIPLINK_HASH",
+              "entryHashBacklink": "BACKLINK_HASH",
+              "seqNum": 3,
+              "logId": 1   
+            }
+          }
+        }
+      ],
       "result": {
         "name": "next entry arguments",
         "schema": {
