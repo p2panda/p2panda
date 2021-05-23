@@ -67,21 +67,28 @@ impl<'de> Deserialize<'de> for MessageAction {
 impl Copy for MessageAction {}
 
 /// Enum of possible data types which can be added to the messages fields as values.
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value")]
 pub enum MessageValue {
     /// Basic `boolean` value.
+    #[serde(rename = "bool")]
     Boolean(bool),
 
     /// Basic signed `integer` value.
+    #[serde(rename = "int")]
     Integer(i64),
 
     /// Basic signed `float` value.
+    #[serde(rename = "float")]
     Float(f64),
 
     /// Basic `string` value.
+    #[serde(rename = "str")]
     Text(String),
 
     /// Reference to an instance.
+    #[serde(rename = "relation")]
     Relation(Hash),
 }
 
