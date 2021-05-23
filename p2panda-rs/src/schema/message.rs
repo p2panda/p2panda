@@ -30,12 +30,12 @@ pub const MESSAGE_SCHEMA: &str = r#"
 
     ; Message values
     message-value-text = (
-        type: "text",
+        type: "str",
         value: tstr,
     )
 
     message-value-integer = (
-        type: "integer",
+        type: "int",
         value: int,
     )
 
@@ -45,7 +45,7 @@ pub const MESSAGE_SCHEMA: &str = r#"
     )
 
     message-value-boolean = (
-        type: "boolean",
+        type: "bool",
         value: bool,
     )
 
