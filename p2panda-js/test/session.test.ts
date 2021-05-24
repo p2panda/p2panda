@@ -25,9 +25,16 @@ describe('Session', () => {
     expect(error.message).to.equal('Schema must be provided');
   });
 
+  it('gets next entry args', async () => {
+    const session = new Session('http://localhost:2020');
+    const { KeyPair } = await session.loadWasm();
+    const keyPair = new KeyPair();
+    const nextEntryArgs = await session.getNextEntryArgs(
+      keyPair.publicKey(),
+      '00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437',
     );
+    expect(nextEntryArgs.entryHashSkiplink).to.equal('SKIPLINK_HASH');
   });
-
 
   it('can publish entries');
 
