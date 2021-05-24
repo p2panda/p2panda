@@ -53,9 +53,9 @@ impl MessageFields {
     /// Adds a field with a value and a given value type.
     ///
     /// The type is defined by a simple string, similar to an enum. Since Rust enums can not (yet)
-    /// be exported via wasm-bindgen we have to do it like this. Possible type values are "text"
-    /// (String), "boolean" (Boolean), "float" (Number), "relation" (String representing a
-    /// hex-encoded hash) and "integer" (Number).
+    /// be exported via wasm-bindgen we have to do it like this. Possible type values are "str"
+    /// (String), "bool" (Boolean), "float" (Number), "relation" (String representing a hex-encoded
+    /// hash) and "int" (Number).
     ///
     /// This method will throw an error when the field was already set, an invalid type value got
     /// passed or when the value does not reflect the given type.
