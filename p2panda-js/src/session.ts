@@ -106,6 +106,8 @@ export default class Session {
   }
 
   async getNextEntryArgs(author: string, schema: string): Promise<EntryArgs> {
+    if (!author || !schema)
+      throw new Error('Author and schema must be provided');
     const cacheKey = `${author}/${schema}`;
     const cachedValue = this.nextEntryArgs[cacheKey];
     if (cachedValue) {
@@ -136,6 +138,9 @@ export default class Session {
     entryEncoded: string,
     messageEncoded: string,
   ): Promise<EntryArgs> {
+    if (!entryEncoded || !messageEncoded)
+      throw new Error('Encoded entry and message must be provided');
+
     const result = await this.client.request({
       method: 'panda_publishEntry',
       params: { entryEncoded, messageEncoded },
@@ -145,6 +150,7 @@ export default class Session {
   }
 
   async queryEntriesEncoded(schema: string): Promise<EncodedEntry[]> {
+    if (!schema) throw new Error('Schema must be provided');
     const result = await this.client.request({
       method: 'panda_queryEntries',
       params: { schema },
@@ -154,6 +160,7 @@ export default class Session {
   }
 
   async queryEntries(schema: string): Promise<EntryRecord[]> {
+    if (!schema) throw new Error('Schema must be provided');
     const { decodeEntry } = await this.loadWasm();
     const result = await this.queryEntriesEncoded(schema);
     return Promise.all(
