@@ -59,7 +59,7 @@ impl MessageFields {
     ///
     /// This method will throw an error when the field was already set, an invalid type value got
     /// passed or when the value does not reflect the given type.
-    #[wasm_bindgen()]
+    #[wasm_bindgen]
     pub fn add(&mut self, name: String, value_type: String, value: JsValue) -> Result<(), JsValue> {
         match &value_type[..] {
             "str" => {
@@ -73,6 +73,10 @@ impl MessageFields {
                 Ok(())
             }
             "int" => {
+                // Bear in mind JavaScript does not represent numbers as integers, all numbers 
+                // are represented as floats therefore if a float is passed incorrectly it will 
+                // simply be cast to an int.
+                // See: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number
                 let value_int = jserr!(value.as_f64().ok_or("Invalid integer value")) as i64;
                 jserr!(self.0.add(&name, MessageValue::Integer(value_int)));
                 Ok(())
@@ -95,7 +99,7 @@ impl MessageFields {
     /// Removes an existing field from this `MessageFields` instance.
     ///
     /// This might throw an error when trying to remove an inexistent field.
-    #[wasm_bindgen()]
+    #[wasm_bindgen]
     pub fn remove(&mut self, name: String) -> Result<(), JsValue> {
         jserr!(self.0.remove(&name));
         Ok(())
@@ -107,7 +111,7 @@ impl MessageFields {
     /// value is larger than an i32 number. The wasm API will use i32 numbers in JavaScript
     /// contexts instead of i64 / BigInt as long as BigInt support is not given in Safari on MacOS
     /// and iOS.
-    #[wasm_bindgen()]
+    #[wasm_bindgen]
     pub fn get(&mut self, name: String) -> Result<JsValue, JsValue> {
         match self.0.get(&name) {
             Some(MessageValue::Boolean(value)) => Ok(JsValue::from_bool(value.to_owned())),
