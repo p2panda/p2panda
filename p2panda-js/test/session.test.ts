@@ -22,8 +22,9 @@ describe('Session', () => {
     } catch (e) {
       error = e;
     }
-    expect(error.message).to.equal(
-      "Cannot read property 'length' of undefined",
+    expect(error.message).to.equal('Schema must be provided');
+  });
+
     );
   });
 
