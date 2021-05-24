@@ -20,10 +20,17 @@ use crate::message::{
 };
 
 // Converts any Rust Error type into js_sys:Error while keeping its error message. This helps
-// propagating errors similar like we do in Rust but in WebAssembly contexts.
+// propagating errors similar like we do in Rust but in WebAssembly contexts. It is possible to
+// optionally use a custom error message when required.
 macro_rules! jserr {
+    // Convert error to js_sys::Error with original error message
     ($l:expr) => {
         $l.map_err::<JsValue, _>(|err| js_sys::Error::new(&format!("{}", err)).into())?;
+    };
+
+    // Convert error to js_sys::Error with custom error message
+    ($l:expr, $err:expr) => {
+        $l.map_err::<JsValue, _>(|_| js_sys::Error::new(&format!("{:?}", $err)).into())?;
     };
 }
 
@@ -53,9 +60,9 @@ impl MessageFields {
     /// Adds a field with a value and a given value type.
     ///
     /// The type is defined by a simple string, similar to an enum. Since Rust enums can not (yet)
-    /// be exported via wasm-bindgen we have to do it like this. Possible type values are "text"
-    /// (String), "boolean" (Boolean), "float" (Number), "relation" (String representing a
-    /// hex-encoded hash) and "integer" (Number).
+    /// be exported via wasm-bindgen we have to do it like this. Possible type values are "str"
+    /// (String), "bool" (Boolean), "float" (Number), "relation" (String representing a hex-encoded
+    /// hash) and "int" (Number).
     ///
     /// This method will throw an error when the field was already set, an invalid type value got
     /// passed or when the value does not reflect the given type.
