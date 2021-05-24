@@ -1,10 +1,10 @@
 //! Methods exported for WebAssembly targets.
 //!
-//! Wrappers for these methods are available in [p2panda-js], which allows idiomatic
-//! usage of `p2panda-rs` in a Javascript/Typescript environment.
+//! Wrappers for these methods are available in [p2panda-js], which allows idiomatic usage of
+//! `p2panda-rs` in a Javascript/Typescript environment.
 //!
 //! [p2panda-js]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::panic;
 
 use console_error_panic_hook::hook as panic_hook;
@@ -51,29 +51,96 @@ pub struct MessageFields(MessageFieldsNonWasm);
 
 #[wasm_bindgen]
 impl MessageFields {
-    /// Returns a `MessageFields` instance
+    /// Returns a `MessageFields` instance.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self(MessageFieldsNonWasm::new())
     }
 
-    /// Adds a new field to this `MessageFields` instance.
+    /// Adds a field with a value and a given value type.
     ///
-    /// Only `text` fields are currently supported and no schema validation is being done to make
-    /// sure that only fields that are part of a schema can be added.
-    pub fn add(&mut self, name: String, value: JsValue) -> Result<(), JsValue> {
-        // @TODO: Add more types
-        let field = match value.as_string() {
-            Some(text) => Ok(MessageValue::Text(text)),
-            None => Err(js_sys::Error::new(&format!("Invalid value type"))),
-        }?;
+    /// The type is defined by a simple string, similar to an enum. Since Rust enums can not (yet)
+    /// be exported via wasm-bindgen we have to do it like this. Possible type values are "str"
+    /// (String), "bool" (Boolean), "float" (Number), "relation" (String representing a hex-encoded
+    /// hash) and "int" (Number).
+    ///
+    /// This method will throw an error when the field was already set, an invalid type value got
+    /// passed or when the value does not reflect the given type.
+    #[wasm_bindgen]
+    pub fn add(&mut self, name: String, value_type: String, value: JsValue) -> Result<(), JsValue> {
+        match &value_type[..] {
+            "str" => {
+                let value_str = jserr!(value.as_string().ok_or("Invalid string value"));
+                jserr!(self.0.add(&name, MessageValue::Text(value_str)));
+                Ok(())
+            }
+            "bool" => {
+                let value_bool = jserr!(value.as_bool().ok_or("Invalid boolean value"));
+                jserr!(self.0.add(&name, MessageValue::Boolean(value_bool)));
+                Ok(())
+            }
+            "int" => {
+                // Bear in mind JavaScript does not represent numbers as integers, all numbers 
+                // are represented as floats therefore if a float is passed incorrectly it will 
+                // simply be cast to an int.
+                // See: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number
+                let value_int = jserr!(value.as_f64().ok_or("Invalid integer value")) as i64;
+                jserr!(self.0.add(&name, MessageValue::Integer(value_int)));
+                Ok(())
+            }
+            "float" => {
+                let value_float = jserr!(value.as_f64().ok_or("Invalid float value"));
+                jserr!(self.0.add(&name, MessageValue::Float(value_float)));
+                Ok(())
+            }
+            "relation" => {
+                let value_str = jserr!(value.as_string().ok_or("Invalid string value"));
+                let hash = jserr!(Hash::new(&value_str));
+                jserr!(self.0.add(&name, MessageValue::Relation(hash)));
+                Ok(())
+            }
+            _ => Err(js_sys::Error::new("Unknown type value").into()),
+        }
+    }
 
-        jserr!(self.0.add(&name, field));
-
+    /// Removes an existing field from this `MessageFields` instance.
+    ///
+    /// This might throw an error when trying to remove an inexistent field.
+    #[wasm_bindgen]
+    pub fn remove(&mut self, name: String) -> Result<(), JsValue> {
+        jserr!(self.0.remove(&name));
         Ok(())
     }
 
-    /// Returns this instance formatted for debugging
+    /// Returns field of this `MessageFields` instance when existing.
+    ///
+    /// When trying to access an integer field the method might throw an error when the internal
+    /// value is larger than an i32 number. The wasm API will use i32 numbers in JavaScript
+    /// contexts instead of i64 / BigInt as long as BigInt support is not given in Safari on MacOS
+    /// and iOS.
+    #[wasm_bindgen]
+    pub fn get(&mut self, name: String) -> Result<JsValue, JsValue> {
+        match self.0.get(&name) {
+            Some(MessageValue::Boolean(value)) => Ok(JsValue::from_bool(value.to_owned())),
+            Some(MessageValue::Text(value)) => Ok(JsValue::from_str(value)),
+            Some(MessageValue::Relation(value)) => Ok(JsValue::from_str(&value.as_str())),
+            Some(MessageValue::Float(value)) => Ok(JsValue::from_f64(value.to_owned())),
+            Some(MessageValue::Integer(value)) => {
+                // Downcast i64 to i32 and throw error when value too large
+                let converted: i32 = jserr!(value.to_owned().try_into());
+                Ok(converted.into())
+            }
+            None => Ok(JsValue::NULL),
+        }
+    }
+
+    /// Returns the number of fields in this instance.
+    #[wasm_bindgen(js_name = length)]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns this instance formatted for debugging.
     #[wasm_bindgen(js_name = toString)]
     pub fn to_string(&self) -> String {
         format!("{:?}", self)
@@ -136,9 +203,8 @@ struct SignEncodeEntryResult {
 /// `entry_backlink_hash`, `entry_skiplink_hash`, `previous_seq_num` and `log_id` are obtained by
 /// querying the `getEntryArguments` method of a p2panda node.
 ///
-/// `previous_seq_num` and `log_id` are `i32` parameters even though they
-/// have 64 bits in the bamboo spec. Webkit doesn't support `BigInt` so
-/// it can't handle those large values.
+/// `previous_seq_num` and `log_id` are `i32` parameters even though they have 64 bits in the
+/// bamboo spec. Webkit doesn't support `BigInt` so it can't handle those large values.
 #[wasm_bindgen(js_name = signEncodeEntry)]
 pub fn sign_encode_entry(
     key_pair: &KeyPair,
