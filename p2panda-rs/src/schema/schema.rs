@@ -12,7 +12,7 @@ pub enum SchemaError {
     Error,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum CDDLType {
     // CDDL types and structs
     Bool,
@@ -27,28 +27,24 @@ pub enum CDDLType {
     Tstr,
 }
 
-#[derive(Debug)]
-pub struct CDDLGroup {
-    // CDDL uses groups to define reuseable data structures
-    // they are also used to express Arrays, Tables and Structs
-    entries: BTreeMap<String, CDDLValue>,
-}
+// CDDL uses groups to define reuseable data structures
+// they are also used to express Arrays, Tables and Structs
+#[derive(Clone, Debug)]
+pub struct CDDLGroup(BTreeMap<String, CDDLValue>);
 
 impl CDDLGroup {
     // Create a new CDDL group
     pub fn new() -> Self {
-        Self {
-            entries: BTreeMap::new(),
-        }
+        Self(BTreeMap::new())
     }
     // Add an `entry` (a term used in CDDL lingo for key/value_type paie) to the group.
     pub fn add_entry(&mut self, key: &str, value_type: CDDLValue) -> Result<(), SchemaError> {
-        self.entries.insert(key.to_owned(), value_type);
+        self.0.insert(key.to_owned(), value_type);
         Ok(())
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum CDDLValue {
     // Possible CDDL values
     Group(CDDLGroup),
@@ -59,16 +55,12 @@ pub enum CDDLValue {
 }
 
 #[derive(Debug)]
-pub struct CDDLSchema {
-    // A CDDL schema can include key/value_type entries or groups
-    entries: BTreeMap<String, CDDLValue>,
-}
+pub struct CDDLSchema(BTreeMap<String, CDDLValue>);
+
 
 impl CDDLSchema {
     pub fn new() -> Self {
-        Self {
-            entries: BTreeMap::new(),
-        }
+        Self(BTreeMap::new())
     }
 
     pub fn add_entry(&mut self, key: &str, value: CDDLValue) -> Result<(), SchemaError> {
@@ -78,17 +70,19 @@ impl CDDLSchema {
         match value {
             CDDLValue::Array(_) => {
                 // Insert Array entry
+                self.0.insert(key.to_owned(), value);
                 Ok(())},
             CDDLValue::Struct(_) => {
                 // Insert Struct entry
-                self.entries.insert(key.to_owned(), value);
+                self.0.insert(key.to_owned(), value);
                 Ok(())},
             CDDLValue::Table(_) => {
                 // Insert Table entry
+                self.0.insert(key.to_owned(), value);
                 Ok(())},
             CDDLValue::Type(_) => {
                 // Insert key value entry
-                self.entries.insert(key.to_owned(), value);
+                self.0.insert(key.to_owned(), value);
                 Ok(())
             }
             CDDLValue::Group(_) => {
@@ -99,8 +93,8 @@ impl CDDLSchema {
 
     pub fn add_group(&mut self, group: CDDLGroup) -> Result<(), SchemaError> {
         // Add a group to a CDDL schema, this merges all group entries into the schema
-        for (key, value) in group.entries {
-            self.entries.insert(key.to_owned(), value);
+        for (key, value) in group.0 {
+            self.0.insert(key.to_owned(), value);
         }
         Ok(())
     }
@@ -175,11 +169,13 @@ mod tests {
             .add_entry("age", CDDLValue::Type(CDDLType::Int))
             .unwrap();
 
-        house.add_entry("owner", CDDLValue::Struct(person)).unwrap();
+        house.add_entry("owner", CDDLValue::Struct(person.clone())).unwrap();
+        
+        house.add_entry("residents", CDDLValue::Array(person.clone())).unwrap();
 
         println!("{:?}", house);
 
-        // => CDDLSchema { entries: {"number": Type(Int), "owner": Group(CDDLGroup { entries: {"age": Type(Int), "name": Type(Tstr)} })} }
+        // => CDDLSchema({"number": Type(Int), "owner": Struct(CDDLGroup({"age": Type(Int), "name": Type(Tstr)})), "residents": Array(CDDLGroup({"age": Type(Int), "name": Type(Tstr)}))})
         // We would have a nice way to convert this to a CDDL string
         // CDDL implements many schema definition features which we'd need to support
         // There must be a library which does this for us... but it's fun building it for now
