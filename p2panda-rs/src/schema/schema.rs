@@ -25,9 +25,6 @@ pub enum CDDLType {
     Float,
     Bstr,
     Tstr,
-    Array,
-    Struct,
-    Table,
 }
 
 #[derive(Debug)]
@@ -53,8 +50,11 @@ impl CDDLGroup {
 
 #[derive(Debug)]
 pub enum CDDLValue {
-    // A value in a CDDL entry can be a Type or a Group
+    // Possible CDDL values
     Group(CDDLGroup),
+    Array(CDDLGroup),
+    Struct(CDDLGroup),
+    Table(CDDLGroup),
     Type(CDDLType),
 }
 
@@ -74,8 +74,26 @@ impl CDDLSchema {
     pub fn add_entry(&mut self, key: &str, value: CDDLValue) -> Result<(), SchemaError> {
         // Add an entry to a CDDL schema
         // This can be a simple key/pair or CDDL struct represented by a group
-        self.entries.insert(key.to_owned(), value);
-        Ok(())
+
+        match value {
+            CDDLValue::Array(_) => {
+                // Insert Array entry
+                Ok(())},
+            CDDLValue::Struct(_) => {
+                // Insert Struct entry
+                Ok(())},
+            CDDLValue::Table(_) => {
+                // Insert Table entry
+                Ok(())},
+            CDDLValue::Type(_) => {
+                // Insert key value entry
+                self.entries.insert(key.to_owned(), value);
+                Ok(())
+            }
+            CDDLValue::Group(_) => {
+                // Groups should be merged via the special method
+                Err(SchemaError::Error)},
+        }
     }
 
     pub fn add_group(&mut self, group: CDDLGroup) -> Result<(), SchemaError> {
