@@ -81,6 +81,7 @@ impl CDDLSchema {
                 Ok(())},
             CDDLValue::Struct(_) => {
                 // Insert Struct entry
+                self.entries.insert(key.to_owned(), value);
                 Ok(())},
             CDDLValue::Table(_) => {
                 // Insert Table entry
@@ -174,7 +175,7 @@ mod tests {
             .add_entry("age", CDDLValue::Type(CDDLType::Int))
             .unwrap();
 
-        house.add_entry("owner", CDDLValue::Group(person)).unwrap();
+        house.add_entry("owner", CDDLValue::Struct(person)).unwrap();
 
         println!("{:?}", house);
 
