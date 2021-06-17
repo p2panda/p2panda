@@ -1,20 +1,19 @@
 use std::collections::BTreeMap;
+use std::fmt;
 
-use crate::hash::Hash;
-
+use cddl::validate_cbor_from_slice;
 use thiserror::Error;
 
-/// Custom error types for schema validation.
+/// Our very descriptive error
 #[derive(Error, Debug)]
 pub enum SchemaError {
-    /// Our very descriptive error
     #[error("Some error happened")]
     Error,
 }
 
+/// CDDL types
 #[derive(Clone, Debug)]
 pub enum CDDLType {
-    // CDDL types and structs
     Bool,
     Uint,
     Nint,
@@ -25,28 +24,75 @@ pub enum CDDLType {
     Float,
     Bstr,
     Tstr,
+    Const(String),
 }
 
+/// CDDL schema type string formats
+impl fmt::Display for CDDLType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let cddl_type = match self {
+            CDDLType::Bool => "bool",
+            CDDLType::Uint => "uint",
+            CDDLType::Nint => "nint",
+            CDDLType::Int => "int",
+            CDDLType::Float16 => "float16",
+            CDDLType::Float32 => "float32",
+            CDDLType::Float64 => "float64",
+            CDDLType::Float => "float",
+            CDDLType::Bstr => "bstr",
+            CDDLType::Tstr => "tstr",
+            // This isn't exactly a CDDL type,
+            // it's for string constants.
+            CDDLType::Const(str) => str,
+        };
+
+        write!(f, "{}", cddl_type)
+    }
+}
+
+/// Struct for building and representing CDDL groups
 // CDDL uses groups to define reuseable data structures
-// they are also used to express Arrays, Tables and Structs
+// they can be merged into schema or used in Arrays, Tables and Structs
 #[derive(Clone, Debug)]
-pub struct CDDLGroup(BTreeMap<String, CDDLValue>);
+pub struct CDDLGroup {
+    name: String,
+    fields: BTreeMap<String, CDDLEntry>,
+}
 
 impl CDDLGroup {
-    // Create a new CDDL group
-    pub fn new() -> Self {
-        Self(BTreeMap::new())
+    /// Create a new CDDL group
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            fields: BTreeMap::new(),
+        }
     }
-    // Add an `entry` (a term used in CDDL lingo for key/value_type paie) to the group.
-    pub fn add_entry(&mut self, key: &str, value_type: CDDLValue) -> Result<(), SchemaError> {
-        self.0.insert(key.to_owned(), value_type);
+
+    /// Add an CDDLEntry to the group.
+    pub fn add_entry(&mut self, key: &str, value_type: CDDLEntry) -> Result<(), SchemaError> {
+        self.fields.insert(key.to_owned(), value_type);
         Ok(())
     }
 }
 
+impl fmt::Display for CDDLGroup {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let map = &self.fields;
+        write!(f, "( ")?;
+        for (count, value) in map.iter().enumerate() {
+            // For every element except the first, add a comma.
+            if count != 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{} : {}", value.0, value.1)?;
+        }
+        write!(f, " )")
+    }
+}
+
+/// A CDDL key value pair, I think they call this an Entry, where the value can be a Type, Struct, Table, Array or Group.
 #[derive(Clone, Debug)]
-pub enum CDDLValue {
-    // Possible CDDL values
+pub enum CDDLEntry {
     Group(CDDLGroup),
     Array(CDDLGroup),
     Struct(CDDLGroup),
@@ -54,159 +100,143 @@ pub enum CDDLValue {
     Type(CDDLType),
 }
 
-#[derive(Debug)]
-pub struct CDDLSchema(BTreeMap<String, CDDLValue>);
-
-
-impl CDDLSchema {
-    pub fn new() -> Self {
-        Self(BTreeMap::new())
-    }
-
-    pub fn add_entry(&mut self, key: &str, value: CDDLValue) -> Result<(), SchemaError> {
-        // Add an entry to a CDDL schema
-        // This can be a simple key/pair or CDDL struct represented by a group
-
-        match value {
-            CDDLValue::Array(_) => {
-                // Insert Array entry
-                self.0.insert(key.to_owned(), value);
-                Ok(())},
-            CDDLValue::Struct(_) => {
-                // Insert Struct entry
-                self.0.insert(key.to_owned(), value);
-                Ok(())},
-            CDDLValue::Table(_) => {
-                // Insert Table entry
-                self.0.insert(key.to_owned(), value);
-                Ok(())},
-            CDDLValue::Type(_) => {
-                // Insert key value entry
-                self.0.insert(key.to_owned(), value);
-                Ok(())
+/// Format each different data type into a schema string.
+impl fmt::Display for CDDLEntry {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CDDLEntry::Group(group) => {
+                write!(f, "{:?}", group)
             }
-            CDDLValue::Group(_) => {
-                // Groups should be merged via the special method
-                Err(SchemaError::Error)},
+            CDDLEntry::Array(group) => {
+                write!(f, "[* {} ]", format!("{}", group))
+            }
+            CDDLEntry::Struct(group) => {
+                write!(f, "{{ {} }}", format!("{}", group))
+            }
+            CDDLEntry::Table(_) => write!(f, "{}", "table"),
+            CDDLEntry::Type(value_type) => {
+                // Hack to catch "tstr" types and format to "str"
+                write!(f, "{}", format!("{}", value_type))
+            }
         }
-    }
-
-    pub fn add_group(&mut self, group: CDDLGroup) -> Result<(), SchemaError> {
-        // Add a group to a CDDL schema, this merges all group entries into the schema
-        for (key, value) in group.0 {
-            self.0.insert(key.to_owned(), value);
-        }
-        Ok(())
-    }
-
-    pub fn as_string(&self) -> String {
-        // Awesome logic for generating string from our CDDLSchema struct goes here
-        String::from("THIS_IS_A_CDDL_SCHEMA_STRING")
     }
 }
 
 #[derive(Debug)]
+/// UserSchema struct for creating CDDL schemas and valdating MessageFields
 pub struct UserSchema {
-    /// Describes if this message creates, updates or deletes data.
-    schema: String,
+    name: String,
+    schema: BTreeMap<String, CDDLEntry>,
 }
 
 impl UserSchema {
-    /// Creates a new UserSchema instance from a schema hash
-    pub fn new(schema: Hash) -> Result<Self, SchemaError> {
-        // Decode and validate schema hash
-        let schema_str = schema.as_str();
-        let user_schema = Self {
-            schema: schema_str.to_owned(),
-        };
-        user_schema.validate()?;
-
-        Ok(user_schema)
+    /// Create a new blank UserSchema
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            schema: BTreeMap::new(),
+        }
     }
 
-    /// Creates a new UserSchema instance from a CDDL schema string
-    pub fn new_from_string(schema_str: String) -> Result<Self, SchemaError> {
-        // validate schema str here
-        let user_schema = Self { schema: schema_str };
-
-        user_schema.validate()?;
-
-        Ok(user_schema)
-    }
-
-    /// Validate user schema
-    pub fn validate(&self) -> Result<(), SchemaError> {
-        // validation schema against meta schema....
+    /// Create a new UserSchema from a CDDL string
+    pub fn new_from_string(_cddl_schema: String) -> Result<(), SchemaError> {
+        // TBC: Do the stuff here
         Ok(())
     }
 
-    /// Checks CBOR bytes against CDDL schemas.
-    pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
-        // validation bytes against instance schema....
-        Ok(())
+    /// Add an entry to this schema
+    pub fn add_entry(&mut self, key: &str, value: CDDLEntry) -> Result<(), SchemaError> {
+        match value {
+            CDDLEntry::Array(_)
+            | CDDLEntry::Struct(_)
+            | CDDLEntry::Table(_)
+            | CDDLEntry::Type(_) => {
+                // Insert Array entry
+                self.schema.insert(key.to_owned(), value);
+                Ok(())
+            }
+            CDDLEntry::Group(_) => {
+                // Groups should be merged via the special method
+                Ok(())
+            }
+        }
+    }
+
+    /// Validate a message against this user schema
+    pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), cddl::validator::cbor::Error> {
+        validate_cbor_from_slice(&format!("{}", self), &bytes)
+    }
+}
+
+impl fmt::Display for UserSchema {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let map = &self.schema;
+        write!(f, "{} = {{ ", self.name)?;
+        for (count, value) in map.iter().enumerate() {
+            if count != 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{} : {}", value.0, value.1)?;
+        }
+        write!(f, " }}")
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::hash::Hash;
     use crate::message::{MessageFields, MessageValue};
 
-    use super::{CDDLGroup, CDDLSchema, CDDLType, CDDLValue, UserSchema};
+    use super::{CDDLEntry, CDDLGroup, CDDLType, UserSchema};
 
     #[test]
-    fn create_schema() {
-        let mut house = CDDLSchema::new();
-        house
-            .add_entry("number", CDDLValue::Type(CDDLType::Int))
+    pub fn validate_cbor() {
+        // Construct an "age" message field
+        let mut message_field_age = CDDLGroup::new("age".to_owned());
+        message_field_age
+            .add_entry(
+                "type",
+                CDDLEntry::Type(CDDLType::Const(r#""int""#.to_owned())),
+            )
+            .unwrap();
+        message_field_age
+            .add_entry("value", CDDLEntry::Type(CDDLType::Int))
             .unwrap();
 
-        let mut person = CDDLGroup::new();
-        person
-            .add_entry("name", CDDLValue::Type(CDDLType::Tstr))
+        // Construct a "name" message field
+        let mut message_field_name = CDDLGroup::new("name".to_owned());
+        message_field_name
+            .add_entry(
+                "type",
+                CDDLEntry::Type(CDDLType::Const(r#""str""#.to_owned())),
+            )
             .unwrap();
-        person
-            .add_entry("age", CDDLValue::Type(CDDLType::Int))
+        message_field_name
+            .add_entry("value", CDDLEntry::Type(CDDLType::Tstr))
             .unwrap();
 
-        house.add_entry("owner", CDDLValue::Struct(person.clone())).unwrap();
-        
-        house.add_entry("residents", CDDLValue::Array(person.clone())).unwrap();
+        // Construct a "person" user schema using the above groups
+        let mut person_schema = UserSchema::new("person_schema".to_owned());
 
-        println!("{:?}", house);
+        person_schema
+            .add_entry("age", CDDLEntry::Struct(message_field_age))
+            .unwrap();
+        person_schema
+            .add_entry("name", CDDLEntry::Struct(message_field_name))
+            .unwrap();
 
-        // => CDDLSchema({"number": Type(Int), "owner": Struct(CDDLGroup({"age": Type(Int), "name": Type(Tstr)})), "residents": Array(CDDLGroup({"age": Type(Int), "name": Type(Tstr)}))})
-        // We would have a nice way to convert this to a CDDL string
-        // CDDL implements many schema definition features which we'd need to support
-        // There must be a library which does this for us... but it's fun building it for now
+        print!("{}", person_schema);
+        // => person = { age : { type: "int", value: int }, name : { type: "str", value: tstr } }
 
-        let house_schema = UserSchema::new_from_string(house.as_string()).unwrap();
-
-        // SCHEMA PUBLISHED TO NETWORK //
-        // here we publish the house schema to an aquadoggo node.
-        // Later, when we want to create a house
-        // we retrieve the schema hash (somehow?) and validate against it
-
-        let house_schema_hash = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
-
-        let retrieved_house_schema =
-            UserSchema::new(Hash::new(house_schema_hash).unwrap()).unwrap();
-
-        let mut my_house = MessageFields::new();
-        my_house.add("number", MessageValue::Integer(12)).unwrap();
-
+        // Build "person" message fields
         let mut me = MessageFields::new();
         me.add("name", MessageValue::Text("Sam".to_owned()))
             .unwrap();
         me.add("age", MessageValue::Integer(35)).unwrap();
 
-        // my_house.add("owner", me).unwrap();
-        // arrays and maps in MessageFields aren't implemented yet
+        // Encode message fields
+        let me_encoded = serde_cbor::to_vec(&me).unwrap();
 
-        // Validate massage fields against retrieved_house_schema
-
-        // retrieved_house_schema
-        //     .validate_message(my_house.to_cbor())
-        //     .unwrap();
+        // Validate message fields against person schema
+        assert!(person_schema.validate_message(me_encoded).is_ok());
     }
 }
