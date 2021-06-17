@@ -117,7 +117,6 @@ impl fmt::Display for CDDLEntry {
             CDDLEntry::Table(group) => write!(f, "{{ + tstr => {{ {} }} }}", group),
             CDDLEntry::TableType(value_type) => write!(f, "{{ + tstr => {} }}", value_type),
             CDDLEntry::Type(value_type) => {
-                // Hack to catch "tstr" types and format to "str"
                 write!(f, "{}", format!("{}", value_type))
             }
         }
