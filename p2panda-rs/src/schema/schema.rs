@@ -97,6 +97,7 @@ pub enum CDDLEntry {
     Array(CDDLGroup),
     Struct(CDDLGroup),
     Table(CDDLGroup),
+    TableType(CDDLType),
     Type(CDDLType),
 }
 
@@ -113,7 +114,8 @@ impl fmt::Display for CDDLEntry {
             CDDLEntry::Struct(group) => {
                 write!(f, "{{ {} }}", format!("{}", group))
             }
-            CDDLEntry::Table(_) => write!(f, "{}", "table"),
+            CDDLEntry::Table(group) => write!(f, "{{ + tstr => {{ {} }} }}", group),
+            CDDLEntry::TableType(value_type) => write!(f, "{{ + tstr => {} }}", value_type),
             CDDLEntry::Type(value_type) => {
                 // Hack to catch "tstr" types and format to "str"
                 write!(f, "{}", format!("{}", value_type))
@@ -150,8 +152,8 @@ impl UserSchema {
             CDDLEntry::Array(_)
             | CDDLEntry::Struct(_)
             | CDDLEntry::Table(_)
-            | CDDLEntry::Type(_) => {
-                // Insert Array entry
+            | CDDLEntry::Type(_)
+            | CDDLEntry::TableType(_) => {
                 self.schema.insert(key.to_owned(), value);
                 Ok(())
             }
@@ -238,5 +240,35 @@ mod tests {
 
         // Validate message fields against person schema
         assert!(person_schema.validate_message(me_encoded).is_ok());
+    }
+
+    #[test]
+    pub fn schema_with_table() {
+        // Construct a "name" message field
+        let mut message_field_prices = CDDLGroup::new("prices".to_owned());
+        message_field_prices
+            .add_entry(
+                "type",
+                CDDLEntry::Type(CDDLType::Const(r#""table""#.to_owned())),
+            )
+            .unwrap();
+        message_field_prices
+            .add_entry("value", CDDLEntry::TableType(CDDLType::Uint))
+            .unwrap();
+
+        // Construct a "person" user schema using the above groups
+        let mut items_schema = UserSchema::new("items_schema".to_owned());
+
+        items_schema
+            .add_entry("prices", CDDLEntry::Struct(message_field_prices))
+            .unwrap();
+
+        let json_string = r#"{"prices": {"type": "table", "value": {"reinforcement": 958, "hunter": 4034, "Liz": 2020, "manicurists": 857}}}"#;
+
+        assert!(cddl::validate_json_from_str(&format!("{}", items_schema), json_string).is_ok());
+        
+        let longer_json_string = r#"{"prices": {"type": "table", "value": {"reinforcement": 958, "hunter": 4034, "Liz": 2020, "manicurists": 857, "blablabla": 123, "yabawaba": 254}}}"#;
+
+        assert!(cddl::validate_json_from_str(&format!("{}", items_schema), longer_json_string).is_ok());        
     }
 }
