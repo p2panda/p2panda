@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+#[cfg(not(target_arch = "wasm32"))]
 use cddl::validate_cbor_from_slice;
 use thiserror::Error;
 
@@ -156,6 +157,7 @@ impl UserSchema {
     }
 
     /// Validate a message against this user schema
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), cddl::validator::cbor::Error> {
         validate_cbor_from_slice(&format!("{}", self), &bytes)
     }
