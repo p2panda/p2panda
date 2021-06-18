@@ -58,6 +58,7 @@ pub enum CDDLEntry {
     Struct(Group),
     Table(Group),
     TableType(Type),
+    Choice(Group)
 }
 
 /// Format each different data type into a schema string.
@@ -70,6 +71,7 @@ impl fmt::Display for CDDLEntry {
             CDDLEntry::Struct(group) => write!(f, "{{ {} }}", format!("{}", group)),
             CDDLEntry::Table(group) => write!(f, "{{ + tstr => {{ {} }} }}", group),
             CDDLEntry::TableType(value_type) => write!(f, "{{ + tstr => {} }}", value_type),
+            CDDLEntry::Choice(group) => write!(f, "&{}", group),
         }
     }
 }
@@ -113,7 +115,6 @@ impl fmt::Display for Group {
         write!(f, " )")
     }
 }
-
 #[derive(Debug)]
 /// UserSchema struct for creating CDDL schemas and valdating MessageFields
 pub struct UserSchema {
@@ -256,5 +257,25 @@ mod tests {
         assert!(
             cddl::validate_json_from_str(&format!("{}", items_schema), longer_json_string).is_ok()
         );
+    }
+    
+    #[test]
+    pub fn group_as_choice(){
+        let mut colours = Group::new("colours".to_owned());
+        colours.add_entry("black", CDDLEntry::Type(Type::Const(r#"1"#.to_owned()))).unwrap();
+        colours.add_entry("red", CDDLEntry::Type(Type::Const(r#"2"#.to_owned()))).unwrap();
+        colours.add_entry("green", CDDLEntry::Type(Type::Const(r#"3"#.to_owned()))).unwrap();
+        
+        let mut colour_schema = UserSchema::new("colour_schema".to_owned());
+
+        colour_schema
+            .add_entry("colour", CDDLEntry::Choice(colours))
+            .unwrap();
+
+        let json_string = r#"{"colour": 1}"#;
+        
+        // The CDDL here is valid, but actually the JSON data doesn't look how I'd imagine
+        // I think I'm just not understanding how _choice_ works properly.
+        assert!(cddl::validate_json_from_str(&format!("{}", colour_schema), json_string).is_ok());
     }
 }
