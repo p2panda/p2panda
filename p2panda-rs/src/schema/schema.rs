@@ -13,7 +13,7 @@ pub enum SchemaError {
 
 /// CDDL types
 #[derive(Clone, Debug)]
-pub enum CDDLType {
+pub enum Type {
     Bool,
     Uint,
     Nint,
@@ -28,38 +28,62 @@ pub enum CDDLType {
 }
 
 /// CDDL schema type string formats
-impl fmt::Display for CDDLType {
+impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let cddl_type = match self {
-            CDDLType::Bool => "bool",
-            CDDLType::Uint => "uint",
-            CDDLType::Nint => "nint",
-            CDDLType::Int => "int",
-            CDDLType::Float16 => "float16",
-            CDDLType::Float32 => "float32",
-            CDDLType::Float64 => "float64",
-            CDDLType::Float => "float",
-            CDDLType::Bstr => "bstr",
-            CDDLType::Tstr => "tstr",
+            Type::Bool => "bool",
+            Type::Uint => "uint",
+            Type::Nint => "nint",
+            Type::Int => "int",
+            Type::Float16 => "float16",
+            Type::Float32 => "float32",
+            Type::Float64 => "float64",
+            Type::Float => "float",
+            Type::Bstr => "bstr",
+            Type::Tstr => "tstr",
             // This isn't exactly a CDDL type,
             // it's for string constants.
-            CDDLType::Const(str) => str,
+            Type::Const(str) => str,
         };
 
         write!(f, "{}", cddl_type)
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum CDDLEntry {
+    Type(Type),
+    Group(Group),
+    Vector(Group),
+    Struct(Group),
+    Table(Group),
+    TableType(Type),
+}
+
+/// Format each different data type into a schema string.
+impl fmt::Display for CDDLEntry {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CDDLEntry::Type(cddl_type) => write!(f, "{}", cddl_type),
+            CDDLEntry::Group(group) => write!(f, "{}", group),
+            CDDLEntry::Vector(group) => write!(f, "[* {} ]", format!("{}", group)),
+            CDDLEntry::Struct(group) => write!(f, "{{ {} }}", format!("{}", group)),
+            CDDLEntry::Table(group) => write!(f, "{{ + tstr => {{ {} }} }}", group),
+            CDDLEntry::TableType(value_type) => write!(f, "{{ + tstr => {} }}", value_type),
+        }
+    }
+}
+
 /// Struct for building and representing CDDL groups
 // CDDL uses groups to define reuseable data structures
-// they can be merged into schema or used in Arrays, Tables and Structs
+// they can be merged into schema or used in Vectors, Tables and Structs
 #[derive(Clone, Debug)]
-pub struct CDDLGroup {
+pub struct Group {
     name: String,
     fields: BTreeMap<String, CDDLEntry>,
 }
 
-impl CDDLGroup {
+impl Group {
     /// Create a new CDDL group
     pub fn new(name: String) -> Self {
         Self {
@@ -75,7 +99,7 @@ impl CDDLGroup {
     }
 }
 
-impl fmt::Display for CDDLGroup {
+impl fmt::Display for Group {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let map = &self.fields;
         write!(f, "( ")?;
@@ -87,39 +111,6 @@ impl fmt::Display for CDDLGroup {
             write!(f, "{} : {}", value.0, value.1)?;
         }
         write!(f, " )")
-    }
-}
-
-/// A CDDL key value pair, I think they call this an Entry, where the value can be a Type, Struct, Table, Array or Group.
-#[derive(Clone, Debug)]
-pub enum CDDLEntry {
-    Group(CDDLGroup),
-    Array(CDDLGroup),
-    Struct(CDDLGroup),
-    Table(CDDLGroup),
-    TableType(CDDLType),
-    Type(CDDLType),
-}
-
-/// Format each different data type into a schema string.
-impl fmt::Display for CDDLEntry {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            CDDLEntry::Group(group) => {
-                write!(f, "{:?}", group)
-            }
-            CDDLEntry::Array(group) => {
-                write!(f, "[* {} ]", format!("{}", group))
-            }
-            CDDLEntry::Struct(group) => {
-                write!(f, "{{ {} }}", format!("{}", group))
-            }
-            CDDLEntry::Table(group) => write!(f, "{{ + tstr => {{ {} }} }}", group),
-            CDDLEntry::TableType(value_type) => write!(f, "{{ + tstr => {} }}", value_type),
-            CDDLEntry::Type(value_type) => {
-                write!(f, "{}", format!("{}", value_type))
-            }
-        }
     }
 }
 
@@ -148,16 +139,16 @@ impl UserSchema {
     /// Add an entry to this schema
     pub fn add_entry(&mut self, key: &str, value: CDDLEntry) -> Result<(), SchemaError> {
         match value {
-            CDDLEntry::Array(_)
-            | CDDLEntry::Struct(_)
-            | CDDLEntry::Table(_)
-            | CDDLEntry::Type(_)
-            | CDDLEntry::TableType(_) => {
+            CDDLEntry::Type(_) => {
                 self.schema.insert(key.to_owned(), value);
                 Ok(())
             }
             CDDLEntry::Group(_) => {
-                // Groups should be merged via the special method
+                //Groups should be merged not inserted
+                Ok(())
+            }
+            _ => {
+                self.schema.insert(key.to_owned(), value);
                 Ok(())
             }
         }
@@ -187,32 +178,26 @@ impl fmt::Display for UserSchema {
 mod tests {
     use crate::message::{MessageFields, MessageValue};
 
-    use super::{CDDLEntry, CDDLGroup, CDDLType, UserSchema};
+    use super::{CDDLEntry, Group, Type, UserSchema};
 
     #[test]
     pub fn validate_cbor() {
         // Construct an "age" message field
-        let mut message_field_age = CDDLGroup::new("age".to_owned());
+        let mut message_field_age = Group::new("age".to_owned());
         message_field_age
-            .add_entry(
-                "type",
-                CDDLEntry::Type(CDDLType::Const(r#""int""#.to_owned())),
-            )
+            .add_entry("type", CDDLEntry::Type(Type::Const(r#""int""#.to_owned())))
             .unwrap();
         message_field_age
-            .add_entry("value", CDDLEntry::Type(CDDLType::Int))
+            .add_entry("value", CDDLEntry::Type(Type::Int))
             .unwrap();
 
         // Construct a "name" message field
-        let mut message_field_name = CDDLGroup::new("name".to_owned());
+        let mut message_field_name = Group::new("name".to_owned());
         message_field_name
-            .add_entry(
-                "type",
-                CDDLEntry::Type(CDDLType::Const(r#""str""#.to_owned())),
-            )
+            .add_entry("type", CDDLEntry::Type(Type::Const(r#""str""#.to_owned())))
             .unwrap();
         message_field_name
-            .add_entry("value", CDDLEntry::Type(CDDLType::Tstr))
+            .add_entry("value", CDDLEntry::Type(Type::Tstr))
             .unwrap();
 
         // Construct a "person" user schema using the above groups
@@ -244,15 +229,15 @@ mod tests {
     #[test]
     pub fn schema_with_table() {
         // Construct a "name" message field
-        let mut message_field_prices = CDDLGroup::new("prices".to_owned());
+        let mut message_field_prices = Group::new("prices".to_owned());
         message_field_prices
             .add_entry(
                 "type",
-                CDDLEntry::Type(CDDLType::Const(r#""table""#.to_owned())),
+                CDDLEntry::Type(Type::Const(r#""table""#.to_owned())),
             )
             .unwrap();
         message_field_prices
-            .add_entry("value", CDDLEntry::TableType(CDDLType::Uint))
+            .add_entry("value", CDDLEntry::TableType(Type::Uint))
             .unwrap();
 
         // Construct a "person" user schema using the above groups
@@ -265,9 +250,11 @@ mod tests {
         let json_string = r#"{"prices": {"type": "table", "value": {"reinforcement": 958, "hunter": 4034, "Liz": 2020, "manicurists": 857}}}"#;
 
         assert!(cddl::validate_json_from_str(&format!("{}", items_schema), json_string).is_ok());
-        
+
         let longer_json_string = r#"{"prices": {"type": "table", "value": {"reinforcement": 958, "hunter": 4034, "Liz": 2020, "manicurists": 857, "blablabla": 123, "yabawaba": 254}}}"#;
 
-        assert!(cddl::validate_json_from_str(&format!("{}", items_schema), longer_json_string).is_ok());        
+        assert!(
+            cddl::validate_json_from_str(&format!("{}", items_schema), longer_json_string).is_ok()
+        );
     }
 }
