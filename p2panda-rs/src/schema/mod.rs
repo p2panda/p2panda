@@ -9,6 +9,7 @@ use cddl::validator::cbor;
 
 mod message;
 mod schema;
+mod schema_v2;
 
 pub use message::MESSAGE_SCHEMA;
 pub use schema::UserSchema;
