@@ -157,13 +157,13 @@ impl UserSchema {
         self.entries
             .push(create_entry(name, create_map(message_fields)));
     }
-    pub fn get_cddl(&self) -> CDDL {
-        create_cddl(self.entries.clone())
+    pub fn get_schema(&self) -> String {
+        create_cddl(self.entries.clone()).to_string()
     }
     /// Validate a message against this user schema
     #[cfg(not(target_arch = "wasm32"))]
     pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), cddl::validator::cbor::Error> {
-        validate_cbor_from_slice(&format!("{}", self.get_cddl().to_string()), &bytes)
+        validate_cbor_from_slice(&format!("{}", self.get_schema()), &bytes)
     }
 }
 
@@ -180,7 +180,7 @@ mod tests {
         schema.add_message_field("last-name", FieldTypes::Str);
         schema.add_message_field("age", FieldTypes::Int);
         let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, age: { type: \"int\", value: int, }, }\n";
-        assert_eq!(cddl_str, schema.get_cddl().to_string())
+        assert_eq!(cddl_str, schema.get_schema())
     }
     
     #[test]
