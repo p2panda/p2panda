@@ -213,7 +213,7 @@ mod tests {
             .add_entry("name", CDDLEntry::Struct(message_field_name))
             .unwrap();
 
-        print!("{}", person_schema);
+        // print!("{}", person_schema);
         // => person = { age : { type: "int", value: int }, name : { type: "str", value: tstr } }
 
         // Build "person" message fields

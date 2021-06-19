@@ -1,7 +1,15 @@
 use cddl::ast::{
-    Group, GroupChoice, GroupEntry, Identifier, MemberKey, OptionalComma, Rule, Type,
-    Type1, Type2, TypeChoice, TypeRule, ValueMemberKeyEntry, CDDL,
+    Group, GroupChoice, GroupEntry, Identifier, MemberKey, OptionalComma, Rule, Type, Type1, Type2,
+    TypeChoice, TypeRule, ValueMemberKeyEntry, CDDL,
 };
+
+pub enum FieldTypes {
+    Str,
+    Int,
+    Float,
+    Bool,
+    Relation,
+}
 
 pub fn create_cddl(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) -> CDDL {
     CDDL {
@@ -93,6 +101,34 @@ pub fn create_entry(
     )
 }
 
+pub fn create_message_field(field_type: FieldTypes) -> (Type2<'static>, Type2<'static>) {
+    // Match passed type and map it to our MessageFields type and CDDL types (do we still need the 
+    // MessageFields type key when we are using schemas?)
+    let (value, value_type) = match field_type {
+        FieldTypes::Str => ("str", "tstr"),
+        FieldTypes::Int => ("int", "int"),
+        FieldTypes::Float => ("float", "float"),
+        FieldTypes::Bool => ("bool", "bool"),
+        FieldTypes::Relation => ("relation", "hash"),
+    };
+    // Return a tuple of message field values
+    (
+        Type2::TextValue {
+            value: value,
+            span: (0, 0, 0),
+        },
+        Type2::Typename {
+            ident: Identifier {
+                ident: value_type,
+                socket: None,
+                span: (0, 0, 0),
+            },
+            generic_args: None,
+            span: (0, 0, 0),
+        },
+    )
+}
+
 #[derive(Debug)]
 pub struct UserSchema {
     entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>,
@@ -105,34 +141,18 @@ impl UserSchema {
         }
     }
     // Add a message field to the schema passing in field name and type
-    pub fn add_message_field(
-        &mut self,
-        name: &'static str,
-        value_type: &'static str,
-    ) {
-        let str_value = Type2::TextValue {
-            value: value_type,
-            span: (0, 0, 0),
-        };
-        let tstr_value = Type2::Typename {
-            ident: Identifier {
-                // Need to do some matching so that this 
-                // is dynamic with the passed value_type
-                // right now it is always "tstr".
-                ident: "tstr".into(),
-                socket: None,
-                span: (0, 0, 0),
-            },
-            generic_args: None,
-            span: (0, 0, 0),
-        };
+    pub fn add_message_field(&mut self, name: &'static str, field_type: FieldTypes) {
+        // Create a message field of passed type
+        let (value_1, value_2) = create_message_field(field_type);
         
         // Create an array of message_fields
         let mut message_fields = Vec::new();
-        message_fields.push(create_entry("type", str_value));
-        message_fields.push(create_entry("value", tstr_value));
+        message_fields.push(create_entry("type", value_1));
+        message_fields.push(create_entry("value", value_2));
+        
         // Add a named message fields entry (of type map) to the schema
-        self.entries.push(create_entry(name, create_map(message_fields)));
+        self.entries
+            .push(create_entry(name, create_map(message_fields)));
     }
     pub fn get_cddl(&self) -> CDDL {
         create_cddl(self.entries.clone())
@@ -141,14 +161,15 @@ impl UserSchema {
 
 #[cfg(test)]
 mod tests {
-    use super::UserSchema;
+    use super::{FieldTypes, UserSchema};
 
     #[test]
-    pub fn add_group() {
+    pub fn add_message_fields() {
         let mut schema = UserSchema::new();
-        schema.add_message_field("first-name", "str");
-        schema.add_message_field("last-name", "str");
-        let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, }\n";
+        schema.add_message_field("first-name", FieldTypes::Str);
+        schema.add_message_field("last-name", FieldTypes::Str);
+        schema.add_message_field("age", FieldTypes::Int);
+        let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, age: { type: \"int\", value: int, }, }\n";
         assert_eq!(cddl_str, schema.get_cddl().to_string())
     }
 }
