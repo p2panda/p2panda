@@ -1,179 +1,169 @@
-use std::collections::BTreeMap;
-use std::fmt;
+use cddl::ast::{
+    Group, GroupChoice, GroupEntry, Identifier, MemberKey, OptionalComma, Rule, Type, Type1, Type2,
+    TypeChoice, TypeRule, ValueMemberKeyEntry, CDDL,
+};
 
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validate_cbor_from_slice;
-use thiserror::Error;
 
-/// Our very descriptive error
-#[derive(Error, Debug)]
-pub enum SchemaError {
-    #[error("Some error happened")]
-    Error,
-}
-
-/// CDDL types
-#[derive(Clone, Debug)]
-pub enum Type {
-    Bool,
-    Uint,
-    Nint,
+pub enum FieldTypes {
+    Str,
     Int,
-    Float16,
-    Float32,
-    Float64,
     Float,
-    Bstr,
-    Tstr,
-    Const(String),
+    Bool,
+    Relation,
 }
 
-/// CDDL schema type string formats
-impl fmt::Display for Type {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let cddl_type = match self {
-            Type::Bool => "bool",
-            Type::Uint => "uint",
-            Type::Nint => "nint",
-            Type::Int => "int",
-            Type::Float16 => "float16",
-            Type::Float32 => "float32",
-            Type::Float64 => "float64",
-            Type::Float => "float",
-            Type::Bstr => "bstr",
-            Type::Tstr => "tstr",
-            // This isn't exactly a CDDL type,
-            // it's for string constants.
-            Type::Const(str) => str,
-        };
+pub fn create_cddl(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) -> CDDL {
+    CDDL {
+        comments: None,
+        rules: vec![Rule::Type {
+            span: (0, 0, 0),
+            comments_after_rule: None,
+            rule: TypeRule {
+                is_type_choice_alternate: false,
+                name: Identifier {
+                    ident: "my_rule".into(),
+                    socket: None,
+                    span: (0, 0, 0),
+                },
+                generic_params: None,
+                value: Type {
+                    type_choices: vec![TypeChoice {
+                        type1: Type1 {
+                            type2: create_map(entries),
+                            operator: None,
+                            span: (0, 0, 0),
+                            comments_after_type: None,
+                        },
 
-        write!(f, "{}", cddl_type)
+                        comments_before_type: None,
+                        comments_after_type: None,
+                    }],
+                    span: (0, 0, 0),
+                },
+                comments_before_assignt: None,
+                comments_after_assignt: None,
+            },
+        }],
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum CDDLEntry {
-    Type(Type),
-    Group(Group),
-    Vector(Group),
-    Struct(Group),
-    Table(Group),
-    TableType(Type),
-    Choice(Group)
-}
-
-/// Format each different data type into a schema string.
-impl fmt::Display for CDDLEntry {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            CDDLEntry::Type(cddl_type) => write!(f, "{}", cddl_type),
-            CDDLEntry::Group(group) => write!(f, "{}", group),
-            CDDLEntry::Vector(group) => write!(f, "[* {} ]", format!("{}", group)),
-            CDDLEntry::Struct(group) => write!(f, "{{ {} }}", format!("{}", group)),
-            CDDLEntry::Table(group) => write!(f, "{{ + tstr => {{ {} }} }}", group),
-            CDDLEntry::TableType(value_type) => write!(f, "{{ + tstr => {} }}", value_type),
-            CDDLEntry::Choice(group) => write!(f, "&{}", group),
-        }
+pub fn create_map(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) -> Type2<'static> {
+    Type2::Map {
+        group: Group {
+            group_choices: vec![GroupChoice {
+                group_entries: entries.to_owned(),
+                comments_before_grpchoice: None,
+                span: (0, 0, 0),
+            }],
+            span: (0, 0, 0),
+        },
+        span: (0, 0, 0),
+        comments_before_group: None,
+        comments_after_group: None,
     }
 }
 
-/// Struct for building and representing CDDL groups
-// CDDL uses groups to define reuseable data structures
-// they can be merged into schema or used in Vectors, Tables and Structs
-#[derive(Clone, Debug)]
-pub struct Group {
-    name: String,
-    fields: BTreeMap<String, CDDLEntry>,
+pub fn create_entry(
+    ident: &'static str,
+    value: Type2<'static>,
+) -> (GroupEntry<'static>, OptionalComma<'static>) {
+    (
+        GroupEntry::ValueMemberKey {
+            ge: Box::from(ValueMemberKeyEntry {
+                occur: None,
+                member_key: Some(MemberKey::Bareword {
+                    ident: ident.into(),
+                    comments: None,
+                    comments_after_colon: None,
+                    span: (0, 0, 0),
+                }),
+                entry_type: Type {
+                    type_choices: vec![TypeChoice {
+                        type1: Type1 {
+                            type2: value,
+                            operator: None,
+                            comments_after_type: None,
+                            span: (0, 0, 0),
+                        },
+                        comments_before_type: None,
+                        comments_after_type: None,
+                    }],
+                    span: (0, 0, 0),
+                },
+            }),
+            leading_comments: None,
+            trailing_comments: None,
+            span: (0, 0, 0),
+        },
+        OptionalComma {
+            optional_comma: true,
+            trailing_comments: None,
+        },
+    )
 }
 
-impl Group {
-    /// Create a new CDDL group
-    pub fn new(name: String) -> Self {
-        Self {
-            name,
-            fields: BTreeMap::new(),
-        }
-    }
-
-    /// Add an CDDLEntry to the group.
-    pub fn add_entry(&mut self, key: &str, value_type: CDDLEntry) -> Result<(), SchemaError> {
-        self.fields.insert(key.to_owned(), value_type);
-        Ok(())
-    }
+pub fn create_message_field(field_type: FieldTypes) -> (Type2<'static>, Type2<'static>) {
+    // Match passed type and map it to our MessageFields type and CDDL types (do we still need the
+    // MessageFields type key when we are using schemas?)
+    let (text_value, type_name) = match field_type {
+        FieldTypes::Str => ("str", "tstr"),
+        FieldTypes::Int => ("int", "int"),
+        FieldTypes::Float => ("float", "float"),
+        FieldTypes::Bool => ("bool", "bool"),
+        FieldTypes::Relation => ("relation", "hash"),
+    };
+    // Return a tuple of message field values
+    (
+        Type2::TextValue {
+            value: text_value,
+            span: (0, 0, 0),
+        },
+        Type2::Typename {
+            ident: Identifier {
+                ident: type_name,
+                socket: None,
+                span: (0, 0, 0),
+            },
+            generic_args: None,
+            span: (0, 0, 0),
+        },
+    )
 }
 
-impl fmt::Display for Group {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let map = &self.fields;
-        write!(f, "( ")?;
-        for (count, value) in map.iter().enumerate() {
-            // For every element except the first, add a comma.
-            if count != 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{} : {}", value.0, value.1)?;
-        }
-        write!(f, " )")
-    }
-}
 #[derive(Debug)]
-/// UserSchema struct for creating CDDL schemas and valdating MessageFields
 pub struct UserSchema {
-    name: String,
-    schema: BTreeMap<String, CDDLEntry>,
+    entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>,
 }
 
 impl UserSchema {
-    /// Create a new blank UserSchema
-    pub fn new(name: String) -> Self {
-        Self {
-            name,
-            schema: BTreeMap::new(),
+    pub fn new() -> Self {
+        UserSchema {
+            entries: Vec::new(),
         }
     }
+    // Add a message field to the schema passing in field name and type
+    pub fn add_message_field(&mut self, name: &'static str, field_type: FieldTypes) {
+        // Create a message field of passed type
+        let (value_1, value_2) = create_message_field(field_type);
 
-    /// Create a new UserSchema from a CDDL string
-    pub fn new_from_string(_cddl_schema: String) -> Result<(), SchemaError> {
-        // TBC: Do the stuff here
-        Ok(())
+        // Create an array of message_fields
+        let mut message_fields = Vec::new();
+        message_fields.push(create_entry("type", value_1));
+        message_fields.push(create_entry("value", value_2));
+
+        // Add a named message fields entry (of type map) to the schema
+        self.entries
+            .push(create_entry(name, create_map(message_fields)));
     }
-
-    /// Add an entry to this schema
-    pub fn add_entry(&mut self, key: &str, value: CDDLEntry) -> Result<(), SchemaError> {
-        match value {
-            CDDLEntry::Type(_) => {
-                self.schema.insert(key.to_owned(), value);
-                Ok(())
-            }
-            CDDLEntry::Group(_) => {
-                //Groups should be merged not inserted
-                Ok(())
-            }
-            _ => {
-                self.schema.insert(key.to_owned(), value);
-                Ok(())
-            }
-        }
+    pub fn get_schema(&self) -> String {
+        create_cddl(self.entries.clone()).to_string()
     }
-
     /// Validate a message against this user schema
     #[cfg(not(target_arch = "wasm32"))]
     pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), cddl::validator::cbor::Error> {
-        validate_cbor_from_slice(&format!("{}", self), &bytes)
-    }
-}
-
-impl fmt::Display for UserSchema {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let map = &self.schema;
-        write!(f, "{} = {{ ", self.name)?;
-        for (count, value) in map.iter().enumerate() {
-            if count != 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{} : {}", value.0, value.1)?;
-        }
-        write!(f, " }}")
+        validate_cbor_from_slice(&format!("{}", self.get_schema()), &bytes)
     }
 }
 
@@ -181,103 +171,46 @@ impl fmt::Display for UserSchema {
 mod tests {
     use crate::message::{MessageFields, MessageValue};
 
-    use super::{CDDLEntry, Group, Type, UserSchema};
+    use super::{FieldTypes, UserSchema};
 
     #[test]
-    pub fn validate_cbor() {
-        // Construct an "age" message field
-        let mut message_field_age = Group::new("age".to_owned());
-        message_field_age
-            .add_entry("type", CDDLEntry::Type(Type::Const(r#""int""#.to_owned())))
-            .unwrap();
-        message_field_age
-            .add_entry("value", CDDLEntry::Type(Type::Int))
-            .unwrap();
-
-        // Construct a "name" message field
-        let mut message_field_name = Group::new("name".to_owned());
-        message_field_name
-            .add_entry("type", CDDLEntry::Type(Type::Const(r#""str""#.to_owned())))
-            .unwrap();
-        message_field_name
-            .add_entry("value", CDDLEntry::Type(Type::Tstr))
-            .unwrap();
-
-        // Construct a "person" user schema using the above groups
-        let mut person_schema = UserSchema::new("person_schema".to_owned());
-
-        person_schema
-            .add_entry("age", CDDLEntry::Struct(message_field_age))
-            .unwrap();
-        person_schema
-            .add_entry("name", CDDLEntry::Struct(message_field_name))
-            .unwrap();
-
-        // print!("{}", person_schema);
-        // => person = { age : { type: "int", value: int }, name : { type: "str", value: tstr } }
-
-        // Build "person" message fields
-        let mut me = MessageFields::new();
-        me.add("name", MessageValue::Text("Sam".to_owned()))
-            .unwrap();
-        me.add("age", MessageValue::Integer(35)).unwrap();
-
-        // Encode message fields
-        let me_encoded = serde_cbor::to_vec(&me).unwrap();
-
-        // Validate message fields against person schema
-        assert!(person_schema.validate_message(me_encoded).is_ok());
-    }
-
-    #[test]
-    pub fn schema_with_table() {
-        // Construct a "name" message field
-        let mut message_field_prices = Group::new("prices".to_owned());
-        message_field_prices
-            .add_entry(
-                "type",
-                CDDLEntry::Type(Type::Const(r#""table""#.to_owned())),
-            )
-            .unwrap();
-        message_field_prices
-            .add_entry("value", CDDLEntry::TableType(Type::Uint))
-            .unwrap();
-
-        // Construct a "person" user schema using the above groups
-        let mut items_schema = UserSchema::new("items_schema".to_owned());
-
-        items_schema
-            .add_entry("prices", CDDLEntry::Struct(message_field_prices))
-            .unwrap();
-
-        let json_string = r#"{"prices": {"type": "table", "value": {"reinforcement": 958, "hunter": 4034, "Liz": 2020, "manicurists": 857}}}"#;
-
-        assert!(cddl::validate_json_from_str(&format!("{}", items_schema), json_string).is_ok());
-
-        let longer_json_string = r#"{"prices": {"type": "table", "value": {"reinforcement": 958, "hunter": 4034, "Liz": 2020, "manicurists": 857, "blablabla": 123, "yabawaba": 254}}}"#;
-
-        assert!(
-            cddl::validate_json_from_str(&format!("{}", items_schema), longer_json_string).is_ok()
-        );
+    pub fn add_message_fields() {
+        let mut schema = UserSchema::new();
+        schema.add_message_field("first-name", FieldTypes::Str);
+        schema.add_message_field("last-name", FieldTypes::Str);
+        schema.add_message_field("age", FieldTypes::Int);
+        let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, age: { type: \"int\", value: int, }, }\n";
+        assert_eq!(cddl_str, schema.get_schema())
     }
     
     #[test]
-    pub fn group_as_choice(){
-        let mut colours = Group::new("colours".to_owned());
-        colours.add_entry("black", CDDLEntry::Type(Type::Const(r#"1"#.to_owned()))).unwrap();
-        colours.add_entry("red", CDDLEntry::Type(Type::Const(r#"2"#.to_owned()))).unwrap();
-        colours.add_entry("green", CDDLEntry::Type(Type::Const(r#"3"#.to_owned()))).unwrap();
-        
-        let mut colour_schema = UserSchema::new("colour_schema".to_owned());
+    pub fn validate_message_fields() {
+        let mut person_schema = UserSchema::new();
+        person_schema.add_message_field("first-name", FieldTypes::Str);
+        person_schema.add_message_field("last-name", FieldTypes::Str);
+        person_schema.add_message_field("age", FieldTypes::Int);
 
-        colour_schema
-            .add_entry("colour", CDDLEntry::Choice(colours))
+        // Build "person" message fields
+        let mut person = MessageFields::new();
+        person
+            .add("first-name", MessageValue::Text("Park".to_owned()))
             .unwrap();
+        person
+            .add("last-name", MessageValue::Text("Saeroyi".to_owned()))
+            .unwrap();
+        person.add("age", MessageValue::Integer(32)).unwrap();
 
-        let json_string = r#"{"colour": 1}"#;
+        // Encode message fields
+        let me_encoded = serde_cbor::to_vec(&person).unwrap();
+
+        // Validate message fields against person schema
+        assert!(person_schema.validate_message(me_encoded).is_ok());
         
-        // The CDDL here is valid, but actually the JSON data doesn't look how I'd imagine
-        // I think I'm just not understanding how _choice_ works properly.
-        assert!(cddl::validate_json_from_str(&format!("{}", colour_schema), json_string).is_ok());
+        person.add("favorite-number", MessageValue::Integer(3)).unwrap();
+        
+        let me_encoded_again = serde_cbor::to_vec(&person).unwrap();
+
+        // Should throw error because of extra field
+        assert!(person_schema.validate_message(me_encoded_again).is_err());
     }
 }
