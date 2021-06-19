@@ -3,6 +3,9 @@ use cddl::ast::{
     TypeChoice, TypeRule, ValueMemberKeyEntry, CDDL,
 };
 
+#[cfg(not(target_arch = "wasm32"))]
+use cddl::validate_cbor_from_slice;
+
 pub enum FieldTypes {
     Str,
     Int,
@@ -102,7 +105,7 @@ pub fn create_entry(
 }
 
 pub fn create_message_field(field_type: FieldTypes) -> (Type2<'static>, Type2<'static>) {
-    // Match passed type and map it to our MessageFields type and CDDL types (do we still need the 
+    // Match passed type and map it to our MessageFields type and CDDL types (do we still need the
     // MessageFields type key when we are using schemas?)
     let (text_value, type_name) = match field_type {
         FieldTypes::Str => ("str", "tstr"),
@@ -144,12 +147,12 @@ impl UserSchema {
     pub fn add_message_field(&mut self, name: &'static str, field_type: FieldTypes) {
         // Create a message field of passed type
         let (value_1, value_2) = create_message_field(field_type);
-        
+
         // Create an array of message_fields
         let mut message_fields = Vec::new();
         message_fields.push(create_entry("type", value_1));
         message_fields.push(create_entry("value", value_2));
-        
+
         // Add a named message fields entry (of type map) to the schema
         self.entries
             .push(create_entry(name, create_map(message_fields)));
@@ -157,10 +160,17 @@ impl UserSchema {
     pub fn get_cddl(&self) -> CDDL {
         create_cddl(self.entries.clone())
     }
+    /// Validate a message against this user schema
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), cddl::validator::cbor::Error> {
+        validate_cbor_from_slice(&format!("{}", self.get_cddl().to_string()), &bytes)
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::message::{MessageFields, MessageValue};
+
     use super::{FieldTypes, UserSchema};
 
     #[test]
@@ -171,5 +181,36 @@ mod tests {
         schema.add_message_field("age", FieldTypes::Int);
         let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, age: { type: \"int\", value: int, }, }\n";
         assert_eq!(cddl_str, schema.get_cddl().to_string())
+    }
+    
+    #[test]
+    pub fn validate_message_fields() {
+        let mut person_schema = UserSchema::new();
+        person_schema.add_message_field("first-name", FieldTypes::Str);
+        person_schema.add_message_field("last-name", FieldTypes::Str);
+        person_schema.add_message_field("age", FieldTypes::Int);
+
+        // Build "person" message fields
+        let mut person = MessageFields::new();
+        person
+            .add("first-name", MessageValue::Text("Park".to_owned()))
+            .unwrap();
+        person
+            .add("last-name", MessageValue::Text("Saeroyi".to_owned()))
+            .unwrap();
+        person.add("age", MessageValue::Integer(32)).unwrap();
+
+        // Encode message fields
+        let me_encoded = serde_cbor::to_vec(&person).unwrap();
+
+        // Validate message fields against person schema
+        assert!(person_schema.validate_message(me_encoded).is_ok());
+        
+        person.add("favorite-number", MessageValue::Integer(3)).unwrap();
+        
+        let me_encoded_again = serde_cbor::to_vec(&person).unwrap();
+
+        // Should throw error because of extra field
+        assert!(person_schema.validate_message(me_encoded_again).is_err());
     }
 }
