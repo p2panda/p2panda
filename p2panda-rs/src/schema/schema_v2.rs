@@ -104,7 +104,7 @@ pub fn create_entry(
 pub fn create_message_field(field_type: FieldTypes) -> (Type2<'static>, Type2<'static>) {
     // Match passed type and map it to our MessageFields type and CDDL types (do we still need the 
     // MessageFields type key when we are using schemas?)
-    let (value, value_type) = match field_type {
+    let (text_value, type_name) = match field_type {
         FieldTypes::Str => ("str", "tstr"),
         FieldTypes::Int => ("int", "int"),
         FieldTypes::Float => ("float", "float"),
@@ -114,12 +114,12 @@ pub fn create_message_field(field_type: FieldTypes) -> (Type2<'static>, Type2<'s
     // Return a tuple of message field values
     (
         Type2::TextValue {
-            value: value,
+            value: text_value,
             span: (0, 0, 0),
         },
         Type2::Typename {
             ident: Identifier {
-                ident: value_type,
+                ident: type_name,
                 socket: None,
                 span: (0, 0, 0),
             },
