@@ -1,15 +1,16 @@
 use std::fmt::Debug;
 
 use cddl::ast::{
-    Group, GroupChoice, GroupEntry, Identifier, MemberKey, Occur, Occurrence, Operator,
-    OptionalComma, Rule, Type, Type1, Type2, TypeChoice, TypeRule, ValueMemberKeyEntry, CDDL,
+    GenericArg, GenericArgs, Group, GroupChoice, GroupEntry, Identifier, MemberKey, Occur,
+    Occurrence, Operator, OptionalComma, RangeCtlOp, Rule, Type, Type1, Type2, TypeChoice,
+    TypeRule, ValueMemberKeyEntry, CDDL
 };
 use cddl::lexer::Lexer;
 use cddl::parser::Parser;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validate_cbor_from_slice;
 
-use crate::message::{MessageFields, MessageFieldsError, MessageValue};
+use crate::message::{MessageFields, MessageFieldsError};
 
 use super::error::SchemaError;
 
@@ -78,12 +79,28 @@ pub fn create_map(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) -
     }
 }
 
-// Helper function for creating CDDL entries, an ident string, `Type2` object and optionally an 
+pub fn create_regex_operator(regex_str: &'static str) -> Operator<'static> {
+    Operator {
+        operator: RangeCtlOp::CtlOp {
+            ctrl: ".regex",
+            span: (0, 0, 0),
+        },
+        type2: Type2::TextValue {
+            value: regex_str,
+            span: (0, 0, 0),
+        },
+        comments_before_operator: None,
+        comments_after_operator: None,
+    }
+}
+
+// Helper function for creating CDDL entries, an ident string, `Type2` object and optionally an
 // `Occur` object are passed in.
 pub fn create_entry(
     ident: &'static str,
     value: Type2<'static>,
     occur: Option<Occur>,
+    operator: Option<Operator<'static>>,
 ) -> (GroupEntry<'static>, OptionalComma<'static>) {
     let occurrence = match occur {
         Some(o) => Some(Occurrence {
@@ -106,7 +123,7 @@ pub fn create_entry(
                     type_choices: vec![TypeChoice {
                         type1: Type1 {
                             type2: value,
-                            operator: None,
+                            operator: operator,
                             comments_after_type: None,
                             span: (0, 0, 0),
                         },
@@ -134,12 +151,13 @@ pub fn create_message_field(
 ) -> Vec<(GroupEntry<'static>, OptionalComma<'static>)> {
     // Match passed type and map it to our MessageFields type and CDDL types (do we still need the
     // MessageFields type key when we are using schemas?)
-    let (text_value, type_name) = match field_type {
-        FieldTypes::Str => ("str", "tstr"),
-        FieldTypes::Int => ("int", "int"),
-        FieldTypes::Float => ("float", "float"),
-        FieldTypes::Bool => ("bool", "bool"),
-        FieldTypes::Relation => ("relation", "hash"),
+    let (text_value, type_name, operator) = match field_type {
+        FieldTypes::Str => ("str", "tstr", None),
+        FieldTypes::Int => ("int", "int", None),
+        FieldTypes::Float => ("float", "float", None),
+        FieldTypes::Bool => ("bool", "bool", None),
+        FieldTypes::Relation => 
+            ("relation", "hash", Some(create_regex_operator("[0-9a-fa-f]{132}"))),
     };
     // Return a tuple of message field values
     let value_1 = Type2::TextValue {
@@ -157,8 +175,8 @@ pub fn create_message_field(
     };
     // Create an array of message_fields
     let mut message_fields = Vec::new();
-    message_fields.push(create_entry("type", value_1, None));
-    message_fields.push(create_entry("value", value_2, None));
+    message_fields.push(create_entry("type", value_1, None, None));
+    message_fields.push(create_entry("value", value_2, None, operator));
     message_fields
 }
 
@@ -191,7 +209,7 @@ impl UserSchema {
 
         // Add a named message fields entry (of type map) to the schema
         self.entries
-            .push(create_entry(name, create_map(message_fields), None));
+            .push(create_entry(name, create_map(message_fields), None, None));
     }
     // Add an optional message field to the schema passing in field name and type
     pub fn add_optional_message_field(&mut self, name: &'static str, field_type: FieldTypes) {
@@ -203,6 +221,7 @@ impl UserSchema {
             name,
             create_map(message_fields),
             Some(Occur::Optional((0, 0, 0))),
+            None
         ));
     }
     // Add message field with custom occurence param to the schema passing in field name, type and [`Occur`]
@@ -211,13 +230,14 @@ impl UserSchema {
         name: &'static str,
         field_type: FieldTypes,
         occur: Occur,
+        operator: Option<Operator<'static>>
     ) {
         // Create an array of message fields
         let message_fields = create_message_field(field_type);
 
         // Add a named message fields entry (of type map) to the schema
         self.entries
-            .push(create_entry(name, create_map(message_fields), Some(occur)));
+            .push(create_entry(name, create_map(message_fields), Some(occur), operator));
     }
     // Returns schema string if schema exists
     pub fn get_schema(&self) -> Option<String> {
@@ -265,7 +285,7 @@ mod tests {
     #[test]
     pub fn add_custom_message_fields() {
         let mut schema = UserSchema::new();
-        schema.add_custom_message_field("first-name", FieldTypes::Str, Occur::OneOrMore((0, 0, 0)));
+        schema.add_custom_message_field("first-name", FieldTypes::Str, Occur::OneOrMore((0, 0, 0)), None);
         schema.add_custom_message_field(
             "last-name",
             FieldTypes::Str,
@@ -274,11 +294,22 @@ mod tests {
                 upper: Some(3),
                 span: (0, 0, 0),
             },
+            None,
         );
-        schema.add_custom_message_field("age", FieldTypes::Int, Occur::ZeroOrMore((0, 0, 0)));
+        schema.add_custom_message_field("age", FieldTypes::Int, Occur::ZeroOrMore((0, 0, 0)), None);
         let cddl_str = "my_rule = { + first-name: { type: \"str\", value: tstr, }, 1*3 last-name: { type: \"str\", value: tstr, }, * age: { type: \"int\", value: int, }, }\n";
         assert_eq!(cddl_str, schema.get_schema().unwrap())
     }
+    #[test]
+    pub fn add_message_fields_with_relation() {
+        let mut schema = UserSchema::new();
+        schema.add_message_field("first-name", FieldTypes::Str);
+        schema.add_message_field("last-name", FieldTypes::Str);
+        schema.add_message_field("member-of", FieldTypes::Relation);
+        let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, member-of: { type: \"relation\", value: hash .regex \"[0-9a-fa-f]{132}\", }, }\n";
+        assert_eq!(cddl_str, schema.get_schema().unwrap())
+    }
+
 
     #[test]
     pub fn new_from_string() {
