@@ -9,6 +9,8 @@ use cddl::lexer::Lexer;
 use cddl::parser::Parser;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validate_cbor_from_slice;
+#[cfg(not(target_arch = "wasm32"))]
+use cddl::validator::cbor;
 
 use crate::message::{MessageFields, MessageFieldsError};
 
@@ -212,12 +214,19 @@ impl UserSchema {
         }
     }
     pub fn new_from_string(schema: &String) -> Result<Self, SchemaError> {
-        let mut l = Lexer::new(schema);
+        let mut lexer = Lexer::new(schema);
         // Need to fix proper error checking, not uwrap()
-        let mut p = Parser::new(l.iter(), schema).unwrap();
+        let parser = Parser::new(lexer.iter(), schema);
+        let cddl_string = match parser {
+            Ok(mut parser) => match parser.parse_cddl() {
+                Ok(cddl) => Ok(cddl.to_string()),
+                Err(err) => Err(SchemaError::ParsingError(err.to_string())),
+            },
+            Err(err) => Err(SchemaError::ParsingError(err.to_string())),
+        };
         Ok(Self {
             entries: Vec::new(),
-            schema: Some(p.parse_cddl().unwrap().to_string()),
+            schema: Some(cddl_string.unwrap()),
         })
     }
     // Add a message field to the schema passing in field name and type
@@ -279,8 +288,27 @@ impl UserSchema {
 
     /// Validate a message against this user schema
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), cddl::validator::cbor::Error> {
-        validate_cbor_from_slice(&self.get_schema().unwrap(), &bytes)
+    pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
+        let cddl_schema = match self.get_schema() {
+            Some(str) => Ok(str),
+            None => Err(SchemaError::NoSchema),
+        };
+        match validate_cbor_from_slice(&cddl_schema.unwrap(), &bytes) {
+            Err(cbor::Error::Validation(err)) => {
+                let err_str = err
+                    .iter()
+                    .map(|fe| format!("{}: \"{}\"", fe.cbor_location, fe.reason))
+                    .collect::<Vec<String>>()
+                    .join(", ");
+
+                Err(SchemaError::InvalidSchema(err_str))
+            }
+            Err(cbor::Error::CBORParsing(_err)) => Err(SchemaError::InvalidCBOR),
+            Err(cbor::Error::CDDLParsing(err)) => {
+                panic!("Parsing CDDL error: {}", err);
+            }
+            _ => Ok(()),
+        }
     }
 }
 

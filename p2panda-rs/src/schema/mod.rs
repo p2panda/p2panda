@@ -26,6 +26,14 @@ pub mod error {
         /// Message can't be deserialized from invalid CBOR encoding.
         #[error("invalid CBOR format")]
         InvalidCBOR,
+        
+        /// There is no schema set
+        #[error("no CDDL schema present")]
+        NoSchema,
+        
+        /// Error while parsing CDDL
+        #[error("error while parsing CDDL: {0}")]
+        ParsingError(String),
     }
 }
 
