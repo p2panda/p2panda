@@ -1,3 +1,7 @@
+// This was my first attempt before I understood how to use the cddl crate ast.
+// We will just delete this file as it's not usefull anymore
+// but I leave it here just for reference and incase any bits are useful
+// see schema.rs for current implementation
 use std::collections::BTreeMap;
 use std::fmt;
 
