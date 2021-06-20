@@ -222,9 +222,9 @@ impl UserSchema {
         // Validate against UserSchema CDDL schema
         // I got stuck here trying to use generic parameters and type checking / where clauses / traits
         // Feels like there is a nice way to do this but didn't find it yet....
-        Ok((MessageFields::new()))
-    } 
-    
+        Ok(MessageFields::new())
+    }
+
     /// Validate a message against this user schema
     #[cfg(not(target_arch = "wasm32"))]
     pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), cddl::validator::cbor::Error> {
@@ -236,12 +236,11 @@ trait SchemaMessage<T = String> {
     // ...
 }
 
-
 #[cfg(test)]
 mod tests {
-    use crate::message::{MessageFields, MessageValue};
-
     use super::{FieldTypes, UserSchema};
+    use crate::message::{MessageFields, MessageValue};
+    use cddl::ast::Occur;
 
     #[test]
     pub fn add_message_fields() {
@@ -250,6 +249,24 @@ mod tests {
         schema.add_message_field("last-name", FieldTypes::Str);
         schema.add_optional_message_field("age", FieldTypes::Int);
         let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, ? age: { type: \"int\", value: int, }, }\n";
+        assert_eq!(cddl_str, schema.get_schema().unwrap())
+    }
+
+    #[test]
+    pub fn add_custom_message_fields() {
+        let mut schema = UserSchema::new();
+        schema.add_custom_message_field("first-name", FieldTypes::Str, Occur::OneOrMore((0, 0, 0)));
+        schema.add_custom_message_field(
+            "last-name",
+            FieldTypes::Str,
+            Occur::Exact {
+                lower: Some(1),
+                upper: Some(3),
+                span: (0, 0, 0),
+            },
+        );
+        schema.add_custom_message_field("age", FieldTypes::Int, Occur::ZeroOrMore((0, 0, 0)));
+        let cddl_str = "my_rule = { + first-name: { type: \"str\", value: tstr, }, 1*3 last-name: { type: \"str\", value: tstr, }, * age: { type: \"int\", value: int, }, }\n";
         assert_eq!(cddl_str, schema.get_schema().unwrap())
     }
 
@@ -271,7 +288,7 @@ mod tests {
         let schema_2 = UserSchema::new_from_string(&cddl_str.to_string()).unwrap();
         // should be equal
         assert_eq!(schema_2.get_schema(), schema_1.get_schema());
-        
+
         // Empty schema should return None
         let empty_schema = UserSchema::new();
         assert_eq!(empty_schema.get_schema(), None)
