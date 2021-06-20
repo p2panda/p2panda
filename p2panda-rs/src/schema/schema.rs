@@ -182,6 +182,30 @@ impl UserSchema {
         self.entries
             .push(create_entry(name, create_map(message_fields), None));
     }
+    // Add an optional message field to the schema passing in field name and type
+    pub fn add_optional_message_field(&mut self, name: &'static str, field_type: FieldTypes) {
+        // Create an array of message fields
+        let message_fields = create_message_field(field_type);
+
+        // Add a named message fields entry (of type map) to the schema
+        self.entries.push(create_entry(
+            name,
+            create_map(message_fields),
+            Some(Occur::Optional((0, 0, 0))),
+        ));
+    }
+    // Add message field with custom occurence param to the schema passing in field name, type and [`Occur`]
+    pub fn add_custom_message_field(&mut self, name: &'static str, field_type: FieldTypes, occur: Occur) {
+        // Create an array of message fields
+        let message_fields = create_message_field(field_type);
+
+        // Add a named message fields entry (of type map) to the schema
+        self.entries.push(create_entry(
+            name,
+            create_map(message_fields),
+            Some(occur),
+        ));
+    }
     // Returns schema string if schema exists
     pub fn get_schema(&self) -> Option<String> {
         match &self.schema {
@@ -208,8 +232,8 @@ mod tests {
         let mut schema = UserSchema::new();
         schema.add_message_field("first-name", FieldTypes::Str);
         schema.add_message_field("last-name", FieldTypes::Str);
-        schema.add_message_field("age", FieldTypes::Int);
-        let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, age: { type: \"int\", value: int, }, }\n";
+        schema.add_optional_message_field("age", FieldTypes::Int);
+        let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, ? age: { type: \"int\", value: int, }, }\n";
         assert_eq!(cddl_str, schema.get_schema().unwrap())
     }
 
@@ -218,9 +242,9 @@ mod tests {
         let mut schema_1 = UserSchema::new();
         schema_1.add_message_field("first-name", FieldTypes::Str);
         schema_1.add_message_field("last-name", FieldTypes::Str);
-        schema_1.add_message_field("age", FieldTypes::Int);
+        schema_1.add_optional_message_field("age", FieldTypes::Int);
 
-        let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, age: { type: \"int\", value: int, }, }\n";
+        let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, ? age: { type: \"int\", value: int, }, }\n";
         let schema_2 = UserSchema::new_from_string(&cddl_str.to_string()).unwrap();
 
         assert_eq!(schema_2.get_schema(), schema_1.get_schema());
@@ -235,7 +259,7 @@ mod tests {
         let mut person_schema = UserSchema::new();
         person_schema.add_message_field("first-name", FieldTypes::Str);
         person_schema.add_message_field("last-name", FieldTypes::Str);
-        person_schema.add_message_field("age", FieldTypes::Int);
+        person_schema.add_optional_message_field("age", FieldTypes::Int);
 
         // Build "person" message fields
         let mut person = MessageFields::new();
