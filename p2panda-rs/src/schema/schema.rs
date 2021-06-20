@@ -1,14 +1,15 @@
+use std::fmt::Debug;
+
 use cddl::ast::{
     Group, GroupChoice, GroupEntry, Identifier, MemberKey, Occur, Occurrence, Operator,
     OptionalComma, Rule, Type, Type1, Type2, TypeChoice, TypeRule, ValueMemberKeyEntry, CDDL,
 };
-
 use cddl::lexer::Lexer;
 use cddl::parser::Parser;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validate_cbor_from_slice;
 
-use crate::message;
+use crate::message::{MessageFields, MessageFieldsError, MessageValue};
 
 use super::error::SchemaError;
 
@@ -216,12 +217,25 @@ impl UserSchema {
             None => Some(create_cddl(self.entries.clone()).to_string()),
         }
     }
+    pub fn create<T>(values: Vec<(String, T)>) -> Result<MessageFields, MessageFieldsError> {
+        // Create a new MessageFields instance based on passed array of (key, value) tuples
+        // Validate against UserSchema CDDL schema
+        // I got stuck here trying to use generic parameters and type checking / where clauses / traits
+        // Feels like there is a nice way to do this but didn't find it yet....
+        Ok((MessageFields::new()))
+    } 
+    
     /// Validate a message against this user schema
     #[cfg(not(target_arch = "wasm32"))]
     pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), cddl::validator::cbor::Error> {
         validate_cbor_from_slice(&self.get_schema().unwrap(), &bytes)
     }
 }
+
+trait SchemaMessage<T = String> {
+    // ...
+}
+
 
 #[cfg(test)]
 mod tests {
