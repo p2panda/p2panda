@@ -1,12 +1,14 @@
 use cddl::ast::{
-    Group, GroupChoice, GroupEntry, Identifier, MemberKey, OptionalComma, Rule, Type, Type1, Type2,
-    TypeChoice, TypeRule, ValueMemberKeyEntry, CDDL
+    Group, GroupChoice, GroupEntry, Identifier, MemberKey, Occur, Occurrence, Operator,
+    OptionalComma, Rule, Type, Type1, Type2, TypeChoice, TypeRule, ValueMemberKeyEntry, CDDL,
 };
 
+use cddl::lexer::Lexer;
+use cddl::parser::Parser;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validate_cbor_from_slice;
-use cddl::parser::Parser;
-use cddl::lexer::Lexer;
+
+use crate::message;
 
 use super::error::SchemaError;
 
@@ -72,11 +74,19 @@ pub fn create_map(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) -
 pub fn create_entry(
     ident: &'static str,
     value: Type2<'static>,
+    occur: Option<Occur>,
 ) -> (GroupEntry<'static>, OptionalComma<'static>) {
+    let occurrence = match occur {
+        Some(o) => Some(Occurrence {
+            occur: o,
+            comments: None,
+        }),
+        None => None,
+    };
     (
         GroupEntry::ValueMemberKey {
             ge: Box::from(ValueMemberKeyEntry {
-                occur: None,
+                occur: occurrence,
                 member_key: Some(MemberKey::Bareword {
                     ident: ident.into(),
                     comments: None,
@@ -108,7 +118,9 @@ pub fn create_entry(
     )
 }
 
-pub fn create_message_field(field_type: FieldTypes) -> (Type2<'static>, Type2<'static>) {
+pub fn create_message_field(
+    field_type: FieldTypes,
+) -> Vec<(GroupEntry<'static>, OptionalComma<'static>)> {
     // Match passed type and map it to our MessageFields type and CDDL types (do we still need the
     // MessageFields type key when we are using schemas?)
     let (text_value, type_name) = match field_type {
@@ -119,27 +131,30 @@ pub fn create_message_field(field_type: FieldTypes) -> (Type2<'static>, Type2<'s
         FieldTypes::Relation => ("relation", "hash"),
     };
     // Return a tuple of message field values
-    (
-        Type2::TextValue {
-            value: text_value,
+    let value_1 = Type2::TextValue {
+        value: text_value,
+        span: (0, 0, 0),
+    };
+    let value_2 = Type2::Typename {
+        ident: Identifier {
+            ident: type_name,
+            socket: None,
             span: (0, 0, 0),
         },
-        Type2::Typename {
-            ident: Identifier {
-                ident: type_name,
-                socket: None,
-                span: (0, 0, 0),
-            },
-            generic_args: None,
-            span: (0, 0, 0),
-        },
-    )
+        generic_args: None,
+        span: (0, 0, 0),
+    };
+    // Create an array of message_fields
+    let mut message_fields = Vec::new();
+    message_fields.push(create_entry("type", value_1, None));
+    message_fields.push(create_entry("value", value_2, None));
+    message_fields
 }
 
 #[derive(Debug)]
 pub struct UserSchema {
     entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>,
-    schema: Option<String>
+    schema: Option<String>,
 }
 
 impl UserSchema {
@@ -153,32 +168,26 @@ impl UserSchema {
         let mut l = Lexer::new(schema);
         // Need to fix proper error checking, not uwrap()
         let mut p = Parser::new(l.iter(), schema).unwrap();
-        Ok(Self{
+        Ok(Self {
             entries: Vec::new(),
             schema: Some(p.parse_cddl().unwrap().to_string()),
         })
-  
     }
     // Add a message field to the schema passing in field name and type
     pub fn add_message_field(&mut self, name: &'static str, field_type: FieldTypes) {
-        // Create a message field of passed type
-        let (value_1, value_2) = create_message_field(field_type);
-
-        // Create an array of message_fields
-        let mut message_fields = Vec::new();
-        message_fields.push(create_entry("type", value_1));
-        message_fields.push(create_entry("value", value_2));
+        // Create an array of message fields
+        let message_fields = create_message_field(field_type);
 
         // Add a named message fields entry (of type map) to the schema
         self.entries
-            .push(create_entry(name, create_map(message_fields)));
+            .push(create_entry(name, create_map(message_fields), None));
     }
     // Returns schema string if schema exists
     pub fn get_schema(&self) -> Option<String> {
         match &self.schema {
             Some(schema) => Some(schema.to_owned()),
             None if self.entries.len() == 0 => None, // schema must contain some entries
-            None => Some(create_cddl(self.entries.clone()).to_string())
+            None => Some(create_cddl(self.entries.clone()).to_string()),
         }
     }
     /// Validate a message against this user schema
@@ -203,20 +212,24 @@ mod tests {
         let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, age: { type: \"int\", value: int, }, }\n";
         assert_eq!(cddl_str, schema.get_schema().unwrap())
     }
-    
+
     #[test]
     pub fn new_from_string() {
         let mut schema_1 = UserSchema::new();
         schema_1.add_message_field("first-name", FieldTypes::Str);
         schema_1.add_message_field("last-name", FieldTypes::Str);
         schema_1.add_message_field("age", FieldTypes::Int);
-        
+
         let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, age: { type: \"int\", value: int, }, }\n";
         let schema_2 = UserSchema::new_from_string(&cddl_str.to_string()).unwrap();
-        
-        assert_eq!(schema_2.get_schema(), schema_1.get_schema())
+
+        assert_eq!(schema_2.get_schema(), schema_1.get_schema());
+
+        let empty_schema = UserSchema::new();
+
+        assert_eq!(empty_schema.get_schema(), None)
     }
-    
+
     #[test]
     pub fn validate_message_fields() {
         let mut person_schema = UserSchema::new();
@@ -239,9 +252,11 @@ mod tests {
 
         // Validate message fields against person schema
         assert!(person_schema.validate_message(me_encoded).is_ok());
-        
-        person.add("favorite-number", MessageValue::Integer(3)).unwrap();
-        
+
+        person
+            .add("favorite-number", MessageValue::Integer(3))
+            .unwrap();
+
         let me_encoded_again = serde_cbor::to_vec(&person).unwrap();
 
         // Should throw error because of extra field
