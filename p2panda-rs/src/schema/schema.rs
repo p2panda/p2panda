@@ -184,7 +184,7 @@ impl UserSchema {
     /// Validate a message against this user schema
     #[cfg(not(target_arch = "wasm32"))]
     pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), cddl::validator::cbor::Error> {
-        validate_cbor_from_slice(&format!("{}", self.get_schema().unwrap()), &bytes)
+        validate_cbor_from_slice(&self.get_schema().unwrap(), &bytes)
     }
 }
 
