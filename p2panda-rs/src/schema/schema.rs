@@ -1,10 +1,14 @@
 use cddl::ast::{
     Group, GroupChoice, GroupEntry, Identifier, MemberKey, OptionalComma, Rule, Type, Type1, Type2,
-    TypeChoice, TypeRule, ValueMemberKeyEntry, CDDL,
+    TypeChoice, TypeRule, ValueMemberKeyEntry, CDDL
 };
 
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validate_cbor_from_slice;
+use cddl::parser::Parser;
+use cddl::lexer::Lexer;
+
+use super::error::SchemaError;
 
 pub enum FieldTypes {
     Str,
@@ -135,13 +139,25 @@ pub fn create_message_field(field_type: FieldTypes) -> (Type2<'static>, Type2<'s
 #[derive(Debug)]
 pub struct UserSchema {
     entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>,
+    schema: Option<String>
 }
 
 impl UserSchema {
     pub fn new() -> Self {
         UserSchema {
             entries: Vec::new(),
+            schema: None,
         }
+    }
+    pub fn new_from_string(schema: &String) -> Result<Self, SchemaError> {
+        let mut l = Lexer::new(schema);
+        // Need to fix proper error checking, not uwrap()
+        let mut p = Parser::new(l.iter(), schema).unwrap();
+        Ok(Self{
+            entries: Vec::new(),
+            schema: Some(p.parse_cddl().unwrap().to_string()),
+        })
+  
     }
     // Add a message field to the schema passing in field name and type
     pub fn add_message_field(&mut self, name: &'static str, field_type: FieldTypes) {
@@ -157,13 +173,18 @@ impl UserSchema {
         self.entries
             .push(create_entry(name, create_map(message_fields)));
     }
-    pub fn get_schema(&self) -> String {
-        create_cddl(self.entries.clone()).to_string()
+    // Returns schema string if schema exists
+    pub fn get_schema(&self) -> Option<String> {
+        match &self.schema {
+            Some(schema) => Some(schema.to_owned()),
+            None if self.entries.len() == 0 => None, // schema must contain some entries
+            None => Some(create_cddl(self.entries.clone()).to_string())
+        }
     }
     /// Validate a message against this user schema
     #[cfg(not(target_arch = "wasm32"))]
     pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), cddl::validator::cbor::Error> {
-        validate_cbor_from_slice(&format!("{}", self.get_schema()), &bytes)
+        validate_cbor_from_slice(&format!("{}", self.get_schema().unwrap()), &bytes)
     }
 }
 
@@ -180,7 +201,20 @@ mod tests {
         schema.add_message_field("last-name", FieldTypes::Str);
         schema.add_message_field("age", FieldTypes::Int);
         let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, age: { type: \"int\", value: int, }, }\n";
-        assert_eq!(cddl_str, schema.get_schema())
+        assert_eq!(cddl_str, schema.get_schema().unwrap())
+    }
+    
+    #[test]
+    pub fn new_from_string() {
+        let mut schema_1 = UserSchema::new();
+        schema_1.add_message_field("first-name", FieldTypes::Str);
+        schema_1.add_message_field("last-name", FieldTypes::Str);
+        schema_1.add_message_field("age", FieldTypes::Int);
+        
+        let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, age: { type: \"int\", value: int, }, }\n";
+        let schema_2 = UserSchema::new_from_string(&cddl_str.to_string()).unwrap();
+        
+        assert_eq!(schema_2.get_schema(), schema_1.get_schema())
     }
     
     #[test]
