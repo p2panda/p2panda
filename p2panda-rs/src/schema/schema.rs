@@ -144,6 +144,25 @@ pub fn create_entry(
     )
 }
 
+pub fn create_text_value(text_value: &str) -> Type2 {
+    Type2::TextValue {
+        value: text_value,
+        span: (0, 0, 0),
+    }
+}
+
+pub fn create_typename(type_name: &str) -> Type2 {
+    Type2::Typename {
+        ident: Identifier {
+            ident: type_name,
+            socket: None,
+            span: (0, 0, 0),
+        },
+        generic_args: None,
+        span: (0, 0, 0),
+    }
+}
+
 // Helper function for creating a CDDL entry in the correct form for p2panda message fields.
 // These are a map containing 2 fields; `type` and `value`.
 pub fn create_message_field(
@@ -151,7 +170,7 @@ pub fn create_message_field(
 ) -> Vec<(GroupEntry<'static>, OptionalComma<'static>)> {
     // Match passed type and map it to our MessageFields type and CDDL types (do we still need the
     // MessageFields type key when we are using schemas?)
-    let (text_value, type_name, operator) = match field_type {
+    let (type_value, type_name, operator) = match field_type {
         FieldTypes::Str => ("str", "tstr", None),
         FieldTypes::Int => ("int", "int", None),
         FieldTypes::Float => ("float", "float", None),
@@ -162,24 +181,20 @@ pub fn create_message_field(
             Some(create_regex_operator("[0-9a-fa-f]{132}")),
         ),
     };
-    // Return a tuple of message field values
-    let value_1 = Type2::TextValue {
-        value: text_value,
-        span: (0, 0, 0),
-    };
-    let value_2 = Type2::Typename {
-        ident: Identifier {
-            ident: type_name,
-            socket: None,
-            span: (0, 0, 0),
-        },
-        generic_args: None,
-        span: (0, 0, 0),
-    };
     // Create an array of message_fields
     let mut message_fields = Vec::new();
-    message_fields.push(create_entry("type", value_1, None, None));
-    message_fields.push(create_entry("value", value_2, None, operator));
+    message_fields.push(create_entry(
+        "type",
+        create_text_value(type_value),
+        None,
+        None,
+    ));
+    message_fields.push(create_entry(
+        "value",
+        create_typename(type_name),
+        None,
+        operator,
+    ));
     message_fields
 }
 
