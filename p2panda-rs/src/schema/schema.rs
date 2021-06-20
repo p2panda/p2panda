@@ -195,16 +195,18 @@ impl UserSchema {
         ));
     }
     // Add message field with custom occurence param to the schema passing in field name, type and [`Occur`]
-    pub fn add_custom_message_field(&mut self, name: &'static str, field_type: FieldTypes, occur: Occur) {
+    pub fn add_custom_message_field(
+        &mut self,
+        name: &'static str,
+        field_type: FieldTypes,
+        occur: Occur,
+    ) {
         // Create an array of message fields
         let message_fields = create_message_field(field_type);
 
         // Add a named message fields entry (of type map) to the schema
-        self.entries.push(create_entry(
-            name,
-            create_map(message_fields),
-            Some(occur),
-        ));
+        self.entries
+            .push(create_entry(name, create_map(message_fields), Some(occur)));
     }
     // Returns schema string if schema exists
     pub fn get_schema(&self) -> Option<String> {
@@ -239,18 +241,25 @@ mod tests {
 
     #[test]
     pub fn new_from_string() {
+        // Create new empty schema
         let mut schema_1 = UserSchema::new();
+        //Add message fields
         schema_1.add_message_field("first-name", FieldTypes::Str);
         schema_1.add_message_field("last-name", FieldTypes::Str);
         schema_1.add_optional_message_field("age", FieldTypes::Int);
-
-        let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, ? age: { type: \"int\", value: int, }, }\n";
+        // Matching CDDL schema string
+        let cddl_str = "my_rule = { 
+            first-name: { type: \"str\", value: tstr, }, 
+            last-name: { type: \"str\", value: tstr, }, 
+            ? age: { type: \"int\", value: int, }, 
+        }\n";
+        // Create new schema from CDDL string
         let schema_2 = UserSchema::new_from_string(&cddl_str.to_string()).unwrap();
-
+        // should be equal
         assert_eq!(schema_2.get_schema(), schema_1.get_schema());
-
+        
+        // Empty schema should return None
         let empty_schema = UserSchema::new();
-
         assert_eq!(empty_schema.get_schema(), None)
     }
 
