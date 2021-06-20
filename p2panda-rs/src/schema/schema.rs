@@ -21,6 +21,7 @@ pub enum FieldTypes {
     Relation,
 }
 
+// Helper function for creating CDDL schema document
 pub fn create_cddl(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) -> CDDL {
     CDDL {
         comments: None,
@@ -56,6 +57,11 @@ pub fn create_cddl(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) 
     }
 }
 
+// Helper function for creating CDDL map
+// The cddl crate terminology is a little confusing,
+// There are `Type` `Type1` and `Type2` structs and they represent
+// a deeper level of nesting, in that order. A `Type2` struct represents
+// the values in a key value pair.
 pub fn create_map(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) -> Type2<'static> {
     Type2::Map {
         group: Group {
@@ -72,6 +78,8 @@ pub fn create_map(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) -
     }
 }
 
+// Helper function for creating CDDL entries, an ident string, `Type2` object and optionally an 
+// `Occur` object are passed in.
 pub fn create_entry(
     ident: &'static str,
     value: Type2<'static>,
@@ -119,6 +127,8 @@ pub fn create_entry(
     )
 }
 
+// Helper function for creating a CDDL entry in the correct form for p2panda message fields.
+// These are a map containing 2 fields; `type` and `value`.
 pub fn create_message_field(
     field_type: FieldTypes,
 ) -> Vec<(GroupEntry<'static>, OptionalComma<'static>)> {
