@@ -34,7 +34,7 @@ pub fn create_cddl(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) 
             rule: TypeRule {
                 is_type_choice_alternate: false,
                 name: Identifier {
-                    ident: "my_rule".into(),
+                    ident: "user-schema".into(),
                     socket: None,
                     span: (0, 0, 0),
                 },
@@ -328,7 +328,7 @@ mod tests {
         schema.add_message_field("first-name", FieldTypes::Str);
         schema.add_message_field("last-name", FieldTypes::Str);
         schema.add_optional_message_field("age", FieldTypes::Int);
-        let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, ? age: { type: \"int\", value: int, }, }\n";
+        let cddl_str = "user-schema = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, ? age: { type: \"int\", value: int, }, }\n";
         assert_eq!(cddl_str, schema.get_schema().unwrap())
     }
 
@@ -352,7 +352,7 @@ mod tests {
             None,
         );
         schema.add_custom_message_field("age", FieldTypes::Int, Occur::ZeroOrMore((0, 0, 0)), None);
-        let cddl_str = "my_rule = { + first-name: { type: \"str\", value: tstr, }, 1*3 last-name: { type: \"str\", value: tstr, }, * age: { type: \"int\", value: int, }, }\n";
+        let cddl_str = "user-schema = { + first-name: { type: \"str\", value: tstr, }, 1*3 last-name: { type: \"str\", value: tstr, }, * age: { type: \"int\", value: int, }, }\n";
         assert_eq!(cddl_str, schema.get_schema().unwrap())
     }
     #[test]
@@ -361,7 +361,7 @@ mod tests {
         schema.add_message_field("first-name", FieldTypes::Str);
         schema.add_message_field("last-name", FieldTypes::Str);
         schema.add_message_field("member-of", FieldTypes::Relation);
-        let cddl_str = "my_rule = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, member-of: { type: \"relation\", value: hash .regex \"[0-9a-fa-f]{132}\", }, }\n";
+        let cddl_str = "user-schema = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, member-of: { type: \"relation\", value: hash .regex \"[0-9a-fa-f]{132}\", }, }\n";
         assert_eq!(cddl_str, schema.get_schema().unwrap())
     }
 
@@ -374,7 +374,7 @@ mod tests {
         schema_1.add_message_field("last-name", FieldTypes::Str);
         schema_1.add_optional_message_field("age", FieldTypes::Int);
         // Matching CDDL schema string
-        let cddl_str = "my_rule = { 
+        let cddl_str = "user-schema = { 
             first-name: { type: \"str\", value: tstr, }, 
             last-name: { type: \"str\", value: tstr, }, 
             ? age: { type: \"int\", value: int, }, 
