@@ -210,12 +210,18 @@ pub fn create_message_field(
 
 /// UserSchema for creating an parsing CDDL schema and creating and validating `Messages`
 /// according to the instance schema.
+//
+// NB: The construction pattern for this struct needs improvement. Currently *either* the `entries` field or the
+// `schema` field are used when creating a new schema or reconstructing one from a string respectively. Could this 
+// be improved in someway so it behaves more consistently in both cases? (we shouldn't be able to instanciate from 
+// a string then add fields to the empty entries field...... wrapping entrie in an Option is one simple solution)
 #[derive(Debug)]
 pub struct UserSchema {
     entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>,
     schema: Option<String>,
 }
 impl UserSchema {
+    // Instanciate an empty UserSchema, to be populated using the add_message_field methods
     pub fn new() -> Self {
         UserSchema {
             entries: Vec::new(),
