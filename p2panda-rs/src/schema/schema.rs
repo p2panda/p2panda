@@ -1,9 +1,9 @@
 use std::fmt::Debug;
 
 use cddl::ast::{
-    GenericArg, GenericArgs, Group, GroupChoice, GroupEntry, Identifier, MemberKey, Occur,
-    Occurrence, Operator, OptionalComma, RangeCtlOp, Rule, Type, Type1, Type2, TypeChoice,
-    TypeRule, ValueMemberKeyEntry, CDDL,
+    Group, GroupChoice, GroupEntry, Identifier, MemberKey, Occur, Occurrence, Operator,
+    OptionalComma, RangeCtlOp, Rule, Type, Type1, Type2, TypeChoice, TypeRule, ValueMemberKeyEntry,
+    CDDL,
 };
 use cddl::lexer::Lexer;
 use cddl::parser::Parser;
@@ -24,6 +24,10 @@ pub enum FieldTypes {
     Relation,
 }
 
+// CAVEAT: I ended up having to use lifetimes a lot in this module.... Either I'm doing something wrong or
+// it's needed because of how the cddl crate works. Basically I don't really understand them yet though, so
+// it may be both....
+
 // Helper function for creating CDDL schema document
 pub fn create_cddl(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) -> CDDL {
     CDDL {
@@ -42,7 +46,7 @@ pub fn create_cddl(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) 
                 value: Type {
                     type_choices: vec![TypeChoice {
                         type1: Type1 {
-                            type2: create_map(entries),
+                            type2: create_map(entries), // map from passed entries constructed here
                             operator: None,
                             span: (0, 0, 0),
                             comments_after_type: None,
@@ -60,16 +64,38 @@ pub fn create_cddl(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) 
     }
 }
 
-// Helper function for creating CDDL map
+
+// Helper function for creating Type2 text values
+pub fn create_text_value(text_value: &str) -> Type2 {
+    Type2::TextValue {
+        value: text_value,
+        span: (0, 0, 0),
+    }
+}
+
+// Helper function for creating Type2 typename values
+pub fn create_typename(type_name: &str) -> Type2 {
+    Type2::Typename {
+        ident: Identifier {
+            ident: type_name,
+            socket: None,
+            span: (0, 0, 0),
+        },
+        generic_args: None,
+        span: (0, 0, 0),
+    }
+}
+
+// Helper function for creating CDDL Type2 map.
 // The cddl crate terminology is a little confusing,
-// There are `Type` `Type1` and `Type2` structs and they represent
+// there are `Type` `Type1` and `Type2` structs and they represent
 // a deeper level of nesting, in that order. A `Type2` struct represents
 // the values in a key value pair.
 pub fn create_map(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) -> Type2<'static> {
     Type2::Map {
         group: Group {
             group_choices: vec![GroupChoice {
-                group_entries: entries.to_owned(),
+                group_entries: entries.to_owned(), // passed entries vec goes here
                 comments_before_grpchoice: None,
                 span: (0, 0, 0),
             }],
@@ -81,6 +107,7 @@ pub fn create_map(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) -
     }
 }
 
+// Creates an Operator instance which injects a regex string control to an entry value
 pub fn create_regex_operator(regex_str: &'static str) -> Operator<'static> {
     Operator {
         operator: RangeCtlOp::CtlOp {
@@ -88,7 +115,7 @@ pub fn create_regex_operator(regex_str: &'static str) -> Operator<'static> {
             span: (0, 0, 0),
         },
         type2: Type2::TextValue {
-            value: regex_str,
+            value: regex_str, // passed regex string goes here
             span: (0, 0, 0),
         },
         comments_before_operator: None,
@@ -114,9 +141,9 @@ pub fn create_entry(
     (
         GroupEntry::ValueMemberKey {
             ge: Box::from(ValueMemberKeyEntry {
-                occur: occurrence,
+                occur: occurrence, // passed occurrence goes here
                 member_key: Some(MemberKey::Bareword {
-                    ident: ident.into(),
+                    ident: ident.into(), // passed ident goes here
                     comments: None,
                     comments_after_colon: None,
                     span: (0, 0, 0),
@@ -124,8 +151,8 @@ pub fn create_entry(
                 entry_type: Type {
                     type_choices: vec![TypeChoice {
                         type1: Type1 {
-                            type2: value,
-                            operator: operator,
+                            type2: value,       // passed value goes here
+                            operator: operator, // passed operator goes here
                             comments_after_type: None,
                             span: (0, 0, 0),
                         },
@@ -144,25 +171,6 @@ pub fn create_entry(
             trailing_comments: None,
         },
     )
-}
-
-pub fn create_text_value(text_value: &str) -> Type2 {
-    Type2::TextValue {
-        value: text_value,
-        span: (0, 0, 0),
-    }
-}
-
-pub fn create_typename(type_name: &str) -> Type2 {
-    Type2::Typename {
-        ident: Identifier {
-            ident: type_name,
-            socket: None,
-            span: (0, 0, 0),
-        },
-        generic_args: None,
-        span: (0, 0, 0),
-    }
 }
 
 // Helper function for creating a CDDL entry in the correct form for p2panda message fields.
@@ -200,12 +208,13 @@ pub fn create_message_field(
     message_fields
 }
 
+/// UserSchema for creating an parsing CDDL schema and creating and validating `Messages`
+/// according to the instance schema.
 #[derive(Debug)]
 pub struct UserSchema {
     entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>,
     schema: Option<String>,
 }
-
 impl UserSchema {
     pub fn new() -> Self {
         UserSchema {
@@ -213,9 +222,9 @@ impl UserSchema {
             schema: None,
         }
     }
+    // Instanciate a new UserSchema instance from a CDDL string.
     pub fn new_from_string(schema: &String) -> Result<Self, SchemaError> {
         let mut lexer = Lexer::new(schema);
-        // Need to fix proper error checking, not uwrap()
         let parser = Parser::new(lexer.iter(), schema);
         let cddl_string = match parser {
             Ok(mut parser) => match parser.parse_cddl() {
@@ -229,7 +238,7 @@ impl UserSchema {
             schema: Some(cddl_string.unwrap()),
         })
     }
-    // Add a message field to the schema passing in field name and type
+    // Add a message field to the schema, passing in field name and type
     pub fn add_message_field(&mut self, name: &'static str, field_type: FieldTypes) {
         // Create an array of message fields
         let message_fields = create_message_field(field_type);
@@ -238,7 +247,9 @@ impl UserSchema {
         self.entries
             .push(create_entry(name, create_map(message_fields), None, None));
     }
-    // Add an optional message field to the schema passing in field name and type
+    // Add an optional message field to the schema passing in field name and type.
+    // This is just a convenience method, the same can be done with add_custom_message_field.
+    // May no longer be needed.
     pub fn add_optional_message_field(&mut self, name: &'static str, field_type: FieldTypes) {
         // Create an array of message fields
         let message_fields = create_message_field(field_type);
@@ -311,11 +322,6 @@ impl UserSchema {
         }
     }
 }
-
-trait SchemaMessage<T = String> {
-    // ...
-}
-
 #[cfg(test)]
 mod tests {
     use super::{FieldTypes, UserSchema};
