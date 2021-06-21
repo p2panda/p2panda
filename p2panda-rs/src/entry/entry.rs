@@ -188,10 +188,9 @@ impl Validate for Entry {
     type Error = EntryError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        // First entries do not contain any sequence number or links. 
-        // Every other entry has to contain a backlink and skiplink unless
-        // they are equal, in which case the skiplink can be omitted.
-
+        // First entries do not contain any sequence number or links. Every other entry has to
+        // contain a backlink and skiplink unless they are equal, in which case the skiplink can be
+        // omitted.
         match (
             self.seq_num.is_first(),
             self.entry_hash_backlink.is_some(),
