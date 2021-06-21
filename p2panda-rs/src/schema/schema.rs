@@ -217,7 +217,7 @@ pub fn create_message_field(
 // a string then add fields to the empty entries field...... wrapping entrie in an Option is one simple solution)
 #[derive(Debug)]
 pub struct UserSchema {
-    entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>,
+    entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>, // this should be wrapped in an Option
     schema: Option<String>,
 }
 impl UserSchema {
