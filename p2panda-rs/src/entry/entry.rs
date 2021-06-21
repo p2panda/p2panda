@@ -189,25 +189,19 @@ impl Validate for Entry {
 
     fn validate(&self) -> Result<(), Self::Error> {
         // First entries do not contain any sequence number or links. Every other entry has to
-        // contain all information.
-        let is_valid_first_entry = self.entry_hash_backlink.is_none()
-            && self.entry_hash_skiplink.is_none()
-            && self.seq_num.is_first();
-
-        let is_valid_other_entry = if !self.seq_num.is_first() && self.entry_hash_backlink.is_some()
-        {
-            // Skiplink can be empty when same as backlink
-            (self.is_skiplink_required() && self.entry_hash_skiplink.is_some())
-                || !self.is_skiplink_required()
-        } else {
-            false
-        };
-
-        if !is_valid_first_entry && !is_valid_other_entry {
-            return Err(EntryError::InvalidLinks);
+        // contain a backlink and skiplink unless they are equal, in which case the skiplink can be
+        // omitted.
+        match (
+            self.seq_num.is_first(),
+            self.entry_hash_backlink.is_some(),
+            self.entry_hash_skiplink.is_some(),
+            self.is_skiplink_required(),
+        ) {
+            (true, false, false, false) => Ok(()),
+            (false, true, false, false) => Ok(()),
+            (false, true, true, _) => Ok(()),
+            (_, _, _, _) => Err(EntryError::InvalidLinks),
         }
-
-        Ok(())
     }
 }
 

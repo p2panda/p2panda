@@ -80,8 +80,8 @@ impl MessageFields {
                 Ok(())
             }
             "int" => {
-                // Bear in mind JavaScript does not represent numbers as integers, all numbers 
-                // are represented as floats therefore if a float is passed incorrectly it will 
+                // Bear in mind JavaScript does not represent numbers as integers, all numbers
+                // are represented as floats therefore if a float is passed incorrectly it will
                 // simply be cast to an int.
                 // See: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number
                 let value_int = jserr!(value.as_f64().ok_or("Invalid integer value")) as i64;
