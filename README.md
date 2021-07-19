@@ -88,6 +88,12 @@ For Rust environments and with [cargo-edit] installed run:
 $ cargo add p2panda-rs
 ```
 
+## Development
+
+Visit the corresponding folders for development instructions:
+- [`p2panda-rs`](https://github.com/p2panda/p2panda/tree/main/p2panda-rs)
+- [`p2panda-js`](https://github.com/p2panda/p2panda/tree/main/p2panda-js)
+
 [cargo-edit]: https://github.com/killercup/cargo-edit
 
 ## License
