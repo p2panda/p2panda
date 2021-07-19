@@ -6,14 +6,14 @@
   "browser": "lib/index.min.js",
   "scripts": {
     "build": "run-s clear wasm webpack",
-    "clear": "rimraf ./lib ./wasm-web ./wasm-node",
+    "clear": "rimraf ./lib/* ./wasm-web/* ./wasm-node/*",
     "lint": "eslint --ext .ts .",
     "test": "run-s clear test:prepare test:mocha",
     "test:prepare": "run-s --silent wasm webpack:node",
     "test:mocha": "TS_NODE_COMPILER_OPTIONS='{\"strict\": false}' mocha -r ts-node/register -r tsconfig-paths/register -r @babel/register ./test/**/*.test.ts",
     "test:watch": "nodemon --watch ../p2panda-rs/src/* --watch ./src/* --exec 'npm run test'",
-    "wasm": "run-s --silent wasm:browser wasm:node",
-    "wasm:browser": "wasm-pack --log-level warn build ../p2panda-rs --target web --out-dir ../p2panda-js/wasm-web --release --out-name index",
+    "wasm": "run-s wasm:browser wasm:node",
+    "wasm:browser": "wasm-pack --log-level warn build ../p2panda-rs --target web --out-dir ./wasm-web --release --out-name index",
     "wasm:node": "wasm-pack --log-level warn build ../p2panda-rs --target nodejs --out-dir ../p2panda-js/wasm-node --release --out-name index",
     "wasm:copy": "mkdir -p ./lib/wasm; cp ./wasm-node/index.js ./lib/wasm; cp ./wasm-node/index.d.ts ./lib/wasm; cp ./wasm-node/index_bg.wasm ./lib/wasm",
     "webpack": "run-p --aggregate-output webpack:browser webpack:node",
@@ -68,5 +68,8 @@
     "wasm-pack": "^0.10.0",
     "webpack": "^5.14.0",
     "webpack-cli": "^4.3.1"
+  },
+  "dependencies": {
+    "wasm-web": "^0.1.0"
   }
 }
