@@ -64,7 +64,6 @@ pub fn create_cddl(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) 
     }
 }
 
-
 // Helper function for creating Type2 text values
 pub fn create_text_value(text_value: &str) -> Type2 {
     Type2::TextValue {
@@ -111,7 +110,7 @@ pub fn create_map(entries: Vec<(GroupEntry<'static>, OptionalComma<'static>)>) -
 pub fn create_regex_operator(regex_str: &'static str) -> Operator<'static> {
     Operator {
         operator: RangeCtlOp::CtlOp {
-            ctrl: ".regex",
+            ctrl: ".regexp",
             span: (0, 0, 0),
         },
         type2: Type2::TextValue {
@@ -187,7 +186,7 @@ pub fn create_message_field(
         FieldTypes::Bool => ("bool", "bool", None),
         FieldTypes::Relation => (
             "relation",
-            "hash",
+            "tstr",
             Some(create_regex_operator("[0-9a-fa-f]{132}")),
         ),
     };
@@ -212,8 +211,8 @@ pub fn create_message_field(
 /// according to the instance schema.
 //
 // NB: The construction pattern for this struct needs improvement. Currently *either* the `entries` field or the
-// `schema` field are used when creating a new schema or reconstructing one from a string respectively. Could this 
-// be improved in someway so it behaves more consistently in both cases? (we shouldn't be able to instanciate from 
+// `schema` field are used when creating a new schema or reconstructing one from a string respectively. Could this
+// be improved in someway so it behaves more consistently in both cases? (we shouldn't be able to instanciate from
 // a string then add fields to the empty entries field...... wrapping entrie in an Option is one simple solution)
 #[derive(Debug)]
 pub struct UserSchema {
@@ -373,8 +372,14 @@ mod tests {
         schema.add_message_field("first-name", FieldTypes::Str);
         schema.add_message_field("last-name", FieldTypes::Str);
         schema.add_message_field("member-of", FieldTypes::Relation);
-        let cddl_str = "user-schema = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, member-of: { type: \"relation\", value: hash .regex \"[0-9a-fa-f]{132}\", }, }\n";
-        assert_eq!(cddl_str, schema.get_schema().unwrap())
+        let cddl_str = "user-schema = { 
+            first-name: { type: \"str\", value: tstr, }, 
+            last-name: { type: \"str\", value: tstr, }, 
+            member-of: { type: \"relation\", value: tstr .regexp \"[0-9a-fa-f]{132}\", }, 
+        }\n";
+        // Create new schema from CDDL string
+        let schema_from_string = UserSchema::new_from_string(&cddl_str.to_string()).unwrap();
+        assert_eq!(schema_from_string.get_schema().unwrap(), schema.get_schema().unwrap())
     }
 
     #[test]
