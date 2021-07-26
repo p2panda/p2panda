@@ -339,8 +339,13 @@ mod tests {
         schema.add_message_field("first-name", FieldTypes::Str);
         schema.add_message_field("last-name", FieldTypes::Str);
         schema.add_optional_message_field("age", FieldTypes::Int);
-        let cddl_str = "user-schema = { first-name: { type: \"str\", value: tstr, }, last-name: { type: \"str\", value: tstr, }, ? age: { type: \"int\", value: int, }, }\n";
-        assert_eq!(cddl_str, schema.get_schema().unwrap())
+        let cddl_str = "user-schema = { 
+            first-name: { type: \"str\", value: tstr, }, 
+            last-name: { type: \"str\", value: tstr, }, 
+            ? age: { type: \"int\", value: int, }, 
+        }\n";
+        let schema_from_string = UserSchema::new_from_string(&cddl_str.to_string()).unwrap();
+        assert_eq!(schema_from_string.get_schema().unwrap(), schema.get_schema().unwrap())
     }
 
     #[test]
@@ -363,8 +368,13 @@ mod tests {
             None,
         );
         schema.add_custom_message_field("age", FieldTypes::Int, Occur::ZeroOrMore((0, 0, 0)), None);
-        let cddl_str = "user-schema = { + first-name: { type: \"str\", value: tstr, }, 1*3 last-name: { type: \"str\", value: tstr, }, * age: { type: \"int\", value: int, }, }\n";
-        assert_eq!(cddl_str, schema.get_schema().unwrap())
+        let cddl_str = "user-schema = { 
+            + first-name: { type: \"str\", value: tstr, }, 
+            1*3 last-name: { type: \"str\", value: tstr, }, 
+            * age: { type: \"int\", value: int, }, 
+        }\n";
+        let schema_from_string = UserSchema::new_from_string(&cddl_str.to_string()).unwrap();
+        assert_eq!(schema_from_string.get_schema().unwrap(), schema.get_schema().unwrap())
     }
     #[test]
     pub fn add_message_fields_with_relation() {
