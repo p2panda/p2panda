@@ -57,6 +57,10 @@ This library provides all tools required to write a client for the [`p2panda`] n
 
 ## Examples
 
+See [the demo application](https://p2panda.org/demo/#) and its [source code](https://p2panda.org/demo/#)
+
+---------------------------------
+
 ```javascript
 import p2panda from 'p2panda-js';
 
