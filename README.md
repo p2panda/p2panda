@@ -55,7 +55,7 @@ This library provides all tools required to write a client for the [`p2panda`] n
 [`bamboo`]: https://github.com/AljoschaMeyer/bamboo
 [`node`]: https://github.com/p2panda/node
 
-## Examples
+## Usage
 
 See [the demo application](https://p2panda.org/demo/#) and its [source code](https://p2panda.org/demo/#)
 
