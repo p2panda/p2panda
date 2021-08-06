@@ -57,10 +57,6 @@ This library provides all tools required to write a client for the [`p2panda`] n
 
 ## Usage
 
-See [the demo application](https://p2panda.org/demo/#) and its [source code](https://p2panda.org/demo/#)
-
----------------------------------
-
 ```javascript
 import p2panda from 'p2panda-js';
 
@@ -76,7 +72,7 @@ let key_pair = KeyPair::new();
 println!("{}", key_pair.public_key());
 ```
 
-More examples can be found in the [`p2panda-rs`] and [`p2panda-js`] directories.
+See [the demo application](https://p2panda.org/demo/#) and its [source code](https://github.com/p2panda/beep-boop). More examples can be found in the [`p2panda-rs`] and [`p2panda-js`] directories.
 
 ## Installation
 
