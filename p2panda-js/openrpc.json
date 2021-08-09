@@ -134,6 +134,9 @@
           "$ref": "#/components/contentDescriptors/Schema"
         }
       ],
+      "result": {
+        "$ref": "#/components/contentDescriptors/EntryArgs"
+      },
       "examples": [
         {
           "name": "testEntryArgumentsExample",
@@ -157,10 +160,7 @@
             }
           }
         }
-      ],
-      "result": {
-        "$ref": "#/components/contentDescriptors/EntryArgs"
-      }
+      ]
     },
     {
       "name": "panda_queryEntries",
@@ -169,6 +169,12 @@
           "$ref": "#/components/contentDescriptors/Schema"
         }
       ],
+      "result": {
+        "name": "query response",
+        "schema": {
+          "$ref": "#/components/schemas/QueryEntriesResponse"
+        }
+      },
       "examples": [
         {
           "name": "testQueryExample",
@@ -204,13 +210,7 @@
             }
           }
         }
-      ],
-      "result": {
-        "name": "query response",
-        "schema": {
-          "$ref": "#/components/schemas/QueryEntriesResponse"
-        }
-      }
+      ]
     },
     {
       "name": "panda_publishEntry",
