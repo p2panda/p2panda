@@ -6,14 +6,30 @@
   },
   "components": {
     "schemas": {
+      "Author": {
+        "type": "string",
+        "pattern": "[0-9a-fa-f]{64}",
+        "minLength": 64,
+        "maxLength": 64
+      },
+      "Hash": {
+        "type": "string",
+        "minLength": 132,
+        "maxLength": 132,
+        "pattern": "[0-9a-fa-f]{132}"
+      },
       "EntryArgs": {
         "type": "object",
         "properties": {
           "entryHashSkiplink": {
-            "type": "string"
+            "schema": {
+              "$ref": "#/components/schemas/Hash"
+            }
           },
           "entryHashBacklink": {
-            "type": "string"
+            "schema": {
+              "$ref": "#/components/schemas/Hash"
+            }
           },
           "seqNum": {
             "type": "number"
@@ -27,13 +43,17 @@
         "type": "object",
         "properties": {
           "author": {
-            "type": "string"
+            "schema": {
+              "$ref": "#/components/schemas/Author"
+            }
           },
           "entryBytes": {
             "type": "string"
           },
           "entryHash": {
-            "type": "string"
+            "schema": {
+              "$ref": "#/components/schemas/Hash"
+            }
           },
           "logId": {
             "type": "number"
@@ -42,7 +62,9 @@
             "type": "string"
           },
           "payloadHash": {
-            "type": "string"
+            "schema": {
+              "$ref": "#/components/schemas/Hash"
+            }
           },
           "seqNum": {
             "type": "number"
@@ -75,14 +97,18 @@
       "params": [
         {
           "name": "author",
+          "required": true,
+          "description": "The public key of author",
           "schema": {
-            "type": "string"
+            "$ref": "#/components/schemas/Author"
           }
         },
         {
           "name": "schema",
+          "required": true,
+          "description": "The hash of schema describing format of message fields",
           "schema": {
-            "type": "string"
+            "$ref": "#/components/schemas/Hash"
           }
         }
       ],
@@ -123,7 +149,9 @@
         {
           "name": "schema",
           "schema": {
-            "type": "string"
+            "schema": {
+              "$ref": "#/components/schemas/Hash"
+            }
           }
         }
       ],
