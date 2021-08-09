@@ -15,7 +15,6 @@ describe('Session', () => {
   it('can query entries', async () => {
     const session = new Session('http://localhost:2020');
     const entries = await session.queryEntries(SCHEMA);
-    console.log(entries);
     expect(entries.length).to.equal(2);
   });
 
