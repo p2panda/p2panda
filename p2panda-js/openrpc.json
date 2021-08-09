@@ -13,6 +13,22 @@
         "schema": {
           "$ref": "#/components/schemas/EntryArgs"
         }
+      },
+      "Author": {
+        "name": "author",
+        "required": true,
+        "description": "The public key of author",
+        "schema": {
+          "$ref": "#/components/schemas/Author"
+        }
+      },
+      "Schema": {
+        "name": "schema",
+        "required": true,
+        "description": "The hash of schema describing format of message fields",
+        "schema": {
+          "$ref": "#/components/schemas/Hash"
+        }
       }
     },
     "schemas": {
@@ -106,20 +122,10 @@
       "summary": "Get arguments for building next entry",
       "params": [
         {
-          "name": "author",
-          "required": true,
-          "description": "The public key of author",
-          "schema": {
-            "$ref": "#/components/schemas/Author"
-          }
+          "$ref": "#/components/contentDescriptors/Author"
         },
         {
-          "name": "schema",
-          "required": true,
-          "description": "The hash of schema describing format of message fields",
-          "schema": {
-            "$ref": "#/components/schemas/Hash"
-          }
+          "$ref": "#/components/contentDescriptors/Schema"
         }
       ],
       "examples": [
@@ -154,12 +160,7 @@
       "name": "panda_queryEntries",
       "params": [
         {
-          "name": "schema",
-          "schema": {
-            "schema": {
-              "$ref": "#/components/schemas/Hash"
-            }
-          }
+          "$ref": "#/components/contentDescriptors/Schema"
         }
       ],
       "examples": [
