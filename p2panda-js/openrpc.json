@@ -197,6 +197,33 @@
           "$ref": "#/components/schemas/QueryEntriesResponse"
         }
       }
+    },
+    {
+      "name": "panda_publishEntry",
+      "params": [
+        {
+          "name": "entryEncoded",
+          "schema": {
+            "schema": {
+              "$ref": "#/components/schemas/Hash"
+            }
+          }
+        },
+        {
+          "name": "messageEncoded",
+          "schema": {
+            "schema": {
+              "$ref": "#/components/schemas/Hash"
+            }
+          }
+        }
+      ],
+      "result": {
+        "name": "return next entry arguments",
+        "schema": {
+          "$ref": "#/components/schemas/EntryArgs"
+        }
+      }
     }
   ]
 }
