@@ -5,6 +5,16 @@
     "version": "0.0.1"
   },
   "components": {
+    "contentDescriptors": {
+      "EntryArgs": {
+        "name": "entryArgs",
+        "required": true,
+        "description": "Arguments for next entry in log",
+        "schema": {
+          "$ref": "#/components/schemas/EntryArgs"
+        }
+      }
+    },
     "schemas": {
       "Author": {
         "type": "string",
@@ -137,10 +147,7 @@
         }
       ],
       "result": {
-        "name": "next entry arguments",
-        "schema": {
-          "$ref": "#/components/schemas/EntryArgs"
-        }
+        "$ref": "#/components/contentDescriptors/EntryArgs"
       }
     },
     {
@@ -219,10 +226,7 @@
         }
       ],
       "result": {
-        "name": "return next entry arguments",
-        "schema": {
-          "$ref": "#/components/schemas/EntryArgs"
-        }
+        "$ref": "#/components/contentDescriptors/EntryArgs"
       }
     }
   ]
