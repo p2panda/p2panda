@@ -211,24 +211,44 @@
       "params": [
         {
           "name": "entryEncoded",
-          "schema": {
             "schema": {
               "$ref": "#/components/schemas/Hash"
             }
-          }
         },
         {
           "name": "messageEncoded",
-          "schema": {
             "schema": {
               "$ref": "#/components/schemas/Hash"
-            }
           }
         }
       ],
       "result": {
         "$ref": "#/components/contentDescriptors/EntryArgs"
-      }
+      },
+      "examples": [
+        {
+          "name": "publishEntryResultExample",
+          "params": [
+            {
+              "name": "entryEncoded",
+              "value": "ENCODED_ENTRY"
+            },
+            {
+              "name": "messageEncoded",
+              "value": "ENCODED_MESSAGE"
+            }
+          ],
+          "result": {
+            "name": "testEntryArgumentsResult",
+            "value": {
+              "entryHashSkiplink": "SKIPLINK_HASH",
+              "entryHashBacklink": "BACKLINK_HASH",
+              "seqNum": 3,
+              "logId": 1
+            }
+          }
+        }
+      ]
     }
   ]
 }
