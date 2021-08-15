@@ -34,6 +34,11 @@ export default class Session {
 
   __schema: string | null = null;
 
+  /**
+   * Return currently configured schema.
+   *
+   * Throws if no schema is configured.
+   */
   get _schema(): string {
     if (!this.__schema) {
       throw new Error(
@@ -49,7 +54,8 @@ export default class Session {
   }
 
   /**
-   * Preconfigure a schema
+   * Set a fixed schema for this session, which will be used if no other schema
+   * is defined through a methods `options` parameter.
    *
    * @param val schema hash
    * @returns Session
@@ -75,6 +81,13 @@ export default class Session {
     this.__keyPair = val;
   }
 
+  /**
+   * Set a fixed key pair for this session, which will be used by methods unless
+   * a different key pair is configured through their `options` parameters.
+   *
+   * @param val key pair instance generated using the `KeyPair` class.
+   * @returns key pair instance
+   */
   keyPair(val: KeyPair): Session {
     this._keyPair = val;
     return this;
@@ -105,7 +118,16 @@ export default class Session {
     return this.p2panda;
   }
 
-  async getNextEntryArgs(author: string, schema: string): Promise<EntryArgs> {
+  /**
+   * Return arguments for constructing the next entry given author and schema.
+   *
+   * This uses the cache set through `Session._setNextEntryArgs`.
+   *
+   * @param author public key of the author
+   * @param schema schema id
+   * @returns an `EntryArgs` object
+   */
+  async _getNextEntryArgs(author: string, schema: string): Promise<EntryArgs> {
     if (!author || !schema)
       throw new Error('Author and schema must be provided');
     const cacheKey = `${author}/${schema}`;
@@ -128,13 +150,28 @@ export default class Session {
 
   /**
    * Cache next entry args for a given author and schema
+   *
+   * @param author public key of the author
+   * @param schema schema id
+   * @param entryArgs an object with entry arguments
    */
-  setNextEntryArgs(author: string, schema: string, entryArgs: EntryArgs): void {
+  _setNextEntryArgs(
+    author: string,
+    schema: string,
+    entryArgs: EntryArgs,
+  ): void {
     const cacheKey = `${author}/${schema}`;
     this.nextEntryArgs[cacheKey] = entryArgs;
   }
 
-  async publishEntry(
+  /**
+   * Publish an encoded entry and message.
+   *
+   * @param entryEncoded
+   * @param messageEncoded
+   * @returns
+   */
+  async _publishEntry(
     entryEncoded: string,
     messageEncoded: string,
   ): Promise<EntryArgs> {
@@ -149,7 +186,13 @@ export default class Session {
     return result;
   }
 
-  async queryEntriesEncoded(schema: string): Promise<EncodedEntry[]> {
+  /**
+   * Query node for encoded entries of a given schema.
+   *
+   * @param schema schema id
+   * @returns an array of encoded entries
+   */
+  async _queryEntriesEncoded(schema: string): Promise<EncodedEntry[]> {
     if (!schema) throw new Error('Schema must be provided');
     const result = await this.client.request({
       method: 'panda_queryEntries',
@@ -159,10 +202,18 @@ export default class Session {
     return result.entries;
   }
 
+  /**
+   * Query node for entries of a given schema and decode entries.
+   *
+   * Returned entries retain their encoded form on `entry.encoded`.
+   *
+   * @param schema schema id
+   * @returns an array of decoded entries
+   */
   async queryEntries(schema: string): Promise<EntryRecord[]> {
     if (!schema) throw new Error('Schema must be provided');
     const { decodeEntry } = await this.loadWasm();
-    const result = await this.queryEntriesEncoded(schema);
+    const result = await this._queryEntriesEncoded(schema);
     return Promise.all(
       result.map(async (entry) => {
         const decoded = await decodeEntry(entry.entryBytes, entry.payloadBytes);
@@ -191,9 +242,8 @@ export default class Session {
    *   message: 'ahoy'
    * };
    * await new Session(endpoint)
-   *   .schema(schema)
    *   .keyPair(keyPair)
-   *   .create(messageFields);
+   *   .create(messageFields, { schema });
    */
   async create(fields: Fields, options: Partial<Context>): Promise<Session> {
     Instance.create(fields, {

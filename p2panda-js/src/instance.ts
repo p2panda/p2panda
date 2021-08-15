@@ -43,7 +43,10 @@ const signPublishEntry = async (
 ) => {
   const { signEncodeEntry } = (await session.loadWasm()) as P2Panda;
 
-  const entryArgs = await session.getNextEntryArgs(keyPair.publicKey(), schema);
+  const entryArgs = await session._getNextEntryArgs(
+    keyPair.publicKey(),
+    schema,
+  );
 
   // If lastSeqNum is null don't try and convert to BigInt
   // Can this be handled better in the wasm code?
@@ -63,13 +66,13 @@ const signPublishEntry = async (
   );
 
   // Publish entry and store returned entryArgs for next entry
-  const nextEntryArgs = await session.publishEntry(
+  const nextEntryArgs = await session._publishEntry(
     entryEncoded,
     messageEncoded,
   );
 
   // Cache next entry args for next publish
-  session.setNextEntryArgs(keyPair.publicKey(), schema, nextEntryArgs);
+  session._setNextEntryArgs(keyPair.publicKey(), schema, nextEntryArgs);
 };
 
 /**

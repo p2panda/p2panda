@@ -48,6 +48,46 @@ Read the library [`documentation`] for installation guides and examples.
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
 [`p2panda`]: https://github.com/p2panda/design-document
 
+## Installation
+
+To install `p2panda-js` from the NPM package, simply run:
+
+`npm i p2panda-js`
+
+## Usage
+
+Create a key pair for each device and user who need to access p2panda.
+
+```
+import { KeyPair } from 'p2panda-js';
+const keyPair = new KeyPair();
+```
+
+Create an instance using an already known schema for chat messages.
+
+```
+import { Session } from 'p2panda-js';
+
+const session = new Session('https://welle.liebechaos.org')
+  .keyPair(keyPair);
+
+const payload = {
+  message: 'Hi there'
+}
+const entry = await session.create(payload, { schema: CHAT_SCHEMA })
+
+```
+
+## Development Setup
+
+### Dependencies
+
+- [`NodeJS`](https://nodejs.org/en/)
+- [`Rust`](https://www.rust-lang.org/learn/get-started)
+- [`wasm-pack`](https://rustwasm.github.io/wasm-pack/installer/)
+
+In order to develop with the current code base `p2panda-js` needs to be compiled from the [`p2panda-rs`](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) code using `wasm-pack`. This requires a working `Rust` environment to be setup and `wasm-pack` to be installed. You can then run the following commands, the compilation occurs during the testing and build phases.
+
 ```bash
 # Install dependencies
 npm install
