@@ -210,7 +210,7 @@ export default class Session {
    * @param schema schema id
    * @returns an array of decoded entries
    */
-  async queryEntries(schema: string): Promise<EntryRecord[]> {
+  async _queryEntries(schema: string): Promise<EntryRecord[]> {
     if (!schema) throw new Error('Schema must be provided');
     const { decodeEntry } = await this.loadWasm();
     const result = await this._queryEntriesEncoded(schema);

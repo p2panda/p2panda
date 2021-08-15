@@ -12,7 +12,7 @@ chai.use(chaiAsPromised);
 describe('Session', () => {
   it('can query entries', async () => {
     const session = new Session('http://localhost:2020');
-    const entries = await session.queryEntries(SCHEMA);
+    const entries = await session._queryEntries(SCHEMA);
     expect(entries.length).to.equal(2);
   });
 
@@ -20,7 +20,7 @@ describe('Session', () => {
     const session = new Session('http://localhost:2020');
     let error;
     try {
-      await session.queryEntries();
+      await session._queryEntries();
     } catch (e) {
       error = e;
     }
@@ -29,7 +29,7 @@ describe('Session', () => {
 
   it('gets next entry args', async () => {
     const session = new Session('http://localhost:2020');
-    const nextEntryArgs = await session.getNextEntryArgs(PUBLIC_KEY, SCHEMA);
+    const nextEntryArgs = await session._getNextEntryArgs(PUBLIC_KEY, SCHEMA);
     expect(nextEntryArgs.entryHashSkiplink).to.equal('SKIPLINK_HASH');
     expect(nextEntryArgs.entryHashBacklink).to.equal('BACKLINK_HASH');
     expect(nextEntryArgs.seqNum).to.equal(3);
@@ -38,7 +38,7 @@ describe('Session', () => {
 
   it('can publish entries', async () => {
     const session = new Session('http://localhost:2020');
-    const nextEntryArgs = await session.publishEntry(
+    const nextEntryArgs = await session._publishEntry(
       ENTRY_ENCODED,
       MESSAGE_ENCODED,
     );
@@ -56,21 +56,21 @@ describe('Session', () => {
     );
 
     const nextEntryArgs = { test: true };
-    session.setNextEntryArgs(PUBLIC_KEY, SCHEMA, nextEntryArgs);
+    session._setNextEntryArgs(PUBLIC_KEY, SCHEMA, nextEntryArgs);
 
-    const cacheResponse = await session.getNextEntryArgs(PUBLIC_KEY, SCHEMA);
+    const cacheResponse = await session._getNextEntryArgs(PUBLIC_KEY, SCHEMA);
     expect(cacheResponse.test).to.equal(nextEntryArgs.test);
     expect(session.client.request.notCalled).to.be.true;
   });
 
   it('throws when missing parameters', async () => {
     const session = new Session('http://localhost:2020');
-    assert.isRejected(session.publishEntry(null, MESSAGE_ENCODED));
-    assert.isRejected(session.publishEntry(ENTRY_ENCODED, null));
+    assert.isRejected(session._publishEntry(null, MESSAGE_ENCODED));
+    assert.isRejected(session._publishEntry(ENTRY_ENCODED, null));
   });
 
   it('throws without a configured endpoint', () => {
     const session = new Session();
-    assert.isRejected(session.publishEntry(ENTRY_ENCODED, MESSAGE_ENCODED));
+    assert.isRejected(session._publishEntry(ENTRY_ENCODED, MESSAGE_ENCODED));
   });
 });
