@@ -103,19 +103,13 @@
       "MessageEncoded": {
         "type": "string"
       },
-      "Entries": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/Entry"
-        }
-      },
       "QueryEntriesResponse": {
         "type": "object",
         "properties": {
           "entries": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Entries"
+              "$ref": "#/components/schemas/Entry"
             }
           }
         }
