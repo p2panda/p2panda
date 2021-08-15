@@ -28,7 +28,7 @@ const getMessageFields = async (
   const messageFields = new MessageFields();
   for (const fieldName of Object.keys(fields)) {
     const fieldType = Object.keys(fields[fieldName])[0];
-    messageFields.add(fieldName, fieldType, fields[fieldName][fieldType]);
+    messageFields.add(fieldName, fields[fieldName][fieldType]);
   }
   log('getMessageFields', messageFields.toString());
   return messageFields;
