@@ -31,7 +31,7 @@
       Releases
     </a>
     <span> | </span>
-    <a href="https://github.com/p2panda/design-document#get-involved">
+    <a href="https://github.com/p2panda/design-document#how-to-contribute">
       Contributing
     </a>
   </h3>
@@ -55,10 +55,10 @@ This library provides all tools required to write a client for the [`p2panda`] n
 [`bamboo`]: https://github.com/AljoschaMeyer/bamboo
 [`node`]: https://github.com/p2panda/node
 
-## Examples
+## Usage
 
 ```javascript
-import p2panda from 'p2panda-js';
+import p2panda from "p2panda-js";
 
 const { KeyPair } = await p2panda;
 const keyPair = new KeyPair();
@@ -66,13 +66,13 @@ console.log(keyPair.publicKey());
 ```
 
 ```rust
-use p2panda_rs::KeyPair;
+use p2panda_rs::identity::KeyPair;
 
 let key_pair = KeyPair::new();
 println!("{}", key_pair.public_key());
 ```
 
-More examples can be found in the [`p2panda-rs`] and [`p2panda-js`] directories.
+See [the demo application](https://p2panda.org/demo/#) and its [source code](https://github.com/p2panda/beep-boop). More examples can be found in the [`p2panda-rs`] and [`p2panda-js`] directories.
 
 ## Installation
 
@@ -87,6 +87,12 @@ For Rust environments and with [cargo-edit] installed run:
 ```bash
 $ cargo add p2panda-rs
 ```
+
+## Development
+
+Visit the corresponding folders for development instructions:
+- [`p2panda-rs`](https://github.com/p2panda/p2panda/tree/main/p2panda-rs)
+- [`p2panda-js`](https://github.com/p2panda/p2panda/tree/main/p2panda-js)
 
 [cargo-edit]: https://github.com/killercup/cargo-edit
 

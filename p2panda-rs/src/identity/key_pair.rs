@@ -3,23 +3,12 @@ use std::convert::TryFrom;
 use ed25519_dalek::{Keypair as Ed25519Keypair, PublicKey, SecretKey, Signature, Signer};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;
 
-/// Custom error types for key-pairs.
-#[derive(Error, Debug)]
-pub enum KeyPairError {
-    /// Handle errors from `ed25519` crate.
-    #[error(transparent)]
-    Ed25519(#[from] ed25519_dalek::ed25519::Error),
-
-    /// Handle errors from `hex` crate.
-    #[error(transparent)]
-    HexEncoding(#[from] hex::FromHexError),
-}
+use crate::identity::KeyPairError;
 
 /// Ed25519 key pair for authors to sign bamboo entries with.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -38,6 +27,22 @@ impl KeyPair {
     /// so make sure to only run this in trusted environments.
     ///
     /// [`getrandom`]: https://docs.rs/getrandom/0.2.1/getrandom/
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use p2panda_rs::identity::KeyPair;
+    ///
+    /// // Generate new Ed25519 key pair
+    /// let key_pair = KeyPair::new();
+    ///
+    /// println!("{}", key_pair.public_key());
+    /// println!("{}", key_pair.private_key());
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(constructor))]
     pub fn new() -> Self {
         let mut csprng: OsRng = OsRng {};
@@ -54,6 +59,26 @@ impl KeyPair {
     /// crate.
     ///
     /// [`ed25519-dalek`]: https://docs.rs/ed25519-dalek/1.0.1/ed25519_dalek/struct.Keypair.html#warning
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use p2panda_rs::identity::KeyPair;
+    ///
+    /// // Generate new Ed25519 key pair
+    /// let key_pair = KeyPair::new();
+    ///
+    /// // Derive a key pair from a private key
+    /// let key_pair_derived = KeyPair::from_private_key(key_pair.private_key())?;
+    ///
+    /// assert_eq!(key_pair.public_key_bytes(), key_pair_derived.public_key_bytes());
+    /// assert_eq!(key_pair.private_key_bytes(), key_pair_derived.private_key_bytes());
+    /// # Ok(())
+    /// # }
+    /// ```
+
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_private_key(private_key: String) -> Result<Self, KeyPairError> {
         from_private_key(private_key)
@@ -92,6 +117,26 @@ impl KeyPair {
     }
 
     /// Sign a message using this key pair.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use p2panda_rs::identity::KeyPair;
+    ///
+    /// // Generate new Ed25519 key pair
+    /// let key_pair = KeyPair::new();
+    ///
+    /// // Sign a message with this key pair
+    /// let message = b"test";
+    /// let signature = key_pair.sign(message);
+    ///
+    /// assert!(key_pair.verify(message, &signature).is_ok());
+    /// # Ok(())
+    /// # }
+    /// ```
+
     pub fn sign(&self, message: &[u8]) -> Box<[u8]> {
         Box::from(self.0.sign(message).to_bytes())
     }

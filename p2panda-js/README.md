@@ -31,7 +31,7 @@
       Releases
     </a>
     <span> | </span>
-    <a href="https://github.com/p2panda/design-document#get-involved">
+    <a href="https://github.com/p2panda/design-document#how-to-contribute">
       Contributing
     </a>
   </h3>
@@ -41,9 +41,6 @@
 
 This library provides all tools required to write a client for the [`p2panda`] network. It is shipped both as a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web browser.
 
-Read the library [`documentation`] for installation guides and examples.
-
-[`documentation`]: https://github.com/p2panda/p2panda
 [`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
 [`p2panda`]: https://github.com/p2panda/design-document

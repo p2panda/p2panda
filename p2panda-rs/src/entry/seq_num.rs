@@ -1,20 +1,11 @@
 use bamboo_rs_core::lipmaa;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
-use crate::atomic::Validation;
+use crate::entry::SeqNumError;
+use crate::Validate;
 
 /// Start counting entries from here.
 pub const FIRST_SEQ_NUM: i64 = 1;
-
-/// Custom error types for `SeqNum`.
-#[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
-pub enum SeqNumError {
-    /// Sequence numbers are always positive.
-    #[error("sequence number can not be zero or negative")]
-    NotZeroOrNegative,
-}
 
 /// Sequence number describing the position of an entry in its append-only log.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -23,6 +14,20 @@ pub struct SeqNum(i64);
 
 impl SeqNum {
     /// Validates and wraps value into a new `SeqNum` instance.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use p2panda_rs::entry::SeqNum;
+    ///
+    /// // Generate new sequence number
+    /// let seq_num = SeqNum::new(2)?;
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new(value: i64) -> Result<Self, SeqNumError> {
         let seq_num = Self(value);
         seq_num.validate()?;
@@ -30,6 +35,22 @@ impl SeqNum {
     }
 
     /// Return sequence number of the previous entry (backlink).
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use p2panda_rs::entry::SeqNum;
+    ///
+    /// // Return backlink (sequence number of the previous entry)
+    /// let seq_num = SeqNum::new(2)?;
+    /// let backlink = seq_num.backlink_seq_num();
+    ///
+    /// assert_eq!(backlink, Some(SeqNum::new(1)?));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn backlink_seq_num(&self) -> Option<Self> {
         Self::new(self.0 - 1).ok()
     }
@@ -62,7 +83,7 @@ impl Default for SeqNum {
 
 impl Copy for SeqNum {}
 
-impl Validation for SeqNum {
+impl Validate for SeqNum {
     type Error = SeqNumError;
 
     fn validate(&self) -> Result<(), Self::Error> {

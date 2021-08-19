@@ -3,34 +3,13 @@ use std::convert::TryFrom;
 use arrayvec::ArrayVec;
 use bamboo_rs_core::yamf_hash::new_blake2b;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use yamf_hash::{YamfHash, BLAKE2B_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
-use crate::atomic::Validation;
+use crate::hash::HashError;
+use crate::Validate;
 
 /// This is the type used for `bamboo-rs-core` entries that own their bytes.
 pub type Blake2BArrayVec = ArrayVec<[u8; BLAKE2B_HASH_SIZE]>;
-
-/// Custom error types for `Hash`.
-#[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
-pub enum HashError {
-    /// Hash string has an invalid length.
-    #[error("invalid hash length")]
-    InvalidLength,
-
-    /// Hash string contains invalid hex characters.
-    #[error("invalid hex encoding in hash string")]
-    InvalidHexEncoding,
-
-    /// Hash is not a valid YAMF BLAKE2b hash.
-    #[error("can not decode YAMF BLAKE2b hash")]
-    DecodingFailed,
-
-    /// Internal YamfHash crate error.
-    #[error(transparent)]
-    YamfHashError(#[from] yamf_hash::error::Error),
-}
 
 /// Hash of `Entry` or `Message` encoded as hex string.
 ///
@@ -76,7 +55,7 @@ impl Hash {
     }
 
     /// Returns hash as hex string.
-    pub fn as_hex(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
 }
@@ -103,7 +82,7 @@ impl From<Hash> for YamfHash<Blake2BArrayVec> {
     }
 }
 
-impl Validation for Hash {
+impl Validate for Hash {
     type Error = HashError;
 
     fn validate(&self) -> Result<(), Self::Error> {

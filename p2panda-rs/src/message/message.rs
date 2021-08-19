@@ -1,10 +1,12 @@
+use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use thiserror::Error;
 
-use crate::atomic::{Hash, MessageEncoded, Validation};
+use crate::hash::Hash;
+use crate::message::{MessageEncoded, MessageError, MessageFieldsError};
+use crate::Validate;
 
 /// Message format versions to introduce API changes in the future.
 #[derive(Clone, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
@@ -65,21 +67,28 @@ impl<'de> Deserialize<'de> for MessageAction {
 impl Copy for MessageAction {}
 
 /// Enum of possible data types which can be added to the messages fields as values.
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value")]
 pub enum MessageValue {
     /// Basic `boolean` value.
+    #[serde(rename = "bool")]
     Boolean(bool),
 
     /// Basic signed `integer` value.
+    #[serde(rename = "int")]
     Integer(i64),
 
     /// Basic signed `float` value.
+    #[serde(rename = "float")]
     Float(f64),
 
     /// Basic `string` value.
+    #[serde(rename = "str")]
     Text(String),
 
     /// Reference to an instance.
+    #[serde(rename = "relation")]
     Relation(Hash),
 }
 
@@ -89,7 +98,7 @@ pub enum MessageValue {
 /// a `MessageFields` instance is attached to a `Message`, the message's schema determines which
 /// fields may be used.
 ///
-/// Internally message fields use sorted B-Tree maps to assure ordering of the fields.  If the
+/// Internally message fields use sorted B-Tree maps to assure ordering of the fields. If the
 /// message fields would not be sorted consistently we would get different hash results for the
 /// same contents.
 ///
@@ -98,7 +107,7 @@ pub enum MessageValue {
 /// ```
 /// # extern crate p2panda_rs;
 /// # fn main() -> () {
-/// # use p2panda_rs::atomic::{MessageFields, MessageValue};
+/// # use p2panda_rs::message::{MessageFields, MessageValue};
 /// let mut fields = MessageFields::new();
 /// fields
 ///     .add("title", MessageValue::Text("Hello, Panda!".to_owned()))
@@ -107,19 +116,6 @@ pub enum MessageValue {
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MessageFields(BTreeMap<String, MessageValue>);
-
-/// Error types for methods of `MessageFields` struct.
-#[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
-pub enum MessageFieldsError {
-    /// Detected duplicate field when adding a new one.
-    #[error("field already exists")]
-    FieldDuplicate,
-
-    /// Tried to interact with an unknown field.
-    #[error("field does not exist")]
-    UnknownField,
-}
 
 impl MessageFields {
     /// Creates a new fields instance to add data to.
@@ -180,7 +176,18 @@ impl MessageFields {
 
         self.0.get(name)
     }
+
+    /// Returns an array of existing message keys.
+    pub fn keys(&self) -> Vec<String> {
+        self.0.keys().cloned().collect()
+    }
+
+    /// Returns an iterator of existing message fields.
+    pub fn iter(&self) -> Iter<String, MessageValue> {
+        self.0.iter()
+    }
 }
+
 /// Messages describe data mutations in the p2panda network. Authors send messages to create,
 /// update or delete instances or collections of data.
 ///
@@ -206,17 +213,32 @@ pub struct Message {
     fields: Option<MessageFields>,
 }
 
-/// Error types for methods of `Message` struct.
-#[allow(missing_copy_implementations)]
-#[derive(Error, Debug)]
-pub enum MessageError {
-    /// Invalid attempt to create a message without any fields data.
-    #[error("message fields can not be empty")]
-    EmptyFields,
-}
-
 impl Message {
     /// Returns new create message.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use p2panda_rs::hash::Hash;
+    /// use p2panda_rs::message::{Message, MessageFields, MessageValue};
+    ///
+    /// let schema_hash_string = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
+    /// let schema_msg_hash = Hash::new(schema_hash_string)?;
+    /// let mut msg_fields = MessageFields::new();
+    ///
+    /// msg_fields
+    ///     .add("Zoo", MessageValue::Text("Pandas, Doggos, Cats, and Parrots!".to_owned()))
+    ///     .unwrap();
+    ///
+    /// let create_message = Message::new_create(schema_msg_hash, msg_fields)?;
+    ///
+    /// assert_eq!(Message::is_create(&create_message), true);
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new_create(schema: Hash, fields: MessageFields) -> Result<Self, MessageError> {
         let message = Self {
             action: MessageAction::Create,
@@ -293,8 +315,8 @@ impl Message {
     }
 
     /// Returns schema of message.
-    pub fn schema(&self) -> Hash {
-        self.schema.clone()
+    pub fn schema(&self) -> &Hash {
+        &self.schema
     }
 
     /// Returns id of message.
@@ -325,7 +347,7 @@ impl From<&MessageEncoded> for Message {
     }
 }
 
-impl Validation for Message {
+impl Validate for Message {
     type Error = MessageError;
 
     fn validate(&self) -> Result<(), Self::Error> {
@@ -342,7 +364,8 @@ impl Validation for Message {
 mod tests {
     use std::convert::TryFrom;
 
-    use crate::atomic::{Hash, MessageEncoded};
+    use crate::hash::Hash;
+    use crate::message::MessageEncoded;
 
     use super::{Message, MessageFields, MessageValue};
 
@@ -419,11 +442,8 @@ mod tests {
             .add("b", MessageValue::Text("penguin".to_owned()))
             .unwrap();
 
-        let first_message = Message::new_create(
-            Hash::new_from_bytes(vec![1, 255, 0]).unwrap(),
-            fields,
-        )
-        .unwrap();
+        let first_message =
+            Message::new_create(Hash::new_from_bytes(vec![1, 255, 0]).unwrap(), fields).unwrap();
 
         // Create second test message with same values but different order of fields
         let mut second_fields = MessageFields::new();
@@ -441,5 +461,28 @@ mod tests {
         .unwrap();
 
         assert_eq!(first_message.to_cbor(), second_message.to_cbor());
+    }
+
+    #[test]
+    fn field_iteration() {
+        // Create first test message
+        let mut fields = MessageFields::new();
+        fields
+            .add("a", MessageValue::Text("sloth".to_owned()))
+            .unwrap();
+        fields
+            .add("b", MessageValue::Text("penguin".to_owned()))
+            .unwrap();
+
+        let mut field_iterator = fields.iter();
+
+        assert_eq!(
+            field_iterator.next().unwrap().1,
+            &MessageValue::Text("sloth".to_owned())
+        );
+        assert_eq!(
+            field_iterator.next().unwrap().1,
+            &MessageValue::Text("penguin".to_owned())
+        );
     }
 }

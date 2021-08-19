@@ -2,22 +2,9 @@ use std::convert::TryFrom;
 
 use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
-use crate::atomic::Validation;
-
-/// Custom error types for `Author`.
-#[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
-pub enum AuthorError {
-    /// Author string does not have the right length.
-    #[error("invalid author key length")]
-    InvalidLength,
-
-    /// Author string contains invalid hex characters.
-    #[error("invalid hex encoding in author string")]
-    InvalidHexEncoding,
-}
+use crate::identity::AuthorError;
+use crate::Validate;
 
 /// Authors are hex encoded ed25519 public key strings.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -30,6 +17,24 @@ pub struct Author(String);
 
 impl Author {
     /// Validates and wraps author string into a new `Author` instance.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use p2panda_rs::identity::{KeyPair, Author};
+    ///
+    /// // Generate new Ed25519 key pair
+    /// let key_pair = KeyPair::new();
+    /// let public_key = key_pair.public_key();
+    ///
+    /// // Create an `Author` instance from a public key string
+    /// let author = Author::new(&key_pair.public_key())?;
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new(value: &str) -> Result<Self, AuthorError> {
         let author = Self(String::from(value));
         author.validate()?;
@@ -46,7 +51,7 @@ impl TryFrom<PublicKey> for Author {
     }
 }
 
-impl Validation for Author {
+impl Validate for Author {
     type Error = AuthorError;
 
     fn validate(&self) -> Result<(), Self::Error> {

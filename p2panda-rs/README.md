@@ -31,7 +31,7 @@
       Releases
     </a>
     <span> | </span>
-    <a href="https://github.com/p2panda/design-document#get-involved">
+    <a href="https://github.com/p2panda/design-document#how-to-contribute">
       Contributing
     </a>
   </h3>
@@ -52,8 +52,8 @@ Read the library [`documentation`] for installation guides and examples.
 
 You will need the following tools to start development:
 
-* [Rust](https://www.rust-lang.org/learn/get-started)
-* [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
+- [Rust](https://www.rust-lang.org/learn/get-started)
+- [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
 
 ```bash
 # Run tests
