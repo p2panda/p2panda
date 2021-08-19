@@ -31,7 +31,7 @@
       Releases
     </a>
     <span> | </span>
-    <a href="https://github.com/p2panda/design-document#get-involved">
+    <a href="https://github.com/p2panda/design-document#how-to-contribute">
       Contributing
     </a>
   </h3>
@@ -58,7 +58,7 @@ This library provides all tools required to write a client for the [`p2panda`] n
 ## Usage
 
 ```javascript
-import p2panda from 'p2panda-js';
+import p2panda from "p2panda-js";
 
 const { KeyPair } = await p2panda;
 const keyPair = new KeyPair();
