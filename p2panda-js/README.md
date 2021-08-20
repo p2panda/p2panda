@@ -99,6 +99,20 @@ npm test
 npm run build
 ```
 
+### Debug logging
+
+Enable debug logging for node environments by setting an environment variable
+
+```
+export DEBUG='p2panda*'
+```
+
+Enable debug logging from a browser console by storing a key `debug` in local storage:
+
+```
+localStorage.debug = 'p2panda*'
+```
+
 ## License
 
 GNU Affero General Public License v3.0 `AGPL-3.0`
