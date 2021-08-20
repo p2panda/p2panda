@@ -31,7 +31,7 @@ describe('MessageFields', () => {
     const TEST_SCHEMA =
       '0040cf94f6d605657e90c543b0c919070cdaaf7209c5e1ea58acb8f3568fa2114268dc9ac3bafe12af277d286fce7dc59b7c0c348973c4e9dacbe79485e56ac2a702';
 
-    const { MessageFields } = await p2panda;
+    const { MessageFields } = await wasm;
     const fields = new MessageFields();
 
     // Set fields of all possible types
@@ -53,7 +53,7 @@ describe('MessageFields', () => {
   });
 
   it('returns the correct length', async () => {
-    const { MessageFields } = await p2panda;
+    const { MessageFields } = await wasm;
     const fields = new MessageFields();
     expect(fields.length()).to.eq(0);
     fields.add('message', 'str', 'Good morning');
@@ -63,7 +63,7 @@ describe('MessageFields', () => {
   });
 
   it('throws when trying to set a field twice', async () => {
-    const { MessageFields } = await p2panda;
+    const { MessageFields } = await wasm;
     const fields = new MessageFields();
     fields.add('description', 'str', 'Good morning, Panda');
     expect(() =>
@@ -72,7 +72,7 @@ describe('MessageFields', () => {
   });
 
   it('throws when using invalid types or values', async () => {
-    const { MessageFields } = await p2panda;
+    const { MessageFields } = await wasm;
     const fields = new MessageFields();
 
     // Throw when type is invalid
@@ -90,7 +90,7 @@ describe('MessageFields', () => {
   });
 
   it('throws when removing an inexistent field', async () => {
-    const { MessageFields } = await p2panda;
+    const { MessageFields } = await wasm;
     const fields = new MessageFields();
     expect(() => fields.remove('test')).to.throw();
   });
