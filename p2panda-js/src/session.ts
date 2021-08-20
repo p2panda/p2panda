@@ -9,7 +9,7 @@ import { marshallResponseFields } from '~/utils';
 import type { EntryArgs, EntryRecord, EncodedEntry, Fields } from '~/types';
 import { KeyPair } from 'wasm-web';
 
-const log = debug('p2panda-api');
+const log = debug('p2panda-js:session');
 
 export default class Session {
   // Address of a p2panda node that we can connect to
@@ -111,7 +111,7 @@ export default class Session {
       // } else {
       //   log('loaded wasm lib');
       // }
-      log('loaded wasm lib');
+      log('initialized wasm lib');
     } else {
       log('access cached wasm lib');
     }
@@ -135,7 +135,7 @@ export default class Session {
     if (cachedValue) {
       // use cache
       delete this.nextEntryArgs[cacheKey];
-      log('panda_getEntryArguments [cached]', cachedValue);
+      log('call panda_getEntryArguments [cached]', cachedValue);
       return cachedValue;
     } else {
       // do rpc call
@@ -143,7 +143,7 @@ export default class Session {
         method: 'panda_getEntryArguments',
         params: { author, schema },
       });
-      log('panda_getEntryArguments', nextEntryArgs);
+      log('call panda_getEntryArguments', nextEntryArgs);
       return nextEntryArgs;
     }
   }
@@ -178,11 +178,13 @@ export default class Session {
     if (!entryEncoded || !messageEncoded)
       throw new Error('Encoded entry and message must be provided');
 
+    const params = { entryEncoded, messageEncoded };
+    log('call panda_publishEntry', params);
     const result = await this.client.request({
       method: 'panda_publishEntry',
-      params: { entryEncoded, messageEncoded },
+      params,
     });
-    log('panda_publishEntry');
+    log('response panda_publishEntry', result);
     return result;
   }
 
@@ -194,11 +196,13 @@ export default class Session {
    */
   async _queryEntriesEncoded(schema: string): Promise<EncodedEntry[]> {
     if (!schema) throw new Error('Schema must be provided');
+    const params = { schema };
+    log('call panda_queryEntries', params);
     const result = await this.client.request({
       method: 'panda_queryEntries',
-      params: { schema },
+      params,
     });
-    log('panda_queryEntries', result);
+    log('response panda_queryEntries', result);
     return result.entries;
   }
 
@@ -214,6 +218,7 @@ export default class Session {
     if (!schema) throw new Error('Schema must be provided');
     const { decodeEntry } = await this.loadWasm();
     const result = await this._queryEntriesEncoded(schema);
+    log(`decoding ${result.length} entries`);
     return Promise.all(
       result.map(async (entry) => {
         const decoded = await decodeEntry(entry.entryBytes, entry.payloadBytes);
@@ -246,6 +251,7 @@ export default class Session {
    *   .create(messageFields, { schema });
    */
   async create(fields: Fields, options: Partial<Context>): Promise<Session> {
+    log('create instance', fields);
     Instance.create(fields, {
       schema: this._schema,
       keyPair: this._keyPair,
