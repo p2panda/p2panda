@@ -40,6 +40,7 @@
   },
   "homepage": "https://github.com/p2panda/p2panda#readme",
   "devDependencies": {
+    "@apidevtools/json-schema-ref-parser": "^9.0.9",
     "@babel/cli": "^7.12.10",
     "@babel/core": "^7.12.10",
     "@babel/register": "^7.12.10",
