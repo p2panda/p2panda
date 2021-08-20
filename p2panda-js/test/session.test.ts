@@ -5,7 +5,13 @@ import chaiAsPromised from 'chai-as-promised';
 import { Session } from '../lib';
 import SAMPLE_VALUES from './sample-values';
 
-const { SCHEMA, PUBLIC_KEY, ENTRY_ENCODED, MESSAGE_ENCODED } = SAMPLE_VALUES;
+const {
+  BACKLINK_HASH,
+  ENTRY_ENCODED,
+  MESSAGE_ENCODED,
+  PUBLIC_KEY,
+  SCHEMA,
+} = SAMPLE_VALUES;
 
 chai.use(chaiAsPromised);
 
@@ -13,7 +19,7 @@ describe('Session', () => {
   it('can query entries', async () => {
     const session = new Session('http://localhost:2020');
     const entries = await session._queryEntries(SCHEMA);
-    expect(entries.length).to.equal(2);
+    expect(entries.length).to.equal(1);
   });
 
   it('throws when querying without a schema', async () => {
@@ -30,9 +36,9 @@ describe('Session', () => {
   it('gets next entry args', async () => {
     const session = new Session('http://localhost:2020');
     const nextEntryArgs = await session._getNextEntryArgs(PUBLIC_KEY, SCHEMA);
-    expect(nextEntryArgs.entryHashSkiplink).to.equal('SKIPLINK_HASH');
-    expect(nextEntryArgs.entryHashBacklink).to.equal('BACKLINK_HASH');
-    expect(nextEntryArgs.seqNum).to.equal(3);
+    expect(nextEntryArgs.entryHashSkiplink).to.equal(null);
+    expect(nextEntryArgs.entryHashBacklink).to.equal(BACKLINK_HASH);
+    expect(nextEntryArgs.seqNum).to.equal(2);
     expect(nextEntryArgs.logId).to.equal(1);
   });
 
@@ -42,7 +48,10 @@ describe('Session', () => {
       ENTRY_ENCODED,
       MESSAGE_ENCODED,
     );
-    expect(nextEntryArgs.entryHashSkiplink).to.equal('SKIPLINK_HASH');
+    expect(nextEntryArgs.entryHashBacklink).to.equal(
+      BACKLINK_HASH,
+      JSON.stringify(nextEntryArgs, null, 2),
+    );
   });
 
   it('caches next entry args', async () => {

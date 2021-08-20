@@ -1,267 +1,258 @@
 {
-  "openrpc": "1.0.0-rc1",
-  "info": {
-    "title": "p2panda RPC interface",
-    "version": "0.0.1"
-  },
-  "components": {
-    "contentDescriptors": {
-      "EntryArgs": {
-        "name": "entryArgs",
-        "required": true,
-        "description": "Arguments for next entry in log",
-        "schema": {
-          "$ref": "#/components/schemas/EntryArgs"
-        }
-      },
-      "Author": {
-        "name": "author",
-        "required": true,
-        "description": "The public key of author",
-        "schema": {
-          "$ref": "#/components/schemas/Author"
-        }
-      },
-      "Schema": {
-        "name": "schema",
-        "required": true,
-        "description": "The hash of schema describing format of message fields",
-        "schema": {
-          "$ref": "#/components/schemas/Hash"
-        }
-      }
+    "openrpc": "1.0.0-rc1",
+    "info": {
+        "title": "p2panda RPC interface",
+        "version": "0.0.1"
     },
-    "schemas": {
-      "Author": {
-        "type": "string",
-        "pattern": "[0-9a-f]{64}",
-        "minLength": 64,
-        "maxLength": 64
-      },
-      "Hash": {
-        "type": "string",
-        "minLength": 132,
-        "maxLength": 132,
-        "pattern": "[0-9a-f]{132}"
-      },
-      "EntryArgs": {
-        "type": "object",
-        "properties": {
-          "entryHashSkiplink": {
-            "schema": {
-              "$ref": "#/components/schemas/Hash"
-            }
-          },
-          "entryHashBacklink": {
-            "schema": {
-              "$ref": "#/components/schemas/Hash"
-            }
-          },
-          "seqNum": {
-            "type": "number"
-          },
-          "logId": {
-            "type": "number"
-          }
-        }
-      },
-      "Entry": {
-        "type": "object",
-        "properties": {
-          "author": {
-            "schema": {
-              "$ref": "#/components/schemas/Author"
-            }
-          },
-          "entryBytes": {
-            "type": "string"
-          },
-          "entryHash": {
-            "schema": {
-              "$ref": "#/components/schemas/Hash"
-            }
-          },
-          "logId": {
-            "type": "number"
-          },
-          "payloadBytes": {
-            "type": "string"
-          },
-          "payloadHash": {
-            "schema": {
-              "$ref": "#/components/schemas/Hash"
-            }
-          },
-          "seqNum": {
-            "type": "number"
-          }
-        }
-      },
-      "EntryEncoded": {
-        "type": "string"
-      },
-      "MessageEncoded": {
-        "type": "string"
-      },
-      "QueryEntriesResponse": {
-        "type": "object",
-        "properties": {
-          "entries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Entry"
-            }
-          }
-        }
-      }
-    },
-    "examples": {
-      "FirstEntryEncoded": {
-        "name": "firstEntryEncoded",
-        "summary": "Encoded bytes of first entry in a log",
-        "value": "00ba07a8da75dd2f922d62eae7e7ac7c081e06bf0c192b2d8ea1b2ab5e9c59013e0101e700400f2338e42f03bfaab4b721949ad355d964ace34aad4d461ba2b1b42706ada938fe126e189c4b6332f891ee038cf0e9e6723d4911632497683a56dd75c8f6d89f8b411f3bd3f5c8c8114693d7c9de5672f4146ec4acb9bc357015e60bc7425874dd4158bdbdf482bfd5779eb0bc2bf4b4d068a4f7b23c8a03d75c7c61a4fba609"
-      },
-      "FirstEntryMessageEncdoded": {
-        "name": "messageEncoded",
-        "summary": "Encoded bytes of first entry payload",
-        "value": "a466616374696f6e6663726561746566736368656d6178843030343063663934663664363035363537653930633534336230633931393037306364616166373230396335653165613538616362386633353638666132313134323638646339616333626166653132616632373764323836666365376463353962376330633334383937336334653964616362653739343835653536616332613730326776657273696f6e01666669656c6473a26464617465a164546578747818323032312d30352d31335431373a32303a31352e3133375a676d657373616765a164546578746648656c6c6f21"
-      },
-      "EntryArgsResult": {
-        "name": "testEntryArgumentsResult",
-        "value": {
-          "entryHashSkiplink": "SKIPLINK_HASH",
-          "entryHashBacklink": "BACKLINK_HASH",
-          "seqNum": 3,
-          "logId": 1
-        }
-      }
-    }
-  },
-  "methods": [
-    {
-      "name": "panda_getEntryArguments",
-      "summary": "Get arguments for building next entry",
-      "params": [
-        {
-          "$ref": "#/components/contentDescriptors/Author"
-        },
-        {
-          "$ref": "#/components/contentDescriptors/Schema"
-        }
-      ],
-      "result": {
-        "$ref": "#/components/contentDescriptors/EntryArgs"
-      },
-      "examples": [
-        {
-          "name": "testEntryArgumentsExample",
-          "params": [
-            {
-              "name": "author",
-              "value": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49"
+    "components": {
+        "contentDescriptors": {
+            "EntryArgs": {
+                "name": "entryArgs",
+                "required": true,
+                "description": "Arguments for next entry in log",
+                "schema": {
+                    "$ref": "#/components/schemas/EntryArgs"
+                }
             },
-            {
-              "name": "schema",
-              "value": "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437"
+            "Author": {
+                "name": "author",
+                "required": true,
+                "description": "The public key of author",
+                "schema": {
+                    "$ref": "#/components/schemas/Author"
+                }
+            },
+            "Schema": {
+                "name": "schema",
+                "required": true,
+                "description": "The hash of schema describing format of message fields",
+                "schema": {
+                    "$ref": "#/components/schemas/Hash"
+                }
             }
-          ],
-          "result": {
-            "name": "testEntryArgumentsResult",
-            "value": {
-              "entryHashSkiplink": "SKIPLINK_HASH",
-              "entryHashBacklink": "BACKLINK_HASH",
-              "seqNum": 3,
-              "logId": 1
+        },
+        "schemas": {
+            "Author": {
+                "type": "string",
+                "pattern": "[0-9a-f]{64}",
+                "minLength": 64,
+                "maxLength": 64
+            },
+            "Hash": {
+                "type": "string",
+                "minLength": 132,
+                "maxLength": 132,
+                "pattern": "[0-9a-f]{132}"
+            },
+            "EntryArgs": {
+                "type": "object",
+                "properties": {
+                    "entryHashSkiplink": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Hash"
+                        }
+                    },
+                    "entryHashBacklink": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Hash"
+                        }
+                    },
+                    "seqNum": {
+                        "type": "number"
+                    },
+                    "logId": {
+                        "type": "number"
+                    }
+                }
+            },
+            "Entry": {
+                "type": "object",
+                "properties": {
+                    "author": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Author"
+                        }
+                    },
+                    "entryBytes": {
+                        "type": "string"
+                    },
+                    "entryHash": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Hash"
+                        }
+                    },
+                    "logId": {
+                        "type": "number"
+                    },
+                    "payloadBytes": {
+                        "type": "string"
+                    },
+                    "payloadHash": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Hash"
+                        }
+                    },
+                    "seqNum": {
+                        "type": "number"
+                    }
+                }
+            },
+            "EntryEncoded": {
+                "type": "string"
+            },
+            "MessageEncoded": {
+                "type": "string"
+            },
+            "QueryEntriesResponse": {
+                "type": "object",
+                "properties": {
+                    "entries": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Entry"
+                        }
+                    }
+                }
             }
-          }
+        },
+        "examples": {
+            "FirstEntryEncoded": {
+                "name": "firstEntryEncoded",
+                "summary": "Encoded bytes of first entry in a log",
+                "value": "009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101f60040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04ef01463f550ce62f983494d0eb6051c73a5641025f355758006724e5b730f47a4454c5395eab807325ee58d69c08d66461357d0f961aee383acc3247ed6419706"
+            },
+            "FirstEntryMessageEncdoded": {
+                "name": "messageEncoded",
+                "summary": "Encoded bytes of first entry payload",
+                "value": "a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a26b6465736372697074696f6ea26474797065637374726576616c756571666f7220706c6179696e67206368657373646e616d65a26474797065637374726576616c7565656368657373"
+            },
+            "EntryArgsResult": {
+                "name": "testEntryArgumentsResult",
+                "value": {
+                    "entryHashSkiplink": null,
+                    "entryHashBacklink": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",
+                    "seqNum": 2,
+                    "logId": 1
+                }
+            }
         }
-      ]
     },
-    {
-      "name": "panda_queryEntries",
-      "params": [
+    "methods": [
         {
-          "$ref": "#/components/contentDescriptors/Schema"
-        }
-      ],
-      "result": {
-        "name": "query response",
-        "schema": {
-          "$ref": "#/components/schemas/QueryEntriesResponse"
-        }
-      },
-      "examples": [
-        {
-          "name": "testQueryExample",
-          "params": [
-            {
-              "name": "schema",
-              "value": "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437"
-            }
-          ],
-          "result": {
-            "name": "testQueryResult",
-            "value": {
-              "entries": [
+            "name": "panda_getEntryArguments",
+            "summary": "Get arguments for building next entry",
+            "params": [
                 {
-                  "author": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49",
-                  "entryBytes": "002deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a490101e200406cde0ae5712e776b41881a2d54bd94605c37c592b95694c941e60bf9f7f55ef6d9590d5d810ec275990ffa5983eb10f92d8cd0a07045e0cc6c3a488b01895191f9593fc917e86f697e2736058133324a3a35f4ea5e87d00e23fce84103c3f202c8fe259ba864a2c68facf56cf7a81e23a1583a2ea82584763cb56dfdd6bde607",
-                  "entryHash": "0040b4108a805f2dd688c3589373fce2889093c8c843c482e0aa0d4faf512f381616c632172f73091063b71d715af7d5dd16aca29849c641609539a34db876c37b40",
-                  "logId": 1,
-                  "payloadBytes": "a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a26b6465736372697074696f6ea1645465787471666f7220706c6179696e67206368657373646e616d65a16454657874656368657373",
-                  "payloadHash": "00406cde0ae5712e776b41881a2d54bd94605c37c592b95694c941e60bf9f7f55ef6d9590d5d810ec275990ffa5983eb10f92d8cd0a07045e0cc6c3a488b01895191",
-                  "seqNum": 1
+                    "$ref": "#/components/contentDescriptors/Author"
                 },
                 {
-                  "author": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49",
-                  "entryBytes": "002deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a4901020040b4108a805f2dd688c3589373fce2889093c8c843c482e0aa0d4faf512f381616c632172f73091063b71d715af7d5dd16aca29849c641609539a34db876c37b40e200406cde0ae5712e776b41881a2d54bd94605c37c592b95694c941e60bf9f7f55ef6d9590d5d810ec275990ffa5983eb10f92d8cd0a07045e0cc6c3a488b01895191ce2681f7c2b3634d4aee83fd3464d151bdee1e90d08fb9b63108d921f8faa0e8b0fd10ebcbfa21f4d44bcf6fd06f1ef8e5b91f3fafb156141610d406f1b3a10b",
-                  "entryHash": "004075cb5fc21eeda09f7ce4f04ea318e84f8430d9850e1380419c16f1c9684b1f7bc7f2b7a5ba0cb850d8ca446f56b0453132a26e482fcb21d59a0b26a5dde4811c",
-                  "logId": 1,
-                  "payloadBytes": "a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a26b6465736372697074696f6ea1645465787471666f7220706c6179696e67206368657373646e616d65a16454657874656368657373",
-                  "payloadHash": "00406cde0ae5712e776b41881a2d54bd94605c37c592b95694c941e60bf9f7f55ef6d9590d5d810ec275990ffa5983eb10f92d8cd0a07045e0cc6c3a488b01895191",
-                  "seqNum": 2
+                    "$ref": "#/components/contentDescriptors/Schema"
                 }
-              ]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "panda_publishEntry",
-      "params": [
-        {
-          "name": "entryEncoded",
-          "schema": {
-            "$ref": "#/components/schemas/EntryEncoded"
-          }
+            ],
+            "result": {
+                "$ref": "#/components/contentDescriptors/EntryArgs"
+            },
+            "examples": [
+                {
+                    "name": "testEntryArgumentsExample",
+                    "params": [
+                        {
+                            "name": "author",
+                            "value": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49"
+                        },
+                        {
+                            "name": "schema",
+                            "value": "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437"
+                        }
+                    ],
+                    "result": {
+                        "name": "testEntryArgumentsResult",
+                        "value": {
+                            "entryHashSkiplink": null,
+                            "entryHashBacklink": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",
+                            "seqNum": 2,
+                            "logId": 1
+                        }
+                    }
+                }
+            ]
         },
         {
-          "name": "messageEncoded",
-          "schema": {
-            "$ref": "#/components/schemas/MessageEncoded"
-          }
-        }
-      ],
-      "result": {
-        "$ref": "#/components/contentDescriptors/EntryArgs"
-      },
-      "examples": [
-        {
-          "name": "publishEntryResultExample",
-          "params": [
-            {
-              "$ref": "#/components/examples/FirstEntryEncoded"
+            "name": "panda_queryEntries",
+            "params": [
+                {
+                    "$ref": "#/components/contentDescriptors/Schema"
+                }
+            ],
+            "result": {
+                "name": "query response",
+                "schema": {
+                    "$ref": "#/components/schemas/QueryEntriesResponse"
+                }
             },
-            {
-              "$ref": "#/components/examples/FirstEntryMessageEncdoded"
-            }
-          ],
-          "result": {
-            "$ref": "#/components/examples/EntryArgsResult"
-          }
+            "examples": [
+                {
+                    "name": "testQueryExample",
+                    "params": [
+                        {
+                            "name": "schema",
+                            "value": "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437"
+                        }
+                    ],
+                    "result": {
+                        "name": "testQueryResult",
+                        "value": {
+                            "entries": [
+                                {
+                                    "author": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49",
+                                    "entryBytes": "009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101f60040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04ef01463f550ce62f983494d0eb6051c73a5641025f355758006724e5b730f47a4454c5395eab807325ee58d69c08d66461357d0f961aee383acc3247ed6419706",
+                                    "entryHash": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",
+                                    "logId": 1,
+                                    "payloadBytes": "a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a26b6465736372697074696f6ea26474797065637374726576616c756571666f7220706c6179696e67206368657373646e616d65a26474797065637374726576616c7565656368657373",
+                                    "payloadHash": "0040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04e",
+                                    "seqNum": 1
+                                }
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "panda_publishEntry",
+            "params": [
+                {
+                    "name": "entryEncoded",
+                    "schema": {
+                        "$ref": "#/components/schemas/EntryEncoded"
+                    }
+                },
+                {
+                    "name": "messageEncoded",
+                    "schema": {
+                        "$ref": "#/components/schemas/MessageEncoded"
+                    }
+                }
+            ],
+            "result": {
+                "$ref": "#/components/contentDescriptors/EntryArgs"
+            },
+            "examples": [
+                {
+                    "name": "publishEntryResultExample",
+                    "params": [
+                        {
+                            "$ref": "#/components/examples/FirstEntryEncoded"
+                        },
+                        {
+                            "$ref": "#/components/examples/FirstEntryMessageEncdoded"
+                        }
+                    ],
+                    "result": {
+                        "$ref": "#/components/examples/EntryArgsResult"
+                    }
+                }
+            ]
         }
-      ]
-    }
-  ]
+    ]
 }
