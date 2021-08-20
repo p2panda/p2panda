@@ -17,6 +17,9 @@ const log = debug('p2panda-api:instance');
 
 /**
  * Returns a message fields instance for the given field contents and schema
+ *
+ * Until we can access arbitrary schema definitions from here we are restricted
+ * to using the 'string' message field type.
  */
 const getMessageFields = async (
   session: Session,
@@ -28,7 +31,8 @@ const getMessageFields = async (
   const messageFields = new MessageFields();
   for (const fieldName of Object.keys(fields)) {
     const fieldType = Object.keys(fields[fieldName])[0];
-    messageFields.add(fieldName, fieldType, fields[fieldName][fieldType]);
+    // Restrict message field type to 'str'
+    messageFields.add(fieldName, 'str', fields[fieldName][fieldType]);
   }
   log('getMessageFields', messageFields.toString());
   return messageFields;
