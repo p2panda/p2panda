@@ -89,5 +89,6 @@ export type FieldsTagged = {
  * A message value of `string` type
  */
 export type MessageValueText = {
-  Text: string;
+  value: string;
+  type: 'str';
 };

@@ -6,7 +6,7 @@ import { Fields, FieldsTagged } from './types';
 export const marshallRequestFields = (fields: Fields): FieldsTagged => {
   const rv: FieldsTagged = {};
   Object.keys(fields).forEach((k) => {
-    rv[k] = { Text: fields[k] };
+    rv[k] = { value: fields[k], type: 'str' };
   });
   return rv;
 };
@@ -17,7 +17,7 @@ export const marshallRequestFields = (fields: Fields): FieldsTagged => {
 export const marshallResponseFields = (fieldsTagged: FieldsTagged): Fields => {
   const fields: Fields = {};
   Object.keys(fieldsTagged).forEach((k) => {
-    fields[k] = fieldsTagged[k].Text;
+    fields[k] = fieldsTagged[k].value;
   });
   return fields;
 };
