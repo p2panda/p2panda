@@ -15,7 +15,7 @@ export default class Session {
   // Address of a p2panda node that we can connect to
   endpoint: string;
 
-  // An rpc client connected to the confgiured endpoint
+  // An rpc client connected to the configured endpoint
   client: Client;
 
   // The wasm library from p2panda-rs. To ensure that it is loaded before

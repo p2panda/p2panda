@@ -12,7 +12,7 @@ export const marshallRequestFields = (fields: Fields): FieldsTagged => {
 };
 
 /**
- * Remove type tagging from mesasge fields on an entry received from node
+ * Remove type tagging from message fields on an entry received from node
  */
 export const marshallResponseFields = (fieldsTagged: FieldsTagged): Fields => {
   const fields: Fields = {};
