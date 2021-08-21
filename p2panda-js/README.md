@@ -53,26 +53,26 @@ To install `p2panda-js` from the NPM package, simply run:
 
 ## Usage
 
-Create a key pair for each device and user who need to access p2panda.
 
-```
-import { KeyPair } from 'p2panda-js';
-const keyPair = new KeyPair();
-```
+```js
+import { KeyPair, Session } from 'p2panda-js'
 
-Create an instance using an already known schema for chat messages.
+const CHAT_SCHEMA = "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437"
 
-```
-import { Session } from 'p2panda-js';
+// Create a key pair for each device and user who need to access p2panda.
+const keyPair = new KeyPair()
 
+// Open a long running connection to a p2panda node.
 const session = new Session('https://welle.liebechaos.org')
-  .keyPair(keyPair);
+  .keyPair(keyPair)
 
+// Compose your message payload, according to chosen schema
 const payload = {
   message: 'Hi there'
 }
-const entry = await session.create(payload, { schema: CHAT_SCHEMA })
 
+// Send new chat message to the node.
+const entry = await session.create(payload, { schema: CHAT_SCHEMA })
 ```
 
 ## Development Setup
