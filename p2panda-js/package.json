@@ -13,6 +13,7 @@
     "test:mocha": "mocha -r ts-node/register -r tsconfig-paths/register -r @babel/register ./test/**/*.test.ts",
     "test:run": "run-s clear test:prepare test:mocha",
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm run test' --ext js,ts,json",
+    "test:template-openrpc": "npx ts-node ./test/test-setup.ts",
     "test:mock-node": "open-rpc-mock-server --port 2020",
     "wasm": "run-s --silent wasm:browser wasm:node",
     "wasm:browser": "wasm-pack --log-level warn build ../p2panda-rs --target web --out-dir ../p2panda-js/wasm-web --release --out-name index",

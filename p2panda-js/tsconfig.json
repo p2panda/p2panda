@@ -9,6 +9,7 @@
       "wasm-node": ["./wasm-node"]
     },
     "lib": ["dom"],
+    "resolveJsonModule": true,
     "sourceMap": true,
     "target": "es5",
     "types": ["mocha", "node"],
