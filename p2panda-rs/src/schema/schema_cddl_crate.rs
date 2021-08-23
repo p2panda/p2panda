@@ -1,3 +1,7 @@
+// This is an alternative approach to CDDL creation more heavily relying on the cddl crate
+// It seems overly complex for our needs so I've gone back to a simpler string concatenation 
+// used in schema.rs
+// leaving code here for now for reference.
 use std::fmt::Debug;
 
 use cddl::ast::{
