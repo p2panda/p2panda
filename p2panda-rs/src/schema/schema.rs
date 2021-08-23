@@ -103,23 +103,6 @@ impl fmt::Display for Group {
     }
 }
 
-pub fn create_message_field(key: &str, field_type: Type) -> Field {
-    // Match passed type and map it to our MessageFields type and CDDL types (do we still need the
-    // MessageFields type key when we are using schemas?)
-    let type_string = match field_type {
-        Type::Tstr => "str",
-        Type::Int => "int",
-        Type::Float => "float",
-        Type::Bool => "bool",
-        Type::Relation => "relation",
-    };
-    // Create an array of message_fields
-    let mut message_fields = Group::new(key.to_owned());
-    message_fields.add_field("type", Field::String(type_string.to_owned()));
-    message_fields.add_field("value", Field::Type(field_type));
-    Field::Struct(message_fields)
-}
-
 #[derive(Debug)]
 /// UserSchema struct for creating CDDL schemas and valdating MessageFields
 pub struct UserSchema {
