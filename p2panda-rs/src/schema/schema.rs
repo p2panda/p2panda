@@ -122,7 +122,7 @@ pub fn create_message_field(key: &str, field_type: Type) -> Field {
 #[derive(Debug)]
 /// UserSchema struct for creating CDDL schemas and valdating MessageFields
 pub struct UserSchema {
-    name: String,
+    name: Option<String>,
     fields: Option<BTreeMap<String, Field>>,
     schema_string: Option<String>,
 }
@@ -131,7 +131,7 @@ impl UserSchema {
     /// Create a new blank UserSchema
     pub fn new(name: String) -> Self {
         Self {
-            name,
+            name: Some(name),
             fields: Some(BTreeMap::new()),
             schema_string: None,
         }
@@ -139,7 +139,7 @@ impl UserSchema {
 
     /// Create a new UserSchema from a CDDL string
     // Instanciate a new UserSchema instance from a CDDL string.
-    pub fn new_from_string(name: String, schema: &String) -> Result<Self, SchemaError> {
+    pub fn new_from_string(schema: &String) -> Result<Self, SchemaError> {
         let mut lexer = Lexer::new(schema);
         let parser = Parser::new(lexer.iter(), schema);
         let cddl_string = match parser {
@@ -150,7 +150,7 @@ impl UserSchema {
             Err(err) => Err(SchemaError::ParsingError(err.to_string())),
         };
         Ok(Self {
-            name,
+            name: None,
             fields: None,
             schema_string: Some(cddl_string.unwrap()),
         })
@@ -213,7 +213,8 @@ impl fmt::Display for UserSchema {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.fields {
             Some(map) => {
-                write!(f, "{} = {{ ", self.name)?;
+                // Naughty unwrap here needs to go!
+                write!(f, "{} = {{ ", self.name.unwrap())?;
                 for (count, value) in map.iter().enumerate() {
                     if count != 0 {
                         write!(f, ", ")?;
@@ -270,7 +271,7 @@ mod tests {
         }";
         
         let person_from_string =
-            UserSchema::new_from_string("person".to_owned(), &cddl_str.to_string()).unwrap();
+            UserSchema::new_from_string(&cddl_str.to_string()).unwrap();
 
         // Both schemas should match
         assert_eq!(format!("{}", person_from_string), format!("{}", person));
