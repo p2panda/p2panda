@@ -214,7 +214,7 @@ impl fmt::Display for UserSchema {
         match &self.fields {
             Some(map) => {
                 // Naughty unwrap here needs to go!
-                write!(f, "{} = {{ ", self.name.unwrap())?;
+                write!(f, "{} = {{ ", self.name.as_ref().unwrap())?;
                 for (count, value) in map.iter().enumerate() {
                     if count != 0 {
                         write!(f, ", ")?;
