@@ -9,6 +9,7 @@ use cddl::validate_cbor_from_slice;
 use cddl::validator::cbor;
 
 use super::error::SchemaError;
+use super::USER_SCHEMA;
 
 /// CDDL types
 #[derive(Clone, Debug)]
@@ -238,10 +239,10 @@ impl fmt::Display for UserSchema {
 mod tests {
     use crate::message::{MessageFields, MessageValue};
 
-    use super::{Type, UserSchema};
+    use super::{Type, UserSchema, USER_SCHEMA};
 
     #[test]
-    pub fn validate_message() {
+    pub fn schema_builder() {
         
         // Instanciate new empty schema named "person"
         let mut person = UserSchema::new("person".to_owned());
@@ -263,18 +264,61 @@ mod tests {
         // Validate message fields against person schema
         let me_bytes = serde_cbor::to_vec(&me).unwrap();
         assert!(person.validate_message(me_bytes.clone()).is_ok());
+    }
+    
+    #[test]
+    pub fn schema_from_string() {
+        // Create a new "person" message
+        let mut me = MessageFields::new();
+        me.add("name", MessageValue::Text("Sam".to_owned()))
+            .unwrap();
+        me.add("age", MessageValue::Integer(35)).unwrap();
 
         // Instanciate "person" schema from cddl string 
-        let cddl_str = "person = { 
-            age: { ( type: \"int\", value: int ) }, 
-            name: { ( type: \"str\", value: tstr ) } 
-        }";
+        let cddl_str = "person = { (
+            age: { type: \"int\", value: int }, 
+            name: { type: \"str\", value: tstr } 
+        ) }";
         
         let person_from_string =
             UserSchema::new_from_string(&cddl_str.to_string()).unwrap();
 
-        // Both schemas should match
-        assert_eq!(format!("{}", person_from_string), format!("{}", person));
+        // Validate message fields against person schema
+        let me_bytes = serde_cbor::to_vec(&me).unwrap();
         assert!(person_from_string.validate_message(me_bytes).is_ok());
+    }
+    
+    #[test]
+    pub fn validate_against_megaschema() {
+        
+        // Instanciate global user schema from mega schema 
+        let user_schema =
+            UserSchema::new_from_string(&USER_SCHEMA.to_string()).unwrap();
+        
+        let mut me = MessageFields::new();
+        me.add("name", MessageValue::Text("Sam".to_owned())).unwrap();
+        me.add("age", MessageValue::Integer(35)).unwrap();
+
+        let mut my_address = MessageFields::new();
+        my_address.add("house-number", MessageValue::Integer(8)).unwrap();
+        my_address.add("street", MessageValue::Text("Panda Lane".to_owned())).unwrap();
+        my_address.add("city", MessageValue::Text("Bamboo Town".to_owned())).unwrap();
+
+        // Validate message fields against user schema
+        let me_bytes = serde_cbor::to_vec(&me).unwrap();
+        let my_address_bytes = serde_cbor::to_vec(&my_address).unwrap();
+
+        assert!(user_schema.validate_message(me_bytes).is_ok());
+        assert!(user_schema.validate_message(my_address_bytes).is_ok());
+        
+        // Messages not matching one of the user schema should fail
+        let mut naughty_panda = MessageFields::new();
+        naughty_panda.add("name", MessageValue::Text("Naughty Panda".to_owned()))
+            .unwrap();
+        naughty_panda.add("colour", MessageValue::Text("pink & orange".to_owned())).unwrap();
+        
+        let naughty_panda_bytes = serde_cbor::to_vec(&naughty_panda).unwrap();
+        assert!(user_schema.validate_message(naughty_panda_bytes).is_err());
+
     }
 }

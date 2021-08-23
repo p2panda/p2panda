@@ -9,8 +9,11 @@ use cddl::validator::cbor;
 
 mod message;
 mod schema;
+mod user_schema;
 
 pub use message::MESSAGE_SCHEMA;
+pub use user_schema::USER_SCHEMA;
+pub use schema::UserSchema;
 
 /// Custom error types of schema validation.
 pub mod error {
