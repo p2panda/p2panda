@@ -43,7 +43,9 @@
     "@babel/cli": "^7.12.10",
     "@babel/core": "^7.12.10",
     "@babel/register": "^7.12.10",
+    "@open-rpc/client-js": "^1.6.3",
     "@open-rpc/mock-server": "^1.7.3",
+    "@open-rpc/typings": "^1.11.3",
     "@tsconfig/node12": "^1.0.7",
     "@types/chai": "^4.2.14",
     "@types/chai-as-promised": "^7.1.4",
@@ -76,12 +78,8 @@
     "webpack-cli": "^4.3.1"
   },
   "dependencies": {
-    "@open-rpc/client-js": "^1.6.3",
-    "@open-rpc/typings": "^1.11.3",
-    "bufferutil": "^4.0.3",
     "debug": "^2.6.9",
     "fetch-headers": "^2.0.0",
-    "node-fetch": "^2.6.1",
-    "utf-8-validate": "^5.0.5"
+    "node-fetch": "^2.6.1"
   }
 }
