@@ -2,7 +2,7 @@ import chai, { assert, expect } from 'chai';
 import sinon from 'sinon';
 import chaiAsPromised from 'chai-as-promised';
 
-import { Session } from '../lib';
+import { Session, createKeyPair } from '../lib';
 import SAMPLE_VALUES from './sample-values';
 
 const {
@@ -78,6 +78,12 @@ describe('Session', () => {
     );
   });
 
+  it('throws when publishing without all required parameters', async () => {
+    const session = new Session('http://localhost:2020');
+    assert.isRejected(session._publishEntry(null, MESSAGE_ENCODED));
+    assert.isRejected(session._publishEntry(ENTRY_ENCODED, null));
+  });
+
   it('caches next entry args', async () => {
     const session = new Session('http://localhost:2020');
     // add a spy to check whether the value is really retrieved from the cache
@@ -99,16 +105,5 @@ describe('Session', () => {
     const cacheResponse = await session._getNextEntryArgs(PUBLIC_KEY, SCHEMA);
     expect(cacheResponse.logId).to.equal(nextEntryArgs.logId);
     expect(session.client.request.notCalled).to.be.true;
-  });
-
-  it('throws when missing parameters', async () => {
-    const session = new Session('http://localhost:2020');
-    assert.isRejected(session._publishEntry(null, MESSAGE_ENCODED));
-    assert.isRejected(session._publishEntry(ENTRY_ENCODED, null));
-  });
-
-  it('throws without a configured endpoint', () => {
-    const session = new Session();
-    assert.isRejected(session._publishEntry(ENTRY_ENCODED, MESSAGE_ENCODED));
   });
 });
