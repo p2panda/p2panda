@@ -29,12 +29,12 @@ describe('Session', () => {
     const session = new Session('http://localhost:2020');
     expect(`${session}`).to.equal('<Session http://localhost:2020>');
 
-    session.keyPair(await createKeyPair());
+    session.setKeyPair(await createKeyPair());
     expect(`${session}`).to.match(
       /<Session http:\/\/localhost:2020 key pair \w{8}>/,
     );
 
-    session.schema(SCHEMA);
+    session.setSchema(SCHEMA);
     expect(`${session}`).to.match(
       /<Session http:\/\/localhost:2020 key pair \w{8} schema \w{8}>/,
     );

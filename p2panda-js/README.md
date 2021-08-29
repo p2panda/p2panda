@@ -69,7 +69,7 @@ const keyPair = await createKeyPair();
 
 // Open a long running connection to a p2panda node and configure it so all
 // calls in this session are executed using that key pair.
-const session = new Session('https://welle.liebechaos.org').keyPair(keyPair);
+const session = new Session('https://welle.liebechaos.org').setKeyPair(keyPair);
 
 // Compose your message payload, according to chosen schema
 const payload = {

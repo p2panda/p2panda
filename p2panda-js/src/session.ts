@@ -34,25 +34,21 @@ export default class Session {
     this.client = new Client(new RequestManager([transport]));
   }
 
-  __schema: string | null = null;
+  private _schema: string | null = null;
 
   /**
    * Return currently configured schema.
    *
    * Throws if no schema is configured.
    */
-  get _schema(): string {
-    if (!this.__schema) {
+  get schema(): string {
+    if (!this._schema) {
       throw new Error(
         'Requires a schema. Configure a schema with ' +
           '`session.schema()` or with the `options` parameter on methods.',
       );
     }
-    return this.__schema;
-  }
-
-  set _schema(val: string) {
-    this.__schema = val;
+    return this._schema;
   }
 
   /**
@@ -62,35 +58,33 @@ export default class Session {
    * @param val schema hash
    * @returns Session
    */
-  schema(val: string): Session {
+  setSchema(val: string): Session {
     this._schema = val;
     return this;
   }
 
-  __keyPair: KeyPair | null = null;
+  private _keyPair: KeyPair | null = null;
 
-  get _keyPair(): KeyPair {
-    if (!this.__keyPair) {
+  get keyPair(): KeyPair {
+    if (!this._keyPair) {
       throw new Error(
         'Requires a signing key pair. Configure a key pair with ' +
           '`session.keyPair()` or with the `options` parameter on methods.',
       );
     }
-    return this.__keyPair;
-  }
-
-  set _keyPair(val: KeyPair) {
-    this.__keyPair = val;
+    return this._keyPair;
   }
 
   /**
    * Set a fixed key pair for this session, which will be used by methods unless
    * a different key pair is configured through their `options` parameters.
    *
+   * This does not check the integrity or type of the supplied key pair!
+   *
    * @param val key pair instance generated using the `KeyPair` class.
    * @returns key pair instance
    */
-  keyPair(val: KeyPair): Session {
+  setKeyPair(val: KeyPair): Session {
     this._keyPair = val;
     return this;
   }
@@ -249,14 +243,14 @@ export default class Session {
    *   message: 'ahoy'
    * };
    * await new Session(endpoint)
-   *   .keyPair(keyPair)
+   *   .setKeyPair(keyPair)
    *   .create(messageFields, { schema });
    */
   async create(fields: Fields, options: Partial<Context>): Promise<Session> {
     log('create instance', fields);
     const mergedOptions = {
-      schema: options.schema || this._schema,
-      keyPair: options.keyPair || this._keyPair,
+      schema: options.schema || this.schema,
+      keyPair: options.keyPair || this.keyPair,
       session: this,
     };
     Instance.create(fields, mergedOptions);
@@ -272,10 +266,10 @@ export default class Session {
   }
 
   toString(): string {
-    const keyPairStr = this.__keyPair
+    const keyPairStr = this._keyPair
       ? ` key pair ${this._keyPair.publicKey().slice(-8)}`
       : '';
-    const schemaStr = this.__schema ? ` schema ${this._schema.slice(-8)}` : '';
+    const schemaStr = this._schema ? ` schema ${this.schema.slice(-8)}` : '';
     return `<Session ${this.endpoint}${keyPairStr}${schemaStr}>`;
   }
 }
