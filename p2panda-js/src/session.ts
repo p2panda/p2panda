@@ -89,24 +89,17 @@ export default class Session {
     return this;
   }
 
-  // Load and return the WebAssembly p2panda library.
-  //
-  // Always await this function before using `this.p2panda`. Unfortunately this
-  // cannot be handled in the constructor as the contructor cannot be async.
+  /**
+   * Load and return the WebAssembly p2panda library.
+   *
+   * Always await this function before using `this.p2panda`. Unfortunately this
+   * cannot be handled in the constructor as the contructor cannot be async.
+   *
+   * @returns object p2panda wasm library exports
+   */
   async loadWasm(): Promise<P2Panda> {
     if (this.p2panda == null) {
       this.p2panda = await p2panda;
-
-      // I am removing this again because it breaks the node build but it may
-      // have to go back in.
-
-      // if (this.p2panda.default != null) {
-      //   log('fallback loader from `p2panda.default`');
-      //   // @ts-expect-error only applies for node context
-      //   this.p2panda = await p2panda.default;
-      // } else {
-      //   log('loaded wasm lib');
-      // }
       log('initialized wasm lib');
     } else {
       log('access cached wasm lib');
