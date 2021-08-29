@@ -11,6 +11,23 @@ import { KeyPair } from 'wasm-web';
 
 const log = debug('p2panda-js:session');
 
+/**
+ * Communicate with the p2panda network through a `Session` instance
+ *
+ * `Session` provides a high-level interface to create data in the p2panda
+ * network by creating, updating and deleting instances of data schemas. It also
+ * provides a low-level api for directly accessing and creating entries on the
+ * bamboo append-only log structure.
+ *
+ * A session is configured with the URL of a p2panda node, which
+ * may be running locally or on a remote machine. It is possible to set a fixed
+ * key pair and/or data schema for a session by calling `setKeyPair()` and
+ * `setSchema()` or you can also configure these through the `options` parameter
+ * of methods.
+ *
+ * Sessions also provide access to the p2panda web assembly library, which is
+ * why many functions in `p2panda-js` have a `session` parameter.
+ */
 export default class Session {
   // Address of a p2panda node that we can connect to
   endpoint: string;
