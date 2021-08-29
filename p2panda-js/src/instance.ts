@@ -91,7 +91,7 @@ const create = async (
   // Create message
   const fieldsTagged = marshallRequestFields(fields);
   const messageFields = await getMessageFields(session, schema, fieldsTagged);
-  const encodedMessage = await encodeCreateMessage(schema, messageFields);
+  const encodedMessage = encodeCreateMessage(schema, messageFields);
   await signPublishEntry(encodedMessage, { keyPair, schema, session });
 };
 

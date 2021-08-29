@@ -53,26 +53,25 @@ To install `p2panda-js` from the NPM package, simply run:
 
 ## Usage
 
-
 ```js
-import { KeyPair, Session } from 'p2panda-js'
+import { KeyPair, Session } from 'p2panda-js';
 
-const CHAT_SCHEMA = "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437"
+const CHAT_SCHEMA =
+  '00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437';
 
 // Create a key pair for each device and user who need to access p2panda.
-const keyPair = new KeyPair()
+const keyPair = new KeyPair();
 
 // Open a long running connection to a p2panda node.
-const session = new Session('https://welle.liebechaos.org')
-  .keyPair(keyPair)
+const session = new Session('https://welle.liebechaos.org').keyPair(keyPair);
 
 // Compose your message payload, according to chosen schema
 const payload = {
-  message: 'Hi there'
-}
+  message: 'Hi there',
+};
 
 // Send new chat message to the node.
-const entry = await session.create(payload, { schema: CHAT_SCHEMA })
+await session.create(payload, { schema: CHAT_SCHEMA });
 ```
 
 ## Development Setup
@@ -103,14 +102,14 @@ npm run build
 
 Enable debug logging for node environments by setting an environment variable
 
-```
+```bash
 export DEBUG='p2panda*'
 ```
 
 Enable debug logging from a browser console by storing a key `debug` in local storage:
 
-```
-localStorage.debug = 'p2panda*'
+```js
+localStorage.debug = 'p2panda*';
 ```
 
 ## License
