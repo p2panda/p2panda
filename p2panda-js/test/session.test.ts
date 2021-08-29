@@ -48,13 +48,7 @@ describe('Session', () => {
 
   it('throws when querying without a schema', async () => {
     const session = new Session('http://localhost:2020');
-    let error;
-    try {
-      await session._queryEntries();
-    } catch (e) {
-      error = e;
-    }
-    expect(error.message).to.equal('Schema must be provided');
+    assert.isRejected(session._queryEntries(), 'Schema must be provided');
   });
 
   it('gets next entry args', async () => {
