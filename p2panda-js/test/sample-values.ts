@@ -3,7 +3,8 @@
  * openrpc spec, which is used to drive the mock openrpc server.
  */
 export default {
-  // PRIVATE_KEY: '4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176',
+  PRIVATE_KEY:
+    '4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176',
   PUBLIC_KEY:
     '2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49',
   SCHEMA:
