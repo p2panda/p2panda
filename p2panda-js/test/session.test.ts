@@ -15,6 +15,12 @@ const {
 
 chai.use(chaiAsPromised);
 
+/**
+ * Test the `Session` class
+ *
+ * These tests expect the mock rpc server to be running, which can be started
+ * with `npm run test:mock-node`.
+ */
 describe('Session', () => {
   it('requires an endpoint parameter', () => {
     expect(() => {
@@ -42,18 +48,18 @@ describe('Session', () => {
 
   it('can query entries', async () => {
     const session = new Session('http://localhost:2020');
-    const entries = await session._queryEntries(SCHEMA);
+    const entries = await session.queryEntries(SCHEMA);
     expect(entries.length).to.equal(1);
   });
 
   it('throws when querying without a schema', async () => {
     const session = new Session('http://localhost:2020');
-    assert.isRejected(session._queryEntries(), 'Schema must be provided');
+    assert.isRejected(session.queryEntries(), 'Schema must be provided');
   });
 
   it('gets next entry args', async () => {
     const session = new Session('http://localhost:2020');
-    const nextEntryArgs = await session._getNextEntryArgs(PUBLIC_KEY, SCHEMA);
+    const nextEntryArgs = await session.getNextEntryArgs(PUBLIC_KEY, SCHEMA);
     expect(nextEntryArgs.entryHashSkiplink).to.equal(null);
     expect(nextEntryArgs.entryHashBacklink).to.equal(BACKLINK_HASH);
     expect(nextEntryArgs.seqNum).to.equal(2);
@@ -62,7 +68,7 @@ describe('Session', () => {
 
   it('can publish entries', async () => {
     const session = new Session('http://localhost:2020');
-    const nextEntryArgs = await session._publishEntry(
+    const nextEntryArgs = await session.publishEntry(
       ENTRY_ENCODED,
       MESSAGE_ENCODED,
     );
@@ -74,8 +80,8 @@ describe('Session', () => {
 
   it('throws when publishing without all required parameters', async () => {
     const session = new Session('http://localhost:2020');
-    assert.isRejected(session._publishEntry(null, MESSAGE_ENCODED));
-    assert.isRejected(session._publishEntry(ENTRY_ENCODED, null));
+    assert.isRejected(session.publishEntry(null, MESSAGE_ENCODED));
+    assert.isRejected(session.publishEntry(ENTRY_ENCODED, null));
   });
 
   it('caches next entry args', async () => {
@@ -94,9 +100,9 @@ describe('Session', () => {
       logId: 1,
       lastSeqNum: 0,
     };
-    session._setNextEntryArgs(PUBLIC_KEY, SCHEMA, nextEntryArgs);
+    session.setNextEntryArgs(PUBLIC_KEY, SCHEMA, nextEntryArgs);
 
-    const cacheResponse = await session._getNextEntryArgs(PUBLIC_KEY, SCHEMA);
+    const cacheResponse = await session.getNextEntryArgs(PUBLIC_KEY, SCHEMA);
     expect(cacheResponse.logId).to.equal(nextEntryArgs.logId);
     expect(session.client.request.notCalled).to.be.true;
   });

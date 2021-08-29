@@ -40,7 +40,7 @@ export default class Session {
   p2panda: Resolved<typeof p2panda> | null = null;
 
   // Cached arguments for the next entry
-  nextEntryArgs: { [cacheKey: string]: EntryArgs } = {};
+  private nextEntryArgs: { [cacheKey: string]: EntryArgs } = {};
 
   constructor(endpoint: Session['endpoint']) {
     if (endpoint == null || endpoint === '') {
@@ -61,8 +61,8 @@ export default class Session {
   get schema(): string {
     if (!this._schema) {
       throw new Error(
-        'Requires a schema. Configure a schema with ' +
-          '`session.schema()` or with the `options` parameter on methods.',
+        'Configure a schema with `session.schema()` or with the `options` ' +
+          'parameter on methods.',
       );
     }
     return this._schema;
@@ -85,8 +85,8 @@ export default class Session {
   get keyPair(): KeyPair {
     if (!this._keyPair) {
       throw new Error(
-        'Requires a signing key pair. Configure a key pair with ' +
-          '`session.keyPair()` or with the `options` parameter on methods.',
+        'Configure a key pair with `session.keyPair()` or with the `options` ' +
+          'parameter on methods.',
       );
     }
     return this._keyPair;
@@ -133,7 +133,7 @@ export default class Session {
    * @param schema schema id
    * @returns an `EntryArgs` object
    */
-  async _getNextEntryArgs(author: string, schema: string): Promise<EntryArgs> {
+  async getNextEntryArgs(author: string, schema: string): Promise<EntryArgs> {
     if (!author || !schema)
       throw new Error('Author and schema must be provided');
     const cacheKey = `${author}/${schema}`;
@@ -161,11 +161,7 @@ export default class Session {
    * @param schema schema id
    * @param entryArgs an object with entry arguments
    */
-  _setNextEntryArgs(
-    author: string,
-    schema: string,
-    entryArgs: EntryArgs,
-  ): void {
+  setNextEntryArgs(author: string, schema: string, entryArgs: EntryArgs): void {
     const cacheKey = `${author}/${schema}`;
     this.nextEntryArgs[cacheKey] = entryArgs;
   }
@@ -177,7 +173,7 @@ export default class Session {
    * @param messageEncoded
    * @returns
    */
-  async _publishEntry(
+  async publishEntry(
     entryEncoded: string,
     messageEncoded: string,
   ): Promise<EntryArgs> {
@@ -200,7 +196,7 @@ export default class Session {
    * @param schema schema id
    * @returns an array of encoded entries
    */
-  async _queryEntriesEncoded(schema: string): Promise<EncodedEntry[]> {
+  private async queryEntriesEncoded(schema: string): Promise<EncodedEntry[]> {
     if (!schema) throw new Error('Schema must be provided');
     const params = { schema };
     log('call panda_queryEntries', params);
@@ -220,10 +216,10 @@ export default class Session {
    * @param schema schema id
    * @returns an array of decoded entries
    */
-  async _queryEntries(schema: string): Promise<EntryRecord[]> {
+  async queryEntries(schema: string): Promise<EntryRecord[]> {
     if (!schema) throw new Error('Schema must be provided');
     const { decodeEntry } = await this.loadWasm();
-    const result = await this._queryEntriesEncoded(schema);
+    const result = await this.queryEntriesEncoded(schema);
     log(`decoding ${result.length} entries`);
     return Promise.all(
       result.map(async (entry) => {
