@@ -111,3 +111,17 @@ export type MessageValueText = {
   value: string;
   type: 'str';
 };
+
+export type InstanceRecord = Record<
+  string,
+  boolean | number | string | unknown
+> & {
+  _meta: {
+    author: string;
+    deleted: boolean;
+    edited: boolean;
+    entries: EntryRecord[];
+    hash: string;
+    schema: string;
+  };
+};

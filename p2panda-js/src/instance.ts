@@ -1,7 +1,7 @@
 import debug from 'debug';
 
 import { Session } from '~/index';
-import { Fields, FieldsTagged } from '~/types';
+import { EntryRecord, Fields, FieldsTagged, InstanceRecord } from '~/types';
 import { marshallRequestFields } from '~/utils';
 
 import { P2Panda } from './wasm';
@@ -17,9 +17,6 @@ const log = debug('p2panda-api:instance');
 
 /**
  * Returns a message fields instance for the given field contents and schema
- *
- * Until we can access arbitrary schema definitions from here we are restricted
- * to using the 'string' message field type.
  */
 export const getMessageFields = async (
   session: Session,
@@ -87,4 +84,72 @@ const create = async (
   await signPublishEntry(encodedMessage, { keyPair, schema, session });
 };
 
-export default { create };
+/**
+ * Create a record of data instances by parsing a series of p2panda log entries
+ *
+ * @param entries entry records from node
+ * @returns records of the instance's data and metadata
+ */
+const materializeEntries = (
+  entries: EntryRecord[],
+): { [instanceId: string]: InstanceRecord } => {
+  const instances: { [instanceId: string]: InstanceRecord } = {};
+  entries.sort((a, b) => a.seqNum - b.seqNum);
+  for (const entry of entries) {
+    if (entry.message == null) continue;
+
+    const entryHash = entry.encoded.entryHash;
+    const author = entry.encoded.author;
+    const schema = entry.message.schema;
+
+    if (instances[entryHash] && instances[entryHash].deleted) continue;
+
+    let updated: InstanceRecord;
+    switch (entry.message.action) {
+      case 'create':
+        instances[entryHash] = {
+          ...entry.message.fields,
+          _meta: {
+            author,
+            deleted: false,
+            edited: false,
+            entries: [entry],
+            hash: entryHash,
+            schema,
+          },
+        };
+        break;
+
+      case 'update':
+        updated = {
+          ...instances[entryHash],
+          ...entry.message.fields,
+        };
+        updated._meta.edited = true;
+        updated._meta.entries.push(entry);
+        instances[entryHash] = updated;
+        break;
+
+      case 'delete':
+        updated = { _meta: instances[entryHash]._meta };
+        updated._meta.deleted = true;
+        updated._meta.entries.push(entry);
+        instances[entryHash] = updated;
+        break;
+      default:
+        throw new Error('Unhandled mesage action');
+    }
+  }
+  return instances;
+};
+
+const query = async ({
+  schema,
+  session,
+}: Pick<Context, 'schema' | 'session'>): Promise<InstanceRecord[]> => {
+  const entries = await session.queryEntries(schema);
+  const instances = Object.values(materializeEntries(entries));
+  return instances;
+};
+
+export default { create, query };

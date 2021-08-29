@@ -78,6 +78,11 @@ const payload = {
 
 // Send new chat message to the node.
 await session.create(payload, { schema: CHAT_SCHEMA });
+
+// Query instances from the p2panda node
+const instances = await session.query({ schema: CHAT_SCHEMA });
+console.log(instances[0].message);
+// -> 'Hi there'
 ```
 
 ## Development Setup

@@ -5,7 +5,13 @@ import p2panda, { P2Panda } from '~/wasm';
 import Instance, { Context } from '~/instance';
 import { marshallResponseFields } from '~/utils';
 
-import type { EntryArgs, EntryRecord, EncodedEntry, Fields } from '~/types';
+import type {
+  EntryArgs,
+  EntryRecord,
+  EncodedEntry,
+  Fields,
+  InstanceRecord,
+} from '~/types';
 import { KeyPair } from 'wasm-web';
 
 const log = debug('p2panda-js:session');
@@ -270,6 +276,15 @@ export default class Session {
 
   async delete(): Promise<Session> {
     throw new Error('not implemented');
+  }
+
+  async query(options: Partial<Context>): Promise<InstanceRecord[]> {
+    log('query schema', options.schema);
+    const instances = Instance.query({
+      schema: options.schema || this.schema,
+      session: this,
+    });
+    return instances;
   }
 
   toString(): string {

@@ -60,6 +60,15 @@ describe('Session', () => {
     });
   });
 
+  describe('query', () => {
+    it('can materialize instances', async () => {
+      const session = new Session('http://localhost:2020');
+      const instances = await session.query({ schema: SCHEMA });
+      expect(instances).to.have.lengthOf(1);
+      expect(instances[0].description).to.equal('for playing chess');
+    });
+  });
+
   describe('publishEntry', () => {
     it('can publish entries', async () => {
       const session = new Session('http://localhost:2020');
