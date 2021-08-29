@@ -54,13 +54,13 @@ To install `p2panda-js` from the NPM package, simply run:
 ## Usage
 
 ```js
-import { KeyPair, Session } from 'p2panda-js';
+import { createKeyPair, Session } from 'p2panda-js';
 
 const CHAT_SCHEMA =
   '00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437';
 
 // Create a key pair for each device and user who need to access p2panda.
-const keyPair = new KeyPair();
+const keyPair = await createKeyPair();
 
 // Open a long running connection to a p2panda node.
 const session = new Session('https://welle.liebechaos.org').keyPair(keyPair);
