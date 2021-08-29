@@ -26,6 +26,9 @@ export default class Session {
   nextEntryArgs: { [cacheKey: string]: EntryArgs } = {};
 
   constructor(endpoint: Session['endpoint']) {
+    if (endpoint == null || endpoint === '') {
+      throw new Error('Missing `endpoint` parameter for creating a session');
+    }
     this.endpoint = endpoint;
     const transport = new HTTPTransport(endpoint);
     this.client = new Client(new RequestManager([transport]));

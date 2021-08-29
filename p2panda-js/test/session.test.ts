@@ -16,6 +16,14 @@ const {
 chai.use(chaiAsPromised);
 
 describe('Session', () => {
+  it('requires an endpoint parameter', () => {
+    expect(() => {
+      new Session();
+    }).to.throw('Missing `endpoint` parameter for creating a session');
+    expect(() => {
+      new Session('');
+    }).to.throw('Missing `endpoint` parameter for creating a session');
+  });
   it('can query entries', async () => {
     const session = new Session('http://localhost:2020');
     const entries = await session._queryEntries(SCHEMA);
