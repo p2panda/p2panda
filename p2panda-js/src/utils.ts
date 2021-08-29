@@ -23,6 +23,7 @@ const getFieldType = (
   if (!Object.keys(mapping).includes(type)) {
     throw new Error(`Unsupported field type: ${typeof field}`);
   }
+  // @ts-expect-error we have made sure that `type` is a key of `mapping`
   return mapping[type];
 };
 

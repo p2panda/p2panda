@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 
+// @ts-expect-error bundle import has no type
 import { Session } from '../lib';
 import { getMessageFields } from '../src/instance';
 import { marshallRequestFields } from '../src/utils';

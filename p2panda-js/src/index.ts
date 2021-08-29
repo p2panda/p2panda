@@ -1,9 +1,8 @@
 import fetch from 'node-fetch';
 import Headers from 'fetch-headers';
 
-export type Resolved<T> = T extends PromiseLike<infer U> ? Resolved<U> : T;
-
 if (!globalThis.fetch) {
+  // @ts-expect-error we trust that `node-fetch` is a suitable replacement
   globalThis.fetch = fetch;
   globalThis.Headers = Headers;
 }

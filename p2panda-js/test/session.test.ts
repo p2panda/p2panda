@@ -2,6 +2,7 @@ import chai, { assert, expect } from 'chai';
 import sinon from 'sinon';
 import chaiAsPromised from 'chai-as-promised';
 
+// @ts-expect-error bundle import has no type
 import { Session, createKeyPair } from '../lib';
 import SAMPLE_VALUES from './sample-values';
 

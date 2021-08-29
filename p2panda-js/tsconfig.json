@@ -2,7 +2,6 @@
   "extends": "@tsconfig/node12/tsconfig.json",
   "compilerOptions": {
     "baseUrl": ".",
-    "noImplicitAny": false,
     "outDir": "./lib",
     "paths": {
       "~/*": ["./src/*"],
@@ -12,6 +11,7 @@
     "lib": ["dom"],
     "sourceMap": true,
     "target": "es5",
-    "types": ["mocha", "node"]
+    "types": ["mocha", "node"],
+    "strict": true
   }
 }

@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 
+// @ts-expect-error bundle import has no type
 import { wasm } from '../lib';
 
 describe('Web assembly interface', () => {

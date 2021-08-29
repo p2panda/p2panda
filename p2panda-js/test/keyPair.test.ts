@@ -1,6 +1,7 @@
 import chai, { expect, assert } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 
+// @ts-expect-error bundle import has no type
 import { createKeyPair, recoverKeyPair } from '../lib';
 
 chai.use(chaiAsPromised);
