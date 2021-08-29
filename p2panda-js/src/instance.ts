@@ -29,10 +29,8 @@ const getMessageFields = async (
   const { MessageFields } = await session.loadWasm();
 
   const messageFields = new MessageFields();
-  for (const fieldName of Object.keys(fields)) {
-    const fieldType = Object.keys(fields[fieldName])[0];
-    // Restrict message field type to 'str'
-    messageFields.add(fieldName, 'str', fields[fieldName][fieldType]);
+  for (const k of Object.keys(fields)) {
+    messageFields.add(k, fields[k]['type'], fields[k]['value']);
   }
   log('getMessageFields', messageFields.toString());
   return messageFields;
@@ -55,7 +53,6 @@ const signPublishEntry = async (
     ? BigInt(entryArgs.lastSeqNum)
     : entryArgs.lastSeqNum;
 
-  // Sign and encode entry passing in copy of keyPair
   const { entryEncoded } = signEncodeEntry(
     keyPair,
     messageEncoded,
@@ -66,7 +63,6 @@ const signPublishEntry = async (
     BigInt(entryArgs.logId),
   );
 
-  // Publish entry and store returned entryArgs for next entry
   const nextEntryArgs = await session.publishEntry(
     entryEncoded,
     messageEncoded,

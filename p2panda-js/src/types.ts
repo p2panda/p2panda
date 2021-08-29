@@ -52,9 +52,7 @@ export type Message = {
  * Object containing message field values
  */
 export type Fields = {
-  // currently only a schema with a text message is supported
-  // [fieldname: string]: boolean | number | string;
-  [fieldname: string]: string;
+  [fieldname: string]: boolean | number | string;
 };
 
 /**
@@ -82,7 +80,28 @@ export type MessageTagged = {
  */
 export type FieldsTagged = {
   // currently only a schema with a text message is supported
-  [fieldname: string]: MessageValueText;
+  [fieldname: string]: MessageValue;
+};
+
+export type MessageValue =
+  | MessageValueText
+  | MessageValueBool
+  | MessageValueInt;
+
+/**
+ * A message value of `boolean` type
+ */
+export type MessageValueBool = {
+  value: boolean;
+  type: 'bool';
+};
+
+/**
+ * A message value of `number` type, which must be an integer
+ */
+export type MessageValueInt = {
+  value: number;
+  type: 'int';
 };
 
 /**
