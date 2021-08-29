@@ -64,11 +64,16 @@ describe('Session', () => {
       sinon.fake(),
     );
 
-    const nextEntryArgs = { test: true };
+    const nextEntryArgs = {
+      entryHashBacklink: BACKLINK_HASH,
+      entryHashSkiplink: undefined,
+      logId: 1,
+      lastSeqNum: 0,
+    };
     session._setNextEntryArgs(PUBLIC_KEY, SCHEMA, nextEntryArgs);
 
     const cacheResponse = await session._getNextEntryArgs(PUBLIC_KEY, SCHEMA);
-    expect(cacheResponse.test).to.equal(nextEntryArgs.test);
+    expect(cacheResponse.logId).to.equal(nextEntryArgs.logId);
     expect(session.client.request.notCalled).to.be.true;
   });
 
