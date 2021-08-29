@@ -20,8 +20,7 @@ export default class Session {
 
   // The wasm library from p2panda-rs. To ensure that it is loaded before
   // using it await `this.loadWasm()`
-  // @ts-expect-error p2panda must be resolved before accessing it
-  p2panda: Resolved<typeof p2panda>;
+  p2panda: Resolved<typeof p2panda> | null = null;
 
   // Cached arguments for the next entry
   nextEntryArgs: { [cacheKey: string]: EntryArgs } = {};
@@ -46,7 +45,7 @@ export default class Session {
           '`session.schema()` or with the `options` parameter on methods.',
       );
     }
-    return this._schema;
+    return this.__schema;
   }
 
   set _schema(val: string) {
@@ -74,7 +73,7 @@ export default class Session {
           '`session.keyPair()` or with the `options` parameter on methods.',
       );
     }
-    return this._keyPair;
+    return this.__keyPair;
   }
 
   set _keyPair(val: KeyPair) {
@@ -252,12 +251,12 @@ export default class Session {
    */
   async create(fields: Fields, options: Partial<Context>): Promise<Session> {
     log('create instance', fields);
-    Instance.create(fields, {
-      schema: this._schema,
-      keyPair: this._keyPair,
+    const mergedOptions = {
+      schema: options.schema || this._schema,
+      keyPair: options.keyPair || this._keyPair,
       session: this,
-      ...options,
-    });
+    };
+    Instance.create(fields, mergedOptions);
     return this;
   }
 
