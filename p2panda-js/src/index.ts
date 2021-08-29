@@ -10,3 +10,5 @@ if (!globalThis.fetch) {
 
 export { default as Session } from './session';
 export { default as wasm } from './wasm';
+
+export * from './types';
