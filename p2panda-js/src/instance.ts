@@ -21,9 +21,8 @@ const log = debug('p2panda-api:instance');
  * Until we can access arbitrary schema definitions from here we are restricted
  * to using the 'string' message field type.
  */
-const getMessageFields = async (
+export const getMessageFields = async (
   session: Session,
-  _schema: string,
   fields: FieldsTagged,
 ): Promise<MessageFields> => {
   const { MessageFields } = await session.loadWasm();
@@ -83,7 +82,7 @@ const create = async (
 
   // Create message
   const fieldsTagged = marshallRequestFields(fields);
-  const messageFields = await getMessageFields(session, schema, fieldsTagged);
+  const messageFields = await getMessageFields(session, fieldsTagged);
   const encodedMessage = encodeCreateMessage(schema, messageFields);
   await signPublishEntry(encodedMessage, { keyPair, schema, session });
 };
