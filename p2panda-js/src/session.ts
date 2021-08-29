@@ -272,9 +272,10 @@ export default class Session {
   }
 
   toString(): string {
-    const schemaStr = this._schema
-      ? ` with schema ${this._schema.slice(-8)}`
+    const keyPairStr = this.__keyPair
+      ? ` key pair ${this._keyPair.publicKey().slice(-8)}`
       : '';
-    return `<Session ${this.endpoint}${schemaStr}>`;
+    const schemaStr = this.__schema ? ` schema ${this._schema.slice(-8)}` : '';
+    return `<Session ${this.endpoint}${keyPairStr}${schemaStr}>`;
   }
 }

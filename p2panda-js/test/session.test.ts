@@ -24,6 +24,22 @@ describe('Session', () => {
       new Session('');
     }).to.throw('Missing `endpoint` parameter for creating a session');
   });
+
+  it('has a string representation', async () => {
+    const session = new Session('http://localhost:2020');
+    expect(`${session}`).to.equal('<Session http://localhost:2020>');
+
+    session.keyPair(await createKeyPair());
+    expect(`${session}`).to.match(
+      /<Session http:\/\/localhost:2020 key pair \w{8}>/,
+    );
+
+    session.schema(SCHEMA);
+    expect(`${session}`).to.match(
+      /<Session http:\/\/localhost:2020 key pair \w{8} schema \w{8}>/,
+    );
+  });
+
   it('can query entries', async () => {
     const session = new Session('http://localhost:2020');
     const entries = await session._queryEntries(SCHEMA);
