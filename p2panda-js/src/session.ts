@@ -248,9 +248,9 @@ export default class Session {
    * Caches arguments for creating the next entry of this schema in the given session.
    *
    * @param fields user data to publish with the new entry, needs to match schema
-   * @param instanceArgs optional config object:
-   * @param instanceArgs.keyPair will be used to sign the new entry
-   * @param instanceArgs.schema hex-encoded schema id
+   * @param options optional config object:
+   * @param options.keyPair will be used to sign the new entry
+   * @param options.schema hex-encoded schema id
    * @example
    * const messageFields = {
    *   message: 'ahoy'
@@ -278,6 +278,17 @@ export default class Session {
     throw new Error('not implemented');
   }
 
+  /**
+   * Query data instances of a specific schema from the node
+   *
+   * Calling this method will retrieve all instances of the given schema from
+   * the node and then materialize them locally.
+   *
+   * @param options optional config object:
+   * @param options.schema hex-encoded schema id
+   * @returns array of instance records, which have data fields and an extra
+   *  `_meta_ field, which holds instance metadata and its entry history
+   */
   async query(options: Partial<Context>): Promise<InstanceRecord[]> {
     log('query schema', options.schema);
     const instances = Instance.query({
