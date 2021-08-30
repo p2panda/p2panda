@@ -47,9 +47,11 @@ This library provides all tools required to write a client for the [`p2panda`] n
 
 ## Installation
 
-To install `p2panda-js` from the NPM package, simply run:
+To install `p2panda-js` from the NPM package, run:
 
-`npm i p2panda-js`
+```
+npm i p2panda-js
+```
 
 ## Usage
 
@@ -112,7 +114,7 @@ npm run build
 
 ### Debug logging
 
-Enable debug logging for node environments by setting an environment variable
+Enable debug logging for node environments by setting an environment variable:
 
 ```bash
 export DEBUG='p2panda*'
