@@ -1,0 +1,51 @@
+{
+    "entries": [
+        {
+            "author": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49",
+            "entryBytes": "009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101f60040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04ef01463f550ce62f983494d0eb6051c73a5641025f355758006724e5b730f47a4454c5395eab807325ee58d69c08d66461357d0f961aee383acc3247ed6419706",
+            "entryHash": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",
+            "logId": 1,
+            "payloadBytes": "a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a26b6465736372697074696f6ea26474797065637374726576616c756571666f7220706c6179696e67206368657373646e616d65a26474797065637374726576616c7565656368657373",
+            "payloadHash": "0040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04e",
+            "seqNum": 1
+        }
+    ],
+    "decodedEntries": [
+        {
+            "message": {
+                "action": "create",
+                "schema": "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437",
+                "version": 1,
+                "fields": {
+                    "description": {
+                        "type": "str",
+                        "value": "for playing chess"
+                    },
+                    "name": {
+                        "type": "str",
+                        "value": "chess"
+                    }
+                }
+            },
+            "meta": {
+                "seqNum": 1,
+                "entryHashBacklink": null,
+                "entryHashSkiplink": null
+            }
+        }
+    ],
+    "nextEntryArgs": {
+        "entryHashBacklink": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",
+        "entryHashSkiplink": null,
+        "logId": 1,
+        "seqNum": 2
+    },
+    "meta": {
+        "keyPair": {
+            "publicKey": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49",
+            "privateKey": "4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176"
+        },
+        "logId": 1,
+        "schema": "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437"
+    }
+}
