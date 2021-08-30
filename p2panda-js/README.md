@@ -60,7 +60,8 @@ import { createKeyPair, Session } from 'p2panda-js';
 // still working on a good way for you to create and access data schemas. For
 // now you can use [fishyfish](https://github.com/p2panda/fishyfish) to do so.
 const CHAT_SCHEMA =
-  '00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437';
+  '00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906' +
+  '401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437';
 
 // Create a key pair for every usage context of p2panda, i.e. every device and
 // every piece of software that is used. Key pairs should never have to be
