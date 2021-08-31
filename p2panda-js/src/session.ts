@@ -270,12 +270,33 @@ export default class Session {
     return this;
   }
 
-  async update(): Promise<Session> {
-    throw new Error('not implemented');
+  async update(
+    instanceId: string,
+    fields: Fields,
+    options: Partial<Context>,
+  ): Promise<Session> {
+    log('update instance', instanceId, fields);
+    const mergedOptions = {
+      schema: options.schema || this.schema,
+      keyPair: options.keyPair || this.keyPair,
+      session: this,
+    };
+    Instance.update(instanceId, fields, mergedOptions);
+    return this;
   }
 
-  async delete(): Promise<Session> {
-    throw new Error('not implemented');
+  async delete(
+    instanceId: string,
+    options: Partial<Context>,
+  ): Promise<Session> {
+    log('delete instance', { instanceId });
+    const mergedOptions = {
+      schema: options.schema || this.schema,
+      keyPair: options.keyPair || this.keyPair,
+      session: this,
+    };
+    Instance.remove(instanceId, mergedOptions);
+    return this;
   }
 
   /**

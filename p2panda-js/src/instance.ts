@@ -85,6 +85,39 @@ const create = async (
 };
 
 /**
+ * Signs and publishes an `update` entry for the given instance id and fields
+ */
+const update = async (
+  id: string,
+  fields: Fields,
+  { keyPair, schema, session }: Context,
+): Promise<void> => {
+  const { encodeUpdateMessage } = await session.loadWasm();
+
+  // Create message
+  const fieldsTagged = marshallRequestFields(fields);
+  const messageFields = await getMessageFields(session, fieldsTagged);
+  const encodedMessage = encodeUpdateMessage(id, schema, messageFields);
+  await signPublishEntry(encodedMessage, { keyPair, schema, session });
+};
+
+/**
+ * Signs and publishes a `delete` entry for the given instance id
+ *
+ * It's called "remove" because "delete" is a reserved keyword in Typescript.
+ */
+const remove = async (
+  id: string,
+  { keyPair, schema, session }: Context,
+): Promise<void> => {
+  const { encodeDeleteMessage } = await session.loadWasm();
+
+  // Create message
+  const encodedMessage = encodeDeleteMessage(id, schema);
+  await signPublishEntry(encodedMessage, { keyPair, schema, session });
+};
+
+/**
  * Create a record of data instances by parsing a series of p2panda log entries
  *
  * @param entries entry records from node
@@ -152,4 +185,4 @@ const query = async ({
   return instances;
 };
 
-export default { create, query };
+export default { create, update, remove, query };
