@@ -60,18 +60,18 @@ import { createKeyPair, Session } from 'p2panda-js';
 
 // This example uses the "chat" schema at which this hash is pointing. We are
 // still working on a good way for you to create and access data schemas. For
-// now you can use [fishyfish](https://github.com/p2panda/fishyfish) to do so.
+// now you can use https://github.com/p2panda/fishyfish to do so
 const CHAT_SCHEMA =
   '00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906' +
   '401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437';
 
 // Create a key pair for every usage context of p2panda, i.e. every device and
 // every piece of software that is used. Key pairs should never have to be
-// transferred between different devices of a user.
+// transferred between different devices of a user
 const keyPair = await createKeyPair();
 
 // Open a long running connection to a p2panda node and configure it so all
-// calls in this session are executed using that key pair.
+// calls in this session are executed using that key pair
 const session = new Session('https://welle.liebechaos.org').setKeyPair(keyPair);
 
 // Compose your message payload, according to chosen schema
@@ -79,7 +79,7 @@ const payload = {
   message: 'Hi there',
 };
 
-// Send new chat message to the node.
+// Send new chat message to the node
 await session.create(payload, { schema: CHAT_SCHEMA });
 
 // Query instances from the p2panda node
