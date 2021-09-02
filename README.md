@@ -46,6 +46,8 @@ This library provides all tools required to write a client for the [`p2panda`] n
 [`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 
 ## Features
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fp2panda%2Fp2panda.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fp2panda%2Fp2panda?ref=badge_shield)
+
 
 - Generate Ed25519 author key pairs.
 - Create and encode [`bamboo`] entries.
@@ -99,3 +101,6 @@ Visit the corresponding folders for development instructions:
 ## License
 
 GNU Affero General Public License v3.0 `AGPL-3.0`
+
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fp2panda%2Fp2panda.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fp2panda%2Fp2panda?ref=badge_large)
