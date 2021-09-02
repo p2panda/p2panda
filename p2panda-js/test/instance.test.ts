@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import { expect } from 'chai';
 
 // @ts-expect-error bundle import has no type
