@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 

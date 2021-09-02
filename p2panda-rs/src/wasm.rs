@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 //! Methods exported for WebAssembly targets.
 //!
 //! Wrappers for these methods are available in [p2panda-js], which allows idiomatic usage of

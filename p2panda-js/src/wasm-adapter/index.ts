@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // We need var requires to make sure that only the right wasm source
 // is imported.
 /* eslint-disable @typescript-eslint/no-var-requires */

@@ -128,4 +128,4 @@ localStorage.debug = 'p2panda*';
 
 ## License
 
-GNU Affero General Public License v3.0 `AGPL-3.0`
+GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)

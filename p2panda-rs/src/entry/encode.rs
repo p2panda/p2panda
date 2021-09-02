@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use std::convert::TryFrom;
 
 use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
