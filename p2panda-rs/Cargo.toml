@@ -48,10 +48,8 @@ rand = "0.7.3"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"
-rand = { version = "0.7.3", features = ["wasm-bindgen"] }
 js-sys = "0.3.53"
-# Pin to v0.2.65 as wasm-opt fails with global exports. See:
-# https://github.com/rustwasm/wasm-pack/issues/886
+rand = { version = "0.7.3", features = ["wasm-bindgen"] }
 wasm-bindgen = "0.2.76"
 
 [dev-dependencies]
