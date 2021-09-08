@@ -38,14 +38,10 @@ serde_cbor = "0.11.1"
 serde_repr = "0.1.6"
 thiserror = "1.0.23"
 yamf-hash = "0.1.2"
+bamboo-rs-core = "0.1.0"
 
 # Optional dependencies (behind feature flags)
 sqlx = { version = "0.5.1", features = ["runtime-async-std-rustls", "all-databases"], optional = true }
-
-# @TODO: Change this as soon as `bamboo-rs` gets published
-[dependencies.bamboo-rs-core]
-git = "https://github.com/pietgeursen/bamboo-rs"
-tag = "v0.1.0-pre-31"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rand = "0.7.3"
