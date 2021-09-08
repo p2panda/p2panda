@@ -42,6 +42,11 @@ impl Author {
         author.validate()?;
         Ok(author)
     }
+
+    /// Returns author as hex string.
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
 }
 
 /// Convert Ed25519 `PublicKey` to `Author` instance.

@@ -99,3 +99,10 @@ Visit the corresponding folders for development instructions:
 ## License
 
 GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)
+
+## Supported by
+
+<img src="https://p2panda.org/images/ngi-logo.png" width="auto" height="80px">
+<img src="https://p2panda.org/images/eu-flag-logo.png" width="auto" height="80px">
+
+*This project has received funding from the European Union’s Horizon 2020 research and innovation programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528*
