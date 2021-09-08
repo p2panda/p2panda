@@ -6,7 +6,7 @@
 export type EntryArgs = {
   entryHashSkiplink: string | undefined;
   entryHashBacklink: string | undefined;
-  lastSeqNum: number | undefined;
+  seqNum: number;
   logId: number;
 };
 

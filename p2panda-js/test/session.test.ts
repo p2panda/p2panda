@@ -123,7 +123,7 @@ describe('Session', () => {
         entryHashBacklink: ENTRY_ARGS.entryHashBacklink,
         entryHashSkiplink: ENTRY_ARGS.entryHashSkiplink,
         logId: ENTRY_ARGS.logId,
-        lastSeqNum: 0,
+        seqNum: 0,
       };
       session.setNextEntryArgs(PUBLIC_KEY, SCHEMA, nextEntryArgs);
 

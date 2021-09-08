@@ -18,7 +18,7 @@ export type Context = {
 const log = debug('p2panda-api:instance');
 
 /**
- * Returns a message fields instance for the given field contents and schema
+ * Returns a message fields instance for the given field contents and schema.
  */
 export const getMessageFields = async (
   session: Session,
@@ -35,7 +35,8 @@ export const getMessageFields = async (
 };
 
 /**
- * Sign and publish an entry given a prepared `Message`, `KeyPair` and `Session`
+ * Sign and publish an entry given a prepared `Message`, `KeyPair` and
+ * `Session`.
  */
 const signPublishEntry = async (
   messageEncoded: string,
@@ -45,20 +46,13 @@ const signPublishEntry = async (
 
   const entryArgs = await session.getNextEntryArgs(keyPair.publicKey(), schema);
 
-  // If lastSeqNum is null don't try and convert to BigInt
-  // Can this be handled better in the wasm code?
-  const lastSeqNum = entryArgs.lastSeqNum
-    ? BigInt(entryArgs.lastSeqNum)
-    : entryArgs.lastSeqNum;
-
   const { entryEncoded } = signEncodeEntry(
     keyPair,
     messageEncoded,
     entryArgs.entryHashSkiplink,
     entryArgs.entryHashBacklink,
-    // @ts-expect-error need to merge changes
-    lastSeqNum,
-    BigInt(entryArgs.logId),
+    entryArgs.seqNum,
+    entryArgs.logId,
   );
 
   const nextEntryArgs = await session.publishEntry(
@@ -71,7 +65,8 @@ const signPublishEntry = async (
 };
 
 /**
- * Signs and publishes a `create` entry for the given user data and matching schema.
+ * Signs and publishes a `create` entry for the given user data and matching
+ * schema.
  */
 const create = async (
   fields: Fields,
