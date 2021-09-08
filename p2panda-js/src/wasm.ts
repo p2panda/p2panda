@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import { initializeWasm } from './wasm-adapter';
 
 // Helper to extract resolved promise

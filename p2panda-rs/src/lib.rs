@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 //! # p2panda-rs
 //!
 //! This library provides all tools required to write a client for the [p2panda] network. It is

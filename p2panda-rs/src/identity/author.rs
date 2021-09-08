@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use std::convert::TryFrom;
 
 use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};

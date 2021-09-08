@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import chai, { assert, expect } from 'chai';
 import sinon from 'sinon';
 import chaiAsPromised from 'chai-as-promised';

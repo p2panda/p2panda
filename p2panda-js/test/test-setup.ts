@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import openrpcSchema from './openrpc-template.json';
 import $RefParser from '@apidevtools/json-schema-ref-parser';
 import fs from 'fs';
