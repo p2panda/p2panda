@@ -3,12 +3,15 @@ import sinon from 'sinon';
 import chaiAsPromised from 'chai-as-promised';
 
 // @ts-expect-error bundle import has no type
-import { Session, createKeyPair } from '../lib';
+import { Session, createKeyPair, recoverKeyPair } from '../lib';
 
 import TEST_DATA from './test-data.json';
+import { Fields, FieldsTagged } from '~/types';
 
 const ENTRIES = TEST_DATA.entries;
+const FIELDS = TEST_DATA.decodedEntries[0].message.fields;
 const PUBLIC_KEY = TEST_DATA.meta.keyPair.publicKey;
+const PRIVATE_KEY = TEST_DATA.meta.keyPair.privateKey;
 const SCHEMA = TEST_DATA.meta.schema;
 const ENTRY_ARGS = TEST_DATA.nextEntryArgs;
 
@@ -128,6 +131,61 @@ describe('Session', () => {
       const cacheResponse = await session.getNextEntryArgs(PUBLIC_KEY, SCHEMA);
       expect(cacheResponse.logId).to.equal(nextEntryArgs.logId);
       expect(session.client.request.notCalled).to.be.true;
+    });
+  });
+
+  describe.only('create', () => {
+    const fields: Fields = {};
+    let keyPair: unknown;
+
+    before(async () => {
+      for (const k of Object.keys(FIELDS)) {
+        fields[k] = (FIELDS as FieldsTagged)[k]['value'];
+      }
+
+      keyPair = await recoverKeyPair(PRIVATE_KEY);
+    });
+
+    it('creates instances', async () => {
+      const session = new Session(NODE_ADDRESS)
+        .setSchema(SCHEMA)
+        .setKeyPair(keyPair);
+      await assert.isFulfilled(session.create(fields));
+
+      const session2 = new Session(NODE_ADDRESS);
+      await assert.isFulfilled(
+        session2.create(fields, { schema: SCHEMA, keyPair }),
+      );
+    });
+
+    it('throws when not supplied with all required options', async () => {
+      const session = new Session(NODE_ADDRESS).setKeyPair(keyPair);
+      await assert.isRejected(
+        session.create(fields),
+        'Configure a schema with `session.schema()` or with the `options` parameter on methods.',
+      );
+
+      const session2 = new Session(NODE_ADDRESS).setSchema(SCHEMA);
+      await assert.isRejected(
+        session2.create(fields),
+        'Configure a key pair with `session.keyPair()` or with the `options` parameter on methods.',
+      );
+
+      session2.setKeyPair(PRIVATE_KEY);
+      await assert.isRejected(
+        session2.create(fields),
+        'Not a valid key pair. You can use p2panda.recoverKeyPair to load a key pair from its private key  representation.',
+      );
+    });
+
+    it('throws when not supplied with valid field data', async () => {
+      const session = new Session(NODE_ADDRESS)
+        .setSchema(SCHEMA)
+        .setKeyPair(keyPair);
+      await assert.isRejected(
+        session.create({}),
+        'message fields can not be empty',
+      );
     });
   });
 });

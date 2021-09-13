@@ -259,21 +259,29 @@ export default class Session {
    *   .setKeyPair(keyPair)
    *   .create(messageFields, { schema });
    */
-  async create(fields: Fields, options: Partial<Context>): Promise<Session> {
+  async create(
+    fields: Fields,
+    options: Partial<Context> = {},
+  ): Promise<Session> {
     log('create instance', fields);
     const mergedOptions = {
       schema: options.schema || this.schema,
       keyPair: options.keyPair || this.keyPair,
       session: this,
     };
-    Instance.create(fields, mergedOptions);
+    if (typeof mergedOptions.keyPair === 'string') {
+      throw new Error(
+        'Not a valid key pair. You can use p2panda.recoverKeyPair to load a key pair from its private key  representation.',
+      );
+    }
+    await Instance.create(fields, mergedOptions);
     return this;
   }
 
   async update(
     instanceId: string,
     fields: Fields,
-    options: Partial<Context>,
+    options: Partial<Context> = {},
   ): Promise<Session> {
     log('update instance', instanceId, fields);
     const mergedOptions = {
@@ -281,13 +289,13 @@ export default class Session {
       keyPair: options.keyPair || this.keyPair,
       session: this,
     };
-    Instance.update(instanceId, fields, mergedOptions);
+    await Instance.update(instanceId, fields, mergedOptions);
     return this;
   }
 
   async delete(
     instanceId: string,
-    options: Partial<Context>,
+    options: Partial<Context> = {},
   ): Promise<Session> {
     log('delete instance', { instanceId });
     const mergedOptions = {
@@ -295,7 +303,7 @@ export default class Session {
       keyPair: options.keyPair || this.keyPair,
       session: this,
     };
-    Instance.remove(instanceId, mergedOptions);
+    await Instance.remove(instanceId, mergedOptions);
     return this;
   }
 
@@ -310,7 +318,7 @@ export default class Session {
    * @returns array of instance records, which have data fields and an extra
    *  `_meta_ field, which holds instance metadata and its entry history
    */
-  async query(options: Partial<Context>): Promise<InstanceRecord[]> {
+  async query(options: Partial<Context> = {}): Promise<InstanceRecord[]> {
     log('query schema', options.schema);
     const instances = Instance.query({
       schema: options.schema || this.schema,
