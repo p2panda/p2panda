@@ -129,12 +129,15 @@ const materializeEntries = (
   const instances: { [instanceId: string]: InstanceRecord } = {};
   entries.sort((a, b) => a.seqNum - b.seqNum);
   for (const entry of entries) {
+    // Skip this entry if it doesn't carry a payload
     if (entry.message == null) continue;
 
     const entryHash = entry.encoded.entryHash;
     const author = entry.encoded.author;
     const schema = entry.message.schema;
 
+    // Skip materialization if we know that this instance has
+    // been deleted previously
     if (instances[entryHash] && instances[entryHash].deleted) continue;
 
     let updated: InstanceRecord;
@@ -154,6 +157,8 @@ const materializeEntries = (
         break;
 
       case 'update':
+        // Copy previous entry fields and overwrite with data
+        // from this update.
         updated = {
           ...instances[entryHash],
           ...entry.message.fields,
@@ -164,11 +169,14 @@ const materializeEntries = (
         break;
 
       case 'delete':
+        // After deletetion, only the `_meta` property is retained, all data
+        // fields are removed.
         updated = { _meta: instances[entryHash]._meta };
         updated._meta.deleted = true;
         updated._meta.entries.push(entry);
         instances[entryHash] = updated;
         break;
+
       default:
         throw new Error('Unhandled mesage action');
     }
