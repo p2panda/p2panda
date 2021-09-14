@@ -3,7 +3,7 @@
 import { RequestManager, HTTPTransport, Client } from '@open-rpc/client-js';
 import debug from 'debug';
 
-import p2panda, { P2Panda } from '~/wasm';
+import p2panda from '~/wasm';
 import Instance, { Context } from '~/instance';
 import { marshallResponseFields } from '~/utils';
 
@@ -14,11 +14,10 @@ import type {
   Fields,
   InstanceRecord,
 } from '~/types';
+
 import { KeyPair } from 'wasm-web';
 
 const log = debug('p2panda-js:session');
-
-type Resolved<T> = T extends PromiseLike<infer U> ? Resolved<U> : T;
 
 /**
  * Communicate with the p2panda network through a `Session` instance

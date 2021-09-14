@@ -5,8 +5,8 @@ import debug from 'debug';
 import { Session } from '~/index';
 import { EntryRecord, Fields, FieldsTagged, InstanceRecord } from '~/types';
 import { marshallRequestFields } from '~/utils';
+import p2panda from '~/wasm';
 
-import { P2Panda } from './wasm';
 import { KeyPair, MessageFields } from 'wasm-web';
 
 export type Context = {
@@ -24,7 +24,7 @@ export const getMessageFields = async (
   session: Session,
   fields: FieldsTagged,
 ): Promise<MessageFields> => {
-  const { MessageFields } = await session.loadWasm();
+  const { MessageFields } = await p2panda;
 
   const messageFields = new MessageFields();
   for (const k of Object.keys(fields)) {
@@ -42,7 +42,7 @@ const signPublishEntry = async (
   messageEncoded: string,
   { keyPair, schema, session }: Context,
 ) => {
-  const { signEncodeEntry } = (await session.loadWasm()) as P2Panda;
+  const { signEncodeEntry } = await p2panda;
 
   const entryArgs = await session.getNextEntryArgs(keyPair.publicKey(), schema);
 
@@ -72,7 +72,7 @@ const create = async (
   fields: Fields,
   { keyPair, schema, session }: Context,
 ): Promise<void> => {
-  const { encodeCreateMessage } = await session.loadWasm();
+  const { encodeCreateMessage } = await p2panda;
 
   // Create message
   const fieldsTagged = marshallRequestFields(fields);
