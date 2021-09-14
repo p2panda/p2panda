@@ -44,10 +44,6 @@ export default class Session {
   // An rpc client connected to the configured endpoint
   client: Client;
 
-  // The wasm library from p2panda-rs. To ensure that it is loaded before
-  // using it await `this.loadWasm()`
-  p2panda: Resolved<typeof p2panda> | null = null;
-
   // Cached arguments for the next entry
   private nextEntryArgs: { [cacheKey: string]: EntryArgs } = {};
 
@@ -113,24 +109,6 @@ export default class Session {
   setKeyPair(val: KeyPair): Session {
     this._keyPair = val;
     return this;
-  }
-
-  /**
-   * Load and return the WebAssembly p2panda library.
-   *
-   * Always await this function before using `this.p2panda`. Unfortunately this
-   * cannot be handled in the constructor as the contructor cannot be async.
-   *
-   * @returns object p2panda wasm library exports
-   */
-  async loadWasm(): Promise<P2Panda> {
-    if (this.p2panda == null) {
-      this.p2panda = await p2panda;
-      log('initialized wasm lib');
-    } else {
-      log('access cached wasm lib');
-    }
-    return this.p2panda;
   }
 
   /**
@@ -227,7 +205,7 @@ export default class Session {
    */
   async queryEntries(schema: string): Promise<EntryRecord[]> {
     if (!schema) throw new Error('Schema must be provided');
-    const { decodeEntry } = await this.loadWasm();
+    const { decodeEntry } = await p2panda;
     const result = await this.queryEntriesEncoded(schema);
     log(`decoding ${result.length} entries`);
     return Promise.all(
