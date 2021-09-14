@@ -35,7 +35,7 @@
     "adz <x1d@adz.garden>",
     "cafca <cafca@001.land>"
   ],
-  "license": "AGPL-3.0",
+  "license": "AGPL-3.0-or-later",
   "bugs": {
     "url": "https://github.com/p2panda/p2panda/issues"
   },

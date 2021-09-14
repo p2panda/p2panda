@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 //! Create, encode and decode p2panda messages.
 //!
 //! Messages describe data mutations in the p2panda network. Authors send messages to create,

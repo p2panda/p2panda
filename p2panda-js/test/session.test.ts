@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import chai, { assert, expect } from 'chai';
 import sinon from 'sinon';
 import chaiAsPromised from 'chai-as-promised';
@@ -124,7 +126,7 @@ describe('Session', () => {
         entryHashBacklink: ENTRY_ARGS.entryHashBacklink,
         entryHashSkiplink: ENTRY_ARGS.entryHashSkiplink,
         logId: ENTRY_ARGS.logId,
-        lastSeqNum: 0,
+        seqNum: 0,
       };
       session.setNextEntryArgs(PUBLIC_KEY, SCHEMA, nextEntryArgs);
 

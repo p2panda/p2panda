@@ -10,7 +10,7 @@ authors = [
 edition = "2018"
 description = "All the things a panda needs"
 repository = "https://github.com/p2panda/p2panda"
-license = "AGPL-3.0"
+license = "AGPL-3.0-or-later"
 readme = "README.md"
 exclude = [".gitignore"]
 categories = ["web-programming", "wasm", "cryptography"]
@@ -30,34 +30,28 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 arrayvec = "0.5.2"
-cddl = "0.8.6"
-ed25519-dalek = { version = "1.0.1" }
-hex = "0.4.2"
-serde = { version = "1.0.119", features = ["derive"] }
-serde_cbor = "0.11.1"
-serde_repr = "0.1.6"
-thiserror = "1.0.23"
+bamboo-rs-core = "0.1.0"
+cddl = "0.8.7"
+ed25519-dalek = "1.0.1"
+hex = "0.4.3"
+serde = { version = "1.0.130", features = ["derive"] }
+serde_cbor = "0.11.2"
+serde_repr = "0.1.7"
+thiserror = "1.0.29"
 yamf-hash = "0.1.2"
 
 # Optional dependencies (behind feature flags)
-sqlx = { version = "0.5.1", features = ["runtime-async-std-rustls", "all-databases"], optional = true }
-
-# @TODO: Change this as soon as `bamboo-rs` gets published
-[dependencies.bamboo-rs-core]
-git = "https://github.com/pietgeursen/bamboo-rs"
-tag = "v0.1.0-pre-31"
+sqlx = { version = "0.5.7", features = ["runtime-async-std-rustls", "all-databases"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rand = "0.7.3"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"
-js-sys = "0.3.49"
+js-sys = "0.3.53"
 rand = { version = "0.7.3", features = ["wasm-bindgen"] }
-# Pin to v0.2.65 as wasm-opt fails with global exports. See:
-# https://github.com/rustwasm/wasm-pack/issues/886
-wasm-bindgen = { version = "0.2.72" }
+wasm-bindgen = "0.2.76"
 
 [dev-dependencies]
-wasm-bindgen-test = "0.2"
-rstest = "0.9.0"
+wasm-bindgen-test = "0.3.26"
+rstest = "0.11.0"

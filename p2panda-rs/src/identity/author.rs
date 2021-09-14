@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use std::convert::TryFrom;
 
 use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
@@ -39,6 +41,11 @@ impl Author {
         let author = Self(String::from(value));
         author.validate()?;
         Ok(author)
+    }
+
+    /// Returns author as hex string.
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
     }
 }
 

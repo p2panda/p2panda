@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import wasmBase64 from 'wasm-web/index_bg.wasm';
 import wasmInit, * as wasmLib from 'wasm-web';
 

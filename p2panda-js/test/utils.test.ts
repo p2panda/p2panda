@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import { expect } from 'chai';
 
 import { marshallRequestFields, marshallResponseFields } from '../src/utils';

@@ -1,10 +1,12 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 /**
  * Arguments for publishing the next entry
  */
 export type EntryArgs = {
   entryHashSkiplink: string | undefined;
   entryHashBacklink: string | undefined;
-  lastSeqNum: number | undefined;
+  seqNum: number;
   logId: number;
 };
 
