@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import * as webpack from 'webpack';
 
 import config, { tsRule } from './webpack.common';
@@ -20,6 +22,8 @@ const configNode: webpack.Configuration = {
   externals: {
     // Treat exported wasm as external module
     'wasm-node': './wasm',
+    // node-fetch has a weird export that needs to be treated differently
+    'node-fetch': 'commonjs2 node-fetch',
   },
   module: {
     rules: [tsRule('node')],

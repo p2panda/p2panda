@@ -1,29 +1,16 @@
-import { initializeWasm } from '~/wasm-adapter';
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Helper to extract resolved promise
-type Resolved<T> = T extends PromiseLike<infer U> ? Resolved<U> : T;
+import fetch from 'node-fetch';
+import Headers from 'fetch-headers';
 
-// p2panda is exported without web assembly utilities
-type P2Panda = Omit<
-  Resolved<typeof initializeWasm>,
-  'setWasmPanicHook' | 'init' | 'default'
->;
+if (!globalThis.fetch) {
+  // @ts-expect-error we trust that `node-fetch` is a suitable replacement
+  globalThis.fetch = fetch;
+  globalThis.Headers = Headers;
+}
 
-// This promise makes sure we only load the p2panda-rs library once even when
-// it was used multiple times (singleton). Also it sets the panic hook
-// automatically for better debugging.
-const wasm = new Promise<P2Panda>((resolve, reject) => {
-  initializeWasm
-    .then(({ setWasmPanicHook, ...rest }) => {
-      // Set panic hooks for better logging of wasm errors. See:
-      // https://github.com/rustwasm/console_error_panic_hook
-      setWasmPanicHook();
+export { createKeyPair, recoverKeyPair } from './keyPair';
+export { default as Session } from './session';
+export { default as wasm } from './wasm';
 
-      resolve(rest);
-    })
-    .catch((err: Error) => {
-      reject(err);
-    });
-});
-
-export default wasm;
+export * from './types';

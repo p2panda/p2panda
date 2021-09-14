@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 //! Methods exported for WebAssembly targets.
 //!
 //! Wrappers for these methods are available in [p2panda-js], which allows idiomatic usage of
@@ -200,11 +202,11 @@ struct SignEncodeEntryResult {
 
 /// Returns a signed and encoded entry that can be published to a p2panda node.
 ///
-/// `entry_backlink_hash`, `entry_skiplink_hash`, `previous_seq_num` and `log_id` are obtained by
-/// querying the `getEntryArguments` method of a p2panda node.
+/// `entry_backlink_hash`, `entry_skiplink_hash`, `seq_num` and `log_id` are obtained by querying
+/// the `getEntryArguments` method of a p2panda node.
 ///
-/// `previous_seq_num` and `log_id` are `i32` parameters even though they have 64 bits in the
-/// bamboo spec. Webkit doesn't support `BigInt` so it can't handle those large values.
+/// `seq_num` and `log_id` are `i32` parameters even though they have 64 bits in the bamboo spec.
+/// Webkit doesn't support `BigInt` so it can't handle those large values.
 #[wasm_bindgen(js_name = signEncodeEntry)]
 pub fn sign_encode_entry(
     key_pair: &KeyPair,

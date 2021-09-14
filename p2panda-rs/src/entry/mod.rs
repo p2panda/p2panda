@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 //! Create, sign, encode and decode [`Bamboo`] entries.
 //!
 //! Bamboo entries are the main data type of p2panda. Entries are organized in a distributed,

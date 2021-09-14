@@ -1,0 +1,264 @@
+{
+    "openrpc": "1.0.0-rc1",
+    "info": {
+        "title": "p2panda RPC interface",
+        "version": "0.0.1"
+    },
+    "components": {
+        "contentDescriptors": {
+            "EntryArgs": {
+                "name": "entryArgs",
+                "required": true,
+                "description": "Arguments for next entry in log",
+                "schema": {
+                    "$ref": "#/components/schemas/EntryArgs"
+                }
+            },
+            "Author": {
+                "name": "author",
+                "required": true,
+                "description": "The public key of author",
+                "schema": {
+                    "$ref": "#/components/schemas/Author"
+                }
+            },
+            "Schema": {
+                "name": "schema",
+                "required": true,
+                "description": "The hash of schema describing format of message fields",
+                "schema": {
+                    "$ref": "#/components/schemas/Hash"
+                }
+            }
+        },
+        "schemas": {
+            "Author": {
+                "type": "string",
+                "pattern": "[0-9a-fa-f]{64}",
+                "minLength": 64,
+                "maxLength": 64
+            },
+            "Hash": {
+                "type": "string",
+                "minLength": 132,
+                "maxLength": 132,
+                "pattern": "[0-9a-fa-f]{132}"
+            },
+            "EntryArgs": {
+                "type": "object",
+                "properties": {
+                    "entryHashSkiplink": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/Hash"
+                            }
+                        ]
+                    },
+                    "entryHashBacklink": {
+                        "oneOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "$ref": "#/components/schemas/Hash"
+                            }
+                        ]
+                    },
+                    "seqNum": {
+                        "type": "number"
+                    },
+                    "logId": {
+                        "type": "number"
+                    }
+                }
+            },
+            "Entry": {
+                "type": "object",
+                "properties": {
+                    "author": {
+                        "$ref": "#/components/schemas/Author"
+                    },
+                    "entryBytes": {
+                        "type": "string"
+                    },
+                    "entryHash": {
+                        "$ref": "#/components/schemas/Hash"
+                    },
+                    "logId": {
+                        "type": "number"
+                    },
+                    "payloadBytes": {
+                        "type": "string"
+                    },
+                    "payloadHash": {
+                        "$ref": "#/components/schemas/Hash"
+                    },
+                    "seqNum": {
+                        "type": "number"
+                    }
+                }
+            },
+            "EntryEncoded": {
+                "type": "string"
+            },
+            "MessageEncoded": {
+                "type": "string"
+            },
+            "Entries": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/components/schemas/Entry"
+                }
+            },
+            "QueryEntriesResponse": {
+                "type": "object",
+                "properties": {
+                    "entries": {
+                        "$ref": "#/components/schemas/Entries"
+                    }
+                }
+            }
+        },
+        "examples": {
+            "FirstEntryEncoded": {
+                "name": "firstEntryEncoded",
+                "summary": "Encoded bytes of first entry in a log",
+                "value": {
+                    "$ref": "./test/test-data.json#/entries/0/entryBytes"
+                }
+            },
+            "FirstEntryMessageEncdoded": {
+                "name": "messageEncoded",
+                "summary": "Encoded bytes of first entry payload",
+                "value": {
+                    "$ref": "./test/test-data.json#/entries/0/payloadBytes"
+                }
+            },
+            "EntryArgsResult": {
+                "name": "testEntryArgumentsResult",
+                "value": {
+                    "$ref": "./test/test-data.json#/nextEntryArgs"
+                }
+            },
+            "Author": {
+                "name": "author",
+                "value": {
+                    "$ref": "./test/test-data.json#/entries/0/author"
+                }
+            },
+            "Schema": {
+                "name": "schema",
+                "value": {
+                    "$ref": "./test/test-data.json#/decodedEntries/0/message/schema"
+                }
+            },
+            "Entries": {
+                "name": "entries",
+                "value": {
+                    "entries": {
+                        "$ref": "./test/test-data.json#/entries"
+                    }
+                }
+            }
+        }
+    },
+    "methods": [
+        {
+            "name": "panda_getEntryArguments",
+            "summary": "Get arguments for building next entry",
+            "params": [
+                {
+                    "$ref": "#/components/contentDescriptors/Author"
+                },
+                {
+                    "$ref": "#/components/contentDescriptors/Schema"
+                }
+            ],
+            "result": {
+                "$ref": "#/components/contentDescriptors/EntryArgs"
+            },
+            "examples": [
+                {
+                    "name": "testEntryArgumentsExample",
+                    "params": [
+                        {
+                            "$ref": "#/components/examples/Author"
+                        },
+                        {
+                            "$ref": "#/components/examples/Schema"
+                        }
+                    ],
+                    "result": {
+                        "$ref": "#/components/examples/EntryArgsResult"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "panda_queryEntries",
+            "params": [
+                {
+                    "$ref": "#/components/contentDescriptors/Schema"
+                }
+            ],
+            "result": {
+                "name": "query response",
+                "schema": {
+                    "$ref": "#/components/schemas/QueryEntriesResponse"
+                }
+            },
+            "examples": [
+                {
+                    "name": "testQueryExample",
+                    "params": [
+                        {
+                            "$ref": "#/components/examples/Schema"
+                        }
+                    ],
+                    "result": {
+                        "$ref": "#/components/examples/Entries"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "panda_publishEntry",
+            "params": [
+                {
+                    "name": "entryEncoded",
+                    "schema": {
+                        "$ref": "#/components/schemas/EntryEncoded"
+                    }
+                },
+                {
+                    "name": "messageEncoded",
+                    "schema": {
+                        "$ref": "#/components/schemas/MessageEncoded"
+                    }
+                }
+            ],
+            "result": {
+                "$ref": "#/components/contentDescriptors/EntryArgs"
+            },
+            "examples": [
+                {
+                    "name": "publishEntryResultExample",
+                    "params": [
+                        {
+                            "$ref": "#/components/examples/FirstEntryEncoded"
+                        },
+                        {
+                            "$ref": "#/components/examples/FirstEntryMessageEncdoded"
+                        }
+                    ],
+                    "result": {
+                        "$ref": "#/components/examples/EntryArgsResult"
+                    }
+                }
+            ]
+        }
+    ]
+}
