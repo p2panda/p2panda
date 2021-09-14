@@ -3,8 +3,6 @@
 #[cfg(test)]
 mod tests {
 
-use std::convert::TryFrom;
-
     use std::convert::TryFrom;
 
     use rstest::{fixture, rstest};
