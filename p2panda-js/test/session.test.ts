@@ -7,6 +7,10 @@ import chaiAsPromised from 'chai-as-promised';
 // @ts-expect-error bundle import has no type
 import { Session, createKeyPair, recoverKeyPair } from '../lib';
 
+// It's okay not to import this from the bundle because it doesn't use any
+// web assembly exports
+import { marshallResponseFields } from '~/utils';
+
 import TEST_DATA from './test-data.json';
 import { Fields, FieldsTagged } from '~/types';
 
@@ -137,14 +141,11 @@ describe('Session', () => {
   });
 
   describe('create', () => {
-    const fields: Fields = {};
+    let fields: Fields = {};
     let keyPair: unknown;
 
     before(async () => {
-      for (const k of Object.keys(FIELDS)) {
-        fields[k] = (FIELDS as FieldsTagged)[k]['value'];
-      }
-
+      fields = marshallResponseFields(FIELDS as FieldsTagged);
       keyPair = await recoverKeyPair(PRIVATE_KEY);
     });
 
