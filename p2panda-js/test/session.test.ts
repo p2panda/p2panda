@@ -136,7 +136,7 @@ describe('Session', () => {
     });
   });
 
-  describe.only('create', () => {
+  describe('create', () => {
     const fields: Fields = {};
     let keyPair: unknown;
 
