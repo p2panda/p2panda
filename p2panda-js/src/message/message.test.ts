@@ -7,7 +7,7 @@ import { Session } from '~/../lib';
 import { getMessageFields } from '~/message';
 import { marshallRequestFields } from '~/utils';
 
-describe('Instance tools', () => {
+describe('message', () => {
   describe('getMessageFields', () => {
     it('creates a web assembly MessageField', async () => {
       const fields = marshallRequestFields({
