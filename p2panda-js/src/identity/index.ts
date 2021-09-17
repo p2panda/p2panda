@@ -1,1 +1,1 @@
-export * from './keyPair';
+export { createKeyPair, recoverKeyPair } from './keyPair';
