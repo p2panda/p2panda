@@ -10,7 +10,7 @@
     "lint": "eslint --ext .ts .",
     "test": "run-p --race test:mock-node test:run",
     "test:prepare": "run-s --silent wasm webpack:node",
-    "test:mocha": "mocha -r ts-node/register -r tsconfig-paths/register -r @babel/register ./test/**/*.test.ts",
+    "test:mocha": "mocha -r ts-node/register -r tsconfig-paths/register -r @babel/register 'src/**/*.test.ts'",
     "test:run": "run-s clear test:prepare test:mocha",
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm run test' --ext js,ts,json",
     "test:template-openrpc": "npx ts-node ./test/test-setup.ts",

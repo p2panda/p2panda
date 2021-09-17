@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import wasm from './wasm';
+import wasm from '~/wasm';
 
 /**
  * Returns a new p2panda key pair

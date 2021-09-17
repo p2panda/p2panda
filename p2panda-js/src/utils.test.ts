@@ -2,8 +2,8 @@
 
 import { expect } from 'chai';
 
-import { marshallRequestFields, marshallResponseFields } from '../src/utils';
-import { Fields, FieldsTagged } from '../src/types';
+import { marshallRequestFields, marshallResponseFields } from './utils';
+import { Fields, FieldsTagged } from './types';
 
 const REQUEST: Fields = {
   channel: 5,
