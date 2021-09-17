@@ -5,13 +5,13 @@ import sinon from 'sinon';
 import chaiAsPromised from 'chai-as-promised';
 
 // @ts-expect-error bundle import has no type
-import { Session, createKeyPair, recoverKeyPair } from '../lib';
+import { Session, createKeyPair, recoverKeyPair } from '../../lib';
 
 // It's okay not to import this from the bundle because it doesn't use any
 // web assembly exports
 import { marshallResponseFields } from '~/utils';
 
-import TEST_DATA from './test-data.json';
+import TEST_DATA from '../../test/test-data.json';
 import { Fields, FieldsTagged } from '~/types';
 
 const ENTRIES = TEST_DATA.entries;
@@ -188,6 +188,31 @@ describe('Session', () => {
       await assert.isRejected(
         session.create({}),
         'message fields can not be empty',
+      );
+    });
+  });
+
+  describe('update', () => {
+    let fields: Fields = {};
+    let keyPair: unknown;
+
+    before(async () => {
+      const updateData = { ...(FIELDS as FieldsTagged) };
+      delete updateData.description;
+      fields = marshallResponseFields(updateData);
+      keyPair = await recoverKeyPair(PRIVATE_KEY);
+    });
+
+    it('updates instances', async () => {
+      const instanceId = ENTRIES[0].entryHash;
+      const session = new Session(NODE_ADDRESS)
+        .setSchema(SCHEMA)
+        .setKeyPair(keyPair);
+      await assert.isFulfilled(session.update(instanceId, fields));
+
+      const session2 = new Session(NODE_ADDRESS);
+      await assert.isFulfilled(
+        session2.update(fields, { schema: SCHEMA, keyPair }),
       );
     });
   });

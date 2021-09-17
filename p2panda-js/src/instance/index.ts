@@ -6,7 +6,7 @@ import { Session } from '~/index';
 import { EntryRecord, Fields, FieldsTagged, InstanceRecord } from '~/types';
 import { marshallRequestFields } from '~/utils';
 
-import { P2Panda } from './wasm';
+import { P2Panda } from '~/wasm';
 import { KeyPair, MessageFields } from 'wasm-web';
 
 export type Context = {
