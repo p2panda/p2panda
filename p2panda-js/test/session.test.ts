@@ -177,7 +177,7 @@ describe('Session', () => {
       session2.setKeyPair(PRIVATE_KEY);
       await assert.isRejected(
         session2.create(fields),
-        'Not a valid key pair. You can use p2panda.recoverKeyPair to load a key pair from its private key  representation.',
+        'Not a valid key pair. You can use p2panda.recoverKeyPair to load a key pair from its private key representation.',
       );
     });
 

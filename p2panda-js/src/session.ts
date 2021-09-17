@@ -273,7 +273,7 @@ export default class Session {
     };
     if (typeof mergedOptions.keyPair === 'string') {
       throw new Error(
-        'Not a valid key pair. You can use p2panda.recoverKeyPair to load a key pair from its private key  representation.',
+        'Not a valid key pair. You can use p2panda.recoverKeyPair to load a key pair from its private key representation.',
       );
     }
     await Instance.create(fields, mergedOptions);
