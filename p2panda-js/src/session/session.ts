@@ -4,7 +4,7 @@ import { RequestManager, HTTPTransport, Client } from '@open-rpc/client-js';
 import debug from 'debug';
 
 import p2panda, { P2Panda } from '~/wasm';
-import Instance from '~/instance';
+import { createInstance, queryInstances } from '~/instance';
 import { marshallResponseFields } from '~/utils';
 
 import type {
@@ -274,7 +274,7 @@ export class Session {
       keyPair: options.keyPair || this.keyPair,
       session: this,
     };
-    Instance.create(fields, mergedOptions);
+    createInstance(fields, mergedOptions);
     return this;
   }
 
@@ -299,7 +299,7 @@ export class Session {
    */
   async query(options: Partial<Context>): Promise<InstanceRecord[]> {
     log('query schema', options.schema);
-    const instances = Instance.query({
+    const instances = queryInstances({
       schema: options.schema || this.schema,
       session: this,
     });

@@ -1,3 +1,2 @@
-import Instance from './instance';
-
-export default Instance;
+export { createInstance, queryInstances } from './instance';
+export { materializeEntries } from './materialiser';

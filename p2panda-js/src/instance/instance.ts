@@ -13,7 +13,7 @@ import type { Context } from '~/session';
  * Signs and publishes a `create` entry for the given user data and matching
  * schema.
  */
-const create = async (
+export const createInstance = async (
   fields: Fields,
   { keyPair, schema, session }: Context,
 ): Promise<void> => {
@@ -26,7 +26,7 @@ const create = async (
   await signPublishEntry(encodedMessage, { keyPair, schema, session });
 };
 
-const query = async ({
+export const queryInstances = async ({
   schema,
   session,
 }: Pick<Context, 'schema' | 'session'>): Promise<InstanceRecord[]> => {
@@ -34,5 +34,3 @@ const query = async ({
   const instances = Object.values(materializeEntries(entries));
   return instances;
 };
-
-export default { create, query };
