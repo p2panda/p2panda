@@ -3,11 +3,9 @@
 import debug from 'debug';
 
 import { Session } from '~/index';
-import { EntryRecord, Fields, FieldsTagged, InstanceRecord } from '~/types';
-import { marshallRequestFields } from '~/utils';
+import { EntryRecord, InstanceRecord } from '~/types';
 
-import { P2Panda } from '~/wasm';
-import { KeyPair, MessageFields } from 'wasm-web';
+import { KeyPair } from 'wasm-web';
 
 export type Context = {
   keyPair: KeyPair;

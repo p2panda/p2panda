@@ -4,7 +4,7 @@ import { expect } from 'chai';
 
 // @ts-expect-error bundle import has no type
 import { Session } from '~/../lib';
-import { getMessageFields } from '.';
+import { getMessageFields } from '~/message';
 import { marshallRequestFields } from '~/utils';
 
 describe('Instance tools', () => {

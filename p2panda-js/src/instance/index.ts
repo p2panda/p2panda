@@ -1,21 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import debug from 'debug';
-
 import { Session } from '~/index';
-import { EntryRecord, Fields, FieldsTagged, InstanceRecord } from '~/types';
+import { Fields, InstanceRecord } from '~/types';
 import { marshallRequestFields } from '~/utils';
 
-import { P2Panda } from '~/wasm';
-import { KeyPair, MessageFields } from 'wasm-web';
+import { KeyPair } from 'wasm-web';
+import { getMessageFields } from '~/message';
+import { signPublishEntry } from '~/entry';
+import { materializeEntries } from './materialiser';
 
 export type Context = {
   keyPair: KeyPair;
   schema: string;
   session: Session;
 };
-
-const log = debug('p2panda-js:instance');
 
 /**
  * Signs and publishes a `create` entry for the given user data and matching

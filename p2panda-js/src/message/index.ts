@@ -3,10 +3,8 @@
 import debug from 'debug';
 
 import { Session } from '~/index';
-import { EntryRecord, Fields, FieldsTagged, InstanceRecord } from '~/types';
-import { marshallRequestFields } from '~/utils';
+import { FieldsTagged } from '~/types';
 
-import { P2Panda } from '~/wasm';
 import { KeyPair, MessageFields } from 'wasm-web';
 
 export type Context = {
