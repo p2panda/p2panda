@@ -37,7 +37,7 @@
         "schemas": {
             "Author": {
                 "type": "string",
-                "pattern": "[0-9a-fa-f]{64}",
+                "pattern": "[0-9a-f]{64}",
                 "minLength": 64,
                 "maxLength": 64
             },
@@ -45,7 +45,7 @@
                 "type": "string",
                 "minLength": 132,
                 "maxLength": 132,
-                "pattern": "[0-9a-fa-f]{132}"
+                "pattern": "[0-9a-f]{132}"
             },
             "EntryArgs": {
                 "type": "object",

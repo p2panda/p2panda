@@ -23,7 +23,7 @@
                                     "type": "string",
                                     "minLength": 132,
                                     "maxLength": 132,
-                                    "pattern": "[0-9a-fa-f]{132}"
+                                    "pattern": "[0-9a-f]{132}"
                                 }
                             ]
                         },
@@ -36,7 +36,7 @@
                                     "type": "string",
                                     "minLength": 132,
                                     "maxLength": 132,
-                                    "pattern": "[0-9a-fa-f]{132}"
+                                    "pattern": "[0-9a-f]{132}"
                                 }
                             ]
                         },
@@ -56,7 +56,7 @@
                 "required": true,
                 "schema": {
                     "type": "string",
-                    "pattern": "[0-9a-fa-f]{64}",
+                    "pattern": "[0-9a-f]{64}",
                     "minLength": 64,
                     "maxLength": 64
                 }
@@ -70,14 +70,14 @@
                     "type": "string",
                     "minLength": 132,
                     "maxLength": 132,
-                    "pattern": "[0-9a-fa-f]{132}"
+                    "pattern": "[0-9a-f]{132}"
                 }
             }
         },
         "schemas": {
             "Author": {
                 "type": "string",
-                "pattern": "[0-9a-fa-f]{64}",
+                "pattern": "[0-9a-f]{64}",
                 "minLength": 64,
                 "maxLength": 64
             },
@@ -85,7 +85,7 @@
                 "type": "string",
                 "minLength": 132,
                 "maxLength": 132,
-                "pattern": "[0-9a-fa-f]{132}"
+                "pattern": "[0-9a-f]{132}"
             },
             "EntryArgs": {
                 "type": "object",
@@ -99,7 +99,7 @@
                                 "type": "string",
                                 "minLength": 132,
                                 "maxLength": 132,
-                                "pattern": "[0-9a-fa-f]{132}"
+                                "pattern": "[0-9a-f]{132}"
                             }
                         ]
                     },
@@ -112,7 +112,7 @@
                                 "type": "string",
                                 "minLength": 132,
                                 "maxLength": 132,
-                                "pattern": "[0-9a-fa-f]{132}"
+                                "pattern": "[0-9a-f]{132}"
                             }
                         ]
                     },
@@ -129,7 +129,7 @@
                 "properties": {
                     "author": {
                         "type": "string",
-                        "pattern": "[0-9a-fa-f]{64}",
+                        "pattern": "[0-9a-f]{64}",
                         "minLength": 64,
                         "maxLength": 64
                     },
@@ -140,7 +140,7 @@
                         "type": "string",
                         "minLength": 132,
                         "maxLength": 132,
-                        "pattern": "[0-9a-fa-f]{132}"
+                        "pattern": "[0-9a-f]{132}"
                     },
                     "logId": {
                         "type": "number"
@@ -152,7 +152,7 @@
                         "type": "string",
                         "minLength": 132,
                         "maxLength": 132,
-                        "pattern": "[0-9a-fa-f]{132}"
+                        "pattern": "[0-9a-f]{132}"
                     },
                     "seqNum": {
                         "type": "number"
@@ -172,7 +172,7 @@
                     "properties": {
                         "author": {
                             "type": "string",
-                            "pattern": "[0-9a-fa-f]{64}",
+                            "pattern": "[0-9a-f]{64}",
                             "minLength": 64,
                             "maxLength": 64
                         },
@@ -183,7 +183,7 @@
                             "type": "string",
                             "minLength": 132,
                             "maxLength": 132,
-                            "pattern": "[0-9a-fa-f]{132}"
+                            "pattern": "[0-9a-f]{132}"
                         },
                         "logId": {
                             "type": "number"
@@ -195,7 +195,7 @@
                             "type": "string",
                             "minLength": 132,
                             "maxLength": 132,
-                            "pattern": "[0-9a-fa-f]{132}"
+                            "pattern": "[0-9a-f]{132}"
                         },
                         "seqNum": {
                             "type": "number"
@@ -213,7 +213,7 @@
                             "properties": {
                                 "author": {
                                     "type": "string",
-                                    "pattern": "[0-9a-fa-f]{64}",
+                                    "pattern": "[0-9a-f]{64}",
                                     "minLength": 64,
                                     "maxLength": 64
                                 },
@@ -224,7 +224,7 @@
                                     "type": "string",
                                     "minLength": 132,
                                     "maxLength": 132,
-                                    "pattern": "[0-9a-fa-f]{132}"
+                                    "pattern": "[0-9a-f]{132}"
                                 },
                                 "logId": {
                                     "type": "number"
@@ -236,7 +236,7 @@
                                     "type": "string",
                                     "minLength": 132,
                                     "maxLength": 132,
-                                    "pattern": "[0-9a-fa-f]{132}"
+                                    "pattern": "[0-9a-f]{132}"
                                 },
                                 "seqNum": {
                                     "type": "number"
@@ -310,7 +310,7 @@
                     "required": true,
                     "schema": {
                         "type": "string",
-                        "pattern": "[0-9a-fa-f]{64}",
+                        "pattern": "[0-9a-f]{64}",
                         "minLength": 64,
                         "maxLength": 64
                     }
@@ -324,7 +324,7 @@
                         "type": "string",
                         "minLength": 132,
                         "maxLength": 132,
-                        "pattern": "[0-9a-fa-f]{132}"
+                        "pattern": "[0-9a-f]{132}"
                     }
                 }
             ],
@@ -345,7 +345,7 @@
                                     "type": "string",
                                     "minLength": 132,
                                     "maxLength": 132,
-                                    "pattern": "[0-9a-fa-f]{132}"
+                                    "pattern": "[0-9a-f]{132}"
                                 }
                             ]
                         },
@@ -358,7 +358,7 @@
                                     "type": "string",
                                     "minLength": 132,
                                     "maxLength": 132,
-                                    "pattern": "[0-9a-fa-f]{132}"
+                                    "pattern": "[0-9a-f]{132}"
                                 }
                             ]
                         },
@@ -414,7 +414,7 @@
                         "type": "string",
                         "minLength": 132,
                         "maxLength": 132,
-                        "pattern": "[0-9a-fa-f]{132}"
+                        "pattern": "[0-9a-f]{132}"
                     }
                 }
             ],
@@ -429,7 +429,7 @@
                                 "properties": {
                                     "author": {
                                         "type": "string",
-                                        "pattern": "[0-9a-fa-f]{64}",
+                                        "pattern": "[0-9a-f]{64}",
                                         "minLength": 64,
                                         "maxLength": 64
                                     },
@@ -440,7 +440,7 @@
                                         "type": "string",
                                         "minLength": 132,
                                         "maxLength": 132,
-                                        "pattern": "[0-9a-fa-f]{132}"
+                                        "pattern": "[0-9a-f]{132}"
                                     },
                                     "logId": {
                                         "type": "number"
@@ -452,7 +452,7 @@
                                         "type": "string",
                                         "minLength": 132,
                                         "maxLength": 132,
-                                        "pattern": "[0-9a-fa-f]{132}"
+                                        "pattern": "[0-9a-f]{132}"
                                     },
                                     "seqNum": {
                                         "type": "number"
@@ -529,7 +529,7 @@
                                     "type": "string",
                                     "minLength": 132,
                                     "maxLength": 132,
-                                    "pattern": "[0-9a-fa-f]{132}"
+                                    "pattern": "[0-9a-f]{132}"
                                 }
                             ]
                         },
@@ -542,7 +542,7 @@
                                     "type": "string",
                                     "minLength": 132,
                                     "maxLength": 132,
-                                    "pattern": "[0-9a-fa-f]{132}"
+                                    "pattern": "[0-9a-f]{132}"
                                 }
                             ]
                         },
