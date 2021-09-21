@@ -6,4 +6,7 @@ module.exports = {
     '^~(.*)$': '<rootDir>/src$1',
     'wasm-node': '<rootDir>/wasm-node',
   },
+  globals: {
+    BUILD_TARGET_WEB: false,
+  },
 };

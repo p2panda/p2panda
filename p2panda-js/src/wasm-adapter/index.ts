@@ -4,7 +4,7 @@
 // is imported.
 /* eslint-disable @typescript-eslint/no-var-requires */
 
-// Defined by WebpackDefinePlugin
+// Defined by WebpackDefinePlugin or Jest configuration in test environment
 declare const BUILD_TARGET_WEB: boolean;
 
 let adapter:
