@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { expect } from 'chai';
-
-import { marshallRequestFields, marshallResponseFields } from './utils';
-import { Fields, FieldsTagged } from './types';
+import { marshallRequestFields, marshallResponseFields } from '~/utils';
+import { Fields, FieldsTagged } from '~/types';
 
 const REQUEST: Fields = {
   channel: 5,
@@ -29,12 +27,12 @@ const RESPONSE: FieldsTagged = {
 describe('Utils', () => {
   describe('marshallRequestFields', () => {
     it("creates aquadoggo's expected request format", () => {
-      expect(marshallRequestFields(REQUEST)).to.eql(RESPONSE);
+      expect(marshallRequestFields(REQUEST)).toEqual(RESPONSE);
     });
   });
   describe('marshallResponseFields', () => {
     it("handles aquadoggo's response format", () => {
-      expect(marshallResponseFields(RESPONSE)).to.eql(REQUEST);
+      expect(marshallResponseFields(RESPONSE)).toEqual(REQUEST);
     });
   });
 });
