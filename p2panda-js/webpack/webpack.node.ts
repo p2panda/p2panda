@@ -46,7 +46,8 @@ const configNode: webpack.Configuration = {
     // into our final `lib` folder after building it. Bringing in the
     // WebAssembly module in like this prevents a bug with Webpack reformating
     // the generated code by `wasm-pack` during bundling and breaking it badly.
-    // Related issue: https://github.com/webpack/webpack/issues/8826
+    // Related issue: https://github.com/webpack/webpack/issues/8826 and
+    // https://github.com/rustwasm/wasm-pack/issues/822
     new CopyPlugin({
       patterns: [
         {
