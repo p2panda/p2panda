@@ -5,9 +5,9 @@ import sinon from 'sinon';
 import chaiAsPromised from 'chai-as-promised';
 
 // @ts-expect-error bundle import has no type
-import { Session, createKeyPair } from '../lib';
+import { Session, createKeyPair } from '~/../lib';
 
-import TEST_DATA from './test-data.json';
+import TEST_DATA from '~/../test/test-data.json';
 
 const ENTRIES = TEST_DATA.entries;
 const PUBLIC_KEY = TEST_DATA.meta.keyPair.publicKey;

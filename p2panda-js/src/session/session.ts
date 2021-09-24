@@ -4,7 +4,7 @@ import { RequestManager, HTTPTransport, Client } from '@open-rpc/client-js';
 import debug from 'debug';
 
 import p2panda, { P2Panda } from '~/wasm';
-import Instance, { Context } from '~/instance';
+import { createInstance, queryInstances } from '~/instance';
 import { marshallResponseFields } from '~/utils';
 
 import type {
@@ -14,11 +14,17 @@ import type {
   Fields,
   InstanceRecord,
 } from '~/types';
-import { KeyPair } from 'wasm-web';
+import type { KeyPair } from 'wasm-web';
 
 const log = debug('p2panda-js:session');
 
 type Resolved<T> = T extends PromiseLike<infer U> ? Resolved<U> : T;
+
+export type Context = {
+  keyPair: KeyPair;
+  schema: string;
+  session: Session;
+};
 
 /**
  * Communicate with the p2panda network through a `Session` instance
@@ -37,7 +43,7 @@ type Resolved<T> = T extends PromiseLike<infer U> ? Resolved<U> : T;
  * Sessions also provide access to the p2panda web assembly library, which is
  * why many functions in `p2panda-js` have a `session` parameter.
  */
-export default class Session {
+export class Session {
   // Address of a p2panda node that we can connect to
   endpoint: string;
 
@@ -268,7 +274,7 @@ export default class Session {
       keyPair: options.keyPair || this.keyPair,
       session: this,
     };
-    Instance.create(fields, mergedOptions);
+    createInstance(fields, mergedOptions);
     return this;
   }
 
@@ -293,7 +299,7 @@ export default class Session {
    */
   async query(options: Partial<Context>): Promise<InstanceRecord[]> {
     log('query schema', options.schema);
-    const instances = Instance.query({
+    const instances = queryInstances({
       schema: options.schema || this.schema,
       session: this,
     });
