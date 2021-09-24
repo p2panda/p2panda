@@ -8,6 +8,7 @@ import config, { getWasmPlugin } from './webpack.common';
  * Extended configuration to build library targeting modern browsers:
  *
  * - Output is minified for smaller library size
+ * - Wasm-pack generates WebAssembly with default `bundler` target
  * - Webpack bundles with `web` target
  */
 const configWeb: webpack.Configuration = {
