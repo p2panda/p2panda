@@ -3,7 +3,7 @@
 import { Session } from '~/index';
 
 import { P2Panda } from '~/wasm';
-import { KeyPair } from 'wasm-web';
+import { KeyPair } from 'wasm';
 
 export type Context = {
   keyPair: KeyPair;

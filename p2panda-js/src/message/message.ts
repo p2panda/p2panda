@@ -5,7 +5,7 @@ import debug from 'debug';
 import { Session } from '~/index';
 import { FieldsTagged } from '~/types';
 
-import { KeyPair, MessageFields } from 'wasm-web';
+import { KeyPair, MessageFields } from 'wasm';
 
 export type Context = {
   keyPair: KeyPair;

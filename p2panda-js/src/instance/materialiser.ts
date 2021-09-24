@@ -5,7 +5,7 @@ import debug from 'debug';
 import { Session } from '~/index';
 import { EntryRecord, InstanceRecord } from '~/types';
 
-import { KeyPair } from 'wasm-web';
+import { KeyPair } from 'wasm';
 
 export type Context = {
   keyPair: KeyPair;
