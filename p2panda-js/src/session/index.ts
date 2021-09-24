@@ -1,3 +1,3 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-export * from './session';
+export { Context, Session } from './session';

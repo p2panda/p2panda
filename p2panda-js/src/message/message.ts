@@ -5,13 +5,7 @@ import debug from 'debug';
 import { Session } from '~/index';
 import { FieldsTagged } from '~/types';
 
-import { KeyPair, MessageFields } from 'wasm';
-
-export type Context = {
-  keyPair: KeyPair;
-  schema: string;
-  session: Session;
-};
+import { MessageFields } from 'wasm';
 
 const log = debug('p2panda-js:message');
 

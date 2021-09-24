@@ -8,6 +8,7 @@ module.exports = {
     // Map `wasm` imports to the build of `wasm-pack`
     'wasm': '<rootDir>/wasm',
   },
+  modulePathIgnorePatterns: ['<rootDir>/wasm-web'],
   globals: {
     // Set `BUILD_TARGET_WEB` to false to import the WebAssembly build for
     // NodeJS targets during testing. This is usually set via the Webpack
