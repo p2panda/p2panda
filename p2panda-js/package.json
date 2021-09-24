@@ -5,23 +5,18 @@
   "main": "lib/index.js",
   "browser": "lib/index.min.js",
   "scripts": {
-    "build": "run-s clear wasm webpack",
-    "clear": "rimraf ./lib ./wasm-web ./wasm-node",
+    "build": "run-s clear webpack",
+    "clear": "rimraf ./lib ./wasm",
     "lint": "eslint --ext .ts .",
     "test": "run-p --race test:mock-node test:run",
-    "test:prepare": "run-s --silent wasm webpack:node",
     "test:jest": "jest",
-    "test:run": "run-s clear test:prepare test:jest",
-    "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm run test' --ext js,ts,json",
-    "test:template-openrpc": "npx ts-node ./test/test-setup.ts",
     "test:mock-node": "open-rpc-mock-server --port 2020",
-    "wasm": "run-s --silent wasm:browser wasm:node",
-    "wasm:browser": "wasm-pack --log-level warn build ../p2panda-rs --target web --out-dir ../p2panda-js/wasm-web --release --out-name index",
-    "wasm:node": "wasm-pack --log-level warn build ../p2panda-rs --target nodejs --out-dir ../p2panda-js/wasm-node --release --out-name index",
-    "wasm:copy": "mkdir -p ./lib/wasm; cp ./wasm-node/index.js ./lib/wasm; cp ./wasm-node/index.d.ts ./lib/wasm; cp ./wasm-node/index_bg.wasm ./lib/wasm",
-    "webpack": "run-p --aggregate-output webpack:browser webpack:node",
+    "test:run": "run-s clear webpack:node test:jest",
+    "test:template-openrpc": "npx ts-node ./test/test-setup.ts",
+    "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm run test' --ext js,ts,json",
+    "webpack": "run-s webpack:browser webpack:node",
     "webpack:browser": "webpack --mode production --config-name browser --color",
-    "webpack:node": "npm run wasm:copy && webpack --mode production --config-name node --color"
+    "webpack:node": "webpack --mode production --config-name node --color"
   },
   "engines": {
     "node": ">= v12.0.0"
@@ -57,6 +52,7 @@
     "@types/node-fetch": "^2.5.12",
     "@typescript-eslint/eslint-plugin": "^4.13.0",
     "@typescript-eslint/parser": "^4.13.0",
+    "@wasm-tool/wasm-pack-plugin": "^1.5.0",
     "babel-loader": "^8.2.2",
     "copy-webpack-plugin": "^7.0.0",
     "eslint": "^7.17.0",

@@ -1,15 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import * as webpack from 'webpack';
+import CopyPlugin from 'copy-webpack-plugin';
 
-import config, { tsRule } from './webpack.common';
+import config, {
+  DIR_WASM,
+  DIR_DIST,
+  getWasmPlugin,
+  getPath,
+} from './webpack.common';
 
 /*
  * Extended configuration to build library targeting node applications:
  *
  * - Output is not minified
- * - Rust compiles wasm with `nodejs` target
- * - Copy compiled wasm to library folder and treat it as external module
+ * - Webpack bundles library with `node` target
  */
 const configNode: webpack.Configuration = {
   ...config,
@@ -21,16 +26,19 @@ const configNode: webpack.Configuration = {
   target: 'node',
   externals: {
     // Treat exported wasm as external module
-    'wasm-node': './wasm',
-    // node-fetch has a weird export that needs to be treated differently
+    wasm: './wasm',
+    // `node-fetch` has a weird export that needs to be treated differently
     'node-fetch': 'commonjs2 node-fetch',
   },
-  module: {
-    rules: [tsRule('node')],
-  },
   plugins: [
-    new webpack.DefinePlugin({
-      BUILD_TARGET_WEB: JSON.stringify(false),
+    getWasmPlugin('nodejs'),
+    new CopyPlugin({
+      patterns: [
+        {
+          from: `${getPath(DIR_WASM)}/*.{js,wasm}`,
+          to: getPath(DIR_DIST),
+        },
+      ],
     }),
   ],
   optimization: {
