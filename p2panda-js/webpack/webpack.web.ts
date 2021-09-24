@@ -10,9 +10,9 @@ import config, { getWasmPlugin } from './webpack.common';
  * - Output is minified for smaller library size
  * - Webpack bundles with `web` target
  */
-const configBrowser: webpack.Configuration = {
+const configWeb: webpack.Configuration = {
   ...config,
-  name: 'browser',
+  name: 'web',
   output: {
     ...config.output,
     filename: '[name].min.js',
@@ -21,4 +21,4 @@ const configBrowser: webpack.Configuration = {
   target: 'web',
 };
 
-export default configBrowser;
+export default configWeb;

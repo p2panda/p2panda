@@ -14,8 +14,8 @@
     "test:run": "run-s clear webpack:node test:jest",
     "test:template-openrpc": "npx ts-node ./test/test-setup.ts",
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm run test' --ext js,ts,json",
-    "webpack": "run-s webpack:browser webpack:node",
-    "webpack:browser": "webpack --mode production --config-name browser --color",
+    "webpack": "run-s webpack:web webpack:node",
+    "webpack:web": "webpack --mode production --config-name web --color",
     "webpack:node": "webpack --mode production --config-name node --color"
   },
   "engines": {
