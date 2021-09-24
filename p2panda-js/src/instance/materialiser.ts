@@ -2,16 +2,7 @@
 
 import debug from 'debug';
 
-import { Session } from '~/index';
 import { EntryRecord, InstanceRecord } from '~/types';
-
-import { KeyPair } from 'wasm-web';
-
-export type Context = {
-  keyPair: KeyPair;
-  schema: string;
-  session: Session;
-};
 
 const log = debug('p2panda-js:message');
 

@@ -1,15 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { Session } from '~/index';
-
+import { Context } from '~/session';
 import { P2Panda } from '~/wasm';
-import { KeyPair } from 'wasm-web';
-
-export type Context = {
-  keyPair: KeyPair;
-  schema: string;
-  session: Session;
-};
 
 /**
  * Sign and publish an entry given a prepared `Message`, `KeyPair` and
