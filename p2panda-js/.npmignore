@@ -1,9 +1,12 @@
+*.tgz
 .eslintignore
 .eslintrc.js
 .nvmrc
+.prettierignore
 .prettierrc.js
 /wasm
-lib/wasm-adapter
+jest.config.js
+openrpc.json
 src
 test
 tsconfig.json
