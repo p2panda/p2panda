@@ -14,7 +14,7 @@ import type {
   Fields,
   InstanceRecord,
 } from '~/types';
-import type { KeyPair } from 'wasm-web';
+import type { KeyPair } from 'wasm-node';
 
 const log = debug('p2panda-js:session');
 
