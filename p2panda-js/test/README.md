@@ -10,9 +10,9 @@
 
 ### Generate template
 
-The `test-data.json` contains valid values which you can use as fixtures or test vectors. The values in this file are injected into `openrpc-template.json` via the `test-setup.ts` script. The final `openrpc.json` file is output into the `p2panda-js` folder. This can be accomplished with the following command:
+The `test-data.json` contains valid values which you can use as fixtures or test vectors. The values in this file are injected into `openrpc-template.json` via the `generate-openrpc-spec.ts` script. The final `openrpc.json` file is output into the `p2panda-js` folder. This can be accomplished with the following command:
 
-```bash 
+```bash
 npm run test:template-openrpc
 ```
 
