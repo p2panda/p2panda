@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { expect } from 'chai';
-
-// @ts-expect-error bundle import has no type
-import { Session } from '~/../lib';
+import { Session } from '~/session';
 import { getMessageFields } from '~/message';
 import { marshallRequestFields } from '~/utils';
 
@@ -21,7 +18,7 @@ describe('message', () => {
 
       const session = new Session('http://localhost:2020');
       const messageFields = await getMessageFields(session, fields);
-      expect(messageFields.toString()).to.equal(outputRepresentation);
+      expect(messageFields.toString()).toEqual(outputRepresentation);
     });
   });
 });

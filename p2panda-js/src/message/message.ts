@@ -5,7 +5,7 @@ import debug from 'debug';
 import { Session } from '~/index';
 import { FieldsTagged } from '~/types';
 
-import { MessageFields } from 'wasm-web';
+import { MessageFields } from 'wasm-node';
 
 const log = debug('p2panda-js:message');
 

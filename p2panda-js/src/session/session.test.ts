@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import chai, { assert, expect } from 'chai';
-import sinon from 'sinon';
-import chaiAsPromised from 'chai-as-promised';
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 
-// @ts-expect-error bundle import has no type
-import { Session, createKeyPair } from '~/../lib';
+import { createKeyPair } from '~/identity';
+import { Session } from '~/session';
 
 import TEST_DATA from '~/../test/test-data.json';
 
@@ -16,8 +14,6 @@ const ENTRY_ARGS = TEST_DATA.nextEntryArgs;
 
 const NODE_ADDRESS = 'http://localhost:2020';
 
-chai.use(chaiAsPromised);
-
 /**
  * Test the `Session` class
  *
@@ -27,24 +23,25 @@ chai.use(chaiAsPromised);
 describe('Session', () => {
   it('requires an endpoint parameter', () => {
     expect(() => {
+      // @ts-ignore: We deliberately use the API wrong here
       new Session();
-    }).to.throw('Missing `endpoint` parameter for creating a session');
+    }).toThrow('Missing `endpoint` parameter for creating a session');
     expect(() => {
       new Session('');
-    }).to.throw('Missing `endpoint` parameter for creating a session');
+    }).toThrow('Missing `endpoint` parameter for creating a session');
   });
 
   it('has a string representation', async () => {
     const session = new Session(NODE_ADDRESS);
-    expect(`${session}`).to.equal('<Session http://localhost:2020>');
+    expect(`${session}`).toEqual('<Session http://localhost:2020>');
 
     session.setKeyPair(await createKeyPair());
-    expect(`${session}`).to.match(
+    expect(`${session}`).toMatch(
       /<Session http:\/\/localhost:2020 key pair \w{8}>/,
     );
 
     session.setSchema(SCHEMA);
-    expect(`${session}`).to.match(
+    expect(`${session}`).toMatch(
       /<Session http:\/\/localhost:2020 key pair \w{8} schema \w{8}>/,
     );
   });
@@ -53,12 +50,15 @@ describe('Session', () => {
     it('can query entries', async () => {
       const session = new Session(NODE_ADDRESS);
       const entries = await session.queryEntries(SCHEMA);
-      expect(entries.length).to.equal(ENTRIES.length);
+      expect(entries.length).toBe(ENTRIES.length);
     });
 
     it('throws when querying without a schema', async () => {
       const session = new Session(NODE_ADDRESS);
-      assert.isRejected(session.queryEntries(), 'Schema must be provided');
+      // @ts-ignore: We deliberately use the API wrong here
+      await expect(session.queryEntries()).rejects.toThrow(
+        /Schema must be provided/,
+      );
     });
   });
 
@@ -66,8 +66,8 @@ describe('Session', () => {
     it('can materialize instances', async () => {
       const session = new Session(NODE_ADDRESS);
       const instances = await session.query({ schema: SCHEMA });
-      expect(instances).to.have.lengthOf(1);
-      expect(instances[0].description).to.equal('for playing chess');
+      expect(instances).toHaveLength(1);
+      expect(instances[0].description).toEqual('for playing chess');
     });
   });
 
@@ -78,20 +78,21 @@ describe('Session', () => {
         ENTRIES[0].entryBytes,
         ENTRIES[0].payloadBytes,
       );
-      expect(nextEntryArgs.entryHashBacklink).to.equal(
+      expect(nextEntryArgs.entryHashBacklink).toEqual(
         ENTRY_ARGS.entryHashBacklink,
-        JSON.stringify(
-          nextEntryArgs,
-          ENTRY_ARGS.entryHashSkiplink,
-          ENTRY_ARGS.seqNum,
-        ),
       );
     });
 
     it('throws when publishing without all required parameters', async () => {
       const session = new Session(NODE_ADDRESS);
-      assert.isRejected(session.publishEntry(null, ENTRIES[0].payloadBytes));
-      assert.isRejected(session.publishEntry(ENTRIES[0].entryBytes, null));
+      await expect(
+        // @ts-ignore: We deliberately use the API wrong here
+        session.publishEntry(null, ENTRIES[0].payloadBytes),
+      ).rejects.toThrow();
+      await expect(
+        // @ts-ignore: We deliberately use the API wrong here
+        session.publishEntry(ENTRIES[0].entryBytes, null),
+      ).rejects.toThrow();
     });
   });
 
@@ -99,37 +100,34 @@ describe('Session', () => {
     it('returns next entry args from node', async () => {
       const session = new Session(NODE_ADDRESS);
       const nextEntryArgs = await session.getNextEntryArgs(PUBLIC_KEY, SCHEMA);
-      expect(nextEntryArgs.entryHashSkiplink).to.equal(
+      expect(nextEntryArgs.entryHashSkiplink).toEqual(
         ENTRY_ARGS.entryHashSkiplink,
       );
-      expect(nextEntryArgs.entryHashBacklink).to.equal(
+      expect(nextEntryArgs.entryHashBacklink).toEqual(
         ENTRY_ARGS.entryHashBacklink,
       );
-      expect(nextEntryArgs.seqNum).to.equal(ENTRY_ARGS.seqNum);
-      expect(nextEntryArgs.logId).to.equal(ENTRY_ARGS.logId);
+      expect(nextEntryArgs.seqNum).toEqual(ENTRY_ARGS.seqNum);
+      expect(nextEntryArgs.logId).toEqual(ENTRY_ARGS.logId);
     });
 
     it('returns next entry args from cache', async () => {
       const session = new Session(NODE_ADDRESS);
-      // add a spy to check whether the value is really retrieved from the cache
-      // and not requested
-      session.client.request = sinon.replace(
-        session.client,
-        'request',
-        sinon.fake(),
-      );
+      // Add a spy to check whether the value is really retrieved from the
+      // cache and not requested
+      const mockedFn = jest.fn(async () => true);
+      session.client.request = mockedFn;
 
       const nextEntryArgs = {
         entryHashBacklink: ENTRY_ARGS.entryHashBacklink,
-        entryHashSkiplink: ENTRY_ARGS.entryHashSkiplink,
+        entryHashSkiplink: undefined,
         logId: ENTRY_ARGS.logId,
-        seqNum: 0,
+        seqNum: 1,
       };
       session.setNextEntryArgs(PUBLIC_KEY, SCHEMA, nextEntryArgs);
 
       const cacheResponse = await session.getNextEntryArgs(PUBLIC_KEY, SCHEMA);
-      expect(cacheResponse.logId).to.equal(nextEntryArgs.logId);
-      expect(session.client.request.notCalled).to.be.true;
+      expect(cacheResponse.logId).toEqual(nextEntryArgs.logId);
+      expect(mockedFn.mock.calls.length).toBe(0);
     });
   });
 });

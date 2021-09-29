@@ -1,32 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { expect } from 'chai';
-
-// @ts-expect-error bundle import has no type
-import { wasm } from '~/../lib';
+import wasm from '~/wasm';
 
 describe('Web assembly interface', () => {
   describe('KeyPair', () => {
     it('creates a key pair', async () => {
       const { KeyPair } = await wasm;
       const keyPair = new KeyPair();
-      expect(keyPair.privateKey().length).to.eq(64);
+      expect(keyPair.privateKey().length).toBe(64);
     });
 
     it('restores a key pair', async () => {
       const { KeyPair } = await wasm;
       const keyPair = new KeyPair();
       const keyPairSecond = KeyPair.fromPrivateKey(keyPair.privateKey());
-      expect(keyPair.publicKey()).to.eq(keyPairSecond.publicKey());
+      expect(keyPair.publicKey()).toBe(keyPairSecond.publicKey());
     });
 
     it('signs and validates', async () => {
       const { KeyPair } = await wasm;
       const keyPair = new KeyPair();
-      const message = 'hello panda';
+      const message = new Uint8Array([1, 2, 3]);
       const sig = keyPair.sign(message);
-      expect(keyPair.verify(message, sig)).to.be.true;
-      expect(keyPair.verify('hello aquadoggo', sig)).to.be.false;
+      expect(keyPair.verify(message, sig)).toBeTruthy();
+      expect(keyPair.verify(new Uint8Array([3, 4, 5]), sig)).toBeFalsy();
     });
   });
 
@@ -46,24 +43,24 @@ describe('Web assembly interface', () => {
       fields.add('username', 'relation', TEST_SCHEMA);
 
       // Returns the correct fields
-      expect(fields.get('description')).to.eq('Hello, Panda');
-      expect(fields.get('temperature')).to.eq(23);
-      expect(fields.get('isCute')).to.eq(true);
-      expect(fields.get('degree')).to.eq(12.322);
-      expect(fields.get('username')).to.eq(TEST_SCHEMA);
+      expect(fields.get('description')).toBe('Hello, Panda');
+      expect(fields.get('temperature')).toBe(23);
+      expect(fields.get('isCute')).toBe(true);
+      expect(fields.get('degree')).toBe(12.322);
+      expect(fields.get('username')).toBe(TEST_SCHEMA);
 
       // Return nothing when field does not exist
-      expect(fields.get('message')).to.eq(null);
+      expect(fields.get('message')).toBe(null);
     });
 
     it('returns the correct length', async () => {
       const { MessageFields } = await wasm;
       const fields = new MessageFields();
-      expect(fields.length()).to.eq(0);
+      expect(fields.length()).toBe(0);
       fields.add('message', 'str', 'Good morning');
-      expect(fields.length()).to.eq(1);
+      expect(fields.length()).toBe(1);
       fields.remove('message');
-      expect(fields.length()).to.eq(0);
+      expect(fields.length()).toBe(0);
     });
 
     it('throws when trying to set a field twice', async () => {
@@ -72,7 +69,7 @@ describe('Web assembly interface', () => {
       fields.add('description', 'str', 'Good morning, Panda');
       expect(() =>
         fields.add('description', 'str', 'Good night, Panda'),
-      ).to.throw('field already exists');
+      ).toThrow('field already exists');
     });
 
     it('throws when using invalid types or values', async () => {
@@ -80,15 +77,15 @@ describe('Web assembly interface', () => {
       const fields = new MessageFields();
 
       // Throw when type is invalid
-      expect(() => fields.add('test', 'lulu', true)).to.throw(
+      expect(() => fields.add('test', 'lulu', true)).toThrow(
         'Unknown type value',
       );
-      expect(() => fields.add('test', 'int', true)).to.throw(
+      expect(() => fields.add('test', 'int', true)).toThrow(
         'Invalid integer value',
       );
 
       // Throw when relation is an invalid hash
-      expect(() => fields.add('contact', 'relation', 'test')).to.throw(
+      expect(() => fields.add('contact', 'relation', 'test')).toThrow(
         'invalid hex encoding in hash string',
       );
     });
@@ -96,7 +93,7 @@ describe('Web assembly interface', () => {
     it('throws when removing an inexistent field', async () => {
       const { MessageFields } = await wasm;
       const fields = new MessageFields();
-      expect(() => fields.remove('test')).to.throw();
+      expect(() => fields.remove('test')).toThrow();
     });
   });
 
@@ -121,7 +118,7 @@ describe('Web assembly interface', () => {
       // Create message
       const fields = new MessageFields();
       fields.add('description', 'str', 'Hello, Panda');
-      expect(fields.get('description')).to.eq('Hello, Panda');
+      expect(fields.get('description')).toBe('Hello, Panda');
 
       const messageEncoded = encodeCreateMessage(TEST_SCHEMA, fields);
 
@@ -129,29 +126,29 @@ describe('Web assembly interface', () => {
       const { entryEncoded, entryHash } = signEncodeEntry(
         keyPair,
         messageEncoded,
-        null,
-        null,
+        undefined,
+        undefined,
         SEQ_NUM,
         LOG_ID,
       );
 
-      expect(entryHash.length).to.eq(132);
+      expect(entryHash.length).toBe(132);
 
       // Decode entry and return as JSON
       const decodedEntry = decodeEntry(entryEncoded, messageEncoded);
 
-      expect(decodedEntry.entryHashBacklink).to.be.null;
-      expect(decodedEntry.entryHashSkiplink).to.be.null;
-      expect(decodedEntry.logId).to.eq(LOG_ID);
-      expect(decodedEntry.message.action).to.eq('create');
-      expect(decodedEntry.message.schema).to.eq(TEST_SCHEMA);
-      expect(decodedEntry.message.fields.description.value).to.eq(
+      expect(decodedEntry.entryHashBacklink).toBeNull();
+      expect(decodedEntry.entryHashSkiplink).toBeNull();
+      expect(decodedEntry.logId).toBe(LOG_ID);
+      expect(decodedEntry.message.action).toBe('create');
+      expect(decodedEntry.message.schema).toBe(TEST_SCHEMA);
+      expect(decodedEntry.message.fields.description.value).toBe(
         'Hello, Panda',
       );
-      expect(decodedEntry.message.fields.description.type).to.eq('str');
+      expect(decodedEntry.message.fields.description.type).toBe('str');
 
       // Test decoding entry without message
-      expect(() => decodeEntry(entryEncoded)).not.to.throw();
+      expect(() => decodeEntry(entryEncoded)).not.toThrow();
     });
   });
 });

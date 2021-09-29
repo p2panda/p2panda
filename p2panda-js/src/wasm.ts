@@ -16,7 +16,7 @@ export type P2Panda = Omit<
 // automatically for better debugging.
 const wasm = new Promise<P2Panda>((resolve, reject) => {
   initializeWasm
-    .then(({ setWasmPanicHook, ...rest }) => {
+    .then(({ setWasmPanicHook, ...rest }: Resolved<typeof initializeWasm>) => {
       // Set panic hooks for better logging of wasm errors. See:
       // https://github.com/rustwasm/console_error_panic_hook
       setWasmPanicHook();
