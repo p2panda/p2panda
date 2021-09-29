@@ -7,13 +7,11 @@
 // Defined by WebpackDefinePlugin or Jest configuration in test environment
 declare const BUILD_TARGET_WEB: boolean;
 
-let adapter:
-  | typeof import('~/wasm-adapter/browser')
-  | typeof import('~/wasm-adapter/node');
+let adapter;
 try {
   adapter = BUILD_TARGET_WEB
-    ? (require('~/wasm-adapter/browser') as typeof import('~/wasm-adapter/browser'))
-    : (require('~/wasm-adapter/node') as typeof import('~/wasm-adapter/node'));
+    ? require('~/wasm-adapter/browser')
+    : require('~/wasm-adapter/node');
 } catch (err) {
   console.error(err);
   throw new Error('Attempted to import web assembly library before bundling.');
