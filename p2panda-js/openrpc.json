@@ -419,6 +419,7 @@
                 }
             ],
             "result": {
+                "name": "schemaEntries",
                 "schema": {
                     "type": "object",
                     "properties": {
