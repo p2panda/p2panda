@@ -12,7 +12,7 @@
     "test:jest": "jest",
     "test:run": "run-s clear wasm:node test:jest",
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm test' --ext js,ts,json",
-    "test:template-openrpc": "npx ts-node ./test/test-setup.ts",
+    "test:template-openrpc": "npx ts-node ./test/generate-openrpc-spec.ts",
     "test:mock-node": "open-rpc-mock-server --port 2020",
     "wasm": "run-s --silent wasm:browser wasm:node",
     "wasm:browser": "wasm-pack --log-level warn build ../p2panda-rs --target web --out-dir ../p2panda-js/wasm-web --release --out-name index",
