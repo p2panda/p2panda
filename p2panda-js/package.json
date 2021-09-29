@@ -11,7 +11,7 @@
     "test": "run-p --race test:mock-node test:run",
     "test:jest": "jest",
     "test:mock-node": "open-rpc-mock-server --port 2020",
-    "test:run": "run-s clear wasm:node test:jest",
+    "test:run": "run-s clear webpack:node test:jest",
     "test:template-openrpc": "npx ts-node ./test/test-setup.ts",
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm test' --ext js,ts,json",
     "webpack": "run-s webpack:web webpack:node",
