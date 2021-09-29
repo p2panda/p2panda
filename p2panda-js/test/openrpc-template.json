@@ -32,6 +32,14 @@
                 "schema": {
                     "$ref": "#/components/schemas/Hash"
                 }
+            },
+            "QueryEntriesResponse": {
+                "name": "entries",
+                "summary": "The response from a call to panda_queryEntries",
+                "required": true,
+                "schema": {
+                    "$ref": "#/components/schemas/Entries"
+                }
             }
         },
         "schemas": {
@@ -114,14 +122,6 @@
                 "type": "array",
                 "items": {
                     "$ref": "#/components/schemas/Entry"
-                }
-            },
-            "QueryEntriesResponse": {
-                "type": "object",
-                "properties": {
-                    "entries": {
-                        "$ref": "#/components/schemas/Entries"
-                    }
                 }
             }
         },
@@ -216,9 +216,7 @@
                 }
             ],
             "result": {
-                "schema": {
-                    "$ref": "#/components/schemas/QueryEntriesResponse"
-                }
+                "$ref": "#/components/contentDescriptors/QueryEntriesResponse"
             },
             "examples": [
                 {
@@ -239,7 +237,6 @@
             "name": "panda_publishEntry",
             "summary": "Publish an encoded entry and message.",
             "description": "Publish a new `Entry` to a `p2panda` log. See the [p2panda-rs]() and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
-
             "params": [
                 {
                     "name": "entryEncoded",
