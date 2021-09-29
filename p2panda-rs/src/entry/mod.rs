@@ -14,6 +14,7 @@ mod entry_signed;
 mod error;
 mod log_id;
 mod seq_num;
+mod tests;
 
 pub use decode::decode_entry;
 pub use encode::sign_and_encode;
