@@ -5,7 +5,7 @@
   "main": "lib/index.js",
   "browser": "lib/index.min.js",
   "scripts": {
-    "build": "cross-env NODE_ENV=production run-s clear webpack",
+    "build": "run-s clear webpack",
     "clear": "rimraf ./lib ./wasm",
     "lint": "eslint --ext .ts .",
     "test": "cross-env NODE_ENV=development run-p --race test:mock-node test:run",
@@ -14,7 +14,7 @@
     "test:run": "run-s clear webpack:node test:jest",
     "test:template-openrpc": "npx ts-node ./test/generate-openrpc-spec.ts",
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm test' --ext js,ts,json",
-    "webpack": "run-s webpack:web webpack:node",
+    "webpack": "cross-env NODE_ENV=production run-s webpack:web webpack:node",
     "webpack:web": "webpack --config-name web --color",
     "webpack:node": "webpack --config-name node --color"
   },
