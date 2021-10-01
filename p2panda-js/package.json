@@ -9,7 +9,7 @@
     "clear": "rimraf ./lib ./wasm",
     "lint": "eslint --ext .ts .",
     "test": "cross-env NODE_ENV=development run-p --race test:mock-node test:run",
-    "test:jest": "jest",
+    "test:jest": "jest --detectOpenHandles",
     "test:mock-node": "open-rpc-mock-server --port 2020",
     "test:run": "run-s clear webpack:node test:jest",
     "test:template-openrpc": "npx ts-node ./test/generate-openrpc-spec.ts",
