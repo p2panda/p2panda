@@ -41,17 +41,17 @@ thiserror = "1.0.29"
 yamf-hash = "0.1.2"
 
 # Optional dependencies (behind feature flags)
-sqlx = { version = "0.5.7", features = ["runtime-async-std-rustls", "all-databases"], optional = true }
+sqlx = { version = "0.5.9", features = ["runtime-async-std-rustls", "all-databases"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rand = "0.7.3"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"
-js-sys = "0.3.53"
+js-sys = "0.3.55"
 rand = { version = "0.7.3", features = ["wasm-bindgen"] }
-wasm-bindgen = "0.2.76"
+wasm-bindgen = "0.2.78"
 
 [dev-dependencies]
-wasm-bindgen-test = "0.3.26"
+wasm-bindgen-test = "0.3.28"
 rstest = "0.11.0"

@@ -5,8 +5,7 @@
     "outDir": "./lib",
     "paths": {
       "~/*": ["./src/*"],
-      "wasm-web": ["./wasm-web"],
-      "wasm-node": ["./wasm-node"]
+      "wasm": ["./wasm"]
     },
     "lib": ["dom"],
     "resolveJsonModule": true,

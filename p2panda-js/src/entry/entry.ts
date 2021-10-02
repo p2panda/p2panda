@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import wasm from '~/wasm';
 import { Context } from '~/session';
-import { P2Panda } from '~/wasm';
 
 /**
  * Sign and publish an entry given a prepared `Message`, `KeyPair` and
@@ -11,7 +11,7 @@ export const signPublishEntry = async (
   messageEncoded: string,
   { keyPair, schema, session }: Context,
 ): Promise<void> => {
-  const { signEncodeEntry } = (await session.loadWasm()) as P2Panda;
+  const { signEncodeEntry } = await wasm;
 
   const entryArgs = await session.getNextEntryArgs(keyPair.publicKey(), schema);
 

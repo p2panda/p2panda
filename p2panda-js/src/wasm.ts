@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { initializeWasm } from './wasm-adapter';
+type WebAssembly = typeof import('wasm');
 
 // Helper to extract resolved promise
 type Resolved<T> = T extends PromiseLike<infer U> ? Resolved<U> : T;
 
-// p2panda is exported without web assembly utilities
+// p2panda is exported without WebAssembly utilities
 export type P2Panda = Omit<
-  Resolved<typeof initializeWasm>,
+  Resolved<WebAssembly>,
   'setWasmPanicHook' | 'init' | 'default'
 >;
 
@@ -15,8 +15,9 @@ export type P2Panda = Omit<
 // it was used multiple times (singleton). Also it sets the panic hook
 // automatically for better debugging.
 const wasm = new Promise<P2Panda>((resolve, reject) => {
-  initializeWasm
-    .then(({ setWasmPanicHook, ...rest }: Resolved<typeof initializeWasm>) => {
+  import('wasm')
+    .then((lib) => lib.default)
+    .then(({ setWasmPanicHook, ...rest }) => {
       // Set panic hooks for better logging of wasm errors. See:
       // https://github.com/rustwasm/console_error_panic_hook
       setWasmPanicHook();
