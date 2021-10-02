@@ -10,7 +10,7 @@ use std::convert::{TryFrom, TryInto};
 use std::panic;
 
 use console_error_panic_hook::hook as panic_hook;
-use ed25519_dalek::{PublicKey, SecretKey, Signature};
+use ed25519_dalek::{PublicKey, Signature};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
