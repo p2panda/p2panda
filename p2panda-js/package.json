@@ -26,9 +26,10 @@
     "url": "git+https://github.com/p2panda/p2panda.git"
   },
   "contributors": [
-    "sophiiistika <sophiiistika@mailbox.org>",
     "adz <x1d@adz.garden>",
-    "cafca <cafca@001.land>"
+    "cafca <cafca@001.land>",
+    "sandreae <contact@samandreae.com>",
+    "sophiiistika <sophiiistika@mailbox.org>"
   ],
   "license": "AGPL-3.0-or-later",
   "bugs": {
