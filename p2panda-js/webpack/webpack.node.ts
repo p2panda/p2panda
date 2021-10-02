@@ -40,6 +40,10 @@ const configNode: webpack.Configuration = {
     wasm: `./${DIR_WASM}`,
     // `node-fetch` has a weird export that needs to be treated differently.
     'node-fetch': 'commonjs2 node-fetch',
+    // Solve missing dependency warning for `ws` package.
+    // Related issue: https://github.com/websockets/ws/issues/1126
+    'utf-8-validate': 'utf-8-validate',
+    bufferutil: 'bufferutil',
   },
   plugins: [
     // As we treat the wasm build as external we can't make use of Webpack's

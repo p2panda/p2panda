@@ -8,15 +8,15 @@
     "build": "run-s clear webpack",
     "clear": "rimraf ./lib ./wasm",
     "lint": "eslint --ext .ts .",
-    "test": "run-p --race test:mock-node test:run",
-    "test:jest": "jest",
+    "test": "cross-env NODE_ENV=development run-p --race test:mock-node test:run",
+    "test:jest": "jest --detectOpenHandles",
     "test:mock-node": "open-rpc-mock-server --port 2020",
     "test:run": "run-s clear webpack:node test:jest",
-    "test:template-openrpc": "npx ts-node ./test/test-setup.ts",
-    "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm run test' --ext js,ts,json",
-    "webpack": "run-s webpack:web webpack:node",
-    "webpack:web": "webpack --mode production --config-name web --color",
-    "webpack:node": "webpack --mode production --config-name node --color"
+    "test:template-openrpc": "npx ts-node ./test/generate-openrpc-spec.ts",
+    "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm test' --ext js,ts,json",
+    "webpack": "cross-env NODE_ENV=production run-s webpack:web webpack:node",
+    "webpack:node": "webpack --config-name node --color",
+    "webpack:web": "webpack --config-name web --color"
   },
   "engines": {
     "node": ">= v12.0.0"
@@ -55,6 +55,7 @@
     "@wasm-tool/wasm-pack-plugin": "^1.5.0",
     "babel-loader": "^8.2.2",
     "copy-webpack-plugin": "^7.0.0",
+    "cross-env": "^7.0.3",
     "eslint": "^7.17.0",
     "eslint-config-prettier": "^7.1.0",
     "eslint-loader": "^4.0.2",

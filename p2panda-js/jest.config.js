@@ -6,7 +6,7 @@ module.exports = {
     // Use the same path alias for our codebase as we do in Webpack
     '^~(.*)$': '<rootDir>/src$1',
     // Map `wasm` imports to the build of `wasm-pack`
-    'wasm': '<rootDir>/wasm',
+    wasm: '<rootDir>/wasm',
   },
   modulePathIgnorePatterns: ['<rootDir>/wasm-web'],
   globals: {
