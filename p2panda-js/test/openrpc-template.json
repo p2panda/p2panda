@@ -180,7 +180,7 @@
                 "name": "entries",
                 "summary": "All `Entries` in the test Log",
                 "value": {
-                    "$ref": "./test/test-data.json#/entries"
+                    "entries": {"$ref": "./test/test-data.json#/entries"}
                 }
             }
         }
