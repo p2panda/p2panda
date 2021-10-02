@@ -31,10 +31,10 @@ impl Author {
     ///
     /// // Generate new Ed25519 key pair
     /// let key_pair = KeyPair::new();
-    /// let public_key = key_pair.public_key();
+    /// let public_key = key_pair.public_key().to_owned();
     ///
-    /// // Create an `Author` instance from a public key string
-    /// let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
+    /// // Create an `Author` instance from a public key
+    /// let author = Author::try_from(public_key).unwrap();
     ///
     /// # Ok(())
     /// # }
