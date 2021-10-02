@@ -18,12 +18,15 @@ describe('Web assembly interface', () => {
     });
 
     it('signs and validates', async () => {
-      const { KeyPair } = await wasm;
+      const { KeyPair, verifySignature } = await wasm;
       const keyPair = new KeyPair();
-      const message = new Uint8Array([1, 2, 3]);
-      const sig = keyPair.sign(message);
-      expect(keyPair.verify(message, sig)).toBeTruthy();
-      expect(keyPair.verify(new Uint8Array([3, 4, 5]), sig)).toBeFalsy();
+      const publicKey = keyPair.publicKey();
+      const message = 'Hello, Signature!';
+      const signature = keyPair.sign(message);
+      expect(verifySignature(publicKey, message, signature)).toBeTruthy();
+      expect(
+        verifySignature(publicKey, 'Wrong Signature!', signature),
+      ).toBeFalsy();
     });
   });
 
