@@ -58,13 +58,11 @@ impl KeyPair {
         Self(KeyPairNonWasm::new())
     }
 
-    /// Derives a key pair from a private key (encoded as hex string for better handling in browser
-    /// contexts).
+    /// Derives a key pair from a private key, encoded as hex string for better handling in browser
+    /// contexts.
     #[wasm_bindgen(js_name = fromPrivateKey)]
     pub fn from_private_key(private_key: String) -> Result<KeyPair, JsValue> {
-        let secret_key_bytes = jserr!(hex::decode(private_key));
-        let secret_key = jserr!(SecretKey::from_bytes(&secret_key_bytes));
-        let key_pair_inner = jserr!(KeyPairNonWasm::from_private_key(&secret_key));
+        let key_pair_inner = jserr!(KeyPairNonWasm::from_private_key_str(&private_key));
         Ok(KeyPair(key_pair_inner))
     }
 
@@ -80,16 +78,10 @@ impl KeyPair {
         hex::encode(self.0.private_key().to_bytes())
     }
 
-    /// Sign a message using this key pair, return signature encoded as a hex string.
+    /// Sign a message using this key pair, returns signature encoded as a hex string.
     #[wasm_bindgen]
     pub fn sign(&self, message: String) -> String {
-        // Convert string to byte sequence
-        let message_bytes = message.as_bytes();
-
-        // Sign data
-        let signature = self.0.sign(&message_bytes);
-
-        // Return signature as a hex string.
+        let signature = self.0.sign(&message.as_bytes());
         hex::encode(signature.to_bytes())
     }
 

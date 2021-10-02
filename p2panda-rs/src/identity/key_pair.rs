@@ -32,8 +32,8 @@ impl KeyPair {
     /// // Generate new Ed25519 key pair
     /// let key_pair = KeyPair::new();
     ///
-    /// println!("{}", key_pair.public_key());
-    /// println!("{}", key_pair.private_key());
+    /// println!("{:?}", key_pair.public_key());
+    /// println!("{:?}", key_pair.private_key());
     /// # Ok(())
     /// # }
     /// ```
@@ -66,8 +66,7 @@ impl KeyPair {
     /// // Derive a key pair from a private key
     /// let key_pair_derived = KeyPair::from_private_key(key_pair.private_key())?;
     ///
-    /// assert_eq!(key_pair.public_key_bytes(), key_pair_derived.public_key_bytes());
-    /// assert_eq!(key_pair.private_key_bytes(), key_pair_derived.private_key_bytes());
+    /// assert_eq!(key_pair.public_key(), key_pair_derived.public_key());
     /// # Ok(())
     /// # }
     /// ```
@@ -80,6 +79,13 @@ impl KeyPair {
         let key_pair = Ed25519Keypair::from_bytes(&bytes)?;
 
         Ok(KeyPair(key_pair))
+    }
+
+    /// Derives a key pair from a private key encoded as hex string.
+    pub fn from_private_key_str(private_key: &str) -> Result<Self, KeyPairError> {
+        let secret_key_bytes = hex::decode(private_key)?;
+        let secret_key = SecretKey::from_bytes(&secret_key_bytes)?;
+        Ok(Self::from_private_key(&secret_key)?)
     }
 
     /// Returns the public half of the key pair.
@@ -136,14 +142,8 @@ mod tests {
     #[test]
     fn makes_keypair() {
         let key_pair = KeyPair::new();
-        assert_eq!(
-            key_pair.public_key().to_bytes().len(),
-            PUBLIC_KEY_LENGTH * 2
-        );
-        assert_eq!(
-            key_pair.private_key().to_bytes().len(),
-            SECRET_KEY_LENGTH * 2
-        );
+        assert_eq!(key_pair.public_key().to_bytes().len(), PUBLIC_KEY_LENGTH);
+        assert_eq!(key_pair.private_key().to_bytes().len(), SECRET_KEY_LENGTH);
     }
 
     #[test]
