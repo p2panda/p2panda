@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import wasm from '~/wasm';
 import { Fields, InstanceRecord } from '~/types';
-import { marshallRequestFields } from '~/utils';
 import { getMessageFields } from '~/message';
+import { marshallRequestFields } from '~/utils';
 import { signPublishEntry } from '~/entry';
 
 import { materializeEntries } from './materialiser';
@@ -17,7 +18,7 @@ export const createInstance = async (
   fields: Fields,
   { keyPair, schema, session }: Context,
 ): Promise<void> => {
-  const { encodeCreateMessage } = await session.loadWasm();
+  const { encodeCreateMessage } = await wasm;
 
   // Create message
   const fieldsTagged = marshallRequestFields(fields);

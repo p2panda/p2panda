@@ -15,8 +15,8 @@
     "test:template-openrpc": "npx ts-node ./test/generate-openrpc-spec.ts",
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm test' --ext js,ts,json",
     "webpack": "cross-env NODE_ENV=production run-s webpack:web webpack:node",
-    "webpack:web": "webpack --config-name web --color",
-    "webpack:node": "webpack --config-name node --color"
+    "webpack:node": "webpack --config-name node --color",
+    "webpack:web": "webpack --config-name web --color"
   },
   "engines": {
     "node": ">= v12.0.0"

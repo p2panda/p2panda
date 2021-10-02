@@ -2,10 +2,11 @@
 
 import debug from 'debug';
 
-import { Session } from '~/index';
+import wasm from '~/wasm';
 import { FieldsTagged } from '~/types';
+import { Session } from '~/index';
 
-import { MessageFields } from 'wasm';
+import type { MessageFields } from 'wasm';
 
 const log = debug('p2panda-js:message');
 
@@ -16,7 +17,7 @@ export const getMessageFields = async (
   session: Session,
   fields: FieldsTagged,
 ): Promise<MessageFields> => {
-  const { MessageFields } = await session.loadWasm();
+  const { MessageFields } = await wasm;
 
   const messageFields = new MessageFields();
   for (const k of Object.keys(fields)) {
