@@ -2,8 +2,23 @@
     "openrpc": "1.0.0-rc1",
     "info": {
         "title": "p2panda RPC interface",
-        "version": "0.0.1"
+        "version": "0.0.1",
+        "description": "The API for a p2panda node which can be used for creating and retrieving entries on a Bamboo append-only log.",
+        "contact": {
+            "name": "p2panda Team",
+            "email": "contributors@p2panda.org",
+            "url": "https://p2panda.org"
+        },
+        "license": {
+            "name": "GNU Affero General Public License v3.0"
+        }
     },
+    "servers": [
+        {
+            "name": "p2panda node",
+            "url": "https://welle.liebechaos.org"
+        }
+    ],
     "components": {
         "contentDescriptors": {
             "EntryArgs": {
