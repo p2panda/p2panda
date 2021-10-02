@@ -249,17 +249,17 @@
         },
         "examples": {
             "FirstEntryEncoded": {
-                "name": "Encoded first `Entry`.",
+                "name": "entryEncoded",
                 "summary": "Encoded bytes of the first entry in a p2panda `Bamboo` log.",
                 "value": "009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101f60040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04ef01463f550ce62f983494d0eb6051c73a5641025f355758006724e5b730f47a4454c5395eab807325ee58d69c08d66461357d0f961aee383acc3247ed6419706"
             },
             "FirstEntryMessageEncdoded": {
-                "name": "Encoded first `Message`",
+                "name": "messageEncoded",
                 "summary": "Encoded bytes of the payload of the first entry in a p2panda `Bamboo` log.",
                 "value": "a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a26b6465736372697074696f6ea26474797065637374726576616c756571666f7220706c6179696e67206368657373646e616d65a26474797065637374726576616c7565656368657373"
             },
             "EntryArgsResult": {
-                "name": "`Entry` arguments",
+                "name": "nextEntryArgs",
                 "summary": "The arguments required for publishing the next `Entry` to the test log.",
                 "value": {
                     "entryHashBacklink": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",
@@ -269,31 +269,29 @@
                 }
             },
             "Author": {
-                "name": "Log `Author`",
+                "name": "author",
                 "summary": "The `Author` of the test log.",
                 "value": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49"
             },
             "Schema": {
-                "name": "Log `Schema`",
+                "name": "schema",
                 "summary": "The `Schema` which this log is assigned",
                 "value": "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437"
             },
             "Entries": {
-                "name": "Array of `Entries`",
+                "name": "entries",
                 "summary": "All `Entries` in the test Log",
-                "value": {
-                    "entries": [
-                        {
-                            "author": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49",
-                            "entryBytes": "009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101f60040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04ef01463f550ce62f983494d0eb6051c73a5641025f355758006724e5b730f47a4454c5395eab807325ee58d69c08d66461357d0f961aee383acc3247ed6419706",
-                            "entryHash": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",
-                            "logId": 1,
-                            "payloadBytes": "a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a26b6465736372697074696f6ea26474797065637374726576616c756571666f7220706c6179696e67206368657373646e616d65a26474797065637374726576616c7565656368657373",
-                            "payloadHash": "0040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04e",
-                            "seqNum": 1
-                        }
-                    ]
-                }
+                "value": [
+                    {
+                        "author": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49",
+                        "entryBytes": "009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101f60040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04ef01463f550ce62f983494d0eb6051c73a5641025f355758006724e5b730f47a4454c5395eab807325ee58d69c08d66461357d0f961aee383acc3247ed6419706",
+                        "entryHash": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",
+                        "logId": 1,
+                        "payloadBytes": "a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a26b6465736372697074696f6ea26474797065637374726576616c756571666f7220706c6179696e67206368657373646e616d65a26474797065637374726576616c7565656368657373",
+                        "payloadHash": "0040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04e",
+                        "seqNum": 1
+                    }
+                ]
             }
         }
     },
@@ -302,6 +300,7 @@
             "name": "panda_getEntryArguments",
             "summary": "Returns arguments needed for constructing the next entry given author and schema.",
             "description": "Fetch the required arguments needed when constructing and publishing an `Entry` to a p2panda log. `p2panda` logs are based on the [Bamboo](https://github.com/AljoschaMeyer/bamboo) append only log specification. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
+            "paramStructure": "by-name",
             "params": [
                 {
                     "name": "author",
@@ -377,18 +376,18 @@
                     "summary": "An example of a valid parameters and response when making a request, based on test data.",
                     "params": [
                         {
-                            "name": "Log `Author`",
+                            "name": "author",
                             "summary": "The `Author` of the test log.",
                             "value": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49"
                         },
                         {
-                            "name": "Log `Schema`",
+                            "name": "schema",
                             "summary": "The `Schema` which this log is assigned",
                             "value": "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437"
                         }
                     ],
                     "result": {
-                        "name": "`Entry` arguments",
+                        "name": "nextEntryArgs",
                         "summary": "The arguments required for publishing the next `Entry` to the test log.",
                         "value": {
                             "entryHashBacklink": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",
@@ -404,6 +403,7 @@
             "name": "panda_queryEntries",
             "summary": "Query node for encoded entries of a given schema.",
             "description": "This method returns all entries of a given schema. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
+            "paramStructure": "by-name",
             "params": [
                 {
                     "name": "schema",
@@ -467,27 +467,25 @@
                     "summary": "The parameters and response when making this request according to the test data.",
                     "params": [
                         {
-                            "name": "Log `Schema`",
+                            "name": "schema",
                             "summary": "The `Schema` which this log is assigned",
                             "value": "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437"
                         }
                     ],
                     "result": {
-                        "name": "Array of `Entries`",
+                        "name": "entries",
                         "summary": "All `Entries` in the test Log",
-                        "value": {
-                            "entries": [
-                                {
-                                    "author": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49",
-                                    "entryBytes": "009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101f60040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04ef01463f550ce62f983494d0eb6051c73a5641025f355758006724e5b730f47a4454c5395eab807325ee58d69c08d66461357d0f961aee383acc3247ed6419706",
-                                    "entryHash": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",
-                                    "logId": 1,
-                                    "payloadBytes": "a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a26b6465736372697074696f6ea26474797065637374726576616c756571666f7220706c6179696e67206368657373646e616d65a26474797065637374726576616c7565656368657373",
-                                    "payloadHash": "0040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04e",
-                                    "seqNum": 1
-                                }
-                            ]
-                        }
+                        "value": [
+                            {
+                                "author": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49",
+                                "entryBytes": "009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101f60040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04ef01463f550ce62f983494d0eb6051c73a5641025f355758006724e5b730f47a4454c5395eab807325ee58d69c08d66461357d0f961aee383acc3247ed6419706",
+                                "entryHash": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",
+                                "logId": 1,
+                                "payloadBytes": "a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a26b6465736372697074696f6ea26474797065637374726576616c756571666f7220706c6179696e67206368657373646e616d65a26474797065637374726576616c7565656368657373",
+                                "payloadHash": "0040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04e",
+                                "seqNum": 1
+                            }
+                        ]
                     }
                 }
             ]
@@ -496,6 +494,7 @@
             "name": "panda_publishEntry",
             "summary": "Publish an encoded entry and message.",
             "description": "Publish a new `Entry` to a `p2panda` log. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
+            "paramStructure": "by-name",
             "params": [
                 {
                     "name": "entryEncoded",
@@ -559,18 +558,18 @@
                     "summary": "Example of valid parameters for publishing a new `Entry` on the test log. Returns the `Entry` arguments required for publishing the next `Entry` on our log.",
                     "params": [
                         {
-                            "name": "Encoded first `Entry`.",
+                            "name": "entryEncoded",
                             "summary": "Encoded bytes of the first entry in a p2panda `Bamboo` log.",
                             "value": "009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101f60040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04ef01463f550ce62f983494d0eb6051c73a5641025f355758006724e5b730f47a4454c5395eab807325ee58d69c08d66461357d0f961aee383acc3247ed6419706"
                         },
                         {
-                            "name": "Encoded first `Message`",
+                            "name": "messageEncoded",
                             "summary": "Encoded bytes of the payload of the first entry in a p2panda `Bamboo` log.",
                             "value": "a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a26b6465736372697074696f6ea26474797065637374726576616c756571666f7220706c6179696e67206368657373646e616d65a26474797065637374726576616c7565656368657373"
                         }
                     ],
                     "result": {
-                        "name": "`Entry` arguments",
+                        "name": "nextEntryArgs",
                         "summary": "The arguments required for publishing the next `Entry` to the test log.",
                         "value": {
                             "entryHashBacklink": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",

@@ -127,47 +127,45 @@
         },
         "examples": {
             "FirstEntryEncoded": {
-                "name": "Encoded first `Entry`.",
+                "name": "entryEncoded",
                 "summary": "Encoded bytes of the first entry in a p2panda `Bamboo` log.",
                 "value": {
                     "$ref": "./test/test-data.json#/entries/0/entryBytes"
                 }
             },
             "FirstEntryMessageEncdoded": {
-                "name": "Encoded first `Message`",
+                "name": "messageEncoded",
                 "summary": "Encoded bytes of the payload of the first entry in a p2panda `Bamboo` log.",
                 "value": {
                     "$ref": "./test/test-data.json#/entries/0/payloadBytes"
                 }
             },
             "EntryArgsResult": {
-                "name": "`Entry` arguments",
+                "name": "nextEntryArgs",
                 "summary": "The arguments required for publishing the next `Entry` to the test log.",
                 "value": {
                     "$ref": "./test/test-data.json#/nextEntryArgs"
                 }
             },
             "Author": {
-                "name": "Log `Author`",
+                "name": "author",
                 "summary": "The `Author` of the test log.",
                 "value": {
                     "$ref": "./test/test-data.json#/entries/0/author"
                 }
             },
             "Schema": {
-                "name": "Log `Schema`",
+                "name": "schema",
                 "summary": "The `Schema` which this log is assigned",
                 "value": {
                     "$ref": "./test/test-data.json#/decodedEntries/0/message/schema"
                 }
             },
             "Entries": {
-                "name": "Array of `Entries`",
+                "name": "entries",
                 "summary": "All `Entries` in the test Log",
                 "value": {
-                    "entries": {
-                        "$ref": "./test/test-data.json#/entries"
-                    }
+                    "$ref": "./test/test-data.json#/entries"
                 }
             }
         }
@@ -177,6 +175,7 @@
             "name": "panda_getEntryArguments",
             "summary": "Returns arguments needed for constructing the next entry given author and schema.",
             "description": "Fetch the required arguments needed when constructing and publishing an `Entry` to a p2panda log. `p2panda` logs are based on the [Bamboo](https://github.com/AljoschaMeyer/bamboo) append only log specification. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
+            "paramStructure": "by-name",
             "params": [
                 {
                     "$ref": "#/components/contentDescriptors/Author"
@@ -210,6 +209,7 @@
             "name": "panda_queryEntries",
             "summary": "Query node for encoded entries of a given schema.",
             "description": "This method returns all entries of a given schema. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
+            "paramStructure": "by-name",
             "params": [
                 {
                     "$ref": "#/components/contentDescriptors/Schema"
@@ -237,6 +237,7 @@
             "name": "panda_publishEntry",
             "summary": "Publish an encoded entry and message.",
             "description": "Publish a new `Entry` to a `p2panda` log. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
+            "paramStructure": "by-name",
             "params": [
                 {
                     "name": "entryEncoded",
