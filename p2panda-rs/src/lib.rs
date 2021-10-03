@@ -46,7 +46,7 @@
     missing_copy_implementations,
     missing_debug_implementations,
     missing_docs,
-    missing_doc_code_examples,
+    rustdoc::missing_doc_code_examples,
     trivial_casts,
     trivial_numeric_casts,
     unsafe_code,
