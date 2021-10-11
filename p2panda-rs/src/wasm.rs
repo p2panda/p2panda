@@ -10,13 +10,14 @@ use std::convert::{TryFrom, TryInto};
 use std::panic;
 
 use console_error_panic_hook::hook as panic_hook;
+use ed25519_dalek::{PublicKey, Signature};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
 use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
-use crate::identity::KeyPair;
+use crate::identity::KeyPair as KeyPairNonWasm;
 use crate::message::{
     Message, MessageEncoded, MessageFields as MessageFieldsNonWasm, MessageValue,
 };
@@ -42,6 +43,75 @@ macro_rules! jserr {
 #[wasm_bindgen(js_name = setWasmPanicHook)]
 pub fn set_wasm_panic_hook() {
     panic::set_hook(Box::new(panic_hook));
+}
+
+/// Ed25519 key pair for authors to sign bamboo entries with.
+#[wasm_bindgen]
+#[derive(Debug)]
+pub struct KeyPair(KeyPairNonWasm);
+
+#[wasm_bindgen]
+impl KeyPair {
+    /// Generates a new key pair using the browsers random number generator as a seed.
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self(KeyPairNonWasm::new())
+    }
+
+    /// Derives a key pair from a private key, encoded as hex string for better handling in browser
+    /// contexts.
+    #[wasm_bindgen(js_name = fromPrivateKey)]
+    pub fn from_private_key(private_key: String) -> Result<KeyPair, JsValue> {
+        let key_pair_inner = jserr!(KeyPairNonWasm::from_private_key_str(&private_key));
+        Ok(KeyPair(key_pair_inner))
+    }
+
+    /// Returns the public half of the key pair, encoded as a hex string.
+    #[wasm_bindgen(js_name = publicKey)]
+    pub fn public_key(&self) -> String {
+        hex::encode(self.0.public_key().to_bytes())
+    }
+
+    /// Returns the private half of the key pair, encoded as a hex string.
+    #[wasm_bindgen(js_name = privateKey)]
+    pub fn private_key(&self) -> String {
+        hex::encode(self.0.private_key().to_bytes())
+    }
+
+    /// Sign a message using this key pair, returns signature encoded as a hex string.
+    #[wasm_bindgen]
+    pub fn sign(&self, message: String) -> String {
+        let signature = self.0.sign(&message.as_bytes());
+        hex::encode(signature.to_bytes())
+    }
+
+    /// Internal method to access non-wasm instance of `KeyPair`.
+    pub(crate) fn as_inner(&self) -> &KeyPairNonWasm {
+        &self.0
+    }
+}
+
+/// Verify the integrity of a signed message.
+#[wasm_bindgen(js_name = verifySignature)]
+pub fn verify_signature(
+    public_key: String,
+    message: String,
+    signature: String,
+) -> Result<JsValue, JsValue> {
+    // Convert all strings to byte sequences
+    let public_key_bytes = jserr!(hex::decode(public_key));
+    let message_bytes = message.as_bytes();
+    let signature_bytes = jserr!(hex::decode(signature));
+
+    // Create `PublicKey` and `Signature` instances from bytes
+    let public_key = jserr!(PublicKey::from_bytes(&public_key_bytes));
+    let signature = jserr!(Signature::try_from(&signature_bytes[..]));
+
+    // Verify signature for given public key and message
+    match KeyPairNonWasm::verify(&public_key, &message_bytes, &signature) {
+        Ok(_) => Ok(JsValue::TRUE),
+        Err(_) => Ok(JsValue::FALSE),
+    }
 }
 
 /// Use `MessageFields` to attach user data to a [`Message`].
@@ -245,7 +315,7 @@ pub fn sign_encode_entry(
     ));
 
     // Finally sign and encode entry
-    let entry_signed = jserr!(sign_and_encode(&entry, &key_pair));
+    let entry_signed = jserr!(sign_and_encode(&entry, key_pair.as_inner()));
 
     // Serialize result to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&SignEncodeEntryResult {

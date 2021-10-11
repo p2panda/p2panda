@@ -25,14 +25,16 @@ impl Author {
     /// ```
     /// # extern crate p2panda_rs;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use std::convert::TryFrom;
+    ///
     /// use p2panda_rs::identity::{KeyPair, Author};
     ///
     /// // Generate new Ed25519 key pair
     /// let key_pair = KeyPair::new();
-    /// let public_key = key_pair.public_key();
+    /// let public_key = key_pair.public_key().to_owned();
     ///
-    /// // Create an `Author` instance from a public key string
-    /// let author = Author::new(&key_pair.public_key())?;
+    /// // Create an `Author` instance from a public key
+    /// let author = Author::try_from(public_key).unwrap();
     ///
     /// # Ok(())
     /// # }
