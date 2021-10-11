@@ -25,7 +25,7 @@ describe('Web assembly interface', () => {
       const signature = keyPair.sign(message);
       expect(verifySignature(publicKey, message, signature)).toBeTruthy();
       expect(
-        verifySignature(publicKey, 'Wrong Signature!', signature),
+        verifySignature(publicKey, 'Wrong Message!', signature),
       ).toBeFalsy();
     });
   });
