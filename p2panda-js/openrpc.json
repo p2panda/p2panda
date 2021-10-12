@@ -277,10 +277,10 @@
                 "name": "nextEntryArgs",
                 "summary": "The arguments required for publishing the next `Entry` to the test log.",
                 "value": {
-                    "entryHashBacklink": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",
+                    "entryHashBacklink": null,
                     "entryHashSkiplink": null,
                     "logId": 1,
-                    "seqNum": 2
+                    "seqNum": 1
                 }
             },
             "Author": {
@@ -407,10 +407,10 @@
                         "name": "nextEntryArgs",
                         "summary": "The arguments required for publishing the next `Entry` to the test log.",
                         "value": {
-                            "entryHashBacklink": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",
+                            "entryHashBacklink": null,
                             "entryHashSkiplink": null,
                             "logId": 1,
-                            "seqNum": 2
+                            "seqNum": 1
                         }
                     }
                 }
@@ -591,10 +591,10 @@
                         "name": "nextEntryArgs",
                         "summary": "The arguments required for publishing the next `Entry` to the test log.",
                         "value": {
-                            "entryHashBacklink": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",
+                            "entryHashBacklink": null,
                             "entryHashSkiplink": null,
                             "logId": 1,
-                            "seqNum": 2
+                            "seqNum": 1
                         }
                     }
                 }
