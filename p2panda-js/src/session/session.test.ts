@@ -118,7 +118,7 @@ describe('Session', () => {
       session.client.request = mockedFn;
 
       const nextEntryArgs = {
-        entryHashBacklink: ENTRY_ARGS.entryHashBacklink,
+        entryHashBacklink: undefined,
         entryHashSkiplink: undefined,
         logId: ENTRY_ARGS.logId,
         seqNum: 1,
