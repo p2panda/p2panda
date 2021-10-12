@@ -43,8 +43,7 @@ impl KeyPair {
         Self(key_pair)
     }
 
-    /// Derives a key pair from a private key (encoded as hex string for better handling in browser
-    /// contexts).
+    /// Derives a key pair from a private key.
     ///
     /// **WARNING:** "Absolutely no validation is done on the key. If you give this function bytes
     /// which do not represent a valid point, or which do not represent corresponding parts of the
@@ -81,7 +80,8 @@ impl KeyPair {
         Ok(KeyPair(key_pair))
     }
 
-    /// Derives a key pair from a private key encoded as hex string.
+    /// Derives a key pair from a private key (encoded as hex string for better handling in browser
+    /// contexts).
     pub fn from_private_key_str(private_key: &str) -> Result<Self, KeyPairError> {
         let secret_key_bytes = hex::decode(private_key)?;
         let secret_key = SecretKey::from_bytes(&secret_key_bytes)?;
