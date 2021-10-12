@@ -1,7 +1,7 @@
 {
     "entries": [
         {
-            "author": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49",
+            "author": "9cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c1",
             "entryBytes": "009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101f60040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04ef01463f550ce62f983494d0eb6051c73a5641025f355758006724e5b730f47a4454c5395eab807325ee58d69c08d66461357d0f961aee383acc3247ed6419706",
             "entryHash": "004028107485824f4ccbd42aaa9136855e373837b175f41e63f0bc410aba4bf0e520ab5668467022d36fe886985e6c33e9212a2a86eeb86a9eba58f50adfcb4ad81b",
             "logId": 1,
@@ -42,7 +42,7 @@
     },
     "meta": {
         "keyPair": {
-            "publicKey": "2deee1fac104aaac753377bbc2ff70fa5d5154abdac4b4577392db88de6a9a49",
+            "publicKey": "9cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c1",
             "privateKey": "4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176"
         },
         "logId": 1,
