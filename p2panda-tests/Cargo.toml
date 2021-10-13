@@ -1,0 +1,15 @@
+[package]
+name = "p2panda-tests"
+version = "0.1.0"
+authors = [
+  "sandreae <contact@samandreae.com>"
+]
+edition = "2018"
+description = "Generate test data for testing p2panda-rs and p2panda-js"
+repository = "https://github.com/p2panda/p2panda"
+license = "AGPL-3.0-or-later"
+readme = "README.md"
+exclude = [".gitignore"]
+
+[dependencies]
+p2panda-rs = { path = "../p2panda-rs" }
