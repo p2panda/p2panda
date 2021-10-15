@@ -15,7 +15,6 @@ mod tests {
     use p2panda_rs::message::{Message, MessageEncoded};
 
     use crate::fixtures::{entry, key_pair, message, PandaTestFixture, v0_1_0_fixture};
-    use crate::utils::MessageTypes;
 
     /// In this test the parameters `entry` and `key_pair` are injected from our test fixtures
     /// using the default values.
@@ -68,13 +67,13 @@ mod tests {
     /// Here we inject the default value for `entry` and `key_pair`
     /// then test for different cases for `message`, many of which should all panic.
     #[rstest(message)]
-    #[case(message(MessageTypes::Create, None, vec![("message", "Hello!")]))]
+    #[case(message(None, Some(vec![("message", "Hello!")])))]
     #[should_panic]
-    #[case(message(MessageTypes::Create, None, vec![("message", "Boo!")]))]
+    #[case(message(None, Some(vec![("message", "Boo!")])))]
     #[should_panic]
-    #[case(message(MessageTypes::Create, None, vec![("date", "2021-05-02T20:06:45.430Z")]))]
+    #[case(message(None, Some(vec![("date", "2021-05-02T20:06:45.430Z")])))]
     #[should_panic]
-    #[case(message(MessageTypes::Create, None, vec![("message", "Hello!"), ("date", "2021-05-02T20:06:45.430Z")]))]
+    #[case(message(None, Some(vec![("message", "Hello!"), ("date", "2021-05-02T20:06:45.430Z")])))]
     fn message_validation(entry: Entry, message: Message, key_pair: KeyPair) {
         let encoded_message = MessageEncoded::try_from(&message).unwrap();
         let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();

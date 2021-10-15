@@ -6,7 +6,7 @@ use p2panda_rs::hash::Hash;
 use p2panda_rs::identity::KeyPair;
 use p2panda_rs::message::{Message, MessageEncoded};
 
-use crate::utils::{MessageTypes, TestPanda};
+use crate::utils::TestPanda;
 
 const CHESS_SCHEMA: &str  = "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437";
 
@@ -24,14 +24,13 @@ pub fn key_pair() -> KeyPair {
 
 #[fixture]
 pub fn message(
-    #[default(MessageTypes::Create)] message_type: MessageTypes,
     #[default(None)] instance_id: Option<Hash>,
-    #[default(vec![("message", "Hello!")])] fields: Vec<(&str, &str)>,
+    #[default(Some(vec![("message", "Hello!")]))] fields: Option<Vec<(&str, &str)>>,
 ) -> Message {
-    match message_type {
-        MessageTypes::Create => TestPanda::create_message(CHESS_SCHEMA, fields),
-        MessageTypes::Update => todo!(),
-        MessageTypes::Delete => todo!(),
+    match fields {
+        Some(fields) if instance_id.is_none() => TestPanda::create_message(CHESS_SCHEMA, fields),
+        Some(_fields) => todo!(), // update_message()
+        None => todo!() // delete_message(),
     }
 }
 
