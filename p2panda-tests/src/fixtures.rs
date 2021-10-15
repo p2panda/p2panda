@@ -46,6 +46,7 @@ pub fn entry(
 ) -> Entry {
     TestPanda::entry(&message, &seq_num, backlink, skiplink)
 }
+
 pub struct PandaTestFixture {
     pub entry: Entry,
     pub entry_signed_encoded: EntrySigned,

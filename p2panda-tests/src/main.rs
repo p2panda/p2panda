@@ -40,11 +40,11 @@ mod tests {
     #[rstest]
     fn sign_and_encode_roundtrip(entry: Entry, key_pair: KeyPair) {
         // Sign a p2panda entry. For this encoding, the entry is converted into a
-        // bamboo-rs-core entry, which means that it also doesn't contain the message anymore
+        // bamboo-rs-core entry, which means that it also doesn't contain the message anymore.
         let entry_first_encoded = sign_and_encode(&entry, &key_pair).unwrap();
 
         // Make an unsigned, decoded p2panda entry from the signed and encoded form. This is adding
-        // the message back
+        // the message back.
         let message_encoded = MessageEncoded::try_from(entry.message().unwrap()).unwrap();
         let entry_decoded: Entry = decode_entry(&entry_first_encoded, Some(&message_encoded)).unwrap();
 
