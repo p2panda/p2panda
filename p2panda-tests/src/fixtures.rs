@@ -10,11 +10,11 @@ use crate::utils::TestPanda;
 
 const CHESS_SCHEMA: &str  = "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437";
 
-/// `rstest` fixtures which can be injected into tests 
+/// `rstest` fixtures which can be injected into tests
 ///
 /// From the `rstest` docs: "rstest uses procedural macros to help you on writing fixtures and table-based tests.
 /// The core idea is that you can inject your test dependencies by passing them as test arguments."
-/// 
+///
 /// https://github.com/la10736/rstest
 
 #[fixture]
@@ -28,9 +28,12 @@ pub fn message(
     #[default(Some(vec![("message", "Hello!")]))] fields: Option<Vec<(&str, &str)>>,
 ) -> Message {
     match fields {
+        // It's a CREATE message
         Some(fields) if instance_id.is_none() => TestPanda::create_message(CHESS_SCHEMA, fields),
-        Some(_fields) => todo!(), // update_message()
-        None => todo!() // delete_message(),
+        // It's an UPDATE message
+        Some(fields) => TestPanda::update_message(CHESS_SCHEMA, instance_id.unwrap(), fields),
+        // It's a DELETE message
+        None => TestPanda::delete_message(CHESS_SCHEMA, instance_id.unwrap()),
     }
 }
 
@@ -59,4 +62,3 @@ pub fn v0_1_0_fixture() -> PandaTestFixture {
         entry: TestPanda::entry(&TestPanda::create_message(CHESS_SCHEMA, vec![("name", "chess"), ("description", "for playing chess")]), &TestPanda::seq_num(1), None, None)
     }
 }
-

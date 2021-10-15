@@ -133,6 +133,15 @@ impl TestPanda {
         Message::new_create(Hash::new(schema).unwrap(), fields).unwrap()
     }
 
+    pub fn update_message(schema: &str, instance_id: Hash, fields: Vec<(&str, &str)>) -> Message {
+        let fields = TestPanda::build_message_fields(fields);
+        Message::new_update(Hash::new(schema).unwrap(), instance_id, fields).unwrap()
+    }
+
+    pub fn delete_message(schema: &str, instance_id: Hash) -> Message {
+        Message::new_delete(Hash::new(schema).unwrap(), instance_id).unwrap()
+    }
+
     pub fn seq_num(seq_num: i64) -> SeqNum {
         SeqNum::new(seq_num).unwrap()
     }
