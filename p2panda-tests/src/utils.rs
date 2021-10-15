@@ -128,6 +128,17 @@ impl TestPanda {
         .unwrap()
     }
 
+    pub fn message(schema: &str, instance_id: Option<Hash>, fields: Option<Vec<(&str, &str)>>) -> Message {
+        match fields {
+            // It's a CREATE message
+            Some(fields) if instance_id.is_none() => TestPanda::create_message(schema, fields),
+            // It's an UPDATE message
+            Some(fields) => TestPanda::update_message(schema, instance_id.unwrap(), fields),
+            // It's a DELETE message
+            None => TestPanda::delete_message(schema, instance_id.unwrap()),
+        }
+    }
+
     pub fn create_message(schema: &str, fields: Vec<(&str, &str)>) -> Message {
         let fields = TestPanda::build_message_fields(fields);
         Message::new_create(Hash::new(schema).unwrap(), fields).unwrap()
