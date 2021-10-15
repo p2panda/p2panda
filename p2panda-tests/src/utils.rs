@@ -62,17 +62,17 @@ impl TestPanda {
     }
 
     /// Publish an entry to a schema log for this TestPanda
-    pub fn build_message_fields(keys: Vec<&str>, values: Vec<&str>) -> MessageFields {
-        let mut fields = MessageFields::new();
-        for (pos, key) in keys.iter().enumerate() {
-            fields
+    pub fn build_message_fields(fields: Vec<(&str, &str)>) -> MessageFields {
+        let mut message_fields = MessageFields::new();
+        for (key, value) in fields.iter() {
+            message_fields
                 .add(
-                    key.to_owned(),
-                    MessageValue::Text(values.get(pos).unwrap().to_string()),
+                    key,
+                    MessageValue::Text(value.to_string()),
                 )
                 .unwrap();
         }
-        fields
+        message_fields
     }
 
     /// Determine the skiplink for the next entry
@@ -134,8 +134,8 @@ impl TestPanda {
         .unwrap()
     }
 
-    pub fn create_message(schema: &str, keys: Vec<&str>, values: Vec<&str>) -> Message {
-        let fields = TestPanda::build_message_fields(keys, values);
+    pub fn create_message(schema: &str, fields: Vec<(&str, &str)>) -> Message {
+        let fields = TestPanda::build_message_fields(fields);
         Message::new_create(Hash::new(schema).unwrap(), fields).unwrap()
     }
 

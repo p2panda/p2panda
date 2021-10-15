@@ -68,13 +68,13 @@ mod tests {
     /// Here we inject the default value for `entry` and `key_pair`
     /// then test for different cases for `message`, many of which should all panic.
     #[rstest(message)]
-    #[case(message(MessageTypes::Create, None, vec!["message"], vec!["Hello!"]))]
+    #[case(message(MessageTypes::Create, None, vec![("message", "Hello!")]))]
     #[should_panic]
-    #[case(message(MessageTypes::Create, None, vec!["message"], vec!["Boo!"]))]
+    #[case(message(MessageTypes::Create, None, vec![("message", "Boo!")]))]
     #[should_panic]
-    #[case(message(MessageTypes::Create, None, vec!["date"], vec!["2021-05-02T20:06:45.430Z"]))]
+    #[case(message(MessageTypes::Create, None, vec![("date", "2021-05-02T20:06:45.430Z")]))]
     #[should_panic]
-    #[case(message(MessageTypes::Create, None, vec!["message", "date"], vec!["Hello!", "2021-05-02T20:06:45.430Z"]))]
+    #[case(message(MessageTypes::Create, None, vec![("message", "Hello!"), ("date", "2021-05-02T20:06:45.430Z")]))]
     fn message_validation(entry: Entry, message: Message, key_pair: KeyPair) {
         let encoded_message = MessageEncoded::try_from(&message).unwrap();
         let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
