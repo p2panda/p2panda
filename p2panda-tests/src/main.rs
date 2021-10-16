@@ -3,19 +3,32 @@
 mod utils;
 mod fixtures;
 
+use rstest_reuse;
+
 #[cfg(test)]
 mod tests {
 
     use std::convert::TryFrom;
 
     use rstest::rstest;
-
+    use rstest_reuse::{self, *};
+    
     use p2panda_rs::entry::{decode_entry, sign_and_encode, Entry, LogId, SeqNum};
     use p2panda_rs::identity::KeyPair;
     use p2panda_rs::message::{Message, MessageEncoded};
 
     use crate::fixtures::{entry, key_pair, message, PandaTestFixture, v0_1_0_fixture};
 
+    #[template]
+    #[rstest]
+    #[should_panic]
+    #[case(message(Some(vec![("message", "Boo!")]), None))]
+    #[should_panic]
+    #[case(message(Some(vec![("date", "2021-05-02T20:06:45.430Z")]), None))]
+    #[should_panic]
+    #[case(message(Some(vec![("message", "Hello!"), ("date", "2021-05-02T20:06:45.430Z")]), None))]
+    pub fn messages_not_matching_entry_should_fail(entry: Entry, #[case] message: Message, key_pair: KeyPair) {}
+    
     /// In this test the parameters `entry` and `key_pair` are injected from our test fixtures
     /// using the default values.
     #[rstest]
@@ -64,17 +77,9 @@ mod tests {
         assert!(sign_and_encode(&entry_second, &key_pair).is_ok());
     }
 
-    /// Here we inject the default value for `entry` and `key_pair`
-    /// then test for different cases for `message`, many of which should all panic.
-    #[rstest(message)]
-    #[case(message(None, Some(vec![("message", "Hello!")])))]
-    #[should_panic]
-    #[case(message(None, Some(vec![("message", "Boo!")])))]
-    #[should_panic]
-    #[case(message(None, Some(vec![("date", "2021-05-02T20:06:45.430Z")])))]
-    #[should_panic]
-    #[case(message(None, Some(vec![("message", "Hello!"), ("date", "2021-05-02T20:06:45.430Z")])))]
-    fn message_validation(entry: Entry, message: Message, key_pair: KeyPair) {
+    #[apply(messages_not_matching_entry_should_fail)]
+    #[case(message(Some(vec![("message", "Hello!")]), None))]
+    fn message_validation(entry: Entry, #[case] message: Message, key_pair: KeyPair) {
         let encoded_message = MessageEncoded::try_from(&message).unwrap();
         let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
         assert!(signed_encoded_entry
@@ -84,8 +89,9 @@ mod tests {
 
     /// Fixture tests
     /// These could be expanded with data from different p2panda versions
-    #[rstest(fixture, case::v0_1_0(v0_1_0_fixture()))]
-    fn fixture_sign_encode(fixture: PandaTestFixture) {
+    #[rstest]
+    #[case(v0_1_0_fixture())]
+    fn fixture_sign_encode(#[case] fixture: PandaTestFixture) {
         // Sign and encode fixture Entry
         let entry_signed_encoded = sign_and_encode(&fixture.entry, &fixture.key_pair).unwrap();
 
@@ -96,8 +102,9 @@ mod tests {
         );
     }
 
-    #[rstest(fixture, case::v0_1_0(v0_1_0_fixture()))]
-    fn fixture_decode_message(fixture: PandaTestFixture) {
+    #[rstest]
+    #[case(v0_1_0_fixture())]
+    fn fixture_decode_message(#[case] fixture: PandaTestFixture) {
         // Decode fixture MessageEncoded
         let message = Message::try_from(&fixture.message_encoded).unwrap();
         let message_fields = message.fields().unwrap();
@@ -117,8 +124,9 @@ mod tests {
         );
     }
 
-    #[rstest(fixture, case::v0_1_0(v0_1_0_fixture()))]
-    fn fixture_decode_entry(fixture: PandaTestFixture) {
+    #[rstest]
+    #[case(v0_1_0_fixture())]
+    fn fixture_decode_entry(#[case] fixture: PandaTestFixture) {
         // Decode fixture EntrySigned
         let entry = decode_entry(
             &fixture.entry_signed_encoded,

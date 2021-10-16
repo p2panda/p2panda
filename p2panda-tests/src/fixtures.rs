@@ -23,9 +23,14 @@ pub fn key_pair() -> KeyPair {
 }
 
 #[fixture]
+pub fn seq_num(#[default(1)] n: i64) -> SeqNum {
+    TestPanda::seq_num(n)
+}
+
+#[fixture]
 pub fn message(
-    #[default(None)] instance_id: Option<Hash>,
     #[default(Some(vec![("message", "Hello!")]))] fields: Option<Vec<(&str, &str)>>,
+    #[default(None)] instance_id: Option<Hash>,
 ) -> Message {
     match fields {
         // It's a CREATE message
@@ -33,14 +38,16 @@ pub fn message(
         // It's an UPDATE message
         Some(fields) => TestPanda::update_message(CHESS_SCHEMA, instance_id.unwrap(), fields),
         // It's a DELETE message
-        None => TestPanda::delete_message(CHESS_SCHEMA, instance_id.unwrap()),
+        None if instance_id.is_some() => TestPanda::delete_message(CHESS_SCHEMA, instance_id.unwrap()),
+        // It's a mistake....
+        None => todo!() // Error.... 
     }
 }
 
 #[fixture]
 pub fn entry(
     message: Message,
-    #[default(SeqNum::new(1).unwrap())] seq_num: SeqNum,
+    seq_num: SeqNum,
     #[default(None)] backlink: Option<Hash>,
     #[default(None)] skiplink: Option<Hash>,
 ) -> Entry {
