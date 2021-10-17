@@ -145,42 +145,42 @@
                 "name": "entryEncoded",
                 "summary": "Encoded bytes of the first entry in a p2panda `Bamboo` log.",
                 "value": {
-                    "$ref": "./test/test-data.json#/entries/0/entryBytes"
+                    "$ref": "./test/test-data.json#/panda/logs/0/encoded_entries/0/entryBytes"
                 }
             },
             "FirstEntryMessageEncdoded": {
                 "name": "messageEncoded",
                 "summary": "Encoded bytes of the payload of the first entry in a p2panda `Bamboo` log.",
                 "value": {
-                    "$ref": "./test/test-data.json#/entries/0/payloadBytes"
+                    "$ref": "./test/test-data.json#/panda/logs/0/encoded_entries/0/payloadBytes"
                 }
             },
             "EntryArgsResult": {
                 "name": "nextEntryArgs",
                 "summary": "The arguments required for publishing the next `Entry` to the test log.",
                 "value": {
-                    "$ref": "./test/test-data.json#/nextEntryArgs"
+                    "$ref": "./test/test-data.json#/panda/logs/0/nextEntryArgs"
                 }
             },
             "Author": {
                 "name": "author",
                 "summary": "The `Author` of the test log.",
                 "value": {
-                    "$ref": "./test/test-data.json#/entries/0/author"
+                    "$ref": "./test/test-data.json#/panda/publicKey"
                 }
             },
             "Schema": {
                 "name": "schema",
                 "summary": "The `Schema` which this log is assigned",
                 "value": {
-                    "$ref": "./test/test-data.json#/decodedEntries/0/message/schema"
+                    "$ref": "./test/test-data.json#/panda/logs/0/schema"
                 }
             },
             "Entries": {
                 "name": "entries",
                 "summary": "All `Entries` in the test Log",
                 "value": {
-                    "entries": {"$ref": "./test/test-data.json#/entries"}
+                    "entries": {"$ref": "./test/test-data.json#/panda/logs/0/encoded_entries"}
                 }
             }
         }

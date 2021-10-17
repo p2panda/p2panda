@@ -7,10 +7,10 @@ import { Session } from '~/session';
 
 import TEST_DATA from '~/../test/test-data.json';
 
-const ENTRIES = TEST_DATA.entries;
-const PUBLIC_KEY = TEST_DATA.meta.keyPair.publicKey;
-const SCHEMA = TEST_DATA.meta.schema;
-const ENTRY_ARGS = TEST_DATA.nextEntryArgs;
+const ENTRIES = TEST_DATA.panda.logs[0].encoded_entries;
+const PUBLIC_KEY = TEST_DATA.panda.publicKey;
+const SCHEMA = TEST_DATA.panda.logs[0].schema;
+const ENTRY_ARGS = TEST_DATA.panda.logs[0].nextEntryArgs;
 
 const NODE_ADDRESS = 'http://localhost:2020';
 
