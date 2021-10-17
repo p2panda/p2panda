@@ -116,6 +116,10 @@ impl Panda {
         message_fields
     }
     
+    pub fn name(&self) -> String {
+        self.name.to_owned()
+    }
+    
     fn get_schema_id(&self, schema: Hash) -> usize {
         self.schema.get(schema.as_str()).unwrap().to_owned()
     }
