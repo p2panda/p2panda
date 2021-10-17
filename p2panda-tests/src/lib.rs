@@ -7,6 +7,7 @@ mod tests;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use serde_json;
 
 use p2panda_rs::entry::{decode_entry, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use p2panda_rs::hash::Hash;
@@ -19,11 +20,12 @@ use rstest_reuse;
 // const META_SCHEMA: &str  = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
 
 pub type TestPandaDB = HashMap<Author, Panda>;
+pub type Logs = HashMap<String, Vec<(EntrySigned, MessageEncoded)>>;
 
 #[derive(Debug)]
 pub struct Panda {
     pub key_pair: KeyPair,
-    pub logs: HashMap<String, Vec<(EntrySigned, MessageEncoded)>>,
+    pub logs: Logs,
 }
 
 /// A helper struct for creating entries and performing psuedo log actions:
@@ -180,5 +182,26 @@ impl Panda {
     
     pub fn get_encoded_entry_and_message(&self, schema: &str, seq_num: usize) -> (EntrySigned, MessageEncoded) {
         self.logs.get(schema).unwrap()[seq_num -1].clone()
+    }
+    
+    pub fn decode(&self) -> HashMap<String, Vec<Entry>> {
+        let mut decoded_logs: HashMap<String, Vec<Entry>> = HashMap::new();
+        for (hash, entries) in self.logs.iter() {
+            decoded_logs.insert(hash.into(), Vec::new());
+            let log_entries = decoded_logs.get_mut(hash).unwrap();
+            for (entry_encoded, message_encoded) in entries.iter() {
+                let entry = decode_entry(entry_encoded, Some(message_encoded)).unwrap();
+                log_entries.push(entry);
+            }
+        }
+        decoded_logs
+    }
+    
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(&self.logs).unwrap()
+    }
+    
+    pub fn to_json_decoded(&self) -> String {
+        serde_json::to_string_pretty(&self.decode()).unwrap()
     }
 }
