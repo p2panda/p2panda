@@ -21,13 +21,6 @@ use rstest_reuse;
 pub type TestPandaDB = HashMap<Author, Panda>;
 
 #[derive(Debug)]
-
-pub struct EntryData {
-    pub entry_encoded: EntrySigned,
-    pub message_encoded: MessageEncoded,
-}
-
-#[derive(Debug)]
 pub struct Panda {
     pub key_pair: KeyPair,
     pub logs: HashMap<String, Vec<(EntrySigned, MessageEncoded)>>,
@@ -180,4 +173,12 @@ impl Panda {
         ));
     }
     
+    pub fn get_entry(&self, schema: &str, seq_num: usize) -> Entry {
+        let entry = &self.logs.get(schema).unwrap()[seq_num -1];
+        decode_entry(&entry.0, Some(&entry.1)).unwrap()
+    }
+    
+    pub fn get_encoded_entry_and_message(&self, schema: &str, seq_num: usize) -> (EntrySigned, MessageEncoded) {
+        self.logs.get(schema).unwrap()[seq_num -1].clone()
+    }
 }
