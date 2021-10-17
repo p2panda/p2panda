@@ -3,7 +3,7 @@ use p2panda_tests::Panda;
 use p2panda_tests::utils::MESSAGE_SCHEMA;
 
 fn main() {
-    let mut panda = Panda::new(Panda::keypair());
+    let mut panda = Panda::new("panda".to_string(), Panda::keypair());
     
     panda.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "hello!")]));
     panda.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "poop!")]));
