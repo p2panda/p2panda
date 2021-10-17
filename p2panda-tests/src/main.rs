@@ -2,17 +2,21 @@
 use p2panda_tests::Panda;
 use p2panda_tests::utils::MESSAGE_SCHEMA;
 
-use p2panda_rs::entry::decode_entry;
-
 fn main() {
     let mut panda = Panda::new(Panda::keypair());
+    
     panda.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "hello!")]));
     panda.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "poop!")]));
-    let entry1 = &panda.logs.get(MESSAGE_SCHEMA).unwrap()[0];
-    let decoded_entry1 = decode_entry(&entry1.0, Some(&entry1.1)).unwrap();
-    let entry2 = &panda.logs.get(MESSAGE_SCHEMA).unwrap()[1];
-    let decoded_entry2 = decode_entry(&entry2.0, Some(&entry2.1)).unwrap();
+    
+    let (entry_encoded_1, _) = panda.get_encoded_entry_and_message(MESSAGE_SCHEMA, 1);
+    panda.publish_entry(Panda::update_message(MESSAGE_SCHEMA, entry_encoded_1.hash(), vec![("message", "Smelly!")]));
+    
+    let entry1 = panda.get_entry(MESSAGE_SCHEMA, 1);
+    let entry2 = panda.get_entry(MESSAGE_SCHEMA, 2);
+    let entry3 = panda.get_entry(MESSAGE_SCHEMA, 3);
+    
     println!("{:#?}", panda.logs);
-    println!("{:#?}", decoded_entry1);
-    println!("{:#?}", decoded_entry2);
+    println!("{:#?}", entry1);
+    println!("{:#?}", entry2);
+    println!("{:#?}", entry3);
 }
