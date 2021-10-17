@@ -98,6 +98,11 @@ impl Panda {
         KeyPair::new()
     }
 
+    pub fn some_hash(str: &str) -> Option<Hash> {
+        let hash = Hash::new(str);
+        Some(hash.unwrap())
+    }
+
     pub fn build_message_fields(fields: Vec<(&str, &str)>) -> MessageFields {
         let mut message_fields = MessageFields::new();
         for (key, value) in fields.iter() {
