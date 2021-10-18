@@ -7,11 +7,7 @@ import { Session } from '~/session';
 
 import TEST_DATA from '~/../test/test-data.json';
 
-const ENTRIES = TEST_DATA.panda.logs[0].encoded_entries;
-const PUBLIC_KEY = TEST_DATA.panda.publicKey;
-const SCHEMA = TEST_DATA.panda.logs[0].schema;
-const ENTRY_ARGS = TEST_DATA.panda.logs[0].nextEntryArgs;
-
+const PANDA_LOG = TEST_DATA.panda.logs[0];
 const NODE_ADDRESS = 'http://localhost:2020';
 
 /**
@@ -40,7 +36,7 @@ describe('Session', () => {
       /<Session http:\/\/localhost:2020 key pair \w{8}>/,
     );
 
-    session.setSchema(SCHEMA);
+    session.setSchema(PANDA_LOG.decodedMessages[0].schema);
     expect(`${session}`).toMatch(
       /<Session http:\/\/localhost:2020 key pair \w{8} schema \w{8}>/,
     );
@@ -49,8 +45,10 @@ describe('Session', () => {
   describe('queryEntries', () => {
     it('can query entries', async () => {
       const session = new Session(NODE_ADDRESS);
-      const entries = await session.queryEntries(SCHEMA);
-      expect(entries.length).toBe(ENTRIES.length);
+      const entries = await session.queryEntries(
+        PANDA_LOG.decodedMessages[0].schema,
+      );
+      expect(entries.length).toBe(PANDA_LOG.encodedEntries.length);
     });
 
     it('throws when querying without a schema', async () => {
@@ -65,9 +63,13 @@ describe('Session', () => {
   describe('query', () => {
     it('can materialize instances', async () => {
       const session = new Session(NODE_ADDRESS);
-      const instances = await session.query({ schema: SCHEMA });
+      const instances = await session.query({
+        schema: PANDA_LOG.decodedMessages[0].schema,
+      });
       expect(instances).toHaveLength(1);
-      expect(instances[0].description).toEqual('for playing chess');
+      expect(instances[0].message).toEqual(
+        PANDA_LOG.decodedMessages[0].fields.message.value,
+      );
     });
   });
 
@@ -75,11 +77,11 @@ describe('Session', () => {
     it('can publish entries', async () => {
       const session = new Session(NODE_ADDRESS);
       const nextEntryArgs = await session.publishEntry(
-        ENTRIES[0].entryBytes,
-        ENTRIES[0].payloadBytes,
+        PANDA_LOG.encodedEntries[0].entryBytes,
+        PANDA_LOG.encodedEntries[0].payloadBytes,
       );
       expect(nextEntryArgs.entryHashBacklink).toEqual(
-        ENTRY_ARGS.entryHashBacklink,
+        PANDA_LOG.nextEntryArgs.entryHashBacklink,
       );
     });
 
@@ -87,11 +89,11 @@ describe('Session', () => {
       const session = new Session(NODE_ADDRESS);
       await expect(
         // @ts-ignore: We deliberately use the API wrong here
-        session.publishEntry(null, ENTRIES[0].payloadBytes),
+        session.publishEntry(null, PANDA_LOG.encodedEntries[0].payloadBytes),
       ).rejects.toThrow();
       await expect(
         // @ts-ignore: We deliberately use the API wrong here
-        session.publishEntry(ENTRIES[0].entryBytes, null),
+        session.publishEntry(PANDA_LOG.encodedEntries[0].entryBytes, null),
       ).rejects.toThrow();
     });
   });
@@ -99,15 +101,18 @@ describe('Session', () => {
   describe('get/setNextEntryArgs', () => {
     it('returns next entry args from node', async () => {
       const session = new Session(NODE_ADDRESS);
-      const nextEntryArgs = await session.getNextEntryArgs(PUBLIC_KEY, SCHEMA);
+      const nextEntryArgs = await session.getNextEntryArgs(
+        TEST_DATA.panda.publicKey,
+        PANDA_LOG.decodedMessages[0].schema,
+      );
       expect(nextEntryArgs.entryHashSkiplink).toEqual(
-        ENTRY_ARGS.entryHashSkiplink,
+        PANDA_LOG.nextEntryArgs.entryHashSkiplink,
       );
       expect(nextEntryArgs.entryHashBacklink).toEqual(
-        ENTRY_ARGS.entryHashBacklink,
+        PANDA_LOG.nextEntryArgs.entryHashBacklink,
       );
-      expect(nextEntryArgs.seqNum).toEqual(ENTRY_ARGS.seqNum);
-      expect(nextEntryArgs.logId).toEqual(ENTRY_ARGS.logId);
+      expect(nextEntryArgs.seqNum).toEqual(PANDA_LOG.nextEntryArgs.seqNum);
+      expect(nextEntryArgs.logId).toEqual(PANDA_LOG.nextEntryArgs.logId);
     });
 
     it('returns next entry args from cache', async () => {
@@ -118,14 +123,21 @@ describe('Session', () => {
       session.client.request = mockedFn;
 
       const nextEntryArgs = {
-        entryHashBacklink: ENTRY_ARGS.entryHashBacklink,
+        entryHashBacklink: PANDA_LOG.nextEntryArgs.entryHashBacklink,
         entryHashSkiplink: undefined,
-        logId: ENTRY_ARGS.logId,
+        logId: PANDA_LOG.nextEntryArgs.logId,
         seqNum: 1,
       };
-      session.setNextEntryArgs(PUBLIC_KEY, SCHEMA, nextEntryArgs);
+      session.setNextEntryArgs(
+        TEST_DATA.panda.publicKey,
+        PANDA_LOG.decodedMessages[0].schema,
+        nextEntryArgs,
+      );
 
-      const cacheResponse = await session.getNextEntryArgs(PUBLIC_KEY, SCHEMA);
+      const cacheResponse = await session.getNextEntryArgs(
+        TEST_DATA.panda.publicKey,
+        PANDA_LOG.decodedMessages[0].schema,
+      );
       expect(cacheResponse.logId).toEqual(nextEntryArgs.logId);
       expect(mockedFn.mock.calls.length).toBe(0);
     });
