@@ -11,7 +11,6 @@ use std::convert::{TryFrom, TryInto};
 use bamboo_rs_core::entry::is_lipmaa_required;
 use rstest_reuse;
 use serde::Serialize;
-use serde_json;
 
 use p2panda_rs::entry::{decode_entry, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use p2panda_rs::hash::Hash;
@@ -78,10 +77,6 @@ impl Panda {
 
     pub fn name(&self) -> String {
         self.name.to_owned()
-    }
-
-    fn get_schema_id(&self, schema: Hash) -> usize {
-        self.schema.get(schema.as_str()).unwrap().to_owned()
     }
 
     /// Determine the skiplink for the next entry
@@ -176,27 +171,6 @@ impl Panda {
     ) -> (EntrySigned, MessageEncoded) {
         let log_id = self.schema.get(schema).unwrap();
         self.logs.get(log_id).unwrap()[seq_num - 1].clone()
-    }
-
-    pub fn decode(&self) -> HashMap<usize, Vec<Entry>> {
-        let mut decoded_logs: HashMap<usize, Vec<Entry>> = HashMap::new();
-        for (hash, entries) in self.logs.iter() {
-            decoded_logs.insert(hash.to_owned(), Vec::new());
-            let log_entries = decoded_logs.get_mut(hash).unwrap();
-            for (entry_encoded, message_encoded) in entries.iter() {
-                let entry = decode_entry(entry_encoded, Some(message_encoded)).unwrap();
-                log_entries.push(entry);
-            }
-        }
-        decoded_logs
-    }
-
-    pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(&self.logs).unwrap()
-    }
-
-    pub fn to_json_decoded(&self) -> String {
-        serde_json::to_string_pretty(&self.decode()).unwrap()
     }
 }
 
