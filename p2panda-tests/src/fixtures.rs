@@ -6,8 +6,8 @@ use p2panda_rs::hash::Hash;
 use p2panda_rs::identity::KeyPair;
 use p2panda_rs::message::{Message, MessageEncoded};
 
+use crate::utils::{Fixture, GENERIC_HASH, MESSAGE_SCHEMA};
 use crate::Panda;
-use crate::utils::{Fixture, MESSAGE_SCHEMA, GENERIC_HASH};
 
 /// `rstest` fixtures which can be injected into tests
 ///
@@ -32,7 +32,7 @@ pub fn some_hash(#[default(GENERIC_HASH)] str: &str) -> Option<Hash> {
 }
 
 #[fixture]
-pub fn some_default_hash()-> Option<Hash> {
+pub fn some_default_hash() -> Option<Hash> {
     Panda::some_hash(GENERIC_HASH)
 }
 
@@ -47,27 +47,34 @@ pub fn message(
         // It's an UPDATE message
         Some(fields) => Panda::update_message(MESSAGE_SCHEMA, instance_id.unwrap(), fields),
         // It's a DELETE message
-        None if instance_id.is_some() => Panda::delete_message(MESSAGE_SCHEMA, instance_id.unwrap()),
+        None if instance_id.is_some() => {
+            Panda::delete_message(MESSAGE_SCHEMA, instance_id.unwrap())
+        }
         // It's a mistake....
-        None => todo!() // Error.... 
+        None => todo!(), // Error....
     }
 }
 
 #[fixture]
-pub fn message_hello() -> Message{
+pub fn message_hello() -> Message {
     message(Some(vec![("message", "Hello!")]), None)
 }
 
 #[fixture]
-pub fn create_message() -> Message{
+pub fn create_message() -> Message {
     message(Some(vec![("message", "Hello!")]), None)
 }
+
 #[fixture]
-pub fn update_message() -> Message{
-    message(Some(vec![("message", "Updated, hello!")]), some_default_hash())
+pub fn update_message() -> Message {
+    message(
+        Some(vec![("message", "Updated, hello!")]),
+        some_default_hash(),
+    )
 }
+
 #[fixture]
-pub fn delete_message() -> Message{
+pub fn delete_message() -> Message {
     message(None, some_default_hash())
 }
 
@@ -93,7 +100,12 @@ pub fn entry_with_backlink() -> Entry {
 
 #[fixture]
 pub fn entry_with_backlink_and_skiplink() -> Entry {
-    entry(message_hello(), seq_num(13), some_default_hash(), some_default_hash())
+    entry(
+        message_hello(),
+        seq_num(13),
+        some_default_hash(),
+        some_default_hash(),
+    )
 }
 
 #[fixture]

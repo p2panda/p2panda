@@ -1,6 +1,6 @@
 use p2panda_rs::entry::{Entry, EntrySigned};
-use p2panda_rs::message::MessageEncoded;
 use p2panda_rs::identity::KeyPair;
+use p2panda_rs::message::MessageEncoded;
 
 pub struct Fixture {
     pub entry: Entry,

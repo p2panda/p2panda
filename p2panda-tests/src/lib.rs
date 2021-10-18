@@ -52,7 +52,7 @@ impl Panda {
             logs: HashMap::new(),
         }
     }
-    
+
     pub fn private_key(&self) -> String {
         hex::encode(self.key_pair.private_key())
     }
@@ -201,7 +201,6 @@ impl Panda {
 }
 
 impl Panda {
-    
     pub fn entry(
         message: &Message,
         seq_num: &SeqNum,
