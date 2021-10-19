@@ -67,9 +67,7 @@ describe('Session', () => {
         schema: SCHEMA,
       });
       expect(instances).toHaveLength(PANDA_LOG.encodedEntries.length);
-      expect(instances[0].message).toEqual(
-        PANDA_LOG.decodedMessages[0].fields.message.value,
-      );
+      expect(instances.length).toEqual(2);
     });
   });
 
@@ -81,7 +79,7 @@ describe('Session', () => {
         PANDA_LOG.encodedEntries[LOG_LENGTH - 1].payloadBytes,
       );
       expect(nextEntryArgs.entryHashBacklink).toEqual(
-        PANDA_LOG.nextEntryArgs.entryHashBacklink,
+        PANDA_LOG.nextEntryArgs[LOG_LENGTH].entryHashBacklink,
       );
     });
 
@@ -106,13 +104,19 @@ describe('Session', () => {
         SCHEMA,
       );
       expect(nextEntryArgs.entryHashSkiplink).toEqual(
-        PANDA_LOG.nextEntryArgs.entryHashSkiplink,
+        PANDA_LOG.nextEntryArgs[LOG_LENGTH].entryHashSkiplink as
+          | string
+          | undefined,
       );
       expect(nextEntryArgs.entryHashBacklink).toEqual(
-        PANDA_LOG.nextEntryArgs.entryHashBacklink,
+        PANDA_LOG.nextEntryArgs[LOG_LENGTH].entryHashBacklink,
       );
-      expect(nextEntryArgs.seqNum).toEqual(PANDA_LOG.nextEntryArgs.seqNum);
-      expect(nextEntryArgs.logId).toEqual(PANDA_LOG.nextEntryArgs.logId);
+      expect(nextEntryArgs.seqNum).toEqual(
+        PANDA_LOG.nextEntryArgs[LOG_LENGTH].seqNum,
+      );
+      expect(nextEntryArgs.logId).toEqual(
+        PANDA_LOG.nextEntryArgs[LOG_LENGTH].logId,
+      );
     });
 
     it('returns next entry args from cache', async () => {
@@ -123,10 +127,13 @@ describe('Session', () => {
       session.client.request = mockedFn;
 
       const nextEntryArgs = {
-        entryHashBacklink: PANDA_LOG.nextEntryArgs.entryHashBacklink,
-        entryHashSkiplink: undefined,
-        logId: PANDA_LOG.nextEntryArgs.logId,
-        seqNum: 1,
+        // convert json null into undefined
+        entryHashBacklink: PANDA_LOG.nextEntryArgs[LOG_LENGTH]
+          .entryHashBacklink as string | undefined,
+        entryHashSkiplink: PANDA_LOG.nextEntryArgs[LOG_LENGTH]
+          .entryHashSkiplink as string | undefined,
+        logId: PANDA_LOG.nextEntryArgs[LOG_LENGTH].logId,
+        seqNum: PANDA_LOG.nextEntryArgs[LOG_LENGTH].seqNum,
       };
       session.setNextEntryArgs(
         TEST_DATA.panda.publicKey,

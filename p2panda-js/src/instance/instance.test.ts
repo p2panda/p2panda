@@ -36,13 +36,13 @@ describe('instance', () => {
 
       // Although we don't have a fixture value for the encoded entry (because it doesn't exist
       // in our test log), we can still compare the decoded values with what we would expect to see.
-      expect(entry.logId).toEqual(PANDA_LOG.nextEntryArgs.logId);
-      expect(entry.seqNum).toEqual(PANDA_LOG.nextEntryArgs.seqNum);
+      expect(entry.logId).toEqual(PANDA_LOG.nextEntryArgs[4].logId);
+      expect(entry.seqNum).toEqual(PANDA_LOG.nextEntryArgs[4].seqNum);
       expect(entry.entryHashBacklink).toEqual(
-        PANDA_LOG.nextEntryArgs.entryHashBacklink,
+        PANDA_LOG.nextEntryArgs[4].entryHashBacklink,
       );
       expect(entry.entryHashSkiplink).toEqual(
-        PANDA_LOG.nextEntryArgs.entryHashSkiplink,
+        PANDA_LOG.nextEntryArgs[4].entryHashSkiplink,
       );
     });
   });

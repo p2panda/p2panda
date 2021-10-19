@@ -5,20 +5,20 @@
         "version": "0.0.1",
         "description": "The API for a p2panda node which can be used for creating and retrieving entries on a Bamboo append-only log.",
         "contact": {
-          "name": "p2panda Team",
-          "email": "contributors@p2panda.org",
-          "url": "https://p2panda.org"
+            "name": "p2panda Team",
+            "email": "contributors@p2panda.org",
+            "url": "https://p2panda.org"
         },
         "license": {
-          "name": "GNU Affero General Public License v3.0"
+            "name": "GNU Affero General Public License v3.0"
         }
-      },
+    },
     "servers": [
         {
-          "name": "p2panda node",
-          "url": "https://welle.liebechaos.org"
+            "name": "p2panda node",
+            "url": "https://welle.liebechaos.org"
         }
-      ],    
+    ],
     "components": {
         "contentDescriptors": {
             "EntryArgs": {
@@ -163,7 +163,7 @@
                 "name": "nextEntryArgs",
                 "summary": "The arguments required for publishing the next `Entry` to the test log.",
                 "value": {
-                    "$ref": "./test/test-data.json#/panda/logs/0/nextEntryArgs"
+                    "$ref": "./test/test-data.json#/panda/logs/0/nextEntryArgs/4"
                 }
             },
             "Author": {
@@ -184,7 +184,9 @@
                 "name": "entries",
                 "summary": "All `Entries` in the test Log",
                 "value": {
-                    "entries": {"$ref": "./test/test-data.json#/panda/logs/0/encodedEntries"}
+                    "entries": {
+                        "$ref": "./test/test-data.json#/panda/logs/0/encodedEntries"
+                    }
                 }
             }
         }
