@@ -79,51 +79,20 @@ impl Panda {
         self.name.to_owned()
     }
 
-    /// Determine the skiplink for the next entry
+    /// Calculate the next entry arguments for this log (log_id, seq_num, backlink, skiplink)
     pub fn next_entry_args(&self, log_id: usize) -> NextEntryArgs {
         let schema_entries = self.logs.get(&log_id).unwrap();
-
-        if schema_entries.len() == 0 {
-            NextEntryArgs {
-                entryHashBacklink: None,
-                entryHashSkiplink: None,
-                seqNum: Panda::seq_num(1),
-                logId: LogId::new(log_id.try_into().unwrap()),
-            }
-        } else {
-            // Get last entry in log
-            let (entry_encoded, _) = schema_entries.get(schema_entries.len() - 1).unwrap();
-            let decoded_last_entry = decode_entry(&entry_encoded, None).unwrap();
-
-            // Get the hash (which is the backlink we need)
-            let backlink = Some(entry_encoded.hash());
-
-            // Get the next sequence number
-            let next_seq_num = decoded_last_entry.seq_num().to_owned().next().unwrap();
-
-            // And then the skiplink
-            let skiplink_seq_num = next_seq_num.skiplink_seq_num().unwrap().as_i64();
-
-            // And finally the log id
-            let log_id = decoded_last_entry.log_id();
-
-            // Check if skiplink is required and return hash if so
-            let skiplink = if is_lipmaa_required(next_seq_num.as_i64() as u64) {
-                let (skiplink_entry, _) = schema_entries.get(skiplink_seq_num as usize).unwrap();
-                Some(skiplink_entry.hash())
-            } else {
-                None
-            };
-
-            NextEntryArgs {
-                entryHashBacklink: backlink,
-                entryHashSkiplink: skiplink,
-                seqNum: next_seq_num,
-                logId: log_id.to_owned(),
-            }
-        }
+        Panda::calculate_entry_args(log_id, schema_entries.to_owned())
     }
-
+    
+    /// Calculate the next entry arguments *at a certain point* in this log. This is helpful
+    /// when generating test data and wanting to test the flow from requesting entry args through 
+    /// to publishing an entry 
+    pub fn next_entry_args_from_the_past(&self, log_id: usize, seq_num: usize) -> NextEntryArgs {
+        let schema_entries = self.logs.get(&log_id).unwrap();
+        Panda::calculate_entry_args(log_id, schema_entries[..seq_num].to_owned())
+    }
+    
     /// Publish an entry to a schema log for this Panda
     pub fn publish_entry(&mut self, message: Message) {
         let schema_str = message.schema().as_str();
@@ -203,6 +172,48 @@ impl Panda {
             Some(fields) => Panda::update_message(schema, instance_id.unwrap(), fields),
             // It's a DELETE message
             None => Panda::delete_message(schema, instance_id.unwrap()),
+        }
+    }
+    
+    fn calculate_entry_args(log_id: usize, schema_entries: Vec<(EntrySigned, MessageEncoded)>) -> NextEntryArgs {
+        if schema_entries.len() == 0 {
+            NextEntryArgs {
+                entryHashBacklink: None,
+                entryHashSkiplink: None,
+                seqNum: Panda::seq_num(1),
+                logId: LogId::new(log_id.try_into().unwrap()),
+            }
+        } else {
+            // Get last entry in log
+            let (entry_encoded, _) = schema_entries.get(schema_entries.len() - 1).unwrap();
+            let decoded_last_entry = decode_entry(&entry_encoded, None).unwrap();
+
+            // Get the hash (which is the backlink we need)
+            let backlink = Some(entry_encoded.hash());
+
+            // Get the next sequence number
+            let next_seq_num = decoded_last_entry.seq_num().to_owned().next().unwrap();
+
+            // And then the skiplink
+            let skiplink_seq_num = next_seq_num.skiplink_seq_num().unwrap().as_i64();
+
+            // And finally the log id
+            let log_id = decoded_last_entry.log_id();
+
+            // Check if skiplink is required and return hash if so
+            let skiplink = if is_lipmaa_required(next_seq_num.as_i64() as u64) {
+                let (skiplink_entry, _) = schema_entries.get(skiplink_seq_num as usize).unwrap();
+                Some(skiplink_entry.hash())
+            } else {
+                None
+            };
+
+            NextEntryArgs {
+                entryHashBacklink: backlink,
+                entryHashSkiplink: skiplink,
+                seqNum: next_seq_num,
+                logId: log_id.to_owned(),
+            }
         }
     }
 
