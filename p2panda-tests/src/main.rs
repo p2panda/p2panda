@@ -27,7 +27,7 @@ pub struct EncodedEntryData {
 pub struct LogData {
     encodedEntries: Vec<EncodedEntryData>,
     decodedMessages: Vec<Message>,
-    nextEntryArgs: NextEntryArgs
+    nextEntryArgs: Vec<NextEntryArgs>
 }
 
 #[derive(Serialize)]
@@ -46,16 +46,15 @@ pub fn get_test_data(authors: Vec<Panda>) -> HashMap<String, AuthorData> {
         let mut author_logs = Vec::new();
         for (log_id, entries) in author.logs.iter() {
             
-            let entry_args = author.next_entry_args(log_id.to_owned());
-
             let mut log_data = LogData {
                 encodedEntries: Vec::new(),
                 decodedMessages: Vec::new(),
-                nextEntryArgs: entry_args,
+                nextEntryArgs: Vec::new(),
             };
 
             for (entry_encoded, message_encoded) in entries.iter() {
                 let entry = decode_entry(entry_encoded, Some(message_encoded)).unwrap();
+                let next_entry_args = author.next_entry_args_for_specific_entry(log_id.to_owned(), entry.seq_num());
                 let message_decoded = entry.message().unwrap();
                 // EncodedEntryData
                 let entry_data = EncodedEntryData {
@@ -70,7 +69,10 @@ pub fn get_test_data(authors: Vec<Panda>) -> HashMap<String, AuthorData> {
 
                 log_data.encodedEntries.push(entry_data);
                 log_data.decodedMessages.push(message_decoded.to_owned());
+                log_data.nextEntryArgs.push(next_entry_args);
             }
+            let final_next_entry_args = author.next_entry_args(log_id.to_owned());
+            log_data.nextEntryArgs.push(final_next_entry_args);
             author_logs.push(log_data);
         }
 
@@ -89,34 +91,22 @@ fn main() {
     let mut panda = Panda::new("panda".to_string(), Panda::keypair());
 
     // Publish an entry to their log
-    panda.publish_entry(Panda::create_message(
+    let entry_encoded_1 = panda.publish_entry(Panda::create_message(
         MESSAGE_SCHEMA,
-        vec![("message", "One create message.")],
+        vec![("message", "Ohh, my first message!")],
     ));
 
-    // Publish some more entries
-    panda.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "Two create message.")]));
-    panda.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "Three create message.")]));
-    panda.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "Four!")]));
+    // Update the instance created by the first published entry
+    panda.publish_entry(Panda::update_message(MESSAGE_SCHEMA, entry_encoded_1.hash(), vec![("message", "Which I now update.")]));
 
-    // Create an author named "panda"
-    let mut penguin = Panda::new("penguin".to_string(), Panda::keypair());
+    // Delete the instance
+    panda.publish_entry(Panda::delete_message(MESSAGE_SCHEMA, entry_encoded_1.hash()));
 
-    // Publish an entry to their log
-    penguin.publish_entry(Panda::create_message(
-        MESSAGE_SCHEMA,
-        vec![("message", "Now I will read a poem.")],
-    ));
-
-    // Publish some more entries
-    penguin.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "Ahh, I'm too nervous.")]));
-    penguin.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "Let me try that again.")]));
-
-    let (entry_encoded_1, _) = penguin.get_encoded_entry_and_message(MESSAGE_SCHEMA, 1);
-    penguin.publish_entry(Panda::update_message(MESSAGE_SCHEMA, entry_encoded_1.hash(), vec![("message", "Now I will buy an ice coffee.")]));
+    // Publish a new message
+    panda.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "Let's try that again.")]));
 
     // Format the log data contained by this author
-    let formatted_data = get_test_data(vec![panda, penguin]);
+    let formatted_data = get_test_data(vec![panda]);
     
     println!("{}", serde_json::to_string_pretty(&formatted_data).unwrap());
 }

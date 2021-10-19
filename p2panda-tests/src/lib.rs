@@ -88,13 +88,13 @@ impl Panda {
     /// Calculate the next entry arguments *at a certain point* in this log. This is helpful
     /// when generating test data and wanting to test the flow from requesting entry args through 
     /// to publishing an entry 
-    pub fn next_entry_args_from_the_past(&self, log_id: usize, seq_num: usize) -> NextEntryArgs {
+    pub fn next_entry_args_for_specific_entry(&self, log_id: usize, seq_num: &SeqNum) -> NextEntryArgs {
         let schema_entries = self.logs.get(&log_id).unwrap();
-        Panda::calculate_entry_args(log_id, schema_entries[..seq_num].to_owned())
+        Panda::calculate_entry_args(log_id, schema_entries[..seq_num.as_i64() as usize -1].to_owned())
     }
     
     /// Publish an entry to a schema log for this Panda
-    pub fn publish_entry(&mut self, message: Message) {
+    pub fn publish_entry(&mut self, message: Message) -> EntrySigned {
         let schema_str = message.schema().as_str();
 
         let log_id = match self.schema.get(schema_str) {
@@ -124,7 +124,8 @@ impl Panda {
 
         // Push new entry to schema log
         let schema_entries = self.logs.get_mut(&log_id).unwrap();
-        schema_entries.push((entry_encoded, message_encoded));
+        schema_entries.push((entry_encoded.clone(), message_encoded));
+        entry_encoded
     }
 
     pub fn get_entry(&self, schema: &str, seq_num: usize) -> Entry {
