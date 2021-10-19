@@ -45,7 +45,13 @@ pub fn get_test_data(authors: Vec<Panda>) -> HashMap<String, AuthorData> {
     for author in authors {
         let mut author_logs = Vec::new();
         for (log_id, entries) in author.logs.iter() {
-            let entry_args = author.next_entry_args(log_id.to_owned());
+            
+            // [IMPORTANT] This is slightly counter intuitive. Here we request the next_entry_args for the most
+            // recently published entry. NOT the "next entry" we would publish. This is only useful for our testing
+            // environment where we need hard coded values which are valid for a full 
+            // getNextEntryArgs -> publishEntry round trip. This would never happen in a normal
+            // bamboo/p2panda scenario.
+            let entry_args = author.next_entry_args_from_the_past(log_id.to_owned(), entries.len() - 1);
 
             let mut log_data = LogData {
                 encodedEntries: Vec::new(),
@@ -90,16 +96,32 @@ fn main() {
     // Publish an entry to their log
     panda.publish_entry(Panda::create_message(
         MESSAGE_SCHEMA,
-        vec![("message", "hello!")],
+        vec![("message", "One create message.")],
     ));
 
     // Publish some more entries
-    panda.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "poop!")]));
-    let (entry_encoded_1, _) = panda.get_encoded_entry_and_message(MESSAGE_SCHEMA, 1);
-    panda.publish_entry(Panda::update_message(MESSAGE_SCHEMA, entry_encoded_1.hash(), vec![("message", "Smelly!")]));
+    panda.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "Two create message.")]));
+    panda.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "Three create message.")]));
+    panda.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "Four!")]));
+
+    // Create an author named "panda"
+    let mut penguin = Panda::new("penguin".to_string(), Panda::keypair());
+
+    // Publish an entry to their log
+    penguin.publish_entry(Panda::create_message(
+        MESSAGE_SCHEMA,
+        vec![("message", "Now I will read a poem.")],
+    ));
+
+    // Publish some more entries
+    penguin.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "Ahh, I'm too nervous.")]));
+    penguin.publish_entry(Panda::create_message(MESSAGE_SCHEMA, vec![("message", "Let me try that again.")]));
+
+    let (entry_encoded_1, _) = penguin.get_encoded_entry_and_message(MESSAGE_SCHEMA, 1);
+    penguin.publish_entry(Panda::update_message(MESSAGE_SCHEMA, entry_encoded_1.hash(), vec![("message", "Now I will buy an ice coffee.")]));
 
     // Format the log data contained by this author
-    let formatted_data = get_test_data(vec![panda]);
-
+    let formatted_data = get_test_data(vec![panda, penguin]);
+    
     println!("{}", serde_json::to_string_pretty(&formatted_data).unwrap());
 }
