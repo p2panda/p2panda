@@ -33,7 +33,7 @@ fn entry_encoding_decoding(#[case] entry: Entry, key_pair: KeyPair) {
     assert_eq!(entry.skiplink_hash(), decoded_entry.skiplink_hash());
 }
 
-/// In this test `Entry` and `key_pair` are injected directly from our test fixtures and `message`
+/// In this test `entry` and `key_pair` are injected directly from our test fixtures and `message`
 /// is tested agains all cases on the `messages_not_matching_entry_should_fail` and one manually defined passing case.
 #[apply(messages_not_matching_entry_should_fail)]
 #[case(message_hello())]

@@ -1,4 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+
+//! `rstest` fixtures which can be injected into tests
+//!
+//! From the `rstest` docs: "rstest uses procedural macros to help you on writing fixtures and table-based tests.
+//! The core idea is that you can inject your test dependencies by passing them as test arguments."
+//!
+//! https://github.com/la10736/rstest
 use rstest::fixture;
 
 use p2panda_rs::entry::{Entry, EntrySigned, SeqNum};
@@ -8,13 +15,6 @@ use p2panda_rs::message::{Message, MessageEncoded};
 
 use crate::utils::{Fixture, GENERIC_HASH, MESSAGE_SCHEMA};
 use crate::Panda;
-
-/// `rstest` fixtures which can be injected into tests
-///
-/// From the `rstest` docs: "rstest uses procedural macros to help you on writing fixtures and table-based tests.
-/// The core idea is that you can inject your test dependencies by passing them as test arguments."
-///
-/// https://github.com/la10736/rstest
 
 #[fixture]
 pub fn key_pair() -> KeyPair {
