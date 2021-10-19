@@ -94,10 +94,12 @@
                         ]
                     },
                     "seqNum": {
-                        "type": "number"
+                        "type": "number",
+                        "minimum": 1
                     },
                     "logId": {
-                        "type": "number"
+                        "type": "number",
+                        "minimum": 1
                     }
                 }
             },
@@ -114,7 +116,8 @@
                         "$ref": "#/components/schemas/Hash"
                     },
                     "logId": {
-                        "type": "number"
+                        "type": "number",
+                        "minimum": 1
                     },
                     "payloadBytes": {
                         "type": "string"
@@ -123,7 +126,8 @@
                         "$ref": "#/components/schemas/Hash"
                     },
                     "seqNum": {
-                        "type": "number"
+                        "type": "number",
+                        "minimum": 1
                     }
                 }
             },
@@ -141,18 +145,18 @@
             }
         },
         "examples": {
-            "FirstEntryEncoded": {
+            "MostRecentPublishedEntry": {
                 "name": "entryEncoded",
                 "summary": "Encoded bytes of the first entry in a p2panda `Bamboo` log.",
                 "value": {
-                    "$ref": "./test/test-data.json#/panda/logs/0/encodedEntries/0/entryBytes"
+                    "$ref": "./test/test-data.json#/panda/logs/0/encodedEntries/3/entryBytes"
                 }
             },
-            "FirstEntryMessageEncdoded": {
+            "MostRecentPublishedMessage": {
                 "name": "messageEncoded",
                 "summary": "Encoded bytes of the payload of the first entry in a p2panda `Bamboo` log.",
                 "value": {
-                    "$ref": "./test/test-data.json#/panda/logs/0/encodedEntries/0/payloadBytes"
+                    "$ref": "./test/test-data.json#/panda/logs/0/encodedEntries/3/payloadBytes"
                 }
             },
             "EntryArgsResult": {
@@ -276,10 +280,10 @@
                     "summary": "Example of valid parameters for publishing a new `Entry` on the test log. Returns the `Entry` arguments required for publishing the next `Entry` on our log.",
                     "params": [
                         {
-                            "$ref": "#/components/examples/FirstEntryEncoded"
+                            "$ref": "#/components/examples/MostRecentPublishedEntry"
                         },
                         {
-                            "$ref": "#/components/examples/FirstEntryMessageEncdoded"
+                            "$ref": "#/components/examples/MostRecentPublishedMessage"
                         }
                     ],
                     "result": {

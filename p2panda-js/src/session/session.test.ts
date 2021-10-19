@@ -8,6 +8,8 @@ import { Session } from '~/session';
 import TEST_DATA from '~/../test/test-data.json';
 
 const PANDA_LOG = TEST_DATA.panda.logs[0];
+const SCHEMA = PANDA_LOG.decodedMessages[0].schema;
+const LOG_LENGTH = PANDA_LOG.encodedEntries.length;
 const NODE_ADDRESS = 'http://localhost:2020';
 
 /**
@@ -36,7 +38,7 @@ describe('Session', () => {
       /<Session http:\/\/localhost:2020 key pair \w{8}>/,
     );
 
-    session.setSchema(PANDA_LOG.decodedMessages[0].schema);
+    session.setSchema(SCHEMA);
     expect(`${session}`).toMatch(
       /<Session http:\/\/localhost:2020 key pair \w{8} schema \w{8}>/,
     );
@@ -45,9 +47,7 @@ describe('Session', () => {
   describe('queryEntries', () => {
     it('can query entries', async () => {
       const session = new Session(NODE_ADDRESS);
-      const entries = await session.queryEntries(
-        PANDA_LOG.decodedMessages[0].schema,
-      );
+      const entries = await session.queryEntries(SCHEMA);
       expect(entries.length).toBe(PANDA_LOG.encodedEntries.length);
     });
 
@@ -64,9 +64,9 @@ describe('Session', () => {
     it('can materialize instances', async () => {
       const session = new Session(NODE_ADDRESS);
       const instances = await session.query({
-        schema: PANDA_LOG.decodedMessages[0].schema,
+        schema: SCHEMA,
       });
-      expect(instances).toHaveLength(1);
+      expect(instances).toHaveLength(PANDA_LOG.encodedEntries.length);
       expect(instances[0].message).toEqual(
         PANDA_LOG.decodedMessages[0].fields.message.value,
       );
@@ -77,8 +77,8 @@ describe('Session', () => {
     it('can publish entries', async () => {
       const session = new Session(NODE_ADDRESS);
       const nextEntryArgs = await session.publishEntry(
-        PANDA_LOG.encodedEntries[0].entryBytes,
-        PANDA_LOG.encodedEntries[0].payloadBytes,
+        PANDA_LOG.encodedEntries[LOG_LENGTH - 1].entryBytes,
+        PANDA_LOG.encodedEntries[LOG_LENGTH - 1].payloadBytes,
       );
       expect(nextEntryArgs.entryHashBacklink).toEqual(
         PANDA_LOG.nextEntryArgs.entryHashBacklink,
@@ -103,7 +103,7 @@ describe('Session', () => {
       const session = new Session(NODE_ADDRESS);
       const nextEntryArgs = await session.getNextEntryArgs(
         TEST_DATA.panda.publicKey,
-        PANDA_LOG.decodedMessages[0].schema,
+        SCHEMA,
       );
       expect(nextEntryArgs.entryHashSkiplink).toEqual(
         PANDA_LOG.nextEntryArgs.entryHashSkiplink,
@@ -130,13 +130,13 @@ describe('Session', () => {
       };
       session.setNextEntryArgs(
         TEST_DATA.panda.publicKey,
-        PANDA_LOG.decodedMessages[0].schema,
+        SCHEMA,
         nextEntryArgs,
       );
 
       const cacheResponse = await session.getNextEntryArgs(
         TEST_DATA.panda.publicKey,
-        PANDA_LOG.decodedMessages[0].schema,
+        SCHEMA,
       );
       expect(cacheResponse.logId).toEqual(nextEntryArgs.logId);
       expect(mockedFn.mock.calls.length).toBe(0);

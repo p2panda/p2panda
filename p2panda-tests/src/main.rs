@@ -27,7 +27,7 @@ pub struct EncodedEntryData {
 pub struct LogData {
     encodedEntries: Vec<EncodedEntryData>,
     decodedMessages: Vec<Message>,
-    nextEntryArgs: NextEntryArgs,
+    nextEntryArgs: NextEntryArgs
 }
 
 #[derive(Serialize)]
@@ -46,12 +46,7 @@ pub fn get_test_data(authors: Vec<Panda>) -> HashMap<String, AuthorData> {
         let mut author_logs = Vec::new();
         for (log_id, entries) in author.logs.iter() {
             
-            // [IMPORTANT] This is slightly counter intuitive. Here we request the next_entry_args for the most
-            // recently published entry. NOT the "next entry" we would publish. This is only useful for our testing
-            // environment where we need hard coded values which are valid for a full 
-            // getNextEntryArgs -> publishEntry round trip. This would never happen in a normal
-            // bamboo/p2panda scenario.
-            let entry_args = author.next_entry_args_from_the_past(log_id.to_owned(), entries.len() - 1);
+            let entry_args = author.next_entry_args(log_id.to_owned());
 
             let mut log_data = LogData {
                 encodedEntries: Vec::new(),
