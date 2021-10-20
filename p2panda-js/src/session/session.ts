@@ -215,7 +215,11 @@ export class Session {
     return Promise.all(
       result.map(async (entry) => {
         const decoded = await decodeEntry(entry.entryBytes, entry.payloadBytes);
-        decoded.message.fields = marshallResponseFields(decoded.message.fields);
+        if (decoded.message.action !== 'delete') {
+          decoded.message.fields = marshallResponseFields(
+            decoded.message.fields,
+          );
+        }
         return {
           ...decoded,
           encoded: entry,
