@@ -66,7 +66,6 @@ describe('Session', () => {
       const instances = await session.query({
         schema: SCHEMA,
       });
-      expect(instances).toHaveLength(PANDA_LOG.encodedEntries.length);
       expect(instances.length).toEqual(2);
     });
   });
