@@ -284,7 +284,7 @@ export class Session {
     fields: Fields,
     options: Partial<Context>,
   ): Promise<Session> {
-    log('create instance', fields);
+    log('update instance', id, fields);
     const mergedOptions = {
       schema: options.schema || this.schema,
       keyPair: options.keyPair || this.keyPair,
