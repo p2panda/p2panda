@@ -271,12 +271,13 @@ export class Session {
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id
    * @example
+   * const instanceId = '0040fd224effd3aa26c2551a380ef9c48a6fae89f388949f24de314027d8ce3e2a5749077afa64a445299ca9528970092a33ef29aa30e5783d958fcee81bed0a197c';
    * const messageFields = {
    *   message: 'ahoy'
    * };
    * await new Session(endpoint)
    *   .setKeyPair(keyPair)
-   *   .create(messageFields, { schema });
+   *   .update(instanceId, messageFields, { schema });
    */
   async update(
     id: string,
