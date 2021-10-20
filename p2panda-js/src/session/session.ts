@@ -4,7 +4,7 @@ import { RequestManager, HTTPTransport, Client } from '@open-rpc/client-js';
 import debug from 'debug';
 
 import wasm from '~/wasm';
-import { createInstance, queryInstances } from '~/instance';
+import { createInstance, updateInstance, queryInstances } from '~/instance';
 import { marshallResponseFields } from '~/utils';
 
 import type {
@@ -258,8 +258,39 @@ export class Session {
     return this;
   }
 
-  async update(): Promise<Session> {
-    throw new Error('not implemented');
+  /**
+   * Signs and publishes an `update` entry for the given user data and matching schema.
+   * An `update` entry references the entry hash of the `create` entry which is the root
+   * of this materialized instance.
+   *
+   * Caches arguments for creating the next entry of this schema in the given session.
+   *
+   * @param id the id of the instance we wish to update, this is the hash of the root `create` entry
+   * @param fields user data to publish with the new entry, needs to match schema
+   * @param options optional config object:
+   * @param options.keyPair will be used to sign the new entry
+   * @param options.schema hex-encoded schema id
+   * @example
+   * const messageFields = {
+   *   message: 'ahoy'
+   * };
+   * await new Session(endpoint)
+   *   .setKeyPair(keyPair)
+   *   .create(messageFields, { schema });
+   */
+  async update(
+    id: string,
+    fields: Fields,
+    options: Partial<Context>,
+  ): Promise<Session> {
+    log('create instance', fields);
+    const mergedOptions = {
+      schema: options.schema || this.schema,
+      keyPair: options.keyPair || this.keyPair,
+      session: this,
+    };
+    updateInstance(id, fields, mergedOptions);
+    return this;
   }
 
   async delete(): Promise<Session> {
