@@ -2,7 +2,7 @@
 
 import { recoverKeyPair } from '~/identity';
 import { Session } from '~/session';
-import { createInstance, updateInstance } from '.';
+import { createInstance, deleteInstance, updateInstance } from '.';
 import { FieldsTagged } from '~/types';
 jest.mock('~/session');
 
@@ -68,6 +68,31 @@ describe('instance', () => {
       });
 
       expect(entryEncoded).toEqual(PANDA_LOG.encodedEntries[1].entryBytes);
+    });
+  });
+  describe('deleteInstance', () => {
+    it('deletes an instance', async () => {
+      const keyPair = await recoverKeyPair(TEST_DATA.panda.privateKey);
+      const session = new Session(MOCK_SERVER_URL);
+      session.setKeyPair(keyPair);
+
+      const asyncFunctionMock = jest
+        .fn()
+        .mockResolvedValue(PANDA_LOG.nextEntryArgs[2]);
+      jest
+        .spyOn(session, 'getNextEntryArgs')
+        .mockImplementation(asyncFunctionMock);
+
+      // This is the instance id
+      const id = PANDA_LOG.decodedMessages[2].id as string;
+
+      const entryEncoded = await deleteInstance(id, {
+        keyPair,
+        schema: SCHEMA,
+        session,
+      });
+
+      expect(entryEncoded).toEqual(PANDA_LOG.encodedEntries[2].entryBytes);
     });
   });
 });
