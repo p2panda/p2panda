@@ -67,6 +67,10 @@ describe('Session', () => {
         schema: SCHEMA,
       });
       expect(instances.length).toEqual(2);
+      expect(instances[0]._meta.deleted).toEqual(true);
+      expect(instances[1].message).toEqual(
+        PANDA_LOG.decodedMessages[3].fields?.message.value,
+      );
     });
   });
 

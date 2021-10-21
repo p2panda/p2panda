@@ -49,6 +49,7 @@ export type Message = {
   action: 'create' | 'update' | 'delete';
   schema: string;
   fields: Fields;
+  id: string | undefined;
 };
 
 /**
@@ -120,11 +121,11 @@ export type InstanceRecord = Record<
   boolean | number | string | unknown
 > & {
   _meta: {
+    id: string;
     author: string;
     deleted: boolean;
     edited: boolean;
     entries: EntryRecord[];
-    hash: string;
     schema: string;
   };
 };
