@@ -253,6 +253,8 @@ export class Session {
    *   .create(messageFields, { schema });
    */
   async create(fields: Fields, options: Partial<Context>): Promise<Session> {
+    // We should validate the data against the schema here too eventually
+    if (!fields) throw new Error('Message fields must be provided');
     log('create instance', fields);
     const mergedOptions = {
       schema: options.schema || this.schema,
@@ -289,6 +291,9 @@ export class Session {
     fields: Fields,
     options: Partial<Context>,
   ): Promise<Session> {
+    // We should validate the data against the schema here too eventually
+    if (!id) throw new Error('Instance id must be provided');
+    if (!fields) throw new Error('Message fields must be provided');
     log('update instance', id, fields);
     const mergedOptions = {
       schema: options.schema || this.schema,
@@ -316,6 +321,7 @@ export class Session {
    *   .delete(instanceId, { schema });
    */
   async delete(id: string, options: Partial<Context>): Promise<Session> {
+    if (!id) throw new Error('Instance id must be provided');
     log('delete instance', id);
     const mergedOptions = {
       schema: options.schema || this.schema,
