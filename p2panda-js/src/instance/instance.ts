@@ -37,6 +37,8 @@ export const createInstance = async (
 
 /**
  * Signs and publishes an `update` entry for the given instance id and fields
+ *
+ * Returns the encoded entry that was created.
  */
 export const updateInstance = async (
   id: string,
@@ -61,17 +63,23 @@ export const updateInstance = async (
 /**
  * Signs and publishes a `delete` entry for the given instance id
  *
- * It's called "remove" because "delete" is a reserved keyword in Typescript.
+ * Returns the encoded entry that was created.
  */
 export const deleteInstance = async (
   id: string,
   { keyPair, schema, session }: Context,
-): Promise<void> => {
+): Promise<string> => {
   const { encodeDeleteMessage } = await wasm;
 
   // Create message
   const encodedMessage = encodeDeleteMessage(id, schema);
-  await signPublishEntry(encodedMessage, { keyPair, schema, session });
+  const encodedEntry = await signPublishEntry(encodedMessage, {
+    keyPair,
+    schema,
+    session,
+  });
+
+  return encodedEntry;
 };
 
 export const queryInstances = async ({
