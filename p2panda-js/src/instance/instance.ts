@@ -42,14 +42,20 @@ export const updateInstance = async (
   id: string,
   fields: Fields,
   { keyPair, schema, session }: Context,
-): Promise<void> => {
+): Promise<string> => {
   const { encodeUpdateMessage } = await wasm;
 
   // Create message
   const fieldsTagged = marshallRequestFields(fields);
   const messageFields = await getMessageFields(session, fieldsTagged);
   const encodedMessage = encodeUpdateMessage(id, schema, messageFields);
-  await signPublishEntry(encodedMessage, { keyPair, schema, session });
+  const entryEncoded = await signPublishEntry(encodedMessage, {
+    keyPair,
+    schema,
+    session,
+  });
+
+  return entryEncoded;
 };
 
 /**
