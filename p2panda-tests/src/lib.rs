@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 mod fixtures;
 mod templates;
+pub mod utils;
+pub mod generate_test_data;
 #[cfg(test)]
 mod tests;
-pub mod utils;
+
+// This must be imported here at the root of the crate.
+#[allow(unused_imports)]
+use rstest_reuse;
+
+use crate::utils::NextEntryArgs;
 
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
-
 use bamboo_rs_core::entry::is_lipmaa_required;
-use rstest_reuse;
-use serde::Serialize;
 
 use p2panda_rs::entry::{decode_entry, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use p2panda_rs::hash::Hash;
@@ -21,15 +25,10 @@ use p2panda_rs::message::{Message, MessageEncoded, MessageFields, MessageValue};
 
 pub type TestPandaDB = HashMap<Author, Panda>;
 pub type Logs = HashMap<usize, Vec<(EntrySigned, MessageEncoded)>>;
-
-#[derive(Serialize)]
-pub struct NextEntryArgs {
-    entryHashBacklink: Option<Hash>,
-    entryHashSkiplink: Option<Hash>,
-    seqNum: SeqNum,
-    logId: LogId,
-}
-
+/// A helper struct for creating entries and performing psuedo log actions:
+/// - publish create, update and delete messages to a schema log
+/// - schema logs are stored on a Panda (Author) instance
+/// - static helper methods for creating entries, messages etc....
 #[derive(Debug)]
 pub struct Panda {
     pub name: String,
@@ -38,10 +37,6 @@ pub struct Panda {
     pub logs: Logs,
 }
 
-/// A helper struct for creating entries and performing psuedo log actions:
-/// - publish create, update and delete messages to a schema log
-/// - schema logs are stored on a Panda (Author) instance
-/// - static helper methods for creating entries, messages etc....
 impl Panda {
     pub fn new(name: String, key_pair: KeyPair) -> Self {
         Self {
@@ -144,6 +139,7 @@ impl Panda {
     }
 }
 
+// These are all static helper methods mainly used within the testing crate for easily creating common values.
 impl Panda {
     pub fn entry(
         message: &Message,

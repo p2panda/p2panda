@@ -1,16 +1,17 @@
-use rstest::*;
 use std::convert::TryFrom;
 
 use rstest::rstest;
 use rstest_reuse::apply;
 
-use p2panda_rs::entry::{decode_entry, sign_and_encode, Entry, LogId, SeqNum};
+use p2panda_rs::entry::{decode_entry, sign_and_encode, Entry};
 use p2panda_rs::identity::KeyPair;
 use p2panda_rs::message::{Message, MessageEncoded};
 
+use crate::Panda;
 use crate::fixtures::*;
 use crate::templates::{many_entry_versions, messages_not_matching_entry_should_fail};
-use crate::utils::Fixture;
+use crate::utils::{Fixture, MESSAGE_SCHEMA};
+
 
 /// In this test `key_pair` is injected directly from our test fixtures and `entry`
 /// is tested agains all cases on the `many_entry_versions` template.
