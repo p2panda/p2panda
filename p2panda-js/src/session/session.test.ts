@@ -4,12 +4,14 @@
 
 import { createKeyPair } from '~/identity';
 import { Session } from '~/session';
+import {
+  authorFixture,
+  entryFixture,
+  encodedEntryFixture,
+  entryArgsFixture,
+  schemaFixture,
+} from '../../test/fixtures';
 
-import TEST_DATA from '~/../test/test-data.json';
-
-const PANDA_LOG = TEST_DATA.panda.logs[0];
-const SCHEMA = PANDA_LOG.decodedMessages[0].schema;
-const LOG_LENGTH = PANDA_LOG.encodedEntries.length;
 const NODE_ADDRESS = 'http://localhost:2020';
 
 /**
@@ -38,7 +40,7 @@ describe('Session', () => {
       /<Session http:\/\/localhost:2020 key pair \w{8}>/,
     );
 
-    session.setSchema(SCHEMA);
+    session.setSchema(schemaFixture());
     expect(`${session}`).toMatch(
       /<Session http:\/\/localhost:2020 key pair \w{8} schema \w{8}>/,
     );
@@ -47,8 +49,8 @@ describe('Session', () => {
   describe('queryEntries', () => {
     it('can query entries', async () => {
       const session = new Session(NODE_ADDRESS);
-      const entries = await session.queryEntries(SCHEMA);
-      expect(entries.length).toBe(PANDA_LOG.encodedEntries.length);
+      const entries = await session.queryEntries(schemaFixture());
+      expect(entries.length).toBe(4);
     });
 
     it('throws when querying without a schema', async () => {
@@ -64,12 +66,12 @@ describe('Session', () => {
     it('can materialize instances', async () => {
       const session = new Session(NODE_ADDRESS);
       const instances = await session.query({
-        schema: SCHEMA,
+        schema: schemaFixture(),
       });
       expect(instances.length).toEqual(2);
       expect(instances[0]._meta.deleted).toEqual(true);
       expect(instances[1].message).toEqual(
-        PANDA_LOG.decodedMessages[3].fields?.message.value,
+        entryFixture(4).message?.fields?.message,
       );
     });
   });
@@ -78,11 +80,11 @@ describe('Session', () => {
     it('can publish entries', async () => {
       const session = new Session(NODE_ADDRESS);
       const nextEntryArgs = await session.publishEntry(
-        PANDA_LOG.encodedEntries[LOG_LENGTH - 1].entryBytes,
-        PANDA_LOG.encodedEntries[LOG_LENGTH - 1].payloadBytes,
+        encodedEntryFixture(4).entryBytes,
+        encodedEntryFixture(4).payloadBytes,
       );
       expect(nextEntryArgs.entryHashBacklink).toEqual(
-        PANDA_LOG.nextEntryArgs[LOG_LENGTH].entryHashBacklink,
+        entryArgsFixture(5).entryHashBacklink,
       );
     });
 
@@ -90,11 +92,11 @@ describe('Session', () => {
       const session = new Session(NODE_ADDRESS);
       await expect(
         // @ts-ignore: We deliberately use the API wrong here
-        session.publishEntry(null, PANDA_LOG.encodedEntries[0].payloadBytes),
+        session.publishEntry(null, encodedEntryFixture(1).payloadBytes),
       ).rejects.toThrow();
       await expect(
         // @ts-ignore: We deliberately use the API wrong here
-        session.publishEntry(PANDA_LOG.encodedEntries[0].entryBytes, null),
+        session.publishEntry(encodedEntryFixture(1).entryBytes, null),
       ).rejects.toThrow();
     });
   });
@@ -103,23 +105,17 @@ describe('Session', () => {
     it('returns next entry args from node', async () => {
       const session = new Session(NODE_ADDRESS);
       const nextEntryArgs = await session.getNextEntryArgs(
-        TEST_DATA.panda.publicKey,
-        SCHEMA,
+        authorFixture().publicKey,
+        schemaFixture(),
       );
       expect(nextEntryArgs.entryHashSkiplink).toEqual(
-        PANDA_LOG.nextEntryArgs[LOG_LENGTH].entryHashSkiplink as
-          | string
-          | undefined,
+        entryArgsFixture(5).entryHashSkiplink as string | undefined,
       );
       expect(nextEntryArgs.entryHashBacklink).toEqual(
-        PANDA_LOG.nextEntryArgs[LOG_LENGTH].entryHashBacklink,
+        entryArgsFixture(5).entryHashBacklink,
       );
-      expect(nextEntryArgs.seqNum).toEqual(
-        PANDA_LOG.nextEntryArgs[LOG_LENGTH].seqNum,
-      );
-      expect(nextEntryArgs.logId).toEqual(
-        PANDA_LOG.nextEntryArgs[LOG_LENGTH].logId,
-      );
+      expect(nextEntryArgs.seqNum).toEqual(entryArgsFixture(5).seqNum);
+      expect(nextEntryArgs.logId).toEqual(entryArgsFixture(5).logId);
     });
 
     it('returns next entry args from cache', async () => {
@@ -131,22 +127,24 @@ describe('Session', () => {
 
       const nextEntryArgs = {
         // convert json null into undefined
-        entryHashBacklink: PANDA_LOG.nextEntryArgs[LOG_LENGTH]
-          .entryHashBacklink as string | undefined,
-        entryHashSkiplink: PANDA_LOG.nextEntryArgs[LOG_LENGTH]
-          .entryHashSkiplink as string | undefined,
-        logId: PANDA_LOG.nextEntryArgs[LOG_LENGTH].logId,
-        seqNum: PANDA_LOG.nextEntryArgs[LOG_LENGTH].seqNum,
+        entryHashBacklink: entryArgsFixture(5).entryHashBacklink as
+          | string
+          | undefined,
+        entryHashSkiplink: entryArgsFixture(5).entryHashSkiplink as
+          | string
+          | undefined,
+        logId: entryArgsFixture(5).logId,
+        seqNum: entryArgsFixture(5).seqNum,
       };
       session.setNextEntryArgs(
-        TEST_DATA.panda.publicKey,
-        SCHEMA,
+        authorFixture().publicKey,
+        schemaFixture(),
         nextEntryArgs,
       );
 
       const cacheResponse = await session.getNextEntryArgs(
-        TEST_DATA.panda.publicKey,
-        SCHEMA,
+        authorFixture().publicKey,
+        schemaFixture(),
       );
       expect(cacheResponse.logId).toEqual(nextEntryArgs.logId);
       expect(mockedFn.mock.calls.length).toBe(0);
