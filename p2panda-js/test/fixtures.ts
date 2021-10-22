@@ -5,10 +5,10 @@ import { marshallResponseFields } from '~/utils';
 // right now we only have one author `panda` who only has one schema log. This could be expanded in the future.
 const PANDA_LOG = TEST_DATA.panda.logs[0];
 
-// Need type for this return value
 export const schemaFixture = (): string => {
   return PANDA_LOG.decodedMessages[0].schema;
 };
+
 // Need type for this return value
 export const authorFixture = () => {
   const author = {
