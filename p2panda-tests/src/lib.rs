@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 mod fixtures;
-mod templates;
-pub mod utils;
 pub mod generate_test_data;
+mod templates;
 #[cfg(test)]
 mod tests;
+pub mod utils;
 
 // This must be imported here at the root of the crate.
 #[allow(unused_imports)]
@@ -12,9 +12,9 @@ use rstest_reuse;
 
 use crate::utils::NextEntryArgs;
 
+use bamboo_rs_core::entry::is_lipmaa_required;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
-use bamboo_rs_core::entry::is_lipmaa_required;
 
 use p2panda_rs::entry::{decode_entry, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use p2panda_rs::hash::Hash;
@@ -79,15 +79,22 @@ impl Panda {
         let schema_entries = self.logs.get(&log_id).unwrap();
         Panda::calculate_entry_args(log_id, schema_entries.to_owned())
     }
-    
+
     /// Calculate the next entry arguments *at a certain point* in this log. This is helpful
-    /// when generating test data and wanting to test the flow from requesting entry args through 
-    /// to publishing an entry 
-    pub fn next_entry_args_for_specific_entry(&self, log_id: usize, seq_num: &SeqNum) -> NextEntryArgs {
+    /// when generating test data and wanting to test the flow from requesting entry args through
+    /// to publishing an entry
+    pub fn next_entry_args_for_specific_entry(
+        &self,
+        log_id: usize,
+        seq_num: &SeqNum,
+    ) -> NextEntryArgs {
         let schema_entries = self.logs.get(&log_id).unwrap();
-        Panda::calculate_entry_args(log_id, schema_entries[..seq_num.as_i64() as usize -1].to_owned())
+        Panda::calculate_entry_args(
+            log_id,
+            schema_entries[..seq_num.as_i64() as usize - 1].to_owned(),
+        )
     }
-    
+
     /// Publish an entry to a schema log for this Panda
     pub fn publish_entry(&mut self, message: Message) -> EntrySigned {
         let schema_str = message.schema().as_str();
@@ -171,8 +178,11 @@ impl Panda {
             None => Panda::delete_message(schema, instance_id.unwrap()),
         }
     }
-    
-    fn calculate_entry_args(log_id: usize, schema_entries: Vec<(EntrySigned, MessageEncoded)>) -> NextEntryArgs {
+
+    fn calculate_entry_args(
+        log_id: usize,
+        schema_entries: Vec<(EntrySigned, MessageEncoded)>,
+    ) -> NextEntryArgs {
         if schema_entries.len() == 0 {
             NextEntryArgs {
                 entryHashBacklink: None,

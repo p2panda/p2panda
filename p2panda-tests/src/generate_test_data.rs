@@ -1,12 +1,11 @@
-
 // SPDX-License-Identifier: AGPL-3.0-or-later
 use std::collections::HashMap;
 
+use crate::{NextEntryArgs, Panda};
 use p2panda_rs::entry::{decode_entry, LogId, SeqNum};
 use p2panda_rs::hash::Hash;
 use p2panda_rs::identity::Author;
 use p2panda_rs::message::Message;
-use crate::{NextEntryArgs, Panda};
 
 use serde::Serialize;
 
@@ -28,7 +27,7 @@ pub struct EncodedEntryData {
 pub struct LogData {
     encodedEntries: Vec<EncodedEntryData>,
     decodedMessages: Vec<Message>,
-    nextEntryArgs: Vec<NextEntryArgs>
+    nextEntryArgs: Vec<NextEntryArgs>,
 }
 
 #[derive(Serialize)]
@@ -47,7 +46,6 @@ pub fn to_test_data(authors: Vec<Panda>) -> HashMap<String, AuthorData> {
     for author in authors {
         let mut author_logs = Vec::new();
         for (log_id, entries) in author.logs.iter() {
-            
             let mut log_data = LogData {
                 encodedEntries: Vec::new(),
                 decodedMessages: Vec::new(),
@@ -56,7 +54,8 @@ pub fn to_test_data(authors: Vec<Panda>) -> HashMap<String, AuthorData> {
 
             for (entry_encoded, message_encoded) in entries.iter() {
                 let entry = decode_entry(entry_encoded, Some(message_encoded)).unwrap();
-                let next_entry_args = author.next_entry_args_for_specific_entry(log_id.to_owned(), entry.seq_num());
+                let next_entry_args =
+                    author.next_entry_args_for_specific_entry(log_id.to_owned(), entry.seq_num());
                 let message_decoded = entry.message().unwrap();
                 let entry_data = EncodedEntryData {
                     author: entry_encoded.author(),

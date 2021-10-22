@@ -1,9 +1,9 @@
 use rstest_reuse::template;
 
-// With these templates you can apply many rstest cases to a single test. They utilize the somewhat new 
+// With these templates you can apply many rstest cases to a single test. They utilize the somewhat new
 // [rstest_reuse](https://github.com/la10736/rstest/tree/master/rstest_reuse) crate.
 //
-// This template contains several different messages which should fail when run against the default 
+// This template contains several different messages which should fail when run against the default
 // fixture message.
 #[template]
 #[rstest]
