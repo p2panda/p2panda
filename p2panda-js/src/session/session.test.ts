@@ -2,8 +2,9 @@
 
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 
-import { createKeyPair } from '~/identity';
+import { createKeyPair, recoverKeyPair } from '~/identity';
 import { Session } from '~/session';
+import { Fields } from '~/types';
 import {
   authorFixture,
   entryFixture,
@@ -12,7 +13,7 @@ import {
   schemaFixture,
 } from '../../test/fixtures';
 
-const NODE_ADDRESS = 'http://localhost:2020';
+const MOCK_SERVER_URL = 'http://localhost:2020';
 
 /**
  * Test the `Session` class
@@ -32,7 +33,7 @@ describe('Session', () => {
   });
 
   it('has a string representation', async () => {
-    const session = new Session(NODE_ADDRESS);
+    const session = new Session(MOCK_SERVER_URL);
     expect(`${session}`).toEqual('<Session http://localhost:2020>');
 
     session.setKeyPair(await createKeyPair());
@@ -48,13 +49,13 @@ describe('Session', () => {
 
   describe('queryEntries', () => {
     it('can query entries', async () => {
-      const session = new Session(NODE_ADDRESS);
+      const session = new Session(MOCK_SERVER_URL);
       const entries = await session.queryEntries(schemaFixture());
       expect(entries.length).toBe(4);
     });
 
     it('throws when querying without a schema', async () => {
-      const session = new Session(NODE_ADDRESS);
+      const session = new Session(MOCK_SERVER_URL);
       // @ts-ignore: We deliberately use the API wrong here
       await expect(session.queryEntries()).rejects.toThrow(
         /Schema must be provided/,
@@ -64,7 +65,7 @@ describe('Session', () => {
 
   describe('query', () => {
     it('can materialize instances', async () => {
-      const session = new Session(NODE_ADDRESS);
+      const session = new Session(MOCK_SERVER_URL);
       const instances = await session.query({
         schema: schemaFixture(),
       });
@@ -78,7 +79,7 @@ describe('Session', () => {
 
   describe('publishEntry', () => {
     it('can publish entries', async () => {
-      const session = new Session(NODE_ADDRESS);
+      const session = new Session(MOCK_SERVER_URL);
       const nextEntryArgs = await session.publishEntry(
         encodedEntryFixture(4).entryBytes,
         encodedEntryFixture(4).payloadBytes,
@@ -89,7 +90,7 @@ describe('Session', () => {
     });
 
     it('throws when publishing without all required parameters', async () => {
-      const session = new Session(NODE_ADDRESS);
+      const session = new Session(MOCK_SERVER_URL);
       await expect(
         // @ts-ignore: We deliberately use the API wrong here
         session.publishEntry(null, encodedEntryFixture(1).payloadBytes),
@@ -103,7 +104,7 @@ describe('Session', () => {
 
   describe('get/setNextEntryArgs', () => {
     it('returns next entry args from node', async () => {
-      const session = new Session(NODE_ADDRESS);
+      const session = new Session(MOCK_SERVER_URL);
       const nextEntryArgs = await session.getNextEntryArgs(
         authorFixture().publicKey,
         schemaFixture(),
@@ -119,7 +120,7 @@ describe('Session', () => {
     });
 
     it('returns next entry args from cache', async () => {
-      const session = new Session(NODE_ADDRESS);
+      const session = new Session(MOCK_SERVER_URL);
       // Add a spy to check whether the value is really retrieved from the
       // cache and not requested
       const mockedFn = jest.fn(async () => true);
@@ -148,6 +149,74 @@ describe('Session', () => {
       );
       expect(cacheResponse.logId).toEqual(nextEntryArgs.logId);
       expect(mockedFn.mock.calls.length).toBe(0);
+    });
+  });
+  describe('create', () => {
+    it('creates an instance', async () => {
+      const keyPair = await recoverKeyPair(authorFixture().privateKey);
+      const session: Session = new Session(MOCK_SERVER_URL);
+
+      const asyncFunctionMock = jest
+        .fn()
+        .mockResolvedValue(entryArgsFixture(1));
+      jest
+        .spyOn(session, 'getNextEntryArgs')
+        .mockImplementation(asyncFunctionMock);
+
+      const fields = entryFixture(1).message?.fields as Fields;
+
+      expect(
+        await session.setKeyPair(keyPair).create(fields, {
+          schema: schemaFixture(),
+        }),
+      ).resolves;
+    });
+  });
+  describe('updateInstance', () => {
+    it('updates an instance', async () => {
+      const keyPair = await recoverKeyPair(authorFixture().privateKey);
+      const session = new Session(MOCK_SERVER_URL);
+
+      const asyncFunctionMock = jest
+        .fn()
+        .mockResolvedValue(entryArgsFixture(2));
+      jest
+        .spyOn(session, 'getNextEntryArgs')
+        .mockImplementation(asyncFunctionMock);
+
+      // These are the fields for an update message
+      const fields = entryFixture(2).message?.fields as Fields;
+
+      // This is the instance id
+      const id = entryFixture(2).message?.id as string;
+
+      expect(
+        await session.setKeyPair(keyPair).update(id, fields, {
+          schema: schemaFixture(),
+        }),
+      ).resolves;
+    });
+  });
+  describe('deleteInstance', () => {
+    it('deletes an instance', async () => {
+      const keyPair = await recoverKeyPair(authorFixture().privateKey);
+      const session = new Session(MOCK_SERVER_URL);
+
+      const asyncFunctionMock = jest
+        .fn()
+        .mockResolvedValue(entryArgsFixture(3));
+      jest
+        .spyOn(session, 'getNextEntryArgs')
+        .mockImplementation(asyncFunctionMock);
+
+      // This is the instance id
+      const id = entryFixture(3).message?.id as string;
+
+      expect(
+        session.setKeyPair(keyPair).delete(id, {
+          schema: schemaFixture(),
+        }),
+      ).resolves;
     });
   });
 });
