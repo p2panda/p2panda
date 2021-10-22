@@ -45,9 +45,11 @@ export type Entry = {
  * Decoded form of a message, which can create, update or delete instances
  */
 export type Message = {
+  // I think we're missing the `id` field which we need for materialization.
   action: 'create' | 'update' | 'delete';
   schema: string;
-  fields: Fields;
+  fields: Fields | undefined;
+  id: string | undefined;
 };
 
 /**
@@ -119,11 +121,11 @@ export type InstanceRecord = Record<
   boolean | number | string | unknown
 > & {
   _meta: {
+    id: string;
     author: string;
     deleted: boolean;
     edited: boolean;
     entries: EntryRecord[];
-    hash: string;
     schema: string;
   };
 };

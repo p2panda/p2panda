@@ -4,7 +4,12 @@ import { RequestManager, HTTPTransport, Client } from '@open-rpc/client-js';
 import debug from 'debug';
 
 import wasm from '~/wasm';
-import { createInstance, queryInstances } from '~/instance';
+import {
+  createInstance,
+  deleteInstance,
+  updateInstance,
+  queryInstances,
+} from '~/instance';
 import { marshallResponseFields } from '~/utils';
 
 import type {
@@ -215,7 +220,11 @@ export class Session {
     return Promise.all(
       result.map(async (entry) => {
         const decoded = await decodeEntry(entry.entryBytes, entry.payloadBytes);
-        decoded.message.fields = marshallResponseFields(decoded.message.fields);
+        if (decoded.message.action !== 'delete') {
+          decoded.message.fields = marshallResponseFields(
+            decoded.message.fields,
+          );
+        }
         return {
           ...decoded,
           encoded: entry,
@@ -244,6 +253,8 @@ export class Session {
    *   .create(messageFields, { schema });
    */
   async create(fields: Fields, options: Partial<Context>): Promise<Session> {
+    // We should validate the data against the schema here too eventually
+    if (!fields) throw new Error('Message fields must be provided');
     log('create instance', fields);
     const mergedOptions = {
       schema: options.schema || this.schema,
@@ -254,12 +265,71 @@ export class Session {
     return this;
   }
 
-  async update(): Promise<Session> {
-    throw new Error('not implemented');
+  /**
+   * Signs and publishes an `update` entry for the given user data and matching schema.
+   * An `update` entry references the entry hash of the `create` entry which is the root
+   * of this materialized instance.
+   *
+   * Caches arguments for creating the next entry of this schema in the given session.
+   *
+   * @param id the id of the instance we wish to update, this is the hash of the root `create` entry
+   * @param fields user data to publish with the new entry, needs to match schema
+   * @param options optional config object:
+   * @param options.keyPair will be used to sign the new entry
+   * @param options.schema hex-encoded schema id
+   * @example
+   * const instanceId = '0040fd224effd3aa26c2551a380ef9c48a6fae89f388949f24de314027d8ce3e2a5749077afa64a445299ca9528970092a33ef29aa30e5783d958fcee81bed0a197c';
+   * const messageFields = {
+   *   message: 'ahoy'
+   * };
+   * await new Session(endpoint)
+   *   .setKeyPair(keyPair)
+   *   .update(instanceId, messageFields, { schema });
+   */
+  async update(
+    id: string,
+    fields: Fields,
+    options: Partial<Context>,
+  ): Promise<Session> {
+    // We should validate the data against the schema here too eventually
+    if (!id) throw new Error('Instance id must be provided');
+    if (!fields) throw new Error('Message fields must be provided');
+    log('update instance', id, fields);
+    const mergedOptions = {
+      schema: options.schema || this.schema,
+      keyPair: options.keyPair || this.keyPair,
+      session: this,
+    };
+    updateInstance(id, fields, mergedOptions);
+    return this;
   }
 
-  async delete(): Promise<Session> {
-    throw new Error('not implemented');
+  /**
+   * Signs and publishes a `delete` entry for the given schema. References the entry hash of the `create` entry which
+   * is the id of this materialized instance.
+   *
+   * Caches arguments for creating the next entry of this schema in the given session.
+   *
+   * @param id the id of the instance we wish to update, this is the hash of the root `create` entry
+   * @param options optional config object:
+   * @param options.keyPair will be used to sign the new entry
+   * @param options.schema hex-encoded schema id
+   * @example
+   * const instanceId = '0040fd224effd3aa26c2551a380ef9c48a6fae89f388949f24de314027d8ce3e2a5749077afa64a445299ca9528970092a33ef29aa30e5783d958fcee81bed0a197c';
+   * await new Session(endpoint)
+   *   .setKeyPair(keyPair)
+   *   .delete(instanceId, { schema });
+   */
+  async delete(id: string, options: Partial<Context>): Promise<Session> {
+    if (!id) throw new Error('Instance id must be provided');
+    log('delete instance', id);
+    const mergedOptions = {
+      schema: options.schema || this.schema,
+      keyPair: options.keyPair || this.keyPair,
+      session: this,
+    };
+    deleteInstance(id, mergedOptions);
+    return this;
   }
 
   /**
