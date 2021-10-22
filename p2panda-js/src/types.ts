@@ -48,7 +48,7 @@ export type Message = {
   // I think we're missing the `id` field which we need for materialization.
   action: 'create' | 'update' | 'delete';
   schema: string;
-  fields: Fields;
+  fields: Fields | undefined;
   id: string | undefined;
 };
 
