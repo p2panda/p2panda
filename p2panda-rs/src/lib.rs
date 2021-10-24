@@ -55,6 +55,12 @@
     unused_qualifications
 )]
 
+// This must be imported here at the root of the crate (not sure why tbh, something about macros...).
+#[allow(unused_imports)]
+#[cfg(test)]
+use rstest_reuse;
+
+pub mod tests;
 pub mod entry;
 pub mod hash;
 pub mod identity;

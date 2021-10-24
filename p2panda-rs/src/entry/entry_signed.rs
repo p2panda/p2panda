@@ -6,13 +6,11 @@ use arrayvec::ArrayVec;
 use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
 use ed25519_dalek::Signature;
 use serde::{Deserialize, Serialize};
-
 use crate::entry::EntrySignedError;
 use crate::hash::{Blake2BArrayVec, Hash};
 use crate::identity::Author;
 use crate::message::MessageEncoded;
 use crate::Validate;
-
 /// Bamboo entry bytes represented in hex encoding format.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(
