@@ -11,15 +11,15 @@ Highlights are marked with a pancake 🥞
 
 ## [0.2.0]
 
-Released: :package: 2021-10-25 `p2panda-js` & `p2panda-rs`
+### Added
 
-### Fixed
-
-- Fix wrong offset of skiplinks [#46](https://github.com/p2panda/p2panda/pull/46) `rs`
-- Assure deterministic hashing by ordering of message keys [84a583](https://github.com/p2panda/p2panda/commit/84a583eb58614e8c5ae76c80f2f04ee96db98713) `rs`
-- Remove `BigInt` to support WebKit [#66](https://github.com/p2panda/p2panda/pull/66) `rs`
-- Properly import entry tests module [#81](https://github.com/p2panda/p2panda/pull/81) `rs`
-- Correct error in `panda_queryEntries` OpenRPC specification result [#108](https://github.com/p2panda/p2panda/pull/108) `tests`
+- `Relation` message values [#33](https://github.com/p2panda/p2panda/pull/33) `rs`
+- Atomic data types like `Message`, `Entry`, `LogId`, `SeqNum`, etc. [#23](https://github.com/p2panda/p2panda/pull/23) `rs` 🥞
+- `sqlx` [Type](https://docs.rs/sqlx/0.5.1/sqlx/trait.Type.html) traits to atomic structs, introduce `db-sqlx` feature flag [#43](https://github.com/p2panda/p2panda/pull/43) `rs`
+- `serde` serialization and deserialization for all atomic structs [#42](https://github.com/p2panda/p2panda/pull/42) `rs`
+- Implement method for iterating over MessageFields [#68](https://github.com/p2panda/p2panda/pull/68) `rs`
+- TypeScript API that wraps wasm bindings, introduce OpenRPC specification [#67](https://github.com/p2panda/p2panda/pull/67) `js` 🥞
+- Methods to update and delete instances [#114](https://github.com/p2panda/p2panda/pull/114) `js` 🥞
 
 ### Changed
 
@@ -37,15 +37,13 @@ Released: :package: 2021-10-25 `p2panda-js` & `p2panda-rs`
 - Revisit singleton logic of WebAssembly import [#110](https://github.com/p2panda/p2panda/pull/110) `js`
 - Move WebAssembly methods of KeyPair into dedicated module [#111](https://github.com/p2panda/p2panda/pull/111) `rs`
 
-### Added
+### Fixed
 
-- `Relation` message values [#33](https://github.com/p2panda/p2panda/pull/33) `rs`
-- Atomic data types like `Message`, `Entry`, `LogId`, `SeqNum`, etc. [#23](https://github.com/p2panda/p2panda/pull/23) `rs` 🥞
-- `sqlx` [Type](https://docs.rs/sqlx/0.5.1/sqlx/trait.Type.html) traits to atomic structs, introduce `db-sqlx` feature flag [#43](https://github.com/p2panda/p2panda/pull/43) `rs`
-- `serde` serialization and deserialization for all atomic structs [#42](https://github.com/p2panda/p2panda/pull/42) `rs`
-- Implement method for iterating over MessageFields [#68](https://github.com/p2panda/p2panda/pull/68) `rs`
-- TypeScript API that wraps wasm bindings, introduce OpenRPC specification [#67](https://github.com/p2panda/p2panda/pull/67) `js` 🥞
-- Methods to update and delete instances [#114](https://github.com/p2panda/p2panda/pull/114) `js` 🥞
+- Fix wrong offset of skiplinks [#46](https://github.com/p2panda/p2panda/pull/46) `rs`
+- Assure deterministic hashing by ordering of message keys [84a583](https://github.com/p2panda/p2panda/commit/84a583eb58614e8c5ae76c80f2f04ee96db98713) `rs`
+- Remove `BigInt` to support WebKit [#66](https://github.com/p2panda/p2panda/pull/66) `rs`
+- Properly import entry tests module [#81](https://github.com/p2panda/p2panda/pull/81) `rs`
+- Correct error in `panda_queryEntries` OpenRPC specification result [#108](https://github.com/p2panda/p2panda/pull/108) `tests`
 
 ### Campfires and boiling pots to sit around
 
@@ -62,6 +60,6 @@ Released: :package: 2021-01-18 `p2panda-js` - :package: 2021-01-28 `p2panda-rs`
 - JavaScript library export with WebAssembly running in browsers and NodeJS. [#21](https://github.com/p2panda/p2panda/pull/21) `js`
 - Ed25519 key pair generation. [#4](https://github.com/p2panda/p2panda/pull/4) `rs`
 
-[Unreleased]: https://github.com/p2panda/p2panda/compare/v0.2.0...HEAD
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.2.0...HEAD
 [0.1.0]: https://github.com/p2panda/p2panda/releases/tag/v0.1.0
 [0.2.0]: https://github.com/p2panda/p2panda/releases/tag/v0.2.0
