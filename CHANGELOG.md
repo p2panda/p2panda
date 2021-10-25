@@ -33,7 +33,7 @@ Highlights are marked with a pancake 🥞
 - `p2panda-js` directory restructure [#102](https://github.com/p2panda/p2panda/pull/102) `js`
 - Use Jest as test framework [#104](https://github.com/p2panda/p2panda/pull/104) `js`
 - Clean up OpenRPC generate script [#109](https://github.com/p2panda/p2panda/pull/109) `tests`
-- Refactor and simplify WebAssembly build pipeline [#105](https://github.com/p2panda/p2panda/pull/105) `rs`, `js`
+- Refactor and simplify WebAssembly build pipeline [#105](https://github.com/p2panda/p2panda/pull/105) `rs` `js`
 - Revisit singleton logic of WebAssembly import [#110](https://github.com/p2panda/p2panda/pull/110) `js`
 - Move WebAssembly methods of KeyPair into dedicated module [#111](https://github.com/p2panda/p2panda/pull/111) `rs`
 
