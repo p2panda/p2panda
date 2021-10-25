@@ -28,12 +28,12 @@ use crate::message::{
 macro_rules! jserr {
     // Convert error to js_sys::Error with original error message
     ($l:expr) => {
-        $l.map_err::<JsValue, _>(|err| js_sys::Error::new(&format!("{}", err)).into())?;
+        $l.map_err::<JsValue, _>(|err| js_sys::Error::new(&format!("{}", err)).into())?
     };
 
     // Convert error to js_sys::Error with custom error message
     ($l:expr, $err:expr) => {
-        $l.map_err::<JsValue, _>(|_| js_sys::Error::new(&format!("{:?}", $err)).into())?;
+        $l.map_err::<JsValue, _>(|_| js_sys::Error::new(&format!("{:?}", $err)).into())?
     };
 }
 
