@@ -178,17 +178,13 @@ describe('Session', () => {
       expect(await session.create(fields)).resolves;
     });
 
-      expect(
-        await session.setKeyPair(keyPair).create(fields, {
-          schema: schemaFixture(),
-        }),
-      ).resolves;
+    it('throws when missing a required parameter', async () => {
+      await expect(
+        // @ts-ignore: We deliberately use the API wrong here
+        session.setKeyPair(keyPair).create(),
+      ).rejects.toThrow();
     });
   });
-  describe('updateInstance', () => {
-    it('updates an instance', async () => {
-      const keyPair = await recoverKeyPair(authorFixture().privateKey);
-      const session = new Session(MOCK_SERVER_URL);
 
   describe('update', () => {
     let session: Session;
@@ -215,11 +211,18 @@ describe('Session', () => {
         }),
       ).resolves;
     });
+
+    it('throws when missing a required parameter', async () => {
+      await expect(
+        // @ts-ignore: We deliberately use the API wrong here
+        session.update(null, fields),
+      ).rejects.toThrow();
+      await expect(
+        // @ts-ignore: We deliberately use the API wrong here
+        session.update(id, null),
+      ).rejects.toThrow();
+    });
   });
-  describe('deleteInstance', () => {
-    it('deletes an instance', async () => {
-      const keyPair = await recoverKeyPair(authorFixture().privateKey);
-      const session = new Session(MOCK_SERVER_URL);
 
   describe('delete', () => {
     let session: Session;
@@ -240,11 +243,9 @@ describe('Session', () => {
       expect(session.delete(id)).resolves;
     });
 
-      expect(
-        session.setKeyPair(keyPair).delete(id, {
-          schema: schemaFixture(),
-        }),
-      ).resolves;
+    it('throws when missing a required parameter', async () => {
+      // @ts-ignore: We deliberately use the API wrong here
+      expect(session.delete(null)).rejects.toThrow();
     });
   });
 });
