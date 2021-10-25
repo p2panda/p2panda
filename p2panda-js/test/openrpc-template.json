@@ -5,20 +5,20 @@
         "version": "0.0.1",
         "description": "The API for a p2panda node which can be used for creating and retrieving entries on a Bamboo append-only log.",
         "contact": {
-          "name": "p2panda Team",
-          "email": "contributors@p2panda.org",
-          "url": "https://p2panda.org"
+            "name": "p2panda Team",
+            "email": "contributors@p2panda.org",
+            "url": "https://p2panda.org"
         },
         "license": {
-          "name": "GNU Affero General Public License v3.0"
+            "name": "GNU Affero General Public License v3.0"
         }
-      },
+    },
     "servers": [
         {
-          "name": "p2panda node",
-          "url": "https://welle.liebechaos.org"
+            "name": "p2panda node",
+            "url": "https://welle.liebechaos.org"
         }
-      ],    
+    ],
     "components": {
         "contentDescriptors": {
             "EntryArgs": {
@@ -94,10 +94,12 @@
                         ]
                     },
                     "seqNum": {
-                        "type": "number"
+                        "type": "number",
+                        "minimum": 1
                     },
                     "logId": {
-                        "type": "number"
+                        "type": "number",
+                        "minimum": 1
                     }
                 }
             },
@@ -114,7 +116,8 @@
                         "$ref": "#/components/schemas/Hash"
                     },
                     "logId": {
-                        "type": "number"
+                        "type": "number",
+                        "minimum": 1
                     },
                     "payloadBytes": {
                         "type": "string"
@@ -123,7 +126,8 @@
                         "$ref": "#/components/schemas/Hash"
                     },
                     "seqNum": {
-                        "type": "number"
+                        "type": "number",
+                        "minimum": 1
                     }
                 }
             },
@@ -141,46 +145,118 @@
             }
         },
         "examples": {
-            "FirstEntryEncoded": {
+            "Entry1": {
                 "name": "entryEncoded",
                 "summary": "Encoded bytes of the first entry in a p2panda `Bamboo` log.",
                 "value": {
-                    "$ref": "./test/test-data.json#/entries/0/entryBytes"
+                    "$ref": "./test/test-data.json#/panda/logs/0/encodedEntries/0/entryBytes"
                 }
             },
-            "FirstEntryMessageEncdoded": {
+            "Entry2": {
+                "name": "entryEncoded",
+                "summary": "Encoded bytes of the second entry in a p2panda `Bamboo` log.",
+                "value": {
+                    "$ref": "./test/test-data.json#/panda/logs/0/encodedEntries/1/entryBytes"
+                }
+            },
+            "Entry3": {
+                "name": "entryEncoded",
+                "summary": "Encoded bytes of the third entry in a p2panda `Bamboo` log.",
+                "value": {
+                    "$ref": "./test/test-data.json#/panda/logs/0/encodedEntries/2/entryBytes"
+                }
+            },
+            "Entry4": {
+                "name": "entryEncoded",
+                "summary": "Encoded bytes of the forth entry in a p2panda `Bamboo` log.",
+                "value": {
+                    "$ref": "./test/test-data.json#/panda/logs/0/encodedEntries/3/entryBytes"
+                }
+            },
+            "Message1": {
                 "name": "messageEncoded",
                 "summary": "Encoded bytes of the payload of the first entry in a p2panda `Bamboo` log.",
                 "value": {
-                    "$ref": "./test/test-data.json#/entries/0/payloadBytes"
+                    "$ref": "./test/test-data.json#/panda/logs/0/encodedEntries/0/payloadBytes"
                 }
             },
-            "EntryArgsResult": {
-                "name": "nextEntryArgs",
-                "summary": "The arguments required for publishing the next `Entry` to the test log.",
+            "Message2": {
+                "name": "messageEncoded",
+                "summary": "Encoded bytes of the payload of the second entry in a p2panda `Bamboo` log.",
                 "value": {
-                    "$ref": "./test/test-data.json#/nextEntryArgs"
+                    "$ref": "./test/test-data.json#/panda/logs/0/encodedEntries/1/payloadBytes"
+                }
+            },
+            "Message3": {
+                "name": "messageEncoded",
+                "summary": "Encoded bytes of the payload of the third entry in a p2panda `Bamboo` log.",
+                "value": {
+                    "$ref": "./test/test-data.json#/panda/logs/0/encodedEntries/2/payloadBytes"
+                }
+            },
+            "Message4": {
+                "name": "messageEncoded",
+                "summary": "Encoded bytes of the payload of the first entry in a p2panda `Bamboo` log.",
+                "value": {
+                    "$ref": "./test/test-data.json#/panda/logs/0/encodedEntries/3/payloadBytes"
+                }
+            },
+            "EntryArgs1": {
+                "name": "nextEntryArgs",
+                "summary": "The arguments required for publishing the first `Entry` to the test log.",
+                "value": {
+                    "$ref": "./test/test-data.json#/panda/logs/0/nextEntryArgs/0"
+                }
+            },
+            "EntryArgs2": {
+                "name": "nextEntryArgs",
+                "summary": "The arguments required for publishing the second `Entry` to the test log.",
+                "value": {
+                    "$ref": "./test/test-data.json#/panda/logs/0/nextEntryArgs/1"
+                }
+            },
+            "EntryArgs3": {
+                "name": "nextEntryArgs",
+                "summary": "The arguments required for publishing the third `Entry` to the test log.",
+                "value": {
+                    "$ref": "./test/test-data.json#/panda/logs/0/nextEntryArgs/2"
+                }
+            },
+            "EntryArgs4": {
+                "name": "nextEntryArgs",
+                "summary": "The arguments required for publishing the forth `Entry` to the test log.",
+                "value": {
+                    "$ref": "./test/test-data.json#/panda/logs/0/nextEntryArgs/3"
+                }
+            },
+            "EntryArgs5": {
+                "name": "nextEntryArgs",
+                "summary": "The arguments required for publishing a new fifth `Entry` to the test log.",
+                "value": {
+                    "$ref": "./test/test-data.json#/panda/logs/0/nextEntryArgs/4"
                 }
             },
             "Author": {
                 "name": "author",
                 "summary": "The `Author` of the test log.",
                 "value": {
-                    "$ref": "./test/test-data.json#/entries/0/author"
+                    "$ref": "./test/test-data.json#/panda/publicKey"
                 }
             },
             "Schema": {
                 "name": "schema",
                 "summary": "The `Schema` which this log is assigned",
                 "value": {
-                    "$ref": "./test/test-data.json#/decodedEntries/0/message/schema"
+                    "$ref": "./test/test-data.json#/panda/logs/0/decodedMessages/0/schema"
                 }
             },
             "Entries": {
                 "name": "entries",
                 "summary": "All `Entries` in the test Log",
                 "value": {
-                    "entries": {"$ref": "./test/test-data.json#/entries"}
+                    "entries": {
+                        "$ref": "./test/test-data.json#/panda/logs/0/encodedEntries"
+                    }
                 }
             }
         }
@@ -215,7 +291,7 @@
                         }
                     ],
                     "result": {
-                        "$ref": "#/components/examples/EntryArgsResult"
+                        "$ref": "#/components/examples/EntryArgs5"
                     }
                 }
             ]
@@ -276,14 +352,59 @@
                     "summary": "Example of valid parameters for publishing a new `Entry` on the test log. Returns the `Entry` arguments required for publishing the next `Entry` on our log.",
                     "params": [
                         {
-                            "$ref": "#/components/examples/FirstEntryEncoded"
+                            "$ref": "#/components/examples/Entry1"
                         },
                         {
-                            "$ref": "#/components/examples/FirstEntryMessageEncdoded"
+                            "$ref": "#/components/examples/Message1"
                         }
                     ],
                     "result": {
-                        "$ref": "#/components/examples/EntryArgsResult"
+                        "$ref": "#/components/examples/EntryArgs2"
+                    }
+                },
+                {
+                    "name": "Example for publishing an `Entry`",
+                    "summary": "Example of valid parameters for publishing a new `Entry` on the test log. Returns the `Entry` arguments required for publishing the next `Entry` on our log.",
+                    "params": [
+                        {
+                            "$ref": "#/components/examples/Entry2"
+                        },
+                        {
+                            "$ref": "#/components/examples/Message2"
+                        }
+                    ],
+                    "result": {
+                        "$ref": "#/components/examples/EntryArgs3"
+                    }
+                },
+                {
+                    "name": "Example for publishing an `Entry`",
+                    "summary": "Example of valid parameters for publishing a new `Entry` on the test log. Returns the `Entry` arguments required for publishing the next `Entry` on our log.",
+                    "params": [
+                        {
+                            "$ref": "#/components/examples/Entry3"
+                        },
+                        {
+                            "$ref": "#/components/examples/Message3"
+                        }
+                    ],
+                    "result": {
+                        "$ref": "#/components/examples/EntryArgs4"
+                    }
+                },
+                {
+                    "name": "Example for publishing an `Entry`",
+                    "summary": "Example of valid parameters for publishing a new `Entry` on the test log. Returns the `Entry` arguments required for publishing the next `Entry` on our log.",
+                    "params": [
+                        {
+                            "$ref": "#/components/examples/Entry4"
+                        },
+                        {
+                            "$ref": "#/components/examples/Message4"
+                        }
+                    ],
+                    "result": {
+                        "$ref": "#/components/examples/EntryArgs5"
                     }
                 }
             ]

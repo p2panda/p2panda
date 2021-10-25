@@ -21,23 +21,32 @@ export const materializeEntries = (
   for (const entry of entries) {
     if (entry.message == null) continue;
 
-    const entryHash = entry.encoded.entryHash;
+    let instanceId: string;
+
+    // Set the instanceId
+    if (entry.message.action === 'create') {
+      instanceId = entry.encoded.entryHash;
+    } else {
+      instanceId = entry.message.id as string;
+    }
+
     const author = entry.encoded.author;
     const schema = entry.message.schema;
 
-    if (instances[entryHash] && instances[entryHash].deleted) continue;
+    if (instances[instanceId] && instances[instanceId].deleted) continue;
 
     let updated: InstanceRecord;
+
     switch (entry.message.action) {
       case 'create':
-        instances[entryHash] = {
+        instances[instanceId] = {
           ...entry.message.fields,
           _meta: {
+            id: instanceId,
             author,
             deleted: false,
             edited: false,
             entries: [entry],
-            hash: entryHash,
             schema,
           },
         };
@@ -45,19 +54,21 @@ export const materializeEntries = (
 
       case 'update':
         updated = {
-          ...instances[entryHash],
+          ...instances[instanceId],
           ...entry.message.fields,
         };
+        // In that case this key wouldn't exist yet.
         updated._meta.edited = true;
         updated._meta.entries.push(entry);
-        instances[entryHash] = updated;
+        instances[instanceId] = updated;
         break;
 
       case 'delete':
-        updated = { _meta: instances[entryHash]._meta };
+        // Same as above
+        updated = { _meta: instances[instanceId]._meta };
         updated._meta.deleted = true;
         updated._meta.entries.push(entry);
-        instances[entryHash] = updated;
+        instances[instanceId] = updated;
         break;
       default:
         throw new Error('Unhandled mesage action');
