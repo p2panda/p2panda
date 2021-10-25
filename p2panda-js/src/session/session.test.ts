@@ -156,12 +156,9 @@ describe('Session', () => {
       const keyPair = await recoverKeyPair(authorFixture().privateKey);
       const session: Session = new Session(MOCK_SERVER_URL);
 
-      const asyncFunctionMock = jest
-        .fn()
-        .mockResolvedValue(entryArgsFixture(1));
       jest
         .spyOn(session, 'getNextEntryArgs')
-        .mockImplementation(asyncFunctionMock);
+        .mockResolvedValue(entryArgsFixture(1));
 
       const fields = entryFixture(1).message?.fields as Fields;
 
@@ -177,12 +174,9 @@ describe('Session', () => {
       const keyPair = await recoverKeyPair(authorFixture().privateKey);
       const session = new Session(MOCK_SERVER_URL);
 
-      const asyncFunctionMock = jest
-        .fn()
-        .mockResolvedValue(entryArgsFixture(2));
       jest
         .spyOn(session, 'getNextEntryArgs')
-        .mockImplementation(asyncFunctionMock);
+        .mockResolvedValue(entryArgsFixture(2));
 
       // These are the fields for an update message
       const fields = entryFixture(2).message?.fields as Fields;
@@ -202,12 +196,9 @@ describe('Session', () => {
       const keyPair = await recoverKeyPair(authorFixture().privateKey);
       const session = new Session(MOCK_SERVER_URL);
 
-      const asyncFunctionMock = jest
-        .fn()
-        .mockResolvedValue(entryArgsFixture(3));
       jest
         .spyOn(session, 'getNextEntryArgs')
-        .mockImplementation(asyncFunctionMock);
+        .mockResolvedValue(entryArgsFixture(3));
 
       // This is the instance id
       const id = entryFixture(3).message?.id as string;
