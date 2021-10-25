@@ -35,8 +35,11 @@ export const entryFixture = (seqNum: number): Entry => {
       | 'delete',
     schema: PANDA_LOG.decodedMessages[index].schema,
     fields: fields,
-    id: PANDA_LOG.decodedMessages[index].id,
   };
+
+  if (PANDA_LOG.decodedMessages[index].id != null) {
+    message.id = PANDA_LOG.decodedMessages[index].id;
+  }
 
   const entry: Entry = {
     entryHashBacklink: PANDA_LOG.nextEntryArgs[index].entryHashBacklink,
