@@ -2,8 +2,10 @@
 
 import { recoverKeyPair } from '~/identity';
 import { Session } from '~/session';
-import { createInstance, deleteInstance, updateInstance } from '.';
 import { Fields } from '~/types';
+
+import { createInstance, deleteInstance, updateInstance } from '.';
+
 import {
   authorFixture,
   entryFixture,
@@ -11,6 +13,7 @@ import {
   entryArgsFixture,
   schemaFixture,
 } from '../../test/fixtures';
+
 jest.mock('~/session');
 
 const MOCK_SERVER_URL = 'http://localhost:2020';
@@ -40,6 +43,7 @@ describe('instance', () => {
       expect(entryEncoded).toEqual(encodedEntryFixture(1).entryBytes);
     });
   });
+
   describe('updateInstance', () => {
     it('updates an instance', async () => {
       const keyPair = await recoverKeyPair(authorFixture().privateKey);
@@ -68,6 +72,7 @@ describe('instance', () => {
       expect(entryEncoded).toEqual(encodedEntryFixture(2).entryBytes);
     });
   });
+
   describe('deleteInstance', () => {
     it('deletes an instance', async () => {
       const keyPair = await recoverKeyPair(authorFixture().privateKey);
