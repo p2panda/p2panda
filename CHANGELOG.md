@@ -71,6 +71,7 @@ Released: :package: 2021-01-18 `p2panda-js` - :package: 2021-01-28 `p2panda-rs`
 - JavaScript library export with WebAssembly running in browsers and NodeJS. [#21](https://github.com/p2panda/p2panda/pull/21) `js`
 - Ed25519 key pair generation. [#4](https://github.com/p2panda/p2panda/pull/4) `rs`
 
-[unreleased]: https://github.com/p2panda/p2panda/compare/v0.2.0...HEAD
-[0.1.0]: https://github.com/p2panda/p2panda/releases/tag/v0.1.0
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/p2panda/p2panda/releases/tag/v0.2.1
 [0.2.0]: https://github.com/p2panda/p2panda/releases/tag/v0.2.0
+[0.1.0]: https://github.com/p2panda/p2panda/releases/tag/v0.1.0
