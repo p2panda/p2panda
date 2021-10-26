@@ -70,8 +70,18 @@ describe('Session', () => {
   });
 
   describe('query', () => {
+    let session: Session;
+
+    beforeEach(() => {
+      session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
+    });
+
+    it('handles valid arguments', async () => {
+      expect(session.query({ schema: schemaFixture() })).resolves;
+      expect(session.setSchema(schemaFixture()).query()).resolves;
+    });
+
     it('can materialize instances', async () => {
-      const session = new Session(MOCK_SERVER_URL);
       const instances = await session.query({
         schema: schemaFixture(),
       });
@@ -80,6 +90,10 @@ describe('Session', () => {
       expect(instances[1].message).toEqual(
         entryFixture(4).message?.fields?.message,
       );
+    });
+
+    it('throws when missing a required parameter', async () => {
+      await expect(session.query()).rejects.toThrow();
     });
   });
 
@@ -165,9 +179,7 @@ describe('Session', () => {
     const fields = entryFixture(1).message?.fields as Fields;
 
     beforeEach(async () => {
-      session = new Session(MOCK_SERVER_URL)
-        .setKeyPair(keyPair)
-        .setSchema(schemaFixture());
+      session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
     });
 
     it('handles valid arguments', async () => {
@@ -175,7 +187,12 @@ describe('Session', () => {
         .spyOn(session, 'getNextEntryArgs')
         .mockResolvedValue(entryArgsFixture(1));
 
-      expect(await session.create(fields)).resolves;
+      expect(
+        await session.create(fields, {
+          schema: schemaFixture(),
+        }),
+      ).resolves;
+      expect(await session.setSchema(schemaFixture()).create(fields)).resolves;
     });
 
     it('throws when missing a required parameter', async () => {
@@ -196,9 +213,7 @@ describe('Session', () => {
     const id = entryFixture(2).message?.id as string;
 
     beforeEach(async () => {
-      session = new Session(MOCK_SERVER_URL)
-        .setKeyPair(keyPair)
-        .setSchema(schemaFixture());
+      session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
       jest
         .spyOn(session, 'getNextEntryArgs')
         .mockResolvedValue(entryArgsFixture(2));
@@ -210,16 +225,23 @@ describe('Session', () => {
           schema: schemaFixture(),
         }),
       ).resolves;
+
+      expect(await session.setSchema(schemaFixture()).update(id, fields))
+        .resolves;
     });
 
     it('throws when missing a required parameter', async () => {
       await expect(
         // @ts-ignore: We deliberately use the API wrong here
-        session.update(null, fields),
+        session.update(null, fields, { schema: schemaFixture() }),
       ).rejects.toThrow();
       await expect(
         // @ts-ignore: We deliberately use the API wrong here
-        session.update(id, null),
+        session.update(id, null, { schema: schemaFixture() }),
+      ).rejects.toThrow();
+      await expect(
+        // @ts-ignore: We deliberately use the API wrong here
+        session.update(id, fields),
       ).rejects.toThrow();
     });
   });
@@ -228,24 +250,30 @@ describe('Session', () => {
     let session: Session;
 
     // This is the instance id that can be deleted
-    const id = entryFixture(3).message?.id as string;
+    const instanceId = entryFixture(3).message?.id as string;
 
     beforeEach(async () => {
-      session = new Session(MOCK_SERVER_URL)
-        .setKeyPair(keyPair)
-        .setSchema(schemaFixture());
+      session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
       jest
         .spyOn(session, 'getNextEntryArgs')
         .mockResolvedValue(entryArgsFixture(3));
     });
 
     it('handles valid arguments', async () => {
-      expect(session.delete(id)).resolves;
+      expect(session.delete(instanceId, { schema: schemaFixture() })).resolves;
+      expect(session.setSchema(schemaFixture()).delete(instanceId)).resolves;
     });
 
     it('throws when missing a required parameter', async () => {
-      // @ts-ignore: We deliberately use the API wrong here
-      expect(session.delete(null)).rejects.toThrow();
+      expect(
+        // @ts-ignore: We deliberately use the API wrong here
+        session.delete(null, { schema: schemaFixture() }),
+      ).rejects.toThrow();
+
+      expect(
+        // @ts-ignore: We deliberately use the API wrong here
+        session.delete(instanceId),
+      ).rejects.toThrow();
     });
   });
 });

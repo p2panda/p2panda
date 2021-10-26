@@ -12,6 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Fixed
 
 - Use deprecated linter name for now as it breaks some building pipelines [#121](https://github.com/p2panda/p2panda/pull/121) `rs`
+- Fix access to optional parameter in `Session.query` logging call [#119](https://github.com/p2panda/p2panda/issues/119) `js`
 
 ## [0.2.0]
 
