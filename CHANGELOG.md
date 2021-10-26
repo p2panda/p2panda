@@ -11,6 +11,8 @@ Highlights are marked with a pancake 🥞
 
 ## [0.2.1]
 
+Released on 2021-10-26: :package: `p2panda-js` :package: `p2panda-rs`
+
 ### Fixed
 
 - Use deprecated linter name for now as it breaks some building pipelines [#121](https://github.com/p2panda/p2panda/pull/121) `rs`
@@ -21,6 +23,8 @@ Highlights are marked with a pancake 🥞
 - Add pull request template to not forget updating this changelog [#122](https://github.com/p2panda/p2panda/pull/122)
 
 ## [0.2.0]
+
+Released on 2021-10-25: :package: `p2panda-js` :package: `p2panda-rs`
 
 ### Added
 
