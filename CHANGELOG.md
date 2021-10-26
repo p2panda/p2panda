@@ -68,7 +68,7 @@ Released on 2021-10-25: :package: `p2panda-js` :package: `p2panda-rs`
 
 ## [0.1.0]
 
-Released: :package: 2021-01-18 `p2panda-js` - :package: 2021-01-28 `p2panda-rs`
+Released on 2021-01-18: :package: `p2panda-js` and 2021-01-28: :package: `p2panda-rs`
 
 ### Added
 
