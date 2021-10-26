@@ -70,8 +70,18 @@ describe('Session', () => {
   });
 
   describe('query', () => {
+    let session: Session;
+
+    beforeEach(() => {
+      session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
+    });
+
+    it('handles valid arguments', async () => {
+      expect(session.query({ schema: schemaFixture() })).resolves;
+      expect(session.setSchema(schemaFixture()).query()).resolves;
+    });
+
     it('can materialize instances', async () => {
-      const session = new Session(MOCK_SERVER_URL);
       const instances = await session.query({
         schema: schemaFixture(),
       });
@@ -80,6 +90,10 @@ describe('Session', () => {
       expect(instances[1].message).toEqual(
         entryFixture(4).message?.fields?.message,
       );
+    });
+
+    it('throws when missing a required parameter', async () => {
+      await expect(session.query()).rejects.toThrow();
     });
   });
 
