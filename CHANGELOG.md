@@ -11,6 +11,8 @@ Highlights are marked with a pancake 🥞
 
 ## [0.2.1]
 
+Released on 2021-10-26: :package: `p2panda-js` :package: `p2panda-rs`
+
 ### Fixed
 
 - Use deprecated linter name for now as it breaks some building pipelines [#121](https://github.com/p2panda/p2panda/pull/121) `rs`
@@ -21,6 +23,8 @@ Highlights are marked with a pancake 🥞
 - Add pull request template to not forget updating this changelog [#122](https://github.com/p2panda/p2panda/pull/122)
 
 ## [0.2.0]
+
+Released on 2021-10-25: :package: `p2panda-js` :package: `p2panda-rs`
 
 ### Added
 
@@ -64,13 +68,14 @@ Highlights are marked with a pancake 🥞
 
 ## [0.1.0]
 
-Released: :package: 2021-01-18 `p2panda-js` - :package: 2021-01-28 `p2panda-rs`
+Released on 2021-01-18: :package: `p2panda-js` and 2021-01-28: :package: `p2panda-rs`
 
 ### Added
 
 - JavaScript library export with WebAssembly running in browsers and NodeJS. [#21](https://github.com/p2panda/p2panda/pull/21) `js`
 - Ed25519 key pair generation. [#4](https://github.com/p2panda/p2panda/pull/4) `rs`
 
-[unreleased]: https://github.com/p2panda/p2panda/compare/v0.2.0...HEAD
-[0.1.0]: https://github.com/p2panda/p2panda/releases/tag/v0.1.0
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/p2panda/p2panda/releases/tag/v0.2.1
 [0.2.0]: https://github.com/p2panda/p2panda/releases/tag/v0.2.0
+[0.1.0]: https://github.com/p2panda/p2panda/releases/tag/v0.1.0
