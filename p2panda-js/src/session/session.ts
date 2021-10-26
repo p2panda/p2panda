@@ -343,10 +343,10 @@ export class Session {
    * @returns array of instance records, which have data fields and an extra
    *  `_meta_ field, which holds instance metadata and its entry history
    */
-  async query(options: Partial<Context>): Promise<InstanceRecord[]> {
-    log('query schema', options.schema);
+  async query(options?: Partial<Context>): Promise<InstanceRecord[]> {
+    log('query schema', options?.schema || this.schema);
     const instances = queryInstances({
-      schema: options.schema || this.schema,
+      schema: options?.schema || this.schema,
       session: this,
     });
     return instances;
