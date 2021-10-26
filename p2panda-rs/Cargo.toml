@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-rs"
-version = "0.2.0"
+version = "0.2.1"
 authors = [
   "sophiiistika <sophiiistika@mailbox.org>",
   "adz <x12@adz.garden>",

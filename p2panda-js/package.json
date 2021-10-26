@@ -1,6 +1,6 @@
 {
   "name": "p2panda-js",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "All the things a panda needs",
   "main": "lib/index.js",
   "browser": "lib/index.min.js",
