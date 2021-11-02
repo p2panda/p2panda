@@ -6,6 +6,7 @@
 //! The core idea is that you can inject your test dependencies by passing them as test arguments."
 //!
 //! https://github.com/la10736/rstest
+#![allow(missing_docs)]
 use rstest::fixture;
 
 use crate::entry::{Entry, EntrySigned, SeqNum};

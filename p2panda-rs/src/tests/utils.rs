@@ -1,11 +1,13 @@
 //! Structs, hard coded values and convenience methods for creating common p2panda data. Mostly utilized in the fixtures
 //! also contained in this testing module. hould not be used outside of a testing environment as best practice for
 //! error checking and unwrapping is not followed.
+#![allow(missing_docs)]
 use crate::entry::{Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::message::{Message, MessageFields, MessageEncoded, MessageValue};
 
+#[derive(Debug)]
 pub struct Fixture {
     pub entry: Entry,
     pub entry_signed_encoded: EntrySigned,
