@@ -2,8 +2,10 @@
 
 import { recoverKeyPair } from '~/identity';
 import { Session } from '~/session';
-import { createInstance, deleteInstance, updateInstance } from '.';
 import { Fields } from '~/types';
+
+import { createInstance, deleteInstance, updateInstance } from '.';
+
 import {
   authorFixture,
   entryFixture,

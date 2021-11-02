@@ -9,8 +9,11 @@ export const schemaFixture = (): string => {
   return PANDA_LOG.decodedMessages[0].schema;
 };
 
-// Need type for this return value
-export const authorFixture = () => {
+/**
+ * Return an object with fields for an author's public and
+ * private key.
+ */
+export const authorFixture = (): { publicKey: string; privateKey: string } => {
   const author = {
     publicKey: TEST_DATA.panda.publicKey,
     privateKey: TEST_DATA.panda.privateKey,
@@ -18,6 +21,9 @@ export const authorFixture = () => {
   return author;
 };
 
+/**
+ * Return an Entry given a sequence number in the testing log.
+ */
 export const entryFixture = (seqNum: number): Entry => {
   const index = seqNum - 1;
 
@@ -29,14 +35,14 @@ export const entryFixture = (seqNum: number): Entry => {
   }
 
   const message: Message = {
-    action: PANDA_LOG.decodedMessages[index].action as
-      | 'create'
-      | 'update'
-      | 'delete',
+    action: PANDA_LOG.decodedMessages[index].action as Message['action'],
     schema: PANDA_LOG.decodedMessages[index].schema,
     fields: fields,
-    id: PANDA_LOG.decodedMessages[index].id,
   };
+
+  if (PANDA_LOG.decodedMessages[index].id != null) {
+    message.id = PANDA_LOG.decodedMessages[index].id;
+  }
 
   const entry: Entry = {
     entryHashBacklink: PANDA_LOG.nextEntryArgs[index].entryHashBacklink,
@@ -49,6 +55,9 @@ export const entryFixture = (seqNum: number): Entry => {
   return entry;
 };
 
+/**
+ * Return an encoded entry given a sequence number on the mock log.
+ */
 export const encodedEntryFixture = (seqNum: number): EncodedEntry => {
   const index = seqNum - 1;
 
@@ -65,6 +74,12 @@ export const encodedEntryFixture = (seqNum: number): EncodedEntry => {
   return encodedEntry;
 };
 
+/**
+ * Return arguments for creating an entry.
+ *
+ * Takes a `seqNum` parameter, which is the sequence number of
+ * the entry preceding the one we want arguments for.
+ */
 export const entryArgsFixture = (seqNum: number): EntryArgs => {
   const index = seqNum - 1;
 

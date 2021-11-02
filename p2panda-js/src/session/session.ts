@@ -252,13 +252,13 @@ export class Session {
    *   .setKeyPair(keyPair)
    *   .create(messageFields, { schema });
    */
-  async create(fields: Fields, options: Partial<Context>): Promise<Session> {
+  async create(fields: Fields, options?: Partial<Context>): Promise<Session> {
     // We should validate the data against the schema here too eventually
     if (!fields) throw new Error('Message fields must be provided');
     log('create instance', fields);
     const mergedOptions = {
-      schema: options.schema || this.schema,
-      keyPair: options.keyPair || this.keyPair,
+      schema: options?.schema || this.schema,
+      keyPair: options?.keyPair || this.keyPair,
       session: this,
     };
     createInstance(fields, mergedOptions);
@@ -289,15 +289,15 @@ export class Session {
   async update(
     id: string,
     fields: Fields,
-    options: Partial<Context>,
+    options?: Partial<Context>,
   ): Promise<Session> {
     // We should validate the data against the schema here too eventually
     if (!id) throw new Error('Instance id must be provided');
     if (!fields) throw new Error('Message fields must be provided');
     log('update instance', id, fields);
     const mergedOptions = {
-      schema: options.schema || this.schema,
-      keyPair: options.keyPair || this.keyPair,
+      schema: options?.schema || this.schema,
+      keyPair: options?.keyPair || this.keyPair,
       session: this,
     };
     updateInstance(id, fields, mergedOptions);
@@ -320,12 +320,12 @@ export class Session {
    *   .setKeyPair(keyPair)
    *   .delete(instanceId, { schema });
    */
-  async delete(id: string, options: Partial<Context>): Promise<Session> {
+  async delete(id: string, options?: Partial<Context>): Promise<Session> {
     if (!id) throw new Error('Instance id must be provided');
     log('delete instance', id);
     const mergedOptions = {
-      schema: options.schema || this.schema,
-      keyPair: options.keyPair || this.keyPair,
+      schema: options?.schema || this.schema,
+      keyPair: options?.keyPair || this.keyPair,
       session: this,
     };
     deleteInstance(id, mergedOptions);
@@ -343,10 +343,10 @@ export class Session {
    * @returns array of instance records, which have data fields and an extra
    *  `_meta_ field, which holds instance metadata and its entry history
    */
-  async query(options: Partial<Context>): Promise<InstanceRecord[]> {
-    log('query schema', options.schema);
+  async query(options?: Partial<Context>): Promise<InstanceRecord[]> {
+    log('query schema', options?.schema || this.schema);
     const instances = queryInstances({
-      schema: options.schema || this.schema,
+      schema: options?.schema || this.schema,
       session: this,
     });
     return instances;
