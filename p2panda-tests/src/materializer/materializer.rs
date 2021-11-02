@@ -98,9 +98,6 @@ impl Materializer {
             // Get the actual message content by id
             let message = self.messages.get(&entry_id).unwrap();
 
-            // Get the message fields
-            let fields = message.fields().unwrap();
-
             // Get the schema string
             let schema_str = message.schema().as_str();
 
@@ -111,20 +108,20 @@ impl Materializer {
 
             // Get all instances for this schema
             let instances = self.data.get_mut(schema_str).unwrap();
-
+            
             // Materialize all messages in order!! Currently an UPDATE message replaces all
             // fields in the message. I guess we don't want this behaviour eventually.
-
+            
             // If CREATE message insert new instance
             if message.is_create() {
-                instances.insert(instance_id.to_owned(), fields.to_owned());
+                instances.insert(instance_id.to_owned(), message.fields().unwrap().to_owned());
             }
 
             // If UPDATE message update existing instance
             if message.is_update() {
-                instances.insert(instance_id.to_owned(), fields.to_owned());
+                instances.insert(instance_id.to_owned(), message.fields().unwrap().to_owned());
             }
-
+            
             // If DELETE message delete existing instance
             if message.is_delete() {
                 instances.remove(&instance_id);

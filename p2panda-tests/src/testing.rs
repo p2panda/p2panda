@@ -8,8 +8,8 @@ use p2panda_rs::identity::Author;
 use p2panda_rs::message::{Message, MessageEncoded};
 use p2panda_rs::tests::utils::MESSAGE_SCHEMA;
 
-use crate::node::{Database, Node};
-use crate::Panda;
+use crate::node::Node;
+use crate::client::Client;
 
 #[derive(Serialize)]
 #[allow(non_snake_case)]
@@ -51,7 +51,7 @@ pub struct AuthorData {
 
 /// Convert log data from a vector of authors into structs which can be json formatted
 /// how we would like for our tests.
-pub fn to_test_data(node: &mut Node, clients: Vec<Panda>) -> HashMap<String, AuthorData> {
+pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<String, AuthorData> {
     let mut decoded_logs: HashMap<String, AuthorData> = HashMap::new();
 
     for (author_hash, author_logs) in node.db() {
@@ -87,7 +87,8 @@ pub fn to_test_data(node: &mut Node, clients: Vec<Panda>) -> HashMap<String, Aut
 
                 log_data.encodedEntries.push(entry_data);
                 log_data.decodedMessages.push(message_decoded.to_owned());
-
+                
+                // Ugly hack for converting keys into what we expect in JS testing world
                 let json_entry_args = NextEntryArgs {
                     entryHashBacklink: next_entry_args.backlink,
                     entryHashSkiplink: next_entry_args.skiplink,
@@ -99,6 +100,7 @@ pub fn to_test_data(node: &mut Node, clients: Vec<Panda>) -> HashMap<String, Aut
             }
             let final_next_entry_args = node.next_entry_args(&author, &Hash::new(MESSAGE_SCHEMA).unwrap()).unwrap();
 
+            // Ugly hack for converting keys into what we expect in JS testing world
             let json_entry_args = NextEntryArgs {
                 entryHashBacklink: final_next_entry_args.backlink,
                 entryHashSkiplink: final_next_entry_args.skiplink,

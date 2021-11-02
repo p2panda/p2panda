@@ -1,6 +1,5 @@
 
 use std::convert::TryInto;
-use std::collections::HashMap;
 use serde::Serialize;
 use bamboo_rs_core::entry::is_lipmaa_required;
 
@@ -8,14 +7,13 @@ use p2panda_rs::entry::{decode_entry, EntrySigned, LogId, SeqNum};
 use p2panda_rs::message::{Message, MessageEncoded};
 use p2panda_rs::hash::Hash;
 
-use crate::Panda;
+use crate::client::Client;
 use crate::node::Node;
 
 // A custom `Result` type to be able to dynamically propagate `Error` types.
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[derive(Serialize)]
-#[allow(non_snake_case)]
 pub struct NextEntryArgs {
     pub backlink: Option<Hash>,
     pub skiplink: Option<Hash>,
@@ -71,7 +69,7 @@ pub fn calculate_entry_args(
 /// Helper method signing and encoding entry and sending it to node backend.
 pub fn send_to_node(
     node: &mut Node,
-    client: &Panda,
+    client: &Client,
     message: &Message,
 ) -> Result<Hash> {
     let entry_args =
