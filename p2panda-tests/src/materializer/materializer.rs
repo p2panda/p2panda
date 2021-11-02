@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use p2panda_rs::message::{Message, MessageFields};
 
-use crate::materializer::DAG;
 use crate::logs::LogEntry;
+use crate::materializer::DAG;
 use crate::node::utils::Result;
 
 /// A wrapper type representing a HashMap of instances stored by Instance id.
@@ -108,10 +108,10 @@ impl Materializer {
 
             // Get all instances for this schema
             let instances = self.data.get_mut(schema_str).unwrap();
-            
+
             // Materialize all messages in order!! Currently an UPDATE message replaces all
             // fields in the message. I guess we don't want this behaviour eventually.
-            
+
             // If CREATE message insert new instance
             if message.is_create() {
                 instances.insert(instance_id.to_owned(), message.fields().unwrap().to_owned());
@@ -121,7 +121,7 @@ impl Materializer {
             if message.is_update() {
                 instances.insert(instance_id.to_owned(), message.fields().unwrap().to_owned());
             }
-            
+
             // If DELETE message delete existing instance
             if message.is_delete() {
                 instances.remove(&instance_id);

@@ -1,6 +1,6 @@
 use serde::Serialize;
 use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 
 use p2panda_rs::entry::{decode_entry, LogId, SeqNum};
 use p2panda_rs::hash::Hash;
@@ -8,8 +8,8 @@ use p2panda_rs::identity::Author;
 use p2panda_rs::message::{Message, MessageEncoded};
 use p2panda_rs::tests::utils::MESSAGE_SCHEMA;
 
-use crate::node::Node;
 use crate::client::Client;
+use crate::node::Node;
 
 #[derive(Serialize)]
 #[allow(non_snake_case)]
@@ -87,7 +87,7 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
 
                 log_data.encodedEntries.push(entry_data);
                 log_data.decodedMessages.push(message_decoded.to_owned());
-                
+
                 // Ugly hack for converting keys into what we expect in JS testing world
                 let json_entry_args = NextEntryArgs {
                     entryHashBacklink: next_entry_args.backlink,
@@ -98,7 +98,9 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
 
                 log_data.nextEntryArgs.push(json_entry_args);
             }
-            let final_next_entry_args = node.next_entry_args(&author, &Hash::new(MESSAGE_SCHEMA).unwrap()).unwrap();
+            let final_next_entry_args = node
+                .next_entry_args(&author, &Hash::new(MESSAGE_SCHEMA).unwrap())
+                .unwrap();
 
             // Ugly hack for converting keys into what we expect in JS testing world
             let json_entry_args = NextEntryArgs {
@@ -110,10 +112,13 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
 
             log_data.nextEntryArgs.push(json_entry_args);
             author_logs_data.push(log_data);
-        }    
-            
-        let client = clients.iter().find(|client| client.public_key() == author.as_str()).unwrap();
-        
+        }
+
+        let client = clients
+            .iter()
+            .find(|client| client.public_key() == author.as_str())
+            .unwrap();
+
         let author_data = AuthorData {
             publicKey: client.public_key(),
             privateKey: client.private_key(),

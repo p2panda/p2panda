@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::HashMap;
-use std::convert::TryFrom;
-
-use p2panda_rs::entry::{decode_entry, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
+use p2panda_rs::entry::{sign_and_encode, Entry, EntrySigned};
 use p2panda_rs::identity::{Author, KeyPair};
-use p2panda_rs::message::{Message, MessageEncoded};
+use p2panda_rs::message::Message;
 
-use crate::utils::{calculate_entry_args, NextEntryArgs};
+use crate::utils::NextEntryArgs;
 
 /// A helper struct which represents a client in the pandaverse. It doesn't do much except wrap an Author identity
 /// and it's KeyPair and create and sign entries.
@@ -19,12 +16,9 @@ pub struct Client {
 
 impl Client {
     pub fn new(name: String, key_pair: KeyPair) -> Self {
-        Self {
-            name,
-            key_pair,
-        }
+        Self { name, key_pair }
     }
-    
+
     pub fn author(&self) -> Author {
         Author::new(&self.public_key()).unwrap()
     }
@@ -40,10 +34,9 @@ impl Client {
     pub fn name(&self) -> String {
         self.name.to_owned()
     }
-    
+
     /// Create, sign and encode an entry
     pub fn signed_encoded_entry(&self, message: Message, entry_args: NextEntryArgs) -> EntrySigned {
-
         // Construct entry from message and entry args then sign and encode it
         let entry = Entry::new(
             &entry_args.log_id,

@@ -175,7 +175,7 @@ impl Node {
                     ),
                     None => None,
                 };
-                
+
                 NextEntryArgs {
                     log_id,
                     seq_num: seq_num_inner,
@@ -238,24 +238,22 @@ impl Node {
                             None => None,
                         }
                     }
-                    _ => None
+                    _ => None,
                 };
 
                 let backlink = match trimmed_log.len() {
                     0 => None,
-                    _ => {
-                        match seq_num.backlink_seq_num() {
-                            Some(seq) => Some(
-                                trimmed_log
-                                    .get(seq.as_i64() as usize - 1)
-                                    .expect("Backlink missing!")
-                                    .entry_encoded(),
-                            ),
-                            None => None,
-                        }
-                    }
+                    _ => match seq_num.backlink_seq_num() {
+                        Some(seq) => Some(
+                            trimmed_log
+                                .get(seq.as_i64() as usize - 1)
+                                .expect("Backlink missing!")
+                                .entry_encoded(),
+                        ),
+                        None => None,
+                    },
                 };
-                
+
                 NextEntryArgs {
                     log_id,
                     seq_num: seq_num.to_owned(),
