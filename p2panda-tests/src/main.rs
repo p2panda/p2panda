@@ -4,7 +4,7 @@ use serde_json;
 use p2panda_rs::tests::utils::{
     create_message, delete_message, fields, new_key_pair, update_message, MESSAGE_SCHEMA,
 };
-use p2panda_tests::testing::generate_test_data;
+use p2panda_tests::data::generate_test_data;
 use p2panda_tests::client::Client;
 use p2panda_tests::node::Node;
 use p2panda_tests::utils::send_to_node;
