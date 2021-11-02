@@ -1,3 +1,4 @@
+use bamboo_rs_core::entry::is_lipmaa_required;
 use std::collections::HashMap;
 
 use p2panda_rs::entry::{decode_entry, EntrySigned, LogId, SeqNum};
@@ -6,7 +7,7 @@ use p2panda_rs::identity::Author;
 use p2panda_rs::message::{Message, MessageFields};
 
 use crate::logs::{Log, LogEntry};
-use crate::materializer::{Materializer, filter_entries};
+use crate::materializer::{filter_entries, Materializer};
 use crate::node::utils::{
     Result, GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
 };
@@ -58,7 +59,8 @@ impl Node {
             let author_logs = self.entries.get(author).unwrap();
             author_logs.iter().for_each(|(_id, log)| {
                 let entries = log.entries();
-                let instance_create_entry = entries.iter()
+                let instance_create_entry = entries
+                    .iter()
                     .find(|log_entry| log_entry.entry_encoded().as_str() == instance_id);
                 match instance_create_entry {
                     Some(_) => instance_author = Some(author.to_owned()),
@@ -122,23 +124,19 @@ impl Node {
         });
         all_entries
     }
-    
+
     pub fn db(&self) -> Database {
         self.entries.clone()
     }
 
     /// Returns the log id, sequence number, skiplink- and backlink hash for a given author and
     /// schema. All of this information is needed to create and sign a new entry.
-    pub fn next_entry_args(
-        &mut self,
-        author: &Author,
-        schema: &Hash,
-    ) -> Result<NextEntryArgs> {
+    pub fn next_entry_args(&mut self, author: &Author, schema: &Hash) -> Result<NextEntryArgs> {
         // Find out the log id for the given schema
         let log_id = self.get_log_id(&schema, &author)?;
 
         // Find any logs by this author for this schema
-        let author_logs = match self.get_author_entries_mut(author) {
+        let author_log = match self.get_author_entries_mut(author) {
             Some(logs) => {
                 match logs.values().find(|log| log.schema() == schema.as_str()) {
                     Some(log) => Some(log),
@@ -151,20 +149,20 @@ impl Node {
         };
 
         // Find out the sequence number, skip- and backlink hash for the next entry in this log
-        let entry_args = match author_logs {
+        let entry_args = match author_log {
             Some(log) => {
                 // Next sequence number
                 let seq_num_inner = SeqNum::new((log.entries().len() + 1) as i64).unwrap();
 
                 // Next skiplink hash
                 let skiplink = match seq_num_inner.skiplink_seq_num() {
-                    Some(seq) => Some(
+                    Some(seq) if is_lipmaa_required(seq_num_inner.as_i64() as u64) => Some(
                         log.entries()
                             .get(seq.as_i64() as usize - 1)
                             .expect("Skiplink missing!")
-                            .entry_encoded()
+                            .entry_encoded(),
                     ),
-                    None => None,
+                    _ => None,
                 };
 
                 // Next backlink hash
@@ -177,15 +175,106 @@ impl Node {
                     ),
                     None => None,
                 };
-                NextEntryArgs {log_id, seq_num: seq_num_inner, skiplink, backlink}
+                
+                NextEntryArgs {
+                    log_id,
+                    seq_num: seq_num_inner,
+                    skiplink,
+                    backlink,
+                }
             }
             // This is the first entry in the log ..
-            None => NextEntryArgs {log_id, seq_num: SeqNum::new(1).unwrap(), skiplink: None, backlink: None}
+            None => NextEntryArgs {
+                log_id,
+                seq_num: SeqNum::new(1).unwrap(),
+                skiplink: None,
+                backlink: None,
+            },
         };
         Ok(entry_args)
     }
 
-    /// Get the next instance args (hahs of the entry considered the tip of this instance) needed when publishing 
+    /// Calculate the next entry arguments *at a certain point* in this log. This is helpful
+    /// when generating test data and wanting to test the flow from requesting entry args through
+    /// to publishing an entry
+    pub fn next_entry_args_for_specific_entry(
+        &mut self,
+        author: &Author,
+        schema: &Hash,
+        seq_num: &SeqNum,
+    ) -> Result<NextEntryArgs> {
+        // Find out the log id for the given schema
+        let log_id = self.get_log_id(&schema, &author)?;
+
+        // Find any logs by this author for this schema
+        let author_log = match self.get_author_entries_mut(author) {
+            Some(logs) => {
+                match logs.values().find(|log| log.schema() == schema.as_str()) {
+                    Some(log) => Some(log),
+                    // No logs by this author for this schema
+                    None => None,
+                }
+            }
+            // No logs for this author
+            None => None,
+        };
+
+        // Find out the sequence number, skip- and backlink hash for the next entry in this log
+        let entry_args = match author_log {
+            Some(log) => {
+                // Next sequence number
+                let trimmed_log = log.entries()[..seq_num.as_i64() as usize - 1].to_owned();
+
+                let skiplink = match trimmed_log.len() {
+                    0 => None,
+                    _ if is_lipmaa_required(seq_num.as_i64() as u64) => {
+                        match seq_num.skiplink_seq_num() {
+                            Some(seq) => Some(
+                                trimmed_log
+                                    .get(seq.as_i64() as usize - 1)
+                                    .expect("Skiplink missing!")
+                                    .entry_encoded(),
+                            ),
+                            None => None,
+                        }
+                    }
+                    _ => None
+                };
+
+                let backlink = match trimmed_log.len() {
+                    0 => None,
+                    _ => {
+                        match seq_num.backlink_seq_num() {
+                            Some(seq) => Some(
+                                trimmed_log
+                                    .get(seq.as_i64() as usize - 1)
+                                    .expect("Backlink missing!")
+                                    .entry_encoded(),
+                            ),
+                            None => None,
+                        }
+                    }
+                };
+                
+                NextEntryArgs {
+                    log_id,
+                    seq_num: seq_num.to_owned(),
+                    skiplink,
+                    backlink,
+                }
+            }
+            // This is the first entry in the log ..
+            None => NextEntryArgs {
+                log_id,
+                seq_num: SeqNum::new(1).unwrap(),
+                skiplink: None,
+                backlink: None,
+            },
+        };
+        Ok(entry_args)
+    }
+
+    /// Get the next instance args (hahs of the entry considered the tip of this instance) needed when publishing
     /// UPDATE or DELETE messages
     pub fn next_instance_args(&mut self, instance_id: &str) -> Option<String> {
         let mut materializer = Materializer::new();
@@ -201,19 +290,15 @@ impl Node {
 
     /// Store entry in the database. Please note that since this an experimental implemention this
     /// method does not validate any integrity or content of the given entry.
-    pub fn publish_entry(
-        &mut self,
-        entry_encoded: &EntrySigned,
-        message: &Message,
-    ) -> Result<()> {
+    pub fn publish_entry(&mut self, entry_encoded: &EntrySigned, message: &Message) -> Result<()> {
         // We add on several metadata values that don't currently exist in a p2panda Entry.
         // Notably: instance_backlink and instance_author
 
         let instance_backlink = match message.id() {
             Some(id) => self.next_instance_args(id.as_str()),
-            None => None
+            None => None,
         };
-        
+
         let entry = decode_entry(&entry_encoded, None)?;
         let log_id = entry.log_id().as_i64();
         let author = entry_encoded.author();

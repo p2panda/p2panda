@@ -4,7 +4,7 @@ use serde_json;
 use p2panda_rs::tests::utils::{
     create_message, delete_message, fields, new_key_pair, update_message, MESSAGE_SCHEMA,
 };
-// use p2panda_tests::test_data::utils::to_test_data;
+use p2panda_tests::test_data::utils::to_test_data;
 use p2panda_tests::Panda;
 use p2panda_tests::node::Node;
 use p2panda_tests::utils::send_to_node;
@@ -33,8 +33,8 @@ fn main() {
     
     let db = node.db();
     let query = node.query_all(&MESSAGE_SCHEMA.to_string()).unwrap();
-    println!("{:#?}", db);
-    println!("{:#?}", query);
+    // println!("{:#?}", db);
+    // println!("{:#?}", query);
     
     // // Update the instance created by the first published entry
     // panda.publish_entry(update_message(
@@ -55,8 +55,8 @@ fn main() {
     //     fields(vec![("message", "Let's try that again.")]),
     // ));
 
-    // // Format the log data contained by this author
-    // let formatted_data = to_test_data(vec![panda]);
+    // Format the log data contained by this author
+    let formatted_data = to_test_data(&mut node, vec![panda]);
 
-    // println!("{}", serde_json::to_string_pretty(&formatted_data).unwrap());
+    println!("{}", serde_json::to_string_pretty(&formatted_data).unwrap());
 }

@@ -1,12 +1,14 @@
-
-use std::collections::HashMap;
 use serde::Serialize;
+use std::collections::HashMap;
+use std::convert::{TryFrom, TryInto};
 
 use p2panda_rs::entry::{decode_entry, LogId, SeqNum};
 use p2panda_rs::hash::Hash;
 use p2panda_rs::identity::Author;
-use p2panda_rs::message::Message;
+use p2panda_rs::message::{Message, MessageEncoded};
+use p2panda_rs::tests::utils::MESSAGE_SCHEMA;
 
+use crate::node::{Database, Node};
 use crate::Panda;
 
 #[derive(Serialize)]
@@ -47,67 +49,75 @@ pub struct AuthorData {
     logs: Vec<LogData>,
 }
 
+/// Convert log data from a vector of authors into structs which can be json formatted
+/// how we would like for our tests.
+pub fn to_test_data(node: &mut Node, clients: Vec<Panda>) -> HashMap<String, AuthorData> {
+    let mut decoded_logs: HashMap<String, AuthorData> = HashMap::new();
 
-//// Convert log data from a vector of authors into structs which can be json formatted
-//// how we would like for our tests.
-// pub fn to_test_data(authors: Vec<Panda>) -> HashMap<String, AuthorData> {
-//     let mut decoded_logs: HashMap<String, AuthorData> = HashMap::new();
+    for (author_hash, author_logs) in node.db() {
+        let author = Author::new(&author_hash).unwrap();
+        let mut author_logs_data = Vec::new();
+        for (_log_id, log) in author_logs.iter() {
+            let mut log_data = LogData {
+                encodedEntries: Vec::new(),
+                decodedMessages: Vec::new(),
+                nextEntryArgs: Vec::new(),
+            };
 
-//     for author in authors {
-//         let mut author_logs = Vec::new();
-//         for (log_id, entries) in author.logs.iter() {
-//             let mut log_data = LogData {
-//                 encodedEntries: Vec::new(),
-//                 decodedMessages: Vec::new(),
-//                 nextEntryArgs: Vec::new(),
-//             };
+            for log_entry in log.entries().iter() {
+                let message_encoded = MessageEncoded::try_from(&log_entry.message).unwrap();
+                let entry = decode_entry(&log_entry.entry_encoded, Some(&message_encoded)).unwrap();
+                let next_entry_args = node
+                    .next_entry_args_for_specific_entry(
+                        &author,
+                        &Hash::new(MESSAGE_SCHEMA).unwrap(),
+                        entry.seq_num(),
+                    )
+                    .unwrap();
+                let message_decoded = entry.message().unwrap();
+                let entry_data = EncodedEntryData {
+                    author: author.clone(),
+                    entryBytes: log_entry.entry_encoded.as_str().into(),
+                    entryHash: log_entry.entry_encoded.hash(),
+                    payloadBytes: message_encoded.as_str().into(),
+                    payloadHash: message_encoded.hash(),
+                    logId: entry.log_id().to_owned(),
+                    seqNum: entry.seq_num().to_owned(),
+                };
 
-//             for (entry_encoded, message_encoded) in entries.iter() {
-//                 let entry = decode_entry(entry_encoded, Some(message_encoded)).unwrap();
-//                 let next_entry_args =
-//                     author.next_entry_args_for_specific_entry(log_id.to_owned(), entry.seq_num());
-//                 let message_decoded = entry.message().unwrap();
-//                 let entry_data = EncodedEntryData {
-//                     author: entry_encoded.author(),
-//                     entryBytes: entry_encoded.as_str().into(),
-//                     entryHash: entry_encoded.hash(),
-//                     payloadBytes: message_encoded.as_str().into(),
-//                     payloadHash: message_encoded.hash(),
-//                     logId: entry.log_id().to_owned(),
-//                     seqNum: entry.seq_num().to_owned(),
-//                 };
+                log_data.encodedEntries.push(entry_data);
+                log_data.decodedMessages.push(message_decoded.to_owned());
 
-//                 log_data.encodedEntries.push(entry_data);
-//                 log_data.decodedMessages.push(message_decoded.to_owned());
-                
-//                 let json_entry_args = NextEntryArgs {
-//                     entryHashBacklink: next_entry_args.backlink,
-//                     entryHashSkiplink: next_entry_args.skiplink,
-//                     seqNum: next_entry_args.seq_num,
-//                     logId: next_entry_args.log_id,
-//                 };
-                
-//                 log_data.nextEntryArgs.push(json_entry_args);
-//             }
-//             let final_next_entry_args = author.next_entry_args(log_id.to_owned());
+                let json_entry_args = NextEntryArgs {
+                    entryHashBacklink: next_entry_args.backlink,
+                    entryHashSkiplink: next_entry_args.skiplink,
+                    seqNum: next_entry_args.seq_num,
+                    logId: next_entry_args.log_id,
+                };
+
+                log_data.nextEntryArgs.push(json_entry_args);
+            }
+            let final_next_entry_args = node.next_entry_args(&author, &Hash::new(MESSAGE_SCHEMA).unwrap()).unwrap();
+
+            let json_entry_args = NextEntryArgs {
+                entryHashBacklink: final_next_entry_args.backlink,
+                entryHashSkiplink: final_next_entry_args.skiplink,
+                seqNum: final_next_entry_args.seq_num,
+                logId: final_next_entry_args.log_id,
+            };
+
+            log_data.nextEntryArgs.push(json_entry_args);
+            author_logs_data.push(log_data);
+        }    
             
-//             let json_entry_args = NextEntryArgs {
-//                 entryHashBacklink: final_next_entry_args.backlink,
-//                 entryHashSkiplink: final_next_entry_args.skiplink,
-//                 seqNum: final_next_entry_args.seq_num,
-//                 logId: final_next_entry_args.log_id,
-//             };
-            
-//             log_data.nextEntryArgs.push(json_entry_args);
-//             author_logs.push(log_data);
-//         }
-
-//         let author_data = AuthorData {
-//             publicKey: author.public_key(),
-//             privateKey: author.private_key(),
-//             logs: author_logs,
-//         };
-//         decoded_logs.insert(author.name(), author_data);
-//     }
-//     decoded_logs
-// }
+        let client = clients.iter().find(|client| client.public_key() == author.as_str()).unwrap();
+        
+        let author_data = AuthorData {
+            publicKey: client.public_key(),
+            privateKey: client.private_key(),
+            logs: author_logs_data,
+        };
+        decoded_logs.insert(client.name(), author_data);
+    }
+    decoded_logs
+}

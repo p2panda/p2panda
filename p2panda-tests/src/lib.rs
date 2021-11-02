@@ -52,7 +52,7 @@ impl Panda {
         self.name.to_owned()
     }
 
-    /// Calculate the next entry arguments for this log (log_id, seq_num, backlink, skiplink)
+    // / Calculate the next entry arguments for this log (log_id, seq_num, backlink, skiplink)
     // pub fn next_entry_args(&self, log_id: usize) -> NextEntryArgs {
     //     let schema_entries = self.logs.get(&log_id).unwrap();
     //     calculate_entry_args(log_id, schema_entries.to_owned())

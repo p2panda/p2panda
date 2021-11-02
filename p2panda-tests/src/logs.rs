@@ -8,11 +8,11 @@ use p2panda_rs::message::Message;
 // which our panda entries currently don't have.
 #[derive(Clone, Debug)]
 pub struct LogEntry {
-    author: Author,
-    instance_author: Option<String>,
-    entry_encoded: EntrySigned,
-    message: Message,
-    instance_backlink: Option<String>,
+    pub author: Author,
+    pub instance_author: Option<String>,
+    pub entry_encoded: EntrySigned,
+    pub message: Message,
+    pub instance_backlink: Option<String>,
 }
 
 #[derive(Clone, Debug)]
