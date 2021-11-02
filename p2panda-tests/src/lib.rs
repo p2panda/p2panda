@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pub mod utils;
+pub mod logs;
+pub mod node;
+pub mod materializer;
+pub mod test_data;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -21,19 +25,19 @@ pub type Logs = HashMap<usize, Vec<(EntrySigned, MessageEncoded)>>;
 #[derive(Debug)]
 pub struct Panda {
     pub name: String,
-    pub schema: HashMap<String, usize>,
     pub key_pair: KeyPair,
-    pub logs: Logs,
 }
 
 impl Panda {
     pub fn new(name: String, key_pair: KeyPair) -> Self {
         Self {
             name,
-            schema: HashMap::new(),
             key_pair,
-            logs: HashMap::new(),
         }
+    }
+    
+    pub fn author(&self) -> Author {
+        Author::new(&self.public_key()).unwrap()
     }
 
     pub fn private_key(&self) -> String {
@@ -49,76 +53,56 @@ impl Panda {
     }
 
     /// Calculate the next entry arguments for this log (log_id, seq_num, backlink, skiplink)
-    pub fn next_entry_args(&self, log_id: usize) -> NextEntryArgs {
-        let schema_entries = self.logs.get(&log_id).unwrap();
-        calculate_entry_args(log_id, schema_entries.to_owned())
-    }
+    // pub fn next_entry_args(&self, log_id: usize) -> NextEntryArgs {
+    //     let schema_entries = self.logs.get(&log_id).unwrap();
+    //     calculate_entry_args(log_id, schema_entries.to_owned())
+    // }
 
     /// Calculate the next entry arguments *at a certain point* in this log. This is helpful
     /// when generating test data and wanting to test the flow from requesting entry args through
     /// to publishing an entry
-    pub fn next_entry_args_for_specific_entry(
-        &self,
-        log_id: usize,
-        seq_num: &SeqNum,
-    ) -> NextEntryArgs {
-        let schema_entries = self.logs.get(&log_id).unwrap();
-        calculate_entry_args(
-            log_id,
-            schema_entries[..seq_num.as_i64() as usize - 1].to_owned(),
-        )
-    }
-
+    // pub fn next_entry_args_for_specific_entry(
+    //     &self,
+    //     log_id: usize,
+    //     seq_num: &SeqNum,
+    // ) -> NextEntryArgs {
+    //     let schema_entries = self.logs.get(&log_id).unwrap();
+    //     calculate_entry_args(
+    //         log_id,
+    //         schema_entries[..seq_num.as_i64() as usize - 1].to_owned(),
+    //     )
+    // }
+    
     /// Publish an entry to a schema log for this Panda
-    pub fn publish_entry(&mut self, message: Message) -> EntrySigned {
-        let schema_str = message.schema().as_str();
-
-        let log_id = match self.schema.get(schema_str) {
-            Some(id) => id.to_owned(),
-            None => {
-                let id = self.logs.len() + 1;
-                self.schema.insert(schema_str.to_string(), id);
-                self.logs.insert(id, Vec::new());
-                id
-            }
-        };
-
-        // Calculate next entry args
-        let next_entry_args = self.next_entry_args(log_id);
+    pub fn signed_encoded_entry(&self, message: Message, entry_args: NextEntryArgs) -> EntrySigned {
 
         // Construct entry from message and entry args then sign and encode it
         let entry = Entry::new(
-            &LogId::default(),
+            &entry_args.log_id,
             Some(&message),
-            next_entry_args.entryHashBacklink.as_ref(),
-            next_entry_args.entryHashBacklink.as_ref(),
-            &next_entry_args.seqNum,
+            entry_args.skiplink.as_ref(),
+            entry_args.backlink.as_ref(),
+            &entry_args.seq_num,
         )
         .unwrap();
 
         let entry_encoded = sign_and_encode(&entry, &self.key_pair).unwrap();
 
-        // Encode message
-        let message_encoded = MessageEncoded::try_from(&message).unwrap();
-
-        // Push new entry to schema log
-        let schema_entries = self.logs.get_mut(&log_id).unwrap();
-        schema_entries.push((entry_encoded.clone(), message_encoded));
         entry_encoded
     }
 
-    pub fn get_entry(&self, schema: &str, seq_num: usize) -> Entry {
-        let log_id = self.schema.get(schema).unwrap();
-        let entry = &self.logs.get(&log_id).unwrap()[seq_num - 1];
-        decode_entry(&entry.0, Some(&entry.1)).unwrap()
-    }
+    // pub fn get_entry(&self, schema: &str, seq_num: usize) -> Entry {
+    //     let log_id = self.schema.get(schema).unwrap();
+    //     let entry = &self.logs.get(&log_id).unwrap()[seq_num - 1];
+    //     decode_entry(&entry.0, Some(&entry.1)).unwrap()
+    // }
 
-    pub fn get_encoded_entry_and_message(
-        &self,
-        schema: &str,
-        seq_num: usize,
-    ) -> (EntrySigned, MessageEncoded) {
-        let log_id = self.schema.get(schema).unwrap();
-        self.logs.get(log_id).unwrap()[seq_num - 1].clone()
-    }
+    // pub fn get_encoded_entry_and_message(
+    //     &self,
+    //     schema: &str,
+    //     seq_num: usize,
+    // ) -> (EntrySigned, MessageEncoded) {
+    //     let log_id = self.schema.get(schema).unwrap();
+    //     self.logs.get(log_id).unwrap()[seq_num - 1].clone()
+    // }
 }
