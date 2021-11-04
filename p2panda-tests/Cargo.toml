@@ -23,6 +23,7 @@ path = "src/shell.rs"
 
 [dependencies]
 bamboo-rs-core = "0.1.0"
+colored = "2"
 hex = "0.4.3"
 p2panda-rs = { path = "../p2panda-rs" }
 prettytable-rs = "^0.8"

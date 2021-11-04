@@ -6,7 +6,6 @@ use p2panda_rs::tests::utils::{
 use p2panda_tests::client::Client;
 use p2panda_tests::node::Node;
 use p2panda_tests::utils::send_to_node;
-use p2panda_tests::utils::Result;
 
 #[macro_use]
 extern crate prettytable;
@@ -16,16 +15,27 @@ use shi::error::ShiError;
 use shi::shell::Shell;
 use shi::{cmd, parent};
 
+use colored::*;
+
 pub struct ShellState {
     pub node: Node,
     pub authors: Vec<Client>,
     pub current_author: Option<String>,
 }
 
-impl ShellState {    
+pub fn print_message_ok(msg_str: String) -> Result<String, ShiError> {
+    Ok(format!("\n> {}\n", msg_str))
+}
+
+pub fn print_message_error(msg_str: String) -> Result<String, ShiError> {
+    println!("");
+    Err(ShiError::general(format!("> {} {} {}\n", "!!".red(), msg_str, "!!".red())))
+}
+
+impl ShellState {
     pub fn author_table(&self) -> Table {
         let mut table = Table::new();
-        table.add_row(row![Fgbc => "name", "id"]);
+        table.add_row(row![Fgbc => "name", "public key"]);
 
         for author in &self.authors {
             table.add_row(row![author.name(), author.public_key()]);
@@ -35,7 +45,7 @@ impl ShellState {
 
     pub fn entry_table(&self) -> Table {
         let mut table = Table::new();
-        table.add_row(row!["id", "message"]);
+        table.add_row(row![Fg => "hash", "message"]);
 
         for entry_data in &self.node.all_entries() {
             let hash = entry_data.entry_encoded();
@@ -53,13 +63,14 @@ impl ShellState {
                 MessageValue::Float(_) => todo!(),
                 MessageValue::Relation(_) => todo!(),
             };
-            table.add_row(row![hash.as_str()[..8], message_string]);
+            let sliced_hash = format!("..{}", hash.as_str()[100..].to_owned());
+            table.add_row(row![sliced_hash, message_string]);
         }
         table
     }
 }
 
-fn main() -> Result<()> {
+fn main() -> Result<(), ShiError> {
     let state = ShellState {
         node: Node::new(),
         authors: Vec::new(),
@@ -67,7 +78,7 @@ fn main() -> Result<()> {
     };
 
     let mut shell = Shell::new_with_state("| ", state);
-    
+
     shell.register(parent!(
         "author",
         cmd!(
@@ -75,10 +86,10 @@ fn main() -> Result<()> {
             "Create new author",
             |state: &mut ShellState, args: &[String]| {
                 if args.len() != 1 {
-                    return Err(ShiError::general(format!(
+                    return print_message_error(format!(
                         "expected 1 arguments, but got {}",
                         args.len()
-                    )));
+                    ));
                 }
                 let client_name_str = args.get(0).unwrap().to_string();
                 let client = Client::new(client_name_str.clone(), new_key_pair());
@@ -88,10 +99,10 @@ fn main() -> Result<()> {
                     .iter()
                     .find(|author| author.name() == client_name_str)
                 {
-                    Some(_) => Err(ShiError::general(format!(
+                    Some(_) => print_message_error(format!(
                         "Author with name {} already exists.",
                         client_name_str
-                    ))),
+                    )),
                     None => {
                         state.authors.push(client);
 
@@ -107,10 +118,10 @@ fn main() -> Result<()> {
             "List all authors",
             |state: &mut ShellState, args: &[String]| {
                 if args.len() != 0 {
-                    return Err(ShiError::general(format!(
+                    return print_message_error(format!(
                         "expected 0 arguments, but got {}",
                         args.len()
-                    )));
+                    ));
                 };
 
                 println!("\n");
@@ -123,10 +134,10 @@ fn main() -> Result<()> {
             "Set the author you want to publish entries as",
             |state: &mut ShellState, args: &[String]| {
                 if args.len() != 1 {
-                    return Err(ShiError::general(format!(
+                    return print_message_error(format!(
                         "expected 1 arguments, but got {}",
                         args.len()
-                    )));
+                    ));
                 };
 
                 let client_name_str = args.get(0).unwrap().to_string();
@@ -136,40 +147,42 @@ fn main() -> Result<()> {
                     .find(|author| author.name() == client_name_str);
 
                 if client.is_none() {
-                    return Err(ShiError::general(format!(
+                    return print_message_error(format!(
                         "Author with name {} does not exist.",
                         client_name_str
-                    )));
+                    ));
                 };
-                
+
                 state.current_author = Some(client.unwrap().name());
-                
-                println!("\n");
-                println!("You are now {}!", client_name_str);
-                Ok("\n".to_string())
+
+                print_message_ok(format!("You are now {}!", client_name_str.green()))
             }
         ),
-        cmd!("whoami", "Check the current author", |state: &mut ShellState, args: &[String]| {
-            if args.len() != 0 {
-                return Err(ShiError::general(format!(
-                    "expected 0 arguments, but got {}",
-                    args.len()
-                )));
+        cmd!(
+            "whoami",
+            "Check the current author",
+            |state: &mut ShellState, args: &[String]| {
+                if args.len() != 0 {
+                    return print_message_error(format!(
+                        "expected 0 arguments, but got {}",
+                        args.len()
+                    ));
+                }
+
+                match &state.current_author {
+                    Some(author) => {
+                        println!("\n");
+                        println!("You are {}", author);
+                        Ok("\n".to_string())
+                    }
+                    None => {
+                        println!("\n");
+                        println!("No author set");
+                        Ok("\n".to_string())
+                    }
+                }
             }
-            
-            match &state.current_author {
-                Some(author) => {
-                    println!("\n");
-                    println!("You are {}", author);
-                    Ok("\n".to_string())
-                },
-                None => {
-                    println!("\n");
-                    println!("No author set");
-                    Ok("\n".to_string())
-                },
-            }
-        })
+        )
     ))?;
 
     shell.register(parent!(
@@ -179,15 +192,16 @@ fn main() -> Result<()> {
             "Publish a message following the simple chat schema",
             |state: &mut ShellState, args: &[String]| {
                 if args.len() < 1 {
-                    return Err(ShiError::general(
-                        "expected chat message string as argument",
-                    ));
+                    return print_message_error(
+                        "expected chat message string as argument".to_string()
+                    )
                 }
 
                 if state.current_author.is_none() {
-                    return Err(ShiError::general(format!(
+                    return print_message_error(
                         "No author set, please set the author you wish to publish under via `author set <name>`."
-                    )));
+                        .to_string()
+                    )
                 };
 
                 let client_name_str = state.current_author.clone().unwrap();
@@ -219,10 +233,10 @@ fn main() -> Result<()> {
             "List all entries",
             |state: &mut ShellState, args: &[String]| {
                 if args.len() != 0 {
-                    return Err(ShiError::general(format!(
+                    return print_message_error(format!(
                         "expected 0 arguments, but got {}",
                         args.len()
-                    )));
+                    ));
                 };
 
                 println!("\n");
