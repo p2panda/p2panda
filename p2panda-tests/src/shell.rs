@@ -1,8 +1,6 @@
-use std::convert::TryFrom;
-
 use p2panda_rs::message::MessageValue;
 use p2panda_rs::hash::Hash;
-use p2panda_rs::entry::{EntrySigned, Entry, decode_entry};
+use p2panda_rs::entry::decode_entry;
 use p2panda_rs::tests::utils::{
     create_message, delete_message, fields, new_key_pair, update_message, CHAT_SCHEMA,
 };
@@ -13,7 +11,7 @@ use p2panda_tests::utils::send_to_node;
 
 #[macro_use]
 extern crate prettytable;
-use prettytable::{format, Table};
+use prettytable::Table;
 
 use shi::error::ShiError;
 use shi::shell::Shell;

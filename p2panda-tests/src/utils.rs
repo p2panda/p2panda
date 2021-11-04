@@ -1,5 +1,4 @@
 
-use std::convert::TryInto;
 use serde::Serialize;
 
 use p2panda_rs::entry::{LogId, SeqNum};
