@@ -34,7 +34,7 @@ pub fn seq_num(#[default(1)] n: i64) -> SeqNum {
 }
 
 #[fixture]
-pub fn schema(#[default(utils::MESSAGE_SCHEMA)] schema_str: &str) -> String {
+pub fn schema(#[default(utils::CHAT_SCHEMA)] schema_str: &str) -> String {
     utils::schema(schema_str)
 }
 
@@ -96,7 +96,7 @@ pub fn delete_message(schema: String, #[from(hash)] instance_id: Hash) -> Messag
 pub fn v0_1_0_fixture() -> utils::Fixture {
     
     let message_fields = utils::build_message_fields(vec![("name", "chess"), ("description", "for playing chess")]);
-    let message = create_message(utils::MESSAGE_SCHEMA.to_string(), message_fields);
+    let message = create_message(utils::CHAT_SCHEMA.to_string(), message_fields);
     
     utils::Fixture {
         entry_signed_encoded: EntrySigned::new("009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101f60040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04ef01463f550ce62f983494d0eb6051c73a5641025f355758006724e5b730f47a4454c5395eab807325ee58d69c08d66461357d0f961aee383acc3247ed6419706").unwrap(),
@@ -126,7 +126,7 @@ pub mod defaults {
     #[fixture]
     pub fn default_message() -> Message {
         fixtures::create_message(
-            utils::MESSAGE_SCHEMA.into(),
+            utils::CHAT_SCHEMA.into(),
             fixtures::fields(vec![("message", "Hello!")]),
         )
     }
@@ -134,7 +134,7 @@ pub mod defaults {
     #[fixture]
     pub fn default_update_message() -> Message {
         fixtures::update_message(
-            utils::MESSAGE_SCHEMA.into(),
+            utils::CHAT_SCHEMA.into(),
             fixtures::hash(utils::DEFAULT_HASH.into()),
             fixtures::fields(vec![("message", "Updated, hello!")]))
     }
@@ -142,7 +142,7 @@ pub mod defaults {
     #[fixture]
     pub fn default_delete_message() -> Message {
         fixtures::delete_message(
-            utils::MESSAGE_SCHEMA.into(),
+            utils::CHAT_SCHEMA.into(),
             fixtures::hash(utils::DEFAULT_HASH.into()),
         )
     }

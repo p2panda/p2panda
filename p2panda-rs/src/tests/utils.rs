@@ -15,7 +15,7 @@ pub struct Fixture {
     pub message_encoded: MessageEncoded,
 }
 
-pub const MESSAGE_SCHEMA: &str  = "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437";
+pub const CHAT_SCHEMA: &str  = "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437";
 
 pub const DEFAULT_HASH: &str  = "0040cf94f6d605657e90c543b0c919070cdaaf7209c5e1ea58acb8f3568fa2114268dc9ac3bafe12af277d286fce7dc59b7c0c348973c4e9dacbe79485e56ac2a702";
 
@@ -60,19 +60,19 @@ pub fn any_message(
     match fields {
         // It's a CREATE message
         Some(fields) if instance_id.is_none() => {    
-            Message::new_create(Hash::new(MESSAGE_SCHEMA).unwrap(), fields).unwrap()
+            Message::new_create(Hash::new(CHAT_SCHEMA).unwrap(), fields).unwrap()
         },
         // It's an UPDATE message
         Some(fields) => {
             Message::new_update(
-            Hash::new(MESSAGE_SCHEMA).unwrap(),
+            Hash::new(CHAT_SCHEMA).unwrap(),
             instance_id.unwrap(),
             fields,
         )
         .unwrap()},
         // It's a DELETE message
         None if instance_id.is_some() => {
-            Message::new_delete(Hash::new(MESSAGE_SCHEMA).unwrap(), instance_id.unwrap()).unwrap()
+            Message::new_delete(Hash::new(CHAT_SCHEMA).unwrap(), instance_id.unwrap()).unwrap()
         }
         // It's a mistake....
         None => todo!(), // Error....
