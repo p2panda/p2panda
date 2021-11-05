@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use p2panda_rs::message::MessageValue;
 use p2panda_rs::hash::Hash;
 use p2panda_rs::entry::decode_entry;
@@ -9,10 +11,7 @@ use p2panda_tests::client::Client;
 use p2panda_tests::node::Node;
 use p2panda_tests::utils::send_to_node;
 
-#[macro_use]
-extern crate prettytable;
-use prettytable::Table;
-
+use prettytable::*;
 use shi::error::ShiError;
 use shi::shell::Shell;
 use shi::{cmd, parent};
