@@ -12,7 +12,7 @@ mod tests {
     use crate::message::{Message, MessageEncoded};
     use crate::tests::templates::{many_entry_versions, messages_not_matching_entry_should_fail, version_fixtures};
     use crate::tests::fixtures::{self, entry, key_pair};
-    use crate::tests::utils::{fields, Fixture, MESSAGE_SCHEMA};
+    use crate::tests::utils::{fields, Fixture, CHAT_SCHEMA};
 
     /// In this test `entry` and `key_pair` are injected directly from our test fixtures and `message`
     /// is tested agains all cases on the `messages_not_matching_entry_should_fail` and one manually defined passing case.
