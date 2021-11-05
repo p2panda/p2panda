@@ -259,32 +259,32 @@ mod tests {
         let node = mock_node(panda);
 
         // Get all entries
-        let enries = node.all_entries();
+        let entries = node.all_entries();
 
         // Initialize materializer
         let mut materializer = Materializer::new();
 
         // Build instance DAGs from vector of all entries of one author
-        materializer.build_dags(enries.clone());
+        materializer.build_dags(entries.clone());
 
         // Get the instance DAG (in the form of a vector of edges) for the two existing instances
         let mut instance_dag_1 = materializer
             .dags()
-            .get(enries[0].entry_encoded().as_str())
+            .get(entries[0].entry_encoded().as_str())
             .unwrap()
             .to_owned()
             .graph();
         let mut instance_dag_2 = materializer
             .dags()
-            .get(enries[3].entry_encoded().as_str())
+            .get(entries[3].entry_encoded().as_str())
             .unwrap()
             .to_owned()
             .graph();
 
-        let entry_str_1 = enries[0].entry_encoded().as_str().to_string();
-        let entry_str_2 = enries[1].entry_encoded().as_str().to_string();
-        let entry_str_3 = enries[2].entry_encoded().as_str().to_string();
-        let entry_str_4 = enries[3].entry_encoded().as_str().to_string();
+        let entry_str_1 = entries[0].entry_encoded().as_str().to_string();
+        let entry_str_2 = entries[1].entry_encoded().as_str().to_string();
+        let entry_str_3 = entries[2].entry_encoded().as_str().to_string();
+        let entry_str_4 = entries[3].entry_encoded().as_str().to_string();
 
         // Pop each edge from the vector and compare with what we expect to see
         assert_eq!(instance_dag_1.pop().unwrap(), (None, entry_str_1.clone()));
