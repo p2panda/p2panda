@@ -74,7 +74,7 @@ impl ShellState {
                 },
                 None => "".to_string(),
             };
-            let sliced_hash = format!("..{}", entry_data.entry_encoded.hash().as_str()[100..].to_owned());
+            let sliced_hash = format!("..{}", entry_data.entry_encoded.hash().as_str()[120..].to_owned());
             let action = match message.action() {
                 p2panda_rs::message::MessageAction::Create => "create",
                 p2panda_rs::message::MessageAction::Update => "update",
