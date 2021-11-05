@@ -50,6 +50,8 @@ This library provides tools used for testing the [`p2panda-rs`] and [`p2panda-js
 - methods for generating test data (used in `p2panda-js` tests)
 - interactive shell playground
 
+[![asciicast](https://asciinema.org/a/kWYR2h59i2DkqW98vlJOoSQPv.svg)](https://asciinema.org/a/kWYR2h59i2DkqW98vlJOoSQPv)
+
 ## Development
 
 You will need the following tools to start development:
