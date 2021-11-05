@@ -58,6 +58,7 @@
 pub mod entry;
 pub mod hash;
 pub mod identity;
+pub mod materializer;
 pub mod message;
 pub mod schema;
 #[cfg(target_arch = "wasm32")]
