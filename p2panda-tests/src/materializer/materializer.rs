@@ -190,24 +190,24 @@ impl Materializer {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
-    
+
     use super::Materializer;
-    
-    use crate::node::Node;
+
     use crate::client::Client;
+    use crate::materializer;
+    use crate::node::Node;
     use crate::utils::send_to_node;
 
-    use p2panda_rs::tests::utils::{
-        create_message, delete_message, fields, keypair_from_private, update_message, MESSAGE_SCHEMA,
-    };
+    use p2panda_rs::message::MessageValue;
     use p2panda_rs::tests::fixtures::private_key;
-    
-    fn mock_node(private_key: String) -> Node {
+    use p2panda_rs::tests::utils::{
+        create_message, delete_message, fields, keypair_from_private, update_message,
+        MESSAGE_SCHEMA,
+    };
+
+    fn mock_node(panda: Client) -> Node {
         let mut node = Node::new();
 
-        // Instantiate one client called "panda" from private_key fixture
-        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
-    
         // Publish a CREATE message
         let instance_1 = send_to_node(
             &mut node,
@@ -218,7 +218,7 @@ mod tests {
             ),
         )
         .unwrap();
-    
+
         // Publish an UPDATE message
         send_to_node(
             &mut node,
@@ -230,7 +230,7 @@ mod tests {
             ),
         )
         .unwrap();
-    
+
         // Publish an DELETE message
         send_to_node(
             &mut node,
@@ -238,7 +238,7 @@ mod tests {
             &delete_message(MESSAGE_SCHEMA.into(), instance_1.clone()),
         )
         .unwrap();
-    
+
         // Publish another CREATE message
         send_to_node(
             &mut node,
@@ -249,36 +249,156 @@ mod tests {
             ),
         )
         .unwrap();
-        
+
         node
     }
-    
+
     #[rstest]
     fn build_dag(private_key: String) {
-        let node = mock_node(private_key);
-        
+        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
+        let node = mock_node(panda);
+
         // Get all entries
         let enries = node.all_entries();
-    
+
         // Initialize materializer
         let mut materializer = Materializer::new();
-        
+
         // Build instance DAGs from vector of all entries of one author
         materializer.build_dags(enries.clone());
-        
+
         // Get the instance DAG (in the form of a vector of edges) for the two existing instances
-        let mut instance_dag_1 = materializer.dags().get(enries[0].entry_encoded().as_str()).unwrap().to_owned().graph();
-        let mut instance_dag_2 = materializer.dags().get(enries[3].entry_encoded().as_str()).unwrap().to_owned().graph();
-        
+        let mut instance_dag_1 = materializer
+            .dags()
+            .get(enries[0].entry_encoded().as_str())
+            .unwrap()
+            .to_owned()
+            .graph();
+        let mut instance_dag_2 = materializer
+            .dags()
+            .get(enries[3].entry_encoded().as_str())
+            .unwrap()
+            .to_owned()
+            .graph();
+
         let entry_str_1 = enries[0].entry_encoded().as_str().to_string();
         let entry_str_2 = enries[1].entry_encoded().as_str().to_string();
         let entry_str_3 = enries[2].entry_encoded().as_str().to_string();
         let entry_str_4 = enries[3].entry_encoded().as_str().to_string();
-        
+
         // Pop each edge from the vector and compare with what we expect to see
         assert_eq!(instance_dag_1.pop().unwrap(), (None, entry_str_1.clone()));
-        assert_eq!(instance_dag_1.pop().unwrap(), (Some(entry_str_1), entry_str_2.clone()));
-        assert_eq!(instance_dag_1.pop().unwrap(), (Some(entry_str_2), entry_str_3));
+        assert_eq!(
+            instance_dag_1.pop().unwrap(),
+            (Some(entry_str_1), entry_str_2.clone())
+        );
+        assert_eq!(
+            instance_dag_1.pop().unwrap(),
+            (Some(entry_str_2), entry_str_3)
+        );
         assert_eq!(instance_dag_2.pop().unwrap(), (None, entry_str_4));
+    }
+
+    #[rstest]
+    fn materialize_instances(private_key: String) {
+        let panda = Client::new(
+            "panda".to_string(),
+            keypair_from_private(private_key.clone()),
+        );
+        let mut node = mock_node(panda);
+
+        // Get all entries
+        let entries = node.all_entries();
+
+        // Initialize materializer
+        let mut materializer = Materializer::new();
+
+        // Materialize all instances
+        let instances = materializer.materialize(&entries).unwrap();
+
+        // Get instances for MESSAGE_SCHEMA
+        let schema_instances = instances.get(MESSAGE_SCHEMA).unwrap();
+
+        // Get an instance by id
+        let instance_1 = schema_instances.get(entries[0].entry_encoded().as_str());
+        let instance_2 = schema_instances.get(entries[3].entry_encoded().as_str());
+
+        // Instance 1 was deleted
+        assert_eq!(instance_1, None);
+        // Instance 2 should be there
+        assert_eq!(
+            instance_2.unwrap().get("message").unwrap().to_owned(),
+            MessageValue::Text("Let's try that again.".to_string())
+        );
+
+        // Create Panda again...
+        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
+
+        // Publish an UPDATE message targeting instance 2
+        send_to_node(
+            &mut node,
+            &panda,
+            &update_message(
+                MESSAGE_SCHEMA.into(),
+                entries[3].entry_encoded(),
+                fields(vec![("message", "Now it's updated.")]),
+            ),
+        )
+        .unwrap();
+
+        // Get all entries
+        let entries = node.all_entries();
+
+        // Materialize all instances
+        let instances = materializer.materialize(&entries).unwrap();
+
+        // Get instances for MESSAGE_SCHEMA
+        let schema_instances = instances.get(MESSAGE_SCHEMA).unwrap();
+
+        // Get an instance by id
+        let instance_2 = schema_instances.get(entries[3].entry_encoded().as_str());
+
+        // Instance 2 should be there
+        assert_eq!(
+            instance_2.unwrap().get("message").unwrap().to_owned(),
+            MessageValue::Text("Now it's updated.".to_string())
+        );
+    }
+
+    #[rstest]
+    fn query_instances(private_key: String) {
+        let panda = Client::new(
+            "panda".to_string(),
+            keypair_from_private(private_key.clone()),
+        );
+        let mut node = mock_node(panda);
+
+        // Get all entries
+        let entries = node.all_entries();
+
+        // Initialize materializer
+        let mut materializer = Materializer::new();
+        
+        // Materialize entries
+        materializer.materialize(&entries).unwrap();
+
+        // Fetch all instances
+        let instances = materializer.query_all(&MESSAGE_SCHEMA.to_string()).unwrap();
+
+        // There should be one instance
+        assert_eq!(instances.len(), 1);
+
+        // Query for one instance by id
+        let instance = materializer
+            .query_instance(
+                &MESSAGE_SCHEMA.to_string(),
+                &entries[3].entry_encoded().as_str().to_string(),
+            )
+            .unwrap();
+
+        assert_eq!(
+            instance.get("message").unwrap().to_owned(),
+            MessageValue::Text("Let's try that again.".to_string())
+        );
     }
 }
