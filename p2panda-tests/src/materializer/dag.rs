@@ -124,3 +124,76 @@ impl DAG {
         ordered_nodes
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::DAG;
+
+    #[test]
+    fn topological_sort() {
+        // Same graph construct in different orders should order in the same way
+
+        let ordered_dag = vec![
+            "0x0a", "0x1a", "0x2a", "0x3a", "0x4a", "0x2b", "0x3b", "0x3c", "0x4c",
+        ];
+
+        let mut graph_1 = DAG::new();
+
+        // DAG trunk A
+        graph_1.add_root("0x0a".to_string());
+        graph_1.add_edge("0x0a".to_string(), "0x1a".to_string());
+        graph_1.add_edge("0x1a".to_string(), "0x2a".to_string());
+        graph_1.add_edge("0x2a".to_string(), "0x3a".to_string());
+        graph_1.add_edge("0x3a".to_string(), "0x4a".to_string());
+
+        // Fork B
+        graph_1.add_edge("0x1a".to_string(), "0x2b".to_string());
+        graph_1.add_edge("0x2b".to_string(), "0x3b".to_string());
+
+        // Fork C
+        graph_1.add_edge("0x2a".to_string(), "0x3c".to_string());
+        graph_1.add_edge("0x3c".to_string(), "0x4c".to_string());
+
+        assert_eq!(graph_1.topological(), ordered_dag);
+
+        let mut graph_2 = DAG::new();
+
+        // DAG trunk A
+        graph_2.add_root("0x0a".to_string());
+        graph_2.add_edge("0x0a".to_string(), "0x1a".to_string());
+        graph_2.add_edge("0x1a".to_string(), "0x2a".to_string());
+        graph_2.add_edge("0x2a".to_string(), "0x3a".to_string());
+        graph_2.add_edge("0x3a".to_string(), "0x4a".to_string());
+
+        // Fork C
+        graph_2.add_edge("0x2a".to_string(), "0x3c".to_string());
+        graph_2.add_edge("0x3c".to_string(), "0x4c".to_string());
+
+        // Fork B
+        graph_2.add_edge("0x1a".to_string(), "0x2b".to_string());
+        graph_2.add_edge("0x2b".to_string(), "0x3b".to_string());
+
+        assert_eq!(graph_2.topological(), ordered_dag);
+
+        let mut graph_3 = DAG::new();
+
+        // DAG trunk A
+        graph_3.add_root("0x0a".to_string());
+        graph_3.add_edge("0x0a".to_string(), "0x1a".to_string());
+        graph_3.add_edge("0x1a".to_string(), "0x2a".to_string());
+
+        // Fork C
+        graph_3.add_edge("0x2a".to_string(), "0x3c".to_string());
+        graph_3.add_edge("0x3c".to_string(), "0x4c".to_string());
+
+        // Fork B
+        graph_3.add_edge("0x1a".to_string(), "0x2b".to_string());
+        graph_3.add_edge("0x2b".to_string(), "0x3b".to_string());
+
+        // DAG trunk A
+        graph_3.add_edge("0x2a".to_string(), "0x3a".to_string());
+        graph_3.add_edge("0x3a".to_string(), "0x4a".to_string());
+
+        assert_eq!(graph_3.topological(), ordered_dag)
+    }
+}

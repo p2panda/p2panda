@@ -54,7 +54,7 @@ impl Materializer {
         });
     }
 
-    // Take an array of entries from multiple authors and schemas. Creates an update path DAG for
+    // Take an array of entries from a single author with multiple schema logs. Creates an update path DAG for
     // each instance of and also stores a list of all messages for materialization which takes place
     // in the next step.
     pub fn build_dags(&mut self, entries: Vec<LogEntry>) {
@@ -189,73 +189,90 @@ impl Materializer {
 
 #[cfg(test)]
 mod tests {
-    use super::DAG;
+    use rstest::rstest;
+    
+    use super::Materializer;
+    
+    use crate::node::Node;
+    use crate::client::Client;
+    use crate::utils::send_to_node;
 
-    #[test]
-    fn topological_sort() {
-        // Same graph construct in different orders should order in the same way
+    use p2panda_rs::tests::utils::{
+        create_message, delete_message, fields, keypair_from_private, update_message, MESSAGE_SCHEMA,
+    };
+    use p2panda_rs::tests::fixtures::private_key;
+        
+    #[rstest]
+    fn build_dag(private_key: String) {
+        let mut node = Node::new();
 
-        let ordered_dag = vec![
-            "0x0a", "0x1a", "0x2a", "0x3a", "0x4a", "0x2b", "0x3b", "0x3c", "0x4c",
-        ];
-
-        let mut graph_1 = DAG::new();
-
-        // DAG trunk A
-        graph_1.add_root("0x0a".to_string());
-        graph_1.add_edge("0x0a".to_string(), "0x1a".to_string());
-        graph_1.add_edge("0x1a".to_string(), "0x2a".to_string());
-        graph_1.add_edge("0x2a".to_string(), "0x3a".to_string());
-        graph_1.add_edge("0x3a".to_string(), "0x4a".to_string());
-
-        // Fork B
-        graph_1.add_edge("0x1a".to_string(), "0x2b".to_string());
-        graph_1.add_edge("0x2b".to_string(), "0x3b".to_string());
-
-        // Fork C
-        graph_1.add_edge("0x2a".to_string(), "0x3c".to_string());
-        graph_1.add_edge("0x3c".to_string(), "0x4c".to_string());
-
-        assert_eq!(graph_1.topological(), ordered_dag);
-
-        let mut graph_2 = DAG::new();
-
-        // DAG trunk A
-        graph_2.add_root("0x0a".to_string());
-        graph_2.add_edge("0x0a".to_string(), "0x1a".to_string());
-        graph_2.add_edge("0x1a".to_string(), "0x2a".to_string());
-        graph_2.add_edge("0x2a".to_string(), "0x3a".to_string());
-        graph_2.add_edge("0x3a".to_string(), "0x4a".to_string());
-
-        // Fork C
-        graph_2.add_edge("0x2a".to_string(), "0x3c".to_string());
-        graph_2.add_edge("0x3c".to_string(), "0x4c".to_string());
-
-        // Fork B
-        graph_2.add_edge("0x1a".to_string(), "0x2b".to_string());
-        graph_2.add_edge("0x2b".to_string(), "0x3b".to_string());
-
-        assert_eq!(graph_2.topological(), ordered_dag);
-
-        let mut graph_3 = DAG::new();
-
-        // DAG trunk A
-        graph_3.add_root("0x0a".to_string());
-        graph_3.add_edge("0x0a".to_string(), "0x1a".to_string());
-        graph_3.add_edge("0x1a".to_string(), "0x2a".to_string());
-
-        // Fork C
-        graph_3.add_edge("0x2a".to_string(), "0x3c".to_string());
-        graph_3.add_edge("0x3c".to_string(), "0x4c".to_string());
-
-        // Fork B
-        graph_3.add_edge("0x1a".to_string(), "0x2b".to_string());
-        graph_3.add_edge("0x2b".to_string(), "0x3b".to_string());
-
-        // DAG trunk A
-        graph_3.add_edge("0x2a".to_string(), "0x3a".to_string());
-        graph_3.add_edge("0x3a".to_string(), "0x4a".to_string());
-
-        assert_eq!(graph_3.topological(), ordered_dag)
+        // Instantiate one client called "panda"
+        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
+    
+        // Publish a CREATE message
+        let entry_1 = send_to_node(
+            &mut node,
+            &panda,
+            &create_message(
+                MESSAGE_SCHEMA.into(),
+                fields(vec![("message", "Ohh, my first message!")]),
+            ),
+        )
+        .unwrap();
+    
+        // Publish an UPDATE message
+        let entry_2 = send_to_node(
+            &mut node,
+            &panda,
+            &update_message(
+                MESSAGE_SCHEMA.into(),
+                entry_1.clone(),
+                fields(vec![("message", "Which I now update.")]),
+            ),
+        )
+        .unwrap();
+    
+        // Publish an DELETE message
+        let entry_3 = send_to_node(
+            &mut node,
+            &panda,
+            &delete_message(MESSAGE_SCHEMA.into(), entry_1.clone()),
+        )
+        .unwrap();
+    
+        // Publish another CREATE message
+        let entry_4 = send_to_node(
+            &mut node,
+            &panda,
+            &create_message(
+                MESSAGE_SCHEMA.into(),
+                fields(vec![("message", "Let's try that again.")]),
+            ),
+        )
+        .unwrap();
+        
+        // Get all entries
+        let enries = node.all_entries();
+    
+        // Initialize materializer
+        let mut materializer = Materializer::new();
+        
+        // Build instance DAGs from vector of all entries of one author
+        materializer.build_dags(enries);
+        
+        // Get the instance DAG (in the form of a vector of edges) for the two existing instances
+        let mut instance_dag_1 = materializer.dags().get(entry_1.as_str()).unwrap().to_owned().graph();
+        let mut instance_dag_2 = materializer.dags().get(entry_4.as_str()).unwrap().to_owned().graph();
+        
+        let entry_str_1 = entry_1.as_str().to_string();
+        let entry_str_2 = entry_2.as_str().to_string();
+        let entry_str_3 = entry_3.as_str().to_string();
+        let entry_str_4 = entry_4.as_str().to_string();
+        
+        // Pop each edge from the vector and compare with what we expect to see
+        assert_eq!(instance_dag_1.pop().unwrap(), (None, entry_str_1.clone()));
+        assert_eq!(instance_dag_1.pop().unwrap(), (Some(entry_str_1), entry_str_2.clone()));
+        assert_eq!(instance_dag_1.pop().unwrap(), (Some(entry_str_2), entry_str_3));
+        assert_eq!(instance_dag_2.pop().unwrap(), (None, entry_str_4));
     }
 }
