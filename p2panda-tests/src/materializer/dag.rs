@@ -121,16 +121,4 @@ impl DAG {
         }
         ordered_nodes
     }
-
-    /// Validate the DAG.
-    ///
-    /// @TODO:
-    /// - Check there is exactly one root node
-    /// - Check there are no disconnected nodes
-    /// - Check there are no cycles
-    ///
-    /// QUESTION: is this necessary? All situations are impossible when processing entries in a Bamboo log.
-    pub fn validate() -> () {
-        // todo
-    }
 }
