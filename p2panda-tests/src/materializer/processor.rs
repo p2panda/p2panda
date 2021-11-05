@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use crate::logs::LogEntry;
 use crate::materializer::Materializer;
 use crate::node::utils::PERMISSIONS_SCHEMA_HASH;

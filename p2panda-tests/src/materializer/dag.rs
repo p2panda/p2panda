@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 /// Wrapper type for a Node in the graph
 type Node = String;
 

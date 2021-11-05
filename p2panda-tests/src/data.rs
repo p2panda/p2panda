@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryFrom;

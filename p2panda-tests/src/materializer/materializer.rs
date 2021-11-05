@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use std::collections::HashMap;
 
 use p2panda_rs::message::{Message, MessageFields};
