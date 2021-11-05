@@ -110,8 +110,10 @@ pub fn v0_1_0_fixture() -> utils::Fixture {
 // with no passed parameters returning a useful test value. This is especially needed in the templates where fixtures 
 // can't be injected in the usual way.
 
+#[cfg(test)]
 pub mod defaults {
     use rstest::fixture;
+
     use crate::tests::fixtures;
     use crate::tests::utils;
     use crate::hash::Hash;

@@ -1,4 +1,6 @@
 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use serde::Serialize;
 
 use p2panda_rs::entry::{LogId, SeqNum};

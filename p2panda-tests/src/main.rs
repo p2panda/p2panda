@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+
 use serde_json;
 
 use p2panda_rs::tests::utils::{
@@ -10,7 +11,6 @@ use p2panda_tests::node::Node;
 use p2panda_tests::utils::send_to_node;
 
 fn main() {
-
     let mut node = Node::new();
 
     let panda = Client::new("panda".to_string(), new_key_pair());
