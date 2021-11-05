@@ -71,7 +71,7 @@ cargo run --bin shell
 
 Test data is generated as a json document formatted as summerised below (to see full output, run `cargo run`). Currently in the `p2panda-js` tests we need the data to consist of a single author with a single log which contains 4 entries published with the following message types in this exact order -> 1: CREATE, 2: UPDATE, 3: DELETE and 4: CREATE.
 
-```json
+```js
 {
   // arbitrary name for identifying author in tests
   "panda": {
