@@ -47,8 +47,6 @@ impl Client {
         )
         .unwrap();
 
-        let entry_encoded = sign_and_encode(&entry, &self.key_pair).unwrap();
-
-        entry_encoded
+        sign_and_encode(&entry, &self.key_pair).unwrap()
     }
 }
