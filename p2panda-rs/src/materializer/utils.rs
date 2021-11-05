@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use crate::entry::{decode_entry, EntrySigned};
 use crate::materializer::{Edge, MaterializationError};
 use crate::message::MessageEncoded;
