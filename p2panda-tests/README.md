@@ -56,6 +56,9 @@ You will need the following tools to start development:
 - [Rust](https://www.rust-lang.org/learn/get-started)
 
 ```bash
+# Run tests
+cargo test
+
 # Generate test data json output (from `main.rs`)
 cargo run
 
