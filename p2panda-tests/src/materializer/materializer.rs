@@ -201,16 +201,15 @@ mod tests {
         create_message, delete_message, fields, keypair_from_private, update_message, MESSAGE_SCHEMA,
     };
     use p2panda_rs::tests::fixtures::private_key;
-        
-    #[rstest]
-    fn build_dag(private_key: String) {
+    
+    fn mock_node(private_key: String) -> Node {
         let mut node = Node::new();
 
-        // Instantiate one client called "panda"
+        // Instantiate one client called "panda" from private_key fixture
         let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
     
         // Publish a CREATE message
-        let entry_1 = send_to_node(
+        let instance_1 = send_to_node(
             &mut node,
             &panda,
             &create_message(
@@ -221,27 +220,27 @@ mod tests {
         .unwrap();
     
         // Publish an UPDATE message
-        let entry_2 = send_to_node(
+        send_to_node(
             &mut node,
             &panda,
             &update_message(
                 MESSAGE_SCHEMA.into(),
-                entry_1.clone(),
+                instance_1.clone(),
                 fields(vec![("message", "Which I now update.")]),
             ),
         )
         .unwrap();
     
         // Publish an DELETE message
-        let entry_3 = send_to_node(
+        send_to_node(
             &mut node,
             &panda,
-            &delete_message(MESSAGE_SCHEMA.into(), entry_1.clone()),
+            &delete_message(MESSAGE_SCHEMA.into(), instance_1.clone()),
         )
         .unwrap();
     
         // Publish another CREATE message
-        let entry_4 = send_to_node(
+        send_to_node(
             &mut node,
             &panda,
             &create_message(
@@ -251,6 +250,13 @@ mod tests {
         )
         .unwrap();
         
+        node
+    }
+    
+    #[rstest]
+    fn build_dag(private_key: String) {
+        let node = mock_node(private_key);
+        
         // Get all entries
         let enries = node.all_entries();
     
@@ -258,16 +264,16 @@ mod tests {
         let mut materializer = Materializer::new();
         
         // Build instance DAGs from vector of all entries of one author
-        materializer.build_dags(enries);
+        materializer.build_dags(enries.clone());
         
         // Get the instance DAG (in the form of a vector of edges) for the two existing instances
-        let mut instance_dag_1 = materializer.dags().get(entry_1.as_str()).unwrap().to_owned().graph();
-        let mut instance_dag_2 = materializer.dags().get(entry_4.as_str()).unwrap().to_owned().graph();
+        let mut instance_dag_1 = materializer.dags().get(enries[0].entry_encoded().as_str()).unwrap().to_owned().graph();
+        let mut instance_dag_2 = materializer.dags().get(enries[3].entry_encoded().as_str()).unwrap().to_owned().graph();
         
-        let entry_str_1 = entry_1.as_str().to_string();
-        let entry_str_2 = entry_2.as_str().to_string();
-        let entry_str_3 = entry_3.as_str().to_string();
-        let entry_str_4 = entry_4.as_str().to_string();
+        let entry_str_1 = enries[0].entry_encoded().as_str().to_string();
+        let entry_str_2 = enries[1].entry_encoded().as_str().to_string();
+        let entry_str_3 = enries[2].entry_encoded().as_str().to_string();
+        let entry_str_4 = enries[3].entry_encoded().as_str().to_string();
         
         // Pop each edge from the vector and compare with what we expect to see
         assert_eq!(instance_dag_1.pop().unwrap(), (None, entry_str_1.clone()));
