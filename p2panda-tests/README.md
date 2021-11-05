@@ -48,6 +48,7 @@ This library provides tools used for testing the [`p2panda-rs`] and [`p2panda-js
 - a mock node
 - a mock client
 - methods for generating test data (used in `p2panda-js` tests)
+- interactive shell playground
 
 ## Development
 
@@ -58,6 +59,9 @@ You will need the following tools to start development:
 ```bash
 # Generate test data json output (from `main.rs`)
 cargo run
+
+# Launch the interactive shell
+cargo run --bin shell
 
 ```
 
@@ -134,6 +138,73 @@ Test data is generated as a json document formatted as summerised below (to see 
     ]
   }
 }
+```
+
+## Interactive CL playground
+
+The interactive shell is intended as a playground are for exploring p2panda features. It utilizes current (and some future) p2panda features and runs against a mock node (there is no networking involved). 
+
+Available commands:
+
+```
+├── author
+│   ├── new
+│   ├── list
+│   ├── set
+│   └── whoami
+├── create
+│   └── chat
+├── update
+│   └── chat
+├── delete
+│   └── chat
+├── instances
+│   ├── list
+│   └── find
+└── entries
+    └── list
+
+
+Builtins
+├── help
+├── helptree
+├── exit
+└── history
+```
+
+### Examples
+
+```sh
+# create a new author called panda
+author new panda
+
+# list all authors
+author list
+
+# become a different author (author must already exist)
+author set penguin
+
+# check who you are
+author whoami
+
+# publish a create message following the 'chat' schema, all trailing arguments make up chat message value
+create chat Hello my name is panda!
+
+# publish an update message
+update chat 0040a8cec28dea11a4ba299cc1b0f246dfe8a5f71af61281085beff90b8564b9e4d9f07cd6f048399a2b73a8dc499a9b5d647f32223b190832cdeed087b1a074f698 Hello my name is Hungry Panda!
+
+# publish a delete message
+delete chat 0040a8cec28dea11a4ba299cc1b0f246dfe8a5f71af61281085beff90b8564b9e4d9f07cd6f048399a2b73a8dc499a9b5d647f32223b190832cdeed087b1a074f698
+
+# list all entries
+entries list
+
+# list all instances
+instances list
+
+# retrieve a full instance id from a sub string (needed for publishing UPDATE and DELETE messages)
+instances find 087b1a074f698
+
 ```
 
 ## License
