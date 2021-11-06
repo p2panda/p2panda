@@ -7,9 +7,34 @@ use cddl::parser::Parser;
 use cddl::validate_cbor_from_slice;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
+use crate::hash::Hash;
+use crate::message::{Message, MessageFields, MessageValue};
 
-use super::error::SchemaError;
-use super::USER_SCHEMA;
+use thiserror::Error;
+
+/// Custom error types for schema validation.
+#[derive(Error, Debug)]
+pub enum SchemaError {
+    /// Message contains invalid fields.
+    #[error("invalid message schema: {0}")]
+    InvalidSchema(String),
+
+    /// Message can't be deserialized from invalid CBOR encoding.
+    #[error("invalid CBOR format")]
+    InvalidCBOR,
+
+    /// There is no schema set
+    #[error("no CDDL schema present")]
+    NoSchema,
+
+    /// Error while parsing CDDL
+    #[error("error while parsing CDDL: {0}")]
+    ParsingError(String),
+
+    /// Message validation error
+    #[error("invalid message values")]
+    ValidationError(String),
+}
 
 /// CDDL types
 #[derive(Clone, Debug)]
@@ -103,16 +128,16 @@ impl fmt::Display for Group {
     }
 }
 
-#[derive(Debug)]
-/// UserSchema struct for creating CDDL schemas and valdating MessageFields
-pub struct UserSchema {
+#[derive(Clone, Debug)]
+/// Schema struct for creating CDDL schemas and valdating MessageFields
+pub struct Schema {
     name: Option<String>,
     fields: Option<BTreeMap<String, Field>>,
     schema_string: Option<String>,
 }
 
-impl UserSchema {
-    /// Create a new blank UserSchema
+impl Schema {
+    /// Create a new blank Schema
     pub fn new(name: String) -> Self {
         Self {
             name: Some(name),
@@ -121,8 +146,8 @@ impl UserSchema {
         }
     }
 
-    /// Create a new UserSchema from a CDDL string
-    // Instanciate a new UserSchema instance from a CDDL string.
+    /// Create a new Schema from a CDDL string
+    // Instanciate a new Schema instance from a CDDL string.
     pub fn new_from_string(schema: &String) -> Result<Self, SchemaError> {
         let mut lexer = Lexer::new(schema);
         let parser = Parser::new(lexer.iter(), schema);
@@ -158,8 +183,8 @@ impl UserSchema {
         // Format message fields group as a struct
         let message_fields = Field::Struct(message_fields);
 
-        // Insert new message field into UserSchema fields.
-        // If this UserSchema was created from a cddl string
+        // Insert new message field into Schema fields.
+        // If this Schema was created from a cddl string
         // `fields` will be None.
         match self.fields.clone() {
             Some(mut fields) => {
@@ -168,6 +193,70 @@ impl UserSchema {
                 Ok(())
             }
             None => Err(SchemaError::NoSchema),
+        }
+    }
+
+    // Create a new CREATE message validated against this schema
+    // Only text fields implemented
+    pub fn create(
+        &self,
+        schema_hash: &str,
+        key_values: Vec<(&str, &str)>,
+    ) -> Result<Message, SchemaError> {
+        let schema = match Hash::new(schema_hash) {
+            Ok(hash) => Ok(hash),
+            Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
+        };
+
+        let mut fields = MessageFields::new();
+
+        for (key, value) in key_values {
+            match fields.add(key, MessageValue::Text(value.into())) {
+                Ok(_) => Ok(()),
+                Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
+            }?;
+        }
+
+        match self.validate_message(serde_cbor::to_vec(&fields.clone()).unwrap()) {
+            Ok(_) => Ok(()),
+            Err(err_str) => Err(SchemaError::ValidationError(err_str.to_string())),
+        }?;
+
+        match Message::new_create(schema.unwrap(), fields) {
+            Ok(hash) => Ok(hash),
+            Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
+        }
+    }
+
+    pub fn update(
+        &self,
+        schema_hash: &str,
+        id: &str,
+        key_values: Vec<(&str, &str)>,
+    ) -> Result<Message, SchemaError> {
+        let schema = match Hash::new(schema_hash) {
+            Ok(hash) => Ok(hash),
+            Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
+        };
+
+        let mut fields = MessageFields::new();
+        let id = Hash::new(id).unwrap();
+
+        for (key, value) in key_values {
+            match fields.add(key, MessageValue::Text(value.into())) {
+                Ok(_) => Ok(()),
+                Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
+            }?;
+        }
+
+        match self.validate_message(serde_cbor::to_vec(&fields.clone()).unwrap()) {
+            Ok(_) => Ok(()),
+            Err(err_str) => Err(SchemaError::ValidationError(err_str.to_string())),
+        }?;
+
+        match Message::new_update(schema.unwrap(), id, fields) {
+            Ok(hash) => Ok(hash),
+            Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
         }
     }
 
@@ -193,7 +282,7 @@ impl UserSchema {
     }
 }
 
-impl fmt::Display for UserSchema {
+impl fmt::Display for Schema {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.fields {
             Some(map) => {
@@ -222,12 +311,12 @@ impl fmt::Display for UserSchema {
 mod tests {
     use crate::message::{MessageFields, MessageValue};
 
-    use super::{Type, UserSchema, USER_SCHEMA};
+    use crate::schema::{Type, Schema, USER_SCHEMA};
 
     #[test]
     pub fn schema_builder() {
         // Instanciate new empty schema named "person"
-        let mut person = UserSchema::new("person".to_owned());
+        let mut person = Schema::new("person".to_owned());
 
         // Add two message fields to the schema
         person
@@ -262,7 +351,7 @@ mod tests {
             name: { type: \"str\", value: tstr } 
         ) }";
 
-        let person_from_string = UserSchema::new_from_string(&cddl_str.to_string()).unwrap();
+        let person_from_string = Schema::new_from_string(&cddl_str.to_string()).unwrap();
 
         // Validate message fields against person schema
         let me_bytes = serde_cbor::to_vec(&me).unwrap();
@@ -272,7 +361,7 @@ mod tests {
     #[test]
     pub fn validate_against_megaschema() {
         // Instanciate global user schema from mega schema
-        let user_schema = UserSchema::new_from_string(&USER_SCHEMA.to_string()).unwrap();
+        let user_schema = Schema::new_from_string(&USER_SCHEMA.to_string()).unwrap();
 
         let mut me = MessageFields::new();
         me.add("name", MessageValue::Text("Sam".to_owned()))
