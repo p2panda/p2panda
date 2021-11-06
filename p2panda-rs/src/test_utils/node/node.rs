@@ -96,7 +96,7 @@ impl Node {
     }
 
     /// Get the author of an Instance by instance id
-    fn get_instance_author(&self, instance_id: String) -> Option<String> {
+    pub fn get_instance_author(&self, instance_id: String) -> Option<String> {
         let mut instance_author = None;
         self.entries.keys().for_each(|author| {
             let author_logs = self.entries.get(author).unwrap();
