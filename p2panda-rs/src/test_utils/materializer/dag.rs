@@ -16,6 +16,7 @@ pub struct DAG {
 }
 
 impl DAG {
+    /// Create a new DAG
     pub fn new() -> Self {
         DAG {
             /// An array of edges which make up the graph. For p2p2anda this is an array of tuples of

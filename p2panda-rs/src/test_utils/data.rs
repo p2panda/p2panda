@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#![allow(missing_docs)]
 
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
-use p2panda_rs::entry::{decode_entry, LogId, SeqNum};
-use p2panda_rs::hash::Hash;
-use p2panda_rs::identity::Author;
-use p2panda_rs::message::{Message, MessageEncoded};
-use p2panda_rs::tests::utils::MESSAGE_SCHEMA;
+use crate::entry::{decode_entry, LogId, SeqNum};
+use crate::hash::Hash;
+use crate::identity::Author;
+use crate::message::{Message, MessageEncoded};
 
-use crate::client::Client;
-use crate::node::Node;
+use crate::test_utils::utils::MESSAGE_SCHEMA;
+use crate::test_utils::client::Client;
+use crate::test_utils::node::Node;
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[allow(non_snake_case)]
 pub struct NextEntryArgs {
     pub entryHashBacklink: Option<Hash>,
@@ -22,8 +23,7 @@ pub struct NextEntryArgs {
     pub logId: LogId,
 }
 
-/// Structs for formatting our author log data into what we want for tests
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[allow(non_snake_case)]
 pub struct EncodedEntryData {
     author: Author,
@@ -35,7 +35,7 @@ pub struct EncodedEntryData {
     seqNum: SeqNum,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[allow(non_snake_case)]
 pub struct LogData {
     encodedEntries: Vec<EncodedEntryData>,
@@ -43,7 +43,7 @@ pub struct LogData {
     nextEntryArgs: Vec<NextEntryArgs>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[allow(non_snake_case)]
 pub struct AuthorData {
     publicKey: String,

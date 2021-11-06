@@ -1,36 +1,47 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use p2panda_rs::entry::{sign_and_encode, Entry, EntrySigned};
-use p2panda_rs::identity::{Author, KeyPair};
-use p2panda_rs::message::Message;
+//! Mock p2panda client.
+//! 
+//! Only to be used in a testing environment!
 
-use crate::utils::NextEntryArgs;
+use crate::entry::{sign_and_encode, Entry, EntrySigned};
+use crate::identity::{Author, KeyPair};
+use crate::message::Message;
+
+use crate::test_utils::utils::NextEntryArgs;
 
 /// A helper struct which represents a client in the pandaverse. It doesn't do much except wrap an Author identity
 /// and it's KeyPair and create and sign entries.
 #[derive(Debug)]
 pub struct Client {
+    /// Name of this client, used in test data creation
     pub name: String,
+    /// The keypair owned by this client
     pub key_pair: KeyPair,
 }
 
 impl Client {
+    /// Create a new client passing in name and key_pair
     pub fn new(name: String, key_pair: KeyPair) -> Self {
         Self { name, key_pair }
     }
 
+    /// Get an author instance for this client
     pub fn author(&self) -> Author {
         Author::new(&self.public_key()).unwrap()
     }
 
+    /// Get the private key for this author
     pub fn private_key(&self) -> String {
         hex::encode(self.key_pair.private_key())
     }
 
+    /// Get the public key identifier for this author
     pub fn public_key(&self) -> String {
         hex::encode(self.key_pair.public_key())
     }
 
+    /// Get the name of this author
     pub fn name(&self) -> String {
         self.name.to_owned()
     }

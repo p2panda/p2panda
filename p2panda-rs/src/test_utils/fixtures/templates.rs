@@ -10,11 +10,11 @@ use rstest_reuse::template;
 #[rstest]
 // This flag states that the tested case should panic
 #[should_panic]
-#[case::wrong_message(crate::tests::fixtures::create_message(MESSAGE_SCHEMA.into(), fields(vec![("message", "Boo!")])))]
+#[case::wrong_message(crate::test_utils::fixtures::create_message(MESSAGE_SCHEMA.into(), fields(vec![("message", "Boo!")])))]
 #[should_panic]
-#[case::wrong_message(crate::tests::fixtures::create_message(MESSAGE_SCHEMA.into(), fields(vec![("date", "2021-05-02T20:06:45.430Z")])))]
+#[case::wrong_message(crate::test_utils::fixtures::create_message(MESSAGE_SCHEMA.into(), fields(vec![("date", "2021-05-02T20:06:45.430Z")])))]
 #[should_panic]
-#[case::wrong_message(crate::tests::fixtures::create_message(MESSAGE_SCHEMA.into(), fields(vec![("message", "Hello!"), ("date", "2021-05-02T20:06:45.430Z")])))]
+#[case::wrong_message(crate::test_utils::fixtures::create_message(MESSAGE_SCHEMA.into(), fields(vec![("message", "Hello!"), ("date", "2021-05-02T20:06:45.430Z")])))]
 fn messages_not_matching_entry_should_fail(
     entry: Entry,
     #[case] message: Message,
@@ -25,23 +25,23 @@ fn messages_not_matching_entry_should_fail(
 // This template contains various types of valid entry.
 #[template]
 #[rstest]
-#[case::first_entry(crate::tests::fixtures::defaults::first_entry())]
-#[case::entry_with_backlink(crate::tests::fixtures::defaults::entry_with_backlink())]
-#[case::entry_with_backlink_and_skiplink(crate::tests::fixtures::defaults::entry_with_backlink_and_skiplink())]
+#[case::first_entry(crate::test_utils::fixtures::defaults::first_entry())]
+#[case::entry_with_backlink(crate::test_utils::fixtures::defaults::entry_with_backlink())]
+#[case::entry_with_backlink_and_skiplink(crate::test_utils::fixtures::defaults::entry_with_backlink_and_skiplink())]
 fn many_entry_versions(#[case] entry: Entry, key_pair: KeyPair) {}
 
 // This template contains various types of valid message.
 #[template]
 #[rstest]
-#[case::create_message(crate::tests::fixtures::defaults::create_message())]
-#[case::update_message(crate::tests::fixtures::defaults::update_message())]
-#[case::delete_message(crate::tests::fixtures::defaults::delete_message())]
+#[case::create_message(crate::test_utils::fixtures::defaults::create_message())]
+#[case::update_message(crate::test_utils::fixtures::defaults::update_message())]
+#[case::delete_message(crate::test_utils::fixtures::defaults::delete_message())]
 fn all_message_types(entry: Entry, #[case] message: Message, key_pair: KeyPair) {}
 
 // Template which will contain many version fixtures in the future.
 #[template]
 #[rstest]
-#[case::v0_1_0(crate::tests::fixtures::v0_1_0_fixture())]
+#[case::v0_1_0(crate::test_utils::fixtures::v0_1_0_fixture())]
 fn version_fixtures(#[case] fixture: Fixture) {}
 
 // Here we export the macros for use in the rest of the crate.

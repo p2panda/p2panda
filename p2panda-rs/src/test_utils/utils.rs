@@ -1,19 +1,17 @@
-//! Structs, hard coded values and convenience methods for creating common p2panda data. Mostly utilized in the fixtures
-//! also contained in this testing module. hould not be used outside of a testing environment as best practice for
-//! error checking and unwrapping is not followed.
-#![allow(missing_docs)]
-use crate::entry::{Entry, EntrySigned, LogId, SeqNum};
-use crate::hash::Hash;
-use crate::identity::KeyPair;
-use crate::message::{Message, MessageFields, MessageEncoded, MessageValue};
 
-#[derive(Debug)]
-pub struct Fixture {
-    pub entry: Entry,
-    pub entry_signed_encoded: EntrySigned,
-    pub key_pair: KeyPair,
-    pub message_encoded: MessageEncoded,
-}
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+#![allow(missing_docs)]
+use serde::Serialize;
+
+use crate::hash::Hash;
+use crate::entry::{Entry, LogId, SeqNum};
+use crate::identity::KeyPair;
+use crate::message::{Message, MessageFields, MessageValue};
+
+// A custom `Result` type to be able to dynamically propagate `Error` types.
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
 
 pub const MESSAGE_SCHEMA: &str  = "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437";
 
@@ -22,6 +20,14 @@ pub const DEFAULT_HASH: &str  = "0040cf94f6d605657e90c543b0c919070cdaaf7209c5e1e
 pub const DEFAULT_PRIVATE_KEY: &str = "eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e2";
 
 pub const DEFAULT_SEQ_NUM: i64 = 1;
+
+#[derive(Serialize, Debug)]
+pub struct NextEntryArgs {
+    pub backlink: Option<Hash>,
+    pub skiplink: Option<Hash>,
+    pub seq_num: SeqNum,
+    pub log_id: LogId,
+}
 
 pub fn new_key_pair() -> KeyPair {
     KeyPair::new()

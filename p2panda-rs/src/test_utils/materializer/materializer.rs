@@ -2,11 +2,11 @@
 
 use std::collections::HashMap;
 
-use p2panda_rs::message::{Message, MessageFields};
+use crate::message::{Message, MessageFields};
 
-use crate::logs::LogEntry;
-use crate::materializer::DAG;
-use crate::node::utils::Result;
+use crate::test_utils::logs::LogEntry;
+use crate::test_utils::materializer::DAG;
+use crate::test_utils::node::utils::Result;
 
 /// A wrapper type representing a HashMap of instances stored by Instance id.
 type Instances = HashMap<String, MessageFields>;
@@ -19,6 +19,7 @@ type SchemaDatabase = HashMap<String, Instances>;
 /// and which might contain conncurent updates (forks). All logs are arranged into DAGs before being topologically sorted
 /// Concurrent edits are resloved in a last-writer-wins, the order of writes being decided by alphabetically ordering
 /// Entries by their hash.
+#[derive(Debug)]
 pub struct Materializer {
     // The final data structure where materialized instances are stored
     data: SchemaDatabase,
@@ -29,6 +30,7 @@ pub struct Materializer {
 }
 
 impl Materializer {
+    /// Create new materializer
     pub fn new() -> Self {
         Self {
             data: HashMap::new(),
@@ -37,12 +39,12 @@ impl Materializer {
         }
     }
 
-    // Get the materialized Instances
+    /// Get the materialized Instances
     pub fn data(&self) -> SchemaDatabase {
         self.data.clone()
     }
 
-    // Get all Instance DAGs
+    /// Get all Instance DAGs
     pub fn dags(&self) -> HashMap<String, DAG> {
         self.dags.clone()
     }
@@ -50,13 +52,13 @@ impl Materializer {
     /// Store messages
     pub fn store_messages(&mut self, entries: Vec<LogEntry>) {
         entries.iter().for_each(|entry| {
-            self.messages.insert(entry.id(), entry.message());
+            self.messages.insert(entry.hash_str(), entry.message());
         });
     }
 
-    // Take an array of entries from a single author with multiple schema logs. Creates an update path DAG for
-    // each instance of and also stores a list of all messages for materialization which takes place
-    // in the next step.
+    /// Take an array of entries from a single author with multiple schema logs. Creates an update path DAG for
+    /// each instance of and also stores a list of all messages for materialization which takes place
+    /// in the next step.
     pub fn build_dags(&mut self, entries: Vec<LogEntry>) {
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         // Build instance DAGs
@@ -68,7 +70,7 @@ impl Materializer {
             // we need to set the instance_id manually
             let instance_id = match entry.message().id() {
                 Some(id) => id.as_str().to_owned(),
-                None => entry.id(),
+                None => entry.hash_str(),
             };
 
             // Check if this instance DAG already exists, create it if not
@@ -82,9 +84,9 @@ impl Materializer {
             // Create an edge for this message in the DAG, if it is a CREATE message
             // then it should be a root node.
             if entry.message().is_create() {
-                dag.add_root(entry.id());
+                dag.add_root(entry.hash_str());
             } else {
-                dag.add_edge(entry.instance_backlink().unwrap(), entry.id());
+                dag.add_edge(entry.instance_backlink().unwrap(), entry.hash_str());
             }
         });
     }
@@ -193,16 +195,14 @@ mod tests {
 
     use super::Materializer;
 
-    use crate::client::Client;
-    use crate::materializer;
-    use crate::node::Node;
-    use crate::utils::send_to_node;
-
-    use p2panda_rs::message::MessageValue;
-    use p2panda_rs::tests::fixtures::private_key;
-    use p2panda_rs::tests::utils::{
+    use crate::message::MessageValue;
+    use crate::test_utils::client::Client;
+    use crate::test_utils::fixtures::private_key;
+    use crate::test_utils::node::send_to_node;
+    use crate::test_utils::node::Node;
+    use crate::test_utils::utils::MESSAGE_SCHEMA;
+    use crate::test_utils::{
         create_message, delete_message, fields, keypair_from_private, update_message,
-        MESSAGE_SCHEMA,
     };
 
     fn mock_node(panda: Client) -> Node {
@@ -371,14 +371,14 @@ mod tests {
             "panda".to_string(),
             keypair_from_private(private_key.clone()),
         );
-        let mut node = mock_node(panda);
+        let node = mock_node(panda);
 
         // Get all entries
         let entries = node.all_entries();
 
         // Initialize materializer
         let mut materializer = Materializer::new();
-        
+
         // Materialize entries
         materializer.materialize(&entries).unwrap();
 

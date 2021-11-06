@@ -15,6 +15,10 @@ readme = "README.md"
 exclude = [".gitignore"]
 categories = ["web-programming", "wasm", "cryptography"]
 
+[[bin]]
+name = "test_data"
+path = "src/test_utils/generate_test_data.rs"
+
 [package.metadata.wasm-pack.profile.release.wasm-bindgen]
 debug-js-glue = false
 demangle-name-section = true
@@ -37,10 +41,9 @@ hex = "0.4.3"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_cbor = "0.11.2"
 serde_repr = "0.1.7"
+serde_json = "1.0.59"
 thiserror = "1.0.29"
 yamf-hash = "0.1.2"
-rstest = "0.11.0"
-rstest_reuse = "0.1.3"
 
 # Optional dependencies (behind feature flags)
 sqlx = { version = "0.5.9", features = ["runtime-async-std-rustls", "all-databases"], optional = true }
@@ -56,3 +59,5 @@ wasm-bindgen = "0.2.78"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.28"
+rstest = "0.11.0"
+rstest_reuse = "0.1.3"

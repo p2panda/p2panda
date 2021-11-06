@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::logs::LogEntry;
-use crate::materializer::Materializer;
-use crate::node::utils::PERMISSIONS_SCHEMA_HASH;
+use crate::test_utils::logs::LogEntry;
+use crate::test_utils::materializer::Materializer;
+use crate::test_utils::node::utils::PERMISSIONS_SCHEMA_HASH;
 
 /// Get all permission entries from this author
 pub fn author_permission_entries(entries: &Vec<LogEntry>, author: &String) -> Vec<LogEntry> {
@@ -48,7 +48,7 @@ pub fn filter_entries(entries: Vec<LogEntry>) -> Vec<LogEntry> {
                     // Extract permitted author from message fields
                     let permitted_author = match message_fields.get("author") {
                         Some(message_value) => match message_value {
-                            p2panda_rs::message::MessageValue::Text(str) => str,
+                            crate::message::MessageValue::Text(str) => str,
                             _ => todo!(),
                         },
                         None => todo!(),
@@ -56,7 +56,7 @@ pub fn filter_entries(entries: Vec<LogEntry>) -> Vec<LogEntry> {
                     // Extract permitted instance from message fields
                     let permitted_instance = match message_fields.get("id") {
                         Some(message_value) => match message_value {
-                            p2panda_rs::message::MessageValue::Text(str) => str,
+                            crate::message::MessageValue::Text(str) => str,
                             _ => todo!(),
                         },
                         None => todo!(),

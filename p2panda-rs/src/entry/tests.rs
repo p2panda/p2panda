@@ -10,9 +10,9 @@ mod tests {
     use crate::entry::{decode_entry, sign_and_encode, Entry, LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::message::{Message, MessageEncoded};
-    use crate::tests::templates::{many_entry_versions, messages_not_matching_entry_should_fail, version_fixtures};
-    use crate::tests::fixtures::{self, entry, key_pair};
-    use crate::tests::utils::{fields, Fixture, MESSAGE_SCHEMA};
+    use crate::test_utils::{fields, MESSAGE_SCHEMA};
+    use crate::test_utils::fixtures::{self, entry, key_pair, Fixture};
+    use crate::test_utils::fixtures::templates::{many_entry_versions, messages_not_matching_entry_should_fail, version_fixtures};
 
     /// In this test `entry` and `key_pair` are injected directly from our test fixtures and `message`
     /// is tested againt all cases on the `messages_not_matching_entry_should_fail` and one manually defined passing case.

@@ -1,4 +1,4 @@
-<h1 align="center">p2panda-rs</h1>
+<h1 align="center">p2panda-rs test utils</h1>
 
 <div align="center">
   <strong>All the things a panda needs (for testing)</strong>
@@ -43,8 +43,9 @@
 
 <br />
 
-This library provides tools used for testing the [`p2panda-rs`] and [`p2panda-js`]. It includes:
+This module provides tools used for testing and generating test data for `p2panda-rs` and `p2panda-js`. 
 
+It includes:
 - a mock node
 - a mock client
 - methods for generating test data (used in `p2panda-js` tests)

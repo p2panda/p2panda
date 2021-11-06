@@ -60,12 +60,12 @@
 #[cfg(test)]
 use rstest_reuse;
 
-pub mod tests;
 pub mod entry;
 pub mod hash;
 pub mod identity;
 pub mod message;
 pub mod schema;
+pub mod test_utils;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 

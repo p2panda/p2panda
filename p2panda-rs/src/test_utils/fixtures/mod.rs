@@ -9,5 +9,7 @@
 //!
 //! https://github.com/la10736/rstest
 pub mod templates;
-pub mod fixtures;
 pub mod utils;
+mod fixtures;
+
+pub use fixtures::*;

@@ -3,31 +3,72 @@
 use bamboo_rs_core::entry::is_lipmaa_required;
 use std::collections::HashMap;
 
-use p2panda_rs::entry::{decode_entry, EntrySigned, LogId, SeqNum};
-use p2panda_rs::hash::Hash;
-use p2panda_rs::identity::Author;
-use p2panda_rs::message::{Message, MessageFields};
+use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
+use crate::hash::Hash;
+use crate::identity::Author;
+use crate::message::{Message, MessageFields};
 
-use crate::logs::{Log, LogEntry};
-use crate::materializer::{filter_entries, Materializer};
-use crate::node::utils::{
+use crate::test_utils::client::Client;
+use crate::test_utils::logs::{Log, LogEntry};
+use crate::test_utils::materializer::{filter_entries, Materializer};
+use crate::test_utils::node::utils::{
     Result, GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
 };
-use crate::utils::NextEntryArgs;
+use crate::test_utils::NextEntryArgs;
+
+/// Helper method signing and encoding entry and sending it to node backend.
+pub fn send_to_node(node: &mut Node, client: &Client, message: &Message) -> Result<Hash> {
+    let entry_args = node.next_entry_args(&client.author(), message.schema())?;
+
+    let entry_encoded = client.signed_encoded_entry(message.to_owned(), entry_args);
+
+    node.publish_entry(&entry_encoded, &message)?;
+
+    // Return entry hash for now so we can use it to perform UPDATE and DELETE messages later
+    Ok(entry_encoded.hash())
+}
+
+fn calculate_links(seq_num: &SeqNum, log: &Log) -> (Option<Hash>, Option<Hash>) {
+    // Next skiplink hash
+    let skiplink = match seq_num.skiplink_seq_num() {
+        Some(seq) if is_lipmaa_required(seq_num.as_i64() as u64) => Some(
+            log.entries()
+                .get(seq.as_i64() as usize - 1)
+                .expect("Skiplink missing!")
+                .entry_encoded(),
+        ),
+        _ => None,
+    };
+
+    // Next backlink hash
+    let backlink = match seq_num.backlink_seq_num() {
+        Some(seq) => Some(
+            log.entries()
+                .get(seq.as_i64() as usize - 1)
+                .expect("Backlink missing!")
+                .entry_encoded(),
+        ),
+        None => None,
+    };
+    (backlink, skiplink)
+}
 
 // @TODO: We could use `Author` instead of `String`, and `LogId` instead of `i64` here
 // if we would implement the `Eq` trait in both classes.
 // type Log = HashMap<i64, Log>;
+
+/// Dummy database type
 pub type Database = HashMap<String, HashMap<i64, Log>>;
 
-/// This resembles the basic functionality of a p2panda "Node", usually living in a separate
-/// process on another machine.
+/// This struct mocks the basic functionality of a p2panda "Node" for testing purposes.
+#[derive(Debug)]
 pub struct Node {
     /// Internal "database" which maps authors and log ids to Bamboo logs with entries inside.
     entries: Database,
 }
 
 impl Node {
+    /// Create a new mock Node
     pub fn new() -> Self {
         Self {
             entries: Database::new(),
@@ -54,7 +95,7 @@ impl Node {
         Some(self.entries.get(author_str).unwrap())
     }
 
-    // Get the author of an Instance by instance id
+    /// Get the author of an Instance by instance id
     fn get_instance_author(&self, instance_id: String) -> Option<String> {
         let mut instance_author = None;
         self.entries.keys().for_each(|author| {
@@ -117,6 +158,7 @@ impl Node {
         Ok(LogId::new(log_id))
     }
 
+    /// Get an array of all entries in database
     pub fn all_entries(&self) -> Vec<LogEntry> {
         let mut all_entries: Vec<LogEntry> = Vec::new();
         self.entries.iter().for_each(|(_id, author_logs)| {
@@ -127,11 +169,12 @@ impl Node {
         all_entries
     }
 
+    /// Return the entire database
     pub fn db(&self) -> Database {
         self.entries.clone()
     }
 
-    /// Returns the log id, sequence number, skiplink- and backlink hash for a given author and
+    /// Returns the log id, sequence number, skiplink and backlink hash for a given author and
     /// schema. All of this information is needed to create and sign a new entry.
     pub fn next_entry_args(&mut self, author: &Author, schema: &Hash) -> Result<NextEntryArgs> {
         // Find out the log id for the given schema
@@ -154,33 +197,14 @@ impl Node {
         let entry_args = match author_log {
             Some(log) => {
                 // Next sequence number
-                let seq_num_inner = SeqNum::new((log.entries().len() + 1) as i64).unwrap();
+                let seq_num = SeqNum::new((log.entries().len() + 1) as i64).unwrap();
 
-                // Next skiplink hash
-                let skiplink = match seq_num_inner.skiplink_seq_num() {
-                    Some(seq) if is_lipmaa_required(seq_num_inner.as_i64() as u64) => Some(
-                        log.entries()
-                            .get(seq.as_i64() as usize - 1)
-                            .expect("Skiplink missing!")
-                            .entry_encoded(),
-                    ),
-                    _ => None,
-                };
-
-                // Next backlink hash
-                let backlink = match seq_num_inner.backlink_seq_num() {
-                    Some(seq) => Some(
-                        log.entries()
-                            .get(seq.as_i64() as usize - 1)
-                            .expect("Backlink missing!")
-                            .entry_encoded(),
-                    ),
-                    None => None,
-                };
+                // Calculate backlink and skiplink
+                let (backlink, skiplink) = calculate_links(&seq_num, log);
 
                 NextEntryArgs {
                     log_id,
-                    seq_num: seq_num_inner,
+                    seq_num,
                     skiplink,
                     backlink,
                 }
@@ -208,6 +232,8 @@ impl Node {
         // Find out the log id for the given schema
         let log_id = self.get_log_id(&schema, &author)?;
 
+        let seq_num = seq_num.to_owned();
+
         // Find any logs by this author for this schema
         let author_log = match self.get_author_entries_mut(author) {
             Some(logs) => {
@@ -224,41 +250,15 @@ impl Node {
         // Find out the sequence number, skip- and backlink hash for the next entry in this log
         let entry_args = match author_log {
             Some(log) => {
-                // Next sequence number
-                let trimmed_log = log.entries()[..seq_num.as_i64() as usize - 1].to_owned();
+                // Trim the log to the point in time we are interested in
+                log.to_owned().entries = log.entries()[..seq_num.as_i64() as usize - 1].to_owned();
 
-                let skiplink = match trimmed_log.len() {
-                    0 => None,
-                    _ if is_lipmaa_required(seq_num.as_i64() as u64) => {
-                        match seq_num.skiplink_seq_num() {
-                            Some(seq) => Some(
-                                trimmed_log
-                                    .get(seq.as_i64() as usize - 1)
-                                    .expect("Skiplink missing!")
-                                    .entry_encoded(),
-                            ),
-                            None => None,
-                        }
-                    }
-                    _ => None,
-                };
-
-                let backlink = match trimmed_log.len() {
-                    0 => None,
-                    _ => match seq_num.backlink_seq_num() {
-                        Some(seq) => Some(
-                            trimmed_log
-                                .get(seq.as_i64() as usize - 1)
-                                .expect("Backlink missing!")
-                                .entry_encoded(),
-                        ),
-                        None => None,
-                    },
-                };
+                // Calculate backlink and skiplink
+                let (backlink, skiplink) = calculate_links(&seq_num, log);
 
                 NextEntryArgs {
                     log_id,
-                    seq_num: seq_num.to_owned(),
+                    seq_num,
                     skiplink,
                     backlink,
                 }
