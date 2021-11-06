@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use thiserror::Error;
 
 /// Error types for methods of `Message` struct.

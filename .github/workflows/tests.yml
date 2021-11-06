@@ -38,6 +38,10 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        node: [12, 15, 16]
+
     defaults:
       run:
         working-directory: p2panda-js
@@ -46,14 +50,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Read node version from .nvmrc
-        id: nvmrc
-        run: echo ::set-output name=NODE_VERSION::$(cat .nvmrc)
-
-      - name: Setup node
+      - name: Setup node ${{ matrix.node }}
         uses: actions/setup-node@v1
         with:
-          node-version: "${{ steps.nvmrc.outputs.NODE_VERSION }}"
+          node-version: "${{ matrix.node }}"
 
       - name: Restore from cargo and npm cache
         uses: actions/cache@v2

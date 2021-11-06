@@ -27,11 +27,15 @@
       Installation
     </a>
     <span> | </span>
+    <a href="https://docs.rs/p2panda-rs">
+      API
+    </a>
+    <span> | </span>
     <a href="https://github.com/p2panda/p2panda/releases">
       Releases
     </a>
     <span> | </span>
-    <a href="https://github.com/p2panda/design-document#get-involved">
+    <a href="https://github.com/p2panda/handbook#how-to-contribute">
       Contributing
     </a>
   </h3>
@@ -46,14 +50,14 @@ Read the library [`documentation`] for installation guides and examples.
 [`documentation`]: https://github.com/p2panda/p2panda
 [`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
-[`p2panda`]: https://github.com/p2panda/design-document
+[`p2panda`]: https://github.com/p2panda/handbook
 
 ## Development
 
 You will need the following tools to start development:
 
-* [Rust](https://www.rust-lang.org/learn/get-started)
-* [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
+- [Rust](https://www.rust-lang.org/learn/get-started)
+- [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
 
 ```bash
 # Run tests
@@ -65,4 +69,10 @@ wasm-pack build
 
 ## License
 
-GNU Affero General Public License v3.0 `AGPL-3.0`
+GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)
+
+## Supported by
+
+<img src="https://p2panda.org/images/ngi-logo.png" width="auto" height="80px"><br /><img src="https://p2panda.org/images/eu-flag-logo.png" width="auto" height="80px">
+
+*This project has received funding from the European Union’s Horizon 2020 research and innovation programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528*

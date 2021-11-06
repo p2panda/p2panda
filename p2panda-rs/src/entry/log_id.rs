@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use serde::{Deserialize, Serialize};
 
 /// Authors can write entries to multiple logs identified by log ids.

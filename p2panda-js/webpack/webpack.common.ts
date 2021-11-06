@@ -1,70 +1,79 @@
-import * as path from 'path';
-import * as webpack from 'webpack';
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
-export const PATH_DIST = '../lib';
-export const PATH_DIST_WASM_WEB = '../wasm-web';
-export const PATH_DIST_WASM_NODE = '../wasm-node';
-export const PATH_SRC = '../src';
-export const PATH_SRC_WASM = '../../p2panda-rs';
+import * as path from 'path';
+
+import * as webpack from 'webpack';
+import WasmPackPlugin from '@wasm-tool/wasm-pack-plugin';
+
+export const DIR_DIST = 'lib';
+export const DIR_SRC = 'src';
+export const DIR_WASM = 'wasm';
+export const DIR_WASM_SRC = 'p2panda-rs';
 
 // Helper method to get absolute path of file or folder
 export function getPath(...args: Array<string>): string {
-  return path.resolve(__dirname, ...args);
+  return path.resolve(__dirname, '..', ...args);
 }
 
-// Helper method which builds a typescript module rule
-export const tsRule = (target: 'node' | 'browser'): webpack.RuleSetRule => {
-  return {
-    test: /\.ts/,
-    exclude: /node_modules/,
-    use: [
-      {
-        loader: 'babel-loader',
-      },
-      {
-        loader: 'ts-loader',
-        options: {
-          configFile: 'tsconfig.json',
-          onlyCompileBundledFiles: true,
-          // Overwrite `wasm-node` path for NodeJS builds, otherwise TypeScript
-          // will export declaration files with wrong import paths in library
-          ...(target === 'node'
-            ? {
-                compilerOptions: {
-                  paths: {
-                    'wasm-node': ['./lib/wasm'],
-                  },
-                },
-              }
-            : {}),
-        },
-      },
-      {
-        loader: 'eslint-loader',
-      },
-    ],
-  };
-};
+// Helper method to create a `wasm-pack` plugin instance
+export function getWasmPlugin(
+  target: 'nodejs' | 'web' | 'bundler',
+): WasmPackPlugin {
+  return new WasmPackPlugin({
+    crateDirectory: getPath('..', DIR_WASM_SRC),
+    outDir: getPath(DIR_WASM),
+    extraArgs: `--target ${target}`,
+    pluginLogLevel: 'error',
+  });
+}
 
 // Base Webpack configuration
 const config: webpack.Configuration = {
   entry: {
-    index: getPath(PATH_SRC, 'index.ts'),
+    index: getPath(DIR_SRC, 'index.ts'),
   },
   output: {
-    path: getPath(PATH_DIST),
-    libraryTarget: 'umd',
+    path: getPath(DIR_DIST),
+    library: {
+      name: 'p2panda',
+      type: 'umd',
+    },
   },
   resolve: {
-    extensions: ['.ts'],
+    extensions: ['.ts', '.js'],
     alias: {
-      '~': getPath(PATH_SRC),
-      'wasm-web': getPath(PATH_DIST_WASM_WEB),
-      'wasm-node': getPath(PATH_DIST_WASM_NODE),
+      '~': getPath(DIR_SRC),
+      wasm: getPath(DIR_WASM),
     },
+  },
+  module: {
+    rules: [
+      {
+        test: /\.ts$/,
+        exclude: /node_modules/,
+        use: [
+          {
+            loader: 'babel-loader',
+          },
+          {
+            loader: 'ts-loader',
+            options: {
+              configFile: 'tsconfig.json',
+              onlyCompileBundledFiles: true,
+            },
+          },
+          {
+            loader: 'eslint-loader',
+          },
+        ],
+      },
+    ],
   },
   devtool: 'source-map',
   stats: 'minimal',
+  experiments: {
+    asyncWebAssembly: true,
+  },
 };
 
 export default config;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 //! Validations for message payloads and definitions of system schemas.
 //!
 //! This uses [`Concise Data Definition Language`] (CDDL) internally to verify CBOR data of p2panda

@@ -31,7 +31,7 @@
       Releases
     </a>
     <span> | </span>
-    <a href="https://github.com/p2panda/design-document#get-involved">
+    <a href="https://github.com/p2panda/handbook#how-to-contribute">
       Contributing
     </a>
   </h3>
@@ -41,7 +41,7 @@
 
 This library provides all tools required to write a client for the [`p2panda`] network. It is shipped both as a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web browser.
 
-[`p2panda`]: https://github.com/p2panda/design-document
+[`p2panda`]: https://github.com/p2panda/handbook
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
 [`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 
@@ -55,10 +55,10 @@ This library provides all tools required to write a client for the [`p2panda`] n
 [`bamboo`]: https://github.com/AljoschaMeyer/bamboo
 [`node`]: https://github.com/p2panda/node
 
-## Examples
+## Usage
 
 ```javascript
-import p2panda from 'p2panda-js';
+import p2panda from "p2panda-js";
 
 const { KeyPair } = await p2panda;
 const keyPair = new KeyPair();
@@ -72,7 +72,7 @@ let key_pair = KeyPair::new();
 println!("{}", key_pair.public_key());
 ```
 
-More examples can be found in the [`p2panda-rs`] and [`p2panda-js`] directories.
+See [the demo application](https://p2panda.org/demo/#) and its [source code](https://github.com/p2panda/beep-boop). More examples can be found in the [`p2panda-rs`] and [`p2panda-js`] directories.
 
 ## Installation
 
@@ -88,8 +88,20 @@ For Rust environments and with [cargo-edit] installed run:
 $ cargo add p2panda-rs
 ```
 
+## Development
+
+Visit the corresponding folders for development instructions:
+- [`p2panda-rs`](https://github.com/p2panda/p2panda/tree/main/p2panda-rs)
+- [`p2panda-js`](https://github.com/p2panda/p2panda/tree/main/p2panda-js)
+
 [cargo-edit]: https://github.com/killercup/cargo-edit
 
 ## License
 
-GNU Affero General Public License v3.0 `AGPL-3.0`
+GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)
+
+## Supported by
+
+<img src="https://p2panda.org/images/ngi-logo.png" width="auto" height="80px"><br /><img src="https://p2panda.org/images/eu-flag-logo.png" width="auto" height="80px">
+
+*This project has received funding from the European Union’s Horizon 2020 research and innovation programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528*

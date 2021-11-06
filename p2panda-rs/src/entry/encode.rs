@@ -1,8 +1,9 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use std::convert::TryFrom;
 
 use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
 use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature};
-use ed25519_dalek::PublicKey;
 
 use crate::entry::{Entry, EntrySigned, EntrySignedError};
 use crate::identity::KeyPair;
@@ -74,7 +75,7 @@ pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned,
         is_end_of_feed: false,
         payload_hash: message_hash.into(),
         payload_size: message_size as u64,
-        author: PublicKey::from_bytes(&key_pair.public_key_bytes())?,
+        author: key_pair.public_key().to_owned(),
         seq_num: entry.seq_num().as_i64() as u64,
         backlink,
         lipmaa_link,
@@ -87,9 +88,9 @@ pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned,
     let entry_size = entry.encode(&mut entry_bytes)?;
 
     // Sign and add signature to entry
-    let sig_bytes = key_pair.sign(&entry_bytes[..entry_size]);
-    let signature = BambooSignature(&*sig_bytes);
-    entry.sig = Some(signature);
+    let signature = key_pair.sign(&entry_bytes[..entry_size]);
+    let signature_bytes = signature.to_bytes();
+    entry.sig = Some(BambooSignature(&signature_bytes[..]));
 
     // Get signed entry bytes
     let signed_entry_size = entry.encode(&mut entry_bytes)?;

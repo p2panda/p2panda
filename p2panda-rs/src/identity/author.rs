@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use std::convert::TryFrom;
 
 use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
@@ -23,14 +25,16 @@ impl Author {
     /// ```
     /// # extern crate p2panda_rs;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use std::convert::TryFrom;
+    ///
     /// use p2panda_rs::identity::{KeyPair, Author};
     ///
     /// // Generate new Ed25519 key pair
     /// let key_pair = KeyPair::new();
-    /// let public_key = key_pair.public_key();
+    /// let public_key = key_pair.public_key().to_owned();
     ///
-    /// // Create an `Author` instance from a public key string
-    /// let author = Author::new(&key_pair.public_key())?;
+    /// // Create an `Author` instance from a public key
+    /// let author = Author::try_from(public_key).unwrap();
     ///
     /// # Ok(())
     /// # }
@@ -39,6 +43,11 @@ impl Author {
         let author = Self(String::from(value));
         author.validate()?;
         Ok(author)
+    }
+
+    /// Returns author as hex string.
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
     }
 }
 

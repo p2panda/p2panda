@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use bamboo_rs_core::lipmaa;
 use serde::{Deserialize, Serialize};
 
