@@ -238,17 +238,16 @@ impl Schema {
             schema_string,
         })
     }
+    
+    pub fn schema_hash(&self) -> Hash {
+        self.schema_hash.clone()
+    }
 
     /// Create a new CREATE message validated against this schema
     pub fn create(
         &self,
-        schema_hash: &str,
         key_values: Vec<(&str, &str)>,
     ) -> Result<Message, SchemaError> {
-        let schema = match Hash::new(schema_hash) {
-            Ok(hash) => Ok(hash),
-            Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
-        };
 
         let mut fields = MessageFields::new();
 
@@ -264,7 +263,7 @@ impl Schema {
             Err(err_str) => Err(SchemaError::ValidationError(err_str.to_string())),
         }?;
 
-        match Message::new_create(schema.unwrap(), fields) {
+        match Message::new_create(self.schema_hash(), fields) {
             Ok(hash) => Ok(hash),
             Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
         }
@@ -273,15 +272,9 @@ impl Schema {
     /// Create a new UPDATE message validated against this schema
     pub fn update(
         &self,
-        schema_hash: &str,
         id: &str,
         key_values: Vec<(&str, &str)>,
     ) -> Result<Message, SchemaError> {
-        let schema = match Hash::new(schema_hash) {
-            Ok(hash) => Ok(hash),
-            Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
-        };
-
         let mut fields = MessageFields::new();
         let id = Hash::new(id).unwrap();
 
@@ -297,7 +290,7 @@ impl Schema {
             Err(err_str) => Err(SchemaError::ValidationError(err_str.to_string())),
         }?;
 
-        match Message::new_update(schema.unwrap(), id, fields) {
+        match Message::new_update(self.schema_hash(), id, fields) {
             Ok(hash) => Ok(hash),
             Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
         }
