@@ -1,4 +1,6 @@
 
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 //! `rstest` fixtures and templates which can be injected into tests
 //!
 //! From the `rstest` docs: "rstest uses procedural macros to help you on writing fixtures and table-based tests.
