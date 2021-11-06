@@ -6,43 +6,6 @@
 
 <br />
 
-<div align="center">
-  <!-- CI status -->
-  <a href="https://github.com/p2panda/p2panda/actions">
-    <img src="https://img.shields.io/github/workflow/status/p2panda/p2panda/Build%20and%20test?style=flat-square" alt="CI Status" />
-  </a>
-  <!-- Crates version -->
-  <a href="https://crates.io/crates/p2panda-rs">
-    <img src="https://img.shields.io/crates/v/p2panda-rs.svg?style=flat-square" alt="Crates.io version" />
-  </a>
-  <!-- NPM version -->
-  <a href="https://www.npmjs.com/package/p2panda-js">
-    <img src="https://img.shields.io/npm/v/p2panda-js?style=flat-square" alt="NPM version" />
-  </a>
-</div>
-
-<div align="center">
-  <h3>
-    <a href="https://github.com/p2panda/p2panda">
-      Installation
-    </a>
-    <span> | </span>
-    <a href="https://docs.rs/p2panda-rs">
-      API
-    </a>
-    <span> | </span>
-    <a href="https://github.com/p2panda/p2panda/releases">
-      Releases
-    </a>
-    <span> | </span>
-    <a href="https://github.com/p2panda/handbook#how-to-contribute">
-      Contributing
-    </a>
-  </h3>
-</div>
-
-<br />
-
 This module provides tools used for testing and generating test data for `p2panda-rs` and `p2panda-js`. 
 
 It includes:
