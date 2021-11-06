@@ -129,49 +129,28 @@ impl fmt::Display for Group {
     }
 }
 
+/// SchemaBuilder struct for programatically creating CDDL schemas and valdating MessageFields.
 #[derive(Clone, Debug)]
-/// Schema struct for creating CDDL schemas, valdating MessageFields and creating messages
-/// following the defined schema.
-pub struct Schema {
-    name: Option<String>,
-    fields: Option<BTreeMap<String, Field>>,
-    schema_hash: Option<Hash>,
-    schema_string: Option<String>,
+pub struct SchemaBuilder {
+    name: String,
+    fields: BTreeMap<String, Field>,
 }
 
-impl Schema {
+/// Schema struct for creating CDDL schemas, valdating MessageFields and creating messages
+/// following the defined schema.
+#[derive(Clone, Debug)]
+pub struct Schema {
+    schema_hash: Hash,
+    schema_string: String,
+}
+
+impl SchemaBuilder {
     /// Create a new blank Schema
     pub fn new(name: String) -> Self {
         Self {
-            name: Some(name),
-            fields: Some(BTreeMap::new()),
-            schema_hash: None,
-            schema_string: None,
+            name: name,
+            fields: BTreeMap::new(),
         }
-    }
-
-    /// Create a new Schema from a CDDL string
-    pub fn new_from(schema_hash: &Hash, schema_str: &String) -> Result<Self, SchemaError> {
-        let mut lexer = Lexer::new(schema_str);
-        let parser = Parser::new(lexer.iter(), schema_str);
-        let schema_string = match parser {
-            Ok(mut parser) => match parser.parse_cddl() {
-                Ok(cddl) => Ok(Some(cddl.to_string())),
-                Err(err) => Err(SchemaError::ParsingError(err.to_string())),
-            },
-            Err(err) => Err(SchemaError::ParsingError(err.to_string())),
-        }?;
-        let schema_hash = match Hash::new(schema_hash.as_str()) {
-            Ok(hash) => Ok(Some(hash)),
-            Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
-        }?;
-
-        Ok(Self {
-            name: None,
-            fields: None,
-            schema_hash,
-            schema_string,
-        })
     }
 
     /// Add a field definition to this schema
@@ -197,14 +176,67 @@ impl Schema {
         // Insert new message field into Schema fields.
         // If this Schema was created from a cddl string
         // `fields` will be None.
-        match self.fields.clone() {
-            Some(mut fields) => {
-                fields.insert(key, message_fields);
-                self.fields = Some(fields);
-                Ok(())
+        self.fields.insert(key, message_fields);
+        Ok(())
+}
+
+    /// Validate a message against this user schema
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
+        match validate_cbor_from_slice(&format!("{}", self), &bytes) {
+            Err(cbor::Error::Validation(err)) => {
+                let err_str = err
+                    .iter()
+                    .map(|fe| format!("{}: \"{}\"", fe.cbor_location, fe.reason))
+                    .collect::<Vec<String>>()
+                    .join(", ");
+
+                Err(SchemaError::InvalidSchema(err_str))
             }
-            None => Err(SchemaError::NoSchema),
+            Err(cbor::Error::CBORParsing(_err)) => Err(SchemaError::InvalidCBOR),
+            Err(cbor::Error::CDDLParsing(err)) => {
+                panic!("Parsing CDDL error: {}", err);
+            }
+            _ => Ok(()),
         }
+    }
+}
+
+impl fmt::Display for SchemaBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} = {{ ", self.name)?;
+        for (count, value) in self.fields.iter().enumerate() {
+            if count != 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}: {}", value.0, value.1)?;
+        }
+        write!(f, " }}\n")
+    }
+}
+
+
+impl Schema {
+    /// Create a new Schema from a schema hash and schema CDDL string
+    pub fn new(schema_hash: &Hash, schema_str: &String) -> Result<Self, SchemaError> {
+        let mut lexer = Lexer::new(schema_str);
+        let parser = Parser::new(lexer.iter(), schema_str);
+        let schema_string = match parser {
+            Ok(mut parser) => match parser.parse_cddl() {
+                Ok(cddl) => Ok(cddl.to_string()),
+                Err(err) => Err(SchemaError::ParsingError(err.to_string())),
+            },
+            Err(err) => Err(SchemaError::ParsingError(err.to_string())),
+        }?;
+        let schema_hash = match Hash::new(schema_hash.as_str()) {
+            Ok(hash) => Ok(hash),
+            Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
+        }?;
+
+        Ok(Self {
+            schema_hash,
+            schema_string,
+        })
     }
 
     /// Create a new CREATE message validated against this schema
@@ -295,30 +327,7 @@ impl Schema {
 
 impl fmt::Display for Schema {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match &self.fields {
-            Some(map) => {
-                let name = match self.name.as_ref() {
-                    Some(name) => Ok(name),
-                    // Need custom errors, but how to do that in Display?
-                    None => Err(fmt::Error),
-                }?;
-                write!(f, "{} = {{ ", name)?;
-                for (count, value) in map.iter().enumerate() {
-                    if count != 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{}: {}", value.0, value.1)?;
-                }
-                write!(f, " }}\n")
-            }
-            None => {
-                match &self.schema_string {
-                    Some(s) => write!(f, "{}", s),
-                    // Should this throw an error or just be an empty schema, like so?
-                    None => write!(f, ""),
-                }
-            }
-        }
+        write!(f, "{}", self.schema_string)
     }
 }
 
@@ -326,12 +335,12 @@ impl fmt::Display for Schema {
 mod tests {
     use crate::hash::Hash;
     use crate::message::{MessageFields, MessageValue};
-    use crate::schema::{Schema, Type, USER_SCHEMA, USER_SCHEMA_HASH};
+    use crate::schema::{Schema, SchemaBuilder, Type, USER_SCHEMA, USER_SCHEMA_HASH};
 
     #[test]
     pub fn schema_builder() {
         // Instanciate new empty schema named "person"
-        let mut person = Schema::new("person".to_owned());
+        let mut person = SchemaBuilder::new("person".to_owned());
 
         // Add two message fields to the schema
         person
@@ -367,7 +376,7 @@ mod tests {
         ) }";
 
         let person_from_string =
-            Schema::new_from(&Hash::new(USER_SCHEMA_HASH).unwrap(), &cddl_str.to_string()).unwrap();
+            Schema::new(&Hash::new(USER_SCHEMA_HASH).unwrap(), &cddl_str.to_string()).unwrap();
 
         // Validate message fields against person schema
         let me_bytes = serde_cbor::to_vec(&me).unwrap();
@@ -377,7 +386,7 @@ mod tests {
     #[test]
     pub fn validate_against_megaschema() {
         // Instanciate global user schema from mega schema string and it's hash
-        let user_schema = Schema::new_from(
+        let user_schema = Schema::new(
             &Hash::new(USER_SCHEMA_HASH).unwrap(),
             &USER_SCHEMA.to_string(),
         )

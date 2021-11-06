@@ -15,7 +15,7 @@ mod utils;
 
 pub use message::MESSAGE_SCHEMA;
 pub use utils::{USER_SCHEMA, USER_SCHEMA_HASH};
-pub use schema::{Type, Schema};
+pub use schema::{Type, Schema, SchemaBuilder};
 
 /// Custom error types of schema validation.
 pub mod error {
