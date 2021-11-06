@@ -244,6 +244,7 @@ impl Schema {
     }
 
     /// Create a new CREATE message validated against this schema
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn create(
         &self,
         key_values: Vec<(&str, &str)>,
@@ -270,6 +271,7 @@ impl Schema {
     }
 
     /// Create a new UPDATE message validated against this schema
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn update(
         &self,
         id: &str,
