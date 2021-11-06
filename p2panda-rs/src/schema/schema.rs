@@ -1,14 +1,14 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+use crate::hash::Hash;
+use crate::message::{Message, MessageFields, MessageValue};
 use cddl::lexer::Lexer;
 use cddl::parser::Parser;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validate_cbor_from_slice;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
-use crate::hash::Hash;
-use crate::message::{Message, MessageFields, MessageValue};
 
 use thiserror::Error;
 
@@ -135,6 +135,7 @@ impl fmt::Display for Group {
 pub struct Schema {
     name: Option<String>,
     fields: Option<BTreeMap<String, Field>>,
+    schema_hash: Option<Hash>,
     schema_string: Option<String>,
 }
 
@@ -144,25 +145,32 @@ impl Schema {
         Self {
             name: Some(name),
             fields: Some(BTreeMap::new()),
+            schema_hash: None,
             schema_string: None,
         }
     }
 
     /// Create a new Schema from a CDDL string
-    pub fn new_from_string(schema: &String) -> Result<Self, SchemaError> {
-        let mut lexer = Lexer::new(schema);
-        let parser = Parser::new(lexer.iter(), schema);
-        let cddl_string = match parser {
+    pub fn new_from(schema_hash: &Hash, schema_str: &String) -> Result<Self, SchemaError> {
+        let mut lexer = Lexer::new(schema_str);
+        let parser = Parser::new(lexer.iter(), schema_str);
+        let schema_string = match parser {
             Ok(mut parser) => match parser.parse_cddl() {
-                Ok(cddl) => Ok(cddl.to_string()),
+                Ok(cddl) => Ok(Some(cddl.to_string())),
                 Err(err) => Err(SchemaError::ParsingError(err.to_string())),
             },
             Err(err) => Err(SchemaError::ParsingError(err.to_string())),
-        };
+        }?;
+        let schema_hash = match Hash::new(schema_hash.as_str()) {
+            Ok(hash) => Ok(Some(hash)),
+            Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
+        }?;
+
         Ok(Self {
             name: None,
             fields: None,
-            schema_string: Some(cddl_string.unwrap()),
+            schema_hash,
+            schema_string,
         })
     }
 
@@ -177,6 +185,7 @@ impl Schema {
             Type::Bool => "bool",
             Type::Relation => "relation",
         };
+
         // Create a message field group and add fields
         let mut message_fields = Group::new(key.to_owned());
         message_fields.add_field("type", Field::String(type_string.to_owned()));
@@ -288,8 +297,12 @@ impl fmt::Display for Schema {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.fields {
             Some(map) => {
-                // Naughty unwrap here needs to go!
-                write!(f, "{} = {{ ", self.name.as_ref().unwrap())?;
+                let name = match self.name.as_ref() {
+                    Some(name) => Ok(name),
+                    // Need custom errors, but how to do that in Display?
+                    None => Err(fmt::Error),
+                }?;
+                write!(f, "{} = {{ ", name)?;
                 for (count, value) in map.iter().enumerate() {
                     if count != 0 {
                         write!(f, ", ")?;
@@ -311,9 +324,9 @@ impl fmt::Display for Schema {
 
 #[cfg(test)]
 mod tests {
+    use crate::hash::Hash;
     use crate::message::{MessageFields, MessageValue};
-
-    use crate::schema::{Type, Schema, USER_SCHEMA};
+    use crate::schema::{Schema, Type, USER_SCHEMA, USER_SCHEMA_HASH};
 
     #[test]
     pub fn schema_builder() {
@@ -353,7 +366,8 @@ mod tests {
             name: { type: \"str\", value: tstr } 
         ) }";
 
-        let person_from_string = Schema::new_from_string(&cddl_str.to_string()).unwrap();
+        let person_from_string =
+            Schema::new_from(&Hash::new(USER_SCHEMA_HASH).unwrap(), &cddl_str.to_string()).unwrap();
 
         // Validate message fields against person schema
         let me_bytes = serde_cbor::to_vec(&me).unwrap();
@@ -362,8 +376,12 @@ mod tests {
 
     #[test]
     pub fn validate_against_megaschema() {
-        // Instanciate global user schema from mega schema
-        let user_schema = Schema::new_from_string(&USER_SCHEMA.to_string()).unwrap();
+        // Instanciate global user schema from mega schema string and it's hash
+        let user_schema = Schema::new_from(
+            &Hash::new(USER_SCHEMA_HASH).unwrap(),
+            &USER_SCHEMA.to_string(),
+        )
+        .unwrap();
 
         let mut me = MessageFields::new();
         me.add("name", MessageValue::Text("Sam".to_owned()))

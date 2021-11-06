@@ -11,10 +11,10 @@ use cddl::validator::cbor;
 
 mod message;
 mod schema;
-mod user_schema;
+mod utils;
 
 pub use message::MESSAGE_SCHEMA;
-pub use user_schema::USER_SCHEMA;
+pub use utils::{USER_SCHEMA, USER_SCHEMA_HASH};
 pub use schema::{Type, Schema};
 
 /// Custom error types of schema validation.
