@@ -37,7 +37,8 @@ pub enum SchemaError {
 }
 
 /// CDDL types
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
+#[allow(missing_docs)]
 pub enum Type {
     Bool,
     Int,
@@ -60,7 +61,7 @@ impl fmt::Display for Type {
     }
 }
 
-/// Field types
+/// CDDL field types
 #[derive(Clone, Debug)]
 pub enum Field {
     String(String),
@@ -89,9 +90,9 @@ impl fmt::Display for Field {
     }
 }
 
-/// Struct for building and representing CDDL groups
-// CDDL uses groups to define reuseable data structures
-// they can be merged into schema or used in Vectors, Tables and Structs
+/// Struct for building and representing CDDL groups.
+/// CDDL uses groups to define reuseable data structures
+/// they can be merged into schema or used in Vectors, Tables and Structs
 #[derive(Clone, Debug)]
 pub struct Group {
     name: String,
@@ -129,7 +130,8 @@ impl fmt::Display for Group {
 }
 
 #[derive(Clone, Debug)]
-/// Schema struct for creating CDDL schemas and valdating MessageFields
+/// Schema struct for creating CDDL schemas, valdating MessageFields and creating messages
+/// following the defined schema.
 pub struct Schema {
     name: Option<String>,
     fields: Option<BTreeMap<String, Field>>,
@@ -147,7 +149,6 @@ impl Schema {
     }
 
     /// Create a new Schema from a CDDL string
-    // Instanciate a new Schema instance from a CDDL string.
     pub fn new_from_string(schema: &String) -> Result<Self, SchemaError> {
         let mut lexer = Lexer::new(schema);
         let parser = Parser::new(lexer.iter(), schema);
@@ -165,6 +166,7 @@ impl Schema {
         })
     }
 
+    /// Add a field definition to this schema
     pub fn add_message_field(&mut self, key: String, field_type: Type) -> Result<(), SchemaError> {
         // Match passed type and map it to our MessageFields type and CDDL types (do we still need the
         // MessageFields type key when we are using schemas?)
@@ -196,8 +198,7 @@ impl Schema {
         }
     }
 
-    // Create a new CREATE message validated against this schema
-    // Only text fields implemented
+    /// Create a new CREATE message validated against this schema
     pub fn create(
         &self,
         schema_hash: &str,
@@ -228,6 +229,7 @@ impl Schema {
         }
     }
 
+    /// Create a new UPDATE message validated against this schema
     pub fn update(
         &self,
         schema_hash: &str,
