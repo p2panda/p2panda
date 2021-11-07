@@ -14,18 +14,18 @@ pub fn marshall_entries(
     for (entry_signed, message_encoded) in entries {
         let entry = match decode_entry(&entry_signed, Some(&message_encoded)) {
             Ok(entry) => Ok(entry),
-            Err(_) => Err(MaterializationError::Error),
+            Err(err) => Err(MaterializationError::EntrySignedError(err)),
         }?;
 
-        let message = match entry.message() {
-            Some(msg) => Ok(msg),
-            None => Err(MaterializationError::Error),
-        };
-
+        if entry.message().is_none() {
+            // The message has been deleted.
+            continue
+        }
+        
         // If we have a `link` field in the Message then we can use it here.
         // `id` should not be optional (even CREATE messages should have it set) then
         // we wouldn't need the EntrySigned here at all.
-        let (link, id) = match message?.id() {
+        let (link, id) = match entry.message().unwrap().id() {
             Some(_) => (
                 Some(entry.backlink_hash().unwrap().as_str().to_owned()),
                 entry_signed.hash().as_str().to_owned(),

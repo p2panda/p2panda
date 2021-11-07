@@ -9,4 +9,8 @@ pub enum MaterializationError {
     /// Materialization error.
     #[error("materialization error")]
     Error,
+    
+    /// Handle errors from `EntrySignedError` struct.
+    #[error(transparent)]
+    EntrySignedError(#[from] crate::entry::EntrySignedError),
 }
