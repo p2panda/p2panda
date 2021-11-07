@@ -34,6 +34,14 @@ pub enum SchemaError {
     /// Message validation error
     #[error("invalid message values")]
     ValidationError(String),
+
+    /// Message fields error
+    #[error("error while adding message fields")]
+    MessageFieldsError(String),
+
+    /// Message error
+    #[error("error while creating message")]
+    MessageError(String),
 }
 
 /// CDDL types
@@ -178,7 +186,7 @@ impl SchemaBuilder {
         // `fields` will be None.
         self.fields.insert(key, message_fields);
         Ok(())
-}
+    }
 
     /// Validate a message against this user schema
     #[cfg(not(target_arch = "wasm32"))]
@@ -215,7 +223,6 @@ impl fmt::Display for SchemaBuilder {
     }
 }
 
-
 impl Schema {
     /// Create a new Schema from a schema hash and schema CDDL string
     pub fn new(schema_hash: &Hash, schema_str: &String) -> Result<Self, SchemaError> {
@@ -238,24 +245,20 @@ impl Schema {
             schema_string,
         })
     }
-    
+
     pub fn schema_hash(&self) -> Hash {
         self.schema_hash.clone()
     }
 
     /// Create a new CREATE message validated against this schema
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn create(
-        &self,
-        key_values: Vec<(&str, &str)>,
-    ) -> Result<Message, SchemaError> {
-
+    pub fn create(&self, key_values: Vec<(&str, MessageValue)>) -> Result<Message, SchemaError> {
         let mut fields = MessageFields::new();
 
         for (key, value) in key_values {
-            match fields.add(key, MessageValue::Text(value.into())) {
+            match fields.add(key, value) {
                 Ok(_) => Ok(()),
-                Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
+                Err(err_str) => Err(SchemaError::MessageFieldsError(err_str.to_string())),
             }?;
         }
 
@@ -266,17 +269,13 @@ impl Schema {
 
         match Message::new_create(self.schema_hash(), fields) {
             Ok(hash) => Ok(hash),
-            Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
+            Err(err_str) => Err(SchemaError::MessageError(err_str.to_string())),
         }
     }
 
     /// Create a new UPDATE message validated against this schema
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn update(
-        &self,
-        id: &str,
-        key_values: Vec<(&str, &str)>,
-    ) -> Result<Message, SchemaError> {
+    pub fn update(&self, id: &str, key_values: Vec<(&str, &str)>) -> Result<Message, SchemaError> {
         let mut fields = MessageFields::new();
         let id = Hash::new(id).unwrap();
 
@@ -329,7 +328,7 @@ impl fmt::Display for Schema {
 #[cfg(test)]
 mod tests {
     use crate::hash::Hash;
-    use crate::message::{MessageFields, MessageValue};
+    use crate::message::{Message, MessageFields, MessageValue};
     use crate::schema::{Schema, SchemaBuilder, Type, USER_SCHEMA, USER_SCHEMA_HASH};
 
     #[test]
@@ -421,5 +420,38 @@ mod tests {
 
         let naughty_panda_bytes = serde_cbor::to_vec(&naughty_panda).unwrap();
         assert!(user_schema.validate_message(naughty_panda_bytes).is_err());
+    }
+
+    #[test]
+    pub fn create_message() {
+        let cddl_str = "person = { (
+            age: { type: \"int\", value: int }, 
+            name: { type: \"str\", value: tstr } 
+        ) }";
+
+        let person_schema =
+            Schema::new(&Hash::new(USER_SCHEMA_HASH).unwrap(), &cddl_str.to_string()).unwrap();
+
+        // Create a message the long way without validation
+        let mut message_fields = MessageFields::new();
+        message_fields
+            .add("name", MessageValue::Text("Panda".to_owned()))
+            .unwrap();
+        message_fields
+            .add("age", MessageValue::Integer(12))
+            .unwrap();
+
+        let message =
+            Message::new_create(Hash::new(USER_SCHEMA_HASH).unwrap(), message_fields).unwrap();
+
+        // Create a message the quick way *with* validation
+        let message_again = person_schema
+            .create(vec![
+                ("name", MessageValue::Text("Panda".to_string())),
+                ("age", MessageValue::Integer(12)),
+            ])
+            .unwrap();
+
+        assert_eq!(message, message_again);
     }
 }
