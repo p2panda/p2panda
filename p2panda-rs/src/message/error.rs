@@ -37,5 +37,5 @@ pub enum MessageEncodedError {
 
     /// Handle errors from validating CBOR schemas.
     #[error(transparent)]
-    SchemaError(#[from] crate::schema::error::SchemaError),
+    SchemaError(#[from] crate::schema::SchemaError),
 }
