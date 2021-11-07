@@ -297,7 +297,7 @@ impl fmt::Display for Schema {
 mod tests {
     use crate::hash::Hash;
     use crate::message::{Message, MessageFields, MessageValue};
-    use crate::schema::{Schema, SchemaBuilder, Type, USER_SCHEMA, USER_SCHEMA_HASH};
+    use crate::schema::{Schema, SchemaBuilder, Type, USER_SCHEMA, PERSON_SCHEMA, USER_SCHEMA_HASH, PERSON_SCHEMA_HASH};
 
     #[test]
     pub fn schema_builder() {
@@ -392,13 +392,8 @@ mod tests {
 
     #[test]
     pub fn create_message() {
-        let cddl_str = "person = { (
-            age: { type: \"int\", value: int }, 
-            name: { type: \"str\", value: tstr } 
-        ) }";
-
         let person_schema =
-            Schema::new(&Hash::new(USER_SCHEMA_HASH).unwrap(), &cddl_str.to_string()).unwrap();
+            Schema::new(&Hash::new(PERSON_SCHEMA_HASH).unwrap(), &PERSON_SCHEMA.to_string()).unwrap();
 
         // Create a message the long way without validation
         let mut message_fields = MessageFields::new();
@@ -410,7 +405,7 @@ mod tests {
             .unwrap();
 
         let message =
-            Message::new_create(Hash::new(USER_SCHEMA_HASH).unwrap(), message_fields).unwrap();
+            Message::new_create(Hash::new(PERSON_SCHEMA_HASH).unwrap(), message_fields).unwrap();
 
         // Create a message the quick way *with* validation
         let message_again = person_schema
