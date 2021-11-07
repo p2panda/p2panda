@@ -3,46 +3,14 @@ use std::fmt;
 
 use crate::hash::Hash;
 use crate::message::{Message, MessageFields, MessageValue};
+use crate::schema::SchemaError;
+
 use cddl::lexer::Lexer;
 use cddl::parser::Parser;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validate_cbor_from_slice;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
-
-use thiserror::Error;
-
-/// Custom error types for schema validation.
-#[derive(Error, Debug)]
-pub enum SchemaError {
-    /// Message contains invalid fields.
-    #[error("invalid message schema: {0}")]
-    InvalidSchema(String),
-
-    /// Message can't be deserialized from invalid CBOR encoding.
-    #[error("invalid CBOR format")]
-    InvalidCBOR,
-
-    /// There is no schema set
-    #[error("no CDDL schema present")]
-    NoSchema,
-
-    /// Error while parsing CDDL
-    #[error("error while parsing CDDL: {0}")]
-    ParsingError(String),
-
-    /// Message validation error
-    #[error("invalid message values")]
-    ValidationError(String),
-
-    /// Message fields error
-    #[error("error while adding message fields")]
-    MessageFieldsError(String),
-
-    /// Message error
-    #[error("error while creating message")]
-    MessageError(String),
-}
 
 /// CDDL types
 #[derive(Clone, Debug, Copy)]
@@ -193,13 +161,13 @@ impl SchemaBuilder {
     pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
         match validate_cbor_from_slice(&format!("{}", self), &bytes) {
             Err(cbor::Error::Validation(err)) => {
-                let err_str = err
+                let err = err
                     .iter()
                     .map(|fe| format!("{}: \"{}\"", fe.cbor_location, fe.reason))
                     .collect::<Vec<String>>()
                     .join(", ");
 
-                Err(SchemaError::InvalidSchema(err_str))
+                Err(SchemaError::InvalidSchema(err))
             }
             Err(cbor::Error::CBORParsing(_err)) => Err(SchemaError::InvalidCBOR),
             Err(cbor::Error::CDDLParsing(err)) => {
@@ -237,7 +205,7 @@ impl Schema {
         }?;
         let schema_hash = match Hash::new(schema_hash.as_str()) {
             Ok(hash) => Ok(hash),
-            Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
+            Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
         }?;
 
         Ok(Self {
@@ -258,18 +226,18 @@ impl Schema {
         for (key, value) in key_values {
             match fields.add(key, value) {
                 Ok(_) => Ok(()),
-                Err(err_str) => Err(SchemaError::MessageFieldsError(err_str.to_string())),
+                Err(err) => Err(SchemaError::MessageFieldsError(err)),
             }?;
         }
 
         match self.validate_message(serde_cbor::to_vec(&fields.clone()).unwrap()) {
             Ok(_) => Ok(()),
-            Err(err_str) => Err(SchemaError::ValidationError(err_str.to_string())),
+            Err(err) => Err(SchemaError::ValidationError(err.to_string())),
         }?;
 
         match Message::new_create(self.schema_hash(), fields) {
             Ok(hash) => Ok(hash),
-            Err(err_str) => Err(SchemaError::MessageError(err_str.to_string())),
+            Err(err) => Err(SchemaError::MessageError(err)),
         }
     }
 
@@ -282,18 +250,18 @@ impl Schema {
         for (key, value) in key_values {
             match fields.add(key, MessageValue::Text(value.into())) {
                 Ok(_) => Ok(()),
-                Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
+                Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
             }?;
         }
 
         match self.validate_message(serde_cbor::to_vec(&fields.clone()).unwrap()) {
             Ok(_) => Ok(()),
-            Err(err_str) => Err(SchemaError::ValidationError(err_str.to_string())),
+            Err(err) => Err(SchemaError::ValidationError(err.to_string())),
         }?;
 
         match Message::new_update(self.schema_hash(), id, fields) {
             Ok(hash) => Ok(hash),
-            Err(err_str) => Err(SchemaError::InvalidSchema(err_str.to_string())),
+            Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
         }
     }
 
@@ -302,13 +270,13 @@ impl Schema {
     pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
         match validate_cbor_from_slice(&format!("{}", self), &bytes) {
             Err(cbor::Error::Validation(err)) => {
-                let err_str = err
+                let err = err
                     .iter()
                     .map(|fe| format!("{}: \"{}\"", fe.cbor_location, fe.reason))
                     .collect::<Vec<String>>()
                     .join(", ");
 
-                Err(SchemaError::InvalidSchema(err_str))
+                Err(SchemaError::InvalidSchema(err))
             }
             Err(cbor::Error::CBORParsing(_err)) => Err(SchemaError::InvalidCBOR),
             Err(cbor::Error::CDDLParsing(err)) => {
