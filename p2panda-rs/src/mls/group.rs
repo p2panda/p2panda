@@ -45,11 +45,14 @@ impl MlsGroup {
 mod test {
     use openmls::group::GroupId;
 
+    use crate::identity::KeyPair;
+
     use super::{MlsGroup, MlsMember};
 
     #[test]
     fn is_active() {
-        let member = MlsMember::new();
+        let key_pair = KeyPair::new();
+        let member = MlsMember::new(key_pair);
         let group_id = GroupId::random(member.provider());
         let group = MlsGroup::new(group_id, &member);
         assert_eq!(group.is_active(), true);

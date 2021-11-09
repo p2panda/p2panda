@@ -6,6 +6,7 @@ use openmls::prelude::{
 use openmls_traits::key_store::OpenMlsKeyStore;
 use openmls_traits::OpenMlsCryptoProvider;
 
+use crate::identity::KeyPair;
 use crate::mls::MlsProvider;
 use crate::mls::{MLS_CIPHERSUITE_NAME, MLS_LIFETIME_EXTENSION};
 
@@ -15,16 +16,17 @@ pub struct MlsMember {
 }
 
 impl MlsMember {
-    pub fn new() -> Self {
-        let ciphersuite = Ciphersuite::new(MLS_CIPHERSUITE_NAME).unwrap();
+    pub fn new(key_pair: KeyPair) -> Self {
+        // The identity of the Credential is the p2panda Author
+        let public_key_bytes = key_pair.public_key().to_bytes();
 
-        let provider = MlsProvider::new();
+        let ciphersuite = Ciphersuite::new(MLS_CIPHERSUITE_NAME).unwrap();
+        let provider = MlsProvider::new(key_pair);
 
         // A CredentialBundle contains a Credential and the corresponding private key.
+        // BasicCredential is a raw, unauthenticated assertion of an identity/key binding.
         let credential_bundle = CredentialBundle::new(
-            // The identity of this Credential is the p2panda Author
-            vec![1, 2, 3],
-            // A BasicCredential is a raw, unauthenticated assertion of an identity/key binding
+            public_key_bytes.to_vec(),
             CredentialType::Basic,
             ciphersuite.signature_scheme(),
             &provider,
@@ -72,5 +74,23 @@ impl MlsMember {
             .unwrap();
 
         key_package
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::identity::KeyPair;
+
+    use super::MlsMember;
+
+    #[test]
+    fn is_active() {
+        let key_pair = KeyPair::new();
+        let public_key_bytes = key_pair.public_key().to_bytes();
+        let member = MlsMember::new(key_pair);
+        assert_eq!(
+            public_key_bytes.to_vec(),
+            member.credential().identity()
+        );
     }
 }
