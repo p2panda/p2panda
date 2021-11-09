@@ -84,7 +84,7 @@ mod test {
     use super::MlsMember;
 
     #[test]
-    fn is_active() {
+    fn public_key_identity() {
         let key_pair = KeyPair::new();
         let public_key_bytes = key_pair.public_key().to_bytes();
         let member = MlsMember::new(key_pair);
