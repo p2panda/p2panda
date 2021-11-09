@@ -48,11 +48,15 @@ sqlx = { version = "0.5.9", features = ["runtime-async-std-rustls", "all-databas
 git = "https://github.com/openmls/openmls"
 branch = "main"
 
-[dependencies.openmls_rust_crypto]
+[dependencies.rust_crypto]
 git = "https://github.com/openmls/openmls"
 branch = "main"
 
 [dependencies.openmls_traits]
+git = "https://github.com/openmls/openmls"
+branch = "main"
+
+[dependencies.memory_keystore]
 git = "https://github.com/openmls/openmls"
 branch = "main"
 

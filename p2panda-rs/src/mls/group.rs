@@ -3,12 +3,17 @@ use openmls::group::{GroupId, ManagedGroup, ManagedGroupConfig};
 use openmls::prelude::{
     CredentialBundle, CredentialType, Extension, KeyPackageBundle, LifetimeExtension, WireFormat,
 };
-use openmls_rust_crypto::OpenMlsRustCrypto;
+use openmls_traits::key_store::OpenMlsKeyStore;
+use openmls_traits::OpenMlsCryptoProvider;
+
+use crate::mls::MlsProvider;
 
 pub const MLS_CIPHERSUITE_NAME: CiphersuiteName =
     CiphersuiteName::MLS10_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
 
 pub const MLS_PADDING_SIZE: usize = 128;
+
+pub const MLS_LIFETIME_EXTENSION: u64 = 60;
 
 /// Wrapper around Managed MLS Group.
 #[derive(Debug)]
@@ -29,35 +34,45 @@ impl MlsGroup {
     }
 
     pub fn new() -> Self {
-        let crypto = OpenMlsRustCrypto::default();
+        let provider = MlsProvider::new();
 
         let ciphersuite = Ciphersuite::new(MLS_CIPHERSUITE_NAME).unwrap();
 
+        // A CredentialBundle contains a Credential and the corresponding private key.
         let credential_bundle = CredentialBundle::new(
+            // The identity of this Credential is the p2panda Author
             vec![1, 2, 3],
+            // A BasicCredential is a raw, unauthenticated assertion of an identity/key binding.
             CredentialType::Basic,
             ciphersuite.signature_scheme(),
-            &crypto,
+            &provider,
         )
         .unwrap();
 
-        let lifetime_extension = Extension::LifeTime(LifetimeExtension::new(60));
+        let lifetime_extension =
+            Extension::LifeTime(LifetimeExtension::new(MLS_LIFETIME_EXTENSION));
 
         let key_package_bundle = KeyPackageBundle::new(
             &[MLS_CIPHERSUITE_NAME],
             &credential_bundle,
-            &crypto,
+            &provider,
             vec![lifetime_extension],
         )
         .unwrap();
 
         let key_package = key_package_bundle.key_package();
+        let key_package_hash = key_package.hash(&provider);
+
+        provider
+            .key_store()
+            .store(&key_package_hash, &key_package_bundle)
+            .unwrap();
 
         let group = ManagedGroup::new(
-            &crypto,
+            &provider,
             &Self::config(),
-            GroupId::random(&crypto),
-            &key_package.hash(&crypto),
+            GroupId::random(&provider),
+            &key_package.hash(&provider),
         )
         .unwrap();
 
@@ -74,7 +89,7 @@ mod test {
     use super::MlsGroup;
 
     #[test]
-    fn test() {
+    fn is_active() {
         let group = MlsGroup::new();
         assert_eq!(group.is_active(), true);
     }
