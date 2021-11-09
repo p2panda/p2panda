@@ -1,4 +1,3 @@
-use openmls::ciphersuite::{Ciphersuite, CiphersuiteName};
 use openmls::group::{GroupId, ManagedGroup, ManagedGroupConfig};
 use openmls::prelude::{
     CredentialBundle, CredentialType, Extension, KeyPackageBundle, LifetimeExtension, WireFormat,
@@ -6,16 +5,9 @@ use openmls::prelude::{
 use openmls_traits::key_store::OpenMlsKeyStore;
 use openmls_traits::OpenMlsCryptoProvider;
 
-use crate::mls::MlsProvider;
+use crate::mls::{MlsMember, MlsProvider, MLS_PADDING_SIZE};
 
-pub const MLS_CIPHERSUITE_NAME: CiphersuiteName =
-    CiphersuiteName::MLS10_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
-
-pub const MLS_PADDING_SIZE: usize = 128;
-
-pub const MLS_LIFETIME_EXTENSION: u64 = 60;
-
-/// Wrapper around Managed MLS Group.
+/// Wrapper around the Managed MLS Group.
 #[derive(Debug)]
 pub struct MlsGroup(ManagedGroup);
 
@@ -33,46 +25,15 @@ impl MlsGroup {
             .build()
     }
 
-    pub fn new() -> Self {
-        let provider = MlsProvider::new();
-
-        let ciphersuite = Ciphersuite::new(MLS_CIPHERSUITE_NAME).unwrap();
-
-        // A CredentialBundle contains a Credential and the corresponding private key.
-        let credential_bundle = CredentialBundle::new(
-            // The identity of this Credential is the p2panda Author
-            vec![1, 2, 3],
-            // A BasicCredential is a raw, unauthenticated assertion of an identity/key binding.
-            CredentialType::Basic,
-            ciphersuite.signature_scheme(),
-            &provider,
-        )
-        .unwrap();
-
-        let lifetime_extension =
-            Extension::LifeTime(LifetimeExtension::new(MLS_LIFETIME_EXTENSION));
-
-        let key_package_bundle = KeyPackageBundle::new(
-            &[MLS_CIPHERSUITE_NAME],
-            &credential_bundle,
-            &provider,
-            vec![lifetime_extension],
-        )
-        .unwrap();
-
-        let key_package = key_package_bundle.key_package();
-        let key_package_hash = key_package.hash(&provider);
-
-        provider
-            .key_store()
-            .store(&key_package_hash, &key_package_bundle)
-            .unwrap();
+    /// Creates a new MLS group. A group is always created with a single member, the "creator".
+    pub fn new(group_id: GroupId, member: &MlsMember) -> Self {
+        let key_package_hash = member.key_package().hash(member.provider());
 
         let group = ManagedGroup::new(
-            &provider,
+            member.provider(),
             &Self::config(),
-            GroupId::random(&provider),
-            &key_package.hash(&provider),
+            group_id,
+            &key_package_hash,
         )
         .unwrap();
 
@@ -86,11 +47,15 @@ impl MlsGroup {
 
 #[cfg(test)]
 mod test {
-    use super::MlsGroup;
+    use openmls::group::GroupId;
+
+    use super::{MlsGroup, MlsMember};
 
     #[test]
     fn is_active() {
-        let group = MlsGroup::new();
+        let member = MlsMember::new();
+        let group_id = GroupId::random(member.provider());
+        let group = MlsGroup::new(group_id, &member);
         assert_eq!(group.is_active(), true);
     }
 }
