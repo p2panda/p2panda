@@ -1,11 +1,7 @@
 use openmls::group::{GroupId, ManagedGroup, ManagedGroupConfig};
-use openmls::prelude::{
-    CredentialBundle, CredentialType, Extension, KeyPackageBundle, LifetimeExtension, WireFormat,
-};
-use openmls_traits::key_store::OpenMlsKeyStore;
-use openmls_traits::OpenMlsCryptoProvider;
+use openmls::prelude::WireFormat;
 
-use crate::mls::{MlsMember, MlsProvider, MLS_PADDING_SIZE};
+use crate::mls::{MlsMember, MLS_PADDING_SIZE};
 
 /// Wrapper around the Managed MLS Group.
 #[derive(Debug)]

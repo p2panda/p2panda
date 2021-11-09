@@ -1,7 +1,7 @@
 use openmls::ciphersuite::{Ciphersuite, CiphersuiteName};
 use openmls::prelude::{
-    CredentialBundle, CredentialType, Extension, KeyPackage, KeyPackageBundle, LifetimeExtension,
-    WireFormat,
+    Credential, CredentialBundle, CredentialType, Extension, KeyPackage, KeyPackageBundle,
+    LifetimeExtension, WireFormat,
 };
 use openmls_traits::key_store::OpenMlsKeyStore;
 use openmls_traits::OpenMlsCryptoProvider;
@@ -39,6 +39,10 @@ impl MlsMember {
 
     pub fn provider(&self) -> &impl OpenMlsCryptoProvider {
         &self.provider
+    }
+
+    pub fn credential(&self) -> &Credential {
+        self.credential_bundle.credential()
     }
 
     pub fn key_package(&self) -> KeyPackage {
