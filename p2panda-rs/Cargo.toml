@@ -30,7 +30,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 arrayvec = "0.5.2"
-async-io = "1.6.0"
 bamboo-rs-core = "0.1.0"
 cddl = "0.8.7"
 ed25519-dalek = "1.0.1"
