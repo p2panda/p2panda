@@ -1,4 +1,3 @@
-use ed25519_dalek::Signer as DalekSigner;
 use memory_keystore::MemoryKeyStore;
 use openmls_traits::crypto::OpenMlsCrypto;
 use openmls_traits::random::OpenMlsRand;
@@ -19,6 +18,34 @@ use crate::identity::KeyPair;
 pub struct MlsProvider {
     crypto: MlsCrypto,
     key_store: MemoryKeyStore,
+}
+
+impl MlsProvider {
+    pub fn new(key_pair: KeyPair) -> Self {
+        Self {
+            crypto: MlsCrypto::new(key_pair),
+            // @TODO: Use our own key store provider here
+            key_store: MemoryKeyStore::default(),
+        }
+    }
+}
+
+impl OpenMlsCryptoProvider for MlsProvider {
+    type CryptoProvider = MlsCrypto;
+    type RandProvider = MlsCrypto;
+    type KeyStoreProvider = MemoryKeyStore;
+
+    fn crypto(&self) -> &Self::CryptoProvider {
+        &self.crypto
+    }
+
+    fn rand(&self) -> &Self::RandProvider {
+        &self.crypto
+    }
+
+    fn key_store(&self) -> &Self::KeyStoreProvider {
+        &self.key_store
+    }
 }
 
 #[derive(Debug)]
@@ -172,33 +199,5 @@ impl OpenMlsRand for MlsCrypto {
 
     fn random_vec(&self, len: usize) -> Result<Vec<u8>, Self::Error> {
         self.0.random_vec(len)
-    }
-}
-
-impl MlsProvider {
-    pub fn new(key_pair: KeyPair) -> Self {
-        Self {
-            crypto: MlsCrypto::new(key_pair),
-            // @TODO: Use our own key store provider here
-            key_store: MemoryKeyStore::default(),
-        }
-    }
-}
-
-impl OpenMlsCryptoProvider for MlsProvider {
-    type CryptoProvider = MlsCrypto;
-    type RandProvider = MlsCrypto;
-    type KeyStoreProvider = MemoryKeyStore;
-
-    fn crypto(&self) -> &Self::CryptoProvider {
-        &self.crypto
-    }
-
-    fn rand(&self) -> &Self::RandProvider {
-        &self.crypto
-    }
-
-    fn key_store(&self) -> &Self::KeyStoreProvider {
-        &self.key_store
     }
 }
