@@ -1,4 +1,4 @@
-use openmls::ciphersuite::{Ciphersuite, CiphersuiteName};
+use openmls::ciphersuite::CiphersuiteName;
 
 /// A ciphersuite is a combination of a protocol version and the set of cryptographic algorithms
 /// that should be used.
@@ -12,7 +12,7 @@ use openmls::ciphersuite::{Ciphersuite, CiphersuiteName};
 pub const MLS_CIPHERSUITE_NAME: CiphersuiteName =
     CiphersuiteName::MLS10_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
 
-/// Padding mechanism is used to improve protection against traffic analysis.
+/// The padding mechanism is used to improve protection against traffic analysis.
 pub const MLS_PADDING_SIZE: usize = 128;
 
 /// The lifetime extension represents the times between which clients will consider a KeyPackage

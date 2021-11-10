@@ -8,6 +8,7 @@ use crate::mls::{MlsMember, MLS_PADDING_SIZE};
 pub struct MlsGroup(ManagedGroup);
 
 impl MlsGroup {
+    /// Returns a p2panda specific configuration for MLS Groups
     fn config() -> ManagedGroupConfig {
         ManagedGroupConfig::builder()
             // Handshake messages should not be encrypted
@@ -23,8 +24,11 @@ impl MlsGroup {
 
     /// Creates a new MLS group. A group is always created with a single member, the "creator".
     pub fn new(group_id: GroupId, member: &MlsMember) -> Self {
+        // Generate a new KeyPackage which can be used to create the group (aka InitKeys). These
+        // keys will directly be consumed during group creation and not further propagated.
         let key_package_hash = member.key_package().hash(member.provider());
 
+        // Create MLS group with one member inside
         let group = ManagedGroup::new(
             member.provider(),
             &Self::config(),
@@ -36,6 +40,8 @@ impl MlsGroup {
         Self(group)
     }
 
+    /// Returns true if the group is still active for this member (maybe it has been removed or
+    /// left the group).
     pub fn is_active(&self) -> bool {
         self.0.is_active()
     }

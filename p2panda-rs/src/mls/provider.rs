@@ -16,7 +16,10 @@ use crate::identity::KeyPair;
 /// outside for better configurability.
 #[derive(Debug)]
 pub struct MlsProvider {
+    /// Provider for cryptographic methods.
     crypto: MlsCrypto,
+
+    /// Provider to store and load KeyPackages.
     key_store: MemoryKeyStore,
 }
 
@@ -48,6 +51,7 @@ impl OpenMlsCryptoProvider for MlsProvider {
     }
 }
 
+/// Provider for random number generation, key-pair cryptography, signatures, hashing etc.
 #[derive(Debug)]
 pub struct MlsCrypto(RustCrypto, KeyPair);
 
