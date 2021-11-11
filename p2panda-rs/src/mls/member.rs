@@ -1,9 +1,11 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use openmls::ciphersuite::Ciphersuite;
 use openmls::prelude::{
     Credential, CredentialBundle, CredentialType, Extension, KeyPackage, KeyPackageBundle,
     LifetimeExtension,
 };
-use openmls_traits::key_store::OpenMlsKeyStore;
+use openmls_traits::key_store::{FromKeyStoreValue, OpenMlsKeyStore};
 use openmls_traits::OpenMlsCryptoProvider;
 
 use crate::identity::KeyPair;
@@ -26,15 +28,29 @@ impl MlsMember {
         // Prepare crypto and storage backend for this member
         let provider = MlsProvider::new(key_pair);
 
-        // A CredentialBundle contains a Credential and the corresponding private key.
-        // BasicCredential is a raw, unauthenticated assertion of an identity/key binding.
-        let credential_bundle = CredentialBundle::new(
-            public_key_bytes.to_vec(),
-            CredentialType::Basic,
-            ciphersuite.signature_scheme(),
-            &provider,
-        )
-        .unwrap();
+        // Check if CredentialBundle already exists in store, otherwise generate it
+        let credential_bundle = match provider.key_store().read(&public_key_bytes.to_vec()) {
+            None => {
+                // A CredentialBundle contains a Credential and the corresponding private key.
+                // BasicCredential is a raw, unauthenticated assertion of an identity/key binding.
+                let bundle = CredentialBundle::new(
+                    public_key_bytes.to_vec(),
+                    CredentialType::Basic,
+                    ciphersuite.signature_scheme(),
+                    &provider,
+                )
+                .unwrap();
+
+                // Persist CredentialBundle in key store for the future
+                provider
+                    .key_store()
+                    .store(bundle.credential().signature_key(), &bundle)
+                    .unwrap();
+
+                bundle
+            }
+            Some(bundle) => bundle,
+        };
 
         Self {
             credential_bundle,
@@ -97,6 +113,7 @@ mod test {
         let key_pair = KeyPair::new();
         let public_key_bytes = key_pair.public_key().to_bytes();
         let member = MlsMember::new(key_pair);
+
         assert_eq!(public_key_bytes.to_vec(), member.credential().identity());
     }
 }
