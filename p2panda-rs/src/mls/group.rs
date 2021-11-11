@@ -1,7 +1,11 @@
-use openmls::group::{GroupId, ManagedGroup, ManagedGroupConfig};
-use openmls::prelude::WireFormat;
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::mls::{MlsMember, MLS_PADDING_SIZE};
+use openmls::framing::MlsCiphertext;
+use openmls::group::{GroupEpoch, GroupId, ManagedGroup, ManagedGroupConfig, MlsMessageOut};
+use openmls::prelude::WireFormat;
+use openmls_traits::OpenMlsCryptoProvider;
+
+use crate::mls::{MlsMember, MlsProvider, MLS_PADDING_SIZE};
 
 /// Wrapper around the Managed MLS Group.
 #[derive(Debug)]
@@ -45,6 +49,14 @@ impl MlsGroup {
     pub fn is_active(&self) -> bool {
         self.0.is_active()
     }
+
+    pub fn encrypt(&mut self, provider: &impl OpenMlsCryptoProvider, data: &[u8]) -> MlsCiphertext {
+        let message = self.0.create_message(provider, data).unwrap();
+        match message {
+            MlsMessageOut::Ciphertext(ciphertext) => ciphertext,
+            _ => panic!("This will never happen"),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -60,7 +72,9 @@ mod test {
         let key_pair = KeyPair::new();
         let member = MlsMember::new(key_pair);
         let group_id = GroupId::random(member.provider());
-        let group = MlsGroup::new(group_id, &member);
+        let mut group = MlsGroup::new(group_id, &member);
+        let data = group.encrypt(member.provider(), "test".as_bytes());
+        println!("{:?}", data);
         assert_eq!(group.is_active(), true);
     }
 }

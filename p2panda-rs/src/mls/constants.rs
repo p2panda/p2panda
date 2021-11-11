@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use openmls::ciphersuite::CiphersuiteName;
 
 /// A ciphersuite is a combination of a protocol version and the set of cryptographic algorithms
