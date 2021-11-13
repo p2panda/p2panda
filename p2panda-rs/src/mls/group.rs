@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use openmls::framing::MlsCiphertext;
-use openmls::group::{GroupEpoch, GroupId, ManagedGroup, ManagedGroupConfig, MlsMessageOut};
+use openmls::group::{
+    GroupEvent, GroupId, ManagedGroup, ManagedGroupConfig, MlsMessageIn, MlsMessageOut,
+};
 use openmls::prelude::WireFormat;
 use openmls_traits::OpenMlsCryptoProvider;
 
-use crate::mls::{MlsMember, MlsProvider, MLS_PADDING_SIZE};
+use crate::mls::{MlsMember, MLS_PADDING_SIZE};
 
 /// Wrapper around the Managed MLS Group.
 #[derive(Debug)]
@@ -57,6 +59,24 @@ impl MlsGroup {
             _ => panic!("This will never happen"),
         }
     }
+
+    pub fn decrypt(
+        &mut self,
+        provider: &impl OpenMlsCryptoProvider,
+        ciphertext: MlsCiphertext,
+    ) -> Vec<u8> {
+        let group_events = self
+            .0
+            .process_message(MlsMessageIn::Ciphertext(ciphertext), provider)
+            .unwrap();
+
+        match group_events.last() {
+            Some(GroupEvent::ApplicationMessage(application_message_event)) => {
+                application_message_event.message().to_owned()
+            }
+            _ => panic!("Expected an ApplicationMessage event"),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -70,11 +90,15 @@ mod test {
     #[test]
     fn is_active() {
         let key_pair = KeyPair::new();
+
         let member = MlsMember::new(key_pair);
         let group_id = GroupId::random(member.provider());
         let mut group = MlsGroup::new(group_id, &member);
-        let data = group.encrypt(member.provider(), "test".as_bytes());
-        println!("{:?}", data);
         assert_eq!(group.is_active(), true);
+
+        let message = "This is a very secret message";
+        let ciphertext = group.encrypt(member.provider(), message.as_bytes());
+        let plaintext = group.decrypt(member.provider(), ciphertext);
+        assert_eq!(&plaintext, message.as_bytes());
     }
 }
