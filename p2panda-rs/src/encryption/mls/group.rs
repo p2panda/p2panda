@@ -7,7 +7,7 @@ use openmls::group::{
 use openmls::prelude::WireFormat;
 use openmls_traits::OpenMlsCryptoProvider;
 
-use crate::mls::{MlsMember, MLS_PADDING_SIZE};
+use crate::encryption::mls::{MlsMember, MLS_PADDING_SIZE};
 
 /// Wrapper around the Managed MLS Group.
 #[derive(Debug)]

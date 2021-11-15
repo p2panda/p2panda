@@ -5,12 +5,12 @@ use openmls::prelude::{
     Credential, CredentialBundle, CredentialType, Extension, KeyPackage, KeyPackageBundle,
     LifetimeExtension,
 };
-use openmls_traits::key_store::{FromKeyStoreValue, OpenMlsKeyStore};
+use openmls_traits::key_store::OpenMlsKeyStore;
 use openmls_traits::OpenMlsCryptoProvider;
 
+use crate::encryption::mls::MlsProvider;
+use crate::encryption::mls::{MLS_CIPHERSUITE_NAME, MLS_LIFETIME_EXTENSION};
 use crate::identity::KeyPair;
-use crate::mls::MlsProvider;
-use crate::mls::{MLS_CIPHERSUITE_NAME, MLS_LIFETIME_EXTENSION};
 
 #[derive(Debug)]
 pub struct MlsMember {
