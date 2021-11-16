@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 /// All user schema
 pub const USER_SCHEMA: &str = r#"
     userSchema = {
