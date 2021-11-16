@@ -9,6 +9,13 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+- `test_utils` module which contains:
+    - fixtures implemented using `rstest`
+    - templates for running tests against multiple test conditions
+    - `Node` and `Client` structs used for mocking a network environment
+    - method for generating test data formatted correctly for `p2panda-js` test setup
+
 ## [0.2.1]
 
 Released on 2021-10-26: :package: `p2panda-js` :package: `p2panda-rs`
