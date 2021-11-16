@@ -33,6 +33,7 @@ pub fn encrypt(key: &[u8], plaintext: &[u8]) -> Result<(Vec<u8>, Vec<u8>), AesEr
     // Generate unique, random nonce before every encryption
     let nonce = generate_nonce();
 
+    // Encrypt with AES256 GCM SIV block cipher and return ciphertext and used nonce
     Aes256GcmSiv::new(key.into())
         .encrypt(nonce.as_slice().into(), plaintext)
         .map(|ciphertext| (ciphertext, nonce))

@@ -46,6 +46,29 @@ impl MlsGroup {
         Self(group)
     }
 
+    pub fn group_id(&self) -> &GroupId {
+        self.0.group_id()
+    }
+
+    pub fn aad(&mut self) -> &[u8] {
+        self.0.aad()
+    }
+
+    pub fn set_aad(&mut self, aad: &[u8]) {
+        self.0.set_aad(aad);
+    }
+
+    pub fn export_secret(
+        &self,
+        provider: &impl OpenMlsCryptoProvider,
+        label: &str,
+        key_length: usize,
+    ) -> Vec<u8> {
+        self.0
+            .export_secret(provider, label, &[], key_length)
+            .unwrap()
+    }
+
     /// Returns true if the group is still active for this member (maybe it has been removed or
     /// left the group).
     pub fn is_active(&self) -> bool {
