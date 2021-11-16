@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::test_utils::logs::LogEntry;
-use crate::test_utils::materializer::Materializer;
+use crate::test_utils::materialiser::Materialiser;
 use crate::test_utils::node::utils::PERMISSIONS_SCHEMA_HASH;
 
 /// Get all permission entries from this author
@@ -19,7 +19,7 @@ pub fn author_permission_entries(entries: &Vec<LogEntry>, author: &String) -> Ve
 /// Filter entries against Instance permissions
 pub fn filter_entries(entries: Vec<LogEntry>) -> Vec<LogEntry> {
     let mut filtered_entries = Vec::new();
-    let mut materializer = Materializer::new();
+    let mut materialiser = Materialiser::new();
 
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Check permissions
@@ -29,7 +29,7 @@ pub fn filter_entries(entries: Vec<LogEntry>) -> Vec<LogEntry> {
         // Materialize permissions entries by this author
         let author_permissions_entries =
             author_permission_entries(&entries, &entry.instance_author());
-        let author_permissions = materializer
+        let author_permissions = materialiser
             .materialize(&author_permissions_entries)
             .unwrap();
 

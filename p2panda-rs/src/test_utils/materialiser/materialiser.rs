@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::message::{Message, MessageFields};
 
 use crate::test_utils::logs::LogEntry;
-use crate::test_utils::materializer::DAG;
+use crate::test_utils::materialiser::DAG;
 use crate::test_utils::node::utils::Result;
 
 /// A wrapper type representing a HashMap of instances stored by Instance id.
@@ -20,7 +20,7 @@ type SchemaDatabase = HashMap<String, Instances>;
 /// Concurrent edits are resloved in a last-writer-wins, the order of writes being decided by alphabetically ordering
 /// Entries by their hash.
 #[derive(Debug)]
-pub struct Materializer {
+pub struct Materialiser {
     // The final data structure where materialized instances are stored
     data: SchemaDatabase,
     // Messages stored by Entry hash
@@ -29,8 +29,8 @@ pub struct Materializer {
     dags: HashMap<String, DAG>,
 }
 
-impl Materializer {
-    /// Create new materializer
+impl Materialiser {
+    /// Create new materialiser
     pub fn new() -> Self {
         Self {
             data: HashMap::new(),
@@ -193,7 +193,7 @@ impl Materializer {
 mod tests {
     use rstest::rstest;
 
-    use super::Materializer;
+    use super::Materialiser;
 
     use crate::message::MessageValue;
     use crate::test_utils::client::Client;
@@ -261,20 +261,20 @@ mod tests {
         // Get all entries
         let entries = node.all_entries();
 
-        // Initialize materializer
-        let mut materializer = Materializer::new();
+        // Initialize materialiser
+        let mut materialiser = Materialiser::new();
 
         // Build instance DAGs from vector of all entries of one author
-        materializer.build_dags(entries.clone());
+        materialiser.build_dags(entries.clone());
 
         // Get the instance DAG (in the form of a vector of edges) for the two existing instances
-        let mut instance_dag_1 = materializer
+        let mut instance_dag_1 = materialiser
             .dags()
             .get(entries[0].entry_encoded().as_str())
             .unwrap()
             .to_owned()
             .graph();
-        let mut instance_dag_2 = materializer
+        let mut instance_dag_2 = materialiser
             .dags()
             .get(entries[3].entry_encoded().as_str())
             .unwrap()
@@ -310,11 +310,11 @@ mod tests {
         // Get all entries
         let entries = node.all_entries();
 
-        // Initialize materializer
-        let mut materializer = Materializer::new();
+        // Initialize materialiser
+        let mut materialiser = Materialiser::new();
 
         // Materialize all instances
-        let instances = materializer.materialize(&entries).unwrap();
+        let instances = materialiser.materialize(&entries).unwrap();
 
         // Get instances for MESSAGE_SCHEMA
         let schema_instances = instances.get(MESSAGE_SCHEMA).unwrap();
@@ -350,7 +350,7 @@ mod tests {
         let entries = node.all_entries();
 
         // Materialize all instances
-        let instances = materializer.materialize(&entries).unwrap();
+        let instances = materialiser.materialize(&entries).unwrap();
 
         // Get instances for MESSAGE_SCHEMA
         let schema_instances = instances.get(MESSAGE_SCHEMA).unwrap();
@@ -376,20 +376,20 @@ mod tests {
         // Get all entries
         let entries = node.all_entries();
 
-        // Initialize materializer
-        let mut materializer = Materializer::new();
+        // Initialize materialiser
+        let mut materialiser = Materialiser::new();
 
         // Materialize entries
-        materializer.materialize(&entries).unwrap();
+        materialiser.materialize(&entries).unwrap();
 
         // Fetch all instances
-        let instances = materializer.query_all(&MESSAGE_SCHEMA.to_string()).unwrap();
+        let instances = materialiser.query_all(&MESSAGE_SCHEMA.to_string()).unwrap();
 
         // There should be one instance
         assert_eq!(instances.len(), 1);
 
         // Query for one instance by id
-        let instance = materializer
+        let instance = materialiser
             .query_instance(
                 &MESSAGE_SCHEMA.to_string(),
                 &entries[3].entry_encoded().as_str().to_string(),

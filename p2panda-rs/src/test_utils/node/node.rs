@@ -10,7 +10,7 @@ use crate::message::{Message, MessageFields};
 
 use crate::test_utils::client::Client;
 use crate::test_utils::logs::{Log, LogEntry};
-use crate::test_utils::materializer::{filter_entries, Materializer};
+use crate::test_utils::materialiser::{filter_entries, Materialiser};
 use crate::test_utils::node::utils::{
     Result, GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
 };
@@ -277,11 +277,11 @@ impl Node {
     /// Get the next instance args (hahs of the entry considered the tip of this instance) needed when publishing
     /// UPDATE or DELETE messages
     pub fn next_instance_args(&mut self, instance_id: &str) -> Option<String> {
-        let mut materializer = Materializer::new();
+        let mut materialiser = Materialiser::new();
         let filtered_entries = filter_entries(self.all_entries());
-        materializer.build_dags(filtered_entries);
+        materialiser.build_dags(filtered_entries);
         // Get the instance with this id
-        match materializer.dags().get_mut(instance_id) {
+        match materialiser.dags().get_mut(instance_id) {
             // Sort it topologically and take the last entry hash
             Some(instance_dag) => instance_dag.topological().pop(),
             None => None,
@@ -343,30 +343,30 @@ impl Node {
     /// Get all Instances of this Schema
     pub fn query_all(&self, schema: &String) -> Result<HashMap<String, MessageFields>> {
         // Instanciate a new materialzer instance
-        let mut materializer = Materializer::new();
+        let mut materialiser = Materialiser::new();
 
         // Filter published entries against permissions published to user system log
         let filtered_entries = filter_entries(self.all_entries());
 
         // Materialize Instances resolving merging concurrent edits
-        materializer.materialize(&filtered_entries)?;
+        materialiser.materialize(&filtered_entries)?;
 
         // Query the materialized Instances
-        materializer.query_all(schema)
+        materialiser.query_all(schema)
     }
 
     /// Get a specific Instance
     pub fn query(&self, schema: &String, instance: &String) -> Result<MessageFields> {
         // Instanciate a new materialzer instance
-        let mut materializer = Materializer::new();
+        let mut materialiser = Materialiser::new();
 
         // Filter published entries against permissions published to user system log
         let filtered_entries = filter_entries(self.all_entries());
 
         // Materialize Instances resolving merging concurrent edits
-        materializer.materialize(&filtered_entries)?;
+        materialiser.materialize(&filtered_entries)?;
 
         // Query the materialized Instances
-        materializer.query_instance(schema, instance)
+        materialiser.query_instance(schema, instance)
     }
 }

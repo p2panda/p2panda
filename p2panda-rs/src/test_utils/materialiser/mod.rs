@@ -5,9 +5,9 @@
 //! Only to be used in a testing environment!
 
 mod dag;
-mod materializer;
+mod materialiser;
 mod processor;
 
 pub use dag::DAG;
-pub use materializer::Materializer;
+pub use materialiser::Materialiser;
 pub use processor::filter_entries;

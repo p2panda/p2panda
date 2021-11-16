@@ -13,7 +13,7 @@
 pub mod fixtures;
 pub mod logs;
 pub mod node;
-pub mod materializer;
+pub mod materialiser;
 pub mod data;
 pub mod client;
 mod utils;
