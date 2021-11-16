@@ -9,6 +9,12 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+- Early stage `Materialisation` module which contains
+    - struct for constructing a directed acyclic graph from a list of `Edges`
+    - helper method for marshalling a list of p2panda `Entries` into a list of `Edges`
+
 ## [0.2.1]
 
 Released on 2021-10-26: :package: `p2panda-js` :package: `p2panda-rs`
