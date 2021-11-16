@@ -9,6 +9,13 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+- `SchemaBuilder` struct for programatically constructing CDDL schema
+- `Schema` struct for: 
+    - creating `Messages` whose content is validated against a CDDL schema
+    - validating `MessageFields` against a CDDL schema   
+
 ## [0.2.1]
 
 Released on 2021-10-26: :package: `p2panda-js` :package: `p2panda-rs`
