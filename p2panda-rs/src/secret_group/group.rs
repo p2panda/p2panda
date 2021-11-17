@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::group::{GroupEpoch, GroupId};
+use openmls::group::GroupId;
 use openmls::prelude::KeyPackage;
 use openmls_traits::OpenMlsCryptoProvider;
 
 use crate::hash::Hash;
-use crate::secret_group::lts::{LongTermSecretEpoch, LongTermSecret};
+use crate::secret_group::lts::{LongTermSecret, LongTermSecretEpoch};
 use crate::secret_group::mls::MlsGroup;
 use crate::secret_group::{SecretGroupCommit, SecretGroupMember, SecretGroupMessage};
 
@@ -15,6 +15,9 @@ pub struct SecretGroup {
 }
 
 impl SecretGroup {
+    // Creation
+    // ========
+
     pub fn new(
         provider: &impl OpenMlsCryptoProvider,
         group_instance_id: &Hash,
@@ -94,14 +97,14 @@ impl SecretGroup {
         todo!();
     }
 
-    // State
-    // =====
+    // Status
+    // ======
 
-    pub fn group_id(&self) -> &Hash {
+    pub fn is_active(&self) -> bool {
         todo!();
     }
 
-    pub fn epoch(&self) -> &GroupEpoch {
+    pub fn group_id(&self) -> &Hash {
         todo!();
     }
 
@@ -251,7 +254,6 @@ mod tests {
         // own LongTermSecrets state and imports the public, encrypted secret from Billies
         // `SecretGroupCommit` instance.
         let mut ada_group = SecretGroup::new_from_welcome(&ada_provider, &group_commit);
-        assert_eq!(ada_group.epoch(), billie_group.epoch());
 
         // ~~~~~~~~~~~~~~~~
         // En- & Decryption

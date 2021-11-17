@@ -2,7 +2,7 @@
 
 use openmls::framing::MlsCiphertext;
 use openmls::group::{
-    GroupEvent, GroupId, ManagedGroup, ManagedGroupConfig, MlsMessageIn, MlsMessageOut,
+    GroupEpoch, GroupEvent, GroupId, ManagedGroup, ManagedGroupConfig, MlsMessageIn, MlsMessageOut,
 };
 use openmls::prelude::{KeyPackage, Welcome, WireFormat};
 use openmls_traits::OpenMlsCryptoProvider;
@@ -29,6 +29,9 @@ impl MlsGroup {
             .build()
     }
 
+    // Creation
+    // ========
+
     /// Creates a new MLS group. A group is always created with a single member, the "creator".
     ///
     /// The given KeyPackage ("InitKeys") will directly be consumed during group creation and not
@@ -54,6 +57,9 @@ impl MlsGroup {
         Self(group)
     }
 
+    // Membership
+    // ==========
+
     pub fn add_members(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
@@ -62,17 +68,30 @@ impl MlsGroup {
         self.0.add_members(provider, members).unwrap()
     }
 
-    pub fn group_id(&self) -> &GroupId {
-        self.0.group_id()
+    pub fn remove_members(
+        &mut self,
+        provider: &impl OpenMlsCryptoProvider,
+        member_leaf_indexes: &[usize],
+    ) -> MlsMessageOut {
+        self.0
+            .remove_members(provider, member_leaf_indexes)
+            .unwrap()
+            .0
     }
 
-    pub fn aad(&mut self) -> &[u8] {
-        self.0.aad()
+    // Commits
+    // =======
+
+    pub fn process_commit(
+        &mut self,
+        provider: &impl OpenMlsCryptoProvider,
+        message: MlsMessageIn,
+    ) -> Vec<GroupEvent> {
+        self.0.process_message(message, provider).unwrap()
     }
 
-    pub fn set_aad(&mut self, aad: &[u8]) {
-        self.0.set_aad(aad);
-    }
+    // Encryption
+    // ==========
 
     pub fn export_secret(
         &self,
@@ -83,12 +102,6 @@ impl MlsGroup {
         self.0
             .export_secret(provider, label, &[], key_length)
             .unwrap()
-    }
-
-    /// Returns true if the group is still active for this member (maybe it has been removed or
-    /// left the group).
-    pub fn is_active(&self) -> bool {
-        self.0.is_active()
     }
 
     pub fn encrypt(&mut self, provider: &impl OpenMlsCryptoProvider, data: &[u8]) -> Vec<u8> {
@@ -121,6 +134,19 @@ impl MlsGroup {
             }
             _ => panic!("Expected an ApplicationMessage event"),
         }
+    }
+
+    // Status
+    // ======
+
+    pub fn group_id(&self) -> &GroupId {
+        self.0.group_id()
+    }
+
+    /// Returns true if the group is still active for this member (maybe it has been removed or
+    /// left the group).
+    pub fn is_active(&self) -> bool {
+        self.0.is_active()
     }
 }
 
