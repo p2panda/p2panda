@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::group::GroupId;
+use openmls::group::{GroupId, MlsMessageIn, MlsMessageOut};
 use openmls::prelude::KeyPackage;
 use openmls_traits::OpenMlsCryptoProvider;
 
@@ -38,75 +38,111 @@ impl SecretGroup {
         provider: &impl OpenMlsCryptoProvider,
         commit: &SecretGroupCommit,
     ) -> Self {
-        todo!();
+        let mls_group = MlsGroup::new_from_welcome(
+            provider,
+            commit
+                .welcome()
+                .expect("This SecretGroupCommit does not contain a welcome message!"),
+        );
+
+        Self {
+            mls_group,
+            long_term_secrets: Vec::new(),
+        }
     }
 
     // Membership
     // ==========
 
     pub fn add_members(
-        &self,
+        &mut self,
         provider: &impl OpenMlsCryptoProvider,
-        members: &[KeyPackage],
+        key_packages: &[KeyPackage],
     ) -> SecretGroupCommit {
-        todo!();
+        let (message_out, welcome) = self.mls_group.add_members(provider, key_packages);
+
+        let mls_commit_message = match message_out {
+            MlsMessageOut::Plaintext(message) => message,
+            _ => panic!("This should never happen"),
+        };
+
+        SecretGroupCommit::new(mls_commit_message, Some(welcome))
     }
 
     pub fn remove_members(
-        &self,
+        &mut self,
         provider: &impl OpenMlsCryptoProvider,
-        members: &[Author],
+        public_keys: &[Author],
     ) -> SecretGroupCommit {
-        todo!();
+        // @TODO: Identiy leaf indexes based on public keys.
+        let member_leaf_indexes: Vec<usize> = vec![];
+
+        let message_out = self
+            .mls_group
+            .remove_members(provider, member_leaf_indexes.as_slice());
+
+        let mls_commit_message = match message_out {
+            MlsMessageOut::Plaintext(message) => message,
+            _ => panic!("This should never happen"),
+        };
+
+        SecretGroupCommit::new(mls_commit_message, None)
     }
 
     // Commits
     // =======
 
     pub fn process_commit(
-        &self,
+        &mut self,
         provider: &impl OpenMlsCryptoProvider,
         commit: &SecretGroupCommit,
     ) {
-        todo!();
+        self.mls_group
+            .process_commit(provider, MlsMessageIn::Plaintext(commit.commit()));
     }
 
     // Encryption
     // ==========
 
     pub fn encrypt(
-        &self,
+        &mut self,
         provider: &impl OpenMlsCryptoProvider,
         data: &[u8],
     ) -> SecretGroupMessage {
-        todo!();
+        let mls_ciphertext = self.mls_group.encrypt(provider, data);
+        SecretGroupMessage::MlsApplicationMessage(mls_ciphertext)
     }
 
-    pub fn encrypt_with_long_term_secret(
-        &self,
-        provider: &impl OpenMlsCryptoProvider,
-        data: &[u8],
-    ) -> SecretGroupMessage {
+    pub fn encrypt_with_long_term_secret(&self, data: &[u8]) -> SecretGroupMessage {
+        // @TODO: Get latest long term secret from array and encrypt data with it
         todo!();
     }
 
     pub fn decrypt(
-        &self,
+        &mut self,
         provider: &impl OpenMlsCryptoProvider,
         message: &SecretGroupMessage,
     ) -> Vec<u8> {
-        todo!();
+        match message {
+            SecretGroupMessage::MlsApplicationMessage(ciphertext) => {
+                self.mls_group.decrypt(provider, ciphertext.clone())
+            }
+            _ => {
+                todo!();
+            }
+        }
     }
 
     // Status
     // ======
 
     pub fn is_active(&self) -> bool {
-        todo!();
+        self.mls_group.is_active()
     }
 
-    pub fn group_id(&self) -> &Hash {
-        todo!();
+    pub fn group_id(&self) -> Hash {
+        let group_id_bytes = self.mls_group.group_id().as_slice().to_vec();
+        Hash::new_from_bytes(group_id_bytes).unwrap()
     }
 
     pub fn long_term_epoch(&self) -> &LongTermSecretEpoch {
@@ -118,9 +154,9 @@ impl SecretGroup {
 mod tests {
     use std::convert::TryFrom;
 
-    use crate::secret_group::mls::MlsProvider;
     use crate::hash::Hash;
     use crate::identity::{Author, KeyPair};
+    use crate::secret_group::mls::MlsProvider;
 
     use super::{SecretGroup, SecretGroupMember};
 
@@ -265,8 +301,8 @@ mod tests {
 
         // Billie sends an symmetrically encrypted message to Ada, the `LongTermSecrets` will
         // automatically use the latest secret for encryption
-        let message_ciphertext = billie_group
-            .encrypt_with_long_term_secret(&billie_provider, b"This is a secret message");
+        let message_ciphertext =
+            billie_group.encrypt_with_long_term_secret(b"This is a secret message");
 
         // * Any instance will be created, using `message_ciphertext` as a message field
         //

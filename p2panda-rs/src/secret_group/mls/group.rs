@@ -2,11 +2,10 @@
 
 use openmls::framing::MlsCiphertext;
 use openmls::group::{
-    GroupEpoch, GroupEvent, GroupId, ManagedGroup, ManagedGroupConfig, MlsMessageIn, MlsMessageOut,
+    GroupEvent, GroupId, ManagedGroup, ManagedGroupConfig, MlsMessageIn, MlsMessageOut,
 };
 use openmls::prelude::{KeyPackage, Welcome, WireFormat};
 use openmls_traits::OpenMlsCryptoProvider;
-use tls_codec::{Deserialize, Serialize};
 
 use crate::secret_group::mls::MLS_PADDING_SIZE;
 
@@ -104,28 +103,23 @@ impl MlsGroup {
             .unwrap()
     }
 
-    pub fn encrypt(&mut self, provider: &impl OpenMlsCryptoProvider, data: &[u8]) -> Vec<u8> {
+    pub fn encrypt(&mut self, provider: &impl OpenMlsCryptoProvider, data: &[u8]) -> MlsCiphertext {
         let message = self.0.create_message(provider, data).unwrap();
 
-        let ciphertext = match message {
+        match message {
             MlsMessageOut::Ciphertext(ciphertext) => ciphertext,
             _ => panic!("This will never happen"),
-        };
-
-        ciphertext.tls_serialize_detached().unwrap()
+        }
     }
 
     pub fn decrypt(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
-        encoded_message: Vec<u8>,
+        ciphertext: MlsCiphertext,
     ) -> Vec<u8> {
-        let decoded_message =
-            MlsCiphertext::tls_deserialize(&mut encoded_message.as_slice()).unwrap();
-
         let group_events = self
             .0
-            .process_message(MlsMessageIn::Ciphertext(decoded_message), provider)
+            .process_message(MlsMessageIn::Ciphertext(ciphertext), provider)
             .unwrap();
 
         match group_events.last() {
