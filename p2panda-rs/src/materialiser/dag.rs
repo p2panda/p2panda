@@ -132,7 +132,8 @@ impl DAG {
 
 #[cfg(test)]
 mod tests {
-    use super::DAG;
+    use rstest::{fixture, rstest};
+    use std::convert::TryFrom;
 
     use crate::entry::{sign_and_encode, Entry, LogId, SeqNum};
     use crate::hash::Hash;
@@ -140,8 +141,7 @@ mod tests {
     use crate::materialiser::{marshall_entries, Edge};
     use crate::message::{Message, MessageEncoded, MessageFields, MessageValue};
 
-    use rstest::{fixture, rstest};
-    use std::convert::TryFrom;
+    use super::DAG;
 
     // All this boilerplate to be removed once `p2panda-tests` is merged.
     fn create_message_fields(keys: Vec<&str>, values: Vec<&str>) -> MessageFields {
