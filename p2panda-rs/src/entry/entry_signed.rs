@@ -12,6 +12,7 @@ use crate::hash::{Blake2BArrayVec, Hash};
 use crate::identity::Author;
 use crate::message::MessageEncoded;
 use crate::Validate;
+
 /// Bamboo entry bytes represented in hex encoding format.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(
