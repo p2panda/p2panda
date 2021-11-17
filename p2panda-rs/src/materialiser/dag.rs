@@ -137,7 +137,7 @@ mod tests {
     use crate::entry::{sign_and_encode, Entry, LogId, SeqNum};
     use crate::hash::Hash;
     use crate::identity::KeyPair;
-    use crate::materializer::{marshall_entries, Edge};
+    use crate::materialiser::{marshall_entries, Edge};
     use crate::message::{Message, MessageEncoded, MessageFields, MessageValue};
 
     use rstest::{fixture, rstest};

@@ -5,12 +5,8 @@ use thiserror::Error;
 /// Error types for methods of `Materializer` struct.
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
-pub enum MaterializationError {
-    /// Materialization error.
-    #[error("materialization error")]
-    Error,
-    
-    /// Handle errors from `EntrySignedError` struct.
+pub enum MaterialisationError {
+        /// Handle errors from `EntrySignedError` struct.
     #[error(transparent)]
     EntrySignedError(#[from] crate::entry::EntrySignedError),
 }

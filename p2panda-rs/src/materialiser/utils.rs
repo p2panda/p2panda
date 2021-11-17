@@ -2,7 +2,7 @@
 
 use crate::entry::{decode_entry, EntrySigned};
 use crate::identity::Author;
-use crate::materializer::{Edge, MaterializationError};
+use crate::materialiser::{Edge, MaterialisationError};
 use crate::message::MessageEncoded;
 
 pub type InstanceAuthor = Author;
@@ -12,12 +12,12 @@ pub type InstanceAuthor = Author;
 /// Strings. This step will look different once have some more instance related fields in our Message struct.
 pub fn marshall_entries(
     entries: Vec<(EntrySigned, MessageEncoded)>,
-) -> Result<Vec<Edge>, MaterializationError> {
+) -> Result<Vec<Edge>, MaterialisationError> {
     let mut edges = Vec::new();
     for (entry_signed, message_encoded) in entries {
         let entry = match decode_entry(&entry_signed, Some(&message_encoded)) {
             Ok(entry) => Ok(entry),
-            Err(err) => Err(MaterializationError::EntrySignedError(err)),
+            Err(err) => Err(MaterialisationError::EntrySignedError(err)),
         }?;
 
         if entry.message().is_none() {

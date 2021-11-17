@@ -4,6 +4,6 @@ mod dag;
 mod utils;
 mod error;
 
-pub use error::MaterializationError;
+pub use error::MaterialisationError;
 pub use dag::{Node, Edge, DAG};
 pub use utils::marshall_entries;
