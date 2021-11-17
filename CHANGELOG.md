@@ -11,9 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
-- Early stage `Materialisation` module which contains
-    - struct for constructing a directed acyclic graph from a list of `Edges`
-    - helper method for marshalling a list of p2panda `Entries` into a list of `Edges`
+- Reconciliation logic /w DAG for materialisation module [#129](https://github.com/p2panda/p2panda/pull/129)
 
 ## [0.2.1]
 
