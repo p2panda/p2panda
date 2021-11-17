@@ -11,10 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
-- `SchemaBuilder` struct for programatically constructing CDDL schema
-- `Schema` struct for: 
-    - creating `Messages` whose content is validated against a CDDL schema
-    - validating `MessageFields` against a CDDL schema   
+- `SchemaBuilder` and `Schema` structs for working with CDDL definitions [78](https://github.com/p2panda/p2panda/pull/78) `rs`
 
 ## [0.2.1]
 
