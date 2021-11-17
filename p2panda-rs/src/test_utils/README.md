@@ -6,12 +6,14 @@
 
 <br />
 
-This module provides tools used for testing and generating test data for `p2panda-rs` and `p2panda-js`. 
+`src/test_utils` provides tools which can be used for testing in `rust` and the generation of test data (currently used in `p2panda-js`). 
 
 It includes:
+- fixtures
+- fixture templates
 - a mock node
 - a mock client
-- methods for generating test data (used in `p2panda-js` tests)
+- methods for generating test data
 
 ## Development
 
