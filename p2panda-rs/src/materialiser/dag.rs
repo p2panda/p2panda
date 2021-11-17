@@ -11,16 +11,16 @@ pub type Edge = (Option<Node>, Node);
 /// nodes.
 #[derive(Clone, Debug)]
 pub struct DAG {
-    // the DAG structure
+    /// An array of edges which make up the graph. For p2p2anda this is an array of tuples of
+    /// Entry hashes [(Some("00x42asd..."), "00x435d..."), .... ], but it can be any string.
+    /// The first string in the tuple is optional as the root of the graph has no parent.
     graph: Vec<Edge>,
 }
 
 impl DAG {
+    /// Instantiate a new empty graph
     pub fn new() -> Self {
         DAG {
-            /// An array of edges which make up the graph. For p2p2anda this is an array of tuples of
-            /// Entry hashes [(Some("00x42asd..."), "00x435d..."), .... ], but it can be any string.
-            /// The first string in the tuple is optional as the root of the graph has no parent.
             graph: Vec::new(),
         }
     }
