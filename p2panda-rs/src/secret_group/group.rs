@@ -5,13 +5,13 @@ use openmls::prelude::KeyPackage;
 use openmls_traits::OpenMlsCryptoProvider;
 
 use crate::hash::Hash;
-use crate::secret_group::lts::{LongTermSecretEpoch, LongTermSecrets};
+use crate::secret_group::lts::{LongTermSecretEpoch, LongTermSecret};
 use crate::secret_group::mls::MlsGroup;
 use crate::secret_group::{SecretGroupCommit, SecretGroupMember, SecretGroupMessage};
 
 pub struct SecretGroup {
     mls_group: MlsGroup,
-    long_term_secrets: LongTermSecrets,
+    long_term_secrets: Vec<LongTermSecret>,
 }
 
 impl SecretGroup {
@@ -23,11 +23,10 @@ impl SecretGroup {
         let init_key_package = member.key_package(provider);
         let group_id = GroupId::from_slice(&group_instance_id.to_bytes());
         let mls_group = MlsGroup::new(provider, group_id, init_key_package);
-        let long_term_secrets = LongTermSecrets::new();
 
         Self {
             mls_group,
-            long_term_secrets,
+            long_term_secrets: Vec::new(),
         }
     }
 

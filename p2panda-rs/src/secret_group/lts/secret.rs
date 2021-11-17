@@ -9,15 +9,3 @@ pub struct LongTermSecret {
     long_term_epoch: LongTermSecretEpoch,
     value: Vec<u8>,
 }
-
-pub struct LongTermSecrets {
-    secrets: Vec<LongTermSecret>,
-}
-
-impl LongTermSecrets {
-    pub fn new() -> Self {
-        Self {
-            secrets: Vec::new(),
-        }
-    }
-}

@@ -2,7 +2,7 @@
 
 //! Long Term Secrets
 mod ciphersuite;
-mod secrets;
+mod secret;
 
 pub use ciphersuite::LongTermSecretCiphersuite;
-pub use secrets::{LongTermSecret, LongTermSecrets, LongTermSecretEpoch};
+pub use secret::{LongTermSecret, LongTermSecretEpoch};
