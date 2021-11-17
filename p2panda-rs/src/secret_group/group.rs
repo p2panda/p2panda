@@ -5,6 +5,7 @@ use openmls::prelude::KeyPackage;
 use openmls_traits::OpenMlsCryptoProvider;
 
 use crate::hash::Hash;
+use crate::identity::Author;
 use crate::secret_group::lts::{LongTermSecret, LongTermSecretEpoch};
 use crate::secret_group::mls::MlsGroup;
 use crate::secret_group::{SecretGroupCommit, SecretGroupMember, SecretGroupMessage};
@@ -54,7 +55,7 @@ impl SecretGroup {
     pub fn remove_members(
         &self,
         provider: &impl OpenMlsCryptoProvider,
-        members: &[KeyPackage],
+        members: &[Author],
     ) -> SecretGroupCommit {
         todo!();
     }
@@ -115,8 +116,11 @@ impl SecretGroup {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
+
     use crate::secret_group::mls::MlsProvider;
-    use crate::{hash::Hash, identity::KeyPair};
+    use crate::hash::Hash;
+    use crate::identity::{Author, KeyPair};
 
     use super::{SecretGroup, SecretGroupMember};
 
@@ -143,7 +147,7 @@ mod tests {
         // the MLS credentials based on the given key pair. A `SecretGroupMember` instance can also
         // be used to generate MLS key packages.
         let billie_key_pair = KeyPair::new();
-        let billie_public_key = billie_key_pair.public_key().clone();
+        let billie_public_key = Author::try_from(billie_key_pair.public_key().clone()).unwrap();
         let billie_provider = MlsProvider::new(billie_key_pair);
         let billie_member = SecretGroupMember::new(&billie_provider, &billie_public_key);
 
@@ -158,7 +162,7 @@ mod tests {
 
         // Ada generates a new key pair to also create a new `SecretGroupMember` instance
         let ada_key_pair = KeyPair::new();
-        let ada_public_key = ada_key_pair.public_key().clone();
+        let ada_public_key = Author::try_from(ada_key_pair.public_key().clone()).unwrap();
         let ada_provider = MlsProvider::new(ada_key_pair);
         let ada_member = SecretGroupMember::new(&billie_provider, &ada_public_key);
 
