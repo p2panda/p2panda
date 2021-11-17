@@ -7,7 +7,7 @@ pub type Node = String;
 pub type Edge = (Option<Node>, Node);
 
 /// A directed acyclic graph which can be ordered topologically in a depth-first sort. It is
-/// described by a list of `edges` which in turn descirbe connections between parent and child
+/// described by a list of `edges` which in turn describe connections between parent and child
 /// nodes.
 #[derive(Clone, Debug)]
 pub struct DAG {
