@@ -9,6 +9,7 @@ pub struct SecretGroupCommit {
 }
 
 impl SecretGroupCommit {
+    // @TODO: Use 'MlsMessageOut' for commit argument type
     pub fn new(commit: MlsPlaintext, welcome: Option<Welcome>) -> Self {
         Self {
             mls_commit_message: commit,
@@ -16,6 +17,7 @@ impl SecretGroupCommit {
         }
     }
 
+    // @TODO: Use 'MlsMessageIn' as return type
     pub fn commit(&self) -> VerifiableMlsPlaintext {
         let message_clone = self.mls_commit_message.clone();
         VerifiableMlsPlaintext::from_plaintext(message_clone, None)

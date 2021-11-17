@@ -66,6 +66,9 @@ impl SecretGroup {
             _ => panic!("This should never happen"),
         };
 
+        // @TODO: Process commit message directly
+        // @TODO: Re-Encrypt long term secrets
+
         SecretGroupCommit::new(mls_commit_message, Some(welcome))
     }
 
@@ -86,6 +89,9 @@ impl SecretGroup {
             _ => panic!("This should never happen"),
         };
 
+        // @TODO: Process commit message directly
+        // @TODO: Re-Encrypt long term secrets
+
         SecretGroupCommit::new(mls_commit_message, None)
     }
 
@@ -97,6 +103,8 @@ impl SecretGroup {
         provider: &impl OpenMlsCryptoProvider,
         commit: &SecretGroupCommit,
     ) {
+        // @TODO: Process long term secrets as well
+
         self.mls_group
             .process_commit(provider, MlsMessageIn::Plaintext(commit.commit()));
     }
