@@ -82,7 +82,7 @@ impl DAG {
         root
     }
 
-    /// Perform depth-first traversal of DAG, merging all forks, and returns an ordered list of
+    /// Perform depth-first traversal of DAG, merging all forks, returns an ordered list of
     /// nodes.
     pub fn topological(&mut self) -> Vec<Node> {
         // Array of queued graph nodes
