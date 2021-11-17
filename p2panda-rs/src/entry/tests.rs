@@ -15,7 +15,7 @@ mod tests {
     use crate::test_utils::fixtures::templates::{many_entry_versions, messages_not_matching_entry_should_fail, version_fixtures};
 
     /// In this test `entry` and `key_pair` are injected directly from our test fixtures and `message`
-    /// is tested againt all cases on the `messages_not_matching_entry_should_fail` and one manually defined passing case.
+    /// is tested against all cases on the `messages_not_matching_entry_should_fail` and one manually defined passing case.
     #[apply(messages_not_matching_entry_should_fail)]
     #[case(fixtures::defaults::default_message())]
     fn message_validation(entry: Entry, #[case] message: Message, key_pair: KeyPair) {
