@@ -11,7 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
-- Reconciliation logic /w DAG for materialisation module [#129](https://github.com/p2panda/p2panda/pull/129)
+- Reconciliation logic /w DAG for materialisation module [#129](https://github.com/p2panda/p2panda/pull/129) `rs`
 
 ## [0.2.1]
 
