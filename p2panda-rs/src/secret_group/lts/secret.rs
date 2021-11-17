@@ -2,8 +2,10 @@
 
 use crate::secret_group::lts::LongTermSecretCiphersuite;
 
+#[derive(Debug)]
 pub struct LongTermSecretEpoch(pub u64);
 
+#[derive(Debug)]
 pub struct LongTermSecret {
     ciphersuite: LongTermSecretCiphersuite,
     long_term_epoch: LongTermSecretEpoch,

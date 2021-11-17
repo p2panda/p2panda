@@ -10,6 +10,7 @@ use crate::secret_group::lts::{LongTermSecret, LongTermSecretEpoch};
 use crate::secret_group::mls::MlsGroup;
 use crate::secret_group::{SecretGroupCommit, SecretGroupMember, SecretGroupMessage};
 
+#[derive(Debug)]
 pub struct SecretGroup {
     mls_group: MlsGroup,
     long_term_secrets: Vec<LongTermSecret>,
@@ -208,7 +209,7 @@ mod tests {
         let ada_key_pair = KeyPair::new();
         let ada_public_key = Author::try_from(ada_key_pair.public_key().clone()).unwrap();
         let ada_provider = MlsProvider::new(ada_key_pair);
-        let ada_member = SecretGroupMember::new(&billie_provider, &ada_public_key);
+        let ada_member = SecretGroupMember::new(&ada_provider, &ada_public_key);
 
         // Ada publishes their KeyPackage for future group invitations
         let ada_key_package = ada_member.key_package(&ada_provider);
@@ -349,31 +350,4 @@ mod tests {
 
         // ...
     }
-
-    // @TODO: Clean this up here
-    /* #[test]
-    fn encoding() {
-        // SymmetricalMessage
-        let message = SymmetricalMessage {
-            group_id: GroupId::from_slice(b"test"),
-            epoch: GroupEpoch(12),
-            nonce: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].into(),
-            ciphertext: vec![4, 5, 6].into(),
-        };
-
-        let encoded = message.tls_serialize_detached().unwrap();
-        let decoded = SymmetricalMessage::tls_deserialize(&mut encoded.as_slice()).unwrap();
-        assert_eq!(message, decoded);
-
-        // SymmetricalSecret
-        let secret = SymmetricalSecret {
-            ciphersuite: SymmetricalCiphersuite::PANDA_AES256GCMSIV,
-            epoch: GroupEpoch(12),
-            value: vec![4, 12, 3, 6].into(),
-        };
-
-        let encoded = secret.tls_serialize_detached().unwrap();
-        let decoded = SymmetricalSecret::tls_deserialize(&mut encoded.as_slice()).unwrap();
-        assert_eq!(secret, decoded);
-    } */
 }
