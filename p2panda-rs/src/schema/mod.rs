@@ -11,11 +11,9 @@ use cddl::validator::cbor;
 
 mod message;
 mod schema;
-mod utils;
 mod error;
 
 pub use message::MESSAGE_SCHEMA;
-pub use utils::{USER_SCHEMA, USER_SCHEMA_HASH, PERSON_SCHEMA, PERSON_SCHEMA_HASH};
 pub use schema::{Type, Schema, SchemaBuilder};
 pub use error::SchemaError;
 
