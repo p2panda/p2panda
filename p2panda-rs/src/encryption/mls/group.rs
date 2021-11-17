@@ -4,8 +4,9 @@ use openmls::framing::MlsCiphertext;
 use openmls::group::{
     GroupEvent, GroupId, ManagedGroup, ManagedGroupConfig, MlsMessageIn, MlsMessageOut,
 };
-use openmls::prelude::WireFormat;
+use openmls::prelude::{KeyPackage, Welcome, WireFormat};
 use openmls_traits::OpenMlsCryptoProvider;
+use tls_codec::{Deserialize, Serialize};
 
 use crate::encryption::mls::{MlsMember, MLS_PADDING_SIZE};
 
@@ -46,6 +47,22 @@ impl MlsGroup {
         Self(group)
     }
 
+    pub fn new_from_welcome(member: &MlsMember, welcome: Welcome) -> Self {
+        let group =
+            ManagedGroup::new_from_welcome(member.provider(), &Self::config(), welcome, None)
+                .unwrap();
+
+        Self(group)
+    }
+
+    pub fn add_members(
+        &mut self,
+        provider: &impl OpenMlsCryptoProvider,
+        members: &[KeyPackage],
+    ) -> (MlsMessageOut, Welcome) {
+        self.0.add_members(provider, members).unwrap()
+    }
+
     pub fn group_id(&self) -> &GroupId {
         self.0.group_id()
     }
@@ -75,22 +92,28 @@ impl MlsGroup {
         self.0.is_active()
     }
 
-    pub fn encrypt(&mut self, provider: &impl OpenMlsCryptoProvider, data: &[u8]) -> MlsCiphertext {
+    pub fn encrypt(&mut self, provider: &impl OpenMlsCryptoProvider, data: &[u8]) -> Vec<u8> {
         let message = self.0.create_message(provider, data).unwrap();
-        match message {
+
+        let ciphertext = match message {
             MlsMessageOut::Ciphertext(ciphertext) => ciphertext,
             _ => panic!("This will never happen"),
-        }
+        };
+
+        ciphertext.tls_serialize_detached().unwrap()
     }
 
     pub fn decrypt(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
-        ciphertext: MlsCiphertext,
+        encoded_message: Vec<u8>,
     ) -> Vec<u8> {
+        let decoded_message =
+            MlsCiphertext::tls_deserialize(&mut encoded_message.as_slice()).unwrap();
+
         let group_events = self
             .0
-            .process_message(MlsMessageIn::Ciphertext(ciphertext), provider)
+            .process_message(MlsMessageIn::Ciphertext(decoded_message), provider)
             .unwrap();
 
         match group_events.last() {

@@ -42,6 +42,7 @@ serde = { version = "1.0.130", features = ["derive"] }
 serde_cbor = "0.11.2"
 serde_repr = "0.1.7"
 thiserror = "1.0.29"
+tls_codec = "0.1.4"
 yamf-hash = "0.1.2"
 
 # Optional dependencies (behind feature flags)
