@@ -55,12 +55,12 @@
     unused_qualifications
 )]
 
-pub mod encryption;
 pub mod entry;
 pub mod hash;
 pub mod identity;
 pub mod message;
 pub mod schema;
+pub mod secret_group;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 

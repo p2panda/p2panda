@@ -4,7 +4,7 @@ use aes_gcm::aead::{Aead, NewAead};
 use aes_gcm_siv::{Aes256GcmSiv, Nonce};
 use rand_core::{OsRng, RngCore};
 
-use crate::encryption::aes::AesError;
+use crate::secret_group::aes::AesError;
 
 /// Generates an unique random 96 bit nonce for AES256.
 fn generate_nonce() -> Vec<u8> {

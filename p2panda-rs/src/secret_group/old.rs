@@ -1,12 +1,6 @@
 use std::io::{Read, Write};
 
-use openmls::group::{GroupEpoch, GroupId};
-use openmls::prelude::KeyPackage;
 use tls_codec::{Deserialize, Serialize, TlsByteVecU8, TlsDeserialize, TlsSerialize, TlsSize};
-
-use crate::encryption::aes;
-use crate::encryption::mls::{MlsGroup, MlsMember};
-use crate::identity::KeyPair;
 
 const AES_EXPORTER_LABEL: &str = "aes_secret";
 const AES_EXPORTER_KEY_LENGTH: usize = 32;
@@ -250,89 +244,4 @@ impl SymmetricalEncryptionGroup {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use openmls::group::{GroupEpoch, GroupId};
-    use tls_codec::{Deserialize, Serialize};
-
-    use crate::encryption::mls::MlsMember;
-    use crate::identity::KeyPair;
-
-    use super::{
-        SymmetricalCiphersuite, SymmetricalEncryptionGroup, SymmetricalMessage, SymmetricalSecret,
-    };
-
-    #[test]
-    fn aead_encryption() {
-        let key_pair = KeyPair::new();
-        let member = MlsMember::new(key_pair);
-        let group = SymmetricalEncryptionGroup::new(member);
-        let ciphertext = group.encrypt(b"This is a secret message");
-        let plaintext = group.decrypt(ciphertext);
-        assert_eq!(b"This is a secret message".to_vec(), plaintext);
-    }
-
-    #[test]
-    fn aead_secret_encryption() {
-        // Billie creates a group
-        let key_pair = KeyPair::new();
-        let member = MlsMember::new(key_pair);
-        let mut group = SymmetricalEncryptionGroup::new(member);
-
-        // Ada publishes their KeyPackage material
-        let key_pair_2 = KeyPair::new();
-        let member_2 = MlsMember::new(key_pair_2);
-        let key_package = member_2.key_package();
-
-        // Billie generates a new AEAD secret and publishes it
-        // @TODO
-        let secret_ciphertext = group.encrypt_secret();
-
-        // Billie invites Ada into their group
-        // @TODO
-
-        // Ada joins the group
-        // @TODO
-        let mut group_2 = SymmetricalEncryptionGroup::new(member_2);
-
-        // Ada reads and decrypts the published secret of Billie
-        // @TODO
-        let secret = group_2.decrypt_secret(secret_ciphertext);
-        group_2.process_secret(secret);
-
-        // Billie sends an symmetrically encrypted message to Ada
-        let message_ciphertext = group.encrypt(b"This is a secret message");
-
-        // Ada decrypts the message with the secret
-        // @TODO
-        let message = group_2.decrypt(message_ciphertext);
-
-        assert_eq!(b"This is a secret message".to_vec(), message);
-    }
-
-    #[test]
-    fn encoding() {
-        // SymmetricalMessage
-        let message = SymmetricalMessage {
-            group_id: GroupId::from_slice(b"test"),
-            epoch: GroupEpoch(12),
-            nonce: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].into(),
-            ciphertext: vec![4, 5, 6].into(),
-        };
-
-        let encoded = message.tls_serialize_detached().unwrap();
-        let decoded = SymmetricalMessage::tls_deserialize(&mut encoded.as_slice()).unwrap();
-        assert_eq!(message, decoded);
-
-        // SymmetricalSecret
-        let secret = SymmetricalSecret {
-            ciphersuite: SymmetricalCiphersuite::PANDA_AES256GCMSIV,
-            epoch: GroupEpoch(12),
-            value: vec![4, 12, 3, 6].into(),
-        };
-
-        let encoded = secret.tls_serialize_detached().unwrap();
-        let decoded = SymmetricalSecret::tls_deserialize(&mut encoded.as_slice()).unwrap();
-        assert_eq!(secret, decoded);
-    }
-}
+// ==========================================================

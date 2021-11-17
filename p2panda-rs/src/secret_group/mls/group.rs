@@ -8,7 +8,7 @@ use openmls::prelude::{KeyPackage, Welcome, WireFormat};
 use openmls_traits::OpenMlsCryptoProvider;
 use tls_codec::{Deserialize, Serialize};
 
-use crate::encryption::mls::{MlsMember, MLS_PADDING_SIZE};
+use crate::secret_group::mls::MLS_PADDING_SIZE;
 
 /// Wrapper around the Managed MLS Group.
 #[derive(Debug)]
@@ -30,27 +30,26 @@ impl MlsGroup {
     }
 
     /// Creates a new MLS group. A group is always created with a single member, the "creator".
-    pub fn new(group_id: GroupId, member: &MlsMember) -> Self {
-        // Generate a new KeyPackage which can be used to create the group (aka InitKeys). These
-        // keys will directly be consumed during group creation and not further propagated.
-        let key_package_hash = member.key_package().hash(member.provider());
+    ///
+    /// The given KeyPackage ("InitKeys") will directly be consumed during group creation and not
+    /// further propagated.
+    pub fn new(
+        provider: &impl OpenMlsCryptoProvider,
+        group_id: GroupId,
+        key_package: KeyPackage,
+    ) -> Self {
+        let key_package_hash = key_package.hash(provider);
 
         // Create MLS group with one member inside
-        let group = ManagedGroup::new(
-            member.provider(),
-            &Self::config(),
-            group_id,
-            &key_package_hash,
-        )
-        .unwrap();
+        let group =
+            ManagedGroup::new(provider, &Self::config(), group_id, &key_package_hash).unwrap();
 
         Self(group)
     }
 
-    pub fn new_from_welcome(member: &MlsMember, welcome: Welcome) -> Self {
+    pub fn new_from_welcome(provider: &impl OpenMlsCryptoProvider, welcome: Welcome) -> Self {
         let group =
-            ManagedGroup::new_from_welcome(member.provider(), &Self::config(), welcome, None)
-                .unwrap();
+            ManagedGroup::new_from_welcome(provider, &Self::config(), welcome, None).unwrap();
 
         Self(group)
     }
@@ -126,25 +125,28 @@ impl MlsGroup {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use openmls::group::GroupId;
 
     use crate::identity::KeyPair;
+    use crate::secret_group::mls::{MlsMember, MlsProvider};
 
-    use super::{MlsGroup, MlsMember};
+    use super::MlsGroup;
 
     #[test]
-    fn is_active() {
+    fn group_encryption() {
         let key_pair = KeyPair::new();
+        let provider = MlsProvider::new(key_pair);
 
-        let member = MlsMember::new(key_pair);
-        let group_id = GroupId::random(member.provider());
-        let mut group = MlsGroup::new(group_id, &member);
+        let member = MlsMember::new(&provider, b"test");
+        let group_id = GroupId::random(&provider);
+        let key_package = member.key_package(&provider);
+        let mut group = MlsGroup::new(&provider, group_id, key_package);
         assert_eq!(group.is_active(), true);
 
         let message = "This is a very secret message";
-        let ciphertext = group.encrypt(member.provider(), message.as_bytes());
-        let plaintext = group.decrypt(member.provider(), ciphertext);
+        let ciphertext = group.encrypt(&provider, message.as_bytes());
+        let plaintext = group.decrypt(&provider, ciphertext);
         assert_eq!(&plaintext, message.as_bytes());
     }
 }
