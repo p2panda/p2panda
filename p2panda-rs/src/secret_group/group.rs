@@ -137,6 +137,7 @@ impl SecretGroup {
         let secrets =
             TlsVecU32::<LongTermSecret>::tls_deserialize(&mut secrets_bytes.as_slice()).unwrap();
 
+        // Add new secrets to group
         self.process_long_term_secrets(secrets);
     }
 
@@ -150,7 +151,13 @@ impl SecretGroup {
     }
 
     fn process_long_term_secrets(&mut self, secrets: TlsVecU32<LongTermSecret>) {
-        todo!();
+        secrets.iter().for_each(|secret| {
+            if self.group_id() == secret.group_id()
+                && self.long_term_secret(secret.long_term_epoch()).is_none()
+            {
+                self.long_term_secrets.push(secret.clone());
+            }
+        });
     }
 
     pub fn rotate_long_term_secret(&mut self, provider: &impl OpenMlsCryptoProvider) {
@@ -244,10 +251,8 @@ impl SecretGroup {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryFrom;
-
     use crate::hash::Hash;
-    use crate::identity::{Author, KeyPair};
+    use crate::identity::KeyPair;
     use crate::secret_group::mls::MlsProvider;
 
     use super::{SecretGroup, SecretGroupMember};
@@ -289,7 +294,6 @@ mod tests {
 
         // Ada generates a new key pair to also create a new `SecretGroupMember` instance
         let ada_key_pair = KeyPair::new();
-        let ada_public_key = Author::try_from(ada_key_pair.public_key().clone()).unwrap();
         let ada_provider = MlsProvider::new();
         let ada_member = SecretGroupMember::new(&ada_provider, &ada_key_pair);
 
@@ -313,24 +317,6 @@ mod tests {
         // which contains the MLS commit and MLS welcome message for this MLS epoch, also the first
         // symmetrical long term secret will be generated, encrypted and published in the
         // `SecretGroupCommit`.
-        //
-        // Pseudo code how long term secret generation could look like:
-        //
-        // ```
-        // // Billie creates a new LongTermSecrets instance
-        // let mut long_term_secrets = LongTermSecrets::new();
-        //
-        // // Billie generates a new symmetrical secret and publishes it securely by encrypting it
-        // // for all SecretGroup members
-        // let secret = group.generate_long_term_secret();
-        // long_term_secrets.add_next_epoch(secret);
-        //
-        // // Export encoded version of all secrets
-        // let encoded_secrets = long_term_secrets.export_encoded();
-        //
-        // // Encrypt encoded secrets with MLS group
-        // let ciphertext_secrets = group.encrypt(ciphertext_secrets);
-        // ```
         let group_commit = billie_group.add_members(&billie_provider, &[ada_key_package]);
 
         // * `SecretGroupCommit` instance will be created, pointing at the `SecretGroup` instance.

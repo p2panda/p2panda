@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use openmls::ciphersuite::signature::{SignatureKeypair, SignaturePrivateKey, SignaturePublicKey};
 use openmls::ciphersuite::Ciphersuite;
 use openmls::prelude::{
-    Credential, CredentialBundle, CredentialType, Extension, KeyPackage, KeyPackageBundle,
-    LifetimeExtension,
+    Credential, CredentialBundle, Extension, KeyPackage, KeyPackageBundle, LifetimeExtension,
 };
 use openmls_traits::key_store::OpenMlsKeyStore;
 use openmls_traits::OpenMlsCryptoProvider;
@@ -11,7 +11,7 @@ use openmls_traits::OpenMlsCryptoProvider;
 use crate::identity::KeyPair;
 use crate::secret_group::mls::{MLS_CIPHERSUITE_NAME, MLS_LIFETIME_EXTENSION};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MlsMember {
     credential_bundle: CredentialBundle,
 }
@@ -19,29 +19,36 @@ pub struct MlsMember {
 impl MlsMember {
     pub fn new(provider: &impl OpenMlsCryptoProvider, key_pair: &KeyPair) -> Self {
         let ciphersuite = Ciphersuite::new(MLS_CIPHERSUITE_NAME).unwrap();
-        let public_key = key_pair.public_key().to_bytes();
+
+        // Credential identities are p2panda public keys!
+        let credential_identity = key_pair.public_key().to_bytes();
 
         // Check if CredentialBundle already exists in store, otherwise generate it
-        let credential_bundle = match provider.key_store().read(&public_key) {
+        let credential_bundle = match provider.key_store().read(&credential_identity) {
             None => {
+                // Use p2panda key pair for MLS signatures
+                let public_key = SignaturePublicKey::new(
+                    key_pair.public_key().to_bytes().to_vec(),
+                    ciphersuite.signature_scheme(),
+                )
+                .unwrap();
+
+                // @TODO: Find out how to create private key instance here ..
+                let private_key = SignaturePrivateKey::new(
+                    key_pair.private_key().to_bytes().to_vec(),
+                    ciphersuite.signature_scheme(),
+                )
+                .unwrap();
+
+                let signature_key_pair = SignatureKeypair::from_keys(private_key, public_key);
+
                 // A CredentialBundle contains a Credential and the corresponding private key.
                 // BasicCredential is a raw, unauthenticated assertion of an identity/key binding.
-                //
-                // @TODO: Use the new API as soon as it is ready!
-                /* let signature_key_pair = SignatureKeypair::from_keys(private_key, public_key);
                 let bundle = CredentialBundle::from_parts(
-                    identity.to_vec(),
+                    credential_identity.to_vec(),
                     ciphersuite.signature_scheme(),
                     signature_key_pair,
-                )
-                .unwrap(); */
-
-                let bundle = CredentialBundle::new(
-                    public_key.to_vec(),
-                    CredentialType::Basic,
-                    ciphersuite.signature_scheme(),
-                    provider,
-                ).unwrap();
+                );
 
                 // Persist CredentialBundle in key store for the future
                 provider

@@ -4,6 +4,7 @@ use openmls::group::GroupId;
 use serde::{Deserialize, Serialize};
 use tls_codec::{Size, TlsByteVecU8, TlsDeserialize, TlsSerialize, TlsSize};
 
+use crate::hash::Hash;
 use crate::secret_group::aes;
 use crate::secret_group::lts::{LongTermSecretCiphersuite, LongTermSecretCiphertext};
 
@@ -29,7 +30,7 @@ impl LongTermSecretEpoch {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, TlsDeserialize, TlsSerialize, TlsSize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TlsDeserialize, TlsSerialize, TlsSize)]
 pub struct LongTermSecret {
     group_id: GroupId,
     ciphersuite: LongTermSecretCiphersuite,
@@ -50,6 +51,10 @@ impl LongTermSecret {
             long_term_epoch,
             value,
         }
+    }
+
+    pub(crate) fn group_id(&self) -> Hash {
+        Hash::new_from_bytes(self.group_id.as_slice().to_vec()).unwrap()
     }
 
     pub(crate) fn long_term_epoch(&self) -> LongTermSecretEpoch {

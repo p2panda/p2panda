@@ -6,6 +6,7 @@ use openmls_traits::OpenMlsCryptoProvider;
 use crate::identity::KeyPair;
 use crate::secret_group::mls::MlsMember;
 
+#[derive(Debug, Clone)]
 pub struct SecretGroupMember {
     mls_member: MlsMember,
 }
