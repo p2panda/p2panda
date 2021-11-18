@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::framing::{MlsPlaintext, MlsPlaintextContentType, VerifiableMlsPlaintext};
-use openmls::group::{MlsMessageIn, MlsMessageOut};
+use openmls::framing::{
+    MlsMessageIn, MlsMessageOut, MlsPlaintext, MlsPlaintextContentType, VerifiableMlsPlaintext,
+};
 use openmls::messages::Welcome;
 
 use crate::secret_group::SecretGroupMessage;
@@ -50,6 +51,6 @@ impl SecretGroupCommit {
     }
 
     pub fn long_term_secret(&self) -> SecretGroupMessage {
-        self.encrypted_long_term_secrets
+        self.encrypted_long_term_secrets.clone()
     }
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::framing::VerifiableMlsPlaintext;
-use openmls::group::{GroupId, MlsMessageIn, MlsMessageOut};
+use openmls::framing::{MlsMessageIn, MlsMessageOut, VerifiableMlsPlaintext};
+use openmls::group::GroupId;
 use openmls::prelude::KeyPackage;
 use openmls_traits::OpenMlsCryptoProvider;
 use tls_codec::{Deserialize, Serialize, TlsVecU32};

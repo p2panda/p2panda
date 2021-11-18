@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::framing::MlsCiphertext;
-use openmls::group::{
-    GroupEvent, GroupId, ManagedGroup, ManagedGroupConfig, MlsMessageIn, MlsMessageOut,
-};
+use openmls::framing::{MlsCiphertext, MlsMessageIn, MlsMessageOut};
+use openmls::group::{GroupEvent, GroupId, ManagedGroup, ManagedGroupConfig};
 use openmls::prelude::{KeyPackage, Welcome, WireFormat};
 use openmls_traits::OpenMlsCryptoProvider;
 
