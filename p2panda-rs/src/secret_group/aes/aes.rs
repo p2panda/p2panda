@@ -13,13 +13,6 @@ fn generate_nonce() -> Vec<u8> {
     Nonce::from_slice(&nonce_bytes).as_slice().to_vec()
 }
 
-/// Generates a new random key which can be used as the secret key for AES256.
-pub fn generate_key() -> Vec<u8> {
-    Aes256GcmSiv::generate_key(OsRng::default())
-        .as_slice()
-        .to_vec()
-}
-
 /// Encrypts plaintext data symmetrically with AES256 block cipher using a secret key, returning
 /// the ciphertext and used nonce.
 ///
@@ -49,7 +42,18 @@ pub fn decrypt(key: &[u8], nonce: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, A
 
 #[cfg(test)]
 mod test {
-    use super::{decrypt, encrypt, generate_key, generate_nonce};
+    use aes_gcm::aead::NewAead;
+    use aes_gcm_siv::Aes256GcmSiv;
+    use rand_core::OsRng;
+
+    use super::{decrypt, encrypt, generate_nonce};
+
+    // Generates a new random key which can be used as the secret key for AES256.
+    fn generate_key() -> Vec<u8> {
+        Aes256GcmSiv::generate_key(OsRng::default())
+            .as_slice()
+            .to_vec()
+    }
 
     #[test]
     fn unique_key_nonce() {

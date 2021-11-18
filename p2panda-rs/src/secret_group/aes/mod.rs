@@ -7,5 +7,5 @@
 mod aes;
 mod error;
 
-pub use aes::{decrypt, encrypt, generate_key};
+pub use aes::{decrypt, encrypt};
 pub use error::AesError;
