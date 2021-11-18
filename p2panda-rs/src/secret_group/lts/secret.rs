@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+
 use serde::{Deserialize, Serialize};
 use tls_codec::{Size, TlsByteVecU8, TlsDeserialize, TlsSerialize, TlsSize};
 
 use crate::secret_group::lts::LongTermSecretCiphersuite;
 
-#[derive(Debug, Serialize, Deserialize, TlsDeserialize, TlsSerialize, TlsSize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, TlsDeserialize, TlsSerialize, TlsSize)]
 pub struct LongTermSecretEpoch(pub u64);
 
 impl LongTermSecretEpoch {

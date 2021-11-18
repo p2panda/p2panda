@@ -268,7 +268,8 @@ mod tests {
         // ```
         // KeyPackage {
         //   mls_key_package: binary(TLS encoded) {
-        //      @TODO
+        //      previous_key_package: authorized_relation(KeyPackage),
+        //      @TODO ...
         //   }
         // }
         // ```
