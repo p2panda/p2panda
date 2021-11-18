@@ -128,8 +128,27 @@ impl SecretGroup {
         self.mls_group.process_commit(provider, commit.commit());
     }
 
+    // Long Term secrets
+    // =================
+
+    pub fn rotate_long_term_secret(&mut self, provider: &impl OpenMlsCryptoProvider) {
+        let value = self
+            .mls_group
+            .export_secret(provider, LTS_EXPORTER_LABEL, LTS_EXPORTER_LENGTH);
+
+        let mut long_term_epoch = self.long_term_epoch();
+        long_term_epoch.increment();
+
+        self.long_term_secrets.push(LongTermSecret::new(
+            LongTermSecretCiphersuite::PANDA_AES256GCMSIV,
+            long_term_epoch,
+            value.into(),
+        ));
+    }
+
     // Encryption
     // ==========
+
     fn encrypt_long_term_secrets(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
@@ -168,25 +187,6 @@ impl SecretGroup {
                 todo!();
             }
         }
-    }
-
-    // Long Term secrets
-    // =================
-
-    pub fn rotate_long_term_secret(&mut self, provider: &impl OpenMlsCryptoProvider) {
-        // @TODO: Encrypt based on given ciphersuite
-        let value = self
-            .mls_group
-            .export_secret(provider, LTS_EXPORTER_LABEL, LTS_EXPORTER_LENGTH);
-
-        let mut long_term_epoch = self.long_term_epoch();
-        long_term_epoch.increment();
-
-        self.long_term_secrets.push(LongTermSecret::new(
-            LongTermSecretCiphersuite::PANDA_AES256GCMSIV,
-            long_term_epoch,
-            value.into(),
-        ));
     }
 
     // Status
