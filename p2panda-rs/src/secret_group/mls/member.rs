@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::ciphersuite::signature::{SignatureKeypair, SignaturePrivateKey, SignaturePublicKey};
 use openmls::ciphersuite::Ciphersuite;
 use openmls::prelude::{
     Credential, CredentialBundle, Extension, KeyPackage, KeyPackageBundle, LifetimeExtension,
+    SignatureKeypair,
 };
 use openmls_traits::key_store::OpenMlsKeyStore;
 use openmls_traits::OpenMlsCryptoProvider;
@@ -21,32 +21,25 @@ impl MlsMember {
         let ciphersuite = Ciphersuite::new(MLS_CIPHERSUITE_NAME).unwrap();
 
         // Credential identities are p2panda public keys!
-        let credential_identity = key_pair.public_key().to_bytes();
+        let public_key = key_pair.public_key().to_bytes();
 
         // Check if CredentialBundle already exists in store, otherwise generate it
-        let credential_bundle = match provider.key_store().read(&credential_identity) {
+        let credential_bundle = match provider.key_store().read(&public_key) {
             None => {
-                // Use p2panda key pair for MLS signatures
-                let public_key = SignaturePublicKey::new(
-                    key_pair.public_key().to_bytes().to_vec(),
-                    ciphersuite.signature_scheme(),
-                )
-                .unwrap();
+                // Full key here because we need it to sign
+                let private_key = key_pair.private_key().to_bytes();
+                let full_key = [private_key, public_key].concat();
 
-                // @TODO: Find out how to create private key instance here ..
-                let private_key = SignaturePrivateKey::new(
-                    key_pair.private_key().to_bytes().to_vec(),
+                let signature_key_pair = SignatureKeypair::from_bytes(
                     ciphersuite.signature_scheme(),
-                )
-                .unwrap();
-
-                let signature_key_pair = SignatureKeypair::from_keys(private_key, public_key);
+                    full_key.to_vec(),
+                    public_key.to_vec(),
+                );
 
                 // A CredentialBundle contains a Credential and the corresponding private key.
                 // BasicCredential is a raw, unauthenticated assertion of an identity/key binding.
                 let bundle = CredentialBundle::from_parts(
-                    credential_identity.to_vec(),
-                    ciphersuite.signature_scheme(),
+                    public_key.to_vec(),
                     signature_key_pair,
                 );
 
