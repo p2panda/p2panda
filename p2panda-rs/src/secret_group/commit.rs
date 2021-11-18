@@ -1,26 +1,48 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use openmls::framing::{MlsPlaintext, MlsPlaintextContentType, VerifiableMlsPlaintext};
+use openmls::group::{MlsMessageIn, MlsMessageOut};
 use openmls::messages::Welcome;
-use openmls::framing::{MlsPlaintext, VerifiableMlsPlaintext};
 
+use crate::secret_group::SecretGroupMessage;
+
+#[derive(Debug)]
 pub struct SecretGroupCommit {
     mls_commit_message: MlsPlaintext,
     mls_welcome_message: Option<Welcome>,
+    encrypted_long_term_secrets: SecretGroupMessage,
 }
 
 impl SecretGroupCommit {
-    // @TODO: Use 'MlsMessageOut' for commit argument type
-    pub fn new(commit: MlsPlaintext, welcome: Option<Welcome>) -> Self {
+    pub fn new(
+        mls_message_out: MlsMessageOut,
+        mls_welcome_message: Option<Welcome>,
+        encrypted_long_term_secrets: SecretGroupMessage,
+    ) -> Self {
+        // Check if message is in plaintext
+        let mls_commit_message = match mls_message_out {
+            MlsMessageOut::Plaintext(message) => message,
+            _ => panic!("This should never happen"),
+        };
+
+        // Check if message is a commit
+        if match mls_commit_message.content() {
+            MlsPlaintextContentType::Commit(..) => false,
+            _ => true,
+        } {
+            panic!("This should never happen")
+        }
+
         Self {
-            mls_commit_message: commit,
-            mls_welcome_message: welcome,
+            mls_commit_message,
+            mls_welcome_message,
+            encrypted_long_term_secrets,
         }
     }
 
-    // @TODO: Use 'MlsMessageIn' as return type
-    pub fn commit(&self) -> VerifiableMlsPlaintext {
+    pub fn commit(&self) -> MlsMessageIn {
         let message_clone = self.mls_commit_message.clone();
-        VerifiableMlsPlaintext::from_plaintext(message_clone, None)
+        MlsMessageIn::Plaintext(VerifiableMlsPlaintext::from_plaintext(message_clone, None))
     }
 
     pub fn welcome(&self) -> Option<Welcome> {

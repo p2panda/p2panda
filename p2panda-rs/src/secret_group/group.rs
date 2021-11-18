@@ -1,19 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use openmls::framing::VerifiableMlsPlaintext;
 use openmls::group::{GroupId, MlsMessageIn, MlsMessageOut};
 use openmls::prelude::KeyPackage;
 use openmls_traits::OpenMlsCryptoProvider;
+use tls_codec::{Serialize as TlsSerialize, TlsVecU32};
 
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::secret_group::lts::{LongTermSecret, LongTermSecretEpoch};
+use crate::secret_group::lts::{LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch};
 use crate::secret_group::mls::MlsGroup;
 use crate::secret_group::{SecretGroupCommit, SecretGroupMember, SecretGroupMessage};
+
+const LTS_EXPORTER_LABEL: &str = "long_term_secret";
+const LTS_EXPORTER_LENGTH: usize = 32; // AES256 key
 
 #[derive(Debug)]
 pub struct SecretGroup {
     mls_group: MlsGroup,
-    long_term_secrets: Vec<LongTermSecret>,
+    long_term_secrets: TlsVecU32<LongTermSecret>,
 }
 
 impl SecretGroup {
@@ -31,7 +36,7 @@ impl SecretGroup {
 
         Self {
             mls_group,
-            long_term_secrets: Vec::new(),
+            long_term_secrets: Vec::new().into(),
         }
     }
 
@@ -48,7 +53,7 @@ impl SecretGroup {
 
         Self {
             mls_group,
-            long_term_secrets: Vec::new(),
+            long_term_secrets: Vec::new().into(),
         }
     }
 
@@ -60,17 +65,16 @@ impl SecretGroup {
         provider: &impl OpenMlsCryptoProvider,
         key_packages: &[KeyPackage],
     ) -> SecretGroupCommit {
-        let (message_out, welcome) = self.mls_group.add_members(provider, key_packages);
+        // Add members
+        let (mls_message_out, mls_welcome) = self.mls_group.add_members(provider, key_packages);
 
-        let mls_commit_message = match message_out {
-            MlsMessageOut::Plaintext(message) => message,
-            _ => panic!("This should never happen"),
-        };
+        // Process message directly to establish group state for encryption
+        self.process_commit_directly(provider, &mls_message_out);
 
-        // @TODO: Process commit message directly
-        // @TODO: Re-Encrypt long term secrets
+        // Re-Encrypt long term secrets for this group epoch
+        let encrypt_long_term_secrets = self.encrypt_long_term_secrets(provider);
 
-        SecretGroupCommit::new(mls_commit_message, Some(welcome))
+        SecretGroupCommit::new(mls_message_out, Some(mls_welcome), encrypt_long_term_secrets)
     }
 
     pub fn remove_members(
@@ -78,26 +82,41 @@ impl SecretGroup {
         provider: &impl OpenMlsCryptoProvider,
         public_keys: &[Author],
     ) -> SecretGroupCommit {
-        // @TODO: Identiy leaf indexes based on public keys.
+        // @TODO: Identify leaf indexes based on public keys.
         let member_leaf_indexes: Vec<usize> = vec![];
 
-        let message_out = self
+        // Remove members
+        let mls_message_out = self
             .mls_group
             .remove_members(provider, member_leaf_indexes.as_slice());
 
-        let mls_commit_message = match message_out {
-            MlsMessageOut::Plaintext(message) => message,
-            _ => panic!("This should never happen"),
-        };
+        // Process message directly to establish group state for encryption
+        self.process_commit_directly(provider, &mls_message_out);
 
-        // @TODO: Process commit message directly
-        // @TODO: Re-Encrypt long term secrets
+        // Re-Encrypt long term secrets for this group epoch
+        let encrypt_long_term_secrets = self.encrypt_long_term_secrets(provider);
 
-        SecretGroupCommit::new(mls_commit_message, None)
+        SecretGroupCommit::new(mls_message_out, None, encrypt_long_term_secrets)
     }
 
     // Commits
     // =======
+
+    fn process_commit_directly(
+        &mut self,
+        provider: &impl OpenMlsCryptoProvider,
+        mls_message_out: &MlsMessageOut,
+    ) {
+        // Convert "out" to "in" message
+        let mls_commit_message = match mls_message_out {
+            MlsMessageOut::Plaintext(message) => MlsMessageIn::Plaintext(
+                VerifiableMlsPlaintext::from_plaintext(message.clone(), None),
+            ),
+            _ => panic!("This is not a plaintext message"),
+        };
+
+        self.mls_group.process_commit(provider, mls_commit_message);
+    }
 
     pub fn process_commit(
         &mut self,
@@ -106,12 +125,21 @@ impl SecretGroup {
     ) {
         // @TODO: Process long term secrets as well
 
-        self.mls_group
-            .process_commit(provider, MlsMessageIn::Plaintext(commit.commit()));
+        self.mls_group.process_commit(provider, commit.commit());
     }
 
     // Encryption
     // ==========
+    fn encrypt_long_term_secrets(
+        &mut self,
+        provider: &impl OpenMlsCryptoProvider,
+    ) -> SecretGroupMessage {
+        // Encode all long term secrets
+        let encoded_secrets = self.long_term_secrets.tls_serialize_detached().unwrap();
+
+        // Encrypt encoded secrets
+        self.encrypt(provider, &encoded_secrets)
+    }
 
     pub fn encrypt(
         &mut self,
@@ -142,6 +170,25 @@ impl SecretGroup {
         }
     }
 
+    // Long Term secrets
+    // =================
+
+    pub fn rotate_long_term_secret(&mut self, provider: &impl OpenMlsCryptoProvider) {
+        // @TODO: Encrypt based on given ciphersuite
+        let value = self
+            .mls_group
+            .export_secret(provider, LTS_EXPORTER_LABEL, LTS_EXPORTER_LENGTH);
+
+        let mut long_term_epoch = self.long_term_epoch();
+        long_term_epoch.increment();
+
+        self.long_term_secrets.push(LongTermSecret::new(
+            LongTermSecretCiphersuite::PANDA_AES256GCMSIV,
+            long_term_epoch,
+            value.into(),
+        ));
+    }
+
     // Status
     // ======
 
@@ -154,7 +201,7 @@ impl SecretGroup {
         Hash::new_from_bytes(group_id_bytes).unwrap()
     }
 
-    pub fn long_term_epoch(&self) -> &LongTermSecretEpoch {
+    pub fn long_term_epoch(&self) -> LongTermSecretEpoch {
         todo!();
     }
 }
