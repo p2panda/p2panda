@@ -48,4 +48,8 @@ impl SecretGroupCommit {
     pub fn welcome(&self) -> Option<Welcome> {
         self.mls_welcome_message.clone()
     }
+
+    pub fn long_term_secret(&self) -> SecretGroupMessage {
+        self.encrypted_long_term_secrets
+    }
 }

@@ -4,12 +4,12 @@
 //! establish secrets in a group of users for asymmetric (DHKEMX25519 and AES128GCM) or symmetric
 //! (AES256 with GCM-SIV) encryption schemes. Both settings allow post-compromise security, while
 //! the asymmetric setting also gives forward secrecy.
+pub(crate) mod aes;
 mod commit;
 mod group;
+pub(crate) mod lts;
 mod member;
 mod message;
-pub(crate) mod aes;
-pub(crate) mod lts;
 pub(crate) mod mls;
 
 pub use commit::SecretGroupCommit;

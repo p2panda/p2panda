@@ -4,7 +4,7 @@ use openmls::framing::VerifiableMlsPlaintext;
 use openmls::group::{GroupId, MlsMessageIn, MlsMessageOut};
 use openmls::prelude::KeyPackage;
 use openmls_traits::OpenMlsCryptoProvider;
-use tls_codec::{Serialize as TlsSerialize, TlsVecU32};
+use tls_codec::{Deserialize, Serialize, TlsVecU32};
 
 use crate::hash::Hash;
 use crate::identity::Author;
@@ -74,7 +74,11 @@ impl SecretGroup {
         // Re-Encrypt long term secrets for this group epoch
         let encrypt_long_term_secrets = self.encrypt_long_term_secrets(provider);
 
-        SecretGroupCommit::new(mls_message_out, Some(mls_welcome), encrypt_long_term_secrets)
+        SecretGroupCommit::new(
+            mls_message_out,
+            Some(mls_welcome),
+            encrypt_long_term_secrets,
+        )
     }
 
     pub fn remove_members(
@@ -123,23 +127,47 @@ impl SecretGroup {
         provider: &impl OpenMlsCryptoProvider,
         commit: &SecretGroupCommit,
     ) {
-        // @TODO: Process long term secrets as well
-
+        // Apply commit message first
         self.mls_group.process_commit(provider, commit.commit());
+
+        // Decrypt long term secrets with current group state
+        let secrets_bytes = self.decrypt(provider, &commit.long_term_secret());
+
+        // Decode secrets
+        let secrets =
+            TlsVecU32::<LongTermSecret>::tls_deserialize(&mut secrets_bytes.as_slice()).unwrap();
+
+        self.process_long_term_secrets(secrets);
     }
 
     // Long Term secrets
     // =================
+
+    fn long_term_secret(&self, epoch: LongTermSecretEpoch) -> Option<&LongTermSecret> {
+        self.long_term_secrets
+            .iter()
+            .find(|secret| secret.long_term_epoch() == epoch)
+    }
+
+    fn process_long_term_secrets(&mut self, secrets: TlsVecU32<LongTermSecret>) {
+        todo!();
+    }
 
     pub fn rotate_long_term_secret(&mut self, provider: &impl OpenMlsCryptoProvider) {
         let value = self
             .mls_group
             .export_secret(provider, LTS_EXPORTER_LABEL, LTS_EXPORTER_LENGTH);
 
-        let mut long_term_epoch = self.long_term_epoch();
-        long_term_epoch.increment();
+        let long_term_epoch = match self.long_term_epoch() {
+            Some(mut epoch) => {
+                epoch.increment();
+                epoch
+            }
+            None => LongTermSecretEpoch(0),
+        };
 
         self.long_term_secrets.push(LongTermSecret::new(
+            self.mls_group.group_id().clone(),
             LongTermSecretCiphersuite::PANDA_AES256GCMSIV,
             long_term_epoch,
             value.into(),
@@ -170,8 +198,12 @@ impl SecretGroup {
     }
 
     pub fn encrypt_with_long_term_secret(&self, data: &[u8]) -> SecretGroupMessage {
-        // @TODO: Get latest long term secret from array and encrypt data with it
-        todo!();
+        let epoch = self
+            .long_term_epoch()
+            .expect("No long term secret generated yet.");
+        let secret = self.long_term_secret(epoch).unwrap();
+        let ciphertext = secret.encrypt(data);
+        SecretGroupMessage::LongTermSecretMessage(ciphertext)
     }
 
     pub fn decrypt(
@@ -183,8 +215,9 @@ impl SecretGroup {
             SecretGroupMessage::MlsApplicationMessage(ciphertext) => {
                 self.mls_group.decrypt(provider, ciphertext.clone())
             }
-            _ => {
-                todo!();
+            SecretGroupMessage::LongTermSecretMessage(ciphertext) => {
+                let secret = self.long_term_secret(ciphertext.long_term_epoch).unwrap();
+                secret.decrypt(ciphertext)
             }
         }
     }
@@ -201,8 +234,11 @@ impl SecretGroup {
         Hash::new_from_bytes(group_id_bytes).unwrap()
     }
 
-    pub fn long_term_epoch(&self) -> LongTermSecretEpoch {
-        todo!();
+    pub fn long_term_epoch(&self) -> Option<LongTermSecretEpoch> {
+        self.long_term_secrets
+            .iter()
+            .map(|secret| secret.long_term_epoch())
+            .max()
     }
 }
 
