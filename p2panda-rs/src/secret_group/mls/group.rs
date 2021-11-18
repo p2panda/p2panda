@@ -154,9 +154,9 @@ mod tests {
     #[test]
     fn group_encryption() {
         let key_pair = KeyPair::new();
-        let provider = MlsProvider::new(key_pair);
+        let provider = MlsProvider::new();
 
-        let member = MlsMember::new(&provider, b"test");
+        let member = MlsMember::new(&provider, &key_pair);
         let group_id = GroupId::random(&provider);
         let key_package = member.key_package(&provider);
         let mut group = MlsGroup::new(&provider, group_id, key_package);

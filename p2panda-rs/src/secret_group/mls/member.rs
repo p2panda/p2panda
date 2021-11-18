@@ -8,6 +8,7 @@ use openmls::prelude::{
 use openmls_traits::key_store::OpenMlsKeyStore;
 use openmls_traits::OpenMlsCryptoProvider;
 
+use crate::identity::KeyPair;
 use crate::secret_group::mls::{MLS_CIPHERSUITE_NAME, MLS_LIFETIME_EXTENSION};
 
 #[derive(Debug)]
@@ -16,21 +17,31 @@ pub struct MlsMember {
 }
 
 impl MlsMember {
-    pub fn new(provider: &impl OpenMlsCryptoProvider, identity: &[u8]) -> Self {
+    pub fn new(provider: &impl OpenMlsCryptoProvider, key_pair: &KeyPair) -> Self {
         let ciphersuite = Ciphersuite::new(MLS_CIPHERSUITE_NAME).unwrap();
+        let public_key = key_pair.public_key().to_bytes();
 
         // Check if CredentialBundle already exists in store, otherwise generate it
-        let credential_bundle = match provider.key_store().read(&identity) {
+        let credential_bundle = match provider.key_store().read(&public_key) {
             None => {
                 // A CredentialBundle contains a Credential and the corresponding private key.
                 // BasicCredential is a raw, unauthenticated assertion of an identity/key binding.
-                let bundle = CredentialBundle::new(
+                //
+                // @TODO: Use the new API as soon as it is ready!
+                /* let signature_key_pair = SignatureKeypair::from_keys(private_key, public_key);
+                let bundle = CredentialBundle::from_parts(
                     identity.to_vec(),
+                    ciphersuite.signature_scheme(),
+                    signature_key_pair,
+                )
+                .unwrap(); */
+
+                let bundle = CredentialBundle::new(
+                    public_key.to_vec(),
                     CredentialType::Basic,
                     ciphersuite.signature_scheme(),
                     provider,
-                )
-                .unwrap();
+                ).unwrap();
 
                 // Persist CredentialBundle in key store for the future
                 provider
@@ -97,8 +108,8 @@ mod tests {
     fn public_key_identity() {
         let key_pair = KeyPair::new();
         let public_key_bytes = key_pair.public_key().to_bytes();
-        let provider = MlsProvider::new(key_pair);
-        let member = MlsMember::new(&provider, &public_key_bytes);
+        let provider = MlsProvider::new();
+        let member = MlsMember::new(&provider, &key_pair);
         assert_eq!(public_key_bytes.to_vec(), member.credential().identity());
     }
 }

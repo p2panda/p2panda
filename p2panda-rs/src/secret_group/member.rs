@@ -3,7 +3,7 @@
 use openmls::prelude::KeyPackage;
 use openmls_traits::OpenMlsCryptoProvider;
 
-use crate::identity::Author;
+use crate::identity::KeyPair;
 use crate::secret_group::mls::MlsMember;
 
 pub struct SecretGroupMember {
@@ -12,9 +12,8 @@ pub struct SecretGroupMember {
 
 impl SecretGroupMember {
     // @TODO: Rename `Author` struct to `PublicKey`.
-    pub fn new(provider: &impl OpenMlsCryptoProvider, public_key: &Author) -> Self {
-        let mls_member = MlsMember::new(provider, &public_key.as_str().as_bytes());
-
+    pub fn new(provider: &impl OpenMlsCryptoProvider, key_pair: &KeyPair) -> Self {
+        let mls_member = MlsMember::new(provider, key_pair);
         SecretGroupMember { mls_member }
     }
 

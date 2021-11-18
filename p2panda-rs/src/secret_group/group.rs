@@ -275,9 +275,8 @@ mod tests {
         // the MLS credentials based on the given key pair. A `SecretGroupMember` instance can also
         // be used to generate MLS key packages.
         let billie_key_pair = KeyPair::new();
-        let billie_public_key = Author::try_from(billie_key_pair.public_key().clone()).unwrap();
-        let billie_provider = MlsProvider::new(billie_key_pair);
-        let billie_member = SecretGroupMember::new(&billie_provider, &billie_public_key);
+        let billie_provider = MlsProvider::new();
+        let billie_member = SecretGroupMember::new(&billie_provider, &billie_key_pair);
 
         // Billie creates a new SecretGroup with themselves as the only member. At this state the
         // group is in epoch 0 and no commit messages are generated since the group is already
@@ -291,8 +290,8 @@ mod tests {
         // Ada generates a new key pair to also create a new `SecretGroupMember` instance
         let ada_key_pair = KeyPair::new();
         let ada_public_key = Author::try_from(ada_key_pair.public_key().clone()).unwrap();
-        let ada_provider = MlsProvider::new(ada_key_pair);
-        let ada_member = SecretGroupMember::new(&ada_provider, &ada_public_key);
+        let ada_provider = MlsProvider::new();
+        let ada_member = SecretGroupMember::new(&ada_provider, &ada_key_pair);
 
         // Ada publishes their KeyPackage for future group invitations
         let ada_key_package = ada_member.key_package(&ada_provider);
