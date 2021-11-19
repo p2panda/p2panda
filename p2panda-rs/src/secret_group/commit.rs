@@ -50,7 +50,7 @@ impl SecretGroupCommit {
         self.mls_welcome_message.clone()
     }
 
-    pub fn long_term_secret(&self) -> SecretGroupMessage {
+    pub fn long_term_secrets(&self) -> SecretGroupMessage {
         self.encrypted_long_term_secrets.clone()
     }
 }

@@ -15,10 +15,12 @@ use crate::secret_group::{SecretGroupCommit, SecretGroupMember, SecretGroupMessa
 const LTS_EXPORTER_LABEL: &str = "long_term_secret";
 const LTS_EXPORTER_LENGTH: usize = 32; // AES256 key
 
+type LongTermSecretVec = TlsVecU32<LongTermSecret>;
+
 #[derive(Debug)]
 pub struct SecretGroup {
     mls_group: MlsGroup,
-    long_term_secrets: TlsVecU32<LongTermSecret>,
+    long_term_secrets: LongTermSecretVec,
 }
 
 impl SecretGroup {
@@ -34,10 +36,15 @@ impl SecretGroup {
         let group_id = GroupId::from_slice(&group_instance_id.to_bytes());
         let mls_group = MlsGroup::new(provider, group_id, init_key_package);
 
-        Self {
+        let mut group = Self {
             mls_group,
             long_term_secrets: Vec::new().into(),
-        }
+        };
+
+        // Generate first long term secret
+        group.rotate_long_term_secret(provider);
+
+        group
     }
 
     pub fn new_from_welcome(
@@ -51,10 +58,18 @@ impl SecretGroup {
                 .expect("This SecretGroupCommit does not contain a welcome message!"),
         );
 
-        Self {
+        let mut group = Self {
             mls_group,
             long_term_secrets: Vec::new().into(),
-        }
+        };
+
+        // Decode long term secrets with current group state
+        let secrets = group.decrypt_long_term_secrets(provider, commit.long_term_secrets());
+
+        // Add new secrets to group
+        group.process_long_term_secrets(secrets);
+
+        group
     }
 
     // Membership
@@ -131,11 +146,7 @@ impl SecretGroup {
         self.mls_group.process_commit(provider, commit.commit());
 
         // Decrypt long term secrets with current group state
-        let secrets_bytes = self.decrypt(provider, &commit.long_term_secret());
-
-        // Decode secrets
-        let secrets =
-            TlsVecU32::<LongTermSecret>::tls_deserialize(&mut secrets_bytes.as_slice()).unwrap();
+        let secrets = self.decrypt_long_term_secrets(provider, commit.long_term_secrets());
 
         // Add new secrets to group
         self.process_long_term_secrets(secrets);
@@ -150,7 +161,7 @@ impl SecretGroup {
             .find(|secret| secret.long_term_epoch() == epoch)
     }
 
-    fn process_long_term_secrets(&mut self, secrets: TlsVecU32<LongTermSecret>) {
+    fn process_long_term_secrets(&mut self, secrets: LongTermSecretVec) {
         secrets.iter().for_each(|secret| {
             if self.group_id() == secret.group_id()
                 && self.long_term_secret(secret.long_term_epoch()).is_none()
@@ -193,6 +204,21 @@ impl SecretGroup {
 
         // Encrypt encoded secrets
         self.encrypt(provider, &encoded_secrets)
+    }
+
+    fn decrypt_long_term_secrets(
+        &mut self,
+        provider: &impl OpenMlsCryptoProvider,
+        encrypted_long_term_secrets: SecretGroupMessage,
+    ) -> LongTermSecretVec {
+        // Decrypt long term secrets with current group state
+        let secrets_bytes = self.decrypt(provider, &encrypted_long_term_secrets);
+
+        // Decode secrets
+        let secrets =
+            LongTermSecretVec::tls_deserialize(&mut secrets_bytes.as_slice()).unwrap();
+
+        secrets
     }
 
     pub fn encrypt(
@@ -312,6 +338,7 @@ mod tests {
         //   }
         // }
         // ```
+        //
 
         // Billie invites Ada into their group, the return value is a `SecretGroupCommit` instance
         // which contains the MLS commit and MLS welcome message for this MLS epoch, also the first
@@ -367,7 +394,7 @@ mod tests {
         // Billie downloads and processes the commit to move to the next group epoch where Ada is a
         // member. Ada does the same and will join the group now in this epoch, with the help of
         // the welcome message which is stored inside the `SecretGroupCommit`.
-        billie_group.process_commit(&billie_provider, &group_commit);
+        //
         // Ada will be able to retreive the group_id from the group_commit. Also they create their
         // own LongTermSecrets state and imports the public, encrypted secret from Billies
         // `SecretGroupCommit` instance.
