@@ -6,6 +6,10 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum AesError {
+    /// Failed generation of random bytes for AES nonce.
+    #[error("Failed generation of random bytes for AES nonce")]
+    NonceGenerationFailed,
+
     /// AES encryption failed because of an invalid key.
     #[error("AES-GCM-SIV encryption failed")]
     EncryptionFailed,

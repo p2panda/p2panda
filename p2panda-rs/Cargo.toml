@@ -37,7 +37,6 @@ bamboo-rs-core = "0.1.0"
 cddl = "0.8.7"
 ed25519-dalek = "1.0.1"
 hex = "0.4.3"
-rand_core = "0.6.3"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_cbor = "0.11.2"
 serde_repr = "0.1.7"

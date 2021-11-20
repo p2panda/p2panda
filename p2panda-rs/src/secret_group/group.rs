@@ -272,6 +272,7 @@ impl SecretGroup {
 
     pub fn encrypt_with_long_term_secret(
         &self,
+        provider: &impl OpenMlsCryptoProvider,
         data: &[u8],
     ) -> Result<SecretGroupMessage, SecretGroupError> {
         // Unwrap here since at this stage we already have at least one epoch
@@ -279,7 +280,7 @@ impl SecretGroup {
         let secret = self
             .long_term_secret(epoch)
             .ok_or_else(|| SecretGroupError::LTSSecretMissing)?;
-        let ciphertext = secret.encrypt(data)?;
+        let ciphertext = secret.encrypt(provider, data)?;
         Ok(SecretGroupMessage::LongTermSecretMessage(ciphertext))
     }
 

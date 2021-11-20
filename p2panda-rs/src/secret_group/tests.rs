@@ -51,7 +51,7 @@ fn long_term_secret_evolution() {
     // Billie sends an symmetrically encrypted message to Ada, the `LongTermSecrets` will
     // automatically use the latest secret for encryption
     let message_ciphertext = billie_group
-        .encrypt_with_long_term_secret(b"This is a secret message")
+        .encrypt_with_long_term_secret(&billie_provider, b"This is a secret message")
         .unwrap();
 
     // Ada decrypts the message with the known secret
@@ -123,7 +123,7 @@ fn long_term_secret_evolution() {
 
     // Ada sends a symmetrically encrypted message using the new secret
     let message_ciphertext = ada_group
-        .encrypt_with_long_term_secret(b"This is another secret message")
+        .encrypt_with_long_term_secret(&ada_provider, b"This is another secret message")
         .unwrap();
 
     // Calvin can not decrypt the secret

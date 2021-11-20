@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use openmls::group::GroupId;
+use openmls_traits::OpenMlsCryptoProvider;
 use serde::{Deserialize, Serialize};
 use tls_codec::{Size, TlsByteVecU8, TlsDeserialize, TlsSerialize, TlsSize};
 
@@ -46,10 +47,14 @@ impl LongTermSecret {
         self.long_term_epoch
     }
 
-    pub fn encrypt(&self, data: &[u8]) -> Result<LongTermSecretCiphertext, LongTermSecretError> {
+    pub fn encrypt(
+        &self,
+        provider: &impl OpenMlsCryptoProvider,
+        data: &[u8],
+    ) -> Result<LongTermSecretCiphertext, LongTermSecretError> {
         let (ciphertext, nonce) = match self.ciphersuite {
             LongTermSecretCiphersuite::PANDA_AES256GCMSIV => {
-                aes::encrypt(self.value.as_slice(), data)?
+                aes::encrypt(provider, self.value.as_slice(), data)?
             }
         };
 
