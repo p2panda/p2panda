@@ -48,6 +48,8 @@ yamf-hash = "0.1.2"
 # Optional dependencies (behind feature flags)
 sqlx = { version = "0.5.9", features = ["runtime-async-std-rustls", "all-databases"], optional = true }
 
+# @TODO: Use `openmls` crate as soon as changes got merged into `main` and
+# updates got published. See: https://github.com/openmls/openmls/pull/559
 [dependencies.openmls]
 git = "https://github.com/openmls/openmls"
 branch = "raphael/fixvisibility"
@@ -60,6 +62,7 @@ branch = "raphael/fixvisibility"
 git = "https://github.com/openmls/openmls"
 branch = "raphael/fixvisibility"
 
+# @TODO: Will be removed as soon as we have our own key store provider
 [dependencies.memory_keystore]
 git = "https://github.com/openmls/openmls"
 branch = "raphael/fixvisibility"
