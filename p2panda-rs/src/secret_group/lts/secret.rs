@@ -73,11 +73,11 @@ impl LongTermSecret {
         ciphertext: &LongTermSecretCiphertext,
     ) -> Result<Vec<u8>, LongTermSecretError> {
         if ciphertext.long_term_epoch != self.long_term_epoch {
-            panic!("Epoch does not match");
+            return Err(LongTermSecretError::EpochNotMatching);
         }
 
         if ciphertext.group_id != self.group_id {
-            panic!("Group does not match");
+            return Err(LongTermSecretError::GroupNotMatching);
         }
 
         let plaintext = match self.ciphersuite {
