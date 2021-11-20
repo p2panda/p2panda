@@ -256,7 +256,7 @@ impl SecretGroup {
 
         // Decode secrets
         let secrets = LongTermSecretVec::tls_deserialize(&mut secrets_bytes.as_slice())
-            .map_err(|_| SecretGroupError::LTSEncodingError)?;
+            .map_err(|_| SecretGroupError::LTSDecodingError)?;
 
         Ok(secrets)
     }
@@ -275,12 +275,13 @@ impl SecretGroup {
         provider: &impl OpenMlsCryptoProvider,
         data: &[u8],
     ) -> Result<SecretGroupMessage, SecretGroupError> {
-        // Unwrap here since at this stage we already have at least one epoch
+        // Unwrap here since at this stage we already have at least one LTS epoch
         let epoch = self.long_term_epoch().unwrap();
-        let secret = self
-            .long_term_secret(epoch)
-            .ok_or_else(|| SecretGroupError::LTSSecretMissing)?;
+        let secret = self.long_term_secret(epoch).unwrap();
+
+        // Encrypt user data with last long term secret
         let ciphertext = secret.encrypt(provider, data)?;
+
         Ok(SecretGroupMessage::LongTermSecretMessage(ciphertext))
     }
 
