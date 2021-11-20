@@ -7,6 +7,11 @@ use openmls::messages::Welcome;
 
 use crate::secret_group::{SecretGroupError, SecretGroupMessage};
 
+/// Plaintext commit message which is published on the network to announce group changes.
+///
+/// A `SecretGroupCommit` always contains a MLS Commit message and the current, encrypted long term
+/// secrets for this group. Optionally it contains another MLS Welcome message in case this commit
+/// invites new members into the group.
 #[derive(Debug)]
 pub struct SecretGroupCommit {
     mls_commit_message: MlsPlaintext,
@@ -15,6 +20,7 @@ pub struct SecretGroupCommit {
 }
 
 impl SecretGroupCommit {
+    /// Returns a new instance of a secret group commit message.
     pub fn new(
         mls_message_out: MlsMessageOut,
         mls_welcome_message: Option<Welcome>,
@@ -41,15 +47,18 @@ impl SecretGroupCommit {
         })
     }
 
+    /// Returns the MLS Commit message.
     pub fn commit(&self) -> MlsMessageIn {
         let message_clone = self.mls_commit_message.clone();
         MlsMessageIn::Plaintext(VerifiableMlsPlaintext::from_plaintext(message_clone, None))
     }
 
+    /// Returns a MLS Welcome message when given.
     pub fn welcome(&self) -> Option<Welcome> {
         self.mls_welcome_message.clone()
     }
 
+    /// Returns the encrypted and encoded long term secrets.
     pub fn long_term_secrets(&self) -> SecretGroupMessage {
         self.encrypted_long_term_secrets.clone()
     }

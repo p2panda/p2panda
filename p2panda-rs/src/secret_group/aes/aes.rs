@@ -21,8 +21,6 @@ fn generate_nonce(provider: &impl OpenMlsCryptoProvider) -> Result<Vec<u8>, AesE
 /// This method automatically generates a unique and random 96 bit nonce for every encryption to
 /// avoid "accidents" where a nonce is used twice for the same key.
 ///
-/// Panics when the key size is not 256 bit / 32 bytes.
-///
 /// See: https://www.imperialviolet.org/2017/05/14/aesgcmsiv.html
 pub fn encrypt(
     provider: &impl OpenMlsCryptoProvider,
@@ -54,7 +52,7 @@ mod test {
 
     use super::{decrypt, encrypt, generate_nonce};
 
-    // Generates a new random key which can be used as the secret key for AES256.
+    // Helper method to generate a new random key which can be used as the secret key for AES256
     fn generate_key(provider: &impl OpenMlsCryptoProvider) -> Vec<u8> {
         provider.rand().random_vec(32).unwrap()
     }
@@ -70,7 +68,7 @@ mod test {
     }
 
     #[test]
-    fn symmetric_encryption() {
+    fn encrypt_decrypt() {
         let provider = MlsProvider::new();
 
         // Generate secret key and public nonce

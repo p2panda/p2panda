@@ -6,17 +6,19 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum LongTermSecretError {
+    /// Failed because epochs do not match.
     #[error("Secret epoch does not match ciphertext")]
     EpochNotMatching,
 
+    /// Failed because group ids do not match.
     #[error("Secret group id does not match ciphertext")]
     GroupNotMatching,
 
-    /// AES En- & Decryption error.
+    /// Internal AES En- & Decryption error.
     #[error(transparent)]
     AESError(#[from] crate::secret_group::aes::AesError),
 
-    /// Hashing error.
+    /// Internal hashing error.
     #[error(transparent)]
     HashError(#[from] crate::hash::HashError),
 }

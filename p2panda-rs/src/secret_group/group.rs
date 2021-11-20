@@ -18,6 +18,8 @@ use crate::secret_group::{
 
 type LongTermSecretVec = TlsVecU32<LongTermSecret>;
 
+/// Main struct maintaining the MLS group- and LongTermSecret state, en- & decrypts user data and
+/// processes SecretGroupCommit messages.
 #[derive(Debug)]
 pub struct SecretGroup {
     mls_group: MlsGroup,
@@ -28,6 +30,8 @@ impl SecretGroup {
     // Creation
     // ========
 
+    /// Creates a new `SecretGroup` instance which can be used to encrypt data securely between
+    /// members of the group.
     pub fn new(
         provider: &impl OpenMlsCryptoProvider,
         group_instance_id: &Hash,
@@ -54,6 +58,7 @@ impl SecretGroup {
         Ok(group)
     }
 
+    /// Creates a `SecretGroup` instance by joining an already existing group.
     pub fn new_from_welcome(
         provider: &impl OpenMlsCryptoProvider,
         commit: &SecretGroupCommit,
@@ -83,6 +88,7 @@ impl SecretGroup {
     // Membership
     // ==========
 
+    /// Add new members to the group.
     pub fn add_members(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
@@ -104,6 +110,7 @@ impl SecretGroup {
         )?)
     }
 
+    /// Remove members from the group.
     pub fn remove_members(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
@@ -134,6 +141,11 @@ impl SecretGroup {
     // Commits
     // =======
 
+    /// Internal method to process MLS Commit messages directly.
+    ///
+    /// Usually MLS Commits would first be sent to a "Delivery Service" and then processed after
+    /// they got received again but in the p2panda case they need to be processed directly to be
+    /// able to encrypt long term secrets based on the new MLS group state.
     fn process_commit_directly(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
@@ -153,6 +165,7 @@ impl SecretGroup {
         Ok(())
     }
 
+    /// Process an incoming `SecretGroupCommit` message.
     pub fn process_commit(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
@@ -176,12 +189,15 @@ impl SecretGroup {
     // Long Term secrets
     // =================
 
+    /// Loads a long term secret from a certain epoch from the internal key store.
     fn long_term_secret(&self, epoch: LongTermSecretEpoch) -> Option<&LongTermSecret> {
         self.long_term_secrets
             .iter()
             .find(|secret| secret.long_term_epoch() == epoch)
     }
 
+    /// Reads an array of long term secrets and stores new ones when given. Ignores already
+    /// existing secrets.
     fn process_long_term_secrets(
         &mut self,
         secrets: LongTermSecretVec,
@@ -203,14 +219,17 @@ impl SecretGroup {
         Ok(())
     }
 
+    /// Generates a new long term secret for this group.
     pub fn rotate_long_term_secret(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
     ) -> Result<(), SecretGroupError> {
+        // Generate secret key by using the MLS exporter method
         let value =
             self.mls_group
                 .export_secret(provider, LTS_EXPORTER_LABEL, LTS_EXPORTER_LENGTH)?;
 
+        // Determine the epoch of the new secret
         let long_term_epoch = match self.long_term_epoch() {
             Some(mut epoch) => {
                 epoch.increment();
@@ -219,6 +238,7 @@ impl SecretGroup {
             None => LongTermSecretEpoch(0),
         };
 
+        // Store secret in internal storage
         self.long_term_secrets.push(LongTermSecret::new(
             self.group_instance_id().clone(),
             LongTermSecretCiphersuite::PANDA_AES256GCMSIV,
@@ -232,6 +252,8 @@ impl SecretGroup {
     // Encryption
     // ==========
 
+    /// Securely encodes and encrypts a list of long term secrets for the current MLS group.
+    /// Members of this group will be able to decrypt and use these secrets.
     fn encrypt_long_term_secrets(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
@@ -246,6 +268,7 @@ impl SecretGroup {
         Ok(self.encrypt(provider, &encoded_secrets)?)
     }
 
+    /// Decrypts and decodes a list of long term secrets.
     fn decrypt_long_term_secrets(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
@@ -261,6 +284,11 @@ impl SecretGroup {
         Ok(secrets)
     }
 
+    /// Encrypt user data asymmetrically using the current MLS group state.
+    ///
+    /// This method gives forward-secrecy and post-compromise security. Use this encryption method
+    /// if decrypted data can be safely stored on the clients device since past data can not be
+    /// recovered.
     pub fn encrypt(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
@@ -270,6 +298,11 @@ impl SecretGroup {
         Ok(SecretGroupMessage::MlsApplicationMessage(mls_ciphertext))
     }
 
+    /// Encrypt user data symmetrically using the current long term secret.
+    ///
+    /// This method gives only post-compromise security and has in general lower security
+    /// guarantees but gives more flexibility. Use this encryption method if you want every old or
+    /// new group member to decrypt past data even when they've joined the group later.
     pub fn encrypt_with_long_term_secret(
         &self,
         provider: &impl OpenMlsCryptoProvider,
@@ -285,6 +318,10 @@ impl SecretGroup {
         Ok(SecretGroupMessage::LongTermSecretMessage(ciphertext))
     }
 
+    /// Decrypt user data.
+    ///
+    /// This method automatically detects if the ciphertext was encrypted with MLS or a long term
+    /// secret.
     pub fn decrypt(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
@@ -296,7 +333,7 @@ impl SecretGroup {
             }
             SecretGroupMessage::LongTermSecretMessage(ciphertext) => {
                 let secret = self
-                    .long_term_secret(ciphertext.long_term_epoch)
+                    .long_term_secret(ciphertext.long_term_epoch())
                     .ok_or_else(|| SecretGroupError::LTSSecretMissing)?;
                 Ok(secret.decrypt(ciphertext)?)
             }
@@ -306,16 +343,20 @@ impl SecretGroup {
     // Status
     // ======
 
+    /// Returns true if this group is still active, or false if the member got removed from the
+    /// group.
     pub fn is_active(&self) -> bool {
         self.mls_group.is_active()
     }
 
+    /// Returns the hash of this `SecretGroup` instance.
     pub fn group_instance_id(&self) -> Hash {
         let group_id_bytes = self.mls_group.group_id().as_slice().to_vec();
         // Unwrap here since we already trusted the user input
         Hash::new_from_bytes(group_id_bytes).unwrap()
     }
 
+    /// Returns the current epoch of the long term secret.
     pub fn long_term_epoch(&self) -> Option<LongTermSecretEpoch> {
         self.long_term_secrets
             .iter()

@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-/// Custom error types for MLS.
+/// Custom error types for Messaging Layer Security (MLS).
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum MlsError {
@@ -15,6 +15,7 @@ pub enum MlsError {
     ManagedGroupError(#[from] openmls::prelude::ManagedGroupError),
 
     /// Internal `memory_keystore` serialization error.
+    // @TODO: This will be changed as soon as we have our own key store implementation.
     #[error("KeyStore failed during serialization")]
     KeyStoreSerializationError,
 }

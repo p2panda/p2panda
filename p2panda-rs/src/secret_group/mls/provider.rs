@@ -18,6 +18,7 @@ pub struct MlsProvider {
 }
 
 impl MlsProvider {
+    /// Creates a new instance of the `MlsProvider`.
     pub fn new() -> Self {
         Self {
             crypto: RustCrypto::default(),

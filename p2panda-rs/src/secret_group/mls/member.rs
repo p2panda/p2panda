@@ -11,12 +11,17 @@ use openmls_traits::OpenMlsCryptoProvider;
 use crate::identity::KeyPair;
 use crate::secret_group::mls::{MlsError, MLS_CIPHERSUITE_NAME, MLS_LIFETIME_EXTENSION};
 
+/// Wrapper around the MLS CredentialBundle of `openmls`.
 #[derive(Debug, Clone)]
 pub struct MlsMember {
     credential_bundle: CredentialBundle,
 }
 
 impl MlsMember {
+    /// Creates a new MLS group member with a CredentialBundle using the p2panda key pair to
+    /// authenticate the member of a group towards others.
+    ///
+    /// The generated bundle is automatically stored in the MLS key store.
     pub fn new(
         provider: &impl OpenMlsCryptoProvider,
         key_pair: &KeyPair,
@@ -58,15 +63,17 @@ impl MlsMember {
         Ok(Self { credential_bundle })
     }
 
-    /// Returns credentials of this group member which are used to identify it.
+    /// Returns Credential of this group member which is used to identify it.
     pub fn credential(&self) -> &Credential {
         self.credential_bundle.credential()
     }
 
-    /// Returns a KeyPackage of this group member.
+    /// Generates new KeyPackage of this group member and returns it.
     ///
     /// A KeyPackage object specifies a ciphersuite that the client supports, as well as
     /// providing a public key that others can use for key agreement.
+    ///
+    /// The generated KeyPackage is automatically stored inside the MLS key store.
     pub fn key_package(
         &self,
         provider: &impl OpenMlsCryptoProvider,
