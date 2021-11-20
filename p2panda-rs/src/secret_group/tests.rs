@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::secret_group::lts::LongTermSecretEpoch;

@@ -7,7 +7,6 @@ use openmls_traits::OpenMlsCryptoProvider;
 use tls_codec::{Deserialize, Serialize, TlsVecU32};
 
 use crate::hash::Hash;
-use crate::identity::Author;
 use crate::secret_group::lts::{LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch};
 use crate::secret_group::mls::MlsGroup;
 use crate::secret_group::{SecretGroupCommit, SecretGroupMember, SecretGroupMessage};
@@ -34,7 +33,7 @@ impl SecretGroup {
     ) -> Self {
         let init_key_package = member.key_package(provider);
         let group_id = GroupId::from_slice(&group_instance_id.to_bytes());
-        let mls_group = MlsGroup::new(provider, group_id, init_key_package);
+        let mls_group = MlsGroup::new(provider, group_id, init_key_package).unwrap();
 
         let mut group = Self {
             mls_group,
@@ -56,7 +55,8 @@ impl SecretGroup {
             commit
                 .welcome()
                 .expect("This SecretGroupCommit does not contain a welcome message!"),
-        );
+        )
+        .unwrap();
 
         let mut group = Self {
             mls_group,
@@ -81,7 +81,8 @@ impl SecretGroup {
         key_packages: &[KeyPackage],
     ) -> SecretGroupCommit {
         // Add members
-        let (mls_message_out, mls_welcome) = self.mls_group.add_members(provider, key_packages);
+        let (mls_message_out, mls_welcome) =
+            self.mls_group.add_members(provider, key_packages).unwrap();
 
         // Process message directly to establish group state for encryption
         self.process_commit_directly(provider, &mls_message_out);
@@ -106,7 +107,10 @@ impl SecretGroup {
         member_leaf_indexes: &[usize],
     ) -> SecretGroupCommit {
         // Remove members
-        let mls_message_out = self.mls_group.remove_members(provider, member_leaf_indexes);
+        let mls_message_out = self
+            .mls_group
+            .remove_members(provider, member_leaf_indexes)
+            .unwrap();
 
         // Process message directly to establish group state for encryption
         self.process_commit_directly(provider, &mls_message_out);
@@ -173,7 +177,8 @@ impl SecretGroup {
     pub fn rotate_long_term_secret(&mut self, provider: &impl OpenMlsCryptoProvider) {
         let value = self
             .mls_group
-            .export_secret(provider, LTS_EXPORTER_LABEL, LTS_EXPORTER_LENGTH);
+            .export_secret(provider, LTS_EXPORTER_LABEL, LTS_EXPORTER_LENGTH)
+            .unwrap();
 
         let long_term_epoch = match self.long_term_epoch() {
             Some(mut epoch) => {
@@ -224,7 +229,7 @@ impl SecretGroup {
         provider: &impl OpenMlsCryptoProvider,
         data: &[u8],
     ) -> SecretGroupMessage {
-        let mls_ciphertext = self.mls_group.encrypt(provider, data);
+        let mls_ciphertext = self.mls_group.encrypt(provider, data).unwrap();
         SecretGroupMessage::MlsApplicationMessage(mls_ciphertext)
     }
 
@@ -243,9 +248,10 @@ impl SecretGroup {
         message: &SecretGroupMessage,
     ) -> Vec<u8> {
         match message {
-            SecretGroupMessage::MlsApplicationMessage(ciphertext) => {
-                self.mls_group.decrypt(provider, ciphertext.clone())
-            }
+            SecretGroupMessage::MlsApplicationMessage(ciphertext) => self
+                .mls_group
+                .decrypt(provider, ciphertext.clone())
+                .unwrap(),
             SecretGroupMessage::LongTermSecretMessage(ciphertext) => {
                 let secret = self.long_term_secret(ciphertext.long_term_epoch).unwrap();
                 secret.decrypt(ciphertext)

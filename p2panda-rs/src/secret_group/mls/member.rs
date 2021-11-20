@@ -9,7 +9,7 @@ use openmls_traits::key_store::OpenMlsKeyStore;
 use openmls_traits::OpenMlsCryptoProvider;
 
 use crate::identity::KeyPair;
-use crate::secret_group::mls::{MLS_CIPHERSUITE_NAME, MLS_LIFETIME_EXTENSION};
+use crate::secret_group::mls::{MlsError, MLS_CIPHERSUITE_NAME, MLS_LIFETIME_EXTENSION};
 
 #[derive(Debug, Clone)]
 pub struct MlsMember {
@@ -17,7 +17,11 @@ pub struct MlsMember {
 }
 
 impl MlsMember {
-    pub fn new(provider: &impl OpenMlsCryptoProvider, key_pair: &KeyPair) -> Self {
+    pub fn new(
+        provider: &impl OpenMlsCryptoProvider,
+        key_pair: &KeyPair,
+    ) -> Result<Self, MlsError> {
+        // Unwrap here since we can be sure this ciphersuite exists
         let ciphersuite = Ciphersuite::new(MLS_CIPHERSUITE_NAME).unwrap();
 
         // Credential identities are p2panda public keys!
@@ -44,14 +48,14 @@ impl MlsMember {
                 provider
                     .key_store()
                     .store(bundle.credential().signature_key(), &bundle)
-                    .unwrap();
+                    .map_err(|_| MlsError::KeyStoreSerializationError)?;
 
                 bundle
             }
             Some(bundle) => bundle,
         };
 
-        Self { credential_bundle }
+        Ok(Self { credential_bundle })
     }
 
     /// Returns credentials of this group member which are used to identify it.
@@ -63,7 +67,10 @@ impl MlsMember {
     ///
     /// A KeyPackage object specifies a ciphersuite that the client supports, as well as
     /// providing a public key that others can use for key agreement.
-    pub fn key_package(&self, provider: &impl OpenMlsCryptoProvider) -> KeyPackage {
+    pub fn key_package(
+        &self,
+        provider: &impl OpenMlsCryptoProvider,
+    ) -> Result<KeyPackage, MlsError> {
         // The lifetime extension represents the times between which clients will consider a
         // KeyPackage valid. Its use is mandatory in the MLS specification
         let lifetime_extension =
@@ -76,8 +83,7 @@ impl MlsMember {
             &self.credential_bundle,
             provider,
             vec![lifetime_extension],
-        )
-        .unwrap();
+        )?;
 
         // Retreive KeyPackage from bundle which is the public part of it
         let key_package = key_package_bundle.key_package().clone();
@@ -87,10 +93,10 @@ impl MlsMember {
         provider
             .key_store()
             .store(&key_package_hash, &key_package_bundle)
-            .unwrap();
+            .map_err(|_| MlsError::KeyStoreSerializationError)?;
 
         // Finally return the public part
-        key_package
+        Ok(key_package)
     }
 }
 
@@ -106,7 +112,7 @@ mod tests {
         let key_pair = KeyPair::new();
         let public_key_bytes = key_pair.public_key().to_bytes();
         let provider = MlsProvider::new();
-        let member = MlsMember::new(&provider, &key_pair);
+        let member = MlsMember::new(&provider, &key_pair).unwrap();
         assert_eq!(public_key_bytes.to_vec(), member.credential().identity());
     }
 }

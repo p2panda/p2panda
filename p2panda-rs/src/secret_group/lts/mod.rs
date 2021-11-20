@@ -4,7 +4,9 @@
 mod ciphersuite;
 mod ciphertext;
 mod secret;
+mod error;
 
 pub use ciphersuite::LongTermSecretCiphersuite;
 pub use ciphertext::LongTermSecretCiphertext;
+pub use error::LongTermSecretError;
 pub use secret::{LongTermSecret, LongTermSecretEpoch};

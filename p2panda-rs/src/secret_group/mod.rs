@@ -6,6 +6,7 @@
 //! the asymmetric setting also gives forward secrecy.
 pub(crate) mod aes;
 mod commit;
+mod error;
 mod group;
 pub(crate) mod lts;
 mod member;
@@ -18,3 +19,4 @@ pub use commit::SecretGroupCommit;
 pub use group::SecretGroup;
 pub use member::SecretGroupMember;
 pub use message::SecretGroupMessage;
+pub use error::SecretGroupError;

@@ -14,11 +14,11 @@ pub struct SecretGroupMember {
 impl SecretGroupMember {
     // @TODO: Rename `Author` struct to `PublicKey`.
     pub fn new(provider: &impl OpenMlsCryptoProvider, key_pair: &KeyPair) -> Self {
-        let mls_member = MlsMember::new(provider, key_pair);
+        let mls_member = MlsMember::new(provider, key_pair).unwrap();
         SecretGroupMember { mls_member }
     }
 
     pub fn key_package(&self, provider: &impl OpenMlsCryptoProvider) -> KeyPackage {
-        self.mls_member.key_package(provider)
+        self.mls_member.key_package(provider).unwrap()
     }
 }

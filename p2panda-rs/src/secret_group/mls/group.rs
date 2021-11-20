@@ -5,7 +5,7 @@ use openmls::group::{GroupEvent, GroupId, ManagedGroup, ManagedGroupConfig};
 use openmls::prelude::{KeyPackage, Welcome, WireFormat};
 use openmls_traits::OpenMlsCryptoProvider;
 
-use crate::secret_group::mls::MLS_PADDING_SIZE;
+use crate::secret_group::mls::{MlsError, MLS_PADDING_SIZE};
 
 /// Wrapper around the Managed MLS Group.
 #[derive(Debug)]
@@ -37,21 +37,22 @@ impl MlsGroup {
         provider: &impl OpenMlsCryptoProvider,
         group_id: GroupId,
         key_package: KeyPackage,
-    ) -> Self {
+    ) -> Result<Self, MlsError> {
+        // Retreive hash from key package
         let key_package_hash = key_package.hash(provider);
 
         // Create MLS group with one member inside
-        let group =
-            ManagedGroup::new(provider, &Self::config(), group_id, &key_package_hash).unwrap();
+        let group = ManagedGroup::new(provider, &Self::config(), group_id, &key_package_hash)?;
 
-        Self(group)
+        Ok(Self(group))
     }
 
-    pub fn new_from_welcome(provider: &impl OpenMlsCryptoProvider, welcome: Welcome) -> Self {
-        let group =
-            ManagedGroup::new_from_welcome(provider, &Self::config(), welcome, None).unwrap();
-
-        Self(group)
+    pub fn new_from_welcome(
+        provider: &impl OpenMlsCryptoProvider,
+        welcome: Welcome,
+    ) -> Result<Self, MlsError> {
+        let group = ManagedGroup::new_from_welcome(provider, &Self::config(), welcome, None)?;
+        Ok(Self(group))
     }
 
     // Membership
@@ -61,19 +62,21 @@ impl MlsGroup {
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
         members: &[KeyPackage],
-    ) -> (MlsMessageOut, Welcome) {
-        self.0.add_members(provider, members).unwrap()
+    ) -> Result<(MlsMessageOut, Welcome), MlsError> {
+        Ok(self.0.add_members(provider, members)?)
     }
 
     pub fn remove_members(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
         member_leaf_indexes: &[usize],
-    ) -> MlsMessageOut {
-        self.0
-            .remove_members(provider, member_leaf_indexes)
-            .unwrap()
-            .0
+    ) -> Result<MlsMessageOut, MlsError> {
+        let results = self.0.remove_members(provider, member_leaf_indexes)?;
+
+        // MLS returns an `MlsMessageOut` and optional `Welcome` message when removing a member. We
+        // can be sure there will be no welcome message in the p2panda case, so we only take the
+        // "out" message.
+        Ok(results.0)
     }
 
     // Commits
@@ -83,8 +86,8 @@ impl MlsGroup {
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
         message: MlsMessageIn,
-    ) -> Vec<GroupEvent> {
-        self.0.process_message(message, provider).unwrap()
+    ) -> Result<Vec<GroupEvent>, MlsError> {
+        Ok(self.0.process_message(message, provider)?)
     }
 
     // Encryption
@@ -95,18 +98,20 @@ impl MlsGroup {
         provider: &impl OpenMlsCryptoProvider,
         label: &str,
         key_length: usize,
-    ) -> Vec<u8> {
-        self.0
-            .export_secret(provider, label, &[], key_length)
-            .unwrap()
+    ) -> Result<Vec<u8>, MlsError> {
+        Ok(self.0.export_secret(provider, label, &[], key_length)?)
     }
 
-    pub fn encrypt(&mut self, provider: &impl OpenMlsCryptoProvider, data: &[u8]) -> MlsCiphertext {
-        let message = self.0.create_message(provider, data).unwrap();
+    pub fn encrypt(
+        &mut self,
+        provider: &impl OpenMlsCryptoProvider,
+        data: &[u8],
+    ) -> Result<MlsCiphertext, MlsError> {
+        let message = self.0.create_message(provider, data)?;
 
         match message {
-            MlsMessageOut::Ciphertext(ciphertext) => ciphertext,
-            _ => panic!("This will never happen"),
+            MlsMessageOut::Ciphertext(ciphertext) => Ok(ciphertext),
+            _ => panic!("Expected a Ciphertext message"),
         }
     }
 
@@ -114,15 +119,14 @@ impl MlsGroup {
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
         ciphertext: MlsCiphertext,
-    ) -> Vec<u8> {
+    ) -> Result<Vec<u8>, MlsError> {
         let group_events = self
             .0
-            .process_message(MlsMessageIn::Ciphertext(ciphertext), provider)
-            .unwrap();
+            .process_message(MlsMessageIn::Ciphertext(ciphertext), provider)?;
 
         match group_events.last() {
             Some(GroupEvent::ApplicationMessage(application_message_event)) => {
-                application_message_event.message().to_owned()
+                Ok(application_message_event.message().to_owned())
             }
             _ => panic!("Expected an ApplicationMessage event"),
         }
@@ -156,15 +160,15 @@ mod tests {
         let key_pair = KeyPair::new();
         let provider = MlsProvider::new();
 
-        let member = MlsMember::new(&provider, &key_pair);
+        let member = MlsMember::new(&provider, &key_pair).unwrap();
         let group_id = GroupId::random(&provider);
-        let key_package = member.key_package(&provider);
-        let mut group = MlsGroup::new(&provider, group_id, key_package);
+        let key_package = member.key_package(&provider).unwrap();
+        let mut group = MlsGroup::new(&provider, group_id, key_package).unwrap();
         assert_eq!(group.is_active(), true);
 
         let message = "This is a very secret message";
-        let ciphertext = group.encrypt(&provider, message.as_bytes());
-        let plaintext = group.decrypt(&provider, ciphertext);
+        let ciphertext = group.encrypt(&provider, message.as_bytes()).unwrap();
+        let plaintext = group.decrypt(&provider, ciphertext).unwrap();
         assert_eq!(&plaintext, message.as_bytes());
     }
 }
