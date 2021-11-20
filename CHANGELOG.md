@@ -9,6 +9,8 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+- `SecureGroup` for symmetric and asymmetric group encryption [#130](https://github.com/p2panda/p2panda/pull/130) `rs`
+
 ## [0.2.1]
 
 Released on 2021-10-26: :package: `p2panda-js` :package: `p2panda-rs`
