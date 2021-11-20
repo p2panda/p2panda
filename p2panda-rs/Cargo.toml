@@ -46,7 +46,8 @@ yamf-hash = "0.1.2"
 sqlx = { version = "0.5.9", features = ["runtime-async-std-rustls", "all-databases"], optional = true }
 
 # @TODO: Use `openmls` crate as soon as changes got merged into `main` and
-# updates got published. See: https://github.com/openmls/openmls/pull/559
+# updates got released in version `0.4.0`.
+# See: https://github.com/openmls/openmls/milestone/3
 [dependencies.openmls]
 git = "https://github.com/openmls/openmls"
 branch = "raphael/fixvisibility"
