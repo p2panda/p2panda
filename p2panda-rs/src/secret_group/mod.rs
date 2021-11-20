@@ -11,6 +11,8 @@ pub(crate) mod lts;
 mod member;
 mod message;
 pub(crate) mod mls;
+#[cfg(test)]
+mod tests;
 
 pub use commit::SecretGroupCommit;
 pub use group::SecretGroup;

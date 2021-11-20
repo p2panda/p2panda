@@ -38,10 +38,7 @@ impl MlsMember {
 
                 // A CredentialBundle contains a Credential and the corresponding private key.
                 // BasicCredential is a raw, unauthenticated assertion of an identity/key binding.
-                let bundle = CredentialBundle::from_parts(
-                    public_key.to_vec(),
-                    signature_key_pair,
-                );
+                let bundle = CredentialBundle::from_parts(public_key.to_vec(), signature_key_pair);
 
                 // Persist CredentialBundle in key store for the future
                 provider
