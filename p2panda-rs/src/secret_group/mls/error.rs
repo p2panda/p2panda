@@ -14,7 +14,7 @@ pub enum MlsError {
     #[error(transparent)]
     ManagedGroupError(#[from] openmls::prelude::ManagedGroupError),
 
-    /// Wrapper around `memory_keystore` serialization error.
+    /// Internal `memory_keystore` serialization error.
     #[error("KeyStore failed during serialization")]
     KeyStoreSerializationError,
 }

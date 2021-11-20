@@ -6,7 +6,9 @@ use tls_codec::{Size, TlsByteVecU8, TlsDeserialize, TlsSerialize, TlsSize};
 
 use crate::hash::Hash;
 use crate::secret_group::aes;
-use crate::secret_group::lts::{LongTermSecretCiphersuite, LongTermSecretCiphertext};
+use crate::secret_group::lts::{
+    LongTermSecretCiphersuite, LongTermSecretCiphertext, LongTermSecretError,
+};
 
 #[derive(
     Debug,
@@ -53,30 +55,38 @@ impl LongTermSecret {
         }
     }
 
-    pub(crate) fn group_id(&self) -> Hash {
-        Hash::new_from_bytes(self.group_id.as_slice().to_vec()).unwrap()
+    pub(crate) fn group_id(&self) -> Result<Hash, LongTermSecretError> {
+        Ok(Hash::new_from_bytes(self.group_id.as_slice().to_vec())?)
     }
 
     pub(crate) fn long_term_epoch(&self) -> LongTermSecretEpoch {
         self.long_term_epoch
     }
 
-    pub(crate) fn encrypt(&self, data: &[u8]) -> LongTermSecretCiphertext {
+    pub(crate) fn encrypt(
+        &self,
+        data: &[u8],
+    ) -> Result<LongTermSecretCiphertext, LongTermSecretError> {
         let (ciphertext, nonce) = match self.ciphersuite {
             LongTermSecretCiphersuite::PANDA_AES256GCMSIV => {
-                aes::encrypt(self.value.as_slice(), data).unwrap()
+                aes::encrypt(self.value.as_slice(), data)?
             }
         };
 
-        LongTermSecretCiphertext {
+        let long_term_secret = LongTermSecretCiphertext {
             group_id: self.group_id.clone(),
             long_term_epoch: self.long_term_epoch,
             ciphertext: ciphertext.into(),
             nonce: nonce.into(),
-        }
+        };
+
+        Ok(long_term_secret)
     }
 
-    pub(crate) fn decrypt(&self, ciphertext: &LongTermSecretCiphertext) -> Vec<u8> {
+    pub(crate) fn decrypt(
+        &self,
+        ciphertext: &LongTermSecretCiphertext,
+    ) -> Result<Vec<u8>, LongTermSecretError> {
         if ciphertext.long_term_epoch != self.long_term_epoch {
             panic!("Epoch does not match");
         }
@@ -85,13 +95,14 @@ impl LongTermSecret {
             panic!("Group does not match");
         }
 
-        match self.ciphersuite {
+        let plaintext = match self.ciphersuite {
             LongTermSecretCiphersuite::PANDA_AES256GCMSIV => aes::decrypt(
                 self.value.as_slice(),
                 ciphertext.nonce.as_slice(),
                 ciphertext.ciphertext.as_slice(),
-            )
-            .unwrap(),
-        }
+            )?,
+        };
+
+        Ok(plaintext)
     }
 }

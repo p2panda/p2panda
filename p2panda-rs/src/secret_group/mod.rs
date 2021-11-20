@@ -16,7 +16,7 @@ pub(crate) mod mls;
 mod tests;
 
 pub use commit::SecretGroupCommit;
+pub use error::SecretGroupError;
 pub use group::SecretGroup;
 pub use member::SecretGroupMember;
 pub use message::SecretGroupMessage;
-pub use error::SecretGroupError;

@@ -115,5 +115,8 @@ fn long_term_secret_evolution() {
 
     // Billie can read the message
     let message_plaintext = billie_group.decrypt(&billie_provider, &message_ciphertext);
-    assert_eq!(b"This is another secret message".to_vec(), message_plaintext);
+    assert_eq!(
+        b"This is another secret message".to_vec(),
+        message_plaintext
+    );
 }

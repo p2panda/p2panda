@@ -137,7 +137,9 @@ impl SecretGroup {
             _ => panic!("This is not a plaintext message"),
         };
 
-        self.mls_group.process_commit(provider, mls_commit_message);
+        self.mls_group
+            .process_commit(provider, mls_commit_message)
+            .unwrap();
     }
 
     pub fn process_commit(
@@ -146,7 +148,9 @@ impl SecretGroup {
         commit: &SecretGroupCommit,
     ) {
         // Apply commit message first
-        self.mls_group.process_commit(provider, commit.commit());
+        self.mls_group
+            .process_commit(provider, commit.commit())
+            .unwrap();
 
         // Decrypt long term secrets with current group state
         let secrets = self.decrypt_long_term_secrets(provider, commit.long_term_secrets());
@@ -166,7 +170,7 @@ impl SecretGroup {
 
     fn process_long_term_secrets(&mut self, secrets: LongTermSecretVec) {
         secrets.iter().for_each(|secret| {
-            if self.group_id() == secret.group_id()
+            if self.group_id() == secret.group_id().unwrap()
                 && self.long_term_secret(secret.long_term_epoch()).is_none()
             {
                 self.long_term_secrets.push(secret.clone());
@@ -238,7 +242,7 @@ impl SecretGroup {
             .long_term_epoch()
             .expect("No long term secret generated yet.");
         let secret = self.long_term_secret(epoch).unwrap();
-        let ciphertext = secret.encrypt(data);
+        let ciphertext = secret.encrypt(data).unwrap();
         SecretGroupMessage::LongTermSecretMessage(ciphertext)
     }
 
@@ -254,7 +258,7 @@ impl SecretGroup {
                 .unwrap(),
             SecretGroupMessage::LongTermSecretMessage(ciphertext) => {
                 let secret = self.long_term_secret(ciphertext.long_term_epoch).unwrap();
-                secret.decrypt(ciphertext)
+                secret.decrypt(ciphertext).unwrap()
             }
         }
     }

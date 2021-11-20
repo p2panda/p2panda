@@ -3,8 +3,8 @@
 //! Long Term Secrets
 mod ciphersuite;
 mod ciphertext;
-mod secret;
 mod error;
+mod secret;
 
 pub use ciphersuite::LongTermSecretCiphersuite;
 pub use ciphertext::LongTermSecretCiphertext;
