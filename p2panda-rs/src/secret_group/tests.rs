@@ -15,11 +15,12 @@ fn long_term_secret_evolution() {
     // Billie generates a new KeyPair and uses it to create a SecretGroupMember
     let billie_key_pair = KeyPair::new();
     let billie_provider = MlsProvider::new();
-    let billie_member = SecretGroupMember::new(&billie_provider, &billie_key_pair);
+    let billie_member = SecretGroupMember::new(&billie_provider, &billie_key_pair).unwrap();
 
     // Billie creates a new SecretGroup
     let secret_group_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
-    let mut billie_group = SecretGroup::new(&billie_provider, &secret_group_id, &billie_member);
+    let mut billie_group =
+        SecretGroup::new(&billie_provider, &secret_group_id, &billie_member).unwrap();
 
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Add members & share secrets
@@ -28,18 +29,20 @@ fn long_term_secret_evolution() {
     // Ada generates a new KeyPair to also create a new `SecretGroupMember`
     let ada_key_pair = KeyPair::new();
     let ada_provider = MlsProvider::new();
-    let ada_member = SecretGroupMember::new(&ada_provider, &ada_key_pair);
+    let ada_member = SecretGroupMember::new(&ada_provider, &ada_key_pair).unwrap();
 
     // Ada publishes their KeyPackage for future group invitations
-    let ada_key_package = ada_member.key_package(&ada_provider);
+    let ada_key_package = ada_member.key_package(&ada_provider).unwrap();
 
     // Billie invites Ada into their group, the return value is a `SecretGroupCommit` which
     // contains the MLS commit and MLS welcome message for this epoch, also the already generated
     // symmetrical long term secret will be encoded, encrypted and included in the same commit
-    let group_commit = billie_group.add_members(&billie_provider, &[ada_key_package]);
+    let group_commit = billie_group
+        .add_members(&billie_provider, &[ada_key_package])
+        .unwrap();
 
     // Ada joins the group and decrypts the long term secret
-    let mut ada_group = SecretGroup::new_from_welcome(&ada_provider, &group_commit);
+    let mut ada_group = SecretGroup::new_from_welcome(&ada_provider, &group_commit).unwrap();
 
     // ~~~~~~~~~~~~~~~~
     // En- & Decryption
@@ -47,11 +50,14 @@ fn long_term_secret_evolution() {
 
     // Billie sends an symmetrically encrypted message to Ada, the `LongTermSecrets` will
     // automatically use the latest secret for encryption
-    let message_ciphertext =
-        billie_group.encrypt_with_long_term_secret(b"This is a secret message");
+    let message_ciphertext = billie_group
+        .encrypt_with_long_term_secret(b"This is a secret message")
+        .unwrap();
 
     // Ada decrypts the message with the known secret
-    let message_plaintext = ada_group.decrypt(&ada_provider, &message_ciphertext);
+    let message_plaintext = ada_group
+        .decrypt(&ada_provider, &message_ciphertext)
+        .unwrap();
     assert_eq!(b"This is a secret message".to_vec(), message_plaintext);
 
     // ~~~~~~~~~~~~
@@ -61,22 +67,28 @@ fn long_term_secret_evolution() {
     // Calvin generates a new KeyPair and uses it to create a SecretGroupMember
     let calvin_key_pair = KeyPair::new();
     let calvin_provider = MlsProvider::new();
-    let calvin_member = SecretGroupMember::new(&calvin_provider, &calvin_key_pair);
+    let calvin_member = SecretGroupMember::new(&calvin_provider, &calvin_key_pair).unwrap();
 
     // Calvin publishes their KeyPackage for future group invitations
-    let calvin_key_package = calvin_member.key_package(&calvin_provider);
+    let calvin_key_package = calvin_member.key_package(&calvin_provider).unwrap();
 
     // Billie invites Calvin into the group
-    let group_commit = billie_group.add_members(&billie_provider, &[calvin_key_package]);
+    let group_commit = billie_group
+        .add_members(&billie_provider, &[calvin_key_package])
+        .unwrap();
 
     // Calvin joins the group and decrypts the long term secret
-    let mut calvin_group = SecretGroup::new_from_welcome(&calvin_provider, &group_commit);
+    let mut calvin_group = SecretGroup::new_from_welcome(&calvin_provider, &group_commit).unwrap();
 
     // Ada processes the commit as well to sync up with the others
-    ada_group.process_commit(&ada_provider, &group_commit);
+    ada_group
+        .process_commit(&ada_provider, &group_commit)
+        .unwrap();
 
-    // Calvin can still decrypt the old message of billie even though they joined the group later
-    let message_plaintext = calvin_group.decrypt(&calvin_provider, &message_ciphertext);
+    // Calvin can still decrypt the old message of Billie even though they joined the group later
+    let message_plaintext = calvin_group
+        .decrypt(&calvin_provider, &message_ciphertext)
+        .unwrap();
     assert_eq!(b"This is a secret message".to_vec(), message_plaintext);
 
     // Ada, Billie and Calvin still share only one long term secret
@@ -90,15 +102,19 @@ fn long_term_secret_evolution() {
 
     // Billie removes Calvin and rotates the long term secret before to make sure Calvin will not
     // be able to decrypt future messages
-    billie_group.rotate_long_term_secret(&billie_provider);
-    let group_commit = billie_group.remove_members(&billie_provider, &[2]);
+    billie_group
+        .rotate_long_term_secret(&billie_provider)
+        .unwrap();
+    let group_commit = billie_group.remove_members(&billie_provider, &[2]).unwrap();
 
-    // Ada processes this group commit
-    ada_group.process_commit(&ada_provider, &group_commit);
+    // Ada and Calvin processes this group commit
+    ada_group
+        .process_commit(&ada_provider, &group_commit)
+        .unwrap();
 
-    // .. Calvin can't as they are already out of the group
-    // @TODO: Test this case after we've introduced proper error handling
-    // assert!(calvin_group.process_commit(&calvin_provider, &group_commit).is_err());
+    calvin_group
+        .process_commit(&calvin_provider, &group_commit)
+        .unwrap();
 
     // Only Ada and Billie share the new long term secret
     assert_eq!(ada_group.long_term_epoch(), Some(LongTermSecretEpoch(1)));
@@ -106,15 +122,19 @@ fn long_term_secret_evolution() {
     assert_eq!(calvin_group.long_term_epoch(), Some(LongTermSecretEpoch(0)));
 
     // Ada sends a symmetrically encrypted message using the new secret
-    let message_ciphertext =
-        ada_group.encrypt_with_long_term_secret(b"This is another secret message");
+    let message_ciphertext = ada_group
+        .encrypt_with_long_term_secret(b"This is another secret message")
+        .unwrap();
 
     // Calvin can not decrypt the secret
-    // @TODO: Test this case after we've introduced proper error handling
-    // assert!(calvin_group.decrypt(&calvin_provider, &message_ciphertext).is_err());
+    assert!(calvin_group
+        .decrypt(&calvin_provider, &message_ciphertext)
+        .is_err());
 
     // Billie can read the message
-    let message_plaintext = billie_group.decrypt(&billie_provider, &message_ciphertext);
+    let message_plaintext = billie_group
+        .decrypt(&billie_provider, &message_ciphertext)
+        .unwrap();
     assert_eq!(
         b"This is another secret message".to_vec(),
         message_plaintext

@@ -5,6 +5,7 @@ use openmls_traits::OpenMlsCryptoProvider;
 
 use crate::identity::KeyPair;
 use crate::secret_group::mls::MlsMember;
+use crate::secret_group::SecretGroupError;
 
 #[derive(Debug, Clone)]
 pub struct SecretGroupMember {
@@ -12,13 +13,18 @@ pub struct SecretGroupMember {
 }
 
 impl SecretGroupMember {
-    // @TODO: Rename `Author` struct to `PublicKey`.
-    pub fn new(provider: &impl OpenMlsCryptoProvider, key_pair: &KeyPair) -> Self {
-        let mls_member = MlsMember::new(provider, key_pair).unwrap();
-        SecretGroupMember { mls_member }
+    pub fn new(
+        provider: &impl OpenMlsCryptoProvider,
+        key_pair: &KeyPair,
+    ) -> Result<Self, SecretGroupError> {
+        let mls_member = MlsMember::new(provider, key_pair)?;
+        Ok(SecretGroupMember { mls_member })
     }
 
-    pub fn key_package(&self, provider: &impl OpenMlsCryptoProvider) -> KeyPackage {
-        self.mls_member.key_package(provider).unwrap()
+    pub fn key_package(
+        &self,
+        provider: &impl OpenMlsCryptoProvider,
+    ) -> Result<KeyPackage, SecretGroupError> {
+        Ok(self.mls_member.key_package(provider)?)
     }
 }

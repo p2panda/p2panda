@@ -7,12 +7,14 @@ use openmls_traits::OpenMlsCryptoProvider;
 use tls_codec::{Deserialize, Serialize, TlsVecU32};
 
 use crate::hash::Hash;
-use crate::secret_group::lts::{LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch};
+use crate::secret_group::lts::{
+    LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch, LTS_EXPORTER_LABEL,
+    LTS_EXPORTER_LENGTH,
+};
 use crate::secret_group::mls::MlsGroup;
-use crate::secret_group::{SecretGroupCommit, SecretGroupMember, SecretGroupMessage};
-
-const LTS_EXPORTER_LABEL: &str = "long_term_secret";
-const LTS_EXPORTER_LENGTH: usize = 32; // AES256 key
+use crate::secret_group::{
+    SecretGroupCommit, SecretGroupError, SecretGroupMember, SecretGroupMessage,
+};
 
 type LongTermSecretVec = TlsVecU32<LongTermSecret>;
 
@@ -30,33 +32,39 @@ impl SecretGroup {
         provider: &impl OpenMlsCryptoProvider,
         group_instance_id: &Hash,
         member: &SecretGroupMember,
-    ) -> Self {
-        let init_key_package = member.key_package(provider);
+    ) -> Result<Self, SecretGroupError> {
+        // Generate new InitKeys and consume them directly when creating MLS group
+        let init_key_package = member.key_package(provider)?;
+
+        // Internally we use the MLS `GroupId` struct to represent groups since it already
+        // implements the TLS encoding traits
         let group_id = GroupId::from_slice(&group_instance_id.to_bytes());
-        let mls_group = MlsGroup::new(provider, group_id, init_key_package).unwrap();
+
+        // Create the MLS group with first member inside
+        let mls_group = MlsGroup::new(provider, group_id, init_key_package)?;
 
         let mut group = Self {
             mls_group,
             long_term_secrets: Vec::new().into(),
         };
 
-        // Generate first long term secret
-        group.rotate_long_term_secret(provider);
+        // Generate first long term secret and store it in secret group
+        group.rotate_long_term_secret(provider)?;
 
-        group
+        Ok(group)
     }
 
     pub fn new_from_welcome(
         provider: &impl OpenMlsCryptoProvider,
         commit: &SecretGroupCommit,
-    ) -> Self {
+    ) -> Result<Self, SecretGroupError> {
+        // Read MLS welcome from secret group commit and try to establish group state from it
         let mls_group = MlsGroup::new_from_welcome(
             provider,
             commit
                 .welcome()
-                .expect("This SecretGroupCommit does not contain a welcome message!"),
-        )
-        .unwrap();
+                .ok_or_else(|| SecretGroupError::WelcomeMissing)?,
+        )?;
 
         let mut group = Self {
             mls_group,
@@ -64,12 +72,12 @@ impl SecretGroup {
         };
 
         // Decode long term secrets with current group state
-        let secrets = group.decrypt_long_term_secrets(provider, commit.long_term_secrets());
+        let secrets = group.decrypt_long_term_secrets(provider, commit.long_term_secrets())?;
 
-        // Add new secrets to group
-        group.process_long_term_secrets(secrets);
+        // .. and finally add new secrets to group
+        group.process_long_term_secrets(secrets)?;
 
-        group
+        Ok(group)
     }
 
     // Membership
@@ -79,22 +87,21 @@ impl SecretGroup {
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
         key_packages: &[KeyPackage],
-    ) -> SecretGroupCommit {
+    ) -> Result<SecretGroupCommit, SecretGroupError> {
         // Add members
-        let (mls_message_out, mls_welcome) =
-            self.mls_group.add_members(provider, key_packages).unwrap();
+        let (mls_message_out, mls_welcome) = self.mls_group.add_members(provider, key_packages)?;
 
         // Process message directly to establish group state for encryption
-        self.process_commit_directly(provider, &mls_message_out);
+        self.process_commit_directly(provider, &mls_message_out)?;
 
         // Re-Encrypt long term secrets for this group epoch
-        let encrypt_long_term_secrets = self.encrypt_long_term_secrets(provider);
+        let encrypt_long_term_secrets = self.encrypt_long_term_secrets(provider)?;
 
-        SecretGroupCommit::new(
+        Ok(SecretGroupCommit::new(
             mls_message_out,
             Some(mls_welcome),
             encrypt_long_term_secrets,
-        )
+        )?)
     }
 
     pub fn remove_members(
@@ -105,20 +112,23 @@ impl SecretGroup {
         // and needs to be implemented in `openmls`.
         // See: https://github.com/openmls/openmls/issues/541
         member_leaf_indexes: &[usize],
-    ) -> SecretGroupCommit {
+    ) -> Result<SecretGroupCommit, SecretGroupError> {
         // Remove members
         let mls_message_out = self
             .mls_group
-            .remove_members(provider, member_leaf_indexes)
-            .unwrap();
+            .remove_members(provider, member_leaf_indexes)?;
 
         // Process message directly to establish group state for encryption
-        self.process_commit_directly(provider, &mls_message_out);
+        self.process_commit_directly(provider, &mls_message_out)?;
 
         // Re-Encrypt long term secrets for this group epoch
-        let encrypt_long_term_secrets = self.encrypt_long_term_secrets(provider);
+        let encrypt_long_term_secrets = self.encrypt_long_term_secrets(provider)?;
 
-        SecretGroupCommit::new(mls_message_out, None, encrypt_long_term_secrets)
+        Ok(SecretGroupCommit::new(
+            mls_message_out,
+            None,
+            encrypt_long_term_secrets,
+        )?)
     }
 
     // Commits
@@ -128,35 +138,39 @@ impl SecretGroup {
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
         mls_message_out: &MlsMessageOut,
-    ) {
+    ) -> Result<(), SecretGroupError> {
         // Convert "out" to "in" message
         let mls_commit_message = match mls_message_out {
-            MlsMessageOut::Plaintext(message) => MlsMessageIn::Plaintext(
+            MlsMessageOut::Plaintext(message) => Ok(MlsMessageIn::Plaintext(
                 VerifiableMlsPlaintext::from_plaintext(message.clone(), None),
-            ),
-            _ => panic!("This is not a plaintext message"),
-        };
+            )),
+            _ => Err(SecretGroupError::NeedsToBeMlsPlaintext),
+        }?;
 
         self.mls_group
-            .process_commit(provider, mls_commit_message)
-            .unwrap();
+            .process_commit(provider, mls_commit_message)?;
+
+        Ok(())
     }
 
     pub fn process_commit(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
         commit: &SecretGroupCommit,
-    ) {
+    ) -> Result<(), SecretGroupError> {
         // Apply commit message first
-        self.mls_group
-            .process_commit(provider, commit.commit())
-            .unwrap();
+        self.mls_group.process_commit(provider, commit.commit())?;
 
-        // Decrypt long term secrets with current group state
-        let secrets = self.decrypt_long_term_secrets(provider, commit.long_term_secrets());
+        // Is this member still part of the group after the commit?
+        if self.mls_group.is_active() {
+            // Decrypt long term secrets with current group state
+            let secrets = self.decrypt_long_term_secrets(provider, commit.long_term_secrets())?;
 
-        // Add new secrets to group
-        self.process_long_term_secrets(secrets);
+            // Add new secrets to group
+            self.process_long_term_secrets(secrets)?;
+        }
+
+        Ok(())
     }
 
     // Long Term secrets
@@ -168,21 +182,34 @@ impl SecretGroup {
             .find(|secret| secret.long_term_epoch() == epoch)
     }
 
-    fn process_long_term_secrets(&mut self, secrets: LongTermSecretVec) {
-        secrets.iter().for_each(|secret| {
-            if self.group_id() == secret.group_id().unwrap()
-                && self.long_term_secret(secret.long_term_epoch()).is_none()
-            {
+    fn process_long_term_secrets(
+        &mut self,
+        secrets: LongTermSecretVec,
+    ) -> Result<(), SecretGroupError> {
+        secrets.iter().try_for_each(|secret| {
+            let group_instance_id = secret.group_instance_id()?;
+
+            if self.group_instance_id() != group_instance_id {
+                return Err(SecretGroupError::LTSInvalidGroupID);
+            }
+
+            if self.long_term_secret(secret.long_term_epoch()).is_none() {
                 self.long_term_secrets.push(secret.clone());
             }
-        });
+
+            Ok(())
+        })?;
+
+        Ok(())
     }
 
-    pub fn rotate_long_term_secret(&mut self, provider: &impl OpenMlsCryptoProvider) {
-        let value = self
-            .mls_group
-            .export_secret(provider, LTS_EXPORTER_LABEL, LTS_EXPORTER_LENGTH)
-            .unwrap();
+    pub fn rotate_long_term_secret(
+        &mut self,
+        provider: &impl OpenMlsCryptoProvider,
+    ) -> Result<(), SecretGroupError> {
+        let value =
+            self.mls_group
+                .export_secret(provider, LTS_EXPORTER_LABEL, LTS_EXPORTER_LENGTH)?;
 
         let long_term_epoch = match self.long_term_epoch() {
             Some(mut epoch) => {
@@ -193,11 +220,13 @@ impl SecretGroup {
         };
 
         self.long_term_secrets.push(LongTermSecret::new(
-            self.mls_group.group_id().clone(),
+            self.group_instance_id().clone(),
             LongTermSecretCiphersuite::PANDA_AES256GCMSIV,
             long_term_epoch,
             value.into(),
         ));
+
+        Ok(())
     }
 
     // Encryption
@@ -206,59 +235,68 @@ impl SecretGroup {
     fn encrypt_long_term_secrets(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
-    ) -> SecretGroupMessage {
+    ) -> Result<SecretGroupMessage, SecretGroupError> {
         // Encode all long term secrets
-        let encoded_secrets = self.long_term_secrets.tls_serialize_detached().unwrap();
+        let encoded_secrets = self
+            .long_term_secrets
+            .tls_serialize_detached()
+            .map_err(|_| SecretGroupError::LTSEncodingError)?;
 
         // Encrypt encoded secrets
-        self.encrypt(provider, &encoded_secrets)
+        Ok(self.encrypt(provider, &encoded_secrets)?)
     }
 
     fn decrypt_long_term_secrets(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
         encrypted_long_term_secrets: SecretGroupMessage,
-    ) -> LongTermSecretVec {
+    ) -> Result<LongTermSecretVec, SecretGroupError> {
         // Decrypt long term secrets with current group state
-        let secrets_bytes = self.decrypt(provider, &encrypted_long_term_secrets);
+        let secrets_bytes = self.decrypt(provider, &encrypted_long_term_secrets)?;
 
         // Decode secrets
-        let secrets = LongTermSecretVec::tls_deserialize(&mut secrets_bytes.as_slice()).unwrap();
+        let secrets = LongTermSecretVec::tls_deserialize(&mut secrets_bytes.as_slice())
+            .map_err(|_| SecretGroupError::LTSEncodingError)?;
 
-        secrets
+        Ok(secrets)
     }
 
     pub fn encrypt(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
         data: &[u8],
-    ) -> SecretGroupMessage {
-        let mls_ciphertext = self.mls_group.encrypt(provider, data).unwrap();
-        SecretGroupMessage::MlsApplicationMessage(mls_ciphertext)
+    ) -> Result<SecretGroupMessage, SecretGroupError> {
+        let mls_ciphertext = self.mls_group.encrypt(provider, data)?;
+        Ok(SecretGroupMessage::MlsApplicationMessage(mls_ciphertext))
     }
 
-    pub fn encrypt_with_long_term_secret(&self, data: &[u8]) -> SecretGroupMessage {
-        let epoch = self
-            .long_term_epoch()
-            .expect("No long term secret generated yet.");
-        let secret = self.long_term_secret(epoch).unwrap();
-        let ciphertext = secret.encrypt(data).unwrap();
-        SecretGroupMessage::LongTermSecretMessage(ciphertext)
+    pub fn encrypt_with_long_term_secret(
+        &self,
+        data: &[u8],
+    ) -> Result<SecretGroupMessage, SecretGroupError> {
+        // Unwrap here since at this stage we already have at least one epoch
+        let epoch = self.long_term_epoch().unwrap();
+        let secret = self
+            .long_term_secret(epoch)
+            .ok_or_else(|| SecretGroupError::LTSSecretMissing)?;
+        let ciphertext = secret.encrypt(data)?;
+        Ok(SecretGroupMessage::LongTermSecretMessage(ciphertext))
     }
 
     pub fn decrypt(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
         message: &SecretGroupMessage,
-    ) -> Vec<u8> {
+    ) -> Result<Vec<u8>, SecretGroupError> {
         match message {
-            SecretGroupMessage::MlsApplicationMessage(ciphertext) => self
-                .mls_group
-                .decrypt(provider, ciphertext.clone())
-                .unwrap(),
+            SecretGroupMessage::MlsApplicationMessage(ciphertext) => {
+                Ok(self.mls_group.decrypt(provider, ciphertext.clone())?)
+            }
             SecretGroupMessage::LongTermSecretMessage(ciphertext) => {
-                let secret = self.long_term_secret(ciphertext.long_term_epoch).unwrap();
-                secret.decrypt(ciphertext).unwrap()
+                let secret = self
+                    .long_term_secret(ciphertext.long_term_epoch)
+                    .ok_or_else(|| SecretGroupError::LTSSecretMissing)?;
+                Ok(secret.decrypt(ciphertext)?)
             }
         }
     }
@@ -270,8 +308,9 @@ impl SecretGroup {
         self.mls_group.is_active()
     }
 
-    pub fn group_id(&self) -> Hash {
+    pub fn group_instance_id(&self) -> Hash {
         let group_id_bytes = self.mls_group.group_id().as_slice().to_vec();
+        // Unwrap here since we already trusted the user input
         Hash::new_from_bytes(group_id_bytes).unwrap()
     }
 

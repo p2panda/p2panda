@@ -5,7 +5,7 @@ use openmls::framing::{
 };
 use openmls::messages::Welcome;
 
-use crate::secret_group::SecretGroupMessage;
+use crate::secret_group::{SecretGroupError, SecretGroupMessage};
 
 #[derive(Debug)]
 pub struct SecretGroupCommit {
@@ -19,26 +19,26 @@ impl SecretGroupCommit {
         mls_message_out: MlsMessageOut,
         mls_welcome_message: Option<Welcome>,
         encrypted_long_term_secrets: SecretGroupMessage,
-    ) -> Self {
+    ) -> Result<Self, SecretGroupError> {
         // Check if message is in plaintext
         let mls_commit_message = match mls_message_out {
-            MlsMessageOut::Plaintext(message) => message,
-            _ => panic!("This should never happen"),
-        };
+            MlsMessageOut::Plaintext(message) => Ok(message),
+            _ => Err(SecretGroupError::NeedsToBeMlsPlaintext),
+        }?;
 
         // Check if message is a commit
         if match mls_commit_message.content() {
             MlsPlaintextContentType::Commit(..) => false,
             _ => true,
         } {
-            panic!("This should never happen")
+            return Err(SecretGroupError::NeedsToBeMlsCommit);
         }
 
-        Self {
+        Ok(Self {
             mls_commit_message,
             mls_welcome_message,
             encrypted_long_term_secrets,
-        }
+        })
     }
 
     pub fn commit(&self) -> MlsMessageIn {

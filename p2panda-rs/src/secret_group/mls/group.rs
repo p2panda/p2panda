@@ -111,7 +111,7 @@ impl MlsGroup {
 
         match message {
             MlsMessageOut::Ciphertext(ciphertext) => Ok(ciphertext),
-            _ => panic!("Expected a Ciphertext message"),
+            _ => panic!("Expected MLS ciphertext"),
         }
     }
 

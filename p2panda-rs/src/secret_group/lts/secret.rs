@@ -7,30 +7,8 @@ use tls_codec::{Size, TlsByteVecU8, TlsDeserialize, TlsSerialize, TlsSize};
 use crate::hash::Hash;
 use crate::secret_group::aes;
 use crate::secret_group::lts::{
-    LongTermSecretCiphersuite, LongTermSecretCiphertext, LongTermSecretError,
+    LongTermSecretCiphersuite, LongTermSecretCiphertext, LongTermSecretEpoch, LongTermSecretError,
 };
-
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    Eq,
-    PartialEq,
-    PartialOrd,
-    Ord,
-    Serialize,
-    Deserialize,
-    TlsDeserialize,
-    TlsSerialize,
-    TlsSize,
-)]
-pub struct LongTermSecretEpoch(pub u64);
-
-impl LongTermSecretEpoch {
-    pub fn increment(&mut self) {
-        self.0 += 1;
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, TlsDeserialize, TlsSerialize, TlsSize)]
 pub struct LongTermSecret {
@@ -42,31 +20,33 @@ pub struct LongTermSecret {
 
 impl LongTermSecret {
     pub fn new(
-        group_id: GroupId,
+        group_instance_id: Hash,
         ciphersuite: LongTermSecretCiphersuite,
         long_term_epoch: LongTermSecretEpoch,
         value: TlsByteVecU8,
     ) -> Self {
         Self {
-            group_id,
+            // Convert group instance id Hash to internal MLS GroupId struct which implements
+            // required TLS encoding traits
+            group_id: GroupId::from_slice(&group_instance_id.to_bytes()),
             ciphersuite,
             long_term_epoch,
             value,
         }
     }
 
-    pub(crate) fn group_id(&self) -> Result<Hash, LongTermSecretError> {
-        Ok(Hash::new_from_bytes(self.group_id.as_slice().to_vec())?)
+    /// This method can throw an error when the secret contains an invalid secret group instance
+    /// hash.
+    pub fn group_instance_id(&self) -> Result<Hash, LongTermSecretError> {
+        let hex_str = hex::encode(&self.group_id.as_slice());
+        Ok(Hash::new(&hex_str)?)
     }
 
-    pub(crate) fn long_term_epoch(&self) -> LongTermSecretEpoch {
+    pub fn long_term_epoch(&self) -> LongTermSecretEpoch {
         self.long_term_epoch
     }
 
-    pub(crate) fn encrypt(
-        &self,
-        data: &[u8],
-    ) -> Result<LongTermSecretCiphertext, LongTermSecretError> {
+    pub fn encrypt(&self, data: &[u8]) -> Result<LongTermSecretCiphertext, LongTermSecretError> {
         let (ciphertext, nonce) = match self.ciphersuite {
             LongTermSecretCiphersuite::PANDA_AES256GCMSIV => {
                 aes::encrypt(self.value.as_slice(), data)?
@@ -83,7 +63,7 @@ impl LongTermSecret {
         Ok(long_term_secret)
     }
 
-    pub(crate) fn decrypt(
+    pub fn decrypt(
         &self,
         ciphertext: &LongTermSecretCiphertext,
     ) -> Result<Vec<u8>, LongTermSecretError> {
@@ -104,5 +84,31 @@ impl LongTermSecret {
         };
 
         Ok(plaintext)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::hash::Hash;
+    use crate::secret_group::lts::{LongTermSecretCiphersuite, LongTermSecretEpoch};
+
+    use super::LongTermSecret;
+
+    #[test]
+    fn group_id_hash_encoding() {
+        let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+
+        let secret = LongTermSecret::new(
+            group_instance_id.clone(),
+            LongTermSecretCiphersuite::PANDA_AES256GCMSIV,
+            LongTermSecretEpoch(0),
+            vec![1, 2, 3].into(),
+        );
+
+        // Make sure the conversion between p2panda `Hash` and MLS `GroupId` works
+        assert_eq!(
+            group_instance_id.as_str(),
+            secret.group_instance_id().unwrap().as_str()
+        );
     }
 }
