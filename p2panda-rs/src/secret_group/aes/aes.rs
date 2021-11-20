@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use aes_gcm::aead::{Aead, NewAead};
+use aes_gcm_siv::aead::{Aead, NewAead};
 use aes_gcm_siv::{Aes256GcmSiv, Nonce};
 use openmls_traits::{random::OpenMlsRand, OpenMlsCryptoProvider};
 

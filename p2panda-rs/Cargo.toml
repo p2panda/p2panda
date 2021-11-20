@@ -29,8 +29,6 @@ db-sqlx = ["sqlx"]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-aead = { version = "0.4.3", features = ["rand_core"] }
-aes-gcm = "0.9.4"
 aes-gcm-siv = "0.10.3"
 arrayvec = "0.5.2"
 bamboo-rs-core = "0.1.0"
