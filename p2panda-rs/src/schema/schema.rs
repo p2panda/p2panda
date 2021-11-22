@@ -215,6 +215,7 @@ impl Schema {
         })
     }
 
+    /// Return the hash id of this schema
     pub fn schema_hash(&self) -> Hash {
         self.schema_hash.clone()
     }
