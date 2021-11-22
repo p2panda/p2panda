@@ -133,8 +133,7 @@ impl SchemaBuilder {
 
     /// Add a field definition to this schema
     pub fn add_message_field(&mut self, key: String, field_type: Type) -> Result<(), SchemaError> {
-        // Match passed type and map it to our MessageFields type and CDDL types (do we still need the
-        // MessageFields type key when we are using schemas?)
+        // Match passed type and map it to our MessageFields type and CDDL types.
         let type_string = match field_type {
             Type::Tstr => "str",
             Type::Int => "int",
