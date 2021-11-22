@@ -44,12 +44,7 @@ impl fmt::Display for Type {
 pub enum Field {
     String(String),
     Type(Type),
-    Group(Group),
-    Vector(Group),
     Struct(Group),
-    Table(Group),
-    TableType(Type),
-    Choice(Group),
 }
 
 /// Format each different data type into a schema string.
@@ -58,12 +53,7 @@ impl fmt::Display for Field {
         match self {
             Field::String(s) => write!(f, "\"{}\"", s),
             Field::Type(cddl_type) => write!(f, "{}", cddl_type),
-            Field::Group(group) => write!(f, "{}", group),
-            Field::Vector(group) => write!(f, "[* {} ]", format!("{}", group)),
             Field::Struct(group) => write!(f, "{{ {} }}", format!("{}", group)),
-            Field::Table(group) => write!(f, "{{ + tstr => {{ {} }} }}", group),
-            Field::TableType(value_type) => write!(f, "{{ + tstr => {} }}", value_type),
-            Field::Choice(group) => write!(f, "&{}", group),
         }
     }
 }
