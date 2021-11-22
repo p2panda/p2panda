@@ -9,13 +9,13 @@
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
 
+mod error;
 mod message;
 mod schema;
-mod error;
 
-pub use message::MESSAGE_SCHEMA;
-pub use schema::{Type, Schema, SchemaBuilder};
 pub use error::SchemaError;
+pub use message::MESSAGE_SCHEMA;
+pub use schema::{Schema, SchemaBuilder, Type};
 
 /// Checks CBOR bytes against CDDL schemas.
 ///
