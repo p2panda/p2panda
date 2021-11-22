@@ -33,7 +33,7 @@ impl fmt::Display for Type {
             Type::Int => "int",
             Type::Float => "float",
             Type::Tstr => "tstr",
-            Type::Relation => "tstr .regexp \"[0-9a-fa-f]{132}\"",
+            Type::Relation => "tstr .regexp \"[0-9a-f]{132}\"",
         };
         write!(f, "{}", cddl_type)
     }
