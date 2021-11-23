@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! With these templates you can apply many rstest cases to a single test. They utilize the somewhat experimental
+//! With these templates you can apply many rstest cases to a single test. They utilise the somewhat experimental
 //! [rstest_reuse](https://github.com/la10736/rstest/tree/master/rstest_reuse) crate.
 use rstest_reuse::template;
 
-// This template contains several different messages which should fail when run against the default
-// fixture message.
+// This template contains several different messages which don't match the default `Entry` fixture
 #[template]
 #[rstest]
 // This flag states that the tested case should panic
@@ -22,7 +21,7 @@ fn messages_not_matching_entry_should_fail(
 ) {
 }
 
-// This template contains various types of valid entry.
+// This template contains various types of valid entries.
 #[template]
 #[rstest]
 #[case::first_entry(crate::test_utils::fixtures::defaults::first_entry())]

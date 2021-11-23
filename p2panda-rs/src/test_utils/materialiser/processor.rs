@@ -26,11 +26,11 @@ pub fn filter_entries(entries: Vec<LogEntry>) -> Vec<LogEntry> {
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     for entry in &entries {
-        // Materialize permissions entries by this author
+        // Materialise permissions entries by this author
         let author_permissions_entries =
             author_permission_entries(&entries, &entry.instance_author());
         let author_permissions = materialiser
-            .materialize(&author_permissions_entries)
+            .materialise(&author_permissions_entries)
             .unwrap();
 
         // If the author of this message is the Instance author then they don't need permissions

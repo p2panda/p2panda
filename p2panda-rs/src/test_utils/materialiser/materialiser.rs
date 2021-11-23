@@ -11,8 +11,8 @@ use crate::test_utils::node::utils::Result;
 /// A wrapper type representing a HashMap of instances stored by Instance id.
 type Instances = HashMap<String, MessageFields>;
 
-/// A wrapper type representing a materialized database of Instances stored by Schema hash.
-/// We lose Author data during materialization in this demo app...
+/// A wrapper type representing a materialised database of Instances stored by Schema hash.
+/// We lose Author data during materialisation in this demo app...
 type SchemaDatabase = HashMap<String, Instances>;
 
 /// Struct which can process multiple append only logs of p2panda Entries, published by multiple Authors
@@ -21,7 +21,7 @@ type SchemaDatabase = HashMap<String, Instances>;
 /// Entries by their hash.
 #[derive(Debug)]
 pub struct Materialiser {
-    // The final data structure where materialized instances are stored
+    // The final data structure where materialised instances are stored
     data: SchemaDatabase,
     // Messages stored by Entry hash
     messages: HashMap<String, Message>,
@@ -39,7 +39,7 @@ impl Materialiser {
         }
     }
 
-    /// Get the materialized Instances
+    /// Get the materialised Instances
     pub fn data(&self) -> SchemaDatabase {
         self.data.clone()
     }
@@ -57,7 +57,7 @@ impl Materialiser {
     }
 
     /// Take an array of entries from a single author with multiple schema logs. Creates an update path DAG for
-    /// each instance of and also stores a list of all messages for materialization which takes place
+    /// each instance of and also stores a list of all messages for materialisation which takes place
     /// in the next step.
     pub fn build_dags(&mut self, entries: Vec<LogEntry>) {
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -94,7 +94,7 @@ impl Materialiser {
     /// Apply changes to an instance from an ordered list of entries
     pub fn apply_instance_messages(&mut self, entries: Vec<String>, instance_id: String) {
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        // Materialize instances
+        // Materialise instances
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         // loop the ordered list of messages
@@ -113,7 +113,7 @@ impl Materialiser {
             // Get all instances for this schema
             let instances = self.data.get_mut(schema_str).unwrap();
 
-            // Materialize all messages in order!! Currently an UPDATE message replaces all
+            // Materialise all messages in order!! Currently an UPDATE message replaces all
             // fields in the message. I guess we don't want this behaviour eventually.
 
             // If CREATE message insert new instance
@@ -133,8 +133,8 @@ impl Materialiser {
         }
     }
 
-    /// Materialize entries from multiple authors and schema logs into a database of Instancess
-    pub fn materialize(&mut self, entries: &Vec<LogEntry>) -> Result<SchemaDatabase> {
+    /// Materialise entries from multiple authors and schema logs into a database of Instancess
+    pub fn materialise(&mut self, entries: &Vec<LogEntry>) -> Result<SchemaDatabase> {
         // Store all messages ready for processing after conflict resolution
         self.store_messages(entries.clone());
 
@@ -142,11 +142,11 @@ impl Materialiser {
         // Build DAGs for each Instances
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        // Process entries ready for ordering and materialization
+        // Process entries ready for ordering and materialisation
         self.build_dags(entries.to_owned());
 
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        // Resolve conflicts and Materialize
+        // Resolve conflicts and Materialise
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         // Loop over all instance DAGs
@@ -159,7 +159,7 @@ impl Materialiser {
             let ordered_messages = dag.topological();
 
             // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-            // Materialize instances
+            // Materialise instances
             // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
             self.apply_instance_messages(ordered_messages, instance_id);
@@ -300,7 +300,7 @@ mod tests {
     }
 
     #[rstest]
-    fn materialize_instances(private_key: String) {
+    fn materialise_instances(private_key: String) {
         let panda = Client::new(
             "panda".to_string(),
             keypair_from_private(private_key.clone()),
@@ -313,8 +313,8 @@ mod tests {
         // Initialize materialiser
         let mut materialiser = Materialiser::new();
 
-        // Materialize all instances
-        let instances = materialiser.materialize(&entries).unwrap();
+        // Materialise all instances
+        let instances = materialiser.materialise(&entries).unwrap();
 
         // Get instances for MESSAGE_SCHEMA
         let schema_instances = instances.get(MESSAGE_SCHEMA).unwrap();
@@ -349,8 +349,8 @@ mod tests {
         // Get all entries
         let entries = node.all_entries();
 
-        // Materialize all instances
-        let instances = materialiser.materialize(&entries).unwrap();
+        // Materialise all instances
+        let instances = materialiser.materialise(&entries).unwrap();
 
         // Get instances for MESSAGE_SCHEMA
         let schema_instances = instances.get(MESSAGE_SCHEMA).unwrap();
@@ -379,8 +379,8 @@ mod tests {
         // Initialize materialiser
         let mut materialiser = Materialiser::new();
 
-        // Materialize entries
-        materialiser.materialize(&entries).unwrap();
+        // Materialise entries
+        materialiser.materialise(&entries).unwrap();
 
         // Fetch all instances
         let instances = materialiser.query_all(&MESSAGE_SCHEMA.to_string()).unwrap();

@@ -348,10 +348,10 @@ impl Node {
         // Filter published entries against permissions published to user system log
         let filtered_entries = filter_entries(self.all_entries());
 
-        // Materialize Instances resolving merging concurrent edits
-        materialiser.materialize(&filtered_entries)?;
+        // Materialise Instances resolving merging concurrent edits
+        materialiser.materialise(&filtered_entries)?;
 
-        // Query the materialized Instances
+        // Query the materialised Instances
         materialiser.query_all(schema)
     }
 
@@ -363,10 +363,10 @@ impl Node {
         // Filter published entries against permissions published to user system log
         let filtered_entries = filter_entries(self.all_entries());
 
-        // Materialize Instances resolving merging concurrent edits
-        materialiser.materialize(&filtered_entries)?;
+        // Materialise Instances resolving merging concurrent edits
+        materialiser.materialise(&filtered_entries)?;
 
-        // Query the materialized Instances
+        // Query the materialised Instances
         materialiser.query_instance(schema, instance)
     }
 }
