@@ -9,8 +9,8 @@ use crate::hash::Hash;
 use crate::identity::Author;
 use crate::message::Message;
 
-/// This struct is an augmented version of a imple log entry. It includes exptra properties to aid in 
-/// testing and materializing instances. In particular it has a `instance_backlink`
+/// This struct is an augmented version of a simple log entry. It includes extra properties to aid in 
+/// testing and materialising instances. In particular it has an `instance_backlink`.
 /// which our panda entries currently don't have and will need in the future.
 #[derive(Clone, Debug)]
 pub struct LogEntry {
