@@ -17,7 +17,7 @@ mod tests {
     /// In this test `entry` and `key_pair` are injected directly from our test fixtures and `message`
     /// is tested against all cases on the `messages_not_matching_entry_should_fail` and one manually defined passing case.
     #[apply(messages_not_matching_entry_should_fail)]
-    #[case(fixtures::defaults::default_message())]
+    #[case(fixtures::defaults::create_message())]
     fn message_validation(entry: Entry, #[case] message: Message, key_pair: KeyPair) {
         let encoded_message = MessageEncoded::try_from(&message).unwrap();
         let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
