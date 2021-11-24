@@ -35,7 +35,7 @@ fn calculate_links(seq_num: &SeqNum, log: &Log) -> (Option<Hash>, Option<Hash>) 
             log.entries()
                 .get(seq.as_i64() as usize - 1)
                 .expect("Skiplink missing!")
-                .entry_encoded(),
+                .hash(),
         ),
         _ => None,
     };
@@ -46,7 +46,7 @@ fn calculate_links(seq_num: &SeqNum, log: &Log) -> (Option<Hash>, Option<Hash>) 
             log.entries()
                 .get(seq.as_i64() as usize - 1)
                 .expect("Backlink missing!")
-                .entry_encoded(),
+                .hash(),
         ),
         None => None,
     };
@@ -104,7 +104,7 @@ impl Node {
                 let entries = log.entries();
                 let instance_create_entry = entries
                     .iter()
-                    .find(|log_entry| log_entry.entry_encoded().as_str() == instance_id);
+                    .find(|log_entry| log_entry.hash_str() == instance_id);
                 match instance_create_entry {
                     Some(_) => instance_author = Some(author.to_owned()),
                     None => (),

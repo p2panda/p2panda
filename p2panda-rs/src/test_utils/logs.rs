@@ -60,9 +60,14 @@ impl LogEntry {
         self.author.as_str().to_string().clone()
     }
 
-    /// Get the author of this entry
-    pub fn entry_encoded(&self) -> Hash {
+    /// Get the hash of this entry
+    pub fn hash(&self) -> Hash {
         self.entry_encoded.hash().clone()
+    }
+
+    /// Get the hash of this entry as a string
+    pub fn hash_str(&self) -> String {
+        self.entry_encoded.hash().as_str().to_string().clone()
     }
 
     /// Get the author of the instance this entry belongs to
@@ -73,11 +78,6 @@ impl LogEntry {
     /// Get the message from this entry
     pub fn message(&self) -> Message {
         self.message.clone()
-    }
-
-    /// Get the hash string of this entry
-    pub fn hash_str(&self) -> String {
-        self.entry_encoded.hash().as_str().to_string().clone()
     }
 
     /// Get the instance backlink for this entry

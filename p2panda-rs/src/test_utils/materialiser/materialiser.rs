@@ -270,21 +270,21 @@ mod tests {
         // Get the instance DAG (in the form of a vector of edges) for the two existing instances
         let mut instance_dag_1 = materialiser
             .dags()
-            .get(entries[0].entry_encoded().as_str())
+            .get(&entries[0].hash_str())
             .unwrap()
             .to_owned()
             .graph();
         let mut instance_dag_2 = materialiser
             .dags()
-            .get(entries[3].entry_encoded().as_str())
+            .get(&entries[3].hash_str())
             .unwrap()
             .to_owned()
             .graph();
 
-        let entry_str_1 = entries[0].entry_encoded().as_str().to_string();
-        let entry_str_2 = entries[1].entry_encoded().as_str().to_string();
-        let entry_str_3 = entries[2].entry_encoded().as_str().to_string();
-        let entry_str_4 = entries[3].entry_encoded().as_str().to_string();
+        let entry_str_1 = entries[0].hash_str();
+        let entry_str_2 = entries[1].hash_str();
+        let entry_str_3 = entries[2].hash_str();
+        let entry_str_4 = entries[3].hash_str();
 
         // Pop each edge from the vector and compare with what we expect to see
         assert_eq!(instance_dag_1.pop().unwrap(), (None, entry_str_1.clone()));
@@ -320,8 +320,8 @@ mod tests {
         let schema_instances = instances.get(MESSAGE_SCHEMA).unwrap();
 
         // Get an instance by id
-        let instance_1 = schema_instances.get(entries[0].entry_encoded().as_str());
-        let instance_2 = schema_instances.get(entries[3].entry_encoded().as_str());
+        let instance_1 = schema_instances.get(&entries[0].hash_str());
+        let instance_2 = schema_instances.get(&entries[3].hash_str());
 
         // Instance 1 was deleted
         assert_eq!(instance_1, None);
@@ -340,7 +340,7 @@ mod tests {
             &panda,
             &update_message(
                 MESSAGE_SCHEMA.into(),
-                entries[3].entry_encoded(),
+                entries[3].hash(),
                 fields(vec![("message", "Now it's updated.")]),
             ),
         )
@@ -356,7 +356,7 @@ mod tests {
         let schema_instances = instances.get(MESSAGE_SCHEMA).unwrap();
 
         // Get an instance by id
-        let instance_2 = schema_instances.get(entries[3].entry_encoded().as_str());
+        let instance_2 = schema_instances.get(&entries[3].hash_str());
 
         // Instance 2 should be there
         assert_eq!(
@@ -392,7 +392,7 @@ mod tests {
         let instance = materialiser
             .query_instance(
                 &MESSAGE_SCHEMA.to_string(),
-                &entries[3].entry_encoded().as_str().to_string(),
+                &entries[3].hash_str(),
             )
             .unwrap();
 
