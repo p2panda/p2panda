@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! `rstest` fixtures which can be injected into tests
-//!
-//! From the `rstest` docs: "rstest uses procedural macros to help you on writing fixtures and table-based tests.
-//! The core idea is that you can inject your test dependencies by passing them as test arguments."
-//!
-//! https://github.com/la10736/rstest
+/// General purpose fixtures which can be injected into rstest methods as parameters.
+/// 
+/// The fixtures can optionally be passed in with custom parameters which overides the default values.
 use rstest::fixture;
 
 use crate::entry::{Entry, EntrySigned, SeqNum};
@@ -14,8 +11,7 @@ use crate::identity::KeyPair;
 use crate::message::{Message, MessageEncoded, MessageFields};
 use crate::test_utils::utils::{self, DEFAULT_HASH, DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
 
-// General purpose fixtures which can be injected into tests as parameters with defaults or custom values
-
+/// Fixture struct which contains versioned p2panda data for testing
 #[derive(Debug)]
 pub struct Fixture {
     pub entry: Entry,
@@ -24,31 +20,42 @@ pub struct Fixture {
     pub message_encoded: MessageEncoded,
 }
 
+/// Fixture which injects the default private key string into a test method
 #[fixture]
 pub fn private_key() -> String {
     DEFAULT_PRIVATE_KEY.into()
 }
 
+/// Fixture which injects the default KeyPair into a test method. Default value can be overridden at testing
+/// time by passing in a custom private key string.
 #[fixture]
 pub fn key_pair(private_key: String) -> KeyPair {
     utils::keypair_from_private(private_key)
 }
 
+/// Fixture which injects the default SeqNum into a test method. Default value can be overridden at testing
+/// time by passing in a custom seq num as i64.
 #[fixture]
 pub fn seq_num(#[default(1)] n: i64) -> SeqNum {
     utils::seq_num(n)
 }
 
+/// Fixture which injects the default schema Hash into a test method. Default value can be overridden at testing
+/// time by passing in a custom schema hash string.
 #[fixture]
 pub fn schema(#[default(DEFAULT_SCHEMA_HASH)] schema_str: &str) -> Hash {
     utils::hash(schema_str)
 }
 
+/// Fixture which injects the default Hash into a test method. Default value can be overridden at testing
+/// time by passing in a custom hash string.
 #[fixture]
 pub fn hash(#[default(DEFAULT_HASH)] hash_str: &str) -> Hash {
     utils::hash(hash_str)
 }
 
+/// Fixture which injects the default MessageFields value into a test method. Default value can be overridden at testing
+/// time by passing in a custom vector of key-value tuples.
 #[fixture]
 pub fn fields(
     #[default(vec![("message", "Hello!")])] fields_vec: Vec<(&str, &str)>,
@@ -56,6 +63,8 @@ pub fn fields(
     utils::message_fields(fields_vec)
 }
 
+/// Fixture which injects the default Entry into a test method. Default value can be overridden at testing
+/// time by passing in custom message, seq number, backlink and skiplink.
 #[fixture]
 pub fn entry(
     message: Message,
@@ -66,6 +75,8 @@ pub fn entry(
     utils::entry(message, skiplink, backlink, seq_num)
 }
 
+/// Fixture which injects the default Message into a test method. Default value can be overridden at testing
+/// time by passing in custom message fields and instance id.
 #[fixture]
 pub fn message(
     #[default(Some(fields(vec![("message", "Hello!")])))] fields: Option<MessageFields>,
@@ -74,17 +85,23 @@ pub fn message(
     utils::any_message(fields, instance_id)
 }
 
+/// Fixture which injects the default Hash into a test method as an Option. Default value can be overridden at testing
+/// time by passing in custom hash string.
 #[fixture]
 pub fn some_hash(#[default(DEFAULT_HASH)] str: &str) -> Option<Hash> {
     let hash = Hash::new(str);
     Some(hash.unwrap())
 }
 
+/// Fixture which injects the default CREATE Message into a test method. Default value can be overridden at testing
+/// time by passing in custom schema hash and message fields.
 #[fixture]
 pub fn create_message(schema: Hash, fields: MessageFields) -> Message {
     utils::create_message(schema, fields)
 }
 
+/// Fixture which injects the default UPDATE Message into a test method. Default value can be overridden at testing
+/// time by passing in custom schema hash, instance id hash and message fields.
 #[fixture]
 pub fn update_message(
     schema: Hash,
@@ -94,11 +111,14 @@ pub fn update_message(
     utils::update_message(schema, instance_id, fields)
 }
 
+/// Fixture which injects the default DELETE Message into a test method. Default value can be overridden at testing
+/// time by passing in custom schema hash and instance id hash.
 #[fixture]
 pub fn delete_message(schema: Hash, #[from(hash)] instance_id: Hash) -> Message {
     utils::delete_message(schema, instance_id)
 }
 
+/// Fixture which injects versioned p2panda testing data into a test method.
 #[fixture]
 pub fn v0_1_0_fixture() -> Fixture {
     const SCHEMA_HASH: &str = "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437";
