@@ -6,18 +6,20 @@ mod tests {
 
     use rstest::rstest;
     use rstest_reuse::apply;
-    
+
     use crate::entry::{decode_entry, sign_and_encode, Entry, LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::message::{Message, MessageEncoded};
-    use crate::test_utils::{message_fields, hash, DEFAULT_SCHEMA_HASH};
-    use crate::test_utils::fixtures::{self, entry, key_pair, Fixture};
-    use crate::test_utils::fixtures::templates::{many_entry_versions, messages_not_matching_entry_should_fail, version_fixtures};
+    use crate::test_utils::fixtures::templates::{
+        many_entry_versions, messages_not_matching_entry_should_fail, version_fixtures,
+    };
+    use crate::test_utils::fixtures::{defaults, entry, key_pair, Fixture};
+    use crate::test_utils::{hash, message_fields, DEFAULT_SCHEMA_HASH};
 
     /// In this test `entry` and `key_pair` are injected directly from our test fixtures and `message`
     /// is tested against all cases on the `messages_not_matching_entry_should_fail` and one manually defined passing case.
     #[apply(messages_not_matching_entry_should_fail)]
-    #[case(fixtures::defaults::create_message())]
+    #[case(defaults::create_message())]
     fn message_validation(entry: Entry, #[case] message: Message, key_pair: KeyPair) {
         let encoded_message = MessageEncoded::try_from(&message).unwrap();
         let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
@@ -89,7 +91,6 @@ mod tests {
 
     #[apply(version_fixtures)]
     fn fixture_decode_message(#[case] fixture: Fixture) {
-                
         // Decode fixture MessageEncoded
         let message = Message::try_from(&fixture.message_encoded).unwrap();
         let message_fields = message.fields().unwrap();
