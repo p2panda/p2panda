@@ -200,9 +200,9 @@ mod tests {
     use crate::test_utils::fixtures::private_key;
     use crate::test_utils::node::send_to_node;
     use crate::test_utils::node::Node;
-    use crate::test_utils::utils::MESSAGE_SCHEMA;
+    use crate::test_utils::utils::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::{
-        create_message, delete_message, fields, keypair_from_private, update_message,
+        create_message, delete_message, hash, message_fields, keypair_from_private, update_message,
     };
 
     fn mock_node(panda: Client) -> Node {
@@ -213,8 +213,8 @@ mod tests {
             &mut node,
             &panda,
             &create_message(
-                MESSAGE_SCHEMA.into(),
-                fields(vec![("message", "Ohh, my first message!")]),
+                hash(DEFAULT_SCHEMA_HASH),
+                message_fields(vec![("message", "Ohh, my first message!")]),
             ),
         )
         .unwrap();
@@ -224,9 +224,9 @@ mod tests {
             &mut node,
             &panda,
             &update_message(
-                MESSAGE_SCHEMA.into(),
+                hash(DEFAULT_SCHEMA_HASH),
                 instance_1.clone(),
-                fields(vec![("message", "Which I now update.")]),
+                message_fields(vec![("message", "Which I now update.")]),
             ),
         )
         .unwrap();
@@ -235,7 +235,7 @@ mod tests {
         send_to_node(
             &mut node,
             &panda,
-            &delete_message(MESSAGE_SCHEMA.into(), instance_1.clone()),
+            &delete_message(hash(DEFAULT_SCHEMA_HASH), instance_1.clone()),
         )
         .unwrap();
 
@@ -244,8 +244,8 @@ mod tests {
             &mut node,
             &panda,
             &create_message(
-                MESSAGE_SCHEMA.into(),
-                fields(vec![("message", "Let's try that again.")]),
+                hash(DEFAULT_SCHEMA_HASH),
+                message_fields(vec![("message", "Let's try that again.")]),
             ),
         )
         .unwrap();
@@ -316,8 +316,8 @@ mod tests {
         // Materialise all instances
         let instances = materialiser.materialise(&entries).unwrap();
 
-        // Get instances for MESSAGE_SCHEMA
-        let schema_instances = instances.get(MESSAGE_SCHEMA).unwrap();
+        // Get instances for DEFAULT_SCHEMA_HASH
+        let schema_instances = instances.get(DEFAULT_SCHEMA_HASH).unwrap();
 
         // Get an instance by id
         let instance_1 = schema_instances.get(&entries[0].hash_str());
@@ -339,9 +339,9 @@ mod tests {
             &mut node,
             &panda,
             &update_message(
-                MESSAGE_SCHEMA.into(),
+                hash(DEFAULT_SCHEMA_HASH),
                 entries[3].hash(),
-                fields(vec![("message", "Now it's updated.")]),
+                message_fields(vec![("message", "Now it's updated.")]),
             ),
         )
         .unwrap();
@@ -352,8 +352,8 @@ mod tests {
         // Materialise all instances
         let instances = materialiser.materialise(&entries).unwrap();
 
-        // Get instances for MESSAGE_SCHEMA
-        let schema_instances = instances.get(MESSAGE_SCHEMA).unwrap();
+        // Get instances for DEFAULT_SCHEMA_HASH
+        let schema_instances = instances.get(DEFAULT_SCHEMA_HASH).unwrap();
 
         // Get an instance by id
         let instance_2 = schema_instances.get(&entries[3].hash_str());
@@ -383,7 +383,7 @@ mod tests {
         materialiser.materialise(&entries).unwrap();
 
         // Fetch all instances
-        let instances = materialiser.query_all(&MESSAGE_SCHEMA.to_string()).unwrap();
+        let instances = materialiser.query_all(&DEFAULT_SCHEMA_HASH.to_string()).unwrap();
 
         // There should be one instance
         assert_eq!(instances.len(), 1);
@@ -391,7 +391,7 @@ mod tests {
         // Query for one instance by id
         let instance = materialiser
             .query_instance(
-                &MESSAGE_SCHEMA.to_string(),
+                &DEFAULT_SCHEMA_HASH.to_string(),
                 &entries[3].hash_str(),
             )
             .unwrap();

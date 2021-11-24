@@ -2,13 +2,14 @@
 
 use serde_json;
 
-use p2panda_rs::test_utils::{
-    create_message, delete_message, fields, new_key_pair, update_message, MESSAGE_SCHEMA,
-};
 use p2panda_rs::test_utils::client::Client;
 use p2panda_rs::test_utils::data::generate_test_data;
-use p2panda_rs::test_utils::node::Node;
 use p2panda_rs::test_utils::node::send_to_node;
+use p2panda_rs::test_utils::node::Node;
+use p2panda_rs::test_utils::{
+    create_message, delete_message, hash, message_fields, new_key_pair, update_message,
+    DEFAULT_SCHEMA_HASH,
+};
 
 fn main() {
     // Instanciate mock node
@@ -22,8 +23,8 @@ fn main() {
         &mut node,
         &panda,
         &create_message(
-            MESSAGE_SCHEMA.into(),
-            fields(vec![("message", "Ohh, my first message!")]),
+            hash(DEFAULT_SCHEMA_HASH),
+            message_fields(vec![("message", "Ohh, my first message!")]),
         ),
     )
     .unwrap();
@@ -33,9 +34,9 @@ fn main() {
         &mut node,
         &panda,
         &update_message(
-            MESSAGE_SCHEMA.into(),
+            hash(DEFAULT_SCHEMA_HASH),
             instance_a_hash.clone(),
-            fields(vec![("message", "Which I now update.")]),
+            message_fields(vec![("message", "Which I now update.")]),
         ),
     )
     .unwrap();
@@ -44,7 +45,7 @@ fn main() {
     send_to_node(
         &mut node,
         &panda,
-        &delete_message(MESSAGE_SCHEMA.into(), instance_a_hash),
+        &delete_message(hash(DEFAULT_SCHEMA_HASH), instance_a_hash),
     )
     .unwrap();
 
@@ -53,8 +54,8 @@ fn main() {
         &mut node,
         &panda,
         &create_message(
-            MESSAGE_SCHEMA.into(),
-            fields(vec![("message", "Let's try that again.")]),
+            hash(DEFAULT_SCHEMA_HASH),
+            message_fields(vec![("message", "Let's try that again.")]),
         ),
     )
     .unwrap();
@@ -64,7 +65,7 @@ fn main() {
     // Get a vector of all entries
     let entries = node.all_entries();
     // Get a map of all instances
-    let query = node.query_all(&MESSAGE_SCHEMA.to_string()).unwrap();
+    let query = node.query_all(&DEFAULT_SCHEMA_HASH.to_string()).unwrap();
 
     println!("{:#?}", db);
     println!("{:#?}", entries);

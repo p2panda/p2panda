@@ -10,7 +10,7 @@ mod tests {
     use crate::entry::{decode_entry, sign_and_encode, Entry, LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::message::{Message, MessageEncoded};
-    use crate::test_utils::{fields, MESSAGE_SCHEMA};
+    use crate::test_utils::{message_fields, hash, DEFAULT_SCHEMA_HASH};
     use crate::test_utils::fixtures::{self, entry, key_pair, Fixture};
     use crate::test_utils::fixtures::templates::{many_entry_versions, messages_not_matching_entry_should_fail, version_fixtures};
 

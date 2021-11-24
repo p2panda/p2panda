@@ -13,7 +13,7 @@ use crate::entry::{Entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::message::{Message, MessageEncoded, MessageFields};
-use crate::test_utils::utils::{self, DEFAULT_PRIVATE_KEY, DEFAULT_HASH, MESSAGE_SCHEMA};
+use crate::test_utils::utils::{self, DEFAULT_PRIVATE_KEY, DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
 
 // General purpose fixtures which can be injected into tests as parameters with defaults or custom values
 
@@ -41,8 +41,8 @@ pub fn seq_num(#[default(1)] n: i64) -> SeqNum {
 }
 
 #[fixture]
-pub fn schema(#[default(MESSAGE_SCHEMA)] schema_str: &str) -> String {
-    utils::schema(schema_str)
+pub fn schema(#[default(DEFAULT_SCHEMA_HASH)] schema_str: &str) -> Hash {
+    utils::hash(schema_str)
 }
 
 #[fixture]
@@ -52,7 +52,7 @@ pub fn hash(#[default(DEFAULT_HASH)] hash_str: &str) -> Hash {
 
 #[fixture]
 pub fn fields(#[default(vec![("message", "Hello!")])] fields_vec: Vec<(&str, &str)>) -> MessageFields {
-    utils::fields(fields_vec)
+    utils::message_fields(fields_vec)
 }
 
 #[fixture]
@@ -85,25 +85,27 @@ pub fn some_hash(#[default(DEFAULT_HASH)] str: &str) -> Option<Hash> {
 }
 
 #[fixture]
-pub fn create_message(schema: String, fields: MessageFields) -> Message {
+pub fn create_message(schema: Hash, fields: MessageFields) -> Message {
     utils::create_message(schema, fields)
 }
 
 #[fixture]
-pub fn update_message(schema: String, #[from(hash)] instance_id: Hash, #[default(fields(vec![("message", "Updated, hello!")]))] fields: MessageFields) -> Message {
+pub fn update_message(schema: Hash, #[from(hash)] instance_id: Hash, #[default(fields(vec![("message", "Updated, hello!")]))] fields: MessageFields) -> Message {
     utils::update_message(schema, instance_id, fields)
 }
 
 #[fixture]
-pub fn delete_message(schema: String, #[from(hash)] instance_id: Hash) -> Message {
+pub fn delete_message(schema: Hash, #[from(hash)] instance_id: Hash) -> Message {
     utils::delete_message(schema, instance_id)
 }
 
 #[fixture]
 pub fn v0_1_0_fixture() -> Fixture {
     
-    let message_fields = utils::build_message_fields(vec![("name", "chess"), ("description", "for playing chess")]);
-    let message = create_message(MESSAGE_SCHEMA.to_string(), message_fields);
+    const SCHEMA_HASH: &str = "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437";
+    
+    let message_fields = utils::message_fields(vec![("name", "chess"), ("description", "for playing chess")]);
+    let message = create_message(hash(SCHEMA_HASH), message_fields);
     
     Fixture {
         entry_signed_encoded: EntrySigned::new("009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101f60040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04ef01463f550ce62f983494d0eb6051c73a5641025f355758006724e5b730f47a4454c5395eab807325ee58d69c08d66461357d0f961aee383acc3247ed6419706").unwrap(),
@@ -125,7 +127,7 @@ pub mod defaults {
     use crate::message::Message;
     use crate::entry::Entry;
     
-    use super::{DEFAULT_HASH, MESSAGE_SCHEMA};
+    use super::{DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
 
     #[fixture]
     pub fn default_some_hash() -> Option<Hash> {
@@ -135,7 +137,7 @@ pub mod defaults {
     #[fixture]
     pub fn default_message() -> Message {
         fixtures::create_message(
-            MESSAGE_SCHEMA.into(),
+            fixtures::schema(DEFAULT_SCHEMA_HASH),
             fixtures::fields(vec![("message", "Hello!")]),
         )
     }
@@ -143,16 +145,16 @@ pub mod defaults {
     #[fixture]
     pub fn default_update_message() -> Message {
         fixtures::update_message(
-            MESSAGE_SCHEMA.into(),
-            fixtures::hash(DEFAULT_HASH.into()),
+            fixtures::schema(DEFAULT_SCHEMA_HASH),
+            fixtures::hash(DEFAULT_HASH),
             fixtures::fields(vec![("message", "Updated, hello!")]))
     }
     
     #[fixture]
     pub fn default_delete_message() -> Message {
         fixtures::delete_message(
-            MESSAGE_SCHEMA.into(),
-            fixtures::hash(DEFAULT_HASH.into()),
+            fixtures::schema(DEFAULT_SCHEMA_HASH),
+            fixtures::hash(DEFAULT_HASH),
         )
     }
     

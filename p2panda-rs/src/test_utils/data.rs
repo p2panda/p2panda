@@ -10,7 +10,7 @@ use crate::hash::Hash;
 use crate::identity::Author;
 use crate::message::{Message, MessageEncoded};
 
-use crate::test_utils::utils::MESSAGE_SCHEMA;
+use crate::test_utils::utils::DEFAULT_SCHEMA_HASH;
 use crate::test_utils::client::Client;
 use crate::test_utils::node::Node;
 
@@ -72,7 +72,7 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
                 let next_entry_args = node
                     .next_entry_args_for_specific_entry(
                         &author,
-                        &Hash::new(MESSAGE_SCHEMA).unwrap(),
+                        &Hash::new(DEFAULT_SCHEMA_HASH).unwrap(),
                         entry.seq_num(),
                     )
                     .unwrap();
@@ -101,7 +101,7 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
                 log_data.nextEntryArgs.push(json_entry_args);
             }
             let final_next_entry_args = node
-                .next_entry_args(&author, &Hash::new(MESSAGE_SCHEMA).unwrap())
+                .next_entry_args(&author, &Hash::new(DEFAULT_SCHEMA_HASH).unwrap())
                 .unwrap();
 
             // Ugly hack for converting keys into what we expect in JS testing world
