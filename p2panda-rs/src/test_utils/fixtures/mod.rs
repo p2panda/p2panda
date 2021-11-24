@@ -11,6 +11,7 @@
 //!
 //! https://github.com/la10736/rstest
 pub mod templates;
+pub mod defaults;
 mod fixtures;
 
 pub use fixtures::*;
