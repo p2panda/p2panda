@@ -3,23 +3,26 @@
 //! With these templates you can apply many rstest cases to a single test. They utilise the somewhat experimental
 //! [rstest_reuse](https://github.com/la10736/rstest/tree/master/rstest_reuse) crate.
 use rstest_reuse::template;
-
 // This template contains several different messages which don't match the default `Entry` fixture
 #[template]
 #[rstest]
 // This flag states that the tested case should panic
 #[should_panic]
-#[case::wrong_message(crate::test_utils::fixtures::create_message(hash(DEFAULT_SCHEMA_HASH), message_fields(vec![("message", "Boo!")])))]
+#[case::wrong_message(
+    crate::test_utils::fixtures::create_message(hash(DEFAULT_SCHEMA_HASH), 
+    crate::test_utils::message_fields(vec![("message", "Boo!")])))
+]
 #[should_panic]
-#[case::wrong_message(crate::test_utils::fixtures::create_message(hash(DEFAULT_SCHEMA_HASH), message_fields(vec![("date", "2021-05-02T20:06:45.430Z")])))]
+#[case::wrong_message(
+    crate::test_utils::fixtures::create_message(hash(DEFAULT_SCHEMA_HASH), 
+    crate::test_utils::message_fields(vec![("date", "2021-05-02T20:06:45.430Z")])))
+]
 #[should_panic]
-#[case::wrong_message(crate::test_utils::fixtures::create_message(hash(DEFAULT_SCHEMA_HASH), message_fields(vec![("message", "Hello!"), ("date", "2021-05-02T20:06:45.430Z")])))]
-fn messages_not_matching_entry_should_fail(
-    entry: Entry,
-    #[case] message: Message,
-    key_pair: KeyPair,
-) {
-}
+#[case::wrong_message(
+    crate::test_utils::fixtures::create_message(hash(DEFAULT_SCHEMA_HASH), 
+    crate::test_utils::message_fields(vec![("message", "Hello!"), ("date", "2021-05-02T20:06:45.430Z")])))
+]
+fn non_default_message_values_panic(entry: Entry, #[case] message: Message, key_pair: KeyPair) {}
 
 // This template contains various types of valid entries.
 #[template]
@@ -29,7 +32,7 @@ fn messages_not_matching_entry_should_fail(
 #[case::entry_with_backlink_and_skiplink(
     crate::test_utils::fixtures::defaults::entry_with_backlink_and_skiplink()
 )]
-fn many_entry_versions(#[case] entry: Entry, key_pair: KeyPair) {}
+fn many_valid_entries(#[case] entry: Entry, key_pair: KeyPair) {}
 
 // This template contains various types of valid message.
 #[template]
@@ -49,8 +52,8 @@ fn version_fixtures(#[case] fixture: Fixture) {}
 #[allow(unused_imports)]
 pub(crate) use all_message_types;
 #[allow(unused_imports)]
-pub(crate) use many_entry_versions;
+pub(crate) use many_valid_entries;
 #[allow(unused_imports)]
-pub(crate) use messages_not_matching_entry_should_fail;
+pub(crate) use non_default_message_values_panic;
 #[allow(unused_imports)]
 pub(crate) use version_fixtures;

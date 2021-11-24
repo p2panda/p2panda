@@ -11,14 +11,14 @@ mod tests {
     use crate::identity::KeyPair;
     use crate::message::{Message, MessageEncoded};
     use crate::test_utils::fixtures::templates::{
-        many_entry_versions, messages_not_matching_entry_should_fail, version_fixtures,
+        many_valid_entries, non_default_message_values_panic, version_fixtures,
     };
     use crate::test_utils::fixtures::{defaults, entry, key_pair, Fixture};
     use crate::test_utils::{hash, message_fields, DEFAULT_SCHEMA_HASH};
 
     /// In this test `entry` and `key_pair` are injected directly from our test fixtures and `message`
-    /// is tested against all cases on the `messages_not_matching_entry_should_fail` and one manually defined passing case.
-    #[apply(messages_not_matching_entry_should_fail)]
+    /// is tested against all cases on the `non_default_message_values_panic` and one manually defined passing case.
+    #[apply(non_default_message_values_panic)]
     #[case(defaults::create_message())]
     fn message_validation(entry: Entry, #[case] message: Message, key_pair: KeyPair) {
         let encoded_message = MessageEncoded::try_from(&message).unwrap();
@@ -29,8 +29,8 @@ mod tests {
     }
 
     /// In this test `key_pair` is injected directly from our test fixtures and `entry`
-    /// is tested agains all cases on the `many_entry_versions` template.
-    #[apply(many_entry_versions)]
+    /// is tested agains all cases on the `many_valid_entries` template.
+    #[apply(many_valid_entries)]
     fn entry_encoding_decoding(#[case] entry: Entry, key_pair: KeyPair) {
         // Encode Message
         let encoded_message = MessageEncoded::try_from(entry.message().unwrap()).unwrap();
@@ -49,7 +49,7 @@ mod tests {
         assert_eq!(entry.skiplink_hash(), decoded_entry.skiplink_hash());
     }
 
-    #[apply(many_entry_versions)]
+    #[apply(many_valid_entries)]
     fn sign_and_encode_roundtrip(#[case] entry: Entry, key_pair: KeyPair) {
         // Sign a p2panda entry. For this encoding, the entry is converted into a
         // bamboo-rs-core entry, which means that it also doesn't contain the message anymore

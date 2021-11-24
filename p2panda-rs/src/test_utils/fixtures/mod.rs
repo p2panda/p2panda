@@ -13,5 +13,6 @@
 pub mod templates;
 pub mod defaults;
 mod fixtures;
+mod tests;
 
 pub use fixtures::*;
