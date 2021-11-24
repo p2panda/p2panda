@@ -1,0 +1,153 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+use std::convert::TryFrom;
+use std::io::{Read, Write};
+
+use openmls::framing::MlsCiphertext;
+use tls_codec::{TlsDeserialize, TlsSerialize, TlsSize};
+
+use crate::secret_group::lts::LongTermSecretCiphertext;
+use crate::secret_group::SecretGroupMessage;
+
+/// `SecretGroupMessageType` is an additional "helper" enum next to the `SecretGroupMessage` enum.
+/// It is used as the first byte to distict the type of the inner message data during TLS en- /
+/// decoding.
+#[derive(Debug, Clone, Copy, TlsSerialize, TlsDeserialize, TlsSize)]
+#[repr(u8)]
+enum SecretGroupMessageType {
+    /// This message contains user data encrypted and encoded in form of a MLS application message.
+    MlsApplicationMessage = 1,
+
+    /// This message contains user data encrypted and encoded as a long term secret ciphertext.
+    LongTermSecretMessage = 2,
+}
+
+impl TryFrom<u8> for SecretGroupMessageType {
+    // @TODO: Use our error type
+    type Error = &'static str;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(SecretGroupMessageType::MlsApplicationMessage),
+            2 => Ok(SecretGroupMessageType::LongTermSecretMessage),
+            _ => Err("Unknown secret group message type."),
+        }
+    }
+}
+
+impl tls_codec::Size for SecretGroupMessage {
+    #[inline]
+    fn tls_serialized_len(&self) -> usize {
+        SecretGroupMessageType::MlsApplicationMessage.tls_serialized_len()
+            + match self {
+                SecretGroupMessage::MlsApplicationMessage(message) => message.tls_serialized_len(),
+                SecretGroupMessage::LongTermSecretMessage(message) => message.tls_serialized_len(),
+            }
+    }
+}
+
+impl tls_codec::Serialize for SecretGroupMessage {
+    fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<usize, tls_codec::Error> {
+        match self {
+            SecretGroupMessage::MlsApplicationMessage(message) => {
+                // Write first byte indicating message type
+                let written =
+                    SecretGroupMessageType::MlsApplicationMessage.tls_serialize(writer)?;
+
+                // Write message data
+                message.tls_serialize(writer).map(|l| l + written)
+            }
+            SecretGroupMessage::LongTermSecretMessage(message) => {
+                // Write first byte indicating message type
+                let written =
+                    SecretGroupMessageType::LongTermSecretMessage.tls_serialize(writer)?;
+
+                // Write message data
+                message.tls_serialize(writer).map(|l| l + written)
+            }
+        }
+    }
+}
+
+impl tls_codec::Deserialize for SecretGroupMessage {
+    fn tls_deserialize<R: Read>(bytes: &mut R) -> Result<Self, tls_codec::Error> {
+        // Read the first byte to find out the message type
+        let message_type = match SecretGroupMessageType::try_from(u8::tls_deserialize(bytes)?) {
+            Ok(message_type) => message_type,
+            Err(error) => {
+                return Err(tls_codec::Error::DecodingError(format!(
+                    "Deserialization error {}",
+                    error
+                )))
+            }
+        };
+
+        // Translate into enum and decode inner values
+        match message_type {
+            SecretGroupMessageType::MlsApplicationMessage => Ok(
+                SecretGroupMessage::MlsApplicationMessage(MlsCiphertext::tls_deserialize(bytes)?),
+            ),
+            SecretGroupMessageType::LongTermSecretMessage => {
+                Ok(SecretGroupMessage::LongTermSecretMessage(
+                    LongTermSecretCiphertext::tls_deserialize(bytes)?,
+                ))
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tls_codec::{Deserialize, Serialize};
+
+    use crate::hash::Hash;
+    use crate::secret_group::lts::{
+        LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch,
+    };
+    use crate::secret_group::MlsProvider;
+
+    use super::SecretGroupMessage;
+
+    #[test]
+    fn tls_codec() {
+        let provider = MlsProvider::new();
+        let ciphersuite = LongTermSecretCiphersuite::PANDA_AES256GCMSIV;
+        let epoch = LongTermSecretEpoch::default();
+        let random_key =
+            hex::decode("fb5abbe6c223ab21fa92ba20aff944cd392af764b2df483d6d77cbdb719b76da")
+                .unwrap()
+                .into();
+
+        // Create long term secret
+        let secret = LongTermSecret::new(
+            Hash::new_from_bytes(vec![1, 2, 3]).unwrap(),
+            ciphersuite,
+            epoch,
+            random_key,
+        );
+
+        // Encrypt message with secret and wrap it inside `SecretGroupMessage`
+        let ciphertext = secret.encrypt(&provider, b"Secret message").unwrap();
+        let message = SecretGroupMessage::LongTermSecretMessage(ciphertext);
+
+        // Encode and decode epoch
+        let encoded = epoch.tls_serialize_detached().unwrap();
+        let decoded = LongTermSecretEpoch::tls_deserialize(&mut encoded.as_slice()).unwrap();
+        assert_eq!(decoded, epoch);
+
+        // Encode and decode ciphersuite
+        let encoded = ciphersuite.tls_serialize_detached().unwrap();
+        let decoded = LongTermSecretCiphersuite::tls_deserialize(&mut encoded.as_slice()).unwrap();
+        assert_eq!(decoded, ciphersuite);
+
+        // Encode and decode secret
+        let encoded = secret.tls_serialize_detached().unwrap();
+        let decoded = LongTermSecret::tls_deserialize(&mut encoded.as_slice()).unwrap();
+        assert_eq!(decoded, secret);
+
+        // Encode and decode message
+        let encoded = message.tls_serialize_detached().unwrap();
+        let decoded = SecretGroupMessage::tls_deserialize(&mut encoded.as_slice()).unwrap();
+        assert_eq!(decoded, message);
+    }
+}

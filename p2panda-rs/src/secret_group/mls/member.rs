@@ -106,20 +106,3 @@ impl MlsMember {
         Ok(key_package)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::identity::KeyPair;
-    use crate::secret_group::mls::MlsProvider;
-
-    use super::MlsMember;
-
-    #[test]
-    fn public_key_identity() {
-        let key_pair = KeyPair::new();
-        let public_key_bytes = key_pair.public_key().to_bytes();
-        let provider = MlsProvider::new();
-        let member = MlsMember::new(&provider, &key_pair).unwrap();
-        assert_eq!(public_key_bytes.to_vec(), member.credential().identity());
-    }
-}

@@ -7,7 +7,7 @@ use thiserror::Error;
 #[allow(missing_copy_implementations)]
 pub enum AesError {
     /// Failed generation of random bytes for AES nonce.
-    #[error("Failed generation of random bytes for AES nonce")]
+    #[error("failed generation of random bytes for aes nonce")]
     NonceGenerationFailed,
 
     /// AES encryption failed (invalid key).

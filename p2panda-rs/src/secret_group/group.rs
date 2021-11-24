@@ -364,3 +364,29 @@ impl SecretGroup {
             .max()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::hash::Hash;
+    use crate::identity::KeyPair;
+    use crate::secret_group::lts::LongTermSecretEpoch;
+    use crate::secret_group::{MlsProvider, SecretGroupMember};
+
+    use super::SecretGroup;
+
+    #[test]
+    fn group_lts_epochs() {
+        let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let key_pair = KeyPair::new();
+        let provider = MlsProvider::new();
+        let member = SecretGroupMember::new(&provider, &key_pair).unwrap();
+        let mut group = SecretGroup::new(&provider, &group_instance_id, &member).unwrap();
+
+        // Epochs increment with every newly generated Long Term Secret
+        assert_eq!(group.long_term_epoch(), Some(LongTermSecretEpoch(0)));
+        group.rotate_long_term_secret(&provider).unwrap();
+        assert_eq!(group.long_term_epoch(), Some(LongTermSecretEpoch(1)));
+        group.rotate_long_term_secret(&provider).unwrap();
+        assert_eq!(group.long_term_epoch(), Some(LongTermSecretEpoch(2)));
+    }
+}

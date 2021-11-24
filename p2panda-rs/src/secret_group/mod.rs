@@ -5,6 +5,7 @@
 //! (AES256 with GCM-SIV) encryption schemes. Both settings allow post-compromise security, while
 //! the asymmetric setting also gives forward secrecy.
 mod aes;
+mod codec;
 mod commit;
 mod error;
 mod group;

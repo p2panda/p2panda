@@ -2,7 +2,6 @@
 
 use openmls::group::GroupId;
 use openmls_traits::OpenMlsCryptoProvider;
-use serde::{Deserialize, Serialize};
 use tls_codec::{Size, TlsByteVecU8, TlsDeserialize, TlsSerialize, TlsSize};
 
 use crate::hash::Hash;
@@ -16,7 +15,7 @@ use crate::secret_group::lts::{
 ///
 /// Additionally to the secret value every long term secret also holds meta data, like the MLS
 /// group id and epoch which this secret belongs to.
-#[derive(Debug, Clone, Serialize, Deserialize, TlsDeserialize, TlsSerialize, TlsSize)]
+#[derive(Debug, Clone, PartialEq, TlsDeserialize, TlsSerialize, TlsSize)]
 pub struct LongTermSecret {
     /// Identifier of the related MLS group.
     group_id: GroupId,
@@ -115,7 +114,10 @@ impl LongTermSecret {
 #[cfg(test)]
 mod tests {
     use crate::hash::Hash;
-    use crate::secret_group::lts::{LongTermSecretCiphersuite, LongTermSecretEpoch};
+    use crate::secret_group::lts::{
+        LongTermSecretCiphersuite, LongTermSecretEpoch, LongTermSecretError,
+    };
+    use crate::secret_group::MlsProvider;
 
     use super::LongTermSecret;
 
@@ -135,5 +137,51 @@ mod tests {
             group_instance_id.as_str(),
             secret.group_instance_id().unwrap().as_str()
         );
+    }
+
+    #[test]
+    fn invalid_ciphertext() {
+        let provider = MlsProvider::new();
+        let ciphersuite = LongTermSecretCiphersuite::PANDA_AES256GCMSIV;
+        let random_key =
+            hex::decode("fb5abbe6c223ab21fa92ba20aff944cd392af764b2df483d6d77cbdb719b76da")
+                .unwrap()
+                .to_vec();
+
+        let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let group_instance_id_2 = Hash::new_from_bytes(vec![4, 5, 6]).unwrap();
+
+        let secret = LongTermSecret::new(
+            group_instance_id.clone(),
+            ciphersuite,
+            LongTermSecretEpoch(0),
+            random_key.clone().into(),
+        );
+
+        let secret_different_group = LongTermSecret::new(
+            group_instance_id_2,
+            ciphersuite,
+            LongTermSecretEpoch(0),
+            random_key.clone().into(),
+        );
+
+        let secret_different_epoch = LongTermSecret::new(
+            group_instance_id,
+            ciphersuite,
+            LongTermSecretEpoch(2),
+            random_key.into(),
+        );
+
+        let ciphertext = secret.encrypt(&provider, b"Secret Message").unwrap();
+        assert!(secret.decrypt(&ciphertext).is_ok());
+
+        assert!(matches!(
+            secret_different_epoch.decrypt(&ciphertext),
+            Err(LongTermSecretError::EpochNotMatching)
+        ));
+        assert!(matches!(
+            secret_different_group.decrypt(&ciphertext),
+            Err(LongTermSecretError::GroupNotMatching)
+        ));
     }
 }
