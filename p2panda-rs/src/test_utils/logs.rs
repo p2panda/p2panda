@@ -2,7 +2,9 @@
 
 //! Structs which encapsulate log data structures and logic.
 //! 
-//! Only to be used in a testing environment!
+//! Much of the logic here looks different from how it will in a  real world p2panda application. As more 
+//! functionality is implemented in the main library this will be replaced with core modules. For these reasons 
+//! this code is only intended for testing or demo purposes.
 
 use crate::entry::EntrySigned;
 use crate::hash::Hash;
