@@ -2,7 +2,9 @@
 
 //! Mock p2panda client.
 //! 
-//! Only to be used in a testing environment!
+//! This client mocks functionality which would be implemented in a real world p2panda client. 
+//! It does so in a simplistic manner and should only be used in a testing environment or demo 
+//! environment.
 
 use crate::entry::{sign_and_encode, Entry, EntrySigned};
 use crate::identity::{Author, KeyPair};
@@ -14,7 +16,7 @@ use crate::test_utils::utils::NextEntryArgs;
 /// and it's KeyPair and create and sign entries.
 #[derive(Debug)]
 pub struct Client {
-    /// Name of this client, used in test data creation
+    /// Name of this client
     pub name: String,
     /// The keypair owned by this client
     pub key_pair: KeyPair,

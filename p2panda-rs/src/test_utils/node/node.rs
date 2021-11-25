@@ -28,6 +28,7 @@ pub fn send_to_node(node: &mut Node, client: &Client, message: &Message) -> Resu
     Ok(entry_encoded.hash())
 }
 
+/// Calculate the skiplink and backlink at a certain point in a log of entries
 fn calculate_links(seq_num: &SeqNum, log: &Log) -> (Option<Hash>, Option<Hash>) {
     // Next skiplink hash
     let skiplink = match seq_num.skiplink_seq_num() {
@@ -57,13 +58,13 @@ fn calculate_links(seq_num: &SeqNum, log: &Log) -> (Option<Hash>, Option<Hash>) 
 // if we would implement the `Eq` trait in both classes.
 // type Log = HashMap<i64, Log>;
 
-/// Dummy database type
+/// Mock database type
 pub type Database = HashMap<String, HashMap<i64, Log>>;
 
-/// This struct mocks the basic functionality of a p2panda "Node" for testing purposes.
+/// This struct mocks the basic functionality of a p2panda Node.
 #[derive(Debug)]
 pub struct Node {
-    /// Internal "database" which maps authors and log ids to Bamboo logs with entries inside.
+    /// Internal database which maps authors and log ids to Bamboo logs with entries inside.
     entries: Database,
 }
 
@@ -75,20 +76,18 @@ impl Node {
         }
     }
 
-    fn get_author_entries_mut(&mut self, author: &Author) -> Option<&mut HashMap<i64, Log>> {
+    /// Get a mutable map of all logs published by a certain author
+    fn get_author_logs_mut(&mut self, author: &Author) -> Option<&mut HashMap<i64, Log>> {
         let author_str = author.as_str();
-
-        // Get entries of author from "database"
         if !self.entries.contains_key(author_str) {
             return None;
         }
         Some(self.entries.get_mut(author_str).unwrap())
     }
 
+    /// Get a map of all logs published by a certain author
     fn get_author_logs(&self, author: &Author) -> Option<&HashMap<i64, Log>> {
         let author_str = author.as_str();
-
-        // Get entries of author from "database"
         if !self.entries.contains_key(author_str) {
             return None;
         }
@@ -128,7 +127,6 @@ impl Node {
             PERMISSIONS_SCHEMA_HASH => 8,
             // If it doesn't match it must be a user schema
             _ => match author_logs {
-                // Iterate over all author
                 Some(logs) => match logs.values().find(|log| log.schema() == schema.as_str()) {
                     // If a log with this hash already exists, return the existing id
                     Some(log) => log.id(),
@@ -181,7 +179,7 @@ impl Node {
         let log_id = self.get_log_id(&schema, &author)?;
 
         // Find any logs by this author for this schema
-        let author_log = match self.get_author_entries_mut(author) {
+        let author_log = match self.get_author_logs_mut(author) {
             Some(logs) => {
                 match logs.values().find(|log| log.schema() == schema.as_str()) {
                     Some(log) => Some(log),
@@ -235,7 +233,7 @@ impl Node {
         let seq_num = seq_num.to_owned();
 
         // Find any logs by this author for this schema
-        let author_log = match self.get_author_entries_mut(author) {
+        let author_log = match self.get_author_logs_mut(author) {
             Some(logs) => {
                 match logs.values().find(|log| log.schema() == schema.as_str()) {
                     Some(log) => Some(log),
@@ -274,7 +272,7 @@ impl Node {
         Ok(entry_args)
     }
 
-    /// Get the next instance args (hahs of the entry considered the tip of this instance) needed when publishing
+    /// Get the next instance args (hash of the entry considered the tip of this instance) needed when publishing
     /// UPDATE or DELETE messages
     pub fn next_instance_args(&mut self, instance_id: &str) -> Option<String> {
         let mut materialiser = Materialiser::new();
@@ -309,12 +307,12 @@ impl Node {
         };
 
         // Get all logs by this author
-        let author_logs = match self.get_author_entries_mut(&author) {
+        let author_logs = match self.get_author_logs_mut(&author) {
             Some(logs) => logs,
             // If there aren't any, then instanciate a new log collection
             None => {
                 self.entries.insert(author.as_str().into(), HashMap::new());
-                self.get_author_entries_mut(&author).unwrap()
+                self.get_author_logs_mut(&author).unwrap()
             }
         };
 

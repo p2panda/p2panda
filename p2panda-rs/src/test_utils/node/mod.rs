@@ -2,7 +2,9 @@
 
 //! Mock p2panda node, related data types and utilities.
 //! 
-//! Only to be used in a testing environment!
+//! This node mocks functionality which would be implemented in a real world p2panda node. 
+//! It does so in a simplistic manner and should only be used in a testing environment or demo 
+//! environment.
 
 mod node;
 pub mod utils;
