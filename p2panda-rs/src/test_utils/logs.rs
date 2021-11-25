@@ -24,7 +24,7 @@ pub struct LogEntry {
     pub entry_encoded: EntrySigned,
     /// The message
     pub message: Message,
-    /// The hash of the entry this instance acts upon
+    /// The hash of the entry this message/operation acts upon
     pub previous_operation: Option<String>,
 }
 
