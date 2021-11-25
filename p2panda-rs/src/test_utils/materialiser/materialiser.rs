@@ -86,7 +86,7 @@ impl Materialiser {
             if entry.message().is_create() {
                 dag.add_root(entry.hash_str());
             } else {
-                dag.add_edge(entry.instance_backlink().unwrap(), entry.hash_str());
+                dag.add_edge(entry.previous_operation().unwrap(), entry.hash_str());
             }
         });
     }

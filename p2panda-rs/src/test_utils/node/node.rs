@@ -290,9 +290,9 @@ impl Node {
     /// method does not validate any integrity or content of the given entry.
     pub fn publish_entry(&mut self, entry_encoded: &EntrySigned, message: &Message) -> Result<()> {
         // We add on several metadata values that don't currently exist in a p2panda Entry.
-        // Notably: instance_backlink and instance_author
+        // Notably: previous_operation and instance_author
 
-        let instance_backlink = match message.id() {
+        let previous_operation = match message.id() {
             Some(id) => self.next_instance_args(id.as_str()),
             None => None,
         };
@@ -332,7 +332,7 @@ impl Node {
             instance_author,
             entry_encoded.to_owned(),
             message.to_owned(),
-            instance_backlink,
+            previous_operation,
         ));
 
         Ok(())

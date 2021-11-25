@@ -12,8 +12,8 @@ use crate::identity::Author;
 use crate::message::Message;
 
 /// This struct is an augmented version of a simple log entry. It includes extra properties to aid in 
-/// testing and materialising instances. In particular it has an `instance_backlink`.
-/// which our panda entries currently don't have and will need in the future.
+/// testing and materialising instances. In particular it has an `previous_operation`.
+/// which our panda messages currently don't have and will need in the future.
 #[derive(Clone, Debug)]
 pub struct LogEntry {
     /// The author of this entry
@@ -25,7 +25,7 @@ pub struct LogEntry {
     /// The message
     pub message: Message,
     /// The hash of the entry this instance acts upon
-    pub instance_backlink: Option<String>,
+    pub previous_operation: Option<String>,
 }
 
 /// Struct to represent a bamboo log
@@ -46,14 +46,14 @@ impl LogEntry {
         instance_author: Option<String>,
         entry_encoded: EntrySigned,
         message: Message,
-        instance_backlink: Option<String>,
+        previous_operation: Option<String>,
     ) -> Self {
         Self {
             author,
             instance_author,
             entry_encoded,
             message,
-            instance_backlink,
+            previous_operation,
         }
     }
 
@@ -83,8 +83,8 @@ impl LogEntry {
     }
 
     /// Get the instance backlink for this entry
-    pub fn instance_backlink(&self) -> Option<String> {
-        self.instance_backlink.to_owned().clone()
+    pub fn previous_operation(&self) -> Option<String> {
+        self.previous_operation.to_owned().clone()
     }
 }
 
