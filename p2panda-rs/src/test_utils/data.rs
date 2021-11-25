@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-#![allow(missing_docs)]
 
+/// Structs and methods needed for generating test data in json format. This is used in `p2panda-js` tests.
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -10,19 +10,21 @@ use crate::hash::Hash;
 use crate::identity::Author;
 use crate::message::{Message, MessageEncoded};
 
-use crate::test_utils::utils::DEFAULT_SCHEMA_HASH;
 use crate::test_utils::client::Client;
 use crate::test_utils::node::Node;
+use crate::test_utils::utils::DEFAULT_SCHEMA_HASH;
 
+/// Next entry args formatted correctly for the test data.
 #[derive(Serialize, Debug)]
 #[allow(non_snake_case)]
 pub struct NextEntryArgs {
-    pub entryHashBacklink: Option<Hash>,
-    pub entryHashSkiplink: Option<Hash>,
-    pub seqNum: SeqNum,
-    pub logId: LogId,
+    entryHashBacklink: Option<Hash>,
+    entryHashSkiplink: Option<Hash>,
+    seqNum: SeqNum,
+    logId: LogId,
 }
 
+/// Encoded entry data formatted correctly for the test data.
 #[derive(Serialize, Debug)]
 #[allow(non_snake_case)]
 pub struct EncodedEntryData {
@@ -35,6 +37,7 @@ pub struct EncodedEntryData {
     seqNum: SeqNum,
 }
 
+/// Log data formatted correctly for the test data.
 #[derive(Serialize, Debug)]
 #[allow(non_snake_case)]
 pub struct LogData {
@@ -43,6 +46,7 @@ pub struct LogData {
     nextEntryArgs: Vec<NextEntryArgs>,
 }
 
+/// Author data formatted correctly for the test data.
 #[derive(Serialize, Debug)]
 #[allow(non_snake_case)]
 pub struct AuthorData {
@@ -52,7 +56,7 @@ pub struct AuthorData {
 }
 
 /// Convert log data from a vector of authors into structs which can be json formatted
-/// how we would like for our tests.
+/// in the way we expect for our test data.
 pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<String, AuthorData> {
     let mut decoded_logs: HashMap<String, AuthorData> = HashMap::new();
 
@@ -90,7 +94,6 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
                 log_data.encodedEntries.push(entry_data);
                 log_data.decodedMessages.push(message_decoded.to_owned());
 
-                // Ugly hack for converting keys into what we expect in JS testing world
                 let json_entry_args = NextEntryArgs {
                     entryHashBacklink: next_entry_args.backlink,
                     entryHashSkiplink: next_entry_args.skiplink,
@@ -104,7 +107,6 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
                 .next_entry_args(&author, &Hash::new(DEFAULT_SCHEMA_HASH).unwrap())
                 .unwrap();
 
-            // Ugly hack for converting keys into what we expect in JS testing world
             let json_entry_args = NextEntryArgs {
                 entryHashBacklink: final_next_entry_args.backlink,
                 entryHashSkiplink: final_next_entry_args.skiplink,

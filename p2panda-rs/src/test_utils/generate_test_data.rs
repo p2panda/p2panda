@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+/// Generate json formatted test data
 use serde_json;
 
 use p2panda_rs::test_utils::client::Client;
@@ -59,17 +60,6 @@ fn main() {
         ),
     )
     .unwrap();
-
-    // Get full database representation
-    let db = node.db();
-    // Get a vector of all entries
-    let entries = node.all_entries();
-    // Get a map of all instances
-    let query = node.query_all(&DEFAULT_SCHEMA_HASH.to_string()).unwrap();
-
-    println!("{:#?}", db);
-    println!("{:#?}", entries);
-    println!("{:#?}", query);
 
     // Get the database represented as json and formatted ready to be used as test data in `p2panda-js`
     let formatted_data = generate_test_data(&mut node, vec![panda]);
