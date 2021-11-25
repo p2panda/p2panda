@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Test for the entry module. These tests utilise parameter injection and templates from `test_utils` module.
 #[cfg(test)]
 mod tests {
     use std::convert::TryFrom;
@@ -10,26 +11,10 @@ mod tests {
     use crate::entry::{decode_entry, sign_and_encode, Entry, LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::message::{Message, MessageEncoded};
-    use crate::test_utils::fixtures::templates::{
-        many_valid_entries, non_default_message_values_panic, version_fixtures,
-    };
-    use crate::test_utils::fixtures::{defaults, entry, key_pair, Fixture};
-    use crate::test_utils::{hash, message_fields, DEFAULT_SCHEMA_HASH};
+    use crate::test_utils::fixtures::templates::{many_valid_entries, version_fixtures};
+    use crate::test_utils::fixtures::{key_pair, Fixture};
 
-    /// In this test `entry` and `key_pair` are injected directly from our test fixtures and `message`
-    /// is tested against all cases on the `non_default_message_values_panic` and one manually defined passing case.
-    #[apply(non_default_message_values_panic)]
-    #[case(defaults::create_message())]
-    fn message_validation(entry: Entry, #[case] message: Message, key_pair: KeyPair) {
-        let encoded_message = MessageEncoded::try_from(&message).unwrap();
-        let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
-        assert!(signed_encoded_entry
-            .validate_message(&encoded_message)
-            .is_ok());
-    }
-
-    /// In this test `key_pair` is injected directly from our test fixtures and `entry`
-    /// is tested agains all cases on the `many_valid_entries` template.
+    /// Test encoding and decoding entries
     #[apply(many_valid_entries)]
     fn entry_encoding_decoding(#[case] entry: Entry, key_pair: KeyPair) {
         // Encode Message
@@ -49,6 +34,7 @@ mod tests {
         assert_eq!(entry.skiplink_hash(), decoded_entry.skiplink_hash());
     }
 
+    /// Test decoding an entry then signing and encoding it again
     #[apply(many_valid_entries)]
     fn sign_and_encode_roundtrip(#[case] entry: Entry, key_pair: KeyPair) {
         // Sign a p2panda entry. For this encoding, the entry is converted into a
@@ -77,6 +63,7 @@ mod tests {
         assert!(sign_and_encode(&entry_second, &key_pair).is_ok());
     }
 
+    /// Test signing and encoding from version fixtures
     #[apply(version_fixtures)]
     fn fixture_sign_encode(#[case] fixture: Fixture) {
         // Sign and encode fixture Entry
@@ -89,6 +76,7 @@ mod tests {
         );
     }
 
+    /// Test decoding a message from version fixtures
     #[apply(version_fixtures)]
     fn fixture_decode_message(#[case] fixture: Fixture) {
         // Decode fixture MessageEncoded
@@ -110,6 +98,7 @@ mod tests {
         );
     }
 
+    /// Test decoding an entry from version fixtures
     #[apply(version_fixtures)]
     fn fixture_decode_entry(#[case] fixture: Fixture) {
         // Decode fixture EntrySigned
