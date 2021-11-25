@@ -18,7 +18,7 @@ use crate::test_utils::NextEntryArgs;
 
 /// Helper method signing and encoding entry and sending it to node backend.
 pub fn send_to_node(node: &mut Node, client: &Client, message: &Message) -> Result<Hash> {
-    let entry_args = node.next_entry_args(&client.author(), message.schema())?;
+    let entry_args = node.next_entry_args(&client.author(), message.schema(), None)?;
 
     let entry_encoded = client.signed_encoded_entry(message.to_owned(), entry_args);
 
@@ -174,64 +174,19 @@ impl Node {
 
     /// Returns the log id, sequence number, skiplink and backlink hash for a given author and
     /// schema. All of this information is needed to create and sign a new entry.
-    pub fn next_entry_args(&mut self, author: &Author, schema: &Hash) -> Result<NextEntryArgs> {
-        // Find out the log id for the given schema
-        let log_id = self.get_log_id(&schema, &author)?;
-
-        // Find any logs by this author for this schema
-        let author_log = match self.get_author_logs_mut(author) {
-            Some(logs) => {
-                match logs.values().find(|log| log.schema() == schema.as_str()) {
-                    Some(log) => Some(log),
-                    // No logs by this author for this schema
-                    None => None,
-                }
-            }
-            // No logs for this author
-            None => None,
-        };
-
-        // Find out the sequence number, skip- and backlink hash for the next entry in this log
-        let entry_args = match author_log {
-            Some(log) => {
-                // Next sequence number
-                let seq_num = SeqNum::new((log.entries().len() + 1) as i64).unwrap();
-
-                // Calculate backlink and skiplink
-                let (backlink, skiplink) = calculate_links(&seq_num, log);
-
-                NextEntryArgs {
-                    log_id,
-                    seq_num,
-                    skiplink,
-                    backlink,
-                }
-            }
-            // This is the first entry in the log ..
-            None => NextEntryArgs {
-                log_id,
-                seq_num: SeqNum::new(1).unwrap(),
-                skiplink: None,
-                backlink: None,
-            },
-        };
-        Ok(entry_args)
-    }
-
-    /// Calculate the next entry arguments *at a certain point* in this log. This is helpful
-    /// when generating test data and wanting to test the flow from requesting entry args through
-    /// to publishing an entry
-    pub fn next_entry_args_for_specific_entry(
+    ///
+    /// If a value for the optional seq_num parameter is passed then next entry args *at that point* in this log
+    /// are returned. This is helpful when generating test data and wanting to test the flow from requesting entry
+    /// args through to publishing an entry.
+    pub fn next_entry_args(
         &mut self,
         author: &Author,
         schema: &Hash,
-        seq_num: &SeqNum,
+        seq_num: Option<&SeqNum>,
     ) -> Result<NextEntryArgs> {
         // Find out the log id for the given schema
         let log_id = self.get_log_id(&schema, &author)?;
 
-        let seq_num = seq_num.to_owned();
-
         // Find any logs by this author for this schema
         let author_log = match self.get_author_logs_mut(author) {
             Some(logs) => {
@@ -248,15 +203,27 @@ impl Node {
         // Find out the sequence number, skip- and backlink hash for the next entry in this log
         let entry_args = match author_log {
             Some(log) => {
-                // Trim the log to the point in time we are interested in
-                log.to_owned().entries = log.entries()[..seq_num.as_i64() as usize - 1].to_owned();
+                let seq_num_inner = match seq_num {
+                    // If a sequence number was passed...
+                    Some(s) => {
+                        // ...trim the log to the point in time we are interested in
+                        log.to_owned().entries =
+                            log.entries()[..s.as_i64() as usize - 1].to_owned();
+                        // and return the sequence number.
+                        s.to_owned()
+                    }
+                    None => {
+                        // If no sequence number was passed calculate and return the next sequence number for this log
+                        SeqNum::new((log.entries().len() + 1) as i64).unwrap()
+                    }
+                };
 
                 // Calculate backlink and skiplink
-                let (backlink, skiplink) = calculate_links(&seq_num, log);
+                let (backlink, skiplink) = calculate_links(&seq_num_inner, log);
 
                 NextEntryArgs {
                     log_id,
-                    seq_num,
+                    seq_num: seq_num_inner,
                     skiplink,
                     backlink,
                 }

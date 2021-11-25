@@ -74,10 +74,10 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
                 let message_encoded = MessageEncoded::try_from(&log_entry.message).unwrap();
                 let entry = decode_entry(&log_entry.entry_encoded, Some(&message_encoded)).unwrap();
                 let next_entry_args = node
-                    .next_entry_args_for_specific_entry(
+                    .next_entry_args(
                         &author,
                         &Hash::new(DEFAULT_SCHEMA_HASH).unwrap(),
-                        entry.seq_num(),
+                        Some(entry.seq_num()),
                     )
                     .unwrap();
                 let message_decoded = entry.message().unwrap();
@@ -104,7 +104,7 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
                 log_data.nextEntryArgs.push(json_entry_args);
             }
             let final_next_entry_args = node
-                .next_entry_args(&author, &Hash::new(DEFAULT_SCHEMA_HASH).unwrap())
+                .next_entry_args(&author, &Hash::new(DEFAULT_SCHEMA_HASH).unwrap(), None)
                 .unwrap();
 
             let json_entry_args = NextEntryArgs {
