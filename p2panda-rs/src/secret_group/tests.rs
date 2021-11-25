@@ -12,12 +12,12 @@ fn long_term_secret_evolution() {
     // Group creation
     // ~~~~~~~~~~~~~~
 
-    // Billie generates a new KeyPair and uses it to create a SecretGroupMember
+    // Billie generates a new `KeyPair` and uses it to create a `SecretGroupMember`
     let billie_key_pair = KeyPair::new();
     let billie_provider = MlsProvider::new();
     let billie_member = SecretGroupMember::new(&billie_provider, &billie_key_pair).unwrap();
 
-    // Billie creates a new SecretGroup
+    // Billie creates a new `SecretGroup`
     let secret_group_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
     let mut billie_group =
         SecretGroup::new(&billie_provider, &secret_group_id, &billie_member).unwrap();
@@ -27,16 +27,16 @@ fn long_term_secret_evolution() {
     // Add members & share secrets
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    // Ada generates a new KeyPair to also create a new `SecretGroupMember`
+    // Ada generates a new `KeyPair` to also create a new `SecretGroupMember`
     let ada_key_pair = KeyPair::new();
     let ada_provider = MlsProvider::new();
     let ada_member = SecretGroupMember::new(&ada_provider, &ada_key_pair).unwrap();
 
-    // Ada publishes their KeyPackage for future group invitations
+    // Ada publishes their `KeyPackage` for future group invitations
     let ada_key_package = ada_member.key_package(&ada_provider).unwrap();
 
     // Billie invites Ada into their group, the return value is a `SecretGroupCommit` which
-    // contains the MLS commit and MLS welcome message for this epoch, also the already generated
+    // contains the MLS `Commit` and MLS `Welcome` message for this epoch, also the already generated
     // symmetrical long term secret will be encoded, encrypted and included in the same commit
     let group_commit = billie_group
         .add_members(&billie_provider, &[ada_key_package])
@@ -51,8 +51,8 @@ fn long_term_secret_evolution() {
     // En- & Decryption
     // ~~~~~~~~~~~~~~~~
 
-    // Billie sends an symmetrically encrypted message to Ada, the `LongTermSecrets` will
-    // automatically use the latest secret for encryption
+    // Billie sends an message which was encrypted with the first `LongTermSecret` to Ada, the
+    // group will automatically use the latest secret for encryption
     let message_ciphertext = billie_group
         .encrypt_with_long_term_secret(&billie_provider, b"This is a secret message")
         .unwrap();
@@ -67,12 +67,12 @@ fn long_term_secret_evolution() {
     // Late members
     // ~~~~~~~~~~~~
 
-    // Calvin generates a new KeyPair and uses it to create a SecretGroupMember
+    // Calvin generates a new `KeyPair` and uses it to create a `SecretGroupMember`
     let calvin_key_pair = KeyPair::new();
     let calvin_provider = MlsProvider::new();
     let calvin_member = SecretGroupMember::new(&calvin_provider, &calvin_key_pair).unwrap();
 
-    // Calvin publishes their KeyPackage for future group invitations
+    // Calvin publishes their `KeyPackage` for future group invitations
     let calvin_key_package = calvin_member.key_package(&calvin_provider).unwrap();
 
     // Billie invites Calvin into the group
@@ -80,7 +80,7 @@ fn long_term_secret_evolution() {
         .add_members(&billie_provider, &[calvin_key_package])
         .unwrap();
 
-    // Calvin joins the group and decrypts the long term secret
+    // Calvin joins the group and decrypts the `LongTermSecret`
     let mut calvin_group = SecretGroup::new_from_welcome(&calvin_provider, &group_commit).unwrap();
     assert!(calvin_group.is_active());
 
@@ -127,12 +127,12 @@ fn long_term_secret_evolution() {
     assert_eq!(billie_group.long_term_epoch(), Some(LongTermSecretEpoch(1)));
     assert_eq!(calvin_group.long_term_epoch(), Some(LongTermSecretEpoch(0)));
 
-    // Ada sends a symmetrically encrypted message using the new secret
+    // Ada sends another encrypted message using the new `LongTermSecret`
     let message_ciphertext = ada_group
         .encrypt_with_long_term_secret(&ada_provider, b"This is another secret message")
         .unwrap();
 
-    // Calvin can not decrypt the secret
+    // Calvin can not read the message
     assert!(calvin_group
         .decrypt(&calvin_provider, &message_ciphertext)
         .is_err());
@@ -153,12 +153,12 @@ fn sender_ratchet_evolution() {
     // Group creation
     // ~~~~~~~~~~~~~~
 
-    // Billie generates a new KeyPair and uses it to create a SecretGroupMember
+    // Billie generates a new `KeyPair` and uses it to create a `SecretGroupMember`
     let billie_key_pair = KeyPair::new();
     let billie_provider = MlsProvider::new();
     let billie_member = SecretGroupMember::new(&billie_provider, &billie_key_pair).unwrap();
 
-    // Billie creates a new SecretGroup
+    // Billie creates a new `SecretGroup`
     let secret_group_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
     let mut billie_group =
         SecretGroup::new(&billie_provider, &secret_group_id, &billie_member).unwrap();
@@ -168,12 +168,12 @@ fn sender_ratchet_evolution() {
     // Add members
     // ~~~~~~~~~~-
 
-    // Ada generates a new KeyPair to also create a new `SecretGroupMember`
+    // Ada generates a new `KeyPair` to also create a new `SecretGroupMember`
     let ada_key_pair = KeyPair::new();
     let ada_provider = MlsProvider::new();
     let ada_member = SecretGroupMember::new(&ada_provider, &ada_key_pair).unwrap();
 
-    // Ada publishes their KeyPackage for future group invitations
+    // Ada publishes their `KeyPackage` for future group invitations
     let ada_key_package = ada_member.key_package(&ada_provider).unwrap();
 
     // Billie invites Ada into their group
@@ -189,7 +189,8 @@ fn sender_ratchet_evolution() {
     // En- & Decryption
     // ~~~~~~~~~~~~~~~~
 
-    // Billie sends an encrypted message to Ada
+    // Billie sends an encrypted message to Ada. This message was encrypted using Billies Sender
+    // Ratchet Secret.
     let message_ciphertext = billie_group
         .encrypt(&billie_provider, b"This is a secret message")
         .unwrap();
@@ -204,12 +205,12 @@ fn sender_ratchet_evolution() {
     // Late members
     // ~~~~~~~~~~~~
 
-    // Calvin generates a new KeyPair and uses it to create a SecretGroupMember
+    // Calvin generates a new `KeyPair` and uses it to create a `SecretGroupMember`
     let calvin_key_pair = KeyPair::new();
     let calvin_provider = MlsProvider::new();
     let calvin_member = SecretGroupMember::new(&calvin_provider, &calvin_key_pair).unwrap();
 
-    // Calvin publishes their KeyPackage for future group invitations
+    // Calvin publishes their `KeyPackage` for future group invitations
     let calvin_key_package = calvin_member.key_package(&calvin_provider).unwrap();
 
     // Billie invites Calvin into the group
