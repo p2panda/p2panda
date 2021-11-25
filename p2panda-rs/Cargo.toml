@@ -32,7 +32,6 @@ db-sqlx = ["sqlx"]
 [[bin]]
 name = "json-test-data"
 path = "src/test_utils/generate_test_data.rs"
-test = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
