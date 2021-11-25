@@ -23,7 +23,6 @@ enum SecretGroupMessageType {
 }
 
 impl TryFrom<u8> for SecretGroupMessageType {
-    // @TODO: Use our error type
     type Error = &'static str;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -84,14 +83,12 @@ impl tls_codec::Deserialize for SecretGroupMessage {
 
         // Translate into enum and decode inner values
         match message_type {
-            SecretGroupMessageType::MlsApplicationMessage => Ok(
-                SecretGroupMessage::MlsApplicationMessage(MlsCiphertext::tls_deserialize(bytes)?),
-            ),
-            SecretGroupMessageType::LongTermSecretMessage => {
-                Ok(SecretGroupMessage::LongTermSecretMessage(
-                    LongTermSecretCiphertext::tls_deserialize(bytes)?,
-                ))
-            }
+            SecretGroupMessageType::MlsApplicationMessage => Ok(Self::MlsApplicationMessage(
+                MlsCiphertext::tls_deserialize(bytes)?,
+            )),
+            SecretGroupMessageType::LongTermSecretMessage => Ok(Self::LongTermSecretMessage(
+                LongTermSecretCiphertext::tls_deserialize(bytes)?,
+            )),
         }
     }
 }
@@ -101,44 +98,34 @@ mod tests {
     use tls_codec::{Deserialize, Serialize};
 
     use crate::hash::Hash;
+    use crate::identity::KeyPair;
     use crate::secret_group::lts::{
         LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch,
     };
     use crate::secret_group::MlsProvider;
+    use crate::secret_group::{SecretGroup, SecretGroupCommit, SecretGroupMember};
 
     use super::SecretGroupMessage;
 
     #[test]
-    fn tls_codec() {
+    fn secret_and_message() {
         let provider = MlsProvider::new();
-        let ciphersuite = LongTermSecretCiphersuite::PANDA_AES256GCMSIV;
-        let epoch = LongTermSecretEpoch::default();
+
         let random_key =
             hex::decode("fb5abbe6c223ab21fa92ba20aff944cd392af764b2df483d6d77cbdb719b76da")
-                .unwrap()
-                .into();
+                .unwrap();
 
         // Create long term secret
         let secret = LongTermSecret::new(
             Hash::new_from_bytes(vec![1, 2, 3]).unwrap(),
-            ciphersuite,
-            epoch,
-            random_key,
+            LongTermSecretCiphersuite::PANDA_AES256GCMSIV,
+            LongTermSecretEpoch::default(),
+            random_key.into(),
         );
 
         // Encrypt message with secret and wrap it inside `SecretGroupMessage`
         let ciphertext = secret.encrypt(&provider, b"Secret message").unwrap();
         let message = SecretGroupMessage::LongTermSecretMessage(ciphertext);
-
-        // Encode and decode epoch
-        let encoded = epoch.tls_serialize_detached().unwrap();
-        let decoded = LongTermSecretEpoch::tls_deserialize(&mut encoded.as_slice()).unwrap();
-        assert_eq!(decoded, epoch);
-
-        // Encode and decode ciphersuite
-        let encoded = ciphersuite.tls_serialize_detached().unwrap();
-        let decoded = LongTermSecretCiphersuite::tls_deserialize(&mut encoded.as_slice()).unwrap();
-        assert_eq!(decoded, ciphersuite);
 
         // Encode and decode secret
         let encoded = secret.tls_serialize_detached().unwrap();
@@ -149,5 +136,55 @@ mod tests {
         let encoded = message.tls_serialize_detached().unwrap();
         let decoded = SecretGroupMessage::tls_deserialize(&mut encoded.as_slice()).unwrap();
         assert_eq!(decoded, message);
+    }
+
+    #[test]
+    fn epoch() {
+        let epoch = LongTermSecretEpoch::default();
+
+        // Encode and decode epoch
+        let encoded = epoch.tls_serialize_detached().unwrap();
+        let decoded = LongTermSecretEpoch::tls_deserialize(&mut encoded.as_slice()).unwrap();
+        assert_eq!(decoded, epoch);
+    }
+
+    #[test]
+    fn ciphersuite() {
+        let ciphersuite = LongTermSecretCiphersuite::PANDA_AES256GCMSIV;
+
+        // Encode and decode ciphersuite
+        let encoded = ciphersuite.tls_serialize_detached().unwrap();
+        let decoded = LongTermSecretCiphersuite::tls_deserialize(&mut encoded.as_slice()).unwrap();
+        assert_eq!(decoded, ciphersuite);
+
+        // Throws error when ciphersuite is unknown
+        assert!(LongTermSecretCiphersuite::tls_deserialize(&mut vec![21].as_slice()).is_err());
+    }
+
+    #[test]
+    fn commits() {
+        let provider = MlsProvider::new();
+
+        // Create secret group and invite second member to create commit message
+        let billie_key_pair = KeyPair::new();
+        let billie_member = SecretGroupMember::new(&provider, &billie_key_pair).unwrap();
+
+        let ada_key_pair = KeyPair::new();
+        let ada_member = SecretGroupMember::new(&provider, &ada_key_pair).unwrap();
+        let ada_key_package = ada_member.key_package(&provider).unwrap();
+
+        let secret_group_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let mut group = SecretGroup::new(&provider, &secret_group_id, &billie_member).unwrap();
+        let commit = group.add_members(&provider, &[ada_key_package]).unwrap();
+
+        // Encode and decode commit
+        let encoded = commit.tls_serialize_detached().unwrap();
+        let decoded = SecretGroupCommit::tls_deserialize(&mut encoded.as_slice()).unwrap();
+        assert_eq!(decoded.long_term_secrets(), commit.long_term_secrets());
+        assert_eq!(decoded.welcome(), commit.welcome());
+
+        // Apply decoded commit
+        let ada_group = SecretGroup::new_from_welcome(&provider, &decoded).unwrap();
+        assert!(ada_group.is_active());
     }
 }

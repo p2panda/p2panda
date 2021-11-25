@@ -106,3 +106,25 @@ impl MlsMember {
         Ok(key_package)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use openmls::ciphersuite::signable::Verifiable;
+
+    use crate::identity::KeyPair;
+    use crate::secret_group::MlsProvider;
+
+    use super::MlsMember;
+
+    #[test]
+    fn key_package_verify() {
+        let key_pair = KeyPair::new();
+        let provider = MlsProvider::new();
+        let member = MlsMember::new(&provider, &key_pair).unwrap();
+        let key_package = member.key_package(&provider).unwrap();
+
+        assert!(key_package
+            .verify_no_out(&provider, member.credential())
+            .is_ok());
+    }
+}
