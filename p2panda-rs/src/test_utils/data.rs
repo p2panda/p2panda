@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-/// Structs and methods needed for generating test data in json format. This is used in `p2panda-js` tests.
+//! Structs and methods needed for generating test data in json format. This is used in `p2panda-js` tests.
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryFrom;
