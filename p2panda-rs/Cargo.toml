@@ -29,6 +29,10 @@ default = []
 # Adds sql database support for atomic structs via sqlx crate
 db-sqlx = ["sqlx"]
 
+[[bin]]
+name = "json-test-data"
+path = "src/test_utils/generate_test_data.rs"
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

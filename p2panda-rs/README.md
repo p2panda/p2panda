@@ -80,7 +80,7 @@ It includes:
 
 ## Test Data
 
-Test data is generated as a json document formatted as summerised below (to see full output, run `cargo run`).
+Test data is generated as a json document formatted as summerised below (to see full output, run `cargo run --bin json-test-data`).
 
 ```js
 {

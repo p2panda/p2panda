@@ -25,8 +25,8 @@ You will need the following tools to start development:
 # Run tests
 cargo test
 
-# Generate test data json output (from `main.rs`)
-cargo run
+# Generate json formatted test data
+cargo run --bin json-test-data
 
 ```
 
