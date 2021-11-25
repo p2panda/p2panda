@@ -5,7 +5,7 @@
 //!
 //! Most of these structs are wrappers around the OpenMLS crate.
 //!
-//! See: https://openmls.tech
+//! See: <https://openmls.tech>
 mod constants;
 mod error;
 mod group;

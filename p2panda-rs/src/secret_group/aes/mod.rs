@@ -3,7 +3,7 @@
 //! Methods to encrypt and decrypt data symmetrically with AES256 block cipher using GCM-SIV
 //! operation mode.
 //!
-//! See: https://www.imperialviolet.org/2017/05/14/aesgcmsiv.html
+//! See: <https://www.imperialviolet.org/2017/05/14/aesgcmsiv.html>
 mod aes;
 mod error;
 

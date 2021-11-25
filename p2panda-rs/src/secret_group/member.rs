@@ -7,14 +7,40 @@ use crate::identity::KeyPair;
 use crate::secret_group::mls::MlsMember;
 use crate::secret_group::SecretGroupError;
 
-/// Member of a secret group.
+/// Member of a secret group holding the key material for creating and signing new KeyPackages.
+///
+/// ## Example
+///
+/// ```
+/// # extern crate p2panda_rs;
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// # use std::convert::TryFrom;
+/// # use p2panda_rs::identity::KeyPair;
+/// # use p2panda_rs::secret_group::{SecretGroupMember, MlsProvider};
+/// // Define provider for cryptographic methods and key storage
+/// let provider = MlsProvider::new();
+///
+/// // Generate new Ed25519 key pair
+/// let key_pair = KeyPair::new();
+///
+/// // Create new group member based on p2panda key pair
+/// let member = SecretGroupMember::new(&provider, &key_pair)?;
+///
+/// // Generate new KeyPackage which can be used to join other groups
+/// let key_package = member.key_package(&provider)?;
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug, Clone)]
 pub struct SecretGroupMember {
     mls_member: MlsMember,
 }
 
 impl SecretGroupMember {
-    /// Creates a new secret group member based on a p2panda key pair.
+    /// Creates a new secret group member based on a p2panda [KeyPair].
+    ///
+    /// The [KeyPair] is used to authenticate the secret group member and its generated
+    /// [KeyPackage] towards others.
     pub fn new(
         provider: &impl OpenMlsCryptoProvider,
         key_pair: &KeyPair,
@@ -32,7 +58,7 @@ impl SecretGroupMember {
         Ok(self.mls_member.key_package(provider)?)
     }
 
-    /// Returns the MLS Credential of this group member.
+    /// Returns the MLS Credential of this group member to identify itself.
     pub fn credential(&self) -> &Credential {
         self.mls_member.credential()
     }
