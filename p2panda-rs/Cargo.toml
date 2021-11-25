@@ -50,20 +50,20 @@ sqlx = { version = "0.5.9", features = ["runtime-async-std-rustls", "all-databas
 # See: https://github.com/openmls/openmls/milestone/3
 [dependencies.openmls]
 git = "https://github.com/openmls/openmls"
-branch = "raphael/fixvisibility"
+rev = "ca74bde"
 
 [dependencies.rust_crypto]
 git = "https://github.com/openmls/openmls"
-branch = "raphael/fixvisibility"
+rev = "ca74bde"
 
 [dependencies.openmls_traits]
 git = "https://github.com/openmls/openmls"
-branch = "raphael/fixvisibility"
+rev = "ca74bde"
 
 # @TODO: Will be removed as soon as we have our own key store provider
 [dependencies.memory_keystore]
 git = "https://github.com/openmls/openmls"
-branch = "raphael/fixvisibility"
+rev = "ca74bde"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rand = "0.7.3"
