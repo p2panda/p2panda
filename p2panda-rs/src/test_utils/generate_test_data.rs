@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-/// Generate json formatted test data
+/// Generate json formatted test data. This is run with the `cargo run --bin json-test-data` command. The output 
+/// data can be used for testing a p2panda implementation. It is currently used in `p2panda-js`.
 use serde_json;
 
 use p2panda_rs::test_utils::client::Client;
