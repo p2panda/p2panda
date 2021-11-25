@@ -4,10 +4,9 @@
 /// data can be used for testing a p2panda implementation. It is currently used in `p2panda-js`.
 use serde_json;
 
-use p2panda_rs::test_utils::client::Client;
-use p2panda_rs::test_utils::data::generate_test_data;
-use p2panda_rs::test_utils::node::send_to_node;
-use p2panda_rs::test_utils::node::Node;
+use p2panda_rs::test_utils::mocks::client::Client;
+use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
+use p2panda_rs::test_utils::mocks::node::{send_to_node, Node};
 use p2panda_rs::test_utils::{
     create_message, delete_message, hash, message_fields, new_key_pair, update_message,
     DEFAULT_SCHEMA_HASH,
@@ -74,10 +73,9 @@ mod tests {
     use serde_json;
     use serde_json::Value;
 
-    use p2panda_rs::test_utils::client::Client;
-    use p2panda_rs::test_utils::data::generate_test_data;
-    use p2panda_rs::test_utils::node::send_to_node;
-    use p2panda_rs::test_utils::node::Node;
+    use p2panda_rs::test_utils::mocks::client::Client;
+    use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
+    use p2panda_rs::test_utils::mocks::node::{send_to_node, Node};
     use p2panda_rs::test_utils::{
         create_message, hash, keypair_from_private, message_fields, DEFAULT_PRIVATE_KEY,
         DEFAULT_SCHEMA_HASH,

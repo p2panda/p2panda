@@ -8,10 +8,10 @@ use crate::hash::Hash;
 use crate::identity::Author;
 use crate::message::{Message, MessageFields};
 
-use crate::test_utils::client::Client;
-use crate::test_utils::logs::{Log, LogEntry};
-use crate::test_utils::materialiser::{filter_entries, Materialiser};
-use crate::test_utils::node::utils::{
+use crate::test_utils::mocks::client::Client;
+use crate::test_utils::mocks::logs::{Log, LogEntry};
+use crate::test_utils::mocks::materialiser::{filter_entries, Materialiser};
+use crate::test_utils::mocks::node::utils::{
     Result, GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
 };
 use crate::test_utils::NextEntryArgs;

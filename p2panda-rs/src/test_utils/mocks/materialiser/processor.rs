@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::test_utils::logs::LogEntry;
-use crate::test_utils::materialiser::Materialiser;
-use crate::test_utils::node::utils::PERMISSIONS_SCHEMA_HASH;
+use crate::test_utils::mocks::logs::LogEntry;
+use crate::test_utils::mocks::materialiser::Materialiser;
+use crate::test_utils::mocks::node::utils::PERMISSIONS_SCHEMA_HASH;
 
 /// Get all permission entries from this author
 pub fn author_permission_entries(entries: &Vec<LogEntry>, author: &String) -> Vec<LogEntry> {

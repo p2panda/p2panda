@@ -9,10 +9,16 @@
 //! With templates you can apply many rstest cases to a single test. They utilize the somewhat experimental
 //! [rstest_reuse](https://github.com/la10736/rstest/tree/master/rstest_reuse) crate.
 //!
-//! https://github.com/la10736/rstest
+//! <https://github.com/la10736/rstest>
+
+#[cfg(test)]
 pub mod templates;
+#[cfg(test)]
 pub mod defaults;
+#[cfg(test)]
 mod fixtures;
+#[cfg(test)]
 mod tests;
 
+#[cfg(test)]
 pub use fixtures::*;

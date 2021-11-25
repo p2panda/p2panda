@@ -3,7 +3,7 @@
 //! Mock p2panda client.
 //! 
 //! This client mocks functionality which would be implemented in a real world p2panda client. 
-//! It does so in a simplistic manner and should only be used in a testing environment or demo 
+//! It does so in a simplistic manner and should only be used in a testing or demo 
 //! environment.
 
 use crate::entry::{sign_and_encode, Entry, EntrySigned};
@@ -12,13 +12,12 @@ use crate::message::Message;
 
 use crate::test_utils::utils::NextEntryArgs;
 
-/// A helper struct which represents a client in the pandaverse. It doesn't do much except wrap an Author identity
-/// and it's KeyPair and create and sign entries.
+/// A helper struct which represents a client in the pandaverse. It is a thin wrapper around a KeyPair, it is used when creating, signing and publishing entries.
 #[derive(Debug)]
 pub struct Client {
     /// Name of this client
     pub name: String,
-    /// The keypair owned by this client
+    /// The keypair of this client
     pub key_pair: KeyPair,
 }
 

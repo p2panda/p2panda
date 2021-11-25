@@ -4,9 +4,9 @@ use std::collections::HashMap;
 
 use crate::message::{Message, MessageFields};
 
-use crate::test_utils::logs::LogEntry;
-use crate::test_utils::materialiser::DAG;
-use crate::test_utils::node::utils::Result;
+use crate::test_utils::mocks::logs::LogEntry;
+use crate::test_utils::mocks::materialiser::DAG;
+use crate::test_utils::mocks::node::utils::Result;
 
 /// A wrapper type representing a HashMap of instances stored by Instance id.
 type Instances = HashMap<String, MessageFields>;
@@ -196,10 +196,9 @@ mod tests {
     use super::Materialiser;
 
     use crate::message::MessageValue;
-    use crate::test_utils::client::Client;
+    use crate::test_utils::mocks::client::Client;
     use crate::test_utils::fixtures::private_key;
-    use crate::test_utils::node::send_to_node;
-    use crate::test_utils::node::Node;
+    use crate::test_utils::mocks::node::{Node, send_to_node};
     use crate::test_utils::utils::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::{
         create_message, delete_message, hash, message_fields, keypair_from_private, update_message,
