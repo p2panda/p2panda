@@ -55,8 +55,7 @@
     unused_qualifications
 )]
 
-// This must be imported here at the root of the crate (not sure why tbh, something about macros...).
-#[allow(unused_imports)]
+// This must be imported here at the root of the crate in order for the fixture macros to work as expected.
 #[cfg(test)]
 use rstest_reuse;
 
