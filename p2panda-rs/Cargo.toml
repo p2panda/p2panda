@@ -15,10 +15,6 @@ readme = "README.md"
 exclude = [".gitignore"]
 categories = ["web-programming", "wasm", "cryptography"]
 
-[[bin]]
-name = "test_data"
-path = "src/test_utils/generate_test_data.rs"
-
 [package.metadata.wasm-pack.profile.release.wasm-bindgen]
 debug-js-glue = false
 demangle-name-section = true
