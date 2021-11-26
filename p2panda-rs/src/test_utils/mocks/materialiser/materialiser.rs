@@ -15,10 +15,11 @@ type Instances = HashMap<String, MessageFields>;
 /// We lose Author data during materialisation in this demo app...
 type SchemaDatabase = HashMap<String, Instances>;
 
-/// Struct which can process multiple append only logs of p2panda Entries, published by multiple Authors
-/// and which might contain conncurent updates (forks). All logs are arranged into DAGs before being topologically sorted
-/// Concurrent edits are resloved in a last-writer-wins, the order of writes being decided by alphabetically ordering
-/// Entries by their hash.
+/// Struct for materialising Instances from Operations/Messages published to append only logs by multiple authors. 
+/// If concurrent Operations were published then conflicts are resolved through building and ordering a Directed Acyclic
+/// Graph of operations arranged causally. Operations are ordered into a linear queue through topologically
+/// sorting the graph. Operations are then applied sequentially with any conflicts that occur being resolved
+/// through last-write-wins rules.  
 #[derive(Debug)]
 pub struct Materialiser {
     // The final data structure where materialised instances are stored
