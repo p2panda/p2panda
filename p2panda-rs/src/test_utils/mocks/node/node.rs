@@ -335,3 +335,177 @@ impl Node {
         materialiser.query_instance(schema, instance)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use crate::entry::{LogId, SeqNum};
+    use crate::message::MessageValue;
+    use crate::test_utils::fixtures::{
+        create_message, delete_message, hash, private_key, some_hash, update_message,
+    };
+    use crate::test_utils::mocks::client::Client;
+    use crate::test_utils::mocks::node::utils::{
+        GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
+    };
+    use crate::test_utils::mocks::node::{send_to_node, Node};
+    use crate::test_utils::utils::DEFAULT_SCHEMA_HASH;
+    use crate::test_utils::{keypair_from_private, message_fields, NextEntryArgs};
+
+    fn mock_node(panda: &Client) -> Node {
+        let mut node = Node::new();
+
+        // Publish a CREATE message
+        let instance_1 = send_to_node(
+            &mut node,
+            &panda,
+            &create_message(
+                hash(DEFAULT_SCHEMA_HASH),
+                message_fields(vec![("message", "Ohh, my first message!")]),
+            ),
+        )
+        .unwrap();
+
+        // Publish an UPDATE message
+        send_to_node(
+            &mut node,
+            &panda,
+            &update_message(
+                hash(DEFAULT_SCHEMA_HASH),
+                instance_1.clone(),
+                message_fields(vec![("message", "Which I now update.")]),
+            ),
+        )
+        .unwrap();
+
+        // Publish an DELETE message
+        send_to_node(
+            &mut node,
+            &panda,
+            &delete_message(hash(DEFAULT_SCHEMA_HASH), instance_1.clone()),
+        )
+        .unwrap();
+
+        // Publish another CREATE message
+        send_to_node(
+            &mut node,
+            &panda,
+            &create_message(
+                hash(DEFAULT_SCHEMA_HASH),
+                message_fields(vec![("message", "Let's try that again.")]),
+            ),
+        )
+        .unwrap();
+
+        node
+    }
+
+    #[rstest]
+    fn get_log_id(private_key: String) {
+        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
+        let mut node = mock_node(&panda);
+
+        let log_id = node
+            .get_log_id(&hash(DEFAULT_SCHEMA_HASH), &panda.author())
+            .unwrap();
+        let meta_schema_log_id = node
+            .get_log_id(&hash(META_SCHEMA_HASH), &panda.author())
+            .unwrap();
+        let group_schema_log_id = node
+            .get_log_id(&hash(GROUP_SCHEMA_HASH), &panda.author())
+            .unwrap();
+        let key_package_schema_log_id = node
+            .get_log_id(&hash(KEY_PACKAGE_SCHEMA_HASH), &panda.author())
+            .unwrap();
+        let permissions_schema_log_id = node
+            .get_log_id(&hash(PERMISSIONS_SCHEMA_HASH), &panda.author())
+            .unwrap();
+
+        assert_eq!(log_id, LogId::new(1));
+        assert_eq!(meta_schema_log_id, LogId::new(2));
+        assert_eq!(group_schema_log_id, LogId::new(4));
+        assert_eq!(key_package_schema_log_id, LogId::new(6));
+        assert_eq!(permissions_schema_log_id, LogId::new(8));
+    }
+
+    #[rstest]
+    fn next_entry_args(private_key: String) {
+        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
+        let mut node = mock_node(&panda);
+
+        let next_entry_args = node
+            .next_entry_args(&panda.author(), &hash(DEFAULT_SCHEMA_HASH), None)
+            .unwrap();
+
+        let expected_next_entry_args = NextEntryArgs{
+            log_id: LogId::new(1),
+            seq_num: SeqNum::new(5).unwrap(),
+            backlink: some_hash("00404c073c9584238a0659a4231b67b1e876cfa0f973eaeb04fe0165d28089b93efaaea8738925d0f49f21be11837d477b0e436466c71a1e4f1f404488a8be1d8232"),
+            skiplink: None
+        };
+
+        assert_eq!(next_entry_args.log_id, expected_next_entry_args.log_id);
+        assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
+        assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
+        assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
+    }
+
+    #[rstest]
+    fn next_entry_args_at_specific_seq_num(private_key: String) {
+        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
+        let mut node = mock_node(&panda);
+
+        let next_entry_args = node
+            .next_entry_args(
+                &panda.author(),
+                &hash(DEFAULT_SCHEMA_HASH),
+                Some(&SeqNum::new(3).unwrap()),
+            )
+            .unwrap();
+
+        let expected_next_entry_args = NextEntryArgs{
+            log_id: LogId::new(1),
+            seq_num: SeqNum::new(3).unwrap(),
+            backlink: some_hash("0040b893ff157b6c402b677b6fe071475e17ca1a0f45852eaed9e9c283b53455a86d1ca9ebafde3809d4197f4732e09f57c969c845707fb51147df8ea736da177c1a"),
+            skiplink: None
+        };
+
+        assert_eq!(next_entry_args.log_id, expected_next_entry_args.log_id);
+        assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
+        assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
+        assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
+    }
+
+    #[rstest]
+    fn query(private_key: String) {
+        let panda = Client::new(
+            "panda".to_string(),
+            keypair_from_private(private_key.clone()),
+        );
+        let node = mock_node(&panda);
+
+        // Get all entries
+        let entries = node.all_entries();
+        
+        // There should be 4 entries
+        assert_eq!(entries.len(), 4);
+
+        // Query all instances
+        let instances = node.query_all(&DEFAULT_SCHEMA_HASH.to_string()).unwrap();
+
+        // There should be one instance
+        assert_eq!(instances.len(), 1);
+
+        // Query for one instance by id
+        let instance = node
+            .query(&DEFAULT_SCHEMA_HASH.to_string(), &entries[3].hash_str())
+            .unwrap();
+
+        // Message content should be correct
+        assert_eq!(
+            instance.get("message").unwrap().to_owned(),
+            MessageValue::Text("Let's try that again.".to_string())
+        );
+    }
+}
