@@ -10,6 +10,8 @@
 //! [rstest_reuse](https://github.com/la10736/rstest/tree/master/rstest_reuse) crate.
 //!
 //! <https://github.com/la10736/rstest>
+//! 
+//! See `fixtures/tests.rs` for examples. 
 
 #[cfg(test)]
 pub mod templates;
