@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+- `SchemaBuilder` and `Schema` structs for working with CDDL definitions [78](https://github.com/p2panda/p2panda/pull/78) `rs`
+
 ## [0.2.1]
 
 Released on 2021-10-26: :package: `p2panda-js` :package: `p2panda-rs`
