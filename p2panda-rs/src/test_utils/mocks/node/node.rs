@@ -276,7 +276,7 @@ impl Node {
         // Get all logs by this author
         let author_logs = match self.get_author_logs_mut(&author) {
             Some(logs) => logs,
-            // If there aren't any, then instanciate a new log collection
+            // If there aren't any, then instantiate a new log collection
             None => {
                 self.entries.insert(author.as_str().into(), HashMap::new());
                 self.get_author_logs_mut(&author).unwrap()
@@ -307,7 +307,7 @@ impl Node {
 
     /// Get all Instances of this Schema
     pub fn query_all(&self, schema: &String) -> Result<HashMap<String, MessageFields>> {
-        // Instanciate a new materialzer instance
+        // Instantiate a new materialiser instance
         let mut materialiser = Materialiser::new();
 
         // Filter published entries against permissions published to user system log
@@ -322,7 +322,7 @@ impl Node {
 
     /// Get a specific Instance
     pub fn query(&self, schema: &String, instance: &String) -> Result<MessageFields> {
-        // Instanciate a new materialzer instance
+        // Instantiate a new materialiser instance
         let mut materialiser = Materialiser::new();
 
         // Filter published entries against permissions published to user system log
@@ -487,7 +487,7 @@ mod tests {
 
         // Get all entries
         let entries = node.all_entries();
-        
+
         // There should be 4 entries
         assert_eq!(entries.len(), 4);
 

@@ -30,18 +30,18 @@ pub const DEFAULT_HASH: &str  = "0040cf94f6d605657e90c543b0c919070cdaaf7209c5e1e
 /// The default schema hash string, used in all message fixtures when no custom schema hash is defined.
 pub const DEFAULT_SCHEMA_HASH: &str  = "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437";
 
-/// The default private key string, used for when creating authors and public keys in fixtures.
+/// The default private key string, used for creating authors and public keys in fixtures.
 pub const DEFAULT_PRIVATE_KEY: &str =
     "eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e2";
 
-/// The default seq number, used when an entry is created in a fixture and no custom values are provided.
+/// The default sequence number, used when an entry is created in a fixture and no custom values are provided.
 pub const DEFAULT_SEQ_NUM: i64 = 1;
 
-/// A helper method for easily generating a message of any type ("CREATE", "UPDATE", "DELETE").
+/// A helper method for easily generating a message of any type (`CREATE`, `UPDATE`, `DELETE`).
 ///
-/// If a value for `fields` is provided, this is a CREATE message
-/// If values for both `fields` and `instance_id` are provided, this is an UPDATE message
-/// If no value for `fields` is provided, this is a DELETE message
+/// If a value for `fields` is provided, this is a `CREATE` message.
+/// If values for both `fields` and `instance_id` are provided, this is an `UPDATE` message.
+/// If no value for `fields` is provided, this is a `DELETE` message.
 pub fn any_message(fields: Option<MessageFields>, instance_id: Option<Hash>) -> Message {
     match fields {
         // It's a CREATE message
@@ -75,27 +75,27 @@ pub fn message_fields(fields: Vec<(&str, &str)>) -> MessageFields {
     message_fields
 }
 
-/// Generate a new key pair, not based on the default private key
+/// Generate a new key pair, not based on the default private key.
 pub fn new_key_pair() -> KeyPair {
     KeyPair::new()
 }
 
-/// Generate a key pair from a private key
+/// Generate a key pair from a private key.
 pub fn keypair_from_private(private_key: String) -> KeyPair {
     KeyPair::from_private_key_str(&private_key).unwrap()
 }
 
-/// Generate a sequence number based on passed i64 value
+/// Generate a sequence number based on passed i64 value.
 pub fn seq_num(n: i64) -> SeqNum {
     SeqNum::new(n).unwrap()
 }
 
-/// Generate a hash based on a hash string
+/// Generate a hash based on a hash string.
 pub fn hash(hash_str: &str) -> Hash {
     Hash::new(hash_str).unwrap()
 }
 
-/// Generate an entry based on passed values
+/// Generate an entry based on passed values.
 pub fn entry(
     message: Message,
     skiplink: Option<Hash>,
@@ -112,17 +112,17 @@ pub fn entry(
     .unwrap()
 }
 
-/// Generate a create message based on passed schema hash and message fields
+/// Generate a create message based on passed schema hash and message fields.
 pub fn create_message(schema: Hash, fields: MessageFields) -> Message {
     Message::new_create(schema, fields).unwrap()
 }
 
-/// Generate an update message based on passed schema hash, instance id and message fields
+/// Generate an update message based on passed schema hash, instance id and message fields.
 pub fn update_message(schema: Hash, instance_id: Hash, fields: MessageFields) -> Message {
     Message::new_update(schema, instance_id, fields).unwrap()
 }
 
-/// Generate a delete message based on passed schema hash and instance id
+/// Generate a delete message based on passed schema hash and instance id.
 pub fn delete_message(schema: Hash, instance_id: Hash) -> Message {
     Message::new_delete(schema, instance_id).unwrap()
 }
