@@ -12,6 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Added
 
 - `SchemaBuilder` and `Schema` structs for working with CDDL definitions [78](https://github.com/p2panda/p2panda/pull/78) `rs`
+- `test_utils` module containing `rstest` fixtures, mock `Node` and `Client` structs, test data helper for `p2panda-js` [116](https://github.com/p2panda/p2panda/pull/116) `rs`
 
 ## [0.2.1]
 

@@ -25,6 +25,10 @@ default = []
 # Adds sql database support for atomic structs via sqlx crate
 db-sqlx = ["sqlx"]
 
+[[bin]]
+name = "json-test-data"
+path = "src/test_utils/generate_test_data.rs"
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
@@ -37,6 +41,7 @@ hex = "0.4.3"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_cbor = "0.11.2"
 serde_repr = "0.1.7"
+serde_json = "1.0.59"
 thiserror = "1.0.29"
 yamf-hash = "0.1.2"
 
@@ -55,3 +60,4 @@ wasm-bindgen = "0.2.78"
 [dev-dependencies]
 wasm-bindgen-test = "0.3.28"
 rstest = "0.11.0"
+rstest_reuse = "0.1.3"
