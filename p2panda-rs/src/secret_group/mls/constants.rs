@@ -19,4 +19,4 @@ pub const MLS_PADDING_SIZE: usize = 128;
 
 /// The lifetime extension represents the times between which clients will consider a KeyPackage
 /// valid.
-pub const MLS_LIFETIME_EXTENSION: u64 = 60;
+pub const MLS_LIFETIME_EXTENSION_DAYS: u64 = 60; // 60 days

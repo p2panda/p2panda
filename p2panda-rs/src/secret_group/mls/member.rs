@@ -9,7 +9,7 @@ use openmls_traits::key_store::OpenMlsKeyStore;
 use openmls_traits::OpenMlsCryptoProvider;
 
 use crate::identity::KeyPair;
-use crate::secret_group::mls::{MlsError, MLS_CIPHERSUITE_NAME, MLS_LIFETIME_EXTENSION};
+use crate::secret_group::mls::{MlsError, MLS_CIPHERSUITE_NAME, MLS_LIFETIME_EXTENSION_DAYS};
 
 /// Wrapper around the MLS CredentialBundle of `openmls`.
 #[derive(Debug, Clone)]
@@ -81,7 +81,7 @@ impl MlsMember {
         // The lifetime extension represents the times between which clients will consider a
         // KeyPackage valid. Its use is mandatory in the MLS specification
         let lifetime_extension =
-            Extension::LifeTime(LifetimeExtension::new(MLS_LIFETIME_EXTENSION));
+            Extension::LifeTime(LifetimeExtension::new(MLS_LIFETIME_EXTENSION_DAYS));
 
         // KeyPackageBundles contain KeyPackage with the corresponding private HPKE (Hybrid Public
         // Key Encryption) key.
