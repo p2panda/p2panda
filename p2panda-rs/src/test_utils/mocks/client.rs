@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Mock p2panda client.
-//! 
-//! This client mocks functionality which would be implemented in a real world p2panda client. 
-//! It does so in a simplistic manner and should only be used in a testing or demo 
+//!
+//! This client mocks functionality which would be implemented in a real world p2panda client.
+//! It does so in a simplistic manner and should only be used in a testing or demo
 //! environment.
-//! 
+//!
 //! ## Example
 //! ```
 //! # extern crate p2panda_rs;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use p2panda_rs::test_utils::mocks::client::Client;
 //! use p2panda_rs::test_utils::mocks::node::{send_to_node, Node};
-//! use p2panda_rs::test_utils::{create_message, hash, message_fields, 
+//! use p2panda_rs::test_utils::{create_message, hash, message_fields,
 //!     new_key_pair, update_message, DEFAULT_SCHEMA_HASH
 //! };
 //! # const CHAT_SCHEMA_HASH: &str = DEFAULT_SCHEMA_HASH;
@@ -22,24 +22,23 @@
 //!
 //! // Instantiate one client named "panda"
 //! let panda = Client::new("panda".to_string(), new_key_pair());
-//! 
+//!
 //! // Create a new message to publish
 //! let message = create_message(
 //!     hash(DEFAULT_SCHEMA_HASH),
 //!     message_fields(vec![("message", "Ohh, my first message!")]),
 //! );
-//! 
+//!
 //! // Retrieve the next entry args from the node
 //! let entry_args = node.next_entry_args(&panda.author(), message.schema(), None)?;
-//! 
+//!
 //! // Sign and encode an entry
 //! let entry_encoded = panda.signed_encoded_entry(message.to_owned(), entry_args);
 //! node.publish_entry(&entry_encoded, &message)?;
-//! 
+//!
 //! # Ok(())
 //! # }
 //! ```
-
 
 use crate::entry::{sign_and_encode, Entry, EntrySigned};
 use crate::identity::{Author, KeyPair};
