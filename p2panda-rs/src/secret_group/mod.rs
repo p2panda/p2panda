@@ -45,7 +45,6 @@
 //! # Ok(())
 //! # }
 //! ```
-mod aes;
 mod codec;
 mod commit;
 mod error;

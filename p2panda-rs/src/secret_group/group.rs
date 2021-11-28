@@ -8,24 +8,30 @@ use tls_codec::{Deserialize, Serialize, TlsVecU32};
 
 use crate::hash::Hash;
 use crate::secret_group::lts::{
-    LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch, LTS_EXPORTER_LABEL,
-    LTS_EXPORTER_LENGTH, LTS_NONCE_EXPORTER_LABEL, LTS_NONCE_EXPORTER_LENGTH,
+    LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch, LongTermSecretNonce,
+    LTS_CIPHERSUITE, LTS_EXPORTER_LABEL, LTS_NONCE_EXPORTER_LABEL,
 };
 use crate::secret_group::mls::MlsGroup;
 use crate::secret_group::{
     SecretGroupCommit, SecretGroupError, SecretGroupMember, SecretGroupMessage,
 };
 
-use super::lts::LongTermSecretNonce;
-
 type LongTermSecretVec = TlsVecU32<LongTermSecret>;
 
 /// Create or join secret groups, maintain their state and en- / decrypt user messages.
 #[derive(Debug)]
 pub struct SecretGroup {
-    mls_group: MlsGroup,
-    long_term_secrets: LongTermSecretVec,
+    /// Used ciphersuite when generating new long term secrets
+    long_term_ciphersuite: LongTermSecretCiphersuite,
+
+    /// Internal counter for AEAD nonce.
     long_term_nonce: LongTermSecretNonce,
+
+    /// Stored long term secrets (AEAD keys).
+    long_term_secrets: LongTermSecretVec,
+
+    /// Messaging Layer Security (MLS) group.
+    mls_group: MlsGroup,
 }
 
 impl SecretGroup {
@@ -53,9 +59,11 @@ impl SecretGroup {
         let mls_group = MlsGroup::new(provider, group_id, init_key_package)?;
 
         let mut group = Self {
-            mls_group,
-            long_term_secrets: Vec::new().into(),
+            // Hard code long term secret ciphersuite for now since there is only one option
+            long_term_ciphersuite: LTS_CIPHERSUITE,
             long_term_nonce: LongTermSecretNonce::default(),
+            long_term_secrets: Vec::new().into(),
+            mls_group,
         };
 
         // Generate first long term secret and store it in secret group
@@ -78,9 +86,10 @@ impl SecretGroup {
         )?;
 
         let mut group = Self {
-            mls_group,
-            long_term_secrets: Vec::new().into(),
+            long_term_ciphersuite: LTS_CIPHERSUITE,
             long_term_nonce: LongTermSecretNonce::default(),
+            long_term_secrets: Vec::new().into(),
+            mls_group,
         };
 
         // Decode long term secrets with current group state
@@ -244,10 +253,13 @@ impl SecretGroup {
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
     ) -> Result<(), SecretGroupError> {
+        // Determine length of AEAD key.
+        let key_length = self.long_term_ciphersuite.mls_aead_type().key_size();
+
         // Generate secret key by using the MLS exporter method
-        let value =
-            self.mls_group
-                .export_secret(provider, LTS_EXPORTER_LABEL, LTS_EXPORTER_LENGTH)?;
+        let value = self
+            .mls_group
+            .export_secret(provider, LTS_EXPORTER_LABEL, key_length)?;
 
         // Determine the epoch of the new secret
         let long_term_epoch = match self.long_term_epoch() {
@@ -261,7 +273,7 @@ impl SecretGroup {
         // Store secret in internal storage
         self.long_term_secrets.push(LongTermSecret::new(
             self.group_instance_id().clone(),
-            LongTermSecretCiphersuite::PANDA_AES256GCM,
+            self.long_term_ciphersuite,
             long_term_epoch,
             value.into(),
         ));
@@ -303,10 +315,13 @@ impl SecretGroup {
             self.long_term_nonce.increment(),
         );
 
+        // Determine length of AEAD nonce.
+        let nonce_length = self.long_term_ciphersuite.mls_aead_type().nonce_size();
+
         // Retreive nonce from MLS exporter
         let nonce = self
             .mls_group
-            .export_secret(provider, label, LTS_NONCE_EXPORTER_LENGTH)?;
+            .export_secret(provider, label, nonce_length)?;
 
         Ok(nonce)
     }
@@ -362,7 +377,7 @@ impl SecretGroup {
         let secret = self.long_term_secret(epoch).unwrap();
 
         // Encrypt user data with last long term secret
-        let ciphertext = secret.encrypt(&nonce, data)?;
+        let ciphertext = secret.encrypt(provider, &nonce, data)?;
 
         Ok(SecretGroupMessage::LongTermSecretMessage(ciphertext))
     }
@@ -385,7 +400,7 @@ impl SecretGroup {
                 let secret = self
                     .long_term_secret(ciphertext.long_term_epoch())
                     .ok_or_else(|| SecretGroupError::LTSSecretMissing)?;
-                Ok(secret.decrypt(ciphertext)?)
+                Ok(secret.decrypt(provider, ciphertext)?)
             }
         }
     }

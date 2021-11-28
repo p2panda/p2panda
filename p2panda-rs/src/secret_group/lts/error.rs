@@ -14,11 +14,11 @@ pub enum LongTermSecretError {
     #[error("secret group id does not match ciphertext")]
     GroupNotMatching,
 
-    /// Internal AES En- & Decryption error.
-    #[error(transparent)]
-    AESError(#[from] crate::secret_group::aes::AesError),
-
     /// Internal hashing error.
     #[error(transparent)]
     HashError(#[from] crate::hash::HashError),
+
+    /// Internal AEAD En- & Decryption error.
+    #[error(transparent)]
+    CryptoError(#[from] openmls_traits::types::CryptoError),
 }

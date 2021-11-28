@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use openmls::group::GroupId;
+use openmls_traits::crypto::OpenMlsCrypto;
+use openmls_traits::OpenMlsCryptoProvider;
 use tls_codec::{Size, TlsByteVecU8, TlsDeserialize, TlsSerialize, TlsSize};
 
 use crate::hash::Hash;
-use crate::secret_group::aes;
 use crate::secret_group::lts::{
     LongTermSecretCiphersuite, LongTermSecretCiphertext, LongTermSecretEpoch, LongTermSecretError,
 };
@@ -65,20 +66,24 @@ impl LongTermSecret {
     /// encrypted data and needed meta information like the nonce to decrypt it again.
     pub fn encrypt(
         &self,
+        provider: &impl OpenMlsCryptoProvider,
         nonce: &[u8],
         data: &[u8],
     ) -> Result<LongTermSecretCiphertext, LongTermSecretError> {
-        // Decrypts data with secret key and receives ciphertext and used nonce
-        let ciphertext = match self.ciphersuite {
-            LongTermSecretCiphersuite::PANDA_AES256GCM => {
-                aes::encrypt(self.value.as_slice(), nonce, data)?
-            }
-        };
+        // Decrypts data with secret key and receive ciphertext plus AAD tag
+        let ciphertext_tag = provider.crypto().aead_encrypt(
+            self.ciphersuite.mls_aead_type(),
+            self.value.as_slice(),
+            data,
+            nonce,
+            // Use group id as AAD
+            self.group_id.as_slice(),
+        )?;
 
         Ok(LongTermSecretCiphertext::new(
             self.group_instance_id()?,
             self.long_term_epoch(),
-            ciphertext,
+            ciphertext_tag,
             nonce.to_vec(),
         ))
     }
@@ -86,6 +91,7 @@ impl LongTermSecret {
     /// Decrypts a `LongTermSecretCiphertext` object with encrypted user data.
     pub fn decrypt(
         &self,
+        provider: &impl OpenMlsCryptoProvider,
         ciphertext: &LongTermSecretCiphertext,
     ) -> Result<Vec<u8>, LongTermSecretError> {
         // The used secret does not match the ciphertexts epoch
@@ -98,15 +104,19 @@ impl LongTermSecret {
             return Err(LongTermSecretError::GroupNotMatching);
         }
 
-        let plaintext = match self.ciphersuite {
-            LongTermSecretCiphersuite::PANDA_AES256GCM => aes::decrypt(
-                self.value.as_slice(),
-                &ciphertext.nonce(),
-                &ciphertext.ciphertext(),
-            )?,
-        };
+        // Decrypt ciphertext with tag and check AAD
+        // @TODO: This is currently broken upstream
+        // See: https://github.com/openmls/openmls/pull/587
+        let payload = provider.crypto().aead_decrypt(
+            self.ciphersuite.mls_aead_type(),
+            self.value.as_slice(),
+            &ciphertext.ciphertext_with_tag(),
+            &ciphertext.nonce(),
+            // Use group id as AAD
+            self.group_id.as_slice(),
+        )?;
 
-        Ok(plaintext)
+        Ok(payload)
     }
 }
 
@@ -114,10 +124,9 @@ impl LongTermSecret {
 mod tests {
     use crate::hash::Hash;
     use crate::secret_group::lts::{
-        LongTermSecretCiphersuite, LongTermSecretEpoch, LongTermSecretError,
+        LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch, LongTermSecretError,
     };
-
-    use super::LongTermSecret;
+    use crate::secret_group::MlsProvider;
 
     #[test]
     fn group_id_hash_encoding() {
@@ -125,7 +134,7 @@ mod tests {
 
         let secret = LongTermSecret::new(
             group_instance_id.clone(),
-            LongTermSecretCiphersuite::PANDA_AES256GCM,
+            LongTermSecretCiphersuite::PANDA10_AES256GCM,
             LongTermSecretEpoch(0),
             vec![1, 2, 3].into(),
         );
@@ -139,7 +148,9 @@ mod tests {
 
     #[test]
     fn invalid_ciphertext() {
-        let ciphersuite = LongTermSecretCiphersuite::PANDA_AES256GCM;
+        let provider = MlsProvider::new();
+        let ciphersuite = LongTermSecretCiphersuite::PANDA10_AES256GCM;
+
         let random_key =
             hex::decode("fb5abbe6c223ab21fa92ba20aff944cd392af764b2df483d6d77cbdb719b76da")
                 .unwrap()
@@ -170,15 +181,17 @@ mod tests {
         );
 
         let nonce = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-        let ciphertext = secret.encrypt(&nonce, b"Secret Message").unwrap();
-        assert!(secret.decrypt(&ciphertext).is_ok());
+        let ciphertext = secret
+            .encrypt(&provider, &nonce, b"Secret Message")
+            .unwrap();
+        assert!(secret.decrypt(&provider, &ciphertext).is_ok());
 
         assert!(matches!(
-            secret_different_epoch.decrypt(&ciphertext),
+            secret_different_epoch.decrypt(&provider, &ciphertext),
             Err(LongTermSecretError::EpochNotMatching)
         ));
         assert!(matches!(
-            secret_different_group.decrypt(&ciphertext),
+            secret_different_group.decrypt(&provider, &ciphertext),
             Err(LongTermSecretError::GroupNotMatching)
         ));
     }

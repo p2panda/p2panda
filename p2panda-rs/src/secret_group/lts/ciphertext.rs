@@ -19,8 +19,8 @@ pub struct LongTermSecretCiphertext {
     /// Used nonce during AES encryption.
     nonce: TlsByteVecU8,
 
-    /// Encrypted user data.
-    ciphertext: TlsByteVecU8,
+    /// Encrypted user data (ciphertext) + AEAD tag (HMAC).
+    ciphertext_tag: TlsByteVecU8,
 }
 
 impl LongTermSecretCiphertext {
@@ -37,7 +37,7 @@ impl LongTermSecretCiphertext {
             group_id: GroupId::from_slice(&group_instance_id.to_bytes()),
             long_term_epoch,
             nonce: nonce.into(),
-            ciphertext: ciphertext.into(),
+            ciphertext_tag: ciphertext.into(),
         }
     }
 
@@ -58,8 +58,8 @@ impl LongTermSecretCiphertext {
         self.nonce.as_slice().to_vec()
     }
 
-    /// Returns encrypted user data.
-    pub fn ciphertext(&self) -> Vec<u8> {
-        self.ciphertext.as_slice().to_vec()
+    /// Returns encrypted user data + AAD tag.
+    pub fn ciphertext_with_tag(&self) -> Vec<u8> {
+        self.ciphertext_tag.as_slice().to_vec()
     }
 }
