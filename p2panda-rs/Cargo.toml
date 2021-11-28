@@ -33,7 +33,7 @@ path = "src/test_utils/generate_test_data.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-aes-gcm-siv = "0.10.3"
+aes-gcm = "0.9.4"
 arrayvec = "0.5.2"
 bamboo-rs-core = "0.1.0"
 cddl = "0.8.7"

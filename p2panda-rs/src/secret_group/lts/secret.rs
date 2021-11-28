@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use openmls::group::GroupId;
-use openmls_traits::OpenMlsCryptoProvider;
 use tls_codec::{Size, TlsByteVecU8, TlsDeserialize, TlsSerialize, TlsSize};
 
 use crate::hash::Hash;
@@ -66,13 +65,13 @@ impl LongTermSecret {
     /// encrypted data and needed meta information like the nonce to decrypt it again.
     pub fn encrypt(
         &self,
-        provider: &impl OpenMlsCryptoProvider,
+        nonce: &[u8],
         data: &[u8],
     ) -> Result<LongTermSecretCiphertext, LongTermSecretError> {
         // Decrypts data with secret key and receives ciphertext and used nonce
-        let (ciphertext, nonce) = match self.ciphersuite {
-            LongTermSecretCiphersuite::PANDA_AES256GCMSIV => {
-                aes::encrypt(provider, self.value.as_slice(), data)?
+        let ciphertext = match self.ciphersuite {
+            LongTermSecretCiphersuite::PANDA_AES256GCM => {
+                aes::encrypt(self.value.as_slice(), nonce, data)?
             }
         };
 
@@ -80,7 +79,7 @@ impl LongTermSecret {
             self.group_instance_id()?,
             self.long_term_epoch(),
             ciphertext,
-            nonce,
+            nonce.to_vec(),
         ))
     }
 
@@ -100,7 +99,7 @@ impl LongTermSecret {
         }
 
         let plaintext = match self.ciphersuite {
-            LongTermSecretCiphersuite::PANDA_AES256GCMSIV => aes::decrypt(
+            LongTermSecretCiphersuite::PANDA_AES256GCM => aes::decrypt(
                 self.value.as_slice(),
                 &ciphertext.nonce(),
                 &ciphertext.ciphertext(),
@@ -117,7 +116,6 @@ mod tests {
     use crate::secret_group::lts::{
         LongTermSecretCiphersuite, LongTermSecretEpoch, LongTermSecretError,
     };
-    use crate::secret_group::MlsProvider;
 
     use super::LongTermSecret;
 
@@ -127,7 +125,7 @@ mod tests {
 
         let secret = LongTermSecret::new(
             group_instance_id.clone(),
-            LongTermSecretCiphersuite::PANDA_AES256GCMSIV,
+            LongTermSecretCiphersuite::PANDA_AES256GCM,
             LongTermSecretEpoch(0),
             vec![1, 2, 3].into(),
         );
@@ -141,8 +139,7 @@ mod tests {
 
     #[test]
     fn invalid_ciphertext() {
-        let provider = MlsProvider::new();
-        let ciphersuite = LongTermSecretCiphersuite::PANDA_AES256GCMSIV;
+        let ciphersuite = LongTermSecretCiphersuite::PANDA_AES256GCM;
         let random_key =
             hex::decode("fb5abbe6c223ab21fa92ba20aff944cd392af764b2df483d6d77cbdb719b76da")
                 .unwrap()
@@ -172,7 +169,8 @@ mod tests {
             random_key.into(),
         );
 
-        let ciphertext = secret.encrypt(&provider, b"Secret Message").unwrap();
+        let nonce = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        let ciphertext = secret.encrypt(&nonce, b"Secret Message").unwrap();
         assert!(secret.decrypt(&ciphertext).is_ok());
 
         assert!(matches!(

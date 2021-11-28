@@ -109,8 +109,6 @@ mod tests {
 
     #[test]
     fn secret_and_message() {
-        let provider = MlsProvider::new();
-
         let random_key =
             hex::decode("fb5abbe6c223ab21fa92ba20aff944cd392af764b2df483d6d77cbdb719b76da")
                 .unwrap();
@@ -118,13 +116,14 @@ mod tests {
         // Create long term secret
         let secret = LongTermSecret::new(
             Hash::new_from_bytes(vec![1, 2, 3]).unwrap(),
-            LongTermSecretCiphersuite::PANDA_AES256GCMSIV,
+            LongTermSecretCiphersuite::PANDA_AES256GCM,
             LongTermSecretEpoch::default(),
             random_key.into(),
         );
 
         // Encrypt message with secret and wrap it inside `SecretGroupMessage`
-        let ciphertext = secret.encrypt(&provider, b"Secret message").unwrap();
+        let nonce = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        let ciphertext = secret.encrypt(&nonce, b"Secret message").unwrap();
         let message = SecretGroupMessage::LongTermSecretMessage(ciphertext);
 
         // Encode and decode secret
@@ -150,7 +149,7 @@ mod tests {
 
     #[test]
     fn ciphersuite() {
-        let ciphersuite = LongTermSecretCiphersuite::PANDA_AES256GCMSIV;
+        let ciphersuite = LongTermSecretCiphersuite::PANDA_AES256GCM;
 
         // Encode and decode ciphersuite
         let encoded = ciphersuite.tls_serialize_detached().unwrap();

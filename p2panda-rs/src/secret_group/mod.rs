@@ -4,7 +4,7 @@
 //!
 //! p2panda uses the [MLS] (Messaging Layer Security) protocol for group key negotiation to
 //! establish secrets in a large group of users for "Sender Ratchet Secrets" (DHKEMX25519 +
-//! AES128-GCM) or "Long Term Secrets" (AES256-GCM-SIV). Both settings give confidentiality,
+//! AES128-GCM) or "Long Term Secrets" (AES256-GCM). Both settings give confidentiality,
 //! authenticity and post-compromise security, while the sender ratchet scheme also gives forward
 //! secrecy.
 //!

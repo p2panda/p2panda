@@ -2,7 +2,7 @@
 
 use openmls::framing::{MlsCiphertext, MlsMessageIn, MlsMessageOut};
 use openmls::group::{GroupEvent, GroupId, ManagedGroup, ManagedGroupConfig};
-use openmls::prelude::{KeyPackage, Welcome, WireFormat};
+use openmls::prelude::{Credential, KeyPackage, Welcome, WireFormat};
 use openmls_traits::OpenMlsCryptoProvider;
 
 use crate::secret_group::mls::{MlsError, MLS_PADDING_SIZE};
@@ -167,6 +167,11 @@ impl MlsGroup {
     /// Returns the group id.
     pub fn group_id(&self) -> &GroupId {
         self.0.group_id()
+    }
+
+    /// Returns the own `Credential` in this group or an Error when member was already removed.
+    pub fn credential(&self) -> Result<Credential, MlsError> {
+        Ok(self.0.credential()?)
     }
 
     /// Returns true if the group is still active for this member (maybe it has been removed or

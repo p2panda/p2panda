@@ -9,12 +9,14 @@ use tls_codec::{Deserialize, Serialize, TlsVecU32};
 use crate::hash::Hash;
 use crate::secret_group::lts::{
     LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch, LTS_EXPORTER_LABEL,
-    LTS_EXPORTER_LENGTH,
+    LTS_EXPORTER_LENGTH, LTS_NONCE_EXPORTER_LABEL, LTS_NONCE_EXPORTER_LENGTH,
 };
 use crate::secret_group::mls::MlsGroup;
 use crate::secret_group::{
     SecretGroupCommit, SecretGroupError, SecretGroupMember, SecretGroupMessage,
 };
+
+use super::lts::LongTermSecretNonce;
 
 type LongTermSecretVec = TlsVecU32<LongTermSecret>;
 
@@ -23,6 +25,7 @@ type LongTermSecretVec = TlsVecU32<LongTermSecret>;
 pub struct SecretGroup {
     mls_group: MlsGroup,
     long_term_secrets: LongTermSecretVec,
+    long_term_nonce: LongTermSecretNonce,
 }
 
 impl SecretGroup {
@@ -52,6 +55,7 @@ impl SecretGroup {
         let mut group = Self {
             mls_group,
             long_term_secrets: Vec::new().into(),
+            long_term_nonce: LongTermSecretNonce::default(),
         };
 
         // Generate first long term secret and store it in secret group
@@ -76,6 +80,7 @@ impl SecretGroup {
         let mut group = Self {
             mls_group,
             long_term_secrets: Vec::new().into(),
+            long_term_nonce: LongTermSecretNonce::default(),
         };
 
         // Decode long term secrets with current group state
@@ -250,13 +255,13 @@ impl SecretGroup {
                 epoch.increment();
                 epoch
             }
-            None => LongTermSecretEpoch(0),
+            None => LongTermSecretEpoch::default(),
         };
 
         // Store secret in internal storage
         self.long_term_secrets.push(LongTermSecret::new(
             self.group_instance_id().clone(),
-            LongTermSecretCiphersuite::PANDA_AES256GCMSIV,
+            LongTermSecretCiphersuite::PANDA_AES256GCM,
             long_term_epoch,
             value.into(),
         ));
@@ -281,6 +286,29 @@ impl SecretGroup {
 
         // Encrypt encoded secrets
         Ok(self.encrypt(provider, &encoded_secrets)?)
+    }
+
+    // Generates unique nonce which can be used for AEAD.
+    fn generate_nonce(
+        &mut self,
+        provider: &impl OpenMlsCryptoProvider,
+    ) -> Result<Vec<u8>, SecretGroupError> {
+        let public_key_str = hex::encode(self.mls_group.credential()?.identity());
+
+        // Use constant value, public key and incrementing integer as exporter label
+        let label = &format!(
+            "{}{}{}",
+            LTS_NONCE_EXPORTER_LABEL,
+            &public_key_str,
+            self.long_term_nonce.increment(),
+        );
+
+        // Retreive nonce from MLS exporter
+        let nonce = self
+            .mls_group
+            .export_secret(provider, label, LTS_NONCE_EXPORTER_LENGTH)?;
+
+        Ok(nonce)
     }
 
     // Decrypts and decodes a list of long term secrets received via a commit message or when
@@ -322,16 +350,19 @@ impl SecretGroup {
     /// guarantees but gives more flexibility. Use this encryption method if you want every old or
     /// new group member to decrypt past data even when they've joined the group later.
     pub fn encrypt_with_long_term_secret(
-        &self,
+        &mut self,
         provider: &impl OpenMlsCryptoProvider,
         data: &[u8],
     ) -> Result<SecretGroupMessage, SecretGroupError> {
+        // Generate unique nonce for AES encryption
+        let nonce = self.generate_nonce(provider)?;
+
         // Unwrap here since at this stage we already have at least one LTS epoch
         let epoch = self.long_term_epoch().unwrap();
         let secret = self.long_term_secret(epoch).unwrap();
 
         // Encrypt user data with last long term secret
-        let ciphertext = secret.encrypt(provider, data)?;
+        let ciphertext = secret.encrypt(&nonce, data)?;
 
         Ok(SecretGroupMessage::LongTermSecretMessage(ciphertext))
     }
@@ -389,7 +420,7 @@ mod tests {
     use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::secret_group::lts::LongTermSecretEpoch;
-    use crate::secret_group::{MlsProvider, SecretGroupMember};
+    use crate::secret_group::{MlsProvider, SecretGroupMember, SecretGroupMessage};
 
     use super::SecretGroup;
 
@@ -407,5 +438,41 @@ mod tests {
         assert_eq!(group.long_term_epoch(), Some(LongTermSecretEpoch(1)));
         group.rotate_long_term_secret(&provider).unwrap();
         assert_eq!(group.long_term_epoch(), Some(LongTermSecretEpoch(2)));
+    }
+
+    #[test]
+    fn unique_exporter_nonce() {
+        // Helper method to get nonce from SecretGroupMessage
+        fn nonce(message: SecretGroupMessage) -> Vec<u8> {
+            match message {
+                SecretGroupMessage::LongTermSecretMessage(lts) => lts.nonce(),
+                _ => panic!(),
+            }
+        }
+
+        let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let key_pair = KeyPair::new();
+        let provider = MlsProvider::new();
+        let member = SecretGroupMember::new(&provider, &key_pair).unwrap();
+        let mut group = SecretGroup::new(&provider, &group_instance_id, &member).unwrap();
+
+        let key_pair_2 = KeyPair::new();
+        let member_2 = SecretGroupMember::new(&provider, &key_pair_2).unwrap();
+        let key_package = member_2.key_package(&provider).unwrap();
+        let commit = group.add_members(&provider, &[key_package]).unwrap();
+        let mut group_2 = SecretGroup::new_from_welcome(&provider, &commit).unwrap();
+
+        // Used nonces for LTS encryption should be unique for each message
+        let ciphertext_1 = group
+            .encrypt_with_long_term_secret(&provider, b"Secret")
+            .unwrap();
+        let ciphertext_2 = group
+            .encrypt_with_long_term_secret(&provider, b"Secret")
+            .unwrap();
+        let ciphertext_3 = group_2
+            .encrypt_with_long_term_secret(&provider, b"Secret")
+            .unwrap();
+        assert_ne!(nonce(ciphertext_1), nonce(ciphertext_2.clone()));
+        assert_ne!(nonce(ciphertext_3), nonce(ciphertext_2));
     }
 }

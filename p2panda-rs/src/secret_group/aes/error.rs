@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-/// Custom error types for AES256-GCM-SIV methods.
+/// Custom error types for AES256-GCM methods.
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum AesError {
@@ -11,10 +11,10 @@ pub enum AesError {
     NonceGenerationFailed,
 
     /// AES encryption failed (invalid key).
-    #[error("AES-GCM-SIV encryption failed")]
+    #[error("AES-GCM encryption failed")]
     EncryptionFailed,
 
     /// AES decryption failed (combination of key, nonce and ciphertext is not correct).
-    #[error("AES-GCM-SIV decryption failed")]
+    #[error("AES-GCM decryption failed")]
     DecryptionFailed,
 }
