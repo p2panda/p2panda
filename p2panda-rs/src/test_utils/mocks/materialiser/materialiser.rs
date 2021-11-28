@@ -15,7 +15,7 @@ type Instances = HashMap<String, MessageFields>;
 /// We lose Author data during materialisation in this demo app...
 type SchemaDatabase = HashMap<String, Instances>;
 
-/// Struct for materialising Instances from Operations/Messages published to append only logs by multiple authors. 
+/// Struct for materialising Instances from Operations/Messages published to append only logs by multiple authors.
 /// If concurrent Operations were published then conflicts are resolved through building and ordering a Directed Acyclic
 /// Graph of operations arranged causally. Operations are ordered into a linear queue through topologically
 /// sorting the graph. Operations are then applied sequentially with any conflicts that occur being resolved
@@ -197,12 +197,12 @@ mod tests {
     use super::Materialiser;
 
     use crate::message::MessageValue;
-    use crate::test_utils::mocks::client::Client;
     use crate::test_utils::fixtures::private_key;
-    use crate::test_utils::mocks::node::{Node, send_to_node};
+    use crate::test_utils::mocks::client::Client;
+    use crate::test_utils::mocks::node::{send_to_node, Node};
     use crate::test_utils::utils::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::{
-        create_message, delete_message, hash, message_fields, keypair_from_private, update_message,
+        create_message, delete_message, hash, keypair_from_private, message_fields, update_message,
     };
 
     fn mock_node(panda: Client) -> Node {
@@ -383,17 +383,16 @@ mod tests {
         materialiser.materialise(&entries).unwrap();
 
         // Fetch all instances
-        let instances = materialiser.query_all(&DEFAULT_SCHEMA_HASH.to_string()).unwrap();
+        let instances = materialiser
+            .query_all(&DEFAULT_SCHEMA_HASH.to_string())
+            .unwrap();
 
         // There should be one instance
         assert_eq!(instances.len(), 1);
 
         // Query for one instance by id
         let instance = materialiser
-            .query_instance(
-                &DEFAULT_SCHEMA_HASH.to_string(),
-                &entries[3].hash_str(),
-            )
+            .query_instance(&DEFAULT_SCHEMA_HASH.to_string(), &entries[3].hash_str())
             .unwrap();
 
         assert_eq!(
