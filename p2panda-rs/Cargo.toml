@@ -36,6 +36,7 @@ crate-type = ["cdylib", "rlib"]
 arrayvec = "0.5.2"
 bamboo-rs-core = "0.1.0"
 cddl = "0.8.7"
+ed25519 = "1.3.0"
 ed25519-dalek = "1.0.1"
 hex = "0.4.3"
 serde = { version = "1.0.130", features = ["derive"] }
@@ -43,31 +44,31 @@ serde_cbor = "0.11.2"
 serde_repr = "0.1.7"
 serde_json = "1.0.59"
 thiserror = "1.0.29"
-tls_codec = "0.1.4"
+tls_codec = { version = "0.2.0-pre.2", features = ["derive", "serde_serialize"] }
 yamf-hash = "0.1.2"
 
 # Optional dependencies (behind feature flags)
 sqlx = { version = "0.5.9", features = ["runtime-async-std-rustls", "all-databases"], optional = true }
 
-# @TODO: Use `openmls` crate as soon as changes got merged into `main` and
-# updates got released in version `0.4.0`.
+# @TODO: Use `openmls` crate as soon as changes got merged into `main` in
+# upstream and released as version `0.4.0`.
 # See: https://github.com/openmls/openmls/milestone/3
 [dependencies.openmls]
-git = "https://github.com/openmls/openmls"
-rev = "ca74bde"
+git = "https://github.com/adzialocha/openmls"
+branch = "p2panda"
 
 [dependencies.rust_crypto]
-git = "https://github.com/openmls/openmls"
-rev = "ca74bde"
+git = "https://github.com/adzialocha/openmls"
+branch = "p2panda"
 
 [dependencies.openmls_traits]
-git = "https://github.com/openmls/openmls"
-rev = "ca74bde"
+git = "https://github.com/adzialocha/openmls"
+branch = "p2panda"
 
 # @TODO: Will be removed as soon as we have our own key store provider
 [dependencies.memory_keystore]
-git = "https://github.com/openmls/openmls"
-rev = "ca74bde"
+git = "https://github.com/adzialocha/openmls"
+branch = "p2panda"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rand = "0.7.3"

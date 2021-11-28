@@ -4,7 +4,7 @@ use openmls::framing::{
     MlsMessageIn, MlsMessageOut, MlsPlaintextContentType, VerifiableMlsPlaintext,
 };
 use openmls::messages::Welcome;
-use tls_codec::{Size, TlsDeserialize, TlsSerialize, TlsSize};
+use tls_codec::{TlsDeserialize, TlsSerialize, TlsSize};
 
 use crate::secret_group::{SecretGroupError, SecretGroupMessage};
 
