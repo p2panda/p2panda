@@ -62,6 +62,12 @@ impl LongTermSecret {
         self.long_term_epoch
     }
 
+    /// Returns the inner AEAD key value for testing.
+    #[cfg(test)]
+    pub(crate) fn value(&self) -> Vec<u8> {
+        self.value.as_slice().to_vec()
+    }
+
     /// Encrypts user data with the given secret and returns a ciphertext object holding the
     /// encrypted data and needed meta information like the nonce to decrypt it again.
     pub fn encrypt(

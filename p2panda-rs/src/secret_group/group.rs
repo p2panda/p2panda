@@ -114,6 +114,8 @@ impl SecretGroup {
     /// This method returns a `SecretGroupCommit` message which needs to be broadcasted in the
     /// network to then be downloaded and processed by all old and new group members to sync group
     /// state.
+    ///
+    /// Note: Only group owners can maintain group members.
     pub fn add_members(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
@@ -143,6 +145,8 @@ impl SecretGroup {
     ///
     /// This method returns a `SecretGroupCommit` message which needs to be broadcasted in the
     /// network to then be downloaded and processed by all other group members to sync group state.
+    ///
+    /// Note: Only group owners can maintain group members.
     pub fn remove_members(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
@@ -263,7 +267,7 @@ impl SecretGroup {
     /// new secret from now on. Old long term secrets are kept and can  still be used to decrypt
     /// data from former epochs.
     ///
-    /// Warning: Only group owners can rotate long term secrets.
+    /// Note: Only group owners can rotate long term secrets.
     pub fn rotate_long_term_secret(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
@@ -275,11 +279,6 @@ impl SecretGroup {
         // Determine length of AEAD key.
         let key_length = self.long_term_ciphersuite.aead_key_length();
 
-        // Generate secret key by using the MLS exporter method
-        let value = self
-            .mls_group
-            .export_secret(provider, LTS_EXPORTER_LABEL, key_length)?;
-
         // Determine the epoch of the new secret
         let long_term_epoch = match self.long_term_epoch() {
             Some(mut epoch) => {
@@ -288,6 +287,12 @@ impl SecretGroup {
             }
             None => LongTermSecretEpoch::default(),
         };
+
+        // Use constant value and incrementing epoch as exporter label
+        let label = &format!("{}{}", LTS_EXPORTER_LABEL, long_term_epoch.0);
+
+        // Generate secret key by using the MLS exporter method
+        let value = self.mls_group.export_secret(provider, label, key_length)?;
 
         // Store secret in internal storage
         self.long_term_secrets.push(LongTermSecret::new(
@@ -480,7 +485,7 @@ mod tests {
     }
 
     #[test]
-    fn unique_exporter_nonce() {
+    fn unique_exporters() {
         // Helper method to get nonce from SecretGroupMessage
         fn nonce(message: SecretGroupMessage) -> Vec<u8> {
             match message {
@@ -501,7 +506,7 @@ mod tests {
         let commit = group.add_members(&provider, &[key_package]).unwrap();
         let mut group_2 = SecretGroup::new_from_welcome(&provider, &commit).unwrap();
 
-        // Used nonces for LTS encryption should be unique for each message
+        // Used nonces for AEAD should be unique for each message
         let ciphertext_1 = group
             .encrypt_with_long_term_secret(&provider, b"Secret")
             .unwrap();
@@ -513,6 +518,14 @@ mod tests {
             .unwrap();
         assert_ne!(nonce(ciphertext_1), nonce(ciphertext_2.clone()));
         assert_ne!(nonce(ciphertext_3), nonce(ciphertext_2));
+
+        // Used keys for AEAD should be unique for each lts rotation
+        group.rotate_long_term_secret(&provider).unwrap();
+        group.rotate_long_term_secret(&provider).unwrap();
+        let secret_1 = group.long_term_secret(LongTermSecretEpoch(1)).unwrap();
+        let secret_2 = group.long_term_secret(LongTermSecretEpoch(2)).unwrap();
+        assert_ne!(secret_1, secret_2);
+        assert_ne!(secret_1.value(), secret_2.value());
     }
 
     #[test]
