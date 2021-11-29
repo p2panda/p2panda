@@ -249,6 +249,8 @@ impl SecretGroup {
     /// This new secret will initiate a new "epoch" and every message will be encrypted with this
     /// new secret from now on. Old long term secrets are kept and can  still be used to decrypt
     /// data from former epochs.
+    ///
+    /// Warning: Only group owners can rotate long term secrets.
     pub fn rotate_long_term_secret(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
