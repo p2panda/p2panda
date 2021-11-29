@@ -2,6 +2,8 @@
 
 use openmls::ciphersuite::CiphersuiteName;
 
+/// MLS ciphersuite used by p2panda.
+///
 /// A ciphersuite is a combination of a protocol version and the set of cryptographic algorithms
 /// that should be used.
 ///

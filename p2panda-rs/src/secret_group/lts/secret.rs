@@ -122,6 +122,9 @@ impl LongTermSecret {
 
 #[cfg(test)]
 mod tests {
+    use openmls_traits::random::OpenMlsRand;
+    use openmls_traits::OpenMlsCryptoProvider;
+
     use crate::hash::Hash;
     use crate::secret_group::lts::{
         LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch, LongTermSecretError,
@@ -149,50 +152,54 @@ mod tests {
     #[test]
     fn invalid_ciphertext() {
         let provider = MlsProvider::new();
-        let ciphersuite = LongTermSecretCiphersuite::PANDA10_AES256GCM;
 
-        let random_key =
-            hex::decode("fb5abbe6c223ab21fa92ba20aff944cd392af764b2df483d6d77cbdb719b76da")
-                .unwrap()
-                .to_vec();
+        for ciphersuite in LongTermSecretCiphersuite::ciphersuites() {
+            let aead_key = provider
+                .rand()
+                .random_vec(ciphersuite.mls_aead_type().key_size())
+                .unwrap();
 
-        let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
-        let group_instance_id_2 = Hash::new_from_bytes(vec![4, 5, 6]).unwrap();
+            let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+            let group_instance_id_2 = Hash::new_from_bytes(vec![4, 5, 6]).unwrap();
 
-        let secret = LongTermSecret::new(
-            group_instance_id.clone(),
-            ciphersuite,
-            LongTermSecretEpoch(0),
-            random_key.clone().into(),
-        );
+            let secret = LongTermSecret::new(
+                group_instance_id.clone(),
+                ciphersuite,
+                LongTermSecretEpoch(0),
+                aead_key.clone().into(),
+            );
 
-        let secret_different_group = LongTermSecret::new(
-            group_instance_id_2,
-            ciphersuite,
-            LongTermSecretEpoch(0),
-            random_key.clone().into(),
-        );
+            let secret_different_group = LongTermSecret::new(
+                group_instance_id_2,
+                ciphersuite,
+                LongTermSecretEpoch(0),
+                aead_key.clone().into(),
+            );
 
-        let secret_different_epoch = LongTermSecret::new(
-            group_instance_id,
-            ciphersuite,
-            LongTermSecretEpoch(2),
-            random_key.into(),
-        );
+            let secret_different_epoch = LongTermSecret::new(
+                group_instance_id,
+                ciphersuite,
+                LongTermSecretEpoch(2),
+                aead_key.into(),
+            );
 
-        let nonce = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-        let ciphertext = secret
-            .encrypt(&provider, &nonce, b"Secret Message")
-            .unwrap();
-        assert!(secret.decrypt(&provider, &ciphertext).is_ok());
+            let aead_nonce = provider
+                .rand()
+                .random_vec(ciphersuite.mls_aead_type().nonce_size())
+                .unwrap();
+            let ciphertext = secret
+                .encrypt(&provider, &aead_nonce, b"Secret Message")
+                .unwrap();
+            assert!(secret.decrypt(&provider, &ciphertext).is_ok());
 
-        assert!(matches!(
-            secret_different_epoch.decrypt(&provider, &ciphertext),
-            Err(LongTermSecretError::EpochNotMatching)
-        ));
-        assert!(matches!(
-            secret_different_group.decrypt(&provider, &ciphertext),
-            Err(LongTermSecretError::GroupNotMatching)
-        ));
+            assert!(matches!(
+                secret_different_epoch.decrypt(&provider, &ciphertext),
+                Err(LongTermSecretError::EpochNotMatching)
+            ));
+            assert!(matches!(
+                secret_different_group.decrypt(&provider, &ciphertext),
+                Err(LongTermSecretError::GroupNotMatching)
+            ));
+        }
     }
 }

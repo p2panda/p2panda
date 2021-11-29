@@ -9,7 +9,7 @@ use tls_codec::{Deserialize, Serialize, TlsVecU32};
 use crate::hash::Hash;
 use crate::secret_group::lts::{
     LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch, LongTermSecretNonce,
-    LTS_CIPHERSUITE, LTS_EXPORTER_LABEL, LTS_NONCE_EXPORTER_LABEL,
+    LTS_DEFAULT_CIPHERSUITE, LTS_EXPORTER_LABEL, LTS_NONCE_EXPORTER_LABEL,
 };
 use crate::secret_group::mls::MlsGroup;
 use crate::secret_group::{
@@ -59,8 +59,8 @@ impl SecretGroup {
         let mls_group = MlsGroup::new(provider, group_id, init_key_package)?;
 
         let mut group = Self {
-            // Hard code long term secret ciphersuite for now since there is only one option
-            long_term_ciphersuite: LTS_CIPHERSUITE,
+            // Hard code long term secret ciphersuite for now
+            long_term_ciphersuite: LTS_DEFAULT_CIPHERSUITE,
             long_term_nonce: LongTermSecretNonce::default(),
             long_term_secrets: Vec::new().into(),
             mls_group,
@@ -86,7 +86,7 @@ impl SecretGroup {
         )?;
 
         let mut group = Self {
-            long_term_ciphersuite: LTS_CIPHERSUITE,
+            long_term_ciphersuite: LTS_DEFAULT_CIPHERSUITE,
             long_term_nonce: LongTermSecretNonce::default(),
             long_term_secrets: Vec::new().into(),
             mls_group,

@@ -153,12 +153,13 @@ mod tests {
 
     #[test]
     fn ciphersuite() {
-        let ciphersuite = LongTermSecretCiphersuite::PANDA10_AES256GCM;
-
         // Encode and decode ciphersuite
-        let encoded = ciphersuite.tls_serialize_detached().unwrap();
-        let decoded = LongTermSecretCiphersuite::tls_deserialize(&mut encoded.as_slice()).unwrap();
-        assert_eq!(decoded, ciphersuite);
+        for ciphersuite in LongTermSecretCiphersuite::ciphersuites() {
+            let encoded = ciphersuite.tls_serialize_detached().unwrap();
+            let decoded =
+                LongTermSecretCiphersuite::tls_deserialize(&mut encoded.as_slice()).unwrap();
+            assert_eq!(decoded, ciphersuite);
+        }
 
         // Throws error when ciphersuite is unknown
         assert!(LongTermSecretCiphersuite::tls_deserialize(&mut vec![21].as_slice()).is_err());
