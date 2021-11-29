@@ -14,6 +14,10 @@ Highlights are marked with a pancake 🥞
 - `SchemaBuilder` and `Schema` structs for working with CDDL definitions [#78](https://github.com/p2panda/p2panda/pull/78) `rs`
 - `test_utils` module containing `rstest` fixtures, mock `Node` and `Client` structs, test data helper for `p2panda-js` [#116](https://github.com/p2panda/p2panda/pull/116) `rs`
 
+### Changed
+
+- Update `ed25519` crate to `1.3.0` and deprecated `Signature` API [#137](https://github.com/p2panda/p2panda/pull/137) `rs`
+
 ## [0.2.1]
 
 Released on 2021-10-26: :package: `p2panda-js` :package: `p2panda-rs`
