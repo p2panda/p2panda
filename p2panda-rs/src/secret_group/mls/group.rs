@@ -107,6 +107,8 @@ impl MlsGroup {
         provider: &impl OpenMlsCryptoProvider,
         message: MlsMessageIn,
     ) -> Result<Vec<GroupEvent>, MlsError> {
+        // @TODO: This API will change soon in `openmls`.
+        // See: https://github.com/openmls/openmls/pull/576
         Ok(self.0.process_message(message, provider)?)
     }
 
@@ -134,6 +136,8 @@ impl MlsGroup {
     ) -> Result<MlsCiphertext, MlsError> {
         let message = self.0.create_message(provider, data)?;
 
+        // @TODO: This should be handled internally by `openmls` instead:
+        // https://github.com/openmls/openmls/issues/584
         match message {
             MlsMessageOut::Ciphertext(ciphertext) => Ok(ciphertext),
             _ => panic!("Expected MLS ciphertext"),
@@ -149,6 +153,8 @@ impl MlsGroup {
         provider: &impl OpenMlsCryptoProvider,
         ciphertext: MlsCiphertext,
     ) -> Result<Vec<u8>, MlsError> {
+        // @TODO: This API will change soon in `openmls`.
+        // See: https://github.com/openmls/openmls/pull/576
         let group_events = self
             .0
             .process_message(MlsMessageIn::Ciphertext(ciphertext), provider)?;

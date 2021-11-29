@@ -28,6 +28,8 @@ impl SecretGroupCommit {
         encrypted_long_term_secrets: SecretGroupMessage,
     ) -> Result<Self, SecretGroupError> {
         // Check if message is in plaintext
+        // @TODO: This should be handled internally by `openmls` instead:
+        // https://github.com/openmls/openmls/issues/584
         let mls_commit_message = match mls_message_out.clone() {
             MlsMessageOut::Plaintext(message) => Ok(message),
             _ => Err(SecretGroupError::NeedsToBeMlsPlaintext),
