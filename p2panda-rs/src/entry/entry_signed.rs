@@ -4,7 +4,7 @@ use std::convert::{TryFrom, TryInto};
 
 use arrayvec::ArrayVec;
 use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
-use ed25519_dalek::Signature;
+use ed25519_dalek::ed25519::Signature;
 use serde::{Deserialize, Serialize};
 
 use crate::entry::EntrySignedError;
@@ -49,7 +49,7 @@ impl EntrySigned {
 
         // Convert into Ed25519 Signature instance
         let array_vec = entry.sig.unwrap().0;
-        Signature::new(array_vec.into_inner().unwrap())
+        Signature::from_bytes(&array_vec.into_inner().unwrap()).unwrap()
     }
 
     /// Returns encoded entry as string.
