@@ -154,7 +154,7 @@ mod tests {
     #[test]
     fn ciphersuite() {
         // Encode and decode ciphersuite
-        for ciphersuite in LongTermSecretCiphersuite::ciphersuites() {
+        for ciphersuite in LongTermSecretCiphersuite::supported_ciphersuites() {
             let encoded = ciphersuite.tls_serialize_detached().unwrap();
             let decoded =
                 LongTermSecretCiphersuite::tls_deserialize(&mut encoded.as_slice()).unwrap();

@@ -4,6 +4,7 @@
 //!
 //! Long Term Secrets contain symmetric AEAD keys which are used to en- & decrypt data over longer
 //! periods of time, spanning over multiple MLS group epochs.
+mod aead;
 mod ciphersuite;
 mod ciphertext;
 mod constants;

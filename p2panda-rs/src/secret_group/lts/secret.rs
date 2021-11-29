@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use openmls::group::GroupId;
-use openmls_traits::crypto::OpenMlsCrypto;
 use openmls_traits::OpenMlsCryptoProvider;
 use tls_codec::{TlsByteVecU8, TlsDeserialize, TlsSerialize, TlsSize};
 
 use crate::hash::Hash;
 use crate::secret_group::lts::{
-    LongTermSecretCiphersuite, LongTermSecretCiphertext, LongTermSecretEpoch, LongTermSecretError,
+    aead, LongTermSecretCiphersuite, LongTermSecretCiphertext, LongTermSecretEpoch,
+    LongTermSecretError,
 };
 
 /// Long term secrets are objects which hold sensitive AEAD key secrets used to symmetrically
@@ -71,8 +71,9 @@ impl LongTermSecret {
         data: &[u8],
     ) -> Result<LongTermSecretCiphertext, LongTermSecretError> {
         // Decrypts data with secret key and receive ciphertext plus AAD tag
-        let ciphertext_tag = provider.crypto().aead_encrypt(
-            self.ciphersuite.mls_aead_type(),
+        let ciphertext_tag = aead::encrypt(
+            provider,
+            &self.ciphersuite,
             self.value.as_slice(),
             data,
             nonce,
@@ -105,10 +106,9 @@ impl LongTermSecret {
         }
 
         // Decrypt ciphertext with tag and check AAD
-        // @TODO: This is currently broken upstream
-        // See: https://github.com/openmls/openmls/pull/587
-        let payload = provider.crypto().aead_decrypt(
-            self.ciphersuite.mls_aead_type(),
+        let payload = aead::decrypt(
+            provider,
+            &self.ciphersuite,
             self.value.as_slice(),
             &ciphertext.ciphertext_with_tag(),
             &ciphertext.nonce(),
@@ -153,10 +153,10 @@ mod tests {
     fn invalid_ciphertext() {
         let provider = MlsProvider::new();
 
-        for ciphersuite in LongTermSecretCiphersuite::ciphersuites() {
+        for ciphersuite in LongTermSecretCiphersuite::supported_ciphersuites() {
             let aead_key = provider
                 .rand()
-                .random_vec(ciphersuite.mls_aead_type().key_size())
+                .random_vec(ciphersuite.aead_key_length())
                 .unwrap();
 
             let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
@@ -185,7 +185,7 @@ mod tests {
 
             let aead_nonce = provider
                 .rand()
-                .random_vec(ciphersuite.mls_aead_type().nonce_size())
+                .random_vec(ciphersuite.aead_nonce_length())
                 .unwrap();
             let ciphertext = secret
                 .encrypt(&provider, &aead_nonce, b"Secret Message")

@@ -256,7 +256,7 @@ impl SecretGroup {
         provider: &impl OpenMlsCryptoProvider,
     ) -> Result<(), SecretGroupError> {
         // Determine length of AEAD key.
-        let key_length = self.long_term_ciphersuite.mls_aead_type().key_size();
+        let key_length = self.long_term_ciphersuite.aead_key_length();
 
         // Generate secret key by using the MLS exporter method
         let value = self
@@ -318,7 +318,7 @@ impl SecretGroup {
         );
 
         // Determine length of AEAD nonce.
-        let nonce_length = self.long_term_ciphersuite.mls_aead_type().nonce_size();
+        let nonce_length = self.long_term_ciphersuite.aead_nonce_length();
 
         // Retreive nonce from MLS exporter
         let nonce = self
