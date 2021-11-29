@@ -32,6 +32,9 @@ pub struct SecretGroup {
 
     /// Messaging Layer Security (MLS) group.
     mls_group: MlsGroup,
+
+    /// Flag indicating if group was created by us.
+    owned: bool,
 }
 
 impl SecretGroup {
@@ -64,6 +67,7 @@ impl SecretGroup {
             long_term_nonce: LongTermSecretNonce::default(),
             long_term_secrets: Vec::new().into(),
             mls_group,
+            owned: true,
         };
 
         // Generate first long term secret and store it in secret group
@@ -90,6 +94,7 @@ impl SecretGroup {
             long_term_nonce: LongTermSecretNonce::default(),
             long_term_secrets: Vec::new().into(),
             mls_group,
+            owned: false,
         };
 
         // Decode long term secrets with current group state
@@ -114,6 +119,10 @@ impl SecretGroup {
         provider: &impl OpenMlsCryptoProvider,
         key_packages: &[KeyPackage],
     ) -> Result<SecretGroupCommit, SecretGroupError> {
+        if !self.owned {
+            return Err(SecretGroupError::NotOwner);
+        }
+
         // Add members
         let (mls_message_out, mls_welcome) = self.mls_group.add_members(provider, key_packages)?;
 
@@ -143,6 +152,10 @@ impl SecretGroup {
         // See: https://github.com/openmls/openmls/issues/541
         member_leaf_indexes: &[usize],
     ) -> Result<SecretGroupCommit, SecretGroupError> {
+        if !self.owned {
+            return Err(SecretGroupError::NotOwner);
+        }
+
         // Remove members
         let mls_message_out = self
             .mls_group
@@ -255,6 +268,10 @@ impl SecretGroup {
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
     ) -> Result<(), SecretGroupError> {
+        if !self.owned {
+            return Err(SecretGroupError::NotOwner);
+        }
+
         // Determine length of AEAD key.
         let key_length = self.long_term_ciphersuite.aead_key_length();
 
@@ -416,6 +433,11 @@ impl SecretGroup {
         self.mls_group.is_active()
     }
 
+    /// Returns true if this group is owned by us.
+    pub fn is_owned(&self) -> bool {
+        self.owned
+    }
+
     /// Returns the hash of this `SecretGroup` instance.
     pub fn group_instance_id(&self) -> Hash {
         let group_id_bytes = self.mls_group.group_id().as_slice().to_vec();
@@ -491,5 +513,27 @@ mod tests {
             .unwrap();
         assert_ne!(nonce(ciphertext_1), nonce(ciphertext_2.clone()));
         assert_ne!(nonce(ciphertext_3), nonce(ciphertext_2));
+    }
+
+    #[test]
+    fn group_ownership() {
+        let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let key_pair = KeyPair::new();
+        let provider = MlsProvider::new();
+        let owner = SecretGroupMember::new(&provider, &key_pair).unwrap();
+        let mut group = SecretGroup::new(&provider, &group_instance_id, &owner).unwrap();
+        assert!(group.is_owned());
+
+        let key_pair_2 = KeyPair::new();
+        let member = SecretGroupMember::new(&provider, &key_pair_2).unwrap();
+        let key_package = member.key_package(&provider).unwrap();
+        let commit = group.add_members(&provider, &[key_package]).unwrap();
+        let mut group_2 = SecretGroup::new_from_welcome(&provider, &commit).unwrap();
+        assert!(!group_2.is_owned());
+
+        // Invited member does not have permission to change group.
+        assert!(group_2.remove_members(&provider, &[1]).is_err());
+        assert!(group_2.rotate_long_term_secret(&provider).is_err());
+        assert!(group.rotate_long_term_secret(&provider).is_ok());
     }
 }

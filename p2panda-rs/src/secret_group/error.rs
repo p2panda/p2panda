@@ -6,6 +6,10 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum SecretGroupError {
+    /// Commit messages and new long term secrets can only be created by group owners.
+    #[error("this method can only be used by group owners")]
+    NotOwner,
+
     /// MLS commit message was expected to contain a welcome message as well.
     #[error("commit does not contain welcome message")]
     WelcomeMissing,
