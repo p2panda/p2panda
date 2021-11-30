@@ -33,7 +33,7 @@ impl fmt::Display for Type {
             Type::Int => "int",
             Type::Float => "float",
             Type::Tstr => "tstr",
-            Type::Relation => "tstr .regexp \"[0-9a-f]{132}\"",
+            Type::Relation => "tstr .regexp \"[0-9a-f]{68}\"",
         };
         write!(f, "{}", cddl_type)
     }
@@ -311,7 +311,8 @@ mod tests {
     "#;
 
     /// All user schema hash
-    pub const USER_SCHEMA_HASH: &str = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
+    pub const USER_SCHEMA_HASH: &str =
+        "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 
     /// Person schema
     pub const PERSON_SCHEMA: &str = r#"
@@ -322,7 +323,8 @@ mod tests {
     "#;
 
     /// Person schema hash
-    pub const PERSON_SCHEMA_HASH: &str = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
+    pub const PERSON_SCHEMA_HASH: &str =
+        "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 
     #[test]
     pub fn schema_builder() {
