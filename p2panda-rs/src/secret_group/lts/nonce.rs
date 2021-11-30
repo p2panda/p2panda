@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-/// Nonce used for AES-GCM encryption with Long Term Secrets.
+/// Nonce used for AEAD encryption with Long Term Secrets.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct LongTermSecretNonce {
     counter: u64,

@@ -16,7 +16,7 @@ pub struct LongTermSecretCiphertext {
     /// Epoch of the long term secret which was used to encrypt data.
     long_term_epoch: LongTermSecretEpoch,
 
-    /// Used nonce during AES encryption.
+    /// Used nonce for AEAD encryption.
     nonce: TlsByteVecU8,
 
     /// Encrypted user data (ciphertext) + AEAD tag (HMAC).
@@ -53,7 +53,7 @@ impl LongTermSecretCiphertext {
         self.long_term_epoch.clone()
     }
 
-    /// Returns AES nonce when data was encrypted.
+    /// Returns AEAD nonce when data was encrypted.
     pub fn nonce(&self) -> Vec<u8> {
         self.nonce.as_slice().to_vec()
     }

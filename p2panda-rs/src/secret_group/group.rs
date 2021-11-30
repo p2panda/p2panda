@@ -393,7 +393,7 @@ impl SecretGroup {
         provider: &impl OpenMlsCryptoProvider,
         data: &[u8],
     ) -> Result<SecretGroupMessage, SecretGroupError> {
-        // Generate unique nonce for AES encryption
+        // Generate unique nonce for AEAD encryption
         let nonce = self.generate_nonce(provider)?;
 
         // Unwrap here since at this stage we already have at least one LTS epoch

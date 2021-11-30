@@ -16,5 +16,5 @@ pub const LTS_DEFAULT_CIPHERSUITE: LongTermSecretCiphersuite =
 /// keys.
 pub const LTS_EXPORTER_LABEL: &str = "long_term_secret";
 
-/// Used label for exporting new AES GCM nonce.
+/// Used label for exporting new AEAD nonce.
 pub const LTS_NONCE_EXPORTER_LABEL: &str = "long_term_nonce";

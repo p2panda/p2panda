@@ -3,14 +3,13 @@
 //! Create and moderate large secret groups to maintain key material for secure messaging.
 //!
 //! p2panda uses the [MLS] (Messaging Layer Security) protocol for group key negotiation to
-//! establish secrets in a large group of users for "Sender Ratchet Secrets" (DHKEMX25519 +
-//! AES128-GCM) or "Long Term Secrets" (AES256-GCM). Both settings give confidentiality,
-//! authenticity and post-compromise security, while the sender ratchet scheme also gives forward
-//! secrecy.
+//! establish secrets in a large group of users for "Sender Ratchet Secrets" or "Long Term
+//! Secrets". Both settings give confidentiality, authenticity and post-compromise security, while
+//! the sender ratchet scheme also gives forward secrecy.
 //!
 //! A group of users sharing that secret state is called a "secret group" in p2panda. Sender
 //! ratchet encryption is interesting for applications with high security standards where every
-//! message is individually protected with a throw-away key, whereas long term secret encryption is
+//! message is individually protected with an epheremal key, whereas long term secret encryption is
 //! useful for building application where keys material is reused for multiple messages over longer
 //! time, so past data can still be decrypted, even when a member joins the secret group later.
 //!
