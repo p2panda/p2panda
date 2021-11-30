@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use bamboo_rs_core::lipmaa;
+use bamboo_rs_core_ed25519_yasmf::lipmaa;
 use serde::{Deserialize, Serialize};
 
 use crate::entry::SeqNumError;

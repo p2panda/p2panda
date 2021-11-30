@@ -15,8 +15,7 @@ use crate::Validate;
 #[serde(untagged)]
 #[repr(u8)]
 pub enum MessageVersion {
-    /// All messages are currently implemented against this first version.
-    Default = 1,
+    Default = 2,
 }
 
 impl Copy for MessageVersion {}

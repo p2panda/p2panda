@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use bamboo_rs_core::entry::is_lipmaa_required;
+use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use std::collections::HashMap;
 
 use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};

@@ -3,12 +3,12 @@
 use std::convert::{TryFrom, TryInto};
 
 use arrayvec::ArrayVec;
-use bamboo_rs_core::{Entry as BambooEntry, YamfHash};
+use bamboo_rs_core_ed25519_yasmf::{Entry as BambooEntry, YasmfHash};
 use ed25519_dalek::ed25519::Signature;
 use serde::{Deserialize, Serialize};
 
 use crate::entry::EntrySignedError;
-use crate::hash::{Blake2BArrayVec, Hash};
+use crate::hash::{Blake3ArrayVec, Hash};
 use crate::identity::Author;
 use crate::message::MessageEncoded;
 use crate::Validate;
@@ -30,7 +30,7 @@ impl EntrySigned {
         Ok(inner)
     }
 
-    /// Returns YAMF BLAKE2b hash of encoded entry.
+    /// Returns YASMF BLAKE3 hash of encoded entry.
     pub fn hash(&self) -> Hash {
         Hash::new_from_bytes(self.to_bytes()).unwrap()
     }
@@ -75,12 +75,12 @@ impl EntrySigned {
         &self,
         message_encoded: &MessageEncoded,
     ) -> Result<(), EntrySignedError> {
-        // Convert to Entry from bamboo_rs_core first
+        // Convert to Entry from bamboo_rs_core_ed25519_yasmf first
         let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.into();
 
         // Message hash must match if it doesn't return an error
-        let yamf_hash: YamfHash<Blake2BArrayVec> = (&message_encoded.hash()).to_owned().into();
-        if yamf_hash != entry.payload_hash {
+        let yasmf_hash: YasmfHash<Blake3ArrayVec> = (&message_encoded.hash()).to_owned().into();
+        if yasmf_hash != entry.payload_hash {
             return Err(EntrySignedError::MessageHashMismatch);
         }
 
@@ -93,7 +93,7 @@ impl From<&EntrySigned> for BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> 
     fn from(signed_entry: &EntrySigned) -> Self {
         let entry_bytes = signed_entry.clone().to_bytes();
         let entry_ref: BambooEntry<&[u8], &[u8]> = entry_bytes.as_slice().try_into().unwrap();
-        bamboo_rs_core::entry::into_owned(&entry_ref)
+        bamboo_rs_core_ed25519_yasmf::entry::into_owned(&entry_ref)
     }
 }
 
