@@ -6,11 +6,11 @@
 pub const MESSAGE_SCHEMA: &str = r#"
     message = {
         schema: hash,
-        version: 1,
+        version: 2,
         message-body,
     }
 
-    hash = tstr .regexp "[0-9a-fa-f]{132}"
+    hash = tstr .regexp "[0-9a-fa-f]{68}"
 
     ; Create message
     message-body = (
