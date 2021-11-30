@@ -7,9 +7,9 @@
 //! Blake3 hashes.
 //!
 //! [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
-//! [`YAMF`]: ttps://github.com/bamboo-rs/yamf-hash
+//! [`YAMF`]: https://github.com/bamboo-rs/yamf-hash
 mod error;
 mod hash;
 
 pub use error::HashError;
-pub use hash::{Blake3ArrayVec, Hash};
+pub use hash::{Blake3ArrayVec, Hash, HASH_SIZE};

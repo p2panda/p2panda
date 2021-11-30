@@ -3,15 +3,19 @@
 use std::convert::{TryFrom, TryInto};
 
 use arrayvec::ArrayVec;
+use bamboo_rs_core_ed25519_yasmf::signature::ED25519_SIGNATURE_SIZE;
 use bamboo_rs_core_ed25519_yasmf::{Entry as BambooEntry, YasmfHash};
 use ed25519_dalek::ed25519::Signature;
 use serde::{Deserialize, Serialize};
 
 use crate::entry::EntrySignedError;
-use crate::hash::{Blake3ArrayVec, Hash};
+use crate::hash::{Blake3ArrayVec, Hash, HASH_SIZE};
 use crate::identity::Author;
 use crate::message::MessageEncoded;
 use crate::Validate;
+
+/// This is the size of p2panda entries' signatures
+pub const SIGNATURE_SIZE: usize = ED25519_SIGNATURE_SIZE;
 
 /// Bamboo entry bytes represented in hex encoding format.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -38,14 +42,16 @@ impl EntrySigned {
     /// Returns `Author` who signed this entry.
     pub fn author(&self) -> Author {
         // Unwrap as we already validated entry
-        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.try_into().unwrap();
+        let entry: BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> =
+            self.try_into().unwrap();
         Author::try_from(entry.author).unwrap()
     }
 
     /// Returns Ed25519 signature of this entry.
     pub fn signature(&self) -> Signature {
         // Unwrap as we already validated entry and know it contains a signature
-        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.try_into().unwrap();
+        let entry: BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> =
+            self.try_into().unwrap();
 
         // Convert into Ed25519 Signature instance
         let array_vec = entry.sig.unwrap().0;
@@ -76,7 +82,8 @@ impl EntrySigned {
         message_encoded: &MessageEncoded,
     ) -> Result<(), EntrySignedError> {
         // Convert to Entry from bamboo_rs_core_ed25519_yasmf first
-        let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = self.into();
+        let entry: BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> =
+            self.into();
 
         // Message hash must match if it doesn't return an error
         let yasmf_hash: YasmfHash<Blake3ArrayVec> = (&message_encoded.hash()).to_owned().into();
@@ -89,7 +96,7 @@ impl EntrySigned {
 }
 
 /// Converts an `EntrySigned` into a Bamboo Entry to interact with the `bamboo_rs` crate.
-impl From<&EntrySigned> for BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> {
+impl From<&EntrySigned> for BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> {
     fn from(signed_entry: &EntrySigned) -> Self {
         let entry_bytes = signed_entry.clone().to_bytes();
         let entry_ref: BambooEntry<&[u8], &[u8]> = entry_bytes.as_slice().try_into().unwrap();

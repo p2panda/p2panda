@@ -10,8 +10,11 @@ use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 use crate::hash::HashError;
 use crate::Validate;
 
+/// This is the size of p2panda entries' hashes
+pub const HASH_SIZE: usize = BLAKE3_HASH_SIZE;
+
 /// This is the type used for `bamboo-rs-core-ed25519-yasmf` entries that own their bytes.
-pub type Blake3ArrayVec = ArrayVec<[u8; BLAKE3_HASH_SIZE]>;
+pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
 
 /// Hash of `Entry` or `Message` encoded as hex string.
 ///
@@ -92,7 +95,7 @@ impl Validate for Hash {
         match hex::decode(self.0.to_owned()) {
             Ok(bytes) => {
                 // Check if length is correct
-                if bytes.len() != BLAKE3_HASH_SIZE + 2 {
+                if bytes.len() != HASH_SIZE + 2 {
                     return Err(HashError::InvalidLength);
                 }
 

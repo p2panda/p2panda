@@ -5,8 +5,8 @@ use std::convert::TryInto;
 use arrayvec::ArrayVec;
 use bamboo_rs_core_ed25519_yasmf::Entry as BambooEntry;
 
-use crate::entry::{Entry, EntrySigned, EntrySignedError, LogId, SeqNum};
-use crate::hash::Hash;
+use crate::entry::{Entry, EntrySigned, EntrySignedError, LogId, SeqNum, SIGNATURE_SIZE};
+use crate::hash::{Hash, HASH_SIZE};
 use crate::message::{Message, MessageEncoded};
 
 /// Takes [`EntrySigned`] and optionally [`MessageEncoded`] as arguments, returns a decoded and
@@ -22,7 +22,8 @@ pub fn decode_entry(
     message_encoded: Option<&MessageEncoded>,
 ) -> Result<Entry, EntrySignedError> {
     // Convert to Entry from bamboo_rs_core_ed25519_yasmf first
-    let entry: BambooEntry<ArrayVec<[u8; 64]>, ArrayVec<[u8; 64]>> = entry_encoded.into();
+    let entry: BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> =
+        entry_encoded.into();
 
     let message = match message_encoded {
         Some(msg) => {
