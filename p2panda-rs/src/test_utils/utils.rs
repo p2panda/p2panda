@@ -25,10 +25,12 @@ pub struct NextEntryArgs {
 }
 
 /// The default hash string, used when a hash is needed for testing, it's the default hash in fixtures when a custom value isn't specified.
-pub const DEFAULT_HASH: &str  = "0040cf94f6d605657e90c543b0c919070cdaaf7209c5e1ea58acb8f3568fa2114268dc9ac3bafe12af277d286fce7dc59b7c0c348973c4e9dacbe79485e56ac2a702";
+pub const DEFAULT_HASH: &str =
+    "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 
 /// The default schema hash string, used in all message fixtures when no custom schema hash is defined.
-pub const DEFAULT_SCHEMA_HASH: &str  = "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437";
+pub const DEFAULT_SCHEMA_HASH: &str =
+    "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 
 /// The default private key string, used for creating authors and public keys in fixtures.
 pub const DEFAULT_PRIVATE_KEY: &str =
@@ -125,4 +127,21 @@ pub fn update_message(schema: Hash, instance_id: Hash, fields: MessageFields) ->
 /// Generate a delete message based on passed schema hash and instance id.
 pub fn delete_message(schema: Hash, instance_id: Hash) -> Message {
     Message::new_delete(schema, instance_id).unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_hash() {
+        let default_hash = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        assert_eq!(default_hash.as_str(), DEFAULT_HASH)
+    }
+
+    #[test]
+    fn default_schema() {
+        let default_schema_hash = Hash::new_from_bytes(vec![3, 2, 1]).unwrap();
+        assert_eq!(default_schema_hash.as_str(), DEFAULT_SCHEMA_HASH)
+    }
 }
