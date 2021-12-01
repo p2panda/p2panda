@@ -145,6 +145,33 @@ fn long_term_secret_evolution() {
         b"This is another secret message".to_vec(),
         message_plaintext
     );
+
+    // ~~~~~~~~~~~~~~~
+    // Re-inviting former members
+    // ~~~~~~~~~~~~~~~
+
+    // Calvin generates a second key package
+    let calvin_member_2 = SecretGroupMember::new(&calvin_provider, &calvin_key_pair).unwrap();
+    let calvin_key_package_2 = calvin_member_2.key_package(&calvin_provider).unwrap();
+
+    // Billie invites Calvin back into the group
+    let group_commit = billie_group
+        .add_members(&billie_provider, &[calvin_key_package_2])
+        .unwrap();
+
+    // Calvin joins the group and decrypts the `LongTermSecret`
+    let mut calvin_group = SecretGroup::new_from_welcome(&calvin_provider, &group_commit).unwrap();
+    assert!(calvin_group.is_active());
+
+    // Calvin can now access the message created during the time they were not a member
+    let message_plaintext = calvin_group
+        .decrypt(&calvin_provider, &message_ciphertext)
+        .unwrap();
+    assert_eq!(
+        b"This is another secret message".to_vec(),
+        message_plaintext
+    );
+    assert_eq!(calvin_group.long_term_epoch(), Some(LongTermSecretEpoch(1)));
 }
 
 #[test]
