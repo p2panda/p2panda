@@ -20,9 +20,7 @@ pub struct DAG {
 impl DAG {
     /// Instantiate a new empty graph
     pub fn new() -> Self {
-        DAG {
-            graph: Vec::new(),
-        }
+        DAG { graph: Vec::new() }
     }
 
     /// New DAG from an existing array of edges.

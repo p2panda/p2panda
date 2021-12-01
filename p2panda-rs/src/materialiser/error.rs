@@ -6,7 +6,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum MaterialisationError {
-        /// Handle errors from `EntrySignedError` struct.
+    /// Handle errors from `EntrySignedError` struct.
     #[error(transparent)]
     EntrySignedError(#[from] crate::entry::EntrySignedError),
 }

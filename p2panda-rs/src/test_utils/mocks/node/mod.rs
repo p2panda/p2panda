@@ -10,7 +10,7 @@
 //! ```
 //! use p2panda_rs::test_utils::mocks::client::Client;
 //! use p2panda_rs::test_utils::mocks::node::{send_to_node, Node};
-//! use p2panda_rs::test_utils::{create_message, delete_message, hash, message_fields, 
+//! use p2panda_rs::test_utils::{create_message, delete_message, hash, message_fields,
 //!     new_key_pair, update_message, DEFAULT_SCHEMA_HASH
 //! };
 //! # const CHAT_SCHEMA_HASH: &str = DEFAULT_SCHEMA_HASH;
