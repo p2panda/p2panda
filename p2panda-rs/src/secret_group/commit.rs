@@ -10,9 +10,9 @@ use crate::secret_group::{SecretGroupError, SecretGroupMessage};
 
 /// Plaintext commit message which is published on the network to announce group changes.
 ///
-/// A `SecretGroupCommit` always contains a MLS Commit message and the current, encrypted long term
-/// secrets for this group. Optionally it contains another MLS Welcome message in case this commit
-/// invites new members into the group.
+/// A `SecretGroupCommit` always contains an MLS Commit message and the current, encrypted
+/// long-term secrets for this group. Optionally it contains another MLS Welcome message in case
+/// this commit invites new members into the group.
 #[derive(Debug, Clone, TlsSerialize, TlsDeserialize, TlsSize)]
 pub struct SecretGroupCommit {
     mls_commit_message: VerifiableMlsPlaintext,
@@ -55,12 +55,12 @@ impl SecretGroupCommit {
         MlsMessageIn::Plaintext(self.mls_commit_message.clone())
     }
 
-    /// Returns a MLS Welcome message when given.
+    /// Returns an MLS Welcome message when given.
     pub(crate) fn welcome(&self) -> Option<Welcome> {
         self.mls_welcome_message.clone()
     }
 
-    /// Returns the encrypted and encoded long term secrets.
+    /// Returns the encrypted and encoded long-term secrets.
     pub(crate) fn long_term_secrets(&self) -> SecretGroupMessage {
         self.encrypted_long_term_secrets.clone()
     }

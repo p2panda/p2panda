@@ -10,10 +10,10 @@ use crate::secret_group::lts::{
     LongTermSecretError,
 };
 
-/// Long term secrets are objects which hold sensitive AEAD key secrets used to symmetrically
+/// Long-term secrets are objects which hold sensitive AEAD key secrets used to symmetrically
 /// encrypt user data for longer periods of time.
 ///
-/// Additionally to the secret value every long term secret also holds meta data, like the MLS
+/// Additionally to the secret value every long-term secret also holds meta data, like the MLS
 /// group id and epoch which this secret belongs to.
 #[derive(Debug, Clone, PartialEq, TlsDeserialize, TlsSerialize, TlsSize)]
 pub struct LongTermSecret {
@@ -23,7 +23,7 @@ pub struct LongTermSecret {
     /// The corresponding ciphersuite for this secret.
     ciphersuite: LongTermSecretCiphersuite,
 
-    /// Epoch of this long term secret.
+    /// Epoch of this long-term secret.
     long_term_epoch: LongTermSecretEpoch,
 
     /// Symmetrical secret key used for AEAD encryption.
@@ -48,7 +48,7 @@ impl LongTermSecret {
         }
     }
 
-    /// Returns the instance hash of the `SecretGroup` of this long term secret.
+    /// Returns the instance hash of the `SecretGroup` of this long-term secret.
     ///
     /// This method can throw an error when the secret contains an invalid secret group instance
     /// hash.
@@ -57,7 +57,7 @@ impl LongTermSecret {
         Ok(Hash::new(&hex_str)?)
     }
 
-    /// Returns the epoch of this long term secret.
+    /// Returns the epoch of this long-term secret.
     pub fn long_term_epoch(&self) -> LongTermSecretEpoch {
         self.long_term_epoch
     }

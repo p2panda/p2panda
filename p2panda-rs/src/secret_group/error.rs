@@ -6,7 +6,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum SecretGroupError {
-    /// Commit messages and new long term secrets can only be created by group owners.
+    /// Commit messages and new long-term secrets can only be created by group owners.
     #[error("this method can only be used by group owners")]
     NotOwner,
 
@@ -22,20 +22,20 @@ pub enum SecretGroupError {
     #[error("mls message is not a commit")]
     NeedsToBeMlsCommit,
 
-    /// Long term secret does not match current secret group.
-    #[error("long term secret has an invalid group id")]
+    /// Long-term secret does not match current secret group.
+    #[error("long-term secret has an invalid group id")]
     LTSInvalidGroupID,
 
-    /// User data could not be decrypted since long term secret is missing.
-    #[error("can not decrypt long term secret since key material is missing")]
+    /// User data could not be decrypted since long-term secret is missing.
+    #[error("can not decrypt long-term secret since key material is missing")]
     LTSSecretMissing,
 
     /// LTS secret encoding failed.
-    #[error("could not encode long term secret")]
+    #[error("could not encode long-term secret")]
     LTSEncodingError,
 
     /// LTS secret decoding failed. Maybe the data was corrupted or invalid?
-    #[error("could not decode long term secret")]
+    #[error("could not decode long-term secret")]
     LTSDecodingError,
 
     /// Decoding failed with unknown value.

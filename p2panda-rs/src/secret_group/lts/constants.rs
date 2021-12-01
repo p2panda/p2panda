@@ -2,13 +2,13 @@
 
 use crate::secret_group::lts::LongTermSecretCiphersuite;
 
-/// Default long term secret ciphersuite used by p2panda.
+/// Default long-term secret ciphersuite used by p2panda.
 ///
 /// A ciphersuite is a combination of a protocol version and the set of cryptographic algorithms
 /// that should be used.
 ///
 /// * PANDA: The string "PANDA" followed by the major and minor version, e.g. "PANDA10"
-/// * AEAD: The AEAD algorithm used for long term secret encryption
+/// * AEAD: The AEAD algorithm used for long-term secret encryption
 pub const LTS_DEFAULT_CIPHERSUITE: LongTermSecretCiphersuite =
     LongTermSecretCiphersuite::PANDA10_AES256GCM;
 

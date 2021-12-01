@@ -13,7 +13,7 @@ pub struct LongTermSecretCiphertext {
     /// Identifier of the related MLS group.
     group_id: GroupId,
 
-    /// Epoch of the long term secret which was used to encrypt data.
+    /// Epoch of the long-term secret which was used to encrypt data.
     long_term_epoch: LongTermSecretEpoch,
 
     /// Used nonce for AEAD encryption.
@@ -48,7 +48,7 @@ impl LongTermSecretCiphertext {
         Ok(Hash::new(&hex_str)?)
     }
 
-    /// Returns epoch of long term secret used when data was encrypted.
+    /// Returns epoch of long-term secret used when data was encrypted.
     pub fn long_term_epoch(&self) -> LongTermSecretEpoch {
         self.long_term_epoch.clone()
     }

@@ -49,7 +49,7 @@ impl SecretGroupMember {
         Ok(SecretGroupMember { mls_member })
     }
 
-    /// Generates a new KeyPackage which can be used by others to invite this member into their
+    /// Generates a new [KeyPackage] which can be used by others to invite this member into their
     /// groups.
     pub fn key_package(
         &self,

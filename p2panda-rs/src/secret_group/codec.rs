@@ -10,7 +10,7 @@ use crate::secret_group::lts::LongTermSecretCiphertext;
 use crate::secret_group::SecretGroupMessage;
 
 /// `SecretGroupMessageType` is an additional "helper" enum next to the `SecretGroupMessage` enum.
-/// It is used as the first byte to distict the type of the inner message data during TLS en- /
+/// It is used as the first byte to distinct the type of the inner message data during TLS en- /
 /// decoding.
 #[derive(Debug, Clone, Copy, TlsSerialize, TlsDeserialize, TlsSize)]
 #[repr(u8)]
@@ -18,7 +18,7 @@ enum SecretGroupMessageType {
     /// This message contains user data encrypted and encoded in form of a MLS application message.
     MlsApplicationMessage = 1,
 
-    /// This message contains user data encrypted and encoded as a long term secret ciphertext.
+    /// This message contains user data encrypted and encoded as a long-term secret ciphertext.
     LongTermSecretMessage = 2,
 }
 
@@ -115,7 +115,7 @@ mod tests {
             hex::decode("fb5abbe6c223ab21fa92ba20aff944cd392af764b2df483d6d77cbdb719b76da")
                 .unwrap();
 
-        // Create long term secret
+        // Create long-term secret
         let secret = LongTermSecret::new(
             Hash::new_from_bytes(vec![1, 2, 3]).unwrap(),
             LongTermSecretCiphersuite::PANDA10_AES256GCM,

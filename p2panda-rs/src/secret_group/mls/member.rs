@@ -11,14 +11,14 @@ use openmls_traits::OpenMlsCryptoProvider;
 use crate::identity::KeyPair;
 use crate::secret_group::mls::{MlsError, MLS_CIPHERSUITE_NAME, MLS_LIFETIME_EXTENSION_DAYS};
 
-/// Wrapper around the MLS CredentialBundle of `openmls`.
+/// Wrapper around the MLS [CredentialBundle] of `openmls`.
 #[derive(Debug, Clone)]
 pub struct MlsMember {
     credential_bundle: CredentialBundle,
 }
 
 impl MlsMember {
-    /// Creates a new MLS group member with a CredentialBundle using the p2panda key pair to
+    /// Creates a new MLS group member with a [CredentialBundle] using the p2panda [KeyPair] to
     /// authenticate the member of a group towards others.
     ///
     /// The generated bundle is automatically stored in the MLS key store.
@@ -63,17 +63,17 @@ impl MlsMember {
         Ok(Self { credential_bundle })
     }
 
-    /// Returns Credential of this group member which is used to identify it.
+    /// Returns [Credential] of this group member which is used to identify it.
     pub fn credential(&self) -> &Credential {
         self.credential_bundle.credential()
     }
 
-    /// Generates new KeyPackage of this group member and returns it.
+    /// Generates a new [KeyPackage] of this group member and returns it.
     ///
-    /// A KeyPackage object specifies a ciphersuite that the client supports, as well as
+    /// A `KeyPackage` object specifies a ciphersuite that the client supports, as well as
     /// providing a public key that others can use for key agreement.
     ///
-    /// The generated KeyPackage is automatically stored inside the MLS key store.
+    /// The generated `KeyPackage` is automatically stored inside the MLS key store.
     pub fn key_package(
         &self,
         provider: &impl OpenMlsCryptoProvider,
@@ -92,7 +92,7 @@ impl MlsMember {
             vec![lifetime_extension],
         )?;
 
-        // Retreive KeyPackage from bundle which is the public part of it
+        // Retreive [KeyPackage] from bundle which is the public part of it
         let key_package = key_package_bundle.key_package().clone();
         let key_package_hash = key_package.hash(provider);
 

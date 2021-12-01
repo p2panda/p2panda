@@ -21,13 +21,13 @@ type LongTermSecretVec = TlsVecU32<LongTermSecret>;
 /// Create or join secret groups, maintain their state and en- / decrypt user messages.
 #[derive(Debug)]
 pub struct SecretGroup {
-    /// Used ciphersuite when generating new long term secrets
+    /// Used ciphersuite when generating new long-term secrets
     long_term_ciphersuite: LongTermSecretCiphersuite,
 
     /// Internal counter for AEAD nonce.
     long_term_nonce: LongTermSecretNonce,
 
-    /// Stored long term secrets (AEAD keys).
+    /// Stored long-term secrets (AEAD keys).
     long_term_secrets: LongTermSecretVec,
 
     /// Messaging Layer Security (MLS) group.
@@ -62,7 +62,7 @@ impl SecretGroup {
         let mls_group = MlsGroup::new(provider, group_id, init_key_package)?;
 
         let mut group = Self {
-            // Hard code long term secret ciphersuite for now
+            // Hard code long-term secret ciphersuite for now
             long_term_ciphersuite: LTS_DEFAULT_CIPHERSUITE,
             long_term_nonce: LongTermSecretNonce::default(),
             long_term_secrets: Vec::new().into(),
@@ -70,7 +70,7 @@ impl SecretGroup {
             owned: true,
         };
 
-        // Generate first long term secret and store it in secret group
+        // Generate first long-term secret and store it in secret group
         group.rotate_long_term_secret(provider)?;
 
         Ok(group)
@@ -97,7 +97,7 @@ impl SecretGroup {
             owned: false,
         };
 
-        // Decode long term secrets with current group state
+        // Decode long-term secrets with current group state
         let secrets = group.decrypt_long_term_secrets(provider, commit.long_term_secrets())?;
 
         // .. and finally add new secrets to group
@@ -131,7 +131,7 @@ impl SecretGroup {
         // Process message directly to establish group state for encryption
         self.process_commit_directly(provider, &mls_message_out)?;
 
-        // Re-Encrypt long term secrets for this group epoch
+        // Re-Encrypt long-term secrets for this group epoch
         let encrypt_long_term_secrets = self.encrypt_long_term_secrets(provider)?;
 
         Ok(SecretGroupCommit::new(
@@ -168,7 +168,7 @@ impl SecretGroup {
         // Process message directly to establish group state for encryption
         self.process_commit_directly(provider, &mls_message_out)?;
 
-        // Re-Encrypt long term secrets for this group epoch
+        // Re-Encrypt long-term secrets for this group epoch
         let encrypt_long_term_secrets = self.encrypt_long_term_secrets(provider)?;
 
         Ok(SecretGroupCommit::new(
@@ -185,7 +185,7 @@ impl SecretGroup {
     //
     // According to the MLS specification commits would first be sent to a "Delivery Service" and
     // then processed after they got received again to assure correct ordering, but in the p2panda
-    // case they need to be processed directly to be able to encrypt long term secrets based on the
+    // case they need to be processed directly to be able to encrypt long-term secrets based on the
     // new MLS group state. Also we don't have to worry about ordering here as commits are
     // organized by only one single append-only log (single-writer).
     fn process_commit_directly(
@@ -218,7 +218,7 @@ impl SecretGroup {
 
         // Is this member still part of the group after the commit?
         if self.mls_group.is_active() {
-            // Decrypt long term secrets with current group state
+            // Decrypt long-term secrets with current group state
             let secrets = self.decrypt_long_term_secrets(provider, commit.long_term_secrets())?;
 
             // Add new secrets to group
@@ -231,14 +231,14 @@ impl SecretGroup {
     // Long Term secrets
     // =================
 
-    // Internal method to load long term secret from a certain epoch from the internal key store.
+    // Internal method to load long-term secret from a certain epoch from the internal key store.
     fn long_term_secret(&self, epoch: LongTermSecretEpoch) -> Option<&LongTermSecret> {
         self.long_term_secrets
             .iter()
             .find(|secret| secret.long_term_epoch() == epoch)
     }
 
-    // Reads an array of long term secrets and stores new ones when given. Ignores already existing
+    // Reads an array of long-term secrets and stores new ones when given. Ignores already existing
     // secrets.
     fn process_long_term_secrets(
         &mut self,
@@ -261,13 +261,13 @@ impl SecretGroup {
         Ok(())
     }
 
-    /// Generates a new long term secret for this group.
+    /// Generates a new long-term secret for this group.
     ///
     /// This new secret will initiate a new "epoch" and every message will be encrypted with this
-    /// new secret from now on. Old long term secrets are kept and can  still be used to decrypt
+    /// new secret from now on. Old long-term secrets are kept and can  still be used to decrypt
     /// data from former epochs.
     ///
-    /// Note: Only group owners can rotate long term secrets.
+    /// Note: Only group owners can rotate long-term secrets.
     pub fn rotate_long_term_secret(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
@@ -308,13 +308,13 @@ impl SecretGroup {
     // Encryption
     // ==========
 
-    // Securely encodes and encrypts a list of long term secrets for the current MLS group. Members
+    // Securely encodes and encrypts a list of long-term secrets for the current MLS group. Members
     // of this MLS group epoch will be able to decrypt and use these secrets.
     fn encrypt_long_term_secrets(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
     ) -> Result<SecretGroupMessage, SecretGroupError> {
-        // Encode all long term secrets
+        // Encode all long-term secrets
         let encoded_secrets = self
             .long_term_secrets
             .tls_serialize_detached()
@@ -350,14 +350,14 @@ impl SecretGroup {
         Ok(nonce)
     }
 
-    // Decrypts and decodes a list of long term secrets received via a commit message or when
+    // Decrypts and decodes a list of long-term secrets received via a commit message or when
     // joining an existing group.
     fn decrypt_long_term_secrets(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
         encrypted_long_term_secrets: SecretGroupMessage,
     ) -> Result<LongTermSecretVec, SecretGroupError> {
-        // Decrypt long term secrets with current group state
+        // Decrypt long-term secrets with current group state
         let secrets_bytes = self.decrypt(provider, &encrypted_long_term_secrets)?;
 
         // Decode secrets
@@ -383,7 +383,7 @@ impl SecretGroup {
         Ok(SecretGroupMessage::MlsApplicationMessage(mls_ciphertext))
     }
 
-    /// Encrypt user data using the group's current symmetrical long term secret.
+    /// Encrypt user data using the group's current symmetrical long-term secret.
     ///
     /// This method gives only post-compromise security and has in general lower security
     /// guarantees but gives more flexibility. Use this encryption method if you want every old or
@@ -400,7 +400,7 @@ impl SecretGroup {
         let epoch = self.long_term_epoch().unwrap();
         let secret = self.long_term_secret(epoch).unwrap();
 
-        // Encrypt user data with last long term secret
+        // Encrypt user data with last long-term secret
         let ciphertext = secret.encrypt(provider, &nonce, data)?;
 
         Ok(SecretGroupMessage::LongTermSecretMessage(ciphertext))
@@ -409,7 +409,7 @@ impl SecretGroup {
     /// Decrypts user data.
     ///
     /// This method automatically detects if the ciphertext was encrypted with a Sender Ratchet
-    /// Secret or a Long Term Secret and returns an `SecretGroupError` if the required key material
+    /// Secret or a Long Term Secret and returns a `SecretGroupError` if the required key material
     /// for decryption is missing.
     pub fn decrypt(
         &mut self,
@@ -450,7 +450,7 @@ impl SecretGroup {
         Hash::new_from_bytes(group_id_bytes).unwrap()
     }
 
-    /// Returns the current epoch of the long term secret.
+    /// Returns the current epoch of the long-term secret.
     pub fn long_term_epoch(&self) -> Option<LongTermSecretEpoch> {
         self.long_term_secrets
             .iter()

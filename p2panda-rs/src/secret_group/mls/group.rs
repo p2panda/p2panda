@@ -31,7 +31,7 @@ impl MlsGroup {
 
     /// Creates a new MLS group. A group is always created with a single member, the "creator".
     ///
-    /// The given KeyPackage ("InitKeys") will directly be consumed during group creation and not
+    /// The given [KeyPackage] ("InitKeys") will directly be consumed during group creation and not
     /// further propagated.
     pub fn new(
         provider: &impl OpenMlsCryptoProvider,

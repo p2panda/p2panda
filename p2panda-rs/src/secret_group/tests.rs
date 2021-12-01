@@ -37,13 +37,13 @@ fn long_term_secret_evolution() {
 
     // Billie invites Ada into their group, the return value is a `SecretGroupCommit` which
     // contains the MLS `Commit` and MLS `Welcome` message for this epoch, also the already generated
-    // symmetrical long term secret will be encoded, encrypted and included in the same commit
+    // symmetrical long-term secret will be encoded, encrypted and included in the same commit
     let group_commit = billie_group
         .add_members(&billie_provider, &[ada_key_package])
         .unwrap();
     assert!(group_commit.welcome().is_some());
 
-    // Ada joins the group and decrypts the long term secret
+    // Ada joins the group and decrypts the long-term secret
     let mut ada_group = SecretGroup::new_from_welcome(&ada_provider, &group_commit).unwrap();
     assert!(ada_group.is_active());
 
@@ -51,7 +51,7 @@ fn long_term_secret_evolution() {
     // En- & Decryption
     // ~~~~~~~~~~~~~~~~
 
-    // Billie sends an message which was encrypted with the first `LongTermSecret` to Ada, the
+    // Billie sends a message which was encrypted with the first `LongTermSecret` to Ada, the
     // group will automatically use the latest secret for encryption
     let message_ciphertext = billie_group
         .encrypt_with_long_term_secret(&billie_provider, b"This is a secret message")
@@ -95,7 +95,7 @@ fn long_term_secret_evolution() {
         .unwrap();
     assert_eq!(b"This is a secret message".to_vec(), message_plaintext);
 
-    // Ada, Billie and Calvin still share only one long term secret
+    // Ada, Billie and Calvin still share only one long-term secret
     assert_eq!(ada_group.long_term_epoch(), Some(LongTermSecretEpoch(0)));
     assert_eq!(billie_group.long_term_epoch(), Some(LongTermSecretEpoch(0)));
     assert_eq!(calvin_group.long_term_epoch(), Some(LongTermSecretEpoch(0)));
@@ -104,7 +104,7 @@ fn long_term_secret_evolution() {
     // Secret rotation
     // ~~~~~~~~~~~~~~~
 
-    // Billie removes Calvin and rotates the long term secret before to make sure Calvin will not
+    // Billie removes Calvin and rotates the long-term secret before to make sure Calvin will not
     // be able to decrypt future messages
     billie_group
         .rotate_long_term_secret(&billie_provider)
@@ -112,7 +112,7 @@ fn long_term_secret_evolution() {
     let group_commit = billie_group.remove_members(&billie_provider, &[2]).unwrap();
     assert!(group_commit.welcome().is_none());
 
-    // Ada and Calvin processes this group commit
+    // Ada and Calvin process this group commit
     ada_group
         .process_commit(&ada_provider, &group_commit)
         .unwrap();
@@ -122,7 +122,7 @@ fn long_term_secret_evolution() {
         .unwrap();
     assert_eq!(calvin_group.is_active(), false);
 
-    // Only Ada and Billie share the new long term secret
+    // Only Ada and Billie share the new long-term secret
     assert_eq!(ada_group.long_term_epoch(), Some(LongTermSecretEpoch(1)));
     assert_eq!(billie_group.long_term_epoch(), Some(LongTermSecretEpoch(1)));
     assert_eq!(calvin_group.long_term_epoch(), Some(LongTermSecretEpoch(0)));
@@ -216,7 +216,7 @@ fn sender_ratchet_evolution() {
     // En- & Decryption
     // ~~~~~~~~~~~~~~~~
 
-    // Billie sends an encrypted message to Ada. This message was encrypted using Billies Sender
+    // Billie sends an encrypted message to Ada. This message was encrypted using Billie's Sender
     // Ratchet Secret.
     let message_ciphertext = billie_group
         .encrypt(&billie_provider, b"This is a secret message")
