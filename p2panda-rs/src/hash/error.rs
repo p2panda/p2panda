@@ -7,8 +7,8 @@ use thiserror::Error;
 #[allow(missing_copy_implementations)]
 pub enum HashError {
     /// Hash string has an invalid length.
-    #[error("invalid hash length")]
-    InvalidLength,
+    #[error("invalid hash length {0} bytes, expected {1} bytes")]
+    InvalidLength(usize, usize),
 
     /// Hash string contains invalid hex characters.
     #[error("invalid hex encoding in hash string")]

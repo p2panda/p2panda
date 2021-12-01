@@ -96,7 +96,7 @@ impl Validate for Hash {
             Ok(bytes) => {
                 // Check if length is correct
                 if bytes.len() != HASH_SIZE + 2 {
-                    return Err(HashError::InvalidLength);
+                    return Err(HashError::InvalidLength(bytes.len(), HASH_SIZE + 2));
                 }
 
                 // Check if YASMF BLAKE3 hash is valid
