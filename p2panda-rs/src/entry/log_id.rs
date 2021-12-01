@@ -3,6 +3,9 @@
 use serde::{Deserialize, Serialize};
 
 /// Authors can write entries to multiple logs identified by log ids.
+///
+/// While the Bamboo spec calls for unsigned 64 bit integers, these are not supported by SQLite,
+/// which we want to support. Therefore, we use `i64` here.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(
     feature = "db-sqlx",
