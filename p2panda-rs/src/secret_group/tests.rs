@@ -146,9 +146,9 @@ fn long_term_secret_evolution() {
         message_plaintext
     );
 
-    // ~~~~~~~~~~~~~~~
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Re-inviting former members
-    // ~~~~~~~~~~~~~~~
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     // Calvin generates a second key package
     let calvin_member_2 = SecretGroupMember::new(&calvin_provider, &calvin_key_pair).unwrap();
