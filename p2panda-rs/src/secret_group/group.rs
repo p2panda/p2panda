@@ -21,7 +21,7 @@ type LongTermSecretVec = TlsVecU32<LongTermSecret>;
 /// Create or join secret groups, maintain their state and en- / decrypt user messages.
 #[derive(Debug)]
 pub struct SecretGroup {
-    /// Used ciphersuite when generating new long-term secrets
+    /// Used ciphersuite when generating new long-term secrets.
     long_term_ciphersuite: LongTermSecretCiphersuite,
 
     /// Internal counter for AEAD nonce.
@@ -41,11 +41,14 @@ impl SecretGroup {
     // Creation
     // ========
 
-    /// Creates a new `SecretGroup` instance which can be used to encrypt data securely between
-    /// members of the group.
+    /// Establishes a new [SecretGroup] state which maintains secrets and data to encrypt messages
+    /// securely between its members.
     ///
-    /// The first member of this group will automatically be the "owner" maintaining the group
-    /// state by updating secrets, adding or removing members.
+    /// As a unique group identifier the [Hash] is used of the `SecretGroup` instance which was
+    /// created before.
+    ///
+    /// The first member of this group will automatically be the "owner". The owner manages the
+    /// group by updating secrets, adding or removing members.
     pub fn new(
         provider: &impl OpenMlsCryptoProvider,
         group_instance_id: &Hash,
