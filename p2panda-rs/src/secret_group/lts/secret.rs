@@ -10,8 +10,8 @@ use crate::secret_group::lts::{
     LongTermSecretError,
 };
 
-/// Long-term secrets are objects which hold sensitive AEAD key secrets used to symmetrically
-/// encrypt user data for longer periods of time.
+/// Long term secrets are objects which hold sensitive AEAD key secrets used to symmetrically
+/// encrypt user data that should be accessible for all future group members.
 ///
 /// Additionally to the secret value every long-term secret also holds meta data, like the MLS
 /// group id and epoch which this secret belongs to.
