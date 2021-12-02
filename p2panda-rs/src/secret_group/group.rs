@@ -114,9 +114,13 @@ impl SecretGroup {
 
     /// Add new members to the group.
     ///
-    /// This method returns a `SecretGroupCommit` message which needs to be broadcasted in the
-    /// network to then be downloaded and processed by all old and new group members to sync group
-    /// state.
+    /// This method advances the group to the next MLS epoch and returns a `SecretGroupCommit`
+    /// message which needs to be broadcasted in the network to then be downloaded and processed by
+    /// all old and new group members to sync group state.
+    ///
+    /// The returned `SecretGroupCommit` contains `Welcome` messages which are used by new members
+    /// to join. Every `Welcome` message contains a list of `KeyPackage` references for clients to
+    /// find out which commit needs to be downloaded to join.
     ///
     /// Note: Only group owners can maintain group members.
     pub fn add_members(
@@ -146,8 +150,9 @@ impl SecretGroup {
 
     /// Remove members from the group.
     ///
-    /// This method returns a `SecretGroupCommit` message which needs to be broadcasted in the
-    /// network to then be downloaded and processed by all other group members to sync group state.
+    /// This method advances the group to the next MLS epoch and returns a `SecretGroupCommit`
+    /// message which needs to be broadcasted in the network to then be downloaded and processed by
+    /// all other group members to sync group state.
     ///
     /// Note: Only group owners can maintain group members.
     pub fn remove_members(
@@ -266,9 +271,9 @@ impl SecretGroup {
 
     /// Generates a new long-term secret for this group.
     ///
-    /// This new secret will initiate a new "epoch" and every message will be encrypted with this
-    /// new secret from now on. Old long-term secrets are kept and can  still be used to decrypt
-    /// data from former epochs.
+    /// This new secret will initiate a new "long-term secret epoch" and every message will be
+    /// encrypted with this new secret from now on. Old long-term secrets are kept and can still be
+    /// used to decrypt data from former lts epochs.
     ///
     /// Note: Only group owners can rotate long-term secrets.
     pub fn rotate_long_term_secret(
