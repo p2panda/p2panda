@@ -7,12 +7,12 @@ use thiserror::Error;
 #[allow(missing_copy_implementations)]
 pub enum LongTermSecretError {
     /// Failed because epochs do not match.
-    #[error("secret epoch does not match ciphertext")]
-    EpochNotMatching,
+    #[error("secret epoch {0} does not match ciphertext {1}")]
+    EpochNotMatching(u64, u64),
 
     /// Failed because group ids do not match.
-    #[error("secret group id does not match ciphertext")]
-    GroupNotMatching,
+    #[error("secret group id {0} does not match ciphertext {1}")]
+    GroupNotMatching(String, String),
 
     /// Internal hashing error.
     #[error(transparent)]

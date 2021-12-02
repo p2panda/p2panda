@@ -103,12 +103,18 @@ impl LongTermSecret {
     ) -> Result<Vec<u8>, LongTermSecretError> {
         // The used secret does not match the ciphertexts epoch
         if ciphertext.long_term_epoch() != self.long_term_epoch {
-            return Err(LongTermSecretError::EpochNotMatching);
+            return Err(LongTermSecretError::EpochNotMatching(
+                self.long_term_epoch.0,
+                ciphertext.long_term_epoch().0,
+            ));
         }
 
         // The used secret does not match the ciphertexts group instance hash
         if ciphertext.group_instance_id()? != self.group_instance_id()? {
-            return Err(LongTermSecretError::GroupNotMatching);
+            return Err(LongTermSecretError::GroupNotMatching(
+                self.group_instance_id()?.as_str().into(),
+                ciphertext.group_instance_id()?.as_str().into(),
+            ));
         }
 
         // Decrypt ciphertext with tag and check AAD
@@ -200,11 +206,11 @@ mod tests {
 
             assert!(matches!(
                 secret_different_epoch.decrypt(&provider, &ciphertext),
-                Err(LongTermSecretError::EpochNotMatching)
+                Err(LongTermSecretError::EpochNotMatching(_, _))
             ));
             assert!(matches!(
                 secret_different_group.decrypt(&provider, &ciphertext),
-                Err(LongTermSecretError::GroupNotMatching)
+                Err(LongTermSecretError::GroupNotMatching(_, _))
             ));
         }
     }
