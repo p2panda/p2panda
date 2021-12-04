@@ -15,7 +15,7 @@ use crate::message::MessageEncoded;
 use crate::Validate;
 
 /// This is the size of p2panda entries' signatures
-pub const SIGNATURE_SIZE: usize = ED25519_SIGNATURE_SIZE;
+pub(crate) const SIGNATURE_SIZE: usize = ED25519_SIGNATURE_SIZE;
 
 /// Bamboo entry bytes represented in hex encoding format.
 #[derive(Clone, Debug, Serialize, Deserialize)]

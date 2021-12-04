@@ -12,4 +12,5 @@ mod error;
 mod hash;
 
 pub use error::HashError;
-pub use hash::{Blake3ArrayVec, Hash, HASH_SIZE};
+pub use hash::{Blake3ArrayVec, Hash};
+pub(crate) use hash::HASH_SIZE;
