@@ -341,6 +341,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::entry::{LogId, SeqNum};
+    use crate::hash::Hash;
     use crate::message::MessageValue;
     use crate::test_utils::fixtures::{
         create_message, delete_message, hash, private_key, some_hash, update_message,
@@ -441,7 +442,7 @@ mod tests {
         let expected_next_entry_args = NextEntryArgs{
             log_id: LogId::new(1),
             seq_num: SeqNum::new(5).unwrap(),
-            backlink: some_hash("00404c073c9584238a0659a4231b67b1e876cfa0f973eaeb04fe0165d28089b93efaaea8738925d0f49f21be11837d477b0e436466c71a1e4f1f404488a8be1d8232"),
+            backlink: some_hash("0020801296ae77fd2cf6e0b00e2d2af7f0ee4db0d28eeeb3567206d2a67463736fd4"),
             skiplink: None
         };
 
@@ -467,7 +468,7 @@ mod tests {
         let expected_next_entry_args = NextEntryArgs{
             log_id: LogId::new(1),
             seq_num: SeqNum::new(3).unwrap(),
-            backlink: some_hash("0040b893ff157b6c402b677b6fe071475e17ca1a0f45852eaed9e9c283b53455a86d1ca9ebafde3809d4197f4732e09f57c969c845707fb51147df8ea736da177c1a"),
+            backlink: some_hash("002078f91b0df66508671dfd6137b6334cb99cf4dc170cf42699830978630c8d5715"),
             skiplink: None
         };
 

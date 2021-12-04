@@ -105,52 +105,52 @@ mod tests {
 
         const TEST_DATA: &str = r#"{
             "panda": {
-                "publicKey": "2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96",
-                "privateKey": "eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e2",
-                "logs": [
+              "publicKey": "2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96",
+              "privateKey": "eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e2",
+              "logs": [
+                {
+                  "encodedEntries": [
                     {
-                        "encodedEntries": [
-                            {
-                                "author": "2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96",
-                                "entryBytes": "002f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc960101dc00402d22e064b16c17209a0a60e6326904effa2a34ad442fe9c8d86664a70b313a464b4dca3aa0927a299968e82d79f29e100191b3f32d8eda63b340fb9757b670609ade5b150be29f2334afe86b277153dd587c5fcea2dd82812df0d9fb5db234efe51883e0234242beae89d439a05947e1530d2282dad74e91d2e5915a08929c0c",
-                                "entryHash": "0040f80486aa52d765acaa2d1e349a1ab62d6f3ae254af263da4e94ab746a8a9aa08ec7c81f18fe563faaae05927bc13815aec4c08b23836f2c0504d9bb356f8f4c6",
-                                "payloadBytes": "a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a1676d657373616765a26474797065637374726576616c7565764f68682c206d79206669727374206d65737361676521",
-                                "payloadHash": "00402d22e064b16c17209a0a60e6326904effa2a34ad442fe9c8d86664a70b313a464b4dca3aa0927a299968e82d79f29e100191b3f32d8eda63b340fb9757b67060",
-                                "logId": 1,
-                                "seqNum": 1
-                            }
-                        ],
-                        "decodedMessages": [
-                            {
-                                "action": "create",
-                                "schema": "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437",
-                                "version": 1,
-                                "fields": {
-                                    "message": {
-                                        "type": "str",
-                                        "value": "Ohh, my first message!"
-                                    }
-                                }
-                            }
-                        ],
-                        "nextEntryArgs": [
-                            {
-                                "entryHashBacklink": null,
-                                "entryHashSkiplink": null,
-                                "seqNum": 1,
-                                "logId": 1
-                            },
-                            {
-                                "entryHashBacklink": "0040f80486aa52d765acaa2d1e349a1ab62d6f3ae254af263da4e94ab746a8a9aa08ec7c81f18fe563faaae05927bc13815aec4c08b23836f2c0504d9bb356f8f4c6",
-                                "entryHashSkiplink": null,
-                                "seqNum": 2,
-                                "logId": 1
-                            }
-                        ]
+                      "author": "2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96",
+                      "entryBytes": "002f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc9601019c002003a7c9205769a33f73fe659fe2de28cda99e2fbdb0354247a245627b0152934b7b99cc46479a6713f93a0a7b71dc126bb9b2fb55eb207b192dc0fa25dc72cfaebfcfcc7196d1524d27c30aeed63cf156471df806a930b24200035bf8d959f102",
+                      "entryHash": "00200c71430f838f89fc15ea7d04dc42466c9ea8b0ba2159390d0095e1323748a258",
+                      "payloadBytes": "a466616374696f6e6663726561746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e02666669656c6473a1676d657373616765a26474797065637374726576616c7565764f68682c206d79206669727374206d65737361676521",
+                      "payloadHash": "002003a7c9205769a33f73fe659fe2de28cda99e2fbdb0354247a245627b0152934b",
+                      "logId": 1,
+                      "seqNum": 1
                     }
-                ]
+                  ],
+                  "decodedMessages": [
+                    {
+                      "action": "create",
+                      "schema": "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
+                      "version": 2,
+                      "fields": {
+                        "message": {
+                          "type": "str",
+                          "value": "Ohh, my first message!"
+                        }
+                      }
+                    }
+                  ],
+                  "nextEntryArgs": [
+                    {
+                      "entryHashBacklink": null,
+                      "entryHashSkiplink": null,
+                      "seqNum": 1,
+                      "logId": 1
+                    },
+                    {
+                      "entryHashBacklink": "00200c71430f838f89fc15ea7d04dc42466c9ea8b0ba2159390d0095e1323748a258",
+                      "entryHashSkiplink": null,
+                      "seqNum": 2,
+                      "logId": 1
+                    }
+                  ]
+                }
+              ]
             }
-        }"#;
+          }"#;
 
         // Generate test data
         let generated_test_data = generate_test_data(&mut node, vec![panda]);
