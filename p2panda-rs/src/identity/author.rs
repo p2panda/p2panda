@@ -9,7 +9,7 @@ use crate::identity::AuthorError;
 use crate::Validate;
 
 /// Authors are hex encoded ed25519 public key strings.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(
     feature = "db-sqlx",
     derive(sqlx::Type, sqlx::FromRow),

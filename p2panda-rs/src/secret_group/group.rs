@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::TryFrom;
+
+use ed25519_dalek::PublicKey;
 use openmls::framing::{MlsMessageIn, MlsMessageOut, VerifiableMlsPlaintext};
 use openmls::group::GroupId;
-use openmls::prelude::KeyPackage;
+use openmls::prelude::{KeyPackage, Credential};
 use openmls_traits::OpenMlsCryptoProvider;
 use tls_codec::{Deserialize, Serialize, TlsVecU32};
 
 use crate::hash::Hash;
+use crate::identity::Author;
 use crate::secret_group::lts::{
     LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch, LongTermSecretNonce,
     LTS_DEFAULT_CIPHERSUITE, LTS_EXPORTER_LABEL, LTS_NONCE_EXPORTER_LABEL,
@@ -184,6 +188,22 @@ impl SecretGroup {
             None,
             encrypt_long_term_secrets,
         )?)
+    }
+
+    /// Return the current group members.
+    pub fn members(&self) -> Result<Vec<Author>, SecretGroupError> {
+        let read_author = |member: Credential| {
+            let public_key = PublicKey::from_bytes(member.identity()).map_err(|_| {
+                SecretGroupError::InvalidMemberPublicKey
+            })?;
+            // It's safe to unwrap here since we just constructed the public key ourselves
+            Ok(Author::try_from(public_key).unwrap())
+        };
+
+        self.mls_group.members().unwrap()
+            .into_iter()
+            .map(read_author)
+            .collect()
     }
 
     // Commits
@@ -470,8 +490,10 @@ impl SecretGroup {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
+
     use crate::hash::Hash;
-    use crate::identity::KeyPair;
+    use crate::identity::{KeyPair, Author};
     use crate::secret_group::lts::LongTermSecretEpoch;
     use crate::secret_group::{MlsProvider, SecretGroupMember, SecretGroupMessage};
 
@@ -557,5 +579,28 @@ mod tests {
         assert!(group_2.remove_members(&provider, &[1]).is_err());
         assert!(group_2.rotate_long_term_secret(&provider).is_err());
         assert!(group.rotate_long_term_secret(&provider).is_ok());
+    }
+
+    #[test]
+    fn group_members() {
+        // Create group
+        let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let key_pair = KeyPair::new();
+        let provider = MlsProvider::new();
+        let owner = SecretGroupMember::new(&provider, &key_pair).unwrap();
+        let mut group = SecretGroup::new(&provider, &group_instance_id, &owner).unwrap();
+
+        // Add a new member
+        let provider_2 = MlsProvider::new();
+        let key_pair_2 = KeyPair::new();
+        let member = SecretGroupMember::new(&provider, &key_pair_2).unwrap();
+        let member_key_package = member.key_package(&provider_2).unwrap();
+        group.add_members(&provider, &[member_key_package]).unwrap();
+
+        // Expect the group to contain the owner and the new member
+        assert_eq!(group.members().unwrap(), [
+            Author::try_from(key_pair.public_key().to_owned()).unwrap(),
+            Author::try_from(key_pair_2.public_key().to_owned()).unwrap()
+        ]);
     }
 }
