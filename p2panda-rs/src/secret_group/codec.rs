@@ -15,11 +15,13 @@ use crate::secret_group::SecretGroupMessage;
 #[derive(Debug, Clone, Copy, TlsSerialize, TlsDeserialize, TlsSize)]
 #[repr(u8)]
 enum SecretGroupMessageType {
-    /// This message contains user data encrypted and encoded in form of a MLS application message.
-    MlsApplicationMessage = 1,
+    /// This message contains user data encrypted with a MLS sender ratchet secret and encoded in
+    /// form of a MLS application message.
+    SenderRatchetSecret = 1,
 
-    /// This message contains user data encrypted and encoded as a long-term secret ciphertext.
-    LongTermSecretMessage = 2,
+    /// This message contains user data encrypted with a long-term secret and encoded as a
+    /// long-term secret ciphertext.
+    LongTermSecret = 2,
 }
 
 impl TryFrom<u8> for SecretGroupMessageType {
@@ -27,8 +29,8 @@ impl TryFrom<u8> for SecretGroupMessageType {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            1 => Ok(SecretGroupMessageType::MlsApplicationMessage),
-            2 => Ok(SecretGroupMessageType::LongTermSecretMessage),
+            1 => Ok(SecretGroupMessageType::SenderRatchetSecret),
+            2 => Ok(SecretGroupMessageType::LongTermSecret),
             _ => Err("Unknown secret group message type."),
         }
     }
@@ -37,10 +39,10 @@ impl TryFrom<u8> for SecretGroupMessageType {
 impl tls_codec::Size for SecretGroupMessage {
     #[inline]
     fn tls_serialized_len(&self) -> usize {
-        SecretGroupMessageType::MlsApplicationMessage.tls_serialized_len()
+        SecretGroupMessageType::SenderRatchetSecret.tls_serialized_len()
             + match self {
-                SecretGroupMessage::MlsApplicationMessage(message) => message.tls_serialized_len(),
-                SecretGroupMessage::LongTermSecretMessage(message) => message.tls_serialized_len(),
+                SecretGroupMessage::SenderRatchetSecret(message) => message.tls_serialized_len(),
+                SecretGroupMessage::LongTermSecret(message) => message.tls_serialized_len(),
             }
     }
 }
@@ -48,18 +50,16 @@ impl tls_codec::Size for SecretGroupMessage {
 impl tls_codec::Serialize for SecretGroupMessage {
     fn tls_serialize<W: Write>(&self, writer: &mut W) -> Result<usize, tls_codec::Error> {
         match self {
-            SecretGroupMessage::MlsApplicationMessage(message) => {
+            SecretGroupMessage::SenderRatchetSecret(message) => {
                 // Write first byte indicating message type
-                let written =
-                    SecretGroupMessageType::MlsApplicationMessage.tls_serialize(writer)?;
+                let written = SecretGroupMessageType::SenderRatchetSecret.tls_serialize(writer)?;
 
                 // Write message data
                 message.tls_serialize(writer).map(|l| l + written)
             }
-            SecretGroupMessage::LongTermSecretMessage(message) => {
+            SecretGroupMessage::LongTermSecret(message) => {
                 // Write first byte indicating message type
-                let written =
-                    SecretGroupMessageType::LongTermSecretMessage.tls_serialize(writer)?;
+                let written = SecretGroupMessageType::LongTermSecret.tls_serialize(writer)?;
 
                 // Write message data
                 message.tls_serialize(writer).map(|l| l + written)
@@ -83,10 +83,10 @@ impl tls_codec::Deserialize for SecretGroupMessage {
 
         // Translate into enum and decode inner values
         match message_type {
-            SecretGroupMessageType::MlsApplicationMessage => Ok(Self::MlsApplicationMessage(
+            SecretGroupMessageType::SenderRatchetSecret => Ok(Self::SenderRatchetSecret(
                 MlsCiphertext::tls_deserialize(bytes)?,
             )),
-            SecretGroupMessageType::LongTermSecretMessage => Ok(Self::LongTermSecretMessage(
+            SecretGroupMessageType::LongTermSecret => Ok(Self::LongTermSecret(
                 LongTermSecretCiphertext::tls_deserialize(bytes)?,
             )),
         }
@@ -128,7 +128,7 @@ mod tests {
         let ciphertext = secret
             .encrypt(&provider, &nonce, b"Secret message")
             .unwrap();
-        let message = SecretGroupMessage::LongTermSecretMessage(ciphertext);
+        let message = SecretGroupMessage::LongTermSecret(ciphertext);
 
         // Encode and decode secret
         let encoded = secret.tls_serialize_detached().unwrap();

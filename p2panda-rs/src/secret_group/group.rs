@@ -409,7 +409,7 @@ impl SecretGroup {
         data: &[u8],
     ) -> Result<SecretGroupMessage, SecretGroupError> {
         let mls_ciphertext = self.mls_group.encrypt(provider, data)?;
-        Ok(SecretGroupMessage::MlsApplicationMessage(mls_ciphertext))
+        Ok(SecretGroupMessage::SenderRatchetSecret(mls_ciphertext))
     }
 
     /// Encrypt user data using the group's current symmetrical long-term secret.
@@ -432,7 +432,7 @@ impl SecretGroup {
         // Encrypt user data with last long-term secret
         let ciphertext = secret.encrypt(provider, &nonce, data)?;
 
-        Ok(SecretGroupMessage::LongTermSecretMessage(ciphertext))
+        Ok(SecretGroupMessage::LongTermSecret(ciphertext))
     }
 
     /// Decrypts user data.
@@ -446,10 +446,10 @@ impl SecretGroup {
         message: &SecretGroupMessage,
     ) -> Result<Vec<u8>, SecretGroupError> {
         match message {
-            SecretGroupMessage::MlsApplicationMessage(ciphertext) => {
+            SecretGroupMessage::SenderRatchetSecret(ciphertext) => {
                 Ok(self.mls_group.decrypt(provider, ciphertext.clone())?)
             }
-            SecretGroupMessage::LongTermSecretMessage(ciphertext) => {
+            SecretGroupMessage::LongTermSecret(ciphertext) => {
                 let secret = self
                     .long_term_secret(ciphertext.long_term_epoch())
                     .ok_or_else(|| SecretGroupError::LTSSecretMissing)?;
@@ -520,7 +520,7 @@ mod tests {
         // Helper method to get nonce from SecretGroupMessage
         fn nonce(message: SecretGroupMessage) -> Vec<u8> {
             match message {
-                SecretGroupMessage::LongTermSecretMessage(lts) => lts.nonce(),
+                SecretGroupMessage::LongTermSecret(lts) => lts.nonce(),
                 _ => panic!(),
             }
         }

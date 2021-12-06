@@ -8,9 +8,11 @@ use crate::secret_group::lts::LongTermSecretCiphertext;
 /// user data encrypted with a long-term secret.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SecretGroupMessage {
-    /// This message contains user data encrypted and encoded in form of a MLS application message.
-    MlsApplicationMessage(MlsCiphertext),
+    /// This message contains user data encrypted with a MLS sender ratchet secret and encoded in
+    /// form of a MLS application message.
+    SenderRatchetSecret(MlsCiphertext),
 
-    /// This message contains user data encrypted and encoded as a long-term secret ciphertext.
-    LongTermSecretMessage(LongTermSecretCiphertext),
+    /// This message contains user data encrypted with a long-term secret and encoded as a
+    /// long-term secret ciphertext.
+    LongTermSecret(LongTermSecretCiphertext),
 }
