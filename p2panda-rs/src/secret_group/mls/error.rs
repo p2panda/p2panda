@@ -8,14 +8,14 @@ use thiserror::Error;
 pub enum MlsError {
     /// Internal MLS `KeyPackage` error.
     #[error(transparent)]
-    KeyPackageError(#[from] openmls::prelude::KeyPackageError),
+    KeyPackage(#[from] openmls::prelude::KeyPackageError),
 
     /// Internal MLS `ManagedGroup` error.
     #[error(transparent)]
-    ManagedGroupError(#[from] openmls::prelude::ManagedGroupError),
+    ManagedGroup(#[from] openmls::prelude::ManagedGroupError),
 
     /// Internal `memory_keystore` serialization error.
     // @TODO: This will be changed as soon as we have our own key store implementation.
     #[error("KeyStore failed during serialization")]
-    KeyStoreSerializationError,
+    KeyStoreSerialization,
 }

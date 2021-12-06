@@ -30,16 +30,16 @@ impl SecretGroupCommit {
         // Check if message is in plaintext
         // @TODO: This should be handled internally by `openmls` instead:
         // https://github.com/openmls/openmls/issues/584
-        let mls_commit_message = match mls_message_out.clone() {
+        let mls_commit_message = match mls_message_out {
             MlsMessageOut::Plaintext(message) => Ok(message),
             _ => Err(SecretGroupError::NeedsToBeMlsPlaintext),
         }?;
 
         // Check if message is a commit
-        if match mls_commit_message.content() {
-            MlsPlaintextContentType::Commit(..) => false,
-            _ => true,
-        } {
+        if !matches!(
+            mls_commit_message.content(),
+            MlsPlaintextContentType::Commit(..),
+        ) {
             return Err(SecretGroupError::NeedsToBeMlsCommit);
         }
 

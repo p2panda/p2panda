@@ -53,7 +53,7 @@ impl MlsMember {
                 provider
                     .key_store()
                     .store(bundle.credential().signature_key(), &bundle)
-                    .map_err(|_| MlsError::KeyStoreSerializationError)?;
+                    .map_err(|_| MlsError::KeyStoreSerialization)?;
 
                 bundle
             }
@@ -100,7 +100,7 @@ impl MlsMember {
         provider
             .key_store()
             .store(&key_package_hash, &key_package_bundle)
-            .map_err(|_| MlsError::KeyStoreSerializationError)?;
+            .map_err(|_| MlsError::KeyStoreSerialization)?;
 
         // Finally return the public part
         Ok(key_package)

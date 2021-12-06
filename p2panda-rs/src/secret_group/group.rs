@@ -94,9 +94,7 @@ impl SecretGroup {
         // Read MLS welcome from secret group commit and try to establish group state from it
         let mls_group = MlsGroup::new_from_welcome(
             provider,
-            commit
-                .welcome()
-                .ok_or_else(|| SecretGroupError::WelcomeMissing)?,
+            commit.welcome().ok_or(SecretGroupError::WelcomeMissing)?,
         )?;
 
         let mut group = Self {
@@ -148,11 +146,11 @@ impl SecretGroup {
         // Re-Encrypt long-term secrets for this group epoch
         let encrypt_long_term_secrets = self.encrypt_long_term_secrets(provider)?;
 
-        Ok(SecretGroupCommit::new(
+        SecretGroupCommit::new(
             mls_message_out,
             Some(mls_welcome),
             encrypt_long_term_secrets,
-        )?)
+        )
     }
 
     /// Remove members from the group.
@@ -186,11 +184,7 @@ impl SecretGroup {
         // Re-Encrypt long-term secrets for this group epoch
         let encrypt_long_term_secrets = self.encrypt_long_term_secrets(provider)?;
 
-        Ok(SecretGroupCommit::new(
-            mls_message_out,
-            None,
-            encrypt_long_term_secrets,
-        )?)
+        SecretGroupCommit::new(mls_message_out, None, encrypt_long_term_secrets)
     }
 
     /// Return the current group members.
@@ -329,7 +323,7 @@ impl SecretGroup {
 
         // Store secret in internal storage
         self.long_term_secrets.push(LongTermSecret::new(
-            self.group_instance_id().clone(),
+            self.group_instance_id(),
             self.long_term_ciphersuite,
             long_term_epoch,
             value.into(),
@@ -354,7 +348,7 @@ impl SecretGroup {
             .map_err(|_| SecretGroupError::LTSEncodingError)?;
 
         // Encrypt encoded secrets
-        Ok(self.encrypt(provider, &encoded_secrets)?)
+        self.encrypt(provider, &encoded_secrets)
     }
 
     // Generates unique nonce which can be used for AEAD.
@@ -457,7 +451,7 @@ impl SecretGroup {
             SecretGroupMessage::LongTermSecret(ciphertext) => {
                 let secret = self
                     .long_term_secret(ciphertext.long_term_epoch())
-                    .ok_or_else(|| SecretGroupError::LTSSecretMissing)?;
+                    .ok_or(SecretGroupError::LTSSecretMissing)?;
                 Ok(secret.decrypt(provider, ciphertext)?)
             }
         }

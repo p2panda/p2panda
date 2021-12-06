@@ -50,7 +50,7 @@ impl LongTermSecretCiphertext {
 
     /// Returns epoch of long-term secret used when data was encrypted.
     pub fn long_term_epoch(&self) -> LongTermSecretEpoch {
-        self.long_term_epoch.clone()
+        self.long_term_epoch
     }
 
     /// Returns AEAD nonce when data was encrypted.

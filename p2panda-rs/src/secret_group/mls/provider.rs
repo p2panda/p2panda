@@ -27,6 +27,12 @@ impl MlsProvider {
     }
 }
 
+impl Default for MlsProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OpenMlsCryptoProvider for MlsProvider {
     type CryptoProvider = RustCrypto;
     type RandProvider = RustCrypto;

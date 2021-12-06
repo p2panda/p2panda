@@ -4,15 +4,19 @@ use tls_codec::{TlsDeserialize, TlsSerialize, TlsSize};
 
 /// Holds the value of a Long Term Secret epoch starting with zero.
 #[derive(
-    Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, TlsDeserialize, TlsSerialize, TlsSize,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    TlsDeserialize,
+    TlsSerialize,
+    TlsSize,
 )]
 pub struct LongTermSecretEpoch(pub u64);
-
-impl Default for LongTermSecretEpoch {
-    fn default() -> Self {
-        Self(0)
-    }
-}
 
 impl LongTermSecretEpoch {
     /// Increments the epoch by one.
