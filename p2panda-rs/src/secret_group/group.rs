@@ -53,6 +53,9 @@ impl SecretGroup {
     ///
     /// The first member of this group will automatically be the "owner". The owner manages the
     /// group by updating secrets, adding or removing members.
+    ///
+    /// Each member in a secret group is holder of a single p2panda [KeyPair] which is used to sign
+    /// MLS data and represented with the regarding public key.
     pub fn new(
         provider: &impl OpenMlsCryptoProvider,
         group_instance_id: &Hash,
