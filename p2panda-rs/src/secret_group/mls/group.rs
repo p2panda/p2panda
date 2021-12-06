@@ -185,6 +185,11 @@ impl MlsGroup {
     pub fn is_active(&self) -> bool {
         self.0.is_active()
     }
+
+    /// Return members
+    pub fn members(&self) -> Result<Vec<Credential>, MlsError> {
+        Ok(self.0.members())
+    }
 }
 
 #[cfg(test)]
