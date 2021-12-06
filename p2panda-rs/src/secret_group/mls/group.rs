@@ -186,7 +186,7 @@ impl MlsGroup {
         self.0.is_active()
     }
 
-    /// Return members
+    /// Return members of MLS group.
     pub fn members(&self) -> Result<Vec<Credential>, MlsError> {
         Ok(self.0.members())
     }

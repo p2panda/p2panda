@@ -5,7 +5,7 @@ use std::convert::TryFrom;
 use ed25519_dalek::PublicKey;
 use openmls::framing::{MlsMessageIn, MlsMessageOut, VerifiableMlsPlaintext};
 use openmls::group::GroupId;
-use openmls::prelude::{KeyPackage, Credential};
+use openmls::prelude::{Credential, KeyPackage};
 use openmls_traits::OpenMlsCryptoProvider;
 use tls_codec::{Deserialize, Serialize, TlsVecU32};
 
@@ -196,14 +196,16 @@ impl SecretGroup {
     /// Return the current group members.
     pub fn members(&self) -> Result<Vec<Author>, SecretGroupError> {
         let read_author = |member: Credential| {
-            let public_key = PublicKey::from_bytes(member.identity()).map_err(|_| {
-                SecretGroupError::InvalidMemberPublicKey
-            })?;
+            let public_key = PublicKey::from_bytes(member.identity())
+                .map_err(|_| SecretGroupError::InvalidMemberPublicKey)?;
+
             // It's safe to unwrap here since we just constructed the public key ourselves
             Ok(Author::try_from(public_key).unwrap())
         };
 
-        self.mls_group.members().unwrap()
+        self.mls_group
+            .members()
+            .unwrap()
             .into_iter()
             .map(read_author)
             .collect()
@@ -496,7 +498,7 @@ mod tests {
     use std::convert::TryFrom;
 
     use crate::hash::Hash;
-    use crate::identity::{KeyPair, Author};
+    use crate::identity::{Author, KeyPair};
     use crate::secret_group::lts::LongTermSecretEpoch;
     use crate::secret_group::{MlsProvider, SecretGroupMember, SecretGroupMessage};
 
@@ -601,9 +603,12 @@ mod tests {
         group.add_members(&provider, &[member_key_package]).unwrap();
 
         // Expect the group to contain the owner and the new member
-        assert_eq!(group.members().unwrap(), [
-            Author::try_from(key_pair.public_key().to_owned()).unwrap(),
-            Author::try_from(key_pair_2.public_key().to_owned()).unwrap()
-        ]);
+        assert_eq!(
+            group.members().unwrap(),
+            [
+                Author::try_from(key_pair.public_key().to_owned()).unwrap(),
+                Author::try_from(key_pair_2.public_key().to_owned()).unwrap()
+            ]
+        );
     }
 }
