@@ -478,7 +478,8 @@ impl SecretGroup {
         Hash::new_from_bytes(group_id_bytes).unwrap()
     }
 
-    /// Returns the current epoch of the long-term secret.
+    /// Returns the current epoch of the long-term secret or None if no long-term secret was
+    /// generated yet.
     pub fn long_term_epoch(&self) -> Option<LongTermSecretEpoch> {
         self.long_term_secrets
             .iter()
