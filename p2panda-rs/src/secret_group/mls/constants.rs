@@ -16,8 +16,9 @@ use openmls::ciphersuite::CiphersuiteName;
 pub const MLS_CIPHERSUITE_NAME: CiphersuiteName =
     CiphersuiteName::MLS10_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
 
-/// The padding mechanism is used to improve protection against traffic analysis.
-pub const MLS_PADDING_SIZE: usize = 128;
+/// The padding mechanism is used to improve protection against traffic analysis. The final size of
+/// the ciphertext will be a multiple of the given padding.
+pub const MLS_PADDING_SIZE: usize = 16;
 
 /// The lifetime extension represents the times between which clients will consider a KeyPackage
 /// valid.
