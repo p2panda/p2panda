@@ -6,10 +6,12 @@
 //! functionality is implemented in the main library this will be replaced with core modules. For these reasons
 //! this code is only intended for testing or demo purposes.
 
+use std::convert::TryFrom;
+
 use crate::entry::EntrySigned;
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::message::Message;
+use crate::message::{Message, MessageEncoded};
 
 /// This struct is an augmented version of a simple log entry. It includes extra properties to aid in
 /// testing and materialising instances. In particular it has an `previous_operation`.
@@ -80,6 +82,16 @@ impl LogEntry {
     /// Get the message from this entry
     pub fn message(&self) -> Message {
         self.message.clone()
+    }
+
+    /// Get the encoded entry from this entry
+    pub fn entry_encoded(&self) -> EntrySigned {
+        self.entry_encoded.clone()
+    }
+
+    /// Get the encoded message from this entry
+    pub fn message_encoded(&self) -> MessageEncoded {
+        MessageEncoded::try_from(&self.message).unwrap()
     }
 
     /// Get the instance backlink for this entry
