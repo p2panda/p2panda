@@ -5,8 +5,9 @@
 
 mod dag;
 mod error;
-mod utils;
+mod filter;
+mod marshall_entries;
 
 pub use dag::{Edge, Node, DAG};
 pub use error::MaterialisationError;
-pub use utils::marshall_entries;
+pub use marshall_entries::marshall_entries;
