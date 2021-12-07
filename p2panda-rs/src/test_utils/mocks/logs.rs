@@ -61,17 +61,17 @@ impl LogEntry {
 
     /// Get the author of this entry
     pub fn author(&self) -> String {
-        self.author.as_str().to_string().clone()
+        self.author.as_str().to_string()
     }
 
     /// Get the hash of this entry
     pub fn hash(&self) -> Hash {
-        self.entry_encoded.hash().clone()
+        self.entry_encoded.hash()
     }
 
     /// Get the hash of this entry as a string
     pub fn hash_str(&self) -> String {
-        self.entry_encoded.hash().as_str().to_string().clone()
+        self.entry_encoded.hash().as_str().to_string()
     }
 
     /// Get the author of the instance this entry belongs to
@@ -96,7 +96,7 @@ impl LogEntry {
 
     /// Get the instance backlink for this entry
     pub fn previous_operation(&self) -> Option<String> {
-        self.previous_operation.to_owned().clone()
+        self.previous_operation.to_owned()
     }
 }
 
@@ -105,7 +105,7 @@ impl Log {
     pub fn new(log_id: i64, schema: String) -> Self {
         Self {
             id: log_id,
-            schema: schema.into(),
+            schema,
             entries: Vec::new(),
         }
     }
