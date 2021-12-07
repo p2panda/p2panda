@@ -135,61 +135,7 @@ impl Default for DAG {
 
 #[cfg(test)]
 mod tests {
-    use rstest::{fixture, rstest};
-    use std::convert::TryFrom;
-
-    use crate::entry::{sign_and_encode, Entry, LogId, SeqNum};
-    use crate::hash::Hash;
-    use crate::identity::KeyPair;
-    use crate::materialiser::{marshall_entries, Edge};
-    use crate::message::{Message, MessageEncoded, MessageFields, MessageValue};
-
     use super::DAG;
-
-    // All this boilerplate to be removed once `p2panda-tests` is merged.
-    fn create_message_fields(keys: Vec<&str>, values: Vec<&str>) -> MessageFields {
-        let mut fields = MessageFields::new();
-        for (pos, key) in keys.iter().enumerate() {
-            fields
-                .add(
-                    key.to_owned(),
-                    MessageValue::Text(values.get(pos).unwrap().to_string()),
-                )
-                .unwrap();
-        }
-        fields
-    }
-
-    #[fixture]
-    fn key_pair() -> KeyPair {
-        KeyPair::new()
-    }
-
-    #[fixture]
-    fn message(
-        #[default(vec!["message"])] keys: Vec<&str>,
-        #[default(vec!["Hello!"])] values: Vec<&str>,
-    ) -> Message {
-        let fields = create_message_fields(keys, values);
-        Message::new_create(Hash::new_from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap()
-    }
-
-    #[fixture]
-    fn entry(
-        message: Message,
-        #[default(SeqNum::new(1).unwrap())] seq_num: SeqNum,
-        #[default(None)] backlink: Option<Hash>,
-        #[default(None)] skiplink: Option<Hash>,
-    ) -> Entry {
-        Entry::new(
-            &LogId::default(),
-            Some(&message),
-            skiplink.as_ref(),
-            backlink.as_ref(),
-            &seq_num,
-        )
-        .unwrap()
-    }
 
     #[test]
     fn topological_sort() {
@@ -257,47 +203,5 @@ mod tests {
         graph_3.add_edge("0x3a".to_string(), "0x4a".to_string());
 
         assert_eq!(graph_3.topological(), ordered_dag)
-    }
-
-    #[rstest]
-    fn marshall_entries_test(entry: Entry, key_pair: KeyPair) {
-        let encoded_message = MessageEncoded::try_from(entry.message().unwrap()).unwrap();
-
-        let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
-
-        let message_fields_2 = create_message_fields(vec!["message"], vec!["Hello too!"]);
-        let message_2 = Message::new_update(
-            Hash::new_from_bytes(vec![1, 2, 3]).unwrap(),
-            signed_encoded_entry.hash(),
-            message_fields_2,
-        )
-        .unwrap();
-
-        let encoded_message_2 = MessageEncoded::try_from(&message_2).unwrap();
-
-        let entry = Entry::new(
-            &LogId::default(),
-            Some(&message_2),
-            None,
-            Some(&signed_encoded_entry.hash()),
-            &SeqNum::new(2).unwrap(),
-        )
-        .unwrap();
-
-        let signed_encoded_entry_2 = sign_and_encode(&entry, &key_pair).unwrap();
-
-        let edges = marshall_entries(vec![
-            (signed_encoded_entry.clone(), encoded_message),
-            (signed_encoded_entry_2.clone(), encoded_message_2),
-        ])
-        .unwrap();
-
-        let edge_1: Edge = (None, signed_encoded_entry.hash().as_str().to_owned());
-        let edge_2: Edge = (
-            Some(signed_encoded_entry.hash().as_str().to_owned()),
-            signed_encoded_entry_2.hash().as_str().to_string(),
-        );
-
-        assert_eq!(edges, vec![edge_1, edge_2]);
     }
 }

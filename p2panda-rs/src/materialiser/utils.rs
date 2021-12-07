@@ -70,3 +70,54 @@ pub fn multi_writer(
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+    use std::convert::TryFrom;
+
+    use crate::entry::{sign_and_encode, Entry, SeqNum};
+    use crate::hash::Hash;
+    use crate::identity::KeyPair;
+    use crate::materialiser::{marshall_entries, Edge};
+    use crate::message::MessageEncoded;
+    use crate::test_utils::fixtures::{entry, fields, key_pair, schema, update_message};
+
+    #[rstest]
+    fn marshall_entries_test(#[from(entry)] entry1: Entry, schema: Hash, key_pair: KeyPair) {
+        let encoded_message_1 = MessageEncoded::try_from(entry1.message().unwrap()).unwrap();
+
+        let signed_encoded_entry_1 = sign_and_encode(&entry1, &key_pair).unwrap();
+
+        let message_2 = update_message(
+            schema,
+            signed_encoded_entry_1.hash(),
+            fields(vec![("message", "Hello too!")]),
+        );
+
+        let encoded_message_2 = MessageEncoded::try_from(&message_2).unwrap();
+
+        let entry = entry(
+            message_2,
+            SeqNum::new(2).unwrap(),
+            Some(signed_encoded_entry_1.hash()),
+            None,
+        );
+
+        let signed_encoded_entry_2 = sign_and_encode(&entry, &key_pair).unwrap();
+
+        let edges = marshall_entries(vec![
+            (signed_encoded_entry_1.clone(), encoded_message_1),
+            (signed_encoded_entry_2.clone(), encoded_message_2),
+        ])
+        .unwrap();
+
+        let edge_1: Edge = (None, signed_encoded_entry_1.hash().as_str().to_owned());
+        let edge_2: Edge = (
+            Some(signed_encoded_entry_1.hash().as_str().to_owned()),
+            signed_encoded_entry_2.hash().as_str().to_string(),
+        );
+
+        assert_eq!(edges, vec![edge_1, edge_2]);
+    }
+}
