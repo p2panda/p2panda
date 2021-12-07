@@ -25,7 +25,7 @@ impl DAG {
 
     /// New DAG from an existing array of edges.
     pub fn new_from_graph(graph: Vec<Edge>) -> Self {
-        DAG { graph: graph }
+        DAG { graph }
     }
 
     /// Return graph edges as array.
@@ -35,12 +35,12 @@ impl DAG {
 
     /// Add a root node to the graph.
     pub fn add_root(&mut self, node_id: Node) {
-        self.graph.insert(0, (None, node_id.into()));
+        self.graph.insert(0, (None, node_id));
     }
 
     /// Add an edge to the graph.
     pub fn add_edge(&mut self, from: Node, to: Node) {
-        self.graph.insert(0, (Some(from.into()), to.into()));
+        self.graph.insert(0, (Some(from), to));
     }
 
     /// Return all out edges starting from a given node.
@@ -61,7 +61,7 @@ impl DAG {
         out_edges.sort_by(|(_, out_edge_a), (_, out_edge_b)| out_edge_a.cmp(out_edge_b));
 
         // If there are no edges then this is the end of this branch we should return None
-        if out_edges.len() == 0 {
+        if out_edges.is_empty() {
             None
         } else {
             Some(out_edges)
@@ -93,10 +93,7 @@ impl DAG {
         let root = self.initial_root();
 
         // Insert root node into queue if it exists
-        match root {
-            Some(node) => queue.insert(0, node),
-            None => (),
-        }
+        if let Some(node) = root { queue.insert(0, node) }
 
         // Pop next root node from end of queue.
         // Continue while there are items in the queue.
@@ -108,7 +105,7 @@ impl DAG {
             // Walk from this node until reaching a tip (leaf) of the graph (a node with no edges).
             // edges are returned in alphabetical order which is how we consistently resolve concurrent edits
             // (last write wins).
-            while let Some(mut out_edges) = self.node_out_edges(&mut current_node) {
+            while let Some(mut out_edges) = self.node_out_edges(&current_node) {
                 // The next node we will visit
                 let next_edge = out_edges.remove(0);
 
@@ -125,6 +122,12 @@ impl DAG {
             }
         }
         ordered_nodes
+    }
+}
+
+impl Default for DAG {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
