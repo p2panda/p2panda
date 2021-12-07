@@ -9,11 +9,11 @@ pub type Edge = (Option<Node>, Node);
 /// A directed acyclic graph which can be ordered topologically in a depth-first sort. It is
 /// described by a list of `edges` which in turn describe connections between parent and child
 /// nodes.
+///
+/// For p2p2anda this is an array of tuples of Entry hashes [(Some("00x42asd..."), "00x435d..."), .... ],
+/// but it could be any string. The first string in the tuple is optional as the root of the graph has no parent.
 #[derive(Clone, Debug)]
 pub struct DAG {
-    /// An array of edges which make up the graph. For p2p2anda this is an array of tuples of
-    /// Entry hashes [(Some("00x42asd..."), "00x435d..."), .... ], but it can be any string.
-    /// The first string in the tuple is optional as the root of the graph has no parent.
     graph: Vec<Edge>,
 }
 
