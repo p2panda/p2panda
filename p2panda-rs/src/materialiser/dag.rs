@@ -93,7 +93,9 @@ impl DAG {
         let root = self.initial_root();
 
         // Insert root node into queue if it exists
-        if let Some(node) = root { queue.insert(0, node) }
+        if let Some(node) = root {
+            queue.insert(0, node)
+        }
 
         // Pop next root node from end of queue.
         // Continue while there are items in the queue.
