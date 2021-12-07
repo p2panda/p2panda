@@ -7,13 +7,18 @@ use rust_crypto::RustCrypto;
 /// Implements the `OpenMlsCryptoProvider` trait to be used as a crypto and key store backend for
 /// all other MLS structs and methods.
 ///
+/// OpenMLS does not implement its own cryptographic primitives and storage solution for key
+/// material. Instead, it relies on existing implementations of the cryptographic primitives and
+/// storage backends. We introduce our approach to OpenMLS in form of this `OpenMlsCryptoProvider`
+/// trait implementation.
+///
 /// @TODO: This will use our own key store soon.
 #[derive(Debug)]
 pub struct MlsProvider {
-    /// Provider for cryptographic methods.
+    /// Backend for cryptographic primitives.
     crypto: RustCrypto,
 
-    /// Provider to store and load KeyPackages.
+    /// Backend to store and load KeyPackages and Credentials.
     key_store: MemoryKeyStore,
 }
 
