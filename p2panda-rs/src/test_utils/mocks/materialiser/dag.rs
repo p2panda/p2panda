@@ -19,7 +19,7 @@ impl DAG {
     /// Create a new DAG
     pub fn new() -> Self {
         DAG {
-            /// An array of edges which make up the graph. For p2p2anda this is an array of tuples of
+            /// An array of edges which make up the graph. For p2panda this is an array of tuples of
             /// Entry hashes [("00x42asd...", "00x435d..."), .... ], but it can be any string.
             /// The first string in the tuple is optional as the root of the graph has no parent.
             graph: Vec::new(),
