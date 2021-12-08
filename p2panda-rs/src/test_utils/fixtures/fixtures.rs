@@ -118,9 +118,9 @@ pub fn delete_message(schema: Hash, #[from(hash)] instance_id: Hash) -> Message 
     utils::delete_message(schema, instance_id)
 }
 
-/// Fixture which injects versioned p2panda testing data into a test method.
+/// Fixture which injects p2panda testing data from p2panda version 0.3.0
 #[fixture]
-pub fn v0_2_0_fixture() -> Fixture {
+pub fn v0_3_0_fixture() -> Fixture {
     let message_fields = utils::message_fields(vec![
         ("name", "chess"),
         ("description", "for playing chess"),
