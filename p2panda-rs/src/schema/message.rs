@@ -6,7 +6,7 @@
 pub const MESSAGE_SCHEMA: &str = r#"
     message = {
         schema: hash,
-        version: 2,
+        version: 1,
         message-body,
     }
 
