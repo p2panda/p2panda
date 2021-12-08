@@ -64,6 +64,7 @@ pub mod hash;
 pub mod identity;
 pub mod message;
 pub mod schema;
+pub mod secret_group;
 pub mod test_utils;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
