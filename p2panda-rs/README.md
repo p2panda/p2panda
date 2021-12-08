@@ -67,91 +67,9 @@ cargo test
 wasm-pack build
 ```
 
-## Test Utils
+## Testing
 
-`src/test_utils` provides tools which can be used for testing in `rust` and the generation of test data in `JSON` format. 
-
-It includes:
-- fixtures
-- fixture templates
-- a mock node
-- a mock client
-- methods for generating test data
-
-## Test Data
-
-Test data is generated as a json document formatted as summerised below (to see full output, run `cargo run --bin json-test-data`).
-
-```js
-{
-  // arbitrary name for identifying author in tests
-  "panda": {
-    "publicKey": "...",
-    "privateKey": "...",
-    "logs": [
-      {
-        "encodedEntries": [
-          {
-            "author": "...",
-            "entryBytes": "...",
-            "entryHash": "...",
-            "payloadBytes": "...",
-            "payloadHash": "...",
-            "logId": 1,
-            "seqNum": 1
-          },
-          //...
-          {
-            "author": "...",
-            //...
-            "seqNum": 4
-          }
-        ],
-        "decodedMessages": [
-          {
-            "action": "create",
-            "schema": "...",
-            "version": 1,
-            "fields": {
-              "message": {
-                "type": "str",
-                "value": "..."
-              }
-            }
-          },
-          {
-            "action": "update",
-            //...
-          },
-          {
-            "action": "delete",
-            //...
-          },
-          {
-            "action": "create",
-            //...
-          }
-        ],
-        "nextEntryArgs": [
-          {
-            "entryHashBacklink": null,
-            "entryHashSkiplink": null,
-            "seqNum": 1,
-            "logId": 1
-          },
-          //...
-          {
-            "entryHashBacklink": "...",
-            "entryHashSkiplink": null,
-            "seqNum": 5,
-            "logId": 1
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+`p2panda-rs` provides tools which can be used for testing your code. Read more about the `test_utils` module [here](/p2panda-rs/src/test_utils/README.md).
 
 ## License
 
