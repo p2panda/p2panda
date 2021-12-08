@@ -442,7 +442,7 @@ mod tests {
         let expected_next_entry_args = NextEntryArgs{
             log_id: LogId::new(1),
             seq_num: SeqNum::new(5).unwrap(),
-            backlink: some_hash("0020801296ae77fd2cf6e0b00e2d2af7f0ee4db0d28eeeb3567206d2a67463736fd4"),
+            backlink: some_hash("00208f742cbae37a03fed0cd73c1a530ff57387456d507b8ccd56a87a5604e376b6f"),
             skiplink: None
         };
 
@@ -468,7 +468,7 @@ mod tests {
         let expected_next_entry_args = NextEntryArgs{
             log_id: LogId::new(1),
             seq_num: SeqNum::new(3).unwrap(),
-            backlink: some_hash("002078f91b0df66508671dfd6137b6334cb99cf4dc170cf42699830978630c8d5715"),
+            backlink: some_hash("00204ee7027b834265bcfa43a666dec820b56f6c9fe51791cb68ddab952cf59c95e0"),
             skiplink: None
         };
 

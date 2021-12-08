@@ -5,7 +5,7 @@
 /// The fixtures can optionally be passed in with custom parameters which overides the default values.
 use rstest::fixture;
 
-use crate::entry::{Entry, EntrySigned, SeqNum};
+use crate::entry::{Entry, EntrySigned, SeqNum, sign_and_encode, LogId};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::message::{Message, MessageEncoded, MessageFields};
@@ -120,17 +120,27 @@ pub fn delete_message(schema: Hash, #[from(hash)] instance_id: Hash) -> Message 
 
 /// Fixture which injects versioned p2panda testing data into a test method.
 #[fixture]
-pub fn v0_1_0_fixture() -> Fixture {
+pub fn v0_2_0_fixture() -> Fixture {
     let message_fields = utils::message_fields(vec![
         ("name", "chess"),
         ("description", "for playing chess"),
     ]);
     let message = create_message(Hash::new(DEFAULT_SCHEMA_HASH).unwrap(), message_fields);
+    let key_pair = utils::keypair_from_private("4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176".into());
+
+    // Comment out to regenerate fixture:
+
+    // let entry_signed_encoded = sign_and_encode(
+    //     &entry(message.clone(), seq_num(1), None, None),
+    //     &key_pair,
+    // ).unwrap();
+    // println!("{:?}", entry_signed_encoded.as_str());
+    // println!("{?}", MessageEncoded::try_from(&message)).unwrap();
 
     Fixture {
-        entry_signed_encoded: EntrySigned::new("009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101b600203f6bc1247808c9e367a63a2142353f91bfe8f155b9350587095bc3f44e3958125e9404c343167f9479c1e94dbdbe7397f1f1af244333c95b0e15bca4d9728a0309da96e71c16900096bf61ceb36d82584d0226537f3ebe7c79e25719c2645e07").unwrap(),
-        message_encoded: MessageEncoded::new("a466616374696f6e6663726561746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e02666669656c6473a26b6465736372697074696f6ea26474797065637374726576616c756571666f7220706c6179696e67206368657373646e616d65a26474797065637374726576616c7565656368657373").unwrap(),
-        key_pair: utils::keypair_from_private("4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176".into()),
+        entry_signed_encoded: EntrySigned::new("009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101b6002065c34e1997b82fd08fc886bf6c2803cfaf93e3ad4da9128a661eb79e30f97bee25e525e72c99394ec91c33195f6b43c78274bd3096938260d5e18f237b57211d0a8e9eee49f594c1ddfb609ee0f9d0f502bf8701c3b2e5b0c34c61ec3e614a02").unwrap(),
+        message_encoded: MessageEncoded::new("a466616374696f6e6663726561746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a26b6465736372697074696f6ea26474797065637374726576616c756571666f7220706c6179696e67206368657373646e616d65a26474797065637374726576616c7565656368657373").unwrap(),
+        key_pair,
         entry: entry(message, seq_num(1), None, None)
     }
 }

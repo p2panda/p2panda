@@ -54,7 +54,7 @@ fn all_message_types(entry: Entry, #[case] message: Message, key_pair: KeyPair) 
 // Template which will contain many version fixtures in the future.
 #[template]
 #[rstest]
-#[case::v0_1_0(crate::test_utils::fixtures::v0_1_0_fixture())]
+#[case::v0_2_0(crate::test_utils::fixtures::v0_2_0_fixture())]
 fn version_fixtures(#[case] fixture: Fixture) {}
 
 // Here we export the macros for use in the rest of the crate.
