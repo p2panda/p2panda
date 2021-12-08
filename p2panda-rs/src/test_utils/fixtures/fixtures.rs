@@ -5,7 +5,7 @@
 /// The fixtures can optionally be passed in with custom parameters which overides the default values.
 use rstest::fixture;
 
-use crate::entry::{Entry, EntrySigned, SeqNum, sign_and_encode, LogId};
+use crate::entry::{Entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::message::{Message, MessageEncoded, MessageFields};

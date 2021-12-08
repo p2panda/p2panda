@@ -341,7 +341,6 @@ mod tests {
     use rstest::rstest;
 
     use crate::entry::{LogId, SeqNum};
-    use crate::hash::Hash;
     use crate::message::MessageValue;
     use crate::test_utils::fixtures::{
         create_message, delete_message, hash, private_key, some_hash, update_message,
