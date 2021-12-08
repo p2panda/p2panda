@@ -66,9 +66,9 @@
             },
             "Hash": {
                 "type": "string",
-                "minLength": 132,
-                "maxLength": 132,
-                "pattern": "[0-9a-f]{132}"
+                "minLength": 68,
+                "maxLength": 68,
+                "pattern": "[0-9a-f]{68}"
             },
             "EntryArgs": {
                 "type": "object",

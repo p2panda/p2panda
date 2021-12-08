@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use bamboo_rs_core::entry::is_lipmaa_required;
+use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use std::collections::HashMap;
 
 use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
@@ -441,7 +441,7 @@ mod tests {
         let expected_next_entry_args = NextEntryArgs{
             log_id: LogId::new(1),
             seq_num: SeqNum::new(5).unwrap(),
-            backlink: some_hash("00404c073c9584238a0659a4231b67b1e876cfa0f973eaeb04fe0165d28089b93efaaea8738925d0f49f21be11837d477b0e436466c71a1e4f1f404488a8be1d8232"),
+            backlink: some_hash("00208f742cbae37a03fed0cd73c1a530ff57387456d507b8ccd56a87a5604e376b6f"),
             skiplink: None
         };
 
@@ -467,7 +467,7 @@ mod tests {
         let expected_next_entry_args = NextEntryArgs{
             log_id: LogId::new(1),
             seq_num: SeqNum::new(3).unwrap(),
-            backlink: some_hash("0040b893ff157b6c402b677b6fe071475e17ca1a0f45852eaed9e9c283b53455a86d1ca9ebafde3809d4197f4732e09f57c969c845707fb51147df8ea736da177c1a"),
+            backlink: some_hash("00204ee7027b834265bcfa43a666dec820b56f6c9fe51791cb68ddab952cf59c95e0"),
             skiplink: None
         };
 

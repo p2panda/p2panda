@@ -10,7 +10,7 @@ pub const MESSAGE_SCHEMA: &str = r#"
         message-body,
     }
 
-    hash = tstr .regexp "[0-9a-fa-f]{132}"
+    hash = tstr .regexp "[0-9a-f]{68}"
 
     ; Create message
     message-body = (

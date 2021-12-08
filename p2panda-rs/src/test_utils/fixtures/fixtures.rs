@@ -118,21 +118,29 @@ pub fn delete_message(schema: Hash, #[from(hash)] instance_id: Hash) -> Message 
     utils::delete_message(schema, instance_id)
 }
 
-/// Fixture which injects versioned p2panda testing data into a test method.
+/// Fixture which injects p2panda testing data from p2panda version 0.3.0
 #[fixture]
-pub fn v0_1_0_fixture() -> Fixture {
-    const SCHEMA_HASH: &str = "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437";
-
+pub fn v0_3_0_fixture() -> Fixture {
     let message_fields = utils::message_fields(vec![
         ("name", "chess"),
         ("description", "for playing chess"),
     ]);
-    let message = create_message(hash(SCHEMA_HASH), message_fields);
+    let message = create_message(Hash::new(DEFAULT_SCHEMA_HASH).unwrap(), message_fields);
+    let key_pair = utils::keypair_from_private("4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176".into());
+
+    // Comment out to regenerate fixture:
+
+    // let entry_signed_encoded = sign_and_encode(
+    //     &entry(message.clone(), seq_num(1), None, None),
+    //     &key_pair,
+    // ).unwrap();
+    // println!("{:?}", entry_signed_encoded.as_str());
+    // println!("{?}", MessageEncoded::try_from(&message)).unwrap();
 
     Fixture {
-        entry_signed_encoded: EntrySigned::new("009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101f60040190c0d1b8a9bbe5d8b94c8226cdb5d9804af3af6a0c5e34c918864370953dbc7100438f1e5cb0f34bd214c595e37fbb0727f86e9f3eccafa9ba13ed8ef77a04ef01463f550ce62f983494d0eb6051c73a5641025f355758006724e5b730f47a4454c5395eab807325ee58d69c08d66461357d0f961aee383acc3247ed6419706").unwrap(),
-        message_encoded: MessageEncoded::new("a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a26b6465736372697074696f6ea26474797065637374726576616c756571666f7220706c6179696e67206368657373646e616d65a26474797065637374726576616c7565656368657373").unwrap(),
-        key_pair: utils::keypair_from_private("4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176".into()),
+        entry_signed_encoded: EntrySigned::new("009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101b6002065c34e1997b82fd08fc886bf6c2803cfaf93e3ad4da9128a661eb79e30f97bee25e525e72c99394ec91c33195f6b43c78274bd3096938260d5e18f237b57211d0a8e9eee49f594c1ddfb609ee0f9d0f502bf8701c3b2e5b0c34c61ec3e614a02").unwrap(),
+        message_encoded: MessageEncoded::new("a466616374696f6e6663726561746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a26b6465736372697074696f6ea26474797065637374726576616c756571666f7220706c6179696e67206368657373646e616d65a26474797065637374726576616c7565656368657373").unwrap(),
+        key_pair,
         entry: entry(message, seq_num(1), None, None)
     }
 }

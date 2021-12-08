@@ -15,7 +15,6 @@ use crate::Validate;
 #[serde(untagged)]
 #[repr(u8)]
 pub enum MessageVersion {
-    /// All messages are currently implemented against this first version.
     Default = 1,
 }
 
@@ -226,7 +225,7 @@ impl Message {
     /// use p2panda_rs::hash::Hash;
     /// use p2panda_rs::message::{Message, MessageFields, MessageValue};
     ///
-    /// let schema_hash_string = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
+    /// let schema_hash_string = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
     /// let schema_msg_hash = Hash::new(schema_hash_string)?;
     /// let mut msg_fields = MessageFields::new();
     ///

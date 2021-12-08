@@ -2,6 +2,10 @@
 
 import wasm from '~/wasm';
 
+import TEST_DATA from '../test/test-data.json';
+
+const TEST_SCHEMA = TEST_DATA.panda.logs[0].decodedMessages[0].schema;
+
 describe('Web assembly interface', () => {
   describe('KeyPair', () => {
     it('creates a key pair', async () => {
@@ -32,9 +36,6 @@ describe('Web assembly interface', () => {
 
   describe('MessageFields', () => {
     it('stores and returns the right fields', async () => {
-      const TEST_SCHEMA =
-        '0040cf94f6d605657e90c543b0c919070cdaaf7209c5e1ea58acb8f3568fa2114268dc9ac3bafe12af277d286fce7dc59b7c0c348973c4e9dacbe79485e56ac2a702';
-
       const { MessageFields } = await wasm;
       const fields = new MessageFields();
 
@@ -102,8 +103,6 @@ describe('Web assembly interface', () => {
 
   describe('Entries', () => {
     it('creates, signs and decodes an entry', async () => {
-      const TEST_SCHEMA =
-        '0040cf94f6d605657e90c543b0c919070cdaaf7209c5e1ea58acb8f3568fa2114268dc9ac3bafe12af277d286fce7dc59b7c0c348973c4e9dacbe79485e56ac2a702';
       const LOG_ID = 5;
       const SEQ_NUM = 1;
 
@@ -135,7 +134,7 @@ describe('Web assembly interface', () => {
         LOG_ID,
       );
 
-      expect(entryHash.length).toBe(132);
+      expect(entryHash.length).toBe(68);
 
       // Decode entry and return as JSON
       const decodedEntry = decodeEntry(entryEncoded, messageEncoded);

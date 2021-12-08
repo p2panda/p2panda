@@ -7,18 +7,18 @@ use thiserror::Error;
 #[allow(missing_copy_implementations)]
 pub enum HashError {
     /// Hash string has an invalid length.
-    #[error("invalid hash length")]
-    InvalidLength,
+    #[error("invalid hash length {0} bytes, expected {1} bytes")]
+    InvalidLength(usize, usize),
 
     /// Hash string contains invalid hex characters.
     #[error("invalid hex encoding in hash string")]
     InvalidHexEncoding,
 
-    /// Hash is not a valid YAMF BLAKE2b hash.
-    #[error("can not decode YAMF BLAKE2b hash")]
+    /// Hash is not a valid YASMF BLAKE3 hash.
+    #[error("can not decode YASMF BLAKE3 hash")]
     DecodingFailed,
 
-    /// Internal YamfHash crate error.
+    /// Internal YasmfHash crate error.
     #[error(transparent)]
-    YamfHashError(#[from] yamf_hash::error::Error),
+    YasmfHashError(#[from] yasmf_hash::error::Error),
 }

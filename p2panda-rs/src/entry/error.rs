@@ -51,13 +51,13 @@ pub enum EntrySignedError {
     #[error(transparent)]
     MessageEncodedError(#[from] crate::message::MessageEncodedError),
 
-    /// Handle errors from encoding bamboo_rs_core entries.
+    /// Handle errors from encoding bamboo_rs_core_ed25519_yasmf entries.
     #[error(transparent)]
-    BambooEncodeError(#[from] bamboo_rs_core::entry::encode::Error),
+    BambooEncodeError(#[from] bamboo_rs_core_ed25519_yasmf::entry::encode::Error),
 
-    /// Handle errors from decoding bamboo_rs_core entries.
+    /// Handle errors from decoding bamboo_rs_core_ed25519_yasmf entries.
     #[error(transparent)]
-    BambooDecodeError(#[from] bamboo_rs_core::entry::decode::Error),
+    BambooDecodeError(#[from] bamboo_rs_core_ed25519_yasmf::entry::decode::Error),
 
     /// Handle errors from ed25519_dalek crate.
     #[error(transparent)]
