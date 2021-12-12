@@ -6,7 +6,7 @@
 
 <br />
 
-`test_utils` provides tools for [p2panda](https://github.com/p2panda/p2panda) which can be used for testing in Rust and the generation of test data (currently used to validate JSON RPC requests in `p2panda-js`). 
+`test_utils` provides tools for [p2panda](https://github.com/p2panda/p2panda) which can be used for testing in Rust and the generation of test data.
 
 ## Features
 
@@ -31,7 +31,7 @@ Test data is generated as a JSON document formatted as summerised below (to see 
 
 ```js
 {
-  // Aarbitrary name for identifying author in tests
+  // Arbitrary name for identifying author in tests
   "panda": {
     "publicKey": "...",
     "privateKey": "...",
@@ -100,6 +100,6 @@ Test data is generated as a JSON document formatted as summerised below (to see 
 }
 ```
 
-### Notes
+### Usage in `p2panda-js`
 
-Currently in the `p2panda-js` tests we need the data of a single author with a single log which contains 4 entries published with the following message types in this exact order: 1) CREATE, 2) UPDATE, 3) DELETE and 4) CREATE.
+The generated test data is used to validate JSON RPC requests in `p2panda-js`. Currently in these tests we need the data of a single author with a single log which contains 4 entries published with the following message types in this exact order: 1) CREATE, 2) UPDATE, 3) DELETE and 4) CREATE.
