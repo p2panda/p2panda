@@ -45,7 +45,7 @@
 #![warn(
     missing_copy_implementations,
     missing_debug_implementations,
-    rustdoc::missing_doc_code_examples,
+    missing_doc_code_examples,
     missing_docs,
     trivial_casts,
     trivial_numeric_casts,
