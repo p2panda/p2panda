@@ -2,7 +2,11 @@
 
 //! Mock p2panda node and client for demo and testing purposes.
 
-pub mod client;
+mod client;
 pub mod logs;
-pub mod materialiser;
-pub mod node;
+pub mod materialisation;
+mod node;
+pub mod utils;
+
+pub use client::Client;
+pub use node::{send_to_node, Node};
