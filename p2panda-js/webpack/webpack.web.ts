@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import * as webpack from 'webpack';
+import ESLintPlugin from 'eslint-webpack-plugin';
 
 import config, { getWasmPlugin } from './webpack.common';
 
@@ -18,7 +19,7 @@ const configWeb: webpack.Configuration = {
     ...config.output,
     filename: '[name].min.js',
   },
-  plugins: [getWasmPlugin('bundler')],
+  plugins: [getWasmPlugin('bundler'), new ESLintPlugin()],
   target: 'web',
 };
 
