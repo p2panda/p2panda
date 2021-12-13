@@ -5,6 +5,7 @@
 //! Messages describe data mutations in the p2panda network. Authors send messages to create,
 //! update or delete instances or collections of data.
 mod error;
+#[allow(clippy::module_inception)]
 mod message;
 mod message_encoded;
 
