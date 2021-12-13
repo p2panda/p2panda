@@ -11,6 +11,7 @@ use cddl::validator::cbor;
 
 mod error;
 mod message;
+#[allow(clippy::module_inception)]
 mod schema;
 
 pub use error::SchemaError;

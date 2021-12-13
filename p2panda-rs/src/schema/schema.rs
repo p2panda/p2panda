@@ -116,7 +116,7 @@ impl SchemaBuilder {
     /// Create a new blank Schema
     pub fn new(name: String) -> Self {
         Self {
-            name: name,
+            name,
             fields: BTreeMap::new(),
         }
     }
@@ -178,13 +178,13 @@ impl fmt::Display for SchemaBuilder {
             }
             write!(f, "{}: {}", value.0, value.1)?;
         }
-        write!(f, " }}\n")
+        writeln!(f, " }}")
     }
 }
 
 impl Schema {
     /// Create a new Schema from a schema hash and schema CDDL string
-    pub fn new(schema_hash: &Hash, schema_str: &String) -> Result<Self, SchemaError> {
+    pub fn new(schema_hash: &Hash, schema_str: &str) -> Result<Self, SchemaError> {
         let mut lexer = Lexer::new(schema_str);
         let parser = Parser::new(lexer.iter(), schema_str);
         let schema_string = match parser {
@@ -347,7 +347,7 @@ mod tests {
 
         // Validate message fields against person schema
         let me_bytes = serde_cbor::to_vec(&me).unwrap();
-        assert!(person.validate_message(me_bytes.clone()).is_ok());
+        assert!(person.validate_message(me_bytes).is_ok());
     }
 
     #[test]
