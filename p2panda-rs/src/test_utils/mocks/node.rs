@@ -80,9 +80,7 @@
 //!     .unwrap();
 //!
 //! instance.get("message").unwrap(); // => "Let's try that again."
-//!
 //! ```
-
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use std::collections::HashMap;
 
@@ -133,10 +131,6 @@ fn calculate_links(seq_num: &SeqNum, log: &Log) -> (Option<Hash>, Option<Hash>) 
     });
     (backlink, skiplink)
 }
-
-// @TODO: We could use `Author` instead of `String`, and `LogId` instead of `i64` here
-// if we would implement the `Eq` trait in both classes.
-// type Log = HashMap<i64, Log>;
 
 /// Mock database type
 pub type Database = HashMap<String, HashMap<i64, Log>>;
