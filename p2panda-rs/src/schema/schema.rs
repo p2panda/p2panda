@@ -63,6 +63,7 @@ impl fmt::Display for Field {
 /// they can be merged into schema or used in Vectors, Tables and Structs
 #[derive(Clone, Debug)]
 pub struct Group {
+    #[allow(dead_code)] // Remove when module in use.
     name: String,
     fields: BTreeMap<String, Field>,
 }
