@@ -210,7 +210,7 @@ mod tests {
         let group_id = GroupId::random(&provider);
         let key_package = member.key_package(&provider).unwrap();
         let mut group = MlsGroup::new(&provider, group_id, key_package).unwrap();
-        assert_eq!(group.is_active(), true);
+        assert!(group.is_active());
 
         let message = "This is a very secret message";
         let ciphertext = group.encrypt(&provider, message.as_bytes()).unwrap();
