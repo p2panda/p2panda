@@ -135,9 +135,7 @@ impl KeyPair {
 
 impl Default for KeyPair {
     fn default() -> Self {
-        let mut csprng: OsRng = OsRng {};
-        let key_pair = Ed25519Keypair::generate(&mut csprng);
-        Self(key_pair)
+        KeyPair::new()
     }
 }
 
