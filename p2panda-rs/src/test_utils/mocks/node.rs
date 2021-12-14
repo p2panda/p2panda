@@ -1,5 +1,86 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Mock p2panda node.
+//!
+//! This node mocks functionality which would be implemented in a real world p2panda node.
+//! It does so in a simplistic manner and should only be used in a testing environment or demo
+//! environment.
+//!
+//! ## Example
+//! ```
+//! use p2panda_rs::test_utils::mocks::{Client, send_to_node, Node};
+//! use p2panda_rs::test_utils::{create_message, delete_message, hash, message_fields,
+//!     new_key_pair, update_message, DEFAULT_SCHEMA_HASH
+//! };
+//! # const CHAT_SCHEMA_HASH: &str = DEFAULT_SCHEMA_HASH;
+//!
+//! // Instantiate a new mock node
+//! let mut node = Node::new();
+//!
+//! // Instantiate one client named "panda"
+//! let panda = Client::new("panda".to_string(), new_key_pair());
+//!
+//! // Panda creates a chat message by publishing a CREATE operation
+//! let instance_a_hash = send_to_node(
+//!     &mut node,
+//!     &panda,
+//!     &create_message(
+//!         hash(CHAT_SCHEMA_HASH),
+//!         message_fields(vec![("message", "Ohh, my first message!")]),
+//!     ),
+//! )
+//! .unwrap();
+//!
+//! // Panda updates their previous chat message by publishing an UPDATE operation
+//! send_to_node(
+//!     &mut node,
+//!     &panda,
+//!     &update_message(
+//!         hash(CHAT_SCHEMA_HASH),
+//!         instance_a_hash.clone(),
+//!         message_fields(vec![("message", "Which I now update.")]),
+//!     ),
+//! )
+//! .unwrap();
+//!
+//! // Panda deletes their previous chat message by publishing a DELETE operation
+//! send_to_node(
+//!     &mut node,
+//!     &panda,
+//!     &delete_message(hash(CHAT_SCHEMA_HASH), instance_a_hash),
+//! )
+//! .unwrap();
+//!
+//! // Panda creates another chat message by publishing a CREATE operation
+//! send_to_node(
+//!     &mut node,
+//!     &panda,
+//!     &create_message(
+//!         hash(CHAT_SCHEMA_HASH),
+//!         message_fields(vec![("message", "Let's try that again.")]),
+//!     ),
+//! )
+//! .unwrap();
+//!
+//! // Get all entries published to this node
+//! let entries = node.all_entries();
+//!
+//! // There should be 4 entries
+//! entries.len(); // => 4
+//!
+//! // Query all instances of a certain schema
+//! let instances = node.query_all(&CHAT_SCHEMA_HASH.to_string()).unwrap();
+//!
+//! // There should be one instance, because on was deleted
+//! instances.len(); // => 1
+//!
+//! // Query for one instance by id
+//! let instance = node
+//!     .query(&CHAT_SCHEMA_HASH.to_string(), &entries[3].hash_str())
+//!     .unwrap();
+//!
+//! instance.get("message").unwrap(); // => "Let's try that again."
+//! ```
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use std::collections::HashMap;
 
@@ -8,12 +89,12 @@ use crate::hash::Hash;
 use crate::identity::Author;
 use crate::message::{Message, MessageFields};
 
-use crate::test_utils::mocks::client::Client;
 use crate::test_utils::mocks::logs::{Log, LogEntry};
-use crate::test_utils::mocks::materialiser::{filter_entries, Materialiser};
-use crate::test_utils::mocks::node::utils::{
+use crate::test_utils::mocks::materialisation::{filter_entries, Materialiser};
+use crate::test_utils::mocks::utils::{
     Result, GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
 };
+use crate::test_utils::mocks::Client;
 use crate::test_utils::NextEntryArgs;
 
 /// Helper method signing and encoding entry and sending it to node backend.
@@ -22,7 +103,7 @@ pub fn send_to_node(node: &mut Node, client: &Client, message: &Message) -> Resu
 
     let entry_encoded = client.signed_encoded_entry(message.to_owned(), entry_args);
 
-    node.publish_entry(&entry_encoded, &message)?;
+    node.publish_entry(&entry_encoded, message)?;
 
     // Return entry hash for now so we can use it to perform UPDATE and DELETE messages later
     Ok(entry_encoded.hash())
@@ -42,27 +123,22 @@ fn calculate_links(seq_num: &SeqNum, log: &Log) -> (Option<Hash>, Option<Hash>) 
     };
 
     // Next backlink hash
-    let backlink = match seq_num.backlink_seq_num() {
-        Some(seq) => Some(
-            log.entries()
-                .get(seq.as_i64() as usize - 1)
-                .expect("Backlink missing!")
-                .hash(),
-        ),
-        None => None,
-    };
+    let backlink = seq_num.backlink_seq_num().map(|seq| {
+        log.entries()
+            .get(seq.as_i64() as usize - 1)
+            .expect("Backlink missing!")
+            .hash()
+    });
     (backlink, skiplink)
 }
-
-// @TODO: We could use `Author` instead of `String`, and `LogId` instead of `i64` here
-// if we would implement the `Eq` trait in both classes.
-// type Log = HashMap<i64, Log>;
 
 /// Mock database type
 pub type Database = HashMap<String, HashMap<i64, Log>>;
 
-/// This struct mocks the basic functionality of a p2panda Node.
-#[derive(Debug)]
+/// This node mocks functionality which would be implemented in a real world p2panda node.
+/// It does so in a simplistic manner and should only be used in a testing environment or demo
+/// environment.
+#[derive(Debug, Default)]
 pub struct Node {
     /// Internal database which maps authors and log ids to Bamboo logs with entries inside.
     entries: Database,
@@ -104,9 +180,8 @@ impl Node {
                 let instance_create_entry = entries
                     .iter()
                     .find(|log_entry| log_entry.hash_str() == instance_id);
-                match instance_create_entry {
-                    Some(_) => instance_author = Some(author.to_owned()),
-                    None => (),
+                if instance_create_entry.is_some() {
+                    instance_author = Some(author.to_owned())
                 };
             });
         });
@@ -118,7 +193,7 @@ impl Node {
     pub fn get_log_id(&mut self, schema: &Hash, author: &Author) -> Result<LogId> {
         let author_logs = self.get_author_logs(author);
 
-        let log_id = match schema.as_str().into() {
+        let log_id = match schema.as_str() {
             // Check if the schema hash matches any of our hard coded system schema
             // if it does, return the hard coded id
             META_SCHEMA_HASH => 2,
@@ -185,17 +260,11 @@ impl Node {
         seq_num: Option<&SeqNum>,
     ) -> Result<NextEntryArgs> {
         // Find out the log id for the given schema
-        let log_id = self.get_log_id(&schema, &author)?;
+        let log_id = self.get_log_id(schema, author)?;
 
         // Find any logs by this author for this schema
         let author_log = match self.get_author_logs_mut(author) {
-            Some(logs) => {
-                match logs.values().find(|log| log.schema() == schema.as_str()) {
-                    Some(log) => Some(log),
-                    // No logs by this author for this schema
-                    None => None,
-                }
-            }
+            Some(logs) => logs.values().find(|log| log.schema() == schema.as_str()),
             // No logs for this author
             None => None,
         };
@@ -264,7 +333,7 @@ impl Node {
             None => None,
         };
 
-        let entry = decode_entry(&entry_encoded, None)?;
+        let entry = decode_entry(entry_encoded, None)?;
         let log_id = entry.log_id().as_i64();
         let author = entry_encoded.author();
 
@@ -306,7 +375,7 @@ impl Node {
     }
 
     /// Get all Instances of this Schema
-    pub fn query_all(&self, schema: &String) -> Result<HashMap<String, MessageFields>> {
+    pub fn query_all(&self, schema: &str) -> Result<HashMap<String, MessageFields>> {
         // Instantiate a new materialiser instance
         let mut materialiser = Materialiser::new();
 
@@ -321,7 +390,7 @@ impl Node {
     }
 
     /// Get a specific Instance
-    pub fn query(&self, schema: &String, instance: &String) -> Result<MessageFields> {
+    pub fn query(&self, schema: &str, instance: &str) -> Result<MessageFields> {
         // Instantiate a new materialiser instance
         let mut materialiser = Materialiser::new();
 
@@ -346,10 +415,10 @@ mod tests {
         create_message, delete_message, hash, private_key, some_hash, update_message,
     };
     use crate::test_utils::mocks::client::Client;
-    use crate::test_utils::mocks::node::utils::{
+    use crate::test_utils::mocks::node::{send_to_node, Node};
+    use crate::test_utils::mocks::utils::{
         GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
     };
-    use crate::test_utils::mocks::node::{send_to_node, Node};
     use crate::test_utils::utils::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::{keypair_from_private, message_fields, NextEntryArgs};
 
@@ -359,7 +428,7 @@ mod tests {
         // Publish a CREATE message
         let instance_1 = send_to_node(
             &mut node,
-            &panda,
+            panda,
             &create_message(
                 hash(DEFAULT_SCHEMA_HASH),
                 message_fields(vec![("message", "Ohh, my first message!")]),
@@ -370,7 +439,7 @@ mod tests {
         // Publish an UPDATE message
         send_to_node(
             &mut node,
-            &panda,
+            panda,
             &update_message(
                 hash(DEFAULT_SCHEMA_HASH),
                 instance_1.clone(),
@@ -382,15 +451,15 @@ mod tests {
         // Publish an DELETE message
         send_to_node(
             &mut node,
-            &panda,
-            &delete_message(hash(DEFAULT_SCHEMA_HASH), instance_1.clone()),
+            panda,
+            &delete_message(hash(DEFAULT_SCHEMA_HASH), instance_1),
         )
         .unwrap();
 
         // Publish another CREATE message
         send_to_node(
             &mut node,
-            &panda,
+            panda,
             &create_message(
                 hash(DEFAULT_SCHEMA_HASH),
                 message_fields(vec![("message", "Let's try that again.")]),
@@ -438,11 +507,13 @@ mod tests {
             .next_entry_args(&panda.author(), &hash(DEFAULT_SCHEMA_HASH), None)
             .unwrap();
 
-        let expected_next_entry_args = NextEntryArgs{
+        let expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
             seq_num: SeqNum::new(5).unwrap(),
-            backlink: some_hash("00208f742cbae37a03fed0cd73c1a530ff57387456d507b8ccd56a87a5604e376b6f"),
-            skiplink: None
+            backlink: some_hash(
+                "00208f742cbae37a03fed0cd73c1a530ff57387456d507b8ccd56a87a5604e376b6f",
+            ),
+            skiplink: None,
         };
 
         assert_eq!(next_entry_args.log_id, expected_next_entry_args.log_id);
@@ -464,11 +535,13 @@ mod tests {
             )
             .unwrap();
 
-        let expected_next_entry_args = NextEntryArgs{
+        let expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
             seq_num: SeqNum::new(3).unwrap(),
-            backlink: some_hash("00204ee7027b834265bcfa43a666dec820b56f6c9fe51791cb68ddab952cf59c95e0"),
-            skiplink: None
+            backlink: some_hash(
+                "00204ee7027b834265bcfa43a666dec820b56f6c9fe51791cb68ddab952cf59c95e0",
+            ),
+            skiplink: None,
         };
 
         assert_eq!(next_entry_args.log_id, expected_next_entry_args.log_id);
@@ -479,10 +552,7 @@ mod tests {
 
     #[rstest]
     fn query(private_key: String) {
-        let panda = Client::new(
-            "panda".to_string(),
-            keypair_from_private(private_key.clone()),
-        );
+        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
         let node = mock_node(&panda);
 
         // Get all entries

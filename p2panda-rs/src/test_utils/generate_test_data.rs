@@ -2,10 +2,8 @@
 
 /// Generate json formatted test data. This is run with the `cargo run --bin json-test-data` command. The output
 /// data can be used for testing a p2panda implementation. It is currently used in `p2panda-js`.
-use serde_json;
-
-use p2panda_rs::test_utils::mocks::client::Client;
-use p2panda_rs::test_utils::mocks::node::{send_to_node, Node};
+use p2panda_rs::test_utils::mocks::Client;
+use p2panda_rs::test_utils::mocks::{send_to_node, Node};
 use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
 use p2panda_rs::test_utils::{
     create_message, delete_message, hash, message_fields, new_key_pair, update_message,
@@ -70,11 +68,10 @@ fn main() {
 #[cfg(test)]
 mod tests {
     /// Generate json formatted test data
-    use serde_json;
     use serde_json::Value;
 
-    use p2panda_rs::test_utils::mocks::client::Client;
-    use p2panda_rs::test_utils::mocks::node::{send_to_node, Node};
+    use p2panda_rs::test_utils::mocks::Client;
+    use p2panda_rs::test_utils::mocks::{send_to_node, Node};
     use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
     use p2panda_rs::test_utils::{
         create_message, hash, keypair_from_private, message_fields, DEFAULT_PRIVATE_KEY,

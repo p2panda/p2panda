@@ -73,8 +73,8 @@ mod tests {
     #[test]
     fn user_log_ids() {
         let mut log_id = LogId::default();
-        assert_eq!(log_id.is_user_log(), true);
-        assert_eq!(log_id.is_system_log(), false);
+        assert!(log_id.is_user_log());
+        assert!(!log_id.is_system_log());
 
         let mut next_log_id = log_id.next().unwrap();
         assert_eq!(next_log_id, LogId::new(3));
@@ -86,8 +86,8 @@ mod tests {
     #[test]
     fn system_log_ids() {
         let mut log_id = LogId::new(0);
-        assert_eq!(log_id.is_user_log(), false);
-        assert_eq!(log_id.is_system_log(), true);
+        assert!(!log_id.is_user_log());
+        assert!(log_id.is_system_log());
 
         // Can't iterate on system logs
         assert!(log_id.next().is_none());

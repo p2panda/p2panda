@@ -133,7 +133,7 @@ impl Entry {
             message: message.cloned(),
             entry_hash_skiplink: entry_hash_skiplink.cloned(),
             entry_hash_backlink: entry_hash_backlink.cloned(),
-            seq_num: seq_num.clone(),
+            seq_num: *seq_num,
         };
         entry.validate()?;
 
@@ -240,7 +240,7 @@ mod tests {
         assert!(Entry::new(
             &LogId::default(),
             Some(&message),
-            Some(&backlink.clone()),
+            Some(&backlink),
             Some(&backlink),
             &SeqNum::new(1).unwrap()
         )
@@ -250,7 +250,7 @@ mod tests {
         assert!(Entry::new(
             &LogId::default(),
             Some(&message),
-            Some(&backlink.clone()),
+            Some(&backlink),
             Some(&backlink),
             &SeqNum::new(2).unwrap()
         )

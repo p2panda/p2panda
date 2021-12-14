@@ -126,7 +126,9 @@ pub fn v0_3_0_fixture() -> Fixture {
         ("description", "for playing chess"),
     ]);
     let message = create_message(Hash::new(DEFAULT_SCHEMA_HASH).unwrap(), message_fields);
-    let key_pair = utils::keypair_from_private("4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176".into());
+    let key_pair = utils::keypair_from_private(
+        "4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176".into(),
+    );
 
     // Comment out to regenerate fixture:
 

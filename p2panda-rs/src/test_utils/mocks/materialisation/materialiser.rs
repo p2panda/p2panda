@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use crate::message::{Message, MessageFields};
 
 use crate::test_utils::mocks::logs::LogEntry;
-use crate::test_utils::mocks::materialiser::DAG;
-use crate::test_utils::mocks::node::utils::Result;
+use crate::test_utils::mocks::materialisation::DAG;
+use crate::test_utils::mocks::utils::Result;
 
 /// A wrapper type representing a HashMap of instances stored by Instance id.
 type Instances = HashMap<String, MessageFields>;
@@ -20,7 +20,7 @@ type SchemaDatabase = HashMap<String, Instances>;
 /// Graph of operations arranged causally. Operations are ordered into a linear queue through topologically
 /// sorting the graph. Operations are then applied sequentially with any conflicts that occur being resolved
 /// through last-write-wins rules.  
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Materialiser {
     // The final data structure where materialised instances are stored
     data: SchemaDatabase,
@@ -135,11 +135,11 @@ impl Materialiser {
     }
 
     /// Materialise entries from multiple authors and schema logs into a database of Instancess
-    pub fn materialise(&mut self, entries: &Vec<LogEntry>) -> Result<SchemaDatabase> {
+    pub fn materialise(&mut self, entries: &[LogEntry]) -> Result<SchemaDatabase> {
         // Store all messages ready for processing after conflict resolution
-        self.store_messages(entries.clone());
+        self.store_messages(entries.to_owned());
 
-        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~LogEntryclone
         // Build DAGs for each Instances
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -169,7 +169,7 @@ impl Materialiser {
     }
 
     /// Very raw POC methods, no error handling... :-(
-    pub fn query_all(&self, schema_str: &String) -> Result<Instances> {
+    pub fn query_all(&self, schema_str: &str) -> Result<Instances> {
         match self.data.get(schema_str) {
             Some(result) => Ok(result.to_owned()),
             None => Err("No results found".into()),
@@ -177,9 +177,9 @@ impl Materialiser {
     }
 
     /// Very raw POC methods, no error handling... :-(
-    pub fn query_instance(&self, schema_str: &String, hash: &String) -> Result<MessageFields> {
+    pub fn query_instance(&self, schema_str: &str, hash: &str) -> Result<MessageFields> {
         let instances = match self.query_all(schema_str) {
-            Ok(instances) => Ok(instances.to_owned()),
+            Ok(instances) => Ok(instances),
             Err(str) => Err(str),
         }?;
 
@@ -235,7 +235,7 @@ mod tests {
         send_to_node(
             &mut node,
             &panda,
-            &delete_message(hash(DEFAULT_SCHEMA_HASH), instance_1.clone()),
+            &delete_message(hash(DEFAULT_SCHEMA_HASH), instance_1),
         )
         .unwrap();
 
@@ -367,10 +367,7 @@ mod tests {
 
     #[rstest]
     fn query_instances(private_key: String) {
-        let panda = Client::new(
-            "panda".to_string(),
-            keypair_from_private(private_key.clone()),
-        );
+        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
         let node = mock_node(panda);
 
         // Get all entries

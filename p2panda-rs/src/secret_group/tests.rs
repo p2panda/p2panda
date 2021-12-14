@@ -120,7 +120,7 @@ fn long_term_secret_evolution() {
     calvin_group
         .process_commit(&calvin_provider, &group_commit)
         .unwrap();
-    assert_eq!(calvin_group.is_active(), false);
+    assert!(!calvin_group.is_active());
 
     // Only Ada and Billie share the new long-term secret
     assert_eq!(ada_group.long_term_epoch(), Some(LongTermSecretEpoch(1)));
