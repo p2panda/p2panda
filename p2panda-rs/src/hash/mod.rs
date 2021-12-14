@@ -9,6 +9,7 @@
 //! [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
 //! [`YAMF`]: https://github.com/bamboo-rs/yamf-hash
 mod error;
+#[allow(clippy::module_inception)]
 mod hash;
 
 pub use error::HashError;

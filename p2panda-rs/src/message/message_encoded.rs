@@ -58,7 +58,7 @@ impl TryFrom<&Message> for MessageEncoded {
     fn try_from(message: &Message) -> Result<Self, Self::Error> {
         // Encode bytes as hex string
         let encoded = hex::encode(&message.to_cbor());
-        Ok(MessageEncoded::new(&encoded)?)
+        MessageEncoded::new(&encoded)
     }
 }
 
@@ -122,7 +122,10 @@ mod tests {
 
         assert!(message.is_update());
         assert!(message.has_id());
-        assert_eq!(message.schema().clone(), Hash::new_from_bytes(vec![1, 255, 0]).unwrap());
+        assert_eq!(
+            message.schema().clone(),
+            Hash::new_from_bytes(vec![1, 255, 0]).unwrap()
+        );
 
         let fields = message.fields().unwrap();
 

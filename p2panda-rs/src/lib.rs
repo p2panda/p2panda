@@ -54,8 +54,8 @@
     unused_import_braces,
     unused_qualifications
 )]
-
 // This must be imported here at the root of the crate in order for the fixture macros to work as expected.
+#![allow(clippy::single_component_path_imports)]
 #[cfg(test)]
 use rstest_reuse;
 

@@ -9,6 +9,7 @@
 //! [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 mod decode;
 mod encode;
+#[allow(clippy::module_inception)]
 mod entry;
 mod entry_signed;
 mod error;

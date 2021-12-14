@@ -115,7 +115,7 @@ pub enum MessageValue {
 ///     .unwrap();
 /// }
 /// ```
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct MessageFields(BTreeMap<String, MessageValue>);
 
 impl MessageFields {
