@@ -23,7 +23,7 @@ Highlights are marked with a pancake 🥞
 ### Campfires and boiling pots to sit around
 
 - Update `test_utils` documentation [#152](https://github.com/p2panda/p2panda/pull/152) `rs`
-- Make clippy happy [#153](https://github.com/p2panda/p2panda/pull/153) `rs`
+- Make clippy happy, add CI for linter checks [#153](https://github.com/p2panda/p2panda/pull/153) `rs`
 
 ## [0.2.1]
 
