@@ -14,6 +14,8 @@
 //! use p2panda_rs::test_utils::{create_operation, hash, operation_fields,
 //!     new_key_pair, update_operation, DEFAULT_SCHEMA_HASH
 //! };
+//! use p2panda_rs::operation::OperationValue;
+//!
 //! # const CHAT_SCHEMA_HASH: &str = DEFAULT_SCHEMA_HASH;
 //!
 //! // Instantiate a new mock node
@@ -25,7 +27,7 @@
 //! // Create a new operation to publish
 //! let operation = create_operation(
 //!     hash(DEFAULT_SCHEMA_HASH),
-//!     operation_fields(vec![("message", "Ohh, my first message!")]),
+//!     operation_fields(vec![("message", OperationValue::Text("Ohh, my first message!".to_string()))]),
 //! );
 //!
 //! // Retrieve the next entry args from the node

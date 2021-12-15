@@ -12,6 +12,8 @@
 //! use p2panda_rs::test_utils::{create_operation, delete_operation, hash, operation_fields,
 //!     new_key_pair, update_operation, DEFAULT_SCHEMA_HASH
 //! };
+//! use p2panda_rs::operation::OperationValue;
+//!
 //! # const CHAT_SCHEMA_HASH: &str = DEFAULT_SCHEMA_HASH;
 //!
 //! // Instantiate a new mock node
