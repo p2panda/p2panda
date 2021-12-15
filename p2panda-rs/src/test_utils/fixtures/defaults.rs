@@ -45,7 +45,7 @@ pub fn delete_operation() -> Operation {
     )
 }
 
-/// Fields
+/// The default operation value
 pub fn operation_value() -> OperationValue {
     OperationValue::Text("Hello!".to_string())
 }
