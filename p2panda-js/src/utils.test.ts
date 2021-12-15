@@ -5,7 +5,7 @@ import { Fields, FieldsTagged } from '~/types';
 
 const REQUEST: Fields = {
   channel: 5,
-  message: 'chin chin',
+  operation: 'chin chin',
   serious: false,
 };
 
@@ -14,7 +14,7 @@ const RESPONSE: FieldsTagged = {
     value: 5,
     type: 'int',
   },
-  message: {
+  operation: {
     value: 'chin chin',
     type: 'str',
   },

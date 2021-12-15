@@ -88,7 +88,7 @@ describe('Session', () => {
       expect(instances.length).toEqual(2);
       expect(instances[0]._meta.deleted).toEqual(true);
       expect(instances[1].message).toEqual(
-        entryFixture(4).message?.fields?.message,
+        entryFixture(4).operation?.fields?.message,
       );
     });
 
@@ -176,7 +176,7 @@ describe('Session', () => {
     let session: Session;
 
     // Fields for instance to be created
-    const fields = entryFixture(1).message?.fields as Fields;
+    const fields = entryFixture(1).operation?.fields as Fields;
 
     beforeEach(async () => {
       session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
@@ -206,11 +206,11 @@ describe('Session', () => {
   describe('update', () => {
     let session: Session;
 
-    // These are the fields for an update message
-    const fields = entryFixture(2).message?.fields as Fields;
+    // These are the fields for an update operation
+    const fields = entryFixture(2).operation?.fields as Fields;
 
     // This is the instance id
-    const id = entryFixture(2).message?.id as string;
+    const id = entryFixture(2).operation?.id as string;
 
     beforeEach(async () => {
       session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
@@ -250,7 +250,7 @@ describe('Session', () => {
     let session: Session;
 
     // This is the instance id that can be deleted
-    const instanceId = entryFixture(3).message?.id as string;
+    const instanceId = entryFixture(3).operation?.id as string;
 
     beforeEach(async () => {
       session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);

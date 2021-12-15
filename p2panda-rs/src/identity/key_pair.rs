@@ -98,7 +98,7 @@ impl KeyPair {
         &self.0.secret
     }
 
-    /// Sign a message using this key pair.
+    /// Sign an operation using this key pair.
     ///
     /// ## Example
     ///
@@ -110,25 +110,25 @@ impl KeyPair {
     /// // Generate new Ed25519 key pair
     /// let key_pair = KeyPair::new();
     ///
-    /// // Sign a message with this key pair
-    /// let message = b"test";
-    /// let signature = key_pair.sign(message);
+    /// // Sign an operation with this key pair
+    /// let operation = b"test";
+    /// let signature = key_pair.sign(operation);
     ///
-    /// assert!(KeyPair::verify(&key_pair.public_key(), message, &signature).is_ok());
+    /// assert!(KeyPair::verify(&key_pair.public_key(), operation, &signature).is_ok());
     /// # Ok(())
     /// # }
     /// ```
-    pub fn sign(&self, message: &[u8]) -> Signature {
-        self.0.sign(message)
+    pub fn sign(&self, operation: &[u8]) -> Signature {
+        self.0.sign(operation)
     }
 
-    /// Verify the integrity of a signed message.
+    /// Verify the integrity of a signed operation.
     pub fn verify(
         public_key: &PublicKey,
-        message: &[u8],
+        operation: &[u8],
         signature: &Signature,
     ) -> Result<(), KeyPairError> {
-        public_key.verify(message, signature)?;
+        public_key.verify(operation, signature)?;
         Ok(())
     }
 }
@@ -162,13 +162,13 @@ mod tests {
     #[test]
     fn signing() {
         let key_pair = KeyPair::new();
-        let message = b"test";
-        let signature = key_pair.sign(message);
-        assert!(KeyPair::verify(key_pair.public_key(), message, &signature).is_ok());
+        let operation = b"test";
+        let signature = key_pair.sign(operation);
+        assert!(KeyPair::verify(key_pair.public_key(), operation, &signature).is_ok());
 
         assert!(KeyPair::verify(key_pair.public_key(), b"not test", &signature).is_err());
 
         let key_pair_2 = KeyPair::new();
-        assert!(KeyPair::verify(key_pair_2.public_key(), message, &signature).is_err());
+        assert!(KeyPair::verify(key_pair_2.public_key(), operation, &signature).is_err());
     }
 }

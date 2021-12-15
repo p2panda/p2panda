@@ -11,8 +11,8 @@
 //! # extern crate p2panda_rs;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use p2panda_rs::test_utils::mocks::{Client, send_to_node, Node};
-//! use p2panda_rs::test_utils::{create_message, hash, message_fields,
-//!     new_key_pair, update_message, DEFAULT_SCHEMA_HASH
+//! use p2panda_rs::test_utils::{create_operation, hash, operation_fields,
+//!     new_key_pair, update_operation, DEFAULT_SCHEMA_HASH
 //! };
 //! # const CHAT_SCHEMA_HASH: &str = DEFAULT_SCHEMA_HASH;
 //!
@@ -22,18 +22,18 @@
 //! // Instantiate one client named "panda"
 //! let panda = Client::new("panda".to_string(), new_key_pair());
 //!
-//! // Create a new message to publish
-//! let message = create_message(
+//! // Create a new operation to publish
+//! let operation = create_operation(
 //!     hash(DEFAULT_SCHEMA_HASH),
-//!     message_fields(vec![("message", "Ohh, my first message!")]),
+//!     operation_fields(vec![("message", "Ohh, my first message!")]),
 //! );
 //!
 //! // Retrieve the next entry args from the node
-//! let entry_args = node.next_entry_args(&panda.author(), message.schema(), None)?;
+//! let entry_args = node.next_entry_args(&panda.author(), operation.schema(), None)?;
 //!
 //! // Sign and encode an entry
-//! let entry_encoded = panda.signed_encoded_entry(message.to_owned(), entry_args);
-//! node.publish_entry(&entry_encoded, &message)?;
+//! let entry_encoded = panda.signed_encoded_entry(operation.to_owned(), entry_args);
+//! node.publish_entry(&entry_encoded, &operation)?;
 //!
 //! # Ok(())
 //! # }
@@ -41,7 +41,7 @@
 
 use crate::entry::{sign_and_encode, Entry, EntrySigned};
 use crate::identity::{Author, KeyPair};
-use crate::message::Message;
+use crate::operation::Operation;
 
 use crate::test_utils::utils::NextEntryArgs;
 
@@ -81,11 +81,15 @@ impl Client {
     }
 
     /// Create, sign and encode an entry
-    pub fn signed_encoded_entry(&self, message: Message, entry_args: NextEntryArgs) -> EntrySigned {
-        // Construct entry from message and entry args then sign and encode it
+    pub fn signed_encoded_entry(
+        &self,
+        operation: Operation,
+        entry_args: NextEntryArgs,
+    ) -> EntrySigned {
+        // Construct entry from operation and entry args then sign and encode it
         let entry = Entry::new(
             &entry_args.log_id,
-            Some(&message),
+            Some(&operation),
             entry_args.skiplink.as_ref(),
             entry_args.backlink.as_ref(),
             &entry_args.seq_num,

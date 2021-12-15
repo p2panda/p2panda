@@ -49,7 +49,7 @@ This library provides all tools required to write a client for the [`p2panda`] n
 
 - Generate Ed25519 author key pairs.
 - Create and encode [`bamboo`] entries.
-- Send messages to [`node`] servers via JSON RPC calls.
+- Send operations to [`node`] servers via JSON RPC calls.
 - Query and filter data in the network.
 
 [`bamboo`]: https://github.com/AljoschaMeyer/bamboo

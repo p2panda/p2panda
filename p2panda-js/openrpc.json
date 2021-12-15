@@ -81,7 +81,7 @@
             "Schema": {
                 "name": "schema",
                 "summary": "The hash of a p2panda schema",
-                "description": "Validation for message payloads and definitions of system schemas. This uses `Concise Data Definition Language` ([CDDL](https://datatracker.ietf.org/doc/html/rfc8610)) internally to verify [CBOR](https://cbor.io/) data of p2panda messages. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
+                "description": "Validation for operation payloads and definitions of system schemas. This uses `Concise Data Definition Language` ([CDDL](https://datatracker.ietf.org/doc/html/rfc8610)) internally to verify [CBOR](https://cbor.io/) data of p2pandan operations. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
                 "required": true,
                 "schema": {
                     "type": "string",
@@ -228,7 +228,7 @@
             "EntryEncoded": {
                 "type": "string"
             },
-            "MessageEncoded": {
+            "OperationEncoded": {
                 "type": "string"
             },
             "Entries": {
@@ -293,23 +293,23 @@
                 "summary": "Encoded bytes of the forth entry in a p2panda `Bamboo` log.",
                 "value": "00985424c015ae923394e3107cbca03af7f6e1de9408da1578c21640f625f6241c010400200262e0852670c67485da9f4207347d13a4661a8e28e5582a9e15875a0c6a53510020e3c52dd3968f01336c8447304d58f90531f306e4444d2433a2933be95c2f91889b00205b0c87d55b707b010f29567df2e54a20618ab66aacc653b025e057d27b6e73c6fd858a8bb31007720c3693bfecd7bbb31b0b487d3796ef82e2da8d7b0a484a72c44adb6d2ab233d45e3b303e952f382b65d4e684d5f1067d65644f1448f9d507"
             },
-            "Message1": {
-                "name": "messageEncoded",
+            "Operation1": {
+                "name": "operationEncoded",
                 "summary": "Encoded bytes of the payload of the first entry in a p2panda `Bamboo` log.",
                 "value": "a466616374696f6e6663726561746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a1676d657373616765a26474797065637374726576616c7565764f68682c206d79206669727374206d65737361676521"
             },
-            "Message2": {
-                "name": "messageEncoded",
+            "Operation2": {
+                "name": "operationEncoded",
                 "summary": "Encoded bytes of the payload of the second entry in a p2panda `Bamboo` log.",
                 "value": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e0162696478443030323030323632653038353236373063363734383564613966343230373334376431336134363631613865323865353538326139653135383735613063366135333531666669656c6473a1676d657373616765a26474797065637374726576616c75657357686963682049206e6f77207570646174652e"
             },
-            "Message3": {
-                "name": "messageEncoded",
+            "Operation3": {
+                "name": "operationEncoded",
                 "summary": "Encoded bytes of the payload of the third entry in a p2panda `Bamboo` log.",
                 "value": "a466616374696f6e6664656c65746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e0162696478443030323030323632653038353236373063363734383564613966343230373334376431336134363631613865323865353538326139653135383735613063366135333531"
             },
-            "Message4": {
-                "name": "messageEncoded",
+            "Operation4": {
+                "name": "operationEncoded",
                 "summary": "Encoded bytes of the payload of the first entry in a p2panda `Bamboo` log.",
                 "value": "a466616374696f6e6663726561746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a1676d657373616765a26474797065637374726576616c7565754c6574277320747279207468617420616761696e2e"
             },
@@ -441,7 +441,7 @@
                 {
                     "name": "schema",
                     "summary": "The hash of a p2panda schema",
-                    "description": "Validation for message payloads and definitions of system schemas. This uses `Concise Data Definition Language` ([CDDL](https://datatracker.ietf.org/doc/html/rfc8610)) internally to verify [CBOR](https://cbor.io/) data of p2panda messages. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
+                    "description": "Validation for operation payloads and definitions of system schemas. This uses `Concise Data Definition Language` ([CDDL](https://datatracker.ietf.org/doc/html/rfc8610)) internally to verify [CBOR](https://cbor.io/) data of p2pandan operations. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
                     "required": true,
                     "schema": {
                         "type": "string",
@@ -534,7 +534,7 @@
                 {
                     "name": "schema",
                     "summary": "The hash of a p2panda schema",
-                    "description": "Validation for message payloads and definitions of system schemas. This uses `Concise Data Definition Language` ([CDDL](https://datatracker.ietf.org/doc/html/rfc8610)) internally to verify [CBOR](https://cbor.io/) data of p2panda messages. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
+                    "description": "Validation for operation payloads and definitions of system schemas. This uses `Concise Data Definition Language` ([CDDL](https://datatracker.ietf.org/doc/html/rfc8610)) internally to verify [CBOR](https://cbor.io/) data of p2pandan operations. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
                     "required": true,
                     "schema": {
                         "type": "string",
@@ -649,7 +649,7 @@
         },
         {
             "name": "panda_publishEntry",
-            "summary": "Publish an encoded entry and message.",
+            "summary": "Publish an encoded entry and operation.",
             "description": "Publish a new `Entry` to a `p2panda` log. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
             "paramStructure": "by-name",
             "params": [
@@ -660,7 +660,7 @@
                     }
                 },
                 {
-                    "name": "messageEncoded",
+                    "name": "operationEncoded",
                     "schema": {
                         "type": "string"
                     }
@@ -722,7 +722,7 @@
                             "value": "00985424c015ae923394e3107cbca03af7f6e1de9408da1578c21640f625f6241c01019c0020bbf34ae370b167c4950df17089ca322965c4e5c92e1b13a1f0fc4d62ce82e494fa46c80b76b9a86201d2eb9a2617f01749181ca096f55ace8be522758b612604bf2edec3059f2e60c8fcf977c745d7f3da5d4363bde50991aff9f9aa28b40400"
                         },
                         {
-                            "name": "messageEncoded",
+                            "name": "operationEncoded",
                             "summary": "Encoded bytes of the payload of the first entry in a p2panda `Bamboo` log.",
                             "value": "a466616374696f6e6663726561746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a1676d657373616765a26474797065637374726576616c7565764f68682c206d79206669727374206d65737361676521"
                         }
@@ -748,7 +748,7 @@
                             "value": "00985424c015ae923394e3107cbca03af7f6e1de9408da1578c21640f625f6241c010200200262e0852670c67485da9f4207347d13a4661a8e28e5582a9e15875a0c6a5351e2002094bb60597a29a2d27939c1f49fca97d5373569fe7ced5d2f8064507513a1ea5f56942784adc6c7ad0f2a3c093bbe6a4f54296ec01d49e9ea8b70f2ba97c219496094408ea307da98cd28153557ad576415ab7402b8c0358548b085e88a632005"
                         },
                         {
-                            "name": "messageEncoded",
+                            "name": "operationEncoded",
                             "summary": "Encoded bytes of the payload of the second entry in a p2panda `Bamboo` log.",
                             "value": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e0162696478443030323030323632653038353236373063363734383564613966343230373334376431336134363631613865323865353538326139653135383735613063366135333531666669656c6473a1676d657373616765a26474797065637374726576616c75657357686963682049206e6f77207570646174652e"
                         }
@@ -774,7 +774,7 @@
                             "value": "00985424c015ae923394e3107cbca03af7f6e1de9408da1578c21640f625f6241c010300205d20b8f5303e76fb47fb2a662c0b86303582491c414e13d68546980fef21296cae0020b3846f3ac4146b89f97a9ec09be209ca0363483da68338f991c9300992d866665f95f0563ee93b87f24c127ceab24c8bc646f4d90538df313674f1686b411eabaa2c4db795fb4dd348ede67738ebf7db72b48e1b3cc58908089e90ae9f6ca405"
                         },
                         {
-                            "name": "messageEncoded",
+                            "name": "operationEncoded",
                             "summary": "Encoded bytes of the payload of the third entry in a p2panda `Bamboo` log.",
                             "value": "a466616374696f6e6664656c65746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e0162696478443030323030323632653038353236373063363734383564613966343230373334376431336134363631613865323865353538326139653135383735613063366135333531"
                         }
@@ -800,7 +800,7 @@
                             "value": "00985424c015ae923394e3107cbca03af7f6e1de9408da1578c21640f625f6241c010400200262e0852670c67485da9f4207347d13a4661a8e28e5582a9e15875a0c6a53510020e3c52dd3968f01336c8447304d58f90531f306e4444d2433a2933be95c2f91889b00205b0c87d55b707b010f29567df2e54a20618ab66aacc653b025e057d27b6e73c6fd858a8bb31007720c3693bfecd7bbb31b0b487d3796ef82e2da8d7b0a484a72c44adb6d2ab233d45e3b303e952f382b65d4e684d5f1067d65644f1448f9d507"
                         },
                         {
-                            "name": "messageEncoded",
+                            "name": "operationEncoded",
                             "summary": "Encoded bytes of the payload of the first entry in a p2panda `Bamboo` log.",
                             "value": "a466616374696f6e6663726561746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a1676d657373616765a26474797065637374726576616c7565754c6574277320747279207468617420616761696e2e"
                         }

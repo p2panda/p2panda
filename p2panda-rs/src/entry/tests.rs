@@ -10,25 +10,28 @@ mod entry_tests {
 
     use crate::entry::{decode_entry, sign_and_encode, Entry, LogId, SeqNum};
     use crate::identity::KeyPair;
-    use crate::message::{Message, MessageEncoded};
+    use crate::operation::{Operation, OperationEncoded};
     use crate::test_utils::fixtures::templates::{many_valid_entries, version_fixtures};
     use crate::test_utils::fixtures::{key_pair, Fixture};
 
     /// Test encoding and decoding entries
     #[apply(many_valid_entries)]
     fn entry_encoding_decoding(#[case] entry: Entry, key_pair: KeyPair) {
-        // Encode Message
-        let encoded_message = MessageEncoded::try_from(entry.message().unwrap()).unwrap();
+        // Encode Operation
+        let encoded_operation = OperationEncoded::try_from(entry.operation().unwrap()).unwrap();
 
         // Sign and encode Entry
         let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
 
         // Decode signed and encoded Entry
-        let decoded_entry = decode_entry(&signed_encoded_entry, Some(&encoded_message)).unwrap();
+        let decoded_entry = decode_entry(&signed_encoded_entry, Some(&encoded_operation)).unwrap();
 
         // All Entry and decoded Entry values should be equal
         assert_eq!(entry.log_id(), decoded_entry.log_id());
-        assert_eq!(entry.message().unwrap(), decoded_entry.message().unwrap());
+        assert_eq!(
+            entry.operation().unwrap(),
+            decoded_entry.operation().unwrap()
+        );
         assert_eq!(entry.seq_num(), decoded_entry.seq_num());
         assert_eq!(entry.backlink_hash(), decoded_entry.backlink_hash());
         assert_eq!(entry.skiplink_hash(), decoded_entry.skiplink_hash());
@@ -38,14 +41,14 @@ mod entry_tests {
     #[apply(many_valid_entries)]
     fn sign_and_encode_roundtrip(#[case] entry: Entry, key_pair: KeyPair) {
         // Sign a p2panda entry. For this encoding, the entry is converted into a
-        // bamboo-rs-core entry, which means that it also doesn't contain the message anymore
+        // bamboo-rs-core entry, which means that it also doesn't contain the operation anymore
         let entry_first_encoded = sign_and_encode(&entry, &key_pair).unwrap();
 
         // Make an unsigned, decoded p2panda entry from the signed and encoded form. This is adding
-        // the message back
-        let message_encoded = MessageEncoded::try_from(entry.message().unwrap()).unwrap();
+        // the operation back
+        let operation_encoded = OperationEncoded::try_from(entry.operation().unwrap()).unwrap();
         let entry_decoded: Entry =
-            decode_entry(&entry_first_encoded, Some(&message_encoded)).unwrap();
+            decode_entry(&entry_first_encoded, Some(&operation_encoded)).unwrap();
 
         // Re-encode the recovered entry to be able to check that we still have the same data
         let test_entry_signed_encoded = sign_and_encode(&entry_decoded, &key_pair).unwrap();
@@ -54,7 +57,7 @@ mod entry_tests {
         // Create second p2panda entry without skiplink as it is not required
         let entry_second = Entry::new(
             &LogId::default(),
-            entry.message(),
+            entry.operation(),
             None,
             Some(&entry_first_encoded.hash()),
             &SeqNum::new(2).unwrap(),
@@ -76,25 +79,25 @@ mod entry_tests {
         );
     }
 
-    /// Test decoding a message from version fixtures
+    /// Test decoding an operation from version fixtures
     #[apply(version_fixtures)]
-    fn fixture_decode_message(#[case] fixture: Fixture) {
-        // Decode fixture MessageEncoded
-        let message = Message::try_from(&fixture.message_encoded).unwrap();
-        let message_fields = message.fields().unwrap();
+    fn fixture_decode_operation(#[case] fixture: Fixture) {
+        // Decode fixture OperationEncoded
+        let operation = Operation::try_from(&fixture.operation_encoded).unwrap();
+        let operation_fields = operation.fields().unwrap();
 
-        let fixture_message_fields = fixture.entry.message().unwrap().fields().unwrap();
+        let fixture_operation_fields = fixture.entry.operation().unwrap().fields().unwrap();
 
-        // Decoded fixture MessageEncoded values should match fixture Entry message values
+        // Decoded fixture OperationEncoded values should match fixture Entry operation values
         // Would be an improvement if we iterate over fields instead of using hard coded keys
         assert_eq!(
-            message_fields.get("description").unwrap(),
-            fixture_message_fields.get("description").unwrap()
+            operation_fields.get("description").unwrap(),
+            fixture_operation_fields.get("description").unwrap()
         );
 
         assert_eq!(
-            message_fields.get("name").unwrap(),
-            fixture_message_fields.get("name").unwrap()
+            operation_fields.get("name").unwrap(),
+            fixture_operation_fields.get("name").unwrap()
         );
     }
 
@@ -104,12 +107,15 @@ mod entry_tests {
         // Decode fixture EntrySigned
         let entry = decode_entry(
             &fixture.entry_signed_encoded,
-            Some(&fixture.message_encoded),
+            Some(&fixture.operation_encoded),
         )
         .unwrap();
 
         // Decoded Entry values should match fixture Entry values
-        assert_eq!(entry.message().unwrap(), fixture.entry.message().unwrap());
+        assert_eq!(
+            entry.operation().unwrap(),
+            fixture.entry.operation().unwrap()
+        );
         assert_eq!(entry.seq_num(), fixture.entry.seq_num());
         assert_eq!(entry.backlink_hash(), fixture.entry.backlink_hash());
         assert_eq!(entry.skiplink_hash(), fixture.entry.skiplink_hash());
