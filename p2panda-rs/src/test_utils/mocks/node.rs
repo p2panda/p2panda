@@ -92,11 +92,12 @@ use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{Operation, OperationFields};
 
+use crate::test_utils::mocks::constants::{
+    GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
+};
 use crate::test_utils::mocks::logs::{Log, LogEntry};
 use crate::test_utils::mocks::materialisation::{filter_entries, Materialiser};
-use crate::test_utils::mocks::utils::{
-    Result, GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
-};
+use crate::test_utils::mocks::utils::Result;
 use crate::test_utils::mocks::Client;
 use crate::test_utils::utils::NextEntryArgs;
 
@@ -423,10 +424,10 @@ mod tests {
         create_operation, delete_operation, hash, private_key, some_hash, update_operation,
     };
     use crate::test_utils::mocks::client::Client;
-    use crate::test_utils::mocks::node::{send_to_node, Node};
-    use crate::test_utils::mocks::utils::{
+    use crate::test_utils::mocks::constants::{
         GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
     };
+    use crate::test_utils::mocks::node::{send_to_node, Node};
     use crate::test_utils::utils::{keypair_from_private, operation_fields, NextEntryArgs};
 
     fn mock_node(panda: &Client) -> Node {
