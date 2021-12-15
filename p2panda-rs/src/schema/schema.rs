@@ -147,28 +147,9 @@ impl SchemaBuilder {
         self.fields.insert(key, message_fields);
         Ok(())
     }
-
-    /// Validate a message against this user schema
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
-        match validate_cbor_from_slice(&format!("{}", self), &bytes) {
-            Err(cbor::Error::Validation(err)) => {
-                let err = err
-                    .iter()
-                    .map(|fe| format!("{}: \"{}\"", fe.cbor_location, fe.reason))
-                    .collect::<Vec<String>>()
-                    .join(", ");
-
-                Err(SchemaError::InvalidSchema(err))
-            }
-            Err(cbor::Error::CBORParsing(_err)) => Err(SchemaError::InvalidCBOR),
-            Err(cbor::Error::CDDLParsing(err)) => {
-                panic!("Parsing CDDL error: {}", err);
-            }
-            _ => Ok(()),
-        }
-    }
 }
+
+impl ValidateMessage for SchemaBuilder {}
 
 impl fmt::Display for SchemaBuilder {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -257,10 +238,23 @@ impl Schema {
             Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
         }
     }
+}
 
-    /// Validate a message against this user schema
+impl fmt::Display for Schema {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.schema_string)
+    }
+}
+
+impl ValidateMessage for Schema {}
+
+trait ValidateMessage
+where
+    Self: fmt::Display,
+{
+    /// Validate an operation against this user schema
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn validate_message(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
+    fn validate_message(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
         match validate_cbor_from_slice(&format!("{}", self), &bytes) {
             Err(cbor::Error::Validation(err)) => {
                 let err = err
@@ -280,17 +274,11 @@ impl Schema {
     }
 }
 
-impl fmt::Display for Schema {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.schema_string)
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use super::{Schema, SchemaBuilder, Type, ValidateMessage};
     use crate::hash::Hash;
     use crate::message::{Message, MessageFields, MessageValue};
-    use crate::schema::{Schema, SchemaBuilder, Type};
 
     /// All user schema
     pub const USER_SCHEMA: &str = r#"
