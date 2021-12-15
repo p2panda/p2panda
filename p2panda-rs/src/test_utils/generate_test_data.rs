@@ -3,12 +3,12 @@
 /// Generate json formatted test data. This is run with the `cargo run --bin json-test-data` command. The output
 /// data can be used for testing a p2panda implementation. It is currently used in `p2panda-js`.
 use p2panda_rs::operation::OperationValue;
+use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 use p2panda_rs::test_utils::mocks::Client;
 use p2panda_rs::test_utils::mocks::{send_to_node, Node};
 use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
-use p2panda_rs::test_utils::{
+use p2panda_rs::test_utils::utils::{
     create_operation, delete_operation, hash, new_key_pair, operation_fields, update_operation,
-    DEFAULT_SCHEMA_HASH,
 };
 
 fn main() {
@@ -81,12 +81,12 @@ mod tests {
     use serde_json::Value;
 
     use p2panda_rs::operation::OperationValue;
+    use p2panda_rs::test_utils::constants::{DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
     use p2panda_rs::test_utils::mocks::Client;
     use p2panda_rs::test_utils::mocks::{send_to_node, Node};
     use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
-    use p2panda_rs::test_utils::{
-        create_operation, hash, keypair_from_private, operation_fields, DEFAULT_PRIVATE_KEY,
-        DEFAULT_SCHEMA_HASH,
+    use p2panda_rs::test_utils::utils::{
+        create_operation, hash, keypair_from_private, operation_fields,
     };
 
     #[test]

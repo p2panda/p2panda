@@ -19,7 +19,8 @@ use crate::test_utils::fixtures::templates::{
     many_valid_entries, non_default_operation_values_panic, version_fixtures,
 };
 // Import dependencies for the templates module
-use crate::test_utils::{hash, operation_fields, DEFAULT_SCHEMA_HASH};
+use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
+use crate::test_utils::utils::{hash, operation_fields};
 
 // In this test `entry` and `key_pair` are injected directly into the test, they were imported from
 // the fixtures module above.

@@ -11,9 +11,10 @@
 //! # extern crate p2panda_rs;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use p2panda_rs::test_utils::mocks::{Client, send_to_node, Node};
-//! use p2panda_rs::test_utils::{create_operation, hash, operation_fields,
-//!     new_key_pair, update_operation, DEFAULT_SCHEMA_HASH
+//! use p2panda_rs::test_utils::utils::{create_operation, hash, operation_fields,
+//!     new_key_pair, update_operation
 //! };
+//! use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 //! use p2panda_rs::operation::OperationValue;
 //!
 //! # const CHAT_SCHEMA_HASH: &str = DEFAULT_SCHEMA_HASH;

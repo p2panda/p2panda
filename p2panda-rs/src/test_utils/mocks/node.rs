@@ -9,9 +9,10 @@
 //! ## Example
 //! ```
 //! use p2panda_rs::test_utils::mocks::{Client, send_to_node, Node};
-//! use p2panda_rs::test_utils::{create_operation, delete_operation, hash, operation_fields,
-//!     new_key_pair, update_operation, DEFAULT_SCHEMA_HASH
+//! use p2panda_rs::test_utils::utils::{create_operation, delete_operation, hash, operation_fields,
+//!     new_key_pair, update_operation
 //! };
+//! use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 //! use p2panda_rs::operation::OperationValue;
 //!
 //! # const CHAT_SCHEMA_HASH: &str = DEFAULT_SCHEMA_HASH;
@@ -97,7 +98,7 @@ use crate::test_utils::mocks::utils::{
     Result, GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
 };
 use crate::test_utils::mocks::Client;
-use crate::test_utils::NextEntryArgs;
+use crate::test_utils::utils::NextEntryArgs;
 
 /// Helper method signing and encoding entry and sending it to node backend.
 pub fn send_to_node(node: &mut Node, client: &Client, operation: &Operation) -> Result<Hash> {
@@ -417,6 +418,7 @@ mod tests {
 
     use crate::entry::{LogId, SeqNum};
     use crate::operation::OperationValue;
+    use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, hash, private_key, some_hash, update_operation,
     };
@@ -425,8 +427,7 @@ mod tests {
     use crate::test_utils::mocks::utils::{
         GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
     };
-    use crate::test_utils::utils::DEFAULT_SCHEMA_HASH;
-    use crate::test_utils::{keypair_from_private, operation_fields, NextEntryArgs};
+    use crate::test_utils::utils::{keypair_from_private, operation_fields, NextEntryArgs};
 
     fn mock_node(panda: &Client) -> Node {
         let mut node = Node::new();

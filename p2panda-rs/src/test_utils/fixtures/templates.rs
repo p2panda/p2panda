@@ -11,19 +11,19 @@ use rstest_reuse::template;
 #[should_panic]
 #[case::wrong_operation(
     crate::test_utils::fixtures::create_operation(hash(DEFAULT_SCHEMA_HASH),
-    crate::test_utils::operation_fields(vec![("message", crate::operation::OperationValue::Text("Boo!".to_string()))])))
+    crate::test_utils::utils::operation_fields(vec![("message", crate::operation::OperationValue::Text("Boo!".to_string()))])))
 ]
 #[allow(unused_qualifications)]
 #[should_panic]
 #[case::wrong_operation(
     crate::test_utils::fixtures::create_operation(hash(DEFAULT_SCHEMA_HASH),
-    crate::test_utils::operation_fields(vec![("date", crate::operation::OperationValue::Text("2021-05-02T20:06:45.430Z".to_string()))])))
+    crate::test_utils::utils::operation_fields(vec![("date", crate::operation::OperationValue::Text("2021-05-02T20:06:45.430Z".to_string()))])))
 ]
 #[allow(unused_qualifications)]
 #[should_panic]
 #[case::wrong_operation(
     crate::test_utils::fixtures::create_operation(hash(DEFAULT_SCHEMA_HASH),
-    crate::test_utils::operation_fields(vec![
+    crate::test_utils::utils::operation_fields(vec![
         ("message", crate::operation::OperationValue::Text("Hello!".to_string())), 
         ("date", crate::operation::OperationValue::Text("2021-05-02T20:06:45.430Z".to_string()))
     ])))

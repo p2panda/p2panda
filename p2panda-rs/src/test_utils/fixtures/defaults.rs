@@ -6,8 +6,8 @@
 use crate::entry::Entry;
 use crate::hash::Hash;
 use crate::operation::{Operation, OperationValue};
+use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
 use crate::test_utils::fixtures;
-use crate::test_utils::utils::{DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
 
 /// The default hash as an option
 pub fn some_hash() -> Option<Hash> {

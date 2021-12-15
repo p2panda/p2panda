@@ -9,8 +9,9 @@ use crate::entry::{Entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::{Operation, OperationEncoded, OperationFields, OperationValue};
+use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
 use crate::test_utils::fixtures::defaults;
-use crate::test_utils::utils::{self, DEFAULT_HASH, DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
+use crate::test_utils::utils;
 
 /// Fixture struct which contains versioned p2panda data for testing
 #[derive(Debug)]

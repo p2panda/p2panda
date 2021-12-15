@@ -203,11 +203,11 @@ mod tests {
     use super::Materialiser;
 
     use crate::operation::OperationValue;
+    use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::fixtures::private_key;
     use crate::test_utils::mocks::client::Client;
     use crate::test_utils::mocks::node::{send_to_node, Node};
-    use crate::test_utils::utils::DEFAULT_SCHEMA_HASH;
-    use crate::test_utils::{
+    use crate::test_utils::utils::{
         create_operation, delete_operation, hash, keypair_from_private, operation_fields,
         update_operation,
     };
