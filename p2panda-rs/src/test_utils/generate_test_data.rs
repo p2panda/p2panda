@@ -2,6 +2,7 @@
 
 /// Generate json formatted test data. This is run with the `cargo run --bin json-test-data` command. The output
 /// data can be used for testing a p2panda implementation. It is currently used in `p2panda-js`.
+use p2panda_rs::operation::OperationValue;
 use p2panda_rs::test_utils::mocks::Client;
 use p2panda_rs::test_utils::mocks::{send_to_node, Node};
 use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
@@ -23,7 +24,10 @@ fn main() {
         &panda,
         &create_operation(
             hash(DEFAULT_SCHEMA_HASH),
-            operation_fields(vec![("message", "Ohh, my first message!")]),
+            operation_fields(vec![(
+                "message",
+                OperationValue::Text("Ohh, my first message!".to_string()),
+            )]),
         ),
     )
     .unwrap();
@@ -35,7 +39,10 @@ fn main() {
         &update_operation(
             hash(DEFAULT_SCHEMA_HASH),
             instance_a_hash.clone(),
-            operation_fields(vec![("message", "Which I now update.")]),
+            operation_fields(vec![(
+                "message",
+                OperationValue::Text("Which I now update.".to_string()),
+            )]),
         ),
     )
     .unwrap();
@@ -54,7 +61,10 @@ fn main() {
         &panda,
         &create_operation(
             hash(DEFAULT_SCHEMA_HASH),
-            operation_fields(vec![("message", "Let's try that again.")]),
+            operation_fields(vec![(
+                "message",
+                OperationValue::Text("Let's try that again.".to_string()),
+            )]),
         ),
     )
     .unwrap();
@@ -70,6 +80,7 @@ mod tests {
     /// Generate json formatted test data
     use serde_json::Value;
 
+    use p2panda_rs::operation::OperationValue;
     use p2panda_rs::test_utils::mocks::Client;
     use p2panda_rs::test_utils::mocks::{send_to_node, Node};
     use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
@@ -95,7 +106,10 @@ mod tests {
             &panda,
             &create_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                operation_fields(vec![("message", "Ohh, my first message!")]),
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Ohh, my first message!".to_string()),
+                )]),
             ),
         )
         .unwrap();

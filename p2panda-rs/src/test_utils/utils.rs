@@ -67,12 +67,10 @@ pub fn any_operation(fields: Option<OperationFields>, instance_id: Option<Hash>)
 }
 
 /// Helper method for generating OperationFields from a vector of key-value tuples, currently only string types are implemented.
-pub fn operation_fields(fields: Vec<(&str, &str)>) -> OperationFields {
+pub fn operation_fields(fields: Vec<(&str, OperationValue)>) -> OperationFields {
     let mut operation_fields = OperationFields::new();
     for (key, value) in fields.iter() {
-        operation_fields
-            .add(key, OperationValue::Text(value.to_string()))
-            .unwrap();
+        operation_fields.add(key, value.to_owned()).unwrap();
     }
     operation_fields
 }

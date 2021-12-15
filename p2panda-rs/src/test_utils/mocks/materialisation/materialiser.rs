@@ -221,7 +221,10 @@ mod tests {
             &panda,
             &create_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                operation_fields(vec![("message", "Ohh, my first message!")]),
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Ohh, my first message!".to_string()),
+                )]),
             ),
         )
         .unwrap();
@@ -233,7 +236,10 @@ mod tests {
             &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
                 instance_1.clone(),
-                operation_fields(vec![("message", "Which I now update.")]),
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Which I now update.".to_string()),
+                )]),
             ),
         )
         .unwrap();
@@ -252,7 +258,10 @@ mod tests {
             &panda,
             &create_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                operation_fields(vec![("message", "Let's try that again.")]),
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Let's try that again.".to_string()),
+                )]),
             ),
         )
         .unwrap();
@@ -348,7 +357,10 @@ mod tests {
             &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
                 entries[3].hash(),
-                operation_fields(vec![("message", "Now it's updated.")]),
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Now it's updated.".to_string()),
+                )]),
             ),
         )
         .unwrap();

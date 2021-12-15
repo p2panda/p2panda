@@ -11,7 +11,7 @@ use rstest_reuse::apply;
 // Import p2panda types and methods we will be using in the tests
 use crate::entry::{sign_and_encode, Entry};
 use crate::identity::KeyPair;
-use crate::operation::{Operation, OperationEncoded};
+use crate::operation::{Operation, OperationEncoded, OperationValue};
 // Import the fixtures we will be using
 use crate::test_utils::fixtures::{create_operation, defaults, entry, key_pair, Fixture};
 // Import the templates we want to run tests aginst
@@ -36,7 +36,7 @@ fn encode_entry(entry: Entry, key_pair: KeyPair) {
 #[case::default_operation(defaults::create_operation())]
 // This case should panic as we are passing in a non-default operation value
 #[should_panic] // panic macro flag
-#[case::non_default_operation(create_operation(hash(DEFAULT_SCHEMA_HASH), operation_fields(vec![("message", "Boo!")])))]
+#[case::non_default_operation(create_operation(hash(DEFAULT_SCHEMA_HASH), operation_fields(vec![("message", OperationValue::Text("Boo!".to_string()))])))]
 fn operation_validation(entry: Entry, #[case] operation: Operation, key_pair: KeyPair) {
     let encoded_operation = OperationEncoded::try_from(&operation).unwrap();
     let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
