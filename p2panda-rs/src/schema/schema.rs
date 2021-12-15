@@ -153,7 +153,7 @@ impl SchemaBuilder {
     }
 }
 
-impl ValidateOperatoin for SchemaBuilder {}
+impl ValidateOperation for SchemaBuilder {}
 
 impl fmt::Display for SchemaBuilder {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -257,9 +257,9 @@ impl fmt::Display for Schema {
     }
 }
 
-impl ValidateOperatoin for Schema {}
+impl ValidateOperation for Schema {}
 
-trait ValidateOperatoin
+trait ValidateOperation
 where
     Self: fmt::Display,
 {
@@ -287,7 +287,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{Schema, SchemaBuilder, Type, ValidateOperatoin};
+    use super::{Schema, SchemaBuilder, Type, ValidateOperation};
     use crate::hash::Hash;
     use crate::operation::{Operation, OperationFields, OperationValue};
     use crate::test_utils::fixtures::hash;
