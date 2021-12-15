@@ -151,28 +151,9 @@ impl SchemaBuilder {
         self.fields.insert(key, operation_fields);
         Ok(())
     }
-
-    /// Validate an operation against this user schema
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn validate_operation(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
-        match validate_cbor_from_slice(&format!("{}", self), &bytes) {
-            Err(cbor::Error::Validation(err)) => {
-                let err = err
-                    .iter()
-                    .map(|fe| format!("{}: \"{}\"", fe.cbor_location, fe.reason))
-                    .collect::<Vec<String>>()
-                    .join(", ");
-
-                Err(SchemaError::InvalidSchema(err))
-            }
-            Err(cbor::Error::CBORParsing(_err)) => Err(SchemaError::InvalidCBOR),
-            Err(cbor::Error::CDDLParsing(err)) => {
-                panic!("Parsing CDDL error: {}", err);
-            }
-            _ => Ok(()),
-        }
-    }
 }
+
+impl ValidateOperatoin for SchemaBuilder {}
 
 impl fmt::Display for SchemaBuilder {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -246,13 +227,13 @@ impl Schema {
     pub fn update(
         &self,
         id: &str,
-        key_values: Vec<(&str, &str)>,
+        key_values: Vec<(&str, OperationValue)>,
     ) -> Result<Operation, SchemaError> {
         let mut fields = OperationFields::new();
         let id = Hash::new(id).unwrap();
 
         for (key, value) in key_values {
-            match fields.add(key, OperationValue::Text(value.into())) {
+            match fields.add(key, value) {
                 Ok(_) => Ok(()),
                 Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
             }?;
@@ -268,10 +249,23 @@ impl Schema {
             Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
         }
     }
+}
 
+impl fmt::Display for Schema {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.schema_string)
+    }
+}
+
+impl ValidateOperatoin for Schema {}
+
+trait ValidateOperatoin
+where
+    Self: fmt::Display,
+{
     /// Validate an operation against this user schema
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn validate_operation(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
+    fn validate_operation(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
         match validate_cbor_from_slice(&format!("{}", self), &bytes) {
             Err(cbor::Error::Validation(err)) => {
                 let err = err
@@ -291,17 +285,14 @@ impl Schema {
     }
 }
 
-impl fmt::Display for Schema {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.schema_string)
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use super::{Schema, SchemaBuilder, Type, ValidateOperatoin};
     use crate::hash::Hash;
     use crate::operation::{Operation, OperationFields, OperationValue};
-    use crate::schema::{Schema, SchemaBuilder, Type};
+    use crate::test_utils::fixtures::hash;
+
+    use rstest::rstest;
 
     /// All user schema
     pub const USER_SCHEMA: &str = r#"
@@ -322,10 +313,6 @@ mod tests {
     )
     "#;
 
-    /// All user schema hash
-    pub const USER_SCHEMA_HASH: &str =
-        "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
-
     /// Person schema
     pub const PERSON_SCHEMA: &str = r#"
     person = (
@@ -333,10 +320,6 @@ mod tests {
         age: { type: "int", value: int },
     )
     "#;
-
-    /// Person schema hash
-    pub const PERSON_SCHEMA_HASH: &str =
-        "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 
     #[test]
     pub fn schema_builder() {
@@ -362,8 +345,8 @@ mod tests {
         assert!(person.validate_operation(me_bytes).is_ok());
     }
 
-    #[test]
-    pub fn schema_from_string() {
+    #[rstest]
+    pub fn schema_from_string(#[from(hash)] schema_hash: Hash) {
         // Create a new "person" operation
         let mut me = OperationFields::new();
         me.add("name", OperationValue::Text("Sam".to_owned()))
@@ -376,22 +359,17 @@ mod tests {
             name: { type: \"str\", value: tstr }
         ) }";
 
-        let person_from_string =
-            Schema::new(&Hash::new(USER_SCHEMA_HASH).unwrap(), &cddl_str.to_string()).unwrap();
+        let person_from_string = Schema::new(&schema_hash, &cddl_str.to_string()).unwrap();
 
         // Validate operation fields against person schema
         let me_bytes = serde_cbor::to_vec(&me).unwrap();
         assert!(person_from_string.validate_operation(me_bytes).is_ok());
     }
 
-    #[test]
-    pub fn validate_against_megaschema() {
+    #[rstest]
+    pub fn validate_against_megaschema(#[from(hash)] schema_hash: Hash) {
         // Instanciate global user schema from mega schema string and it's hash
-        let user_schema = Schema::new(
-            &Hash::new(USER_SCHEMA_HASH).unwrap(),
-            &USER_SCHEMA.to_string(),
-        )
-        .unwrap();
+        let user_schema = Schema::new(&schema_hash, &USER_SCHEMA.to_string()).unwrap();
 
         let mut me = OperationFields::new();
         me.add("name", OperationValue::Text("Sam".to_owned()))
@@ -429,13 +407,9 @@ mod tests {
         assert!(user_schema.validate_operation(naughty_panda_bytes).is_err());
     }
 
-    #[test]
-    pub fn create_operation() {
-        let person_schema = Schema::new(
-            &Hash::new(PERSON_SCHEMA_HASH).unwrap(),
-            &PERSON_SCHEMA.to_string(),
-        )
-        .unwrap();
+    #[rstest]
+    pub fn create_operation(#[from(hash)] schema_hash: Hash) {
+        let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
 
         // Create an operation the long way without validation
         let mut operation_fields = OperationFields::new();
@@ -446,9 +420,7 @@ mod tests {
             .add("age", OperationValue::Integer(12))
             .unwrap();
 
-        let operation =
-            Operation::new_create(Hash::new(PERSON_SCHEMA_HASH).unwrap(), operation_fields)
-                .unwrap();
+        let operation = Operation::new_create(schema_hash, operation_fields).unwrap();
 
         // Create an operation the quick way *with* validation
         let operation_again = person_schema
@@ -456,6 +428,36 @@ mod tests {
                 ("name", OperationValue::Text("Panda".to_string())),
                 ("age", OperationValue::Integer(12)),
             ])
+            .unwrap();
+
+        assert_eq!(operation, operation_again);
+    }
+
+    #[rstest]
+    pub fn update_operation(#[from(hash)] instance_id: Hash, #[from(hash)] schema_hash: Hash) {
+        let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
+
+        // Create a operation the long way without validation
+        let mut operation_fields = OperationFields::new();
+        operation_fields
+            .add("name", OperationValue::Text("Panda".to_owned()))
+            .unwrap();
+        operation_fields
+            .add("age", OperationValue::Integer(12))
+            .unwrap();
+
+        let operation =
+            Operation::new_update(schema_hash, instance_id.to_owned(), operation_fields).unwrap();
+
+        // Create a operation the quick way *with* validation
+        let operation_again = person_schema
+            .update(
+                instance_id.as_str(),
+                vec![
+                    ("name", OperationValue::Text("Panda".to_string())),
+                    ("age", OperationValue::Integer(12)),
+                ],
+            )
             .unwrap();
 
         assert_eq!(operation, operation_again);
