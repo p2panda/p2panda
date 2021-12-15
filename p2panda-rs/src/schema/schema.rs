@@ -217,12 +217,16 @@ impl Schema {
 
     /// Create a new UPDATE message validated against this schema
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn update(&self, id: &str, key_values: Vec<(&str, &str)>) -> Result<Message, SchemaError> {
+    pub fn update(
+        &self,
+        id: &str,
+        key_values: Vec<(&str, MessageValue)>,
+    ) -> Result<Message, SchemaError> {
         let mut fields = MessageFields::new();
         let id = Hash::new(id).unwrap();
 
         for (key, value) in key_values {
-            match fields.add(key, MessageValue::Text(value.into())) {
+            match fields.add(key, value) {
                 Ok(_) => Ok(()),
                 Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
             }?;
