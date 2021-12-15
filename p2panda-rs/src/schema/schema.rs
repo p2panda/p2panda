@@ -283,6 +283,9 @@ mod tests {
     use super::{Schema, SchemaBuilder, Type, ValidateMessage};
     use crate::hash::Hash;
     use crate::message::{Message, MessageFields, MessageValue};
+    use crate::test_utils::fixtures::hash;
+
+    use rstest::rstest;
 
     /// All user schema
     pub const USER_SCHEMA: &str = r#"
@@ -303,10 +306,6 @@ mod tests {
     )
     "#;
 
-    /// All user schema hash
-    pub const USER_SCHEMA_HASH: &str =
-        "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
-
     /// Person schema
     pub const PERSON_SCHEMA: &str = r#"
     person = (
@@ -314,10 +313,6 @@ mod tests {
         age: { type: "int", value: int },
     )
     "#;
-
-    /// Person schema hash
-    pub const PERSON_SCHEMA_HASH: &str =
-        "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 
     #[test]
     pub fn schema_builder() {
@@ -343,8 +338,8 @@ mod tests {
         assert!(person.validate_message(me_bytes).is_ok());
     }
 
-    #[test]
-    pub fn schema_from_string() {
+    #[rstest]
+    pub fn schema_from_string(#[from(hash)] schema_hash: Hash) {
         // Create a new "person" message
         let mut me = MessageFields::new();
         me.add("name", MessageValue::Text("Sam".to_owned()))
@@ -357,22 +352,17 @@ mod tests {
             name: { type: \"str\", value: tstr }
         ) }";
 
-        let person_from_string =
-            Schema::new(&Hash::new(USER_SCHEMA_HASH).unwrap(), &cddl_str.to_string()).unwrap();
+        let person_from_string = Schema::new(&schema_hash, &cddl_str.to_string()).unwrap();
 
         // Validate message fields against person schema
         let me_bytes = serde_cbor::to_vec(&me).unwrap();
         assert!(person_from_string.validate_message(me_bytes).is_ok());
     }
 
-    #[test]
-    pub fn validate_against_megaschema() {
+    #[rstest]
+    pub fn validate_against_megaschema(#[from(hash)] schema_hash: Hash) {
         // Instanciate global user schema from mega schema string and it's hash
-        let user_schema = Schema::new(
-            &Hash::new(USER_SCHEMA_HASH).unwrap(),
-            &USER_SCHEMA.to_string(),
-        )
-        .unwrap();
+        let user_schema = Schema::new(&schema_hash, &USER_SCHEMA.to_string()).unwrap();
 
         let mut me = MessageFields::new();
         me.add("name", MessageValue::Text("Sam".to_owned()))
@@ -410,13 +400,35 @@ mod tests {
         assert!(user_schema.validate_message(naughty_panda_bytes).is_err());
     }
 
-    #[test]
-    pub fn create_message() {
-        let person_schema = Schema::new(
-            &Hash::new(PERSON_SCHEMA_HASH).unwrap(),
-            &PERSON_SCHEMA.to_string(),
-        )
-        .unwrap();
+    #[rstest]
+    pub fn create_message(#[from(hash)] schema_hash: Hash) {
+        let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
+
+        // Create a message the long way without validation
+        let mut message_fields = MessageFields::new();
+        message_fields
+            .add("name", MessageValue::Text("Panda".to_owned()))
+            .unwrap();
+        message_fields
+            .add("age", MessageValue::Integer(12))
+            .unwrap();
+
+        let message = Message::new_create(schema_hash, message_fields).unwrap();
+
+        // Create a message the quick way *with* validation
+        let message_again = person_schema
+            .create(vec![
+                ("name", MessageValue::Text("Panda".to_string())),
+                ("age", MessageValue::Integer(12)),
+            ])
+            .unwrap();
+
+        assert_eq!(message, message_again);
+    }
+
+    #[rstest]
+    pub fn update_message(#[from(hash)] instance_id: Hash, #[from(hash)] schema_hash: Hash) {
+        let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
 
         // Create a message the long way without validation
         let mut message_fields = MessageFields::new();
@@ -428,14 +440,17 @@ mod tests {
             .unwrap();
 
         let message =
-            Message::new_create(Hash::new(PERSON_SCHEMA_HASH).unwrap(), message_fields).unwrap();
+            Message::new_update(schema_hash, instance_id.to_owned(), message_fields).unwrap();
 
         // Create a message the quick way *with* validation
         let message_again = person_schema
-            .create(vec![
-                ("name", MessageValue::Text("Panda".to_string())),
-                ("age", MessageValue::Integer(12)),
-            ])
+            .update(
+                instance_id.as_str(),
+                vec![
+                    ("name", MessageValue::Text("Panda".to_string())),
+                    ("age", MessageValue::Integer(12)),
+                ],
+            )
             .unwrap();
 
         assert_eq!(message, message_again);
