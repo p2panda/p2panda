@@ -253,6 +253,7 @@ impl Schema {
     }
 
     /// Returns a new `Instance` converted from CREATE `Operation` and validated against it's schema definition.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn instance_from_create(&self, operation: Operation) -> Result<Instance, InstanceError> {
         match self.validate_operation(serde_cbor::to_vec(&operation.fields()).unwrap()) {
             Ok(_) => Ok(()),
