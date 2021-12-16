@@ -43,6 +43,7 @@ mod tests {
     use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::materialiser::Edge;
+    use crate::operation::OperationValue;
     use crate::test_utils::fixtures::{
         create_operation, fields, key_pair, schema, update_operation,
     };
@@ -59,7 +60,13 @@ mod tests {
         let entry_1_hash = send_to_node(
             &mut node,
             &client,
-            &create_operation(schema.clone(), fields(vec![("message", "Hello!")])),
+            &create_operation(
+                schema.clone(),
+                fields(vec![(
+                    "message",
+                    OperationValue::Text("Hello!".to_string()),
+                )]),
+            ),
         )
         .unwrap();
 
@@ -69,7 +76,10 @@ mod tests {
             &update_operation(
                 schema,
                 entry_1_hash,
-                fields(vec![("operation", "Hello too!")]),
+                fields(vec![(
+                    "operation",
+                    OperationValue::Text("Hello too!".to_string()),
+                )]),
             ),
         )
         .unwrap();
