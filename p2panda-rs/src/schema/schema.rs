@@ -133,7 +133,7 @@ impl SchemaBuilder {
             Type::Relation => "relation",
         };
 
-        // Create a operation field group and add fields
+        // Create an operation field group and add fields
         let mut operation_fields = Group::new(key.to_owned());
         operation_fields.add_field("type", Field::String(type_string.to_owned()));
         operation_fields.add_field("value", Field::Type(field_type));
@@ -404,7 +404,7 @@ mod tests {
     pub fn create_operation(#[from(hash)] schema_hash: Hash) {
         let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
 
-        // Create a operation the long way without validation
+        // Create an operation the long way without validation
         let mut operation_fields = OperationFields::new();
         operation_fields
             .add("name", OperationValue::Text("Panda".to_owned()))
@@ -415,7 +415,7 @@ mod tests {
 
         let operation = Operation::new_create(schema_hash, operation_fields).unwrap();
 
-        // Create a operation the quick way *with* validation
+        // Create an operation the quick way *with* validation
         let operation_again = person_schema
             .create(vec![
                 ("name", OperationValue::Text("Panda".to_string())),
@@ -430,7 +430,7 @@ mod tests {
     pub fn update_operation(#[from(hash)] instance_id: Hash, #[from(hash)] schema_hash: Hash) {
         let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
 
-        // Create a operation the long way without validation
+        // Create an operation the long way without validation
         let mut operation_fields = OperationFields::new();
         operation_fields
             .add("name", OperationValue::Text("Panda".to_owned()))
@@ -442,7 +442,7 @@ mod tests {
         let operation =
             Operation::new_update(schema_hash, instance_id.to_owned(), operation_fields).unwrap();
 
-        // Create a operation the quick way *with* validation
+        // Create an operation the quick way *with* validation
         let operation_again = person_schema
             .update(
                 instance_id.as_str(),
