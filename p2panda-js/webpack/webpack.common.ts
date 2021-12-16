@@ -62,9 +62,6 @@ const config: webpack.Configuration = {
               onlyCompileBundledFiles: true,
             },
           },
-          {
-            loader: 'eslint-loader',
-          },
         ],
       },
     ],
