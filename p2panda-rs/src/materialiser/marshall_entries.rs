@@ -22,7 +22,6 @@ pub fn marshall_entries(
             continue;
         }
 
-        // If we have a `link` field in the Message then we can use it here.
         // `id` should not be optional (even CREATE messages should have it set) then
         // we wouldn't need the EntrySigned here at all.
         let (link, id) = match entry.message().unwrap().id() {
