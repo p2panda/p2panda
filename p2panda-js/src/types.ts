@@ -31,20 +31,20 @@ export type EntryRecord = Entry & {
 };
 
 /**
- * Decoded entry containing optional `Message`
+ * Decoded entry containing optional `Operation`
  */
 export type Entry = {
   entryHashBacklink: string | null;
   entryHashSkiplink: string | null;
   logId: number;
-  message: Message | null;
+  operation: Operation | null;
   seqNum: number;
 };
 
 /**
- * Decoded form of a message, which can create, update or delete instances
+ * Decoded form of an operation, which can create, update or delete instances
  */
-export type Message = {
+export type Operation = {
   action: 'create' | 'update' | 'delete';
   schema: string;
   fields?: Fields;
@@ -52,65 +52,65 @@ export type Message = {
 };
 
 /**
- * Object containing message field values
+ * Object containing operation field values
  */
 export type Fields = {
   [fieldname: string]: boolean | number | string;
 };
 
 /**
- * Decoded entry containing optional `Message`
+ * Decoded entry containing optional `Operation`
  */
 export type EntryTagged = {
   entryHashBacklink: string | null;
   entryHashSkiplink: string | null;
   logId: number;
-  message: MessageTagged | null;
+  operation: OperationTagged | null;
   seqNum: number;
 };
 
 /**
- * Decoded form of a message, which can create, update or delete instances
+ * Decoded form of an operation, which can create, update or delete instances
  */
-export type MessageTagged = {
+export type OperationTagged = {
   action: 'create' | 'update' | 'delete';
   schema: string;
   fields: FieldsTagged;
 };
 
 /**
- * Object containing message fields in tagged form
+ * Object containing operation fields in tagged form
  */
 export type FieldsTagged = {
-  // currently only a schema with a text message is supported
-  [fieldname: string]: MessageValue;
+  // currently only a schema with a text operation is supported
+  [fieldname: string]: OperationValue;
 };
 
-export type MessageValue =
-  | MessageValueText
-  | MessageValueBool
-  | MessageValueInt;
+export type OperationValue =
+  | OperationValueText
+  | OperationValueBool
+  | OperationValueInt;
 
 /**
- * A message value of `boolean` type
+ * An operation value of `boolean` type
  */
-export type MessageValueBool = {
+export type OperationValueBool = {
   value: boolean;
   type: 'bool';
 };
 
 /**
- * A message value of `number` type, which must be an integer
+ * An operation value of `number` type, which must be an integer
  */
-export type MessageValueInt = {
+export type OperationValueInt = {
   value: number;
   type: 'int';
 };
 
 /**
- * A message value of `string` type
+ * An operation value of `string` type
  */
-export type MessageValueText = {
+export type OperationValueText = {
   value: string;
   type: 'str';
 };

@@ -19,23 +19,23 @@
 //! # use p2panda_rs::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 //! # use p2panda_rs::hash::Hash;
 //! # use p2panda_rs::identity::KeyPair;
-//! # use p2panda_rs::message::{Message, MessageFields, MessageValue};
+//! # use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
 //! # let profile_schema = Hash::new_from_bytes(vec![1, 2, 3])?;
 //! // Generate new Ed25519 key pair
 //! let key_pair = KeyPair::new();
 //!
-//! // Create message fields which contain the data we want to send
-//! let mut fields = MessageFields::new();
-//! fields.add("username", MessageValue::Text("panda".to_owned()))?;
+//! // Create operation fields which contain the data we want to send
+//! let mut fields = OperationFields::new();
+//! fields.add("username", OperationValue::Text("panda".to_owned()))?;
 //!
-//! // Add field data to "create" message
-//! let message = Message::new_create(profile_schema, fields)?;
+//! // Add field data to "create" operation
+//! let operation = Operation::new_create(profile_schema, fields)?;
 //!
 //! // This is the entry at sequence number 1 (the first entry in the log)
 //! let seq_num = SeqNum::new(1)?;
 //!
-//! // Wrap message into Bamboo entry (append-only log data type)
-//! let entry = Entry::new(&LogId::default(), Some(&message), None, None, &seq_num)?;
+//! // Wrap operation into Bamboo entry (append-only log data type)
+//! let entry = Entry::new(&LogId::default(), Some(&operation), None, None, &seq_num)?;
 //!
 //! // Sign entry with private key
 //! let entry_signed = sign_and_encode(&entry, &key_pair)?;
@@ -63,7 +63,7 @@ pub mod entry;
 pub mod hash;
 pub mod identity;
 pub mod materialiser;
-pub mod message;
+pub mod operation;
 pub mod schema;
 pub mod secret_group;
 pub mod test_utils;

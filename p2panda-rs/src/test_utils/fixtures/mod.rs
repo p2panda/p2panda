@@ -21,14 +21,14 @@
 //! # use rstest_reuse::apply;
 //! # use crate::entry::{sign_and_encode, Entry};
 //! # use crate::identity::KeyPair;
-//! # use crate::message::{Message, MessageEncoded};
+//! # use crate::operation::{Operation, OperationEncoded};
 //! // **hidden imports used, see code for full import list**
 //!
 //! // These are the fixtures we will be using below
-//! use crate::test_utils::fixtures::{create_message, defaults, entry, key_pair, Fixture};
+//! use crate::test_utils::fixtures::{create_operation, defaults, entry, key_pair, Fixture};
 //! // And these are the templates we can run tests against
 //! use crate::test_utils::fixtures::templates::{
-//!     many_valid_entries, non_default_message_values_panic, version_fixtures,
+//!     many_valid_entries, non_default_operation_values_panic, version_fixtures,
 //! };
 //!
 //! // In this test `entry` and `key_pair` are injected directly into the test, they were imported from the
@@ -39,36 +39,36 @@
 //! }
 //!
 //! // Here `entry` and `key_pair` are still injected automatically but we also
-//! // test against several different `message` value cases which are manually
+//! // test against several different `operation` value cases which are manually
 //! // passed in via the #[case] macro. We can name the cases for nice test result printouts.
 //! #[rstest]
-//! // This case should pass as the default create message matches the content of the default entry
-//! #[case::default_message(defaults::create_message())]
-//! // This case should panic as we are passing in a non-default message value
+//! // This case should pass as the default create operation matches the content of the default entry
+//! #[case::default_operation(defaults::create_operation())]
+//! // This case should panic as we are passing in a non-default operation value
 //! #[should_panic] // panic macro flag
-//! #[case::non_default_message(create_message(hash(DEFAULT_SCHEMA_HASH), message_fields(vec![("message", "Boo!")])))]
-//! fn message_validation(entry: Entry, #[case] message: Message, key_pair: KeyPair) {
-//!     let encoded_message = MessageEncoded::try_from(&message).unwrap();
+//! #[case::non_default_operation(create_operation(hash(DEFAULT_SCHEMA_HASH), operation_fields(vec![("message", "Boo!")])))]
+//! fn operation_validation(entry: Entry, #[case] operation: Operation, key_pair: KeyPair) {
+//!     let encoded_operation = OperationEncoded::try_from(&operation).unwrap();
 //!     let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
 //!     assert!(signed_encoded_entry
-//!         .validate_message(&encoded_message)
+//!         .validate_operation(&encoded_operation)
 //!         .is_ok());
 //! }
 //!
 //! // This test is similar to the one seen above, but now uses a template to run
-//! // the test against many non default message values. These are defined in
+//! // the test against many non default operation values. These are defined in
 //! // fixtures/templates.rs. We also set a custom case which should pass.
-//! #[apply(non_default_message_values_panic)]
-//! #[case(defaults::create_message())]
-//! fn message_validation_with_templates(
+//! #[apply(non_default_operation_values_panic)]
+//! #[case(defaults::create_operation())]
+//! fn operation_validation_with_templates(
 //!     entry: Entry,
-//!     #[case] message: Message,
+//!     #[case] operation: Operation,
 //!     key_pair: KeyPair,
 //! ) {
-//!     let encoded_message = MessageEncoded::try_from(&message).unwrap();
+//!     let encoded_operation = OperationEncoded::try_from(&operation).unwrap();
 //!     let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
 //!     assert!(signed_encoded_entry
-//!         .validate_message(&encoded_message)
+//!         .validate_operation(&encoded_operation)
 //!         .is_ok());
 //! }
 //!

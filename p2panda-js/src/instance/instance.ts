@@ -2,7 +2,7 @@
 
 import wasm from '~/wasm';
 import { Fields, InstanceRecord } from '~/types';
-import { getMessageFields } from '~/message';
+import { getOperationFields } from '~/operation';
 import { marshallRequestFields } from '~/utils';
 import { signPublishEntry } from '~/entry';
 
@@ -20,13 +20,13 @@ export const createInstance = async (
   fields: Fields,
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
-  const { encodeCreateMessage } = await wasm;
+  const { encodeCreateOperation } = await wasm;
 
-  // Create message
+  // Create operation
   const fieldsTagged = marshallRequestFields(fields);
-  const messageFields = await getMessageFields(session, fieldsTagged);
-  const encodedMessage = encodeCreateMessage(schema, messageFields);
-  const entryEncoded = await signPublishEntry(encodedMessage, {
+  const operationFields = await getOperationFields(session, fieldsTagged);
+  const encodedOperation = encodeCreateOperation(schema, operationFields);
+  const entryEncoded = await signPublishEntry(encodedOperation, {
     keyPair,
     schema,
     session,
@@ -45,13 +45,13 @@ export const updateInstance = async (
   fields: Fields,
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
-  const { encodeUpdateMessage } = await wasm;
+  const { encodeUpdateOperation } = await wasm;
 
-  // Create message
+  // Create operation
   const fieldsTagged = marshallRequestFields(fields);
-  const messageFields = await getMessageFields(session, fieldsTagged);
-  const encodedMessage = encodeUpdateMessage(id, schema, messageFields);
-  const entryEncoded = await signPublishEntry(encodedMessage, {
+  const operationFields = await getOperationFields(session, fieldsTagged);
+  const encodedOperation = encodeUpdateOperation(id, schema, operationFields);
+  const entryEncoded = await signPublishEntry(encodedOperation, {
     keyPair,
     schema,
     session,
@@ -69,11 +69,11 @@ export const deleteInstance = async (
   id: string,
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
-  const { encodeDeleteMessage } = await wasm;
+  const { encodeDeleteOperation } = await wasm;
 
-  // Create message
-  const encodedMessage = encodeDeleteMessage(id, schema);
-  const encodedEntry = await signPublishEntry(encodedMessage, {
+  // Create operation
+  const encodedOperation = encodeDeleteOperation(id, schema);
+  const encodedEntry = await signPublishEntry(encodedOperation, {
     keyPair,
     schema,
     session,

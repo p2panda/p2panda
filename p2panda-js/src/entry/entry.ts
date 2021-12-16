@@ -7,7 +7,7 @@ import { Context } from '~/session';
 
 const log = debug('p2panda-js:entry');
 /**
- * Sign and publish an entry given a prepared `Message`, `KeyPair` and
+ * Sign and publish an entry given a prepared `Operation`, `KeyPair` and
  * `Session`.
  *
  * Sets next entry args on the supplied session's entry args cache.
@@ -15,7 +15,7 @@ const log = debug('p2panda-js:entry');
  * Returns the encoded entry.
  */
 export const signPublishEntry = async (
-  messageEncoded: string,
+  operationEncoded: string,
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
   const { signEncodeEntry } = await wasm;
@@ -32,7 +32,7 @@ export const signPublishEntry = async (
 
   const { entryEncoded } = signEncodeEntry(
     keyPair,
-    messageEncoded,
+    operationEncoded,
     entryArgs.entryHashSkiplink,
     entryArgs.entryHashBacklink,
     entryArgs.seqNum,
@@ -42,7 +42,7 @@ export const signPublishEntry = async (
 
   const nextEntryArgs = await session.publishEntry(
     entryEncoded,
-    messageEncoded,
+    operationEncoded,
   );
   log('Published entry');
 

@@ -54,7 +54,7 @@ Test data is generated as a JSON document formatted as summerised below (to see 
             "seqNum": 4
           }
         ],
-        "decodedMessages": [
+        "decodedOperations": [
           {
             "action": "create",
             "schema": "...",
@@ -102,4 +102,4 @@ Test data is generated as a JSON document formatted as summerised below (to see 
 
 ### Usage in `p2panda-js`
 
-The generated test data is used to validate JSON RPC requests in `p2panda-js`. Currently in these tests we need the data of a single author with a single log which contains 4 entries published with the following message types in this exact order: 1) CREATE, 2) UPDATE, 3) DELETE and 4) CREATE.
+The generated test data is used to validate JSON RPC requests in `p2panda-js`. Currently in these tests we need the data of a single author with a single log which contains 4 entries published with the following operation types in this exact order: 1) CREATE, 2) UPDATE, 3) DELETE and 4) CREATE.

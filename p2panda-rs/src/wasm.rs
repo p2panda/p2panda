@@ -18,8 +18,8 @@ use wasm_bindgen::JsValue;
 use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair as KeyPairNonWasm;
-use crate::message::{
-    Message, MessageEncoded, MessageFields as MessageFieldsNonWasm, MessageValue,
+use crate::operation::{
+    Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationValue,
 };
 
 // Converts any Rust Error type into js_sys:Error while keeping its error message. This helps
@@ -78,10 +78,10 @@ impl KeyPair {
         hex::encode(self.0.private_key().to_bytes())
     }
 
-    /// Sign a message using this key pair, returns signature encoded as a hex string.
+    /// Sign an operation using this key pair, returns signature encoded as a hex string.
     #[wasm_bindgen]
-    pub fn sign(&self, message: String) -> String {
-        let signature = self.0.sign(&message.as_bytes());
+    pub fn sign(&self, operation: String) -> String {
+        let signature = self.0.sign(&operation.as_bytes());
         hex::encode(signature.to_bytes())
     }
 
@@ -91,42 +91,42 @@ impl KeyPair {
     }
 }
 
-/// Verify the integrity of a signed message.
+/// Verify the integrity of a signed operation.
 #[wasm_bindgen(js_name = verifySignature)]
 pub fn verify_signature(
     public_key: String,
-    message: String,
+    operation: String,
     signature: String,
 ) -> Result<JsValue, JsValue> {
     // Convert all strings to byte sequences
     let public_key_bytes = jserr!(hex::decode(public_key));
-    let message_bytes = message.as_bytes();
+    let operation_bytes = operation.as_bytes();
     let signature_bytes = jserr!(hex::decode(signature));
 
     // Create `PublicKey` and `Signature` instances from bytes
     let public_key = jserr!(PublicKey::from_bytes(&public_key_bytes));
     let signature = jserr!(Signature::try_from(&signature_bytes[..]));
 
-    // Verify signature for given public key and message
-    match KeyPairNonWasm::verify(&public_key, &message_bytes, &signature) {
+    // Verify signature for given public key and operation
+    match KeyPairNonWasm::verify(&public_key, &operation_bytes, &signature) {
         Ok(_) => Ok(JsValue::TRUE),
         Err(_) => Ok(JsValue::FALSE),
     }
 }
 
-/// Use `MessageFields` to attach user data to a [`Message`].
+/// Use `OperationFields` to attach user data to a [`Operation`].
 ///
-/// See [`crate::atomic::MessageFields`] for further documentation.
+/// See [`crate::atomic::OperationFields`] for further documentation.
 #[wasm_bindgen]
 #[derive(Debug)]
-pub struct MessageFields(MessageFieldsNonWasm);
+pub struct OperationFields(OperationFieldsNonWasm);
 
 #[wasm_bindgen]
-impl MessageFields {
-    /// Returns a `MessageFields` instance.
+impl OperationFields {
+    /// Returns a `OperationFields` instance.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
-        Self(MessageFieldsNonWasm::new())
+        Self(OperationFieldsNonWasm::new())
     }
 
     /// Adds a field with a value and a given value type.
@@ -143,12 +143,12 @@ impl MessageFields {
         match &value_type[..] {
             "str" => {
                 let value_str = jserr!(value.as_string().ok_or("Invalid string value"));
-                jserr!(self.0.add(&name, MessageValue::Text(value_str)));
+                jserr!(self.0.add(&name, OperationValue::Text(value_str)));
                 Ok(())
             }
             "bool" => {
                 let value_bool = jserr!(value.as_bool().ok_or("Invalid boolean value"));
-                jserr!(self.0.add(&name, MessageValue::Boolean(value_bool)));
+                jserr!(self.0.add(&name, OperationValue::Boolean(value_bool)));
                 Ok(())
             }
             "int" => {
@@ -157,25 +157,25 @@ impl MessageFields {
                 // simply be cast to an int.
                 // See: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number
                 let value_int = jserr!(value.as_f64().ok_or("Invalid integer value")) as i64;
-                jserr!(self.0.add(&name, MessageValue::Integer(value_int)));
+                jserr!(self.0.add(&name, OperationValue::Integer(value_int)));
                 Ok(())
             }
             "float" => {
                 let value_float = jserr!(value.as_f64().ok_or("Invalid float value"));
-                jserr!(self.0.add(&name, MessageValue::Float(value_float)));
+                jserr!(self.0.add(&name, OperationValue::Float(value_float)));
                 Ok(())
             }
             "relation" => {
                 let value_str = jserr!(value.as_string().ok_or("Invalid string value"));
                 let hash = jserr!(Hash::new(&value_str));
-                jserr!(self.0.add(&name, MessageValue::Relation(hash)));
+                jserr!(self.0.add(&name, OperationValue::Relation(hash)));
                 Ok(())
             }
             _ => Err(js_sys::Error::new("Unknown type value").into()),
         }
     }
 
-    /// Removes an existing field from this `MessageFields` instance.
+    /// Removes an existing field from this `OperationFields` instance.
     ///
     /// This might throw an error when trying to remove an inexistent field.
     #[wasm_bindgen]
@@ -184,7 +184,7 @@ impl MessageFields {
         Ok(())
     }
 
-    /// Returns field of this `MessageFields` instance when existing.
+    /// Returns field of this `OperationFields` instance when existing.
     ///
     /// When trying to access an integer field the method might throw an error when the internal
     /// value is larger than an i32 number. The wasm API will use i32 numbers in JavaScript
@@ -193,11 +193,11 @@ impl MessageFields {
     #[wasm_bindgen]
     pub fn get(&mut self, name: String) -> Result<JsValue, JsValue> {
         match self.0.get(&name) {
-            Some(MessageValue::Boolean(value)) => Ok(JsValue::from_bool(value.to_owned())),
-            Some(MessageValue::Text(value)) => Ok(JsValue::from_str(value)),
-            Some(MessageValue::Relation(value)) => Ok(JsValue::from_str(&value.as_str())),
-            Some(MessageValue::Float(value)) => Ok(JsValue::from_f64(value.to_owned())),
-            Some(MessageValue::Integer(value)) => {
+            Some(OperationValue::Boolean(value)) => Ok(JsValue::from_bool(value.to_owned())),
+            Some(OperationValue::Text(value)) => Ok(JsValue::from_str(value)),
+            Some(OperationValue::Relation(value)) => Ok(JsValue::from_str(&value.as_str())),
+            Some(OperationValue::Float(value)) => Ok(JsValue::from_f64(value.to_owned())),
+            Some(OperationValue::Integer(value)) => {
                 // Downcast i64 to i32 and throw error when value too large
                 let converted: i32 = jserr!(value.to_owned().try_into());
                 Ok(converted.into())
@@ -219,46 +219,49 @@ impl MessageFields {
     }
 }
 
-/// Returns an encoded `create` message that creates an instance of the provided schema.
+/// Returns an encoded `create` operation that creates an instance of the provided schema.
 ///
-/// Use `create` messages by attaching them to an entry that you publish.
-#[wasm_bindgen(js_name = encodeCreateMessage)]
-pub fn encode_create_message(
+/// Use `create` operations by attaching them to an entry that you publish.
+#[wasm_bindgen(js_name = encodeCreateOperation)]
+pub fn encode_create_operation(
     schema_hash: String,
-    fields: MessageFields,
+    fields: OperationFields,
 ) -> Result<String, JsValue> {
     let schema = jserr!(Hash::new(&schema_hash));
-    let message = jserr!(Message::new_create(schema, fields.0));
-    let message_encoded = jserr!(MessageEncoded::try_from(&message));
-    Ok(message_encoded.as_str().to_owned())
+    let operation = jserr!(Operation::new_create(schema, fields.0));
+    let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
+    Ok(operation_encoded.as_str().to_owned())
 }
 
-/// Returns an encoded `update` message that updates fields of a given instance.
+/// Returns an encoded `update` operation that updates fields of a given instance.
 ///
-/// Use `update` messages by attaching them to an entry that you publish.
-#[wasm_bindgen(js_name = encodeUpdateMessage)]
-pub fn encode_update_message(
+/// Use `update` operations by attaching them to an entry that you publish.
+#[wasm_bindgen(js_name = encodeUpdateOperation)]
+pub fn encode_update_operation(
     instance_id: String,
     schema_hash: String,
-    fields: MessageFields,
+    fields: OperationFields,
 ) -> Result<String, JsValue> {
     let instance = jserr!(Hash::new(&instance_id));
     let schema = jserr!(Hash::new(&schema_hash));
-    let message = jserr!(Message::new_update(schema, instance, fields.0));
-    let message_encoded = jserr!(MessageEncoded::try_from(&message));
-    Ok(message_encoded.as_str().to_owned())
+    let operation = jserr!(Operation::new_update(schema, instance, fields.0));
+    let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
+    Ok(operation_encoded.as_str().to_owned())
 }
 
-/// Returns an encoded `delete` message that deletes a given instance.
+/// Returns an encoded `delete` operation that deletes a given instance.
 ///
-/// Use `delete` messages by attaching them to an entry that you publish.
-#[wasm_bindgen(js_name = encodeDeleteMessage)]
-pub fn encode_delete_message(instance_id: String, schema_hash: String) -> Result<String, JsValue> {
+/// Use `delete` operations by attaching them to an entry that you publish.
+#[wasm_bindgen(js_name = encodeDeleteOperation)]
+pub fn encode_delete_operation(
+    instance_id: String,
+    schema_hash: String,
+) -> Result<String, JsValue> {
     let instance = jserr!(Hash::new(&instance_id));
     let schema = jserr!(Hash::new(&schema_hash));
-    let message = jserr!(Message::new_delete(schema, instance));
-    let message_encoded = jserr!(MessageEncoded::try_from(&message));
-    Ok(message_encoded.as_str().to_owned())
+    let operation = jserr!(Operation::new_delete(schema, instance));
+    let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
+    Ok(operation_encoded.as_str().to_owned())
 }
 
 /// Return value of [`sign_encode_entry`] that holds the encoded entry and its hash
@@ -267,7 +270,7 @@ pub fn encode_delete_message(instance_id: String, schema_hash: String) -> Result
 struct SignEncodeEntryResult {
     pub entry_encoded: String,
     pub entry_hash: String,
-    pub message_hash: String,
+    pub operation_hash: String,
 }
 
 /// Returns a signed and encoded entry that can be published to a p2panda node.
@@ -280,7 +283,7 @@ struct SignEncodeEntryResult {
 #[wasm_bindgen(js_name = signEncodeEntry)]
 pub fn sign_encode_entry(
     key_pair: &KeyPair,
-    encoded_message: String,
+    encoded_operation: String,
     entry_skiplink_hash: Option<String>,
     entry_backlink_hash: Option<String>,
     seq_num: i32,
@@ -301,14 +304,14 @@ pub fn sign_encode_entry(
     // Create SeqNum instance
     let seq_num = jserr!(SeqNum::new(seq_num.into()));
 
-    // Convert to Message
-    let message_encoded = jserr!(MessageEncoded::new(&encoded_message));
-    let message = jserr!(Message::try_from(&message_encoded));
+    // Convert to Operation
+    let operation_encoded = jserr!(OperationEncoded::new(&encoded_operation));
+    let operation = jserr!(Operation::try_from(&operation_encoded));
 
     // Create Entry instance
     let entry = jserr!(Entry::new(
         &LogId::new(log_id.into()),
-        Some(&message),
+        Some(&operation),
         skiplink_hash.as_ref(),
         backlink_hash.as_ref(),
         &seq_num,
@@ -321,21 +324,21 @@ pub fn sign_encode_entry(
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&SignEncodeEntryResult {
         entry_encoded: entry_signed.as_str().into(),
         entry_hash: entry_signed.hash().as_str().into(),
-        message_hash: message_encoded.hash().as_str().into(),
+        operation_hash: operation_encoded.hash().as_str().into(),
     }));
     Ok(result)
 }
 
-/// Decodes an entry and optional message given their encoded form.
+/// Decodes an entry and optional operation given their encoded form.
 #[wasm_bindgen(js_name = decodeEntry)]
 pub fn decode_entry(
     entry_encoded: String,
-    message_encoded: Option<String>,
+    operation_encoded: Option<String>,
 ) -> Result<JsValue, JsValue> {
-    // Convert encoded message
-    let message_encoded = match message_encoded {
+    // Convert encoded operation
+    let operation_encoded = match operation_encoded {
         Some(msg) => {
-            let inner = jserr!(MessageEncoded::new(&msg));
+            let inner = jserr!(OperationEncoded::new(&msg));
             Some(inner)
         }
         None => None,
@@ -343,7 +346,7 @@ pub fn decode_entry(
 
     // Convert encoded entry
     let entry_signed = jserr!(EntrySigned::new(&entry_encoded));
-    let entry: Entry = jserr!(decode(&entry_signed, message_encoded.as_ref()));
+    let entry: Entry = jserr!(decode(&entry_signed, operation_encoded.as_ref()));
 
     // Serialize struct to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&entry));

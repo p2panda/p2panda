@@ -2,13 +2,13 @@
 
 use crate::entry::EntrySigned;
 use crate::identity::Author;
-use crate::message::MessageEncoded;
+use crate::operation::OperationEncoded;
 
 /// Filter entries against instance author for a single writer setting. This is needed for materializing System Logs.
 pub fn single_writer_filter(
-    entries: Vec<(EntrySigned, MessageEncoded)>,
+    entries: Vec<(EntrySigned, OperationEncoded)>,
     instance_author: Author,
-) -> Vec<(EntrySigned, MessageEncoded)> {
+) -> Vec<(EntrySigned, OperationEncoded)> {
     entries
         .iter()
         .cloned()
@@ -17,12 +17,12 @@ pub fn single_writer_filter(
 }
 
 /// Filter entries against permissions for multi writer setting. This is needed for materializing User Logs which allow
-/// update messages from multiple writers via the use of permissions.
+/// update operations from multiple writers via the use of permissions.
 pub fn multi_writer_filter(
-    entries: Vec<(EntrySigned, MessageEncoded)>,
+    entries: Vec<(EntrySigned, OperationEncoded)>,
     instance_author: Author,
     permitted_authors: Vec<Author>,
-) -> Vec<(EntrySigned, MessageEncoded)> {
+) -> Vec<(EntrySigned, OperationEncoded)> {
     entries
         .iter()
         .cloned()
@@ -42,7 +42,7 @@ mod tests {
     use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::test_utils::fixtures::{
-        create_message, fields, random_key_pair, schema, update_message,
+        create_operation, fields, random_key_pair, schema, update_operation,
     };
     use crate::test_utils::mocks::Client;
     use crate::test_utils::mocks::{send_to_node, Node};
@@ -62,17 +62,17 @@ mod tests {
         let panda_entry_1_hash = send_to_node(
             &mut node,
             &panda,
-            &create_message(schema.clone(), fields(vec![("message", "Hello!")])),
+            &create_operation(schema.clone(), fields(vec![("operation", "Hello!")])),
         )
         .unwrap();
 
         send_to_node(
             &mut node,
             &panda,
-            &update_message(
+            &update_operation(
                 schema.clone(),
                 panda_entry_1_hash.clone(),
-                fields(vec![("message", "Hello too!")]),
+                fields(vec![("operation", "Hello too!")]),
             ),
         )
         .unwrap();
@@ -80,10 +80,10 @@ mod tests {
         send_to_node(
             &mut node,
             &penguin,
-            &update_message(
+            &update_operation(
                 schema,
                 panda_entry_1_hash,
-                fields(vec![("message", "Hello too!")]),
+                fields(vec![("operation", "Hello too!")]),
             ),
         )
         .unwrap();
@@ -93,9 +93,9 @@ mod tests {
         let entry_2 = entries.get(1).unwrap();
         let entry_3 = entries.get(2).unwrap();
         let formatted_entries = vec![
-            (entry_1.entry_encoded(), entry_1.message_encoded()),
-            (entry_2.entry_encoded(), entry_2.message_encoded()),
-            (entry_3.entry_encoded(), entry_3.message_encoded()),
+            (entry_1.entry_encoded(), entry_1.operation_encoded()),
+            (entry_2.entry_encoded(), entry_2.operation_encoded()),
+            (entry_3.entry_encoded(), entry_3.operation_encoded()),
         ];
 
         let single_writer_entries = single_writer_filter(formatted_entries.clone(), panda.author());

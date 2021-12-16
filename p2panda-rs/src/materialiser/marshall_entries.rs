@@ -2,29 +2,29 @@
 
 use crate::entry::{decode_entry, EntrySigned};
 use crate::materialiser::{Edge, MaterialisationError};
-use crate::message::MessageEncoded;
+use crate::operation::OperationEncoded;
 
-/// Method for marshalling an array of (EntrySigned, MessageEncoded) into an array of Edges which can then
-/// be turned into a DAG. It is here to detach the DAG from any concepts of Entries and Messages. The DAG just sees
-/// Strings. This step will look different once have some more instance related fields in our Message struct.
+/// Method for marshalling an array of (EntrySigned, OperationEncoded) into an array of Edges which can then
+/// be turned into a DAG. It is here to detach the DAG from any concepts of Entries and Operations. The DAG just sees
+/// Strings. This step will look different once have some more instance related fields in our Operation struct.
 pub fn marshall_entries(
-    entries: Vec<(EntrySigned, MessageEncoded)>,
+    entries: Vec<(EntrySigned, OperationEncoded)>,
 ) -> Result<Vec<Edge>, MaterialisationError> {
     let mut edges = Vec::new();
-    for (entry_signed, message_encoded) in entries {
-        let entry = match decode_entry(&entry_signed, Some(&message_encoded)) {
+    for (entry_signed, operation_encoded) in entries {
+        let entry = match decode_entry(&entry_signed, Some(&operation_encoded)) {
             Ok(entry) => Ok(entry),
             Err(err) => Err(MaterialisationError::EntrySignedError(err)),
         }?;
 
-        if entry.message().is_none() {
-            // The message has been deleted.
+        if entry.operation().is_none() {
+            // The operation has been deleted.
             continue;
         }
 
-        // `id` should not be optional (even CREATE messages should have it set) then
+        // `id` should not be optional (even CREATE operations should have it set) then
         // we wouldn't need the EntrySigned here at all.
-        let (link, id) = match entry.message().unwrap().id() {
+        let (link, id) = match entry.operation().unwrap().id() {
             Some(_) => (
                 Some(entry.backlink_hash().unwrap().as_str().to_owned()),
                 entry_signed.hash().as_str().to_owned(),
@@ -43,7 +43,9 @@ mod tests {
     use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::materialiser::Edge;
-    use crate::test_utils::fixtures::{create_message, fields, key_pair, schema, update_message};
+    use crate::test_utils::fixtures::{
+        create_operation, fields, key_pair, schema, update_operation,
+    };
     use crate::test_utils::mocks::Client;
     use crate::test_utils::mocks::{send_to_node, Node};
 
@@ -57,17 +59,17 @@ mod tests {
         let entry_1_hash = send_to_node(
             &mut node,
             &client,
-            &create_message(schema.clone(), fields(vec![("message", "Hello!")])),
+            &create_operation(schema.clone(), fields(vec![("message", "Hello!")])),
         )
         .unwrap();
 
         send_to_node(
             &mut node,
             &client,
-            &update_message(
+            &update_operation(
                 schema,
                 entry_1_hash,
-                fields(vec![("message", "Hello too!")]),
+                fields(vec![("operation", "Hello too!")]),
             ),
         )
         .unwrap();
@@ -77,8 +79,8 @@ mod tests {
         let entry_2 = entries.get(1).unwrap();
 
         let edges = marshall_entries(vec![
-            (entry_1.entry_encoded(), entry_1.message_encoded()),
-            (entry_2.entry_encoded(), entry_2.message_encoded()),
+            (entry_1.entry_encoded(), entry_1.operation_encoded()),
+            (entry_2.entry_encoded(), entry_2.operation_encoded()),
         ])
         .unwrap();
 

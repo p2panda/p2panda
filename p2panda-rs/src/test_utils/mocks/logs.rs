@@ -11,11 +11,11 @@ use std::convert::TryFrom;
 use crate::entry::EntrySigned;
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::message::{Message, MessageEncoded};
+use crate::operation::{Operation, OperationEncoded};
 
 /// This struct is an augmented version of a simple log entry. It includes extra properties to aid in
 /// testing and materialising instances. In particular it has an `previous_operation`.
-/// which our panda messages currently don't have and will need in the future.
+/// which our pandan operations currently don't have and will need in the future.
 #[derive(Clone, Debug)]
 pub struct LogEntry {
     /// The author of this entry
@@ -24,9 +24,9 @@ pub struct LogEntry {
     pub instance_author: Option<String>,
     /// The encoded entry
     pub entry_encoded: EntrySigned,
-    /// The message
-    pub message: Message,
-    /// The hash of the entry this message/operation acts upon
+    /// The operation
+    pub operation: Operation,
+    /// The hash of the entry this operation/operation acts upon
     pub previous_operation: Option<String>,
 }
 
@@ -47,14 +47,14 @@ impl LogEntry {
         author: Author,
         instance_author: Option<String>,
         entry_encoded: EntrySigned,
-        message: Message,
+        operation: Operation,
         previous_operation: Option<String>,
     ) -> Self {
         Self {
             author,
             instance_author,
             entry_encoded,
-            message,
+            operation,
             previous_operation,
         }
     }
@@ -79,9 +79,9 @@ impl LogEntry {
         self.instance_author.clone().unwrap().as_str().to_string()
     }
 
-    /// Get the message from this entry
-    pub fn message(&self) -> Message {
-        self.message.clone()
+    /// Get the operation from this entry
+    pub fn operation(&self) -> Operation {
+        self.operation.clone()
     }
 
     /// Get the encoded entry from this entry
@@ -89,9 +89,9 @@ impl LogEntry {
         self.entry_encoded.clone()
     }
 
-    /// Get the encoded message from this entry
-    pub fn message_encoded(&self) -> MessageEncoded {
-        MessageEncoded::try_from(&self.message).unwrap()
+    /// Get the encoded operation from this entry
+    pub fn operation_encoded(&self) -> OperationEncoded {
+        OperationEncoded::try_from(&self.operation).unwrap()
     }
 
     /// Get the instance backlink for this entry

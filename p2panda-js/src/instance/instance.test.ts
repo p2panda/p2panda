@@ -32,7 +32,7 @@ describe('instance', () => {
         .spyOn(session, 'getNextEntryArgs')
         .mockImplementation(asyncFunctionMock);
 
-      const fields = entryFixture(1).message?.fields as Fields;
+      const fields = entryFixture(1).operation?.fields as Fields;
 
       const entryEncoded = await createInstance(fields, {
         keyPair,
@@ -57,11 +57,11 @@ describe('instance', () => {
         .spyOn(session, 'getNextEntryArgs')
         .mockImplementation(asyncFunctionMock);
 
-      // These are the fields for an update message
-      const fields = entryFixture(2).message?.fields as Fields;
+      // These are the fields for an update operation
+      const fields = entryFixture(2).operation?.fields as Fields;
 
       // This is the instance id
-      const id = entryFixture(2).message?.id as string;
+      const id = entryFixture(2).operation?.id as string;
 
       const entryEncoded = await updateInstance(id, fields, {
         keyPair,
@@ -87,7 +87,7 @@ describe('instance', () => {
         .mockImplementation(asyncFunctionMock);
 
       // This is the instance id
-      const id = entryFixture(3).message?.id as string;
+      const id = entryFixture(3).operation?.id as string;
 
       const entryEncoded = await deleteInstance(id, {
         keyPair,

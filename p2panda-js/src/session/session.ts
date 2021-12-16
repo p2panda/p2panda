@@ -76,7 +76,7 @@ export class Session {
     if (!this._schema) {
       throw new Error(
         'Configure a schema with `session.schema()` or with the `options` ' +
-          'parameter on methods.',
+        'parameter on methods.',
       );
     }
     return this._schema;
@@ -100,7 +100,7 @@ export class Session {
     if (!this._keyPair) {
       throw new Error(
         'Configure a key pair with `session.keyPair()` or with the `options` ' +
-          'parameter on methods.',
+        'parameter on methods.',
       );
     }
     return this._keyPair;
@@ -163,20 +163,20 @@ export class Session {
   }
 
   /**
-   * Publish an encoded entry and message.
+   * Publish an encoded entry and operation.
    *
    * @param entryEncoded
-   * @param messageEncoded
+   * @param operationEncoded
    * @returns
    */
   async publishEntry(
     entryEncoded: string,
-    messageEncoded: string,
+    operationEncoded: string,
   ): Promise<EntryArgs> {
-    if (!entryEncoded || !messageEncoded)
-      throw new Error('Encoded entry and message must be provided');
+    if (!entryEncoded || !operationEncoded)
+      throw new Error('Encoded entry and operation must be provided');
 
-    const params = { entryEncoded, messageEncoded };
+    const params = { entryEncoded, operationEncoded };
     log('call panda_publishEntry', params);
     const result = await this.client.request({
       method: 'panda_publishEntry',
@@ -220,9 +220,9 @@ export class Session {
     return Promise.all(
       result.map(async (entry) => {
         const decoded = await decodeEntry(entry.entryBytes, entry.payloadBytes);
-        if (decoded.message.action !== 'delete') {
-          decoded.message.fields = marshallResponseFields(
-            decoded.message.fields,
+        if (decoded.operation.action !== 'delete') {
+          decoded.operation.fields = marshallResponseFields(
+            decoded.operation.fields,
           );
         }
         return {
@@ -245,16 +245,16 @@ export class Session {
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id
    * @example
-   * const messageFields = {
+   * const operationFields = {
    *   message: 'ahoy'
    * };
    * await new Session(endpoint)
    *   .setKeyPair(keyPair)
-   *   .create(messageFields, { schema });
+   *   .create(operationFields, { schema });
    */
   async create(fields: Fields, options?: Partial<Context>): Promise<Session> {
     // We should validate the data against the schema here too eventually
-    if (!fields) throw new Error('Message fields must be provided');
+    if (!fields) throw new Error('Operation fields must be provided');
     log('create instance', fields);
     const mergedOptions = {
       schema: options?.schema || this.schema,
@@ -279,12 +279,12 @@ export class Session {
    * @param options.schema hex-encoded schema id
    * @example
    * const instanceId = '0040fd224effd3aa26c2551a380ef9c48a6fae89f388949f24de314027d8ce3e2a5749077afa64a445299ca9528970092a33ef29aa30e5783d958fcee81bed0a197c';
-   * const messageFields = {
+   * const operationFields = {
    *   message: 'ahoy'
    * };
    * await new Session(endpoint)
    *   .setKeyPair(keyPair)
-   *   .update(instanceId, messageFields, { schema });
+   *   .update(instanceId, operationFields, { schema });
    */
   async update(
     id: string,
@@ -293,7 +293,7 @@ export class Session {
   ): Promise<Session> {
     // We should validate the data against the schema here too eventually
     if (!id) throw new Error('Instance id must be provided');
-    if (!fields) throw new Error('Message fields must be provided');
+    if (!fields) throw new Error('Operation fields must be provided');
     log('update instance', id, fields);
     const mergedOptions = {
       schema: options?.schema || this.schema,

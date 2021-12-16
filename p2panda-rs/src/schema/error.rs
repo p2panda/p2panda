@@ -5,11 +5,11 @@ use thiserror::Error;
 /// Custom error types for schema validation.
 #[derive(Error, Debug)]
 pub enum SchemaError {
-    /// Message contains invalid fields.
-    #[error("invalid message schema: {0}")]
+    /// Operation contains invalid fields.
+    #[error("invalid operation schema: {0}")]
     InvalidSchema(String),
 
-    /// Message can't be deserialized from invalid CBOR encoding.
+    /// Operation can't be deserialized from invalid CBOR encoding.
     #[error("invalid CBOR format")]
     InvalidCBOR,
 
@@ -21,15 +21,15 @@ pub enum SchemaError {
     #[error("error while parsing CDDL: {0}")]
     ParsingError(String),
 
-    /// Message validation error
-    #[error("invalid message values")]
+    /// Operation validation error
+    #[error("invalid operation values")]
     ValidationError(String),
 
-    /// Message fields error
-    #[error("error while adding message fields")]
-    MessageFieldsError(#[from] crate::message::MessageFieldsError),
+    /// Operation fields error
+    #[error("error while adding operation fields")]
+    OperationFieldsError(#[from] crate::operation::OperationFieldsError),
 
-    /// Message error
-    #[error("error while creating message")]
-    MessageError(#[from] crate::message::MessageError),
+    /// Operation error
+    #[error("error while creating operation")]
+    OperationError(#[from] crate::operation::OperationError),
 }

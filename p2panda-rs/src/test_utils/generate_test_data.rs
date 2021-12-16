@@ -6,7 +6,7 @@ use p2panda_rs::test_utils::mocks::Client;
 use p2panda_rs::test_utils::mocks::{send_to_node, Node};
 use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
 use p2panda_rs::test_utils::{
-    create_message, delete_message, hash, message_fields, new_key_pair, update_message,
+    create_operation, delete_operation, hash, new_key_pair, operation_fields, update_operation,
     DEFAULT_SCHEMA_HASH,
 };
 
@@ -17,44 +17,44 @@ fn main() {
     // Instantiate one client called "panda"
     let panda = Client::new("panda".to_string(), new_key_pair());
 
-    // Publish a CREATE message
+    // Publish a CREATE operation
     let instance_a_hash = send_to_node(
         &mut node,
         &panda,
-        &create_message(
+        &create_operation(
             hash(DEFAULT_SCHEMA_HASH),
-            message_fields(vec![("message", "Ohh, my first message!")]),
+            operation_fields(vec![("message", "Ohh, my first message!")]),
         ),
     )
     .unwrap();
 
-    // Publish an UPDATE message
+    // Publish an UPDATE operation
     send_to_node(
         &mut node,
         &panda,
-        &update_message(
+        &update_operation(
             hash(DEFAULT_SCHEMA_HASH),
             instance_a_hash.clone(),
-            message_fields(vec![("message", "Which I now update.")]),
+            operation_fields(vec![("message", "Which I now update.")]),
         ),
     )
     .unwrap();
 
-    // Publish an DELETE message
+    // Publish an DELETE operation
     send_to_node(
         &mut node,
         &panda,
-        &delete_message(hash(DEFAULT_SCHEMA_HASH), instance_a_hash),
+        &delete_operation(hash(DEFAULT_SCHEMA_HASH), instance_a_hash),
     )
     .unwrap();
 
-    // Publish another CREATE message
+    // Publish another CREATE operation
     send_to_node(
         &mut node,
         &panda,
-        &create_message(
+        &create_operation(
             hash(DEFAULT_SCHEMA_HASH),
-            message_fields(vec![("message", "Let's try that again.")]),
+            operation_fields(vec![("message", "Let's try that again.")]),
         ),
     )
     .unwrap();
@@ -74,7 +74,7 @@ mod tests {
     use p2panda_rs::test_utils::mocks::{send_to_node, Node};
     use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
     use p2panda_rs::test_utils::{
-        create_message, hash, keypair_from_private, message_fields, DEFAULT_PRIVATE_KEY,
+        create_operation, hash, keypair_from_private, operation_fields, DEFAULT_PRIVATE_KEY,
         DEFAULT_SCHEMA_HASH,
     };
 
@@ -89,13 +89,13 @@ mod tests {
             keypair_from_private(DEFAULT_PRIVATE_KEY.into()),
         );
 
-        // Publish a CREATE message
+        // Publish a CREATE operation
         send_to_node(
             &mut node,
             &panda,
-            &create_message(
+            &create_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                message_fields(vec![("message", "Ohh, my first message!")]),
+                operation_fields(vec![("message", "Ohh, my first message!")]),
             ),
         )
         .unwrap();
@@ -117,7 +117,7 @@ mod tests {
                       "seqNum": 1
                     }
                   ],
-                  "decodedMessages": [
+                  "decodedOperations": [
                     {
                       "action": "create",
                       "schema": "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",

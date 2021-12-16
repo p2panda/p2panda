@@ -74,17 +74,17 @@ const keyPair = await createKeyPair();
 // calls in this session are executed using that key pair
 const session = new Session('https://welle.liebechaos.org').setKeyPair(keyPair);
 
-// Compose your message payload, according to chosen schema
+// Compose your operation payload, according to chosen schema
 const payload = {
-  message: 'Hi there',
+  operation: 'Hi there',
 };
 
-// Send new chat message to the node
+// Send new chat operation to the node
 await session.create(payload, { schema: CHAT_SCHEMA });
 
 // Query instances from the p2panda node
 const instances = await session.query({ schema: CHAT_SCHEMA });
-console.log(instances[0].message);
+console.log(instances[0].operation);
 // -> 'Hi there'
 ```
 

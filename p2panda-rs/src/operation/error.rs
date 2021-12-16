@@ -2,19 +2,19 @@
 
 use thiserror::Error;
 
-/// Error types for methods of `Message` struct.
+/// Error types for methods of `Operation` struct.
 #[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
-pub enum MessageError {
-    /// Invalid attempt to create a message without any fields data.
-    #[error("message fields can not be empty")]
+pub enum OperationError {
+    /// Invalid attempt to create an operation without any fields data.
+    #[error("operation fields can not be empty")]
     EmptyFields,
 }
 
-/// Error types for methods of `MessageFields` struct.
+/// Error types for methods of `OperationFields` struct.
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
-pub enum MessageFieldsError {
+pub enum OperationFieldsError {
     /// Detected duplicate field when adding a new one.
     #[error("field already exists")]
     FieldDuplicate,
@@ -24,14 +24,14 @@ pub enum MessageFieldsError {
     UnknownField,
 }
 
-/// Custom error types for `MessageEncoded`.
+/// Custom error types for `OperationEncoded`.
 #[derive(Error, Debug)]
-pub enum MessageEncodedError {
-    /// Encoded message string contains invalid hex characters.
-    #[error("invalid hex encoding in message")]
+pub enum OperationEncodedError {
+    /// Encoded operation string contains invalid hex characters.
+    #[error("invalid hex encoding in operation")]
     InvalidHexEncoding,
 
-    /// Message can't be deserialized from invalid CBOR encoding.
+    /// Operation can't be deserialized from invalid CBOR encoding.
     #[error("invalid CBOR format")]
     InvalidCBOR,
 
