@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::entry::{EntryError, LogId, SeqNum};
 use crate::hash::Hash;
-use crate::message::Message;
+use crate::operation::Operation;
 use crate::Validate;
 
 /// Entry of an append-only log based on [`Bamboo`] specification. It describes the actual data in
@@ -16,8 +16,8 @@ use crate::Validate;
 /// stored inside the node database.
 ///
 /// Entries are separated from the actual (off-chain) data to be able to delete user data without
-/// loosing the integrity of the log. Each entry only holds a hash of the message payload, this is
-/// why a message instance is required during entry signing.
+/// loosing the integrity of the log. Each entry only holds a hash of the operation payload, this is
+/// why an operation instance is required during entry signing.
 ///
 /// [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 ///
@@ -27,7 +27,7 @@ use crate::Validate;
 /// # extern crate p2panda_rs;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use p2panda_rs::entry::{Entry, LogId, SeqNum};
-/// use p2panda_rs::message::{Message, MessageFields, MessageValue};
+/// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
 /// use p2panda_rs::hash::Hash;
 /// # let schema_hash_str = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 ///
@@ -36,17 +36,17 @@ use crate::Validate;
 /// // Create schema hash
 /// let schema_hash = Hash::new(schema_hash_str)?;
 ///
-/// // Create a MessageFields instance and add a text field string with the key "title"
-/// let mut fields = MessageFields::new();
-/// fields.add("title", MessageValue::Text("Hello, Panda!".to_owned()))?;
+/// // Create a OperationFields instance and add a text field string with the key "title"
+/// let mut fields = OperationFields::new();
+/// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
 ///
-/// // Create a message containing the above fields
-/// let message = Message::new_create(schema_hash, fields)?;
+/// // Create an operation containing the above fields
+/// let operation = Operation::new_create(schema_hash, fields)?;
 ///
 /// // Create the first Entry in a log
 /// let entry = Entry::new(
 ///     &LogId::default(),
-///     Some(&message),
+///     Some(&operation),
 ///     None,
 ///     None,
 ///     &SeqNum::new(1)?,
@@ -59,7 +59,7 @@ use crate::Validate;
 /// # extern crate p2panda_rs;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use p2panda_rs::entry::{Entry, LogId, SeqNum};
-/// use p2panda_rs::message::{Message, MessageFields, MessageValue};
+/// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
 /// use p2panda_rs::hash::Hash;
 ///
 /// // == ENTRY IN EXISTING LOG ==
@@ -70,12 +70,12 @@ use crate::Validate;
 /// // Create schema hash
 /// let schema_hash = Hash::new(schema_hash_string)?;
 ///
-/// // Create a MessageFields instance and add a text field string with the key "title"
-/// let mut fields = MessageFields::new();
-/// fields.add("title", MessageValue::Text("Hello, Panda!".to_owned()))?;
+/// // Create a OperationFields instance and add a text field string with the key "title"
+/// let mut fields = OperationFields::new();
+/// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
 ///
-/// // Create a message containing the above fields
-/// let message = Message::new_create(schema_hash, fields)?;
+/// // Create an operation containing the above fields
+/// let operation = Operation::new_create(schema_hash, fields)?;
 ///
 /// // Create log ID from i64
 /// let log_id = LogId::new(1);
@@ -92,7 +92,7 @@ use crate::Validate;
 /// // Create entry
 /// let next_entry = Entry::new(
 ///     &log_id,
-///     Some(&message),
+///     Some(&operation),
 ///     Some(&skiplink_hash),
 ///     Some(&backlink_hash),
 ///     &seq_no,
@@ -112,8 +112,8 @@ pub struct Entry {
     /// Used log for this entry.
     log_id: LogId,
 
-    /// Message payload of entry, can be deleted.
-    message: Option<Message>,
+    /// Operation payload of entry, can be deleted.
+    operation: Option<Operation>,
 
     /// Sequence number of this entry.
     seq_num: SeqNum,
@@ -123,14 +123,14 @@ impl Entry {
     /// Validates and returns a new instance of `Entry`.
     pub fn new(
         log_id: &LogId,
-        message: Option<&Message>,
+        operation: Option<&Operation>,
         entry_hash_skiplink: Option<&Hash>,
         entry_hash_backlink: Option<&Hash>,
         seq_num: &SeqNum,
     ) -> Result<Self, EntryError> {
         let entry = Self {
             log_id: log_id.clone().to_owned(),
-            message: message.cloned(),
+            operation: operation.cloned(),
             entry_hash_skiplink: entry_hash_skiplink.cloned(),
             entry_hash_backlink: entry_hash_backlink.cloned(),
             seq_num: *seq_num,
@@ -165,9 +165,9 @@ impl Entry {
         self.seq_num.skiplink_seq_num()
     }
 
-    /// Returns message of entry.
-    pub fn message(&self) -> Option<&Message> {
-        self.message.as_ref()
+    /// Returns operation of entry.
+    pub fn operation(&self) -> Option<&Operation> {
+        self.operation.as_ref()
     }
 
     /// Returns log_id of entry.
@@ -175,9 +175,9 @@ impl Entry {
         &self.log_id
     }
 
-    /// Returns true if entry contains message.
-    pub fn has_message(&self) -> bool {
-        self.message.is_some()
+    /// Returns true if entry contains operation.
+    pub fn has_operation(&self) -> bool {
+        self.operation.is_some()
     }
 
     /// Returns true if skiplink has to be given.
@@ -211,25 +211,25 @@ impl Validate for Entry {
 mod tests {
     use crate::entry::{LogId, SeqNum};
     use crate::hash::Hash;
-    use crate::message::{Message, MessageFields, MessageValue};
+    use crate::operation::{Operation, OperationFields, OperationValue};
 
     use super::Entry;
 
     #[test]
     fn validation() {
         // Prepare sample values
-        let mut fields = MessageFields::new();
+        let mut fields = OperationFields::new();
         fields
-            .add("test", MessageValue::Text("Hello".to_owned()))
+            .add("test", OperationValue::Text("Hello".to_owned()))
             .unwrap();
-        let message =
-            Message::new_create(Hash::new_from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
+        let operation =
+            Operation::new_create(Hash::new_from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
         let backlink = Hash::new_from_bytes(vec![7, 8, 9]).unwrap();
 
         // The first entry in a log doesn't need and cannot have references to previous entries
         assert!(Entry::new(
             &LogId::default(),
-            Some(&message),
+            Some(&operation),
             None,
             None,
             &SeqNum::new(1).unwrap()
@@ -239,7 +239,7 @@ mod tests {
         // Try to pass them over anyways, it will be invalidated
         assert!(Entry::new(
             &LogId::default(),
-            Some(&message),
+            Some(&operation),
             Some(&backlink),
             Some(&backlink),
             &SeqNum::new(1).unwrap()
@@ -249,7 +249,7 @@ mod tests {
         // Any following entry requires backreferences
         assert!(Entry::new(
             &LogId::default(),
-            Some(&message),
+            Some(&operation),
             Some(&backlink),
             Some(&backlink),
             &SeqNum::new(2).unwrap()
@@ -259,7 +259,7 @@ mod tests {
         // We can omit the skiplink here as it is the same as the backlink
         assert!(Entry::new(
             &LogId::default(),
-            Some(&message),
+            Some(&operation),
             None,
             Some(&backlink),
             &SeqNum::new(2).unwrap()
@@ -269,7 +269,7 @@ mod tests {
         // We need a backlink here
         assert!(Entry::new(
             &LogId::default(),
-            Some(&message),
+            Some(&operation),
             None,
             None,
             &SeqNum::new(2).unwrap()

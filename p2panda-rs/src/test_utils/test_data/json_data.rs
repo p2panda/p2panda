@@ -8,7 +8,7 @@ use std::convert::TryFrom;
 use crate::entry::{decode_entry, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::message::{Message, MessageEncoded};
+use crate::operation::{Operation, OperationEncoded};
 
 use crate::test_utils::mocks::Client;
 use crate::test_utils::mocks::Node;
@@ -42,7 +42,7 @@ pub struct EncodedEntryData {
 #[allow(non_snake_case)]
 pub struct LogData {
     encodedEntries: Vec<EncodedEntryData>,
-    decodedMessages: Vec<Message>,
+    decodedOperations: Vec<Operation>,
     nextEntryArgs: Vec<NextEntryArgs>,
 }
 
@@ -66,13 +66,14 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
         for (_log_id, log) in author_logs.iter() {
             let mut log_data = LogData {
                 encodedEntries: Vec::new(),
-                decodedMessages: Vec::new(),
+                decodedOperations: Vec::new(),
                 nextEntryArgs: Vec::new(),
             };
 
             for log_entry in log.entries().iter() {
-                let message_encoded = MessageEncoded::try_from(&log_entry.message).unwrap();
-                let entry = decode_entry(&log_entry.entry_encoded, Some(&message_encoded)).unwrap();
+                let operation_encoded = OperationEncoded::try_from(&log_entry.operation).unwrap();
+                let entry =
+                    decode_entry(&log_entry.entry_encoded, Some(&operation_encoded)).unwrap();
                 let next_entry_args = node
                     .next_entry_args(
                         &author,
@@ -80,19 +81,21 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
                         Some(entry.seq_num()),
                     )
                     .unwrap();
-                let message_decoded = entry.message().unwrap();
+                let operation_decoded = entry.operation().unwrap();
                 let entry_data = EncodedEntryData {
                     author: author.clone(),
                     entryBytes: log_entry.entry_encoded.as_str().into(),
                     entryHash: log_entry.entry_encoded.hash(),
-                    payloadBytes: message_encoded.as_str().into(),
-                    payloadHash: message_encoded.hash(),
+                    payloadBytes: operation_encoded.as_str().into(),
+                    payloadHash: operation_encoded.hash(),
                     logId: entry.log_id().to_owned(),
                     seqNum: entry.seq_num().to_owned(),
                 };
 
                 log_data.encodedEntries.push(entry_data);
-                log_data.decodedMessages.push(message_decoded.to_owned());
+                log_data
+                    .decodedOperations
+                    .push(operation_decoded.to_owned());
 
                 let json_entry_args = NextEntryArgs {
                     entryHashBacklink: next_entry_args.backlink,

@@ -1,27 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Validations for message payloads and definitions of system schemas.
+//! Validations for operation payloads and definitions of system schemas.
 //!
 //! This uses [`Concise Data Definition Language`] (CDDL) internally to verify CBOR data of p2panda
-//! messages.
+//! operations.
 //!
 //! [`Concise Data Definition Language`]: https://tools.ietf.org/html/rfc8610
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
 
 mod error;
-mod message;
+mod operation;
 #[allow(clippy::module_inception)]
 mod schema;
 
 pub use error::SchemaError;
-pub use message::MESSAGE_SCHEMA;
+pub use operation::MESSAGE_SCHEMA;
 pub use schema::{Schema, SchemaBuilder, Type};
 
 /// Checks CBOR bytes against CDDL schemas.
 ///
 /// This helper method also converts validation errors coming from the cddl crate into an
-/// concatenated error message and returns it.
+/// concatenated error operation and returns it.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaError> {
     match cddl::validate_cbor_from_slice(cddl_schema, &bytes) {

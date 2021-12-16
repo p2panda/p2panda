@@ -7,28 +7,28 @@ use bamboo_rs_core_ed25519_yasmf::Entry as BambooEntry;
 
 use crate::entry::{Entry, EntrySigned, EntrySignedError, LogId, SeqNum, SIGNATURE_SIZE};
 use crate::hash::{Hash, HASH_SIZE};
-use crate::message::{Message, MessageEncoded};
+use crate::operation::{Operation, OperationEncoded};
 
-/// Takes [`EntrySigned`] and optionally [`MessageEncoded`] as arguments, returns a decoded and
-/// unsigned [`Entry`]. When a [`MessageEncoded`] is passed it will automatically check its
-/// integrity with this [`Entry`] by comparing their hashes. Valid messages will be included in the
-/// returned [`Entry`], if an invalid message is passed an error will be returned.
+/// Takes [`EntrySigned`] and optionally [`OperationEncoded`] as arguments, returns a decoded and
+/// unsigned [`Entry`]. When a [`OperationEncoded`] is passed it will automatically check its
+/// integrity with this [`Entry`] by comparing their hashes. Valid operations will be included in the
+/// returned [`Entry`], if an invalid operation is passed an error will be returned.
 ///
-/// Entries are separated from the messages they refer to. Since messages can independently be
-/// deleted they can be passed on as an optional argument. When a [`Message`] is passed it will
+/// Entries are separated from the operations they refer to. Since operations can independently be
+/// deleted they can be passed on as an optional argument. When a [`Operation`] is passed it will
 /// automatically check its integrity with this Entry by comparing their hashes.
 pub fn decode_entry(
     entry_encoded: &EntrySigned,
-    message_encoded: Option<&MessageEncoded>,
+    operation_encoded: Option<&OperationEncoded>,
 ) -> Result<Entry, EntrySignedError> {
     // Convert to Entry from bamboo_rs_core_ed25519_yasmf first
     let entry: BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> =
         entry_encoded.into();
 
-    let message = match message_encoded {
+    let operation = match operation_encoded {
         Some(msg) => {
-            entry_encoded.validate_message(msg)?;
-            Some(Message::from(msg))
+            entry_encoded.validate_operation(msg)?;
+            Some(Operation::from(msg))
         }
         None => None,
     };
@@ -45,7 +45,7 @@ pub fn decode_entry(
 
     Ok(Entry::new(
         &LogId::new(entry.log_id as i64),
-        message.as_ref(),
+        operation.as_ref(),
         entry_hash_skiplink.as_ref(),
         entry_hash_backlink.as_ref(),
         &SeqNum::new(entry.seq_num as i64).unwrap(),

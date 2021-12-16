@@ -20,18 +20,6 @@ impl LogId {
         Self(value)
     }
 
-    /// Returns true when `LogId` is for a user schema.
-    pub fn is_user_log(&self) -> bool {
-        // Log ids for user schemas are odd numbers
-        self.0 % 2 == 1
-    }
-
-    /// Returns true when `LogId` is for a system schema.
-    pub fn is_system_log(&self) -> bool {
-        // Log ids for system schemas are even numbers
-        self.0 % 2 == 0
-    }
-
     /// Returns `LogId` as i64 integer.
     pub fn as_i64(&self) -> i64 {
         self.0
@@ -40,8 +28,6 @@ impl LogId {
 
 impl Default for LogId {
     fn default() -> Self {
-        // Log ids for system schemes are defined by the specification and fixed, the default value
-        // is hence the first possible user schema log id.
         Self::new(1)
     }
 }
@@ -52,11 +38,7 @@ impl Iterator for LogId {
     type Item = LogId;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.is_user_log() {
-            Some(Self(self.0 + 2))
-        } else {
-            None
-        }
+        Some(Self(self.0 + 1))
     }
 }
 
@@ -71,25 +53,13 @@ mod tests {
     use super::LogId;
 
     #[test]
-    fn user_log_ids() {
+    fn log_ids() {
         let mut log_id = LogId::default();
-        assert!(log_id.is_user_log());
-        assert!(!log_id.is_system_log());
 
         let mut next_log_id = log_id.next().unwrap();
-        assert_eq!(next_log_id, LogId::new(3));
+        assert_eq!(next_log_id, LogId::new(2));
 
         let next_log_id = next_log_id.next().unwrap();
-        assert_eq!(next_log_id, LogId::new(5));
-    }
-
-    #[test]
-    fn system_log_ids() {
-        let mut log_id = LogId::new(0);
-        assert!(!log_id.is_user_log());
-        assert!(log_id.is_system_log());
-
-        // Can't iterate on system logs
-        assert!(log_id.next().is_none());
+        assert_eq!(next_log_id, LogId::new(3));
     }
 }

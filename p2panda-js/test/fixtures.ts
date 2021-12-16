@@ -1,4 +1,4 @@
-import { Entry, Message, FieldsTagged, EncodedEntry, EntryArgs } from '~/types';
+import { Entry, Operation, FieldsTagged, EncodedEntry, EntryArgs } from '~/types';
 import TEST_DATA from './test-data.json';
 import { marshallResponseFields } from '~/utils';
 
@@ -6,7 +6,7 @@ import { marshallResponseFields } from '~/utils';
 const PANDA_LOG = TEST_DATA.panda.logs[0];
 
 export const schemaFixture = (): string => {
-  return PANDA_LOG.decodedMessages[0].schema;
+  return PANDA_LOG.decodedOperations[0].schema;
 };
 
 /**
@@ -28,20 +28,20 @@ export const entryFixture = (seqNum: number): Entry => {
   const index = seqNum - 1;
 
   let fields = undefined;
-  if (PANDA_LOG.decodedMessages[index].action !== 'delete') {
+  if (PANDA_LOG.decodedOperations[index].action !== 'delete') {
     fields = marshallResponseFields(
-      PANDA_LOG.decodedMessages[index].fields as FieldsTagged,
+      PANDA_LOG.decodedOperations[index].fields as FieldsTagged,
     );
   }
 
-  const message: Message = {
-    action: PANDA_LOG.decodedMessages[index].action as Message['action'],
-    schema: PANDA_LOG.decodedMessages[index].schema,
+  const operation: Operation = {
+    action: PANDA_LOG.decodedOperations[index].action as Operation['action'],
+    schema: PANDA_LOG.decodedOperations[index].schema,
     fields: fields,
   };
 
-  if (PANDA_LOG.decodedMessages[index].id != null) {
-    message.id = PANDA_LOG.decodedMessages[index].id;
+  if (PANDA_LOG.decodedOperations[index].id != null) {
+    operation.id = PANDA_LOG.decodedOperations[index].id;
   }
 
   const entry: Entry = {
@@ -49,7 +49,7 @@ export const entryFixture = (seqNum: number): Entry => {
     entryHashSkiplink: PANDA_LOG.nextEntryArgs[index].entryHashSkiplink,
     seqNum: PANDA_LOG.nextEntryArgs[index].seqNum,
     logId: PANDA_LOG.nextEntryArgs[index].logId,
-    message,
+    operation,
   };
 
   return entry;

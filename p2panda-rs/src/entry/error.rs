@@ -27,13 +27,13 @@ pub enum EntrySignedError {
     #[error("invalid hex encoding in entry")]
     InvalidHexEncoding,
 
-    /// Message needs to match payload hash of encoded entry
-    #[error("message needs to match payload hash of encoded entry")]
-    MessageHashMismatch,
+    /// Operation needs to match payload hash of encoded entry
+    #[error("operation needs to match payload hash of encoded entry")]
+    OperationHashMismatch,
 
-    /// Can not sign and encode an entry without a `Message`.
-    #[error("entry does not contain any message")]
-    MessageMissing,
+    /// Can not sign and encode an entry without a `Operation`.
+    #[error("entry does not contain any operation")]
+    OperationMissing,
 
     /// Skiplink is required for entry encoding.
     #[error("entry requires skiplink for encoding")]
@@ -47,9 +47,9 @@ pub enum EntrySignedError {
     #[error(transparent)]
     HashError(#[from] crate::hash::HashError),
 
-    /// Handle errors from `MessageEncoded` struct.
+    /// Handle errors from `OperationEncoded` struct.
     #[error(transparent)]
-    MessageEncodedError(#[from] crate::message::MessageEncodedError),
+    OperationEncodedError(#[from] crate::operation::OperationEncodedError),
 
     /// Handle errors from encoding bamboo_rs_core_ed25519_yasmf entries.
     #[error(transparent)]

@@ -7,7 +7,7 @@ use bamboo_rs_core_ed25519_yasmf::{Entry as BambooEntry, Signature as BambooSign
 
 use crate::entry::{Entry, EntrySigned, EntrySignedError};
 use crate::identity::KeyPair;
-use crate::message::MessageEncoded;
+use crate::operation::OperationEncoded;
 
 /// Takes an [`Entry`] and a [`KeyPair`], returns signed and encoded entry bytes in form of an
 /// [`EntrySigned`] instance.
@@ -20,23 +20,23 @@ use crate::message::MessageEncoded;
 /// # extern crate p2panda_rs;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use p2panda_rs::entry::{Entry, EntrySigned, LogId, SeqNum, sign_and_encode};
-/// use p2panda_rs::message::{Message, MessageFields, MessageValue};
+/// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
 /// use p2panda_rs::hash::Hash;
 /// use p2panda_rs::identity::KeyPair;
 ///
 /// // Generate Ed25519 key pair to sign entry with
 /// let key_pair = KeyPair::new();
 ///
-/// // Create message
+/// // Create operation
 /// let schema_hash = Hash::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
-/// let mut fields = MessageFields::new();
-/// fields.add("title", MessageValue::Text("Hello, Panda!".to_owned()))?;
-/// let message = Message::new_create(schema_hash, fields)?;
+/// let mut fields = OperationFields::new();
+/// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
+/// let operation = Operation::new_create(schema_hash, fields)?;
 ///
 /// // Create entry
 /// let entry = Entry::new(
 ///     &LogId::default(),
-///     Some(&message),
+///     Some(&operation),
 ///     None,
 ///     None,
 ///     &SeqNum::new(1)?,
@@ -48,13 +48,13 @@ use crate::message::MessageEncoded;
 /// # }
 /// ```
 pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned, EntrySignedError> {
-    // Generate message hash
-    let message_encoded = match entry.message() {
-        Some(message) => MessageEncoded::try_from(message)?,
-        None => return Err(EntrySignedError::MessageMissing),
+    // Generate operation hash
+    let operation_encoded = match entry.operation() {
+        Some(operation) => OperationEncoded::try_from(operation)?,
+        None => return Err(EntrySignedError::OperationMissing),
     };
-    let message_hash = message_encoded.hash();
-    let message_size = message_encoded.size();
+    let operation_hash = operation_encoded.hash();
+    let operation_size = operation_encoded.size();
 
     // Convert entry links to bamboo-rs `YasmfHash` type
     let backlink = entry.backlink_hash().map(|link| link.to_owned().into());
@@ -73,8 +73,8 @@ pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned,
     let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
         log_id: entry.log_id().as_i64() as u64,
         is_end_of_feed: false,
-        payload_hash: message_hash.into(),
-        payload_size: message_size as u64,
+        payload_hash: operation_hash.into(),
+        payload_size: operation_size as u64,
         author: key_pair.public_key().to_owned(),
         seq_num: entry.seq_num().as_i64() as u64,
         backlink,

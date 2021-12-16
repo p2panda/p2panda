@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::hash::Hash;
-use crate::message::{Message, MessageFields, MessageValue};
+use crate::operation::{Operation, OperationFields, OperationValue};
 use crate::schema::SchemaError;
 
 use cddl::lexer::Lexer;
@@ -98,14 +98,14 @@ impl fmt::Display for Group {
     }
 }
 
-/// SchemaBuilder struct for programatically creating CDDL schemas and valdating MessageFields.
+/// SchemaBuilder struct for programatically creating CDDL schemas and valdating OperationFields.
 #[derive(Clone, Debug)]
 pub struct SchemaBuilder {
     name: String,
     fields: BTreeMap<String, Field>,
 }
 
-/// Schema struct for creating CDDL schemas, valdating MessageFields and creating messages
+/// Schema struct for creating CDDL schemas, valdating OperationFields and creating operations
 /// following the defined schema.
 #[derive(Clone, Debug)]
 pub struct Schema {
@@ -123,8 +123,8 @@ impl SchemaBuilder {
     }
 
     /// Add a field definition to this schema
-    pub fn add_message_field(&mut self, key: String, field_type: Type) -> Result<(), SchemaError> {
-        // Match passed type and map it to our MessageFields type and CDDL types.
+    pub fn add_operation_field(&mut self, key: String, field_type: Type) -> Result<(), SchemaError> {
+        // Match passed type and map it to our OperationFields type and CDDL types.
         let type_string = match field_type {
             Type::Tstr => "str",
             Type::Int => "int",
@@ -133,23 +133,23 @@ impl SchemaBuilder {
             Type::Relation => "relation",
         };
 
-        // Create a message field group and add fields
-        let mut message_fields = Group::new(key.to_owned());
-        message_fields.add_field("type", Field::String(type_string.to_owned()));
-        message_fields.add_field("value", Field::Type(field_type));
+        // Create a operation field group and add fields
+        let mut operation_fields = Group::new(key.to_owned());
+        operation_fields.add_field("type", Field::String(type_string.to_owned()));
+        operation_fields.add_field("value", Field::Type(field_type));
 
-        // Format message fields group as a struct
-        let message_fields = Field::Struct(message_fields);
+        // Format operation fields group as a struct
+        let operation_fields = Field::Struct(operation_fields);
 
-        // Insert new message field into Schema fields.
+        // Insert new operation field into Schema fields.
         // If this Schema was created from a cddl string
         // `fields` will be None.
-        self.fields.insert(key, message_fields);
+        self.fields.insert(key, operation_fields);
         Ok(())
     }
 }
 
-impl ValidateMessage for SchemaBuilder {}
+impl ValidateOperation for SchemaBuilder {}
 
 impl fmt::Display for SchemaBuilder {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -192,37 +192,37 @@ impl Schema {
         self.schema_hash.clone()
     }
 
-    /// Create a new CREATE message validated against this schema
+    /// Create a new CREATE operation validated against this schema
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn create(&self, key_values: Vec<(&str, MessageValue)>) -> Result<Message, SchemaError> {
-        let mut fields = MessageFields::new();
+    pub fn create(&self, key_values: Vec<(&str, OperationValue)>) -> Result<Operation, SchemaError> {
+        let mut fields = OperationFields::new();
 
         for (key, value) in key_values {
             match fields.add(key, value) {
                 Ok(_) => Ok(()),
-                Err(err) => Err(SchemaError::MessageFieldsError(err)),
+                Err(err) => Err(SchemaError::OperationFieldsError(err)),
             }?;
         }
 
-        match self.validate_message(serde_cbor::to_vec(&fields.clone()).unwrap()) {
+        match self.validate_operation(serde_cbor::to_vec(&fields.clone()).unwrap()) {
             Ok(_) => Ok(()),
             Err(err) => Err(SchemaError::ValidationError(err.to_string())),
         }?;
 
-        match Message::new_create(self.schema_hash(), fields) {
+        match Operation::new_create(self.schema_hash(), fields) {
             Ok(hash) => Ok(hash),
-            Err(err) => Err(SchemaError::MessageError(err)),
+            Err(err) => Err(SchemaError::OperationError(err)),
         }
     }
 
-    /// Create a new UPDATE message validated against this schema
+    /// Create a new UPDATE operation validated against this schema
     #[cfg(not(target_arch = "wasm32"))]
     pub fn update(
         &self,
         id: &str,
-        key_values: Vec<(&str, MessageValue)>,
-    ) -> Result<Message, SchemaError> {
-        let mut fields = MessageFields::new();
+        key_values: Vec<(&str, OperationValue)>,
+    ) -> Result<Operation, SchemaError> {
+        let mut fields = OperationFields::new();
         let id = Hash::new(id).unwrap();
 
         for (key, value) in key_values {
@@ -232,12 +232,12 @@ impl Schema {
             }?;
         }
 
-        match self.validate_message(serde_cbor::to_vec(&fields.clone()).unwrap()) {
+        match self.validate_operation(serde_cbor::to_vec(&fields.clone()).unwrap()) {
             Ok(_) => Ok(()),
             Err(err) => Err(SchemaError::ValidationError(err.to_string())),
         }?;
 
-        match Message::new_update(self.schema_hash(), id, fields) {
+        match Operation::new_update(self.schema_hash(), id, fields) {
             Ok(hash) => Ok(hash),
             Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
         }
@@ -250,15 +250,15 @@ impl fmt::Display for Schema {
     }
 }
 
-impl ValidateMessage for Schema {}
+impl ValidateOperation for Schema {}
 
-trait ValidateMessage
+trait ValidateOperation
 where
     Self: fmt::Display,
 {
     /// Validate an operation against this user schema
     #[cfg(not(target_arch = "wasm32"))]
-    fn validate_message(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
+    fn validate_operation(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
         match validate_cbor_from_slice(&format!("{}", self), &bytes) {
             Err(cbor::Error::Validation(err)) => {
                 let err = err
@@ -280,9 +280,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{Schema, SchemaBuilder, Type, ValidateMessage};
+    use super::{Schema, SchemaBuilder, Type, ValidateOperation};
     use crate::hash::Hash;
-    use crate::message::{Message, MessageFields, MessageValue};
+    use crate::operation::{Operation, OperationFields, OperationValue};
     use crate::test_utils::fixtures::hash;
 
     use rstest::rstest;
@@ -319,32 +319,32 @@ mod tests {
         // Instanciate new empty schema named "person"
         let mut person = SchemaBuilder::new("person".to_owned());
 
-        // Add two message fields to the schema
+        // Add two operation fields to the schema
         person
-            .add_message_field("name".to_owned(), Type::Tstr)
+            .add_operation_field("name".to_owned(), Type::Tstr)
             .unwrap();
         person
-            .add_message_field("age".to_owned(), Type::Int)
+            .add_operation_field("age".to_owned(), Type::Int)
             .unwrap();
 
-        // Create a new "person" message
-        let mut me = MessageFields::new();
-        me.add("name", MessageValue::Text("Sam".to_owned()))
+        // Create a new "person" operation
+        let mut me = OperationFields::new();
+        me.add("name", OperationValue::Text("Sam".to_owned()))
             .unwrap();
-        me.add("age", MessageValue::Integer(35)).unwrap();
+        me.add("age", OperationValue::Integer(35)).unwrap();
 
-        // Validate message fields against person schema
+        // Validate operation fields against person schema
         let me_bytes = serde_cbor::to_vec(&me).unwrap();
-        assert!(person.validate_message(me_bytes).is_ok());
+        assert!(person.validate_operation(me_bytes).is_ok());
     }
 
     #[rstest]
     pub fn schema_from_string(#[from(hash)] schema_hash: Hash) {
-        // Create a new "person" message
-        let mut me = MessageFields::new();
-        me.add("name", MessageValue::Text("Sam".to_owned()))
+        // Create a new "person" operation
+        let mut me = OperationFields::new();
+        me.add("name", OperationValue::Text("Sam".to_owned()))
             .unwrap();
-        me.add("age", MessageValue::Integer(35)).unwrap();
+        me.add("age", OperationValue::Integer(35)).unwrap();
 
         // Instanciate "person" schema from cddl string
         let cddl_str = "person = { (
@@ -354,9 +354,9 @@ mod tests {
 
         let person_from_string = Schema::new(&schema_hash, &cddl_str.to_string()).unwrap();
 
-        // Validate message fields against person schema
+        // Validate operation fields against person schema
         let me_bytes = serde_cbor::to_vec(&me).unwrap();
-        assert!(person_from_string.validate_message(me_bytes).is_ok());
+        assert!(person_from_string.validate_operation(me_bytes).is_ok());
     }
 
     #[rstest]
@@ -364,95 +364,95 @@ mod tests {
         // Instanciate global user schema from mega schema string and it's hash
         let user_schema = Schema::new(&schema_hash, &USER_SCHEMA.to_string()).unwrap();
 
-        let mut me = MessageFields::new();
-        me.add("name", MessageValue::Text("Sam".to_owned()))
+        let mut me = OperationFields::new();
+        me.add("name", OperationValue::Text("Sam".to_owned()))
             .unwrap();
-        me.add("age", MessageValue::Integer(35)).unwrap();
+        me.add("age", OperationValue::Integer(35)).unwrap();
 
-        let mut my_address = MessageFields::new();
+        let mut my_address = OperationFields::new();
         my_address
-            .add("house-number", MessageValue::Integer(8))
+            .add("house-number", OperationValue::Integer(8))
             .unwrap();
         my_address
-            .add("street", MessageValue::Text("Panda Lane".to_owned()))
+            .add("street", OperationValue::Text("Panda Lane".to_owned()))
             .unwrap();
         my_address
-            .add("city", MessageValue::Text("Bamboo Town".to_owned()))
+            .add("city", OperationValue::Text("Bamboo Town".to_owned()))
             .unwrap();
 
-        // Validate message fields against user schema
+        // Validate operation fields against user schema
         let me_bytes = serde_cbor::to_vec(&me).unwrap();
         let my_address_bytes = serde_cbor::to_vec(&my_address).unwrap();
 
-        assert!(user_schema.validate_message(me_bytes).is_ok());
-        assert!(user_schema.validate_message(my_address_bytes).is_ok());
+        assert!(user_schema.validate_operation(me_bytes).is_ok());
+        assert!(user_schema.validate_operation(my_address_bytes).is_ok());
 
-        // Messages not matching one of the user schema should fail
-        let mut naughty_panda = MessageFields::new();
+        // Operations not matching one of the user schema should fail
+        let mut naughty_panda = OperationFields::new();
         naughty_panda
-            .add("name", MessageValue::Text("Naughty Panda".to_owned()))
+            .add("name", OperationValue::Text("Naughty Panda".to_owned()))
             .unwrap();
         naughty_panda
-            .add("colour", MessageValue::Text("pink & orange".to_owned()))
+            .add("colour", OperationValue::Text("pink & orange".to_owned()))
             .unwrap();
 
         let naughty_panda_bytes = serde_cbor::to_vec(&naughty_panda).unwrap();
-        assert!(user_schema.validate_message(naughty_panda_bytes).is_err());
+        assert!(user_schema.validate_operation(naughty_panda_bytes).is_err());
     }
 
     #[rstest]
-    pub fn create_message(#[from(hash)] schema_hash: Hash) {
+    pub fn create_operation(#[from(hash)] schema_hash: Hash) {
         let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
 
-        // Create a message the long way without validation
-        let mut message_fields = MessageFields::new();
-        message_fields
-            .add("name", MessageValue::Text("Panda".to_owned()))
+        // Create a operation the long way without validation
+        let mut operation_fields = OperationFields::new();
+        operation_fields
+            .add("name", OperationValue::Text("Panda".to_owned()))
             .unwrap();
-        message_fields
-            .add("age", MessageValue::Integer(12))
+        operation_fields
+            .add("age", OperationValue::Integer(12))
             .unwrap();
 
-        let message = Message::new_create(schema_hash, message_fields).unwrap();
+        let operation = Operation::new_create(schema_hash, operation_fields).unwrap();
 
-        // Create a message the quick way *with* validation
-        let message_again = person_schema
+        // Create a operation the quick way *with* validation
+        let operation_again = person_schema
             .create(vec![
-                ("name", MessageValue::Text("Panda".to_string())),
-                ("age", MessageValue::Integer(12)),
+                ("name", OperationValue::Text("Panda".to_string())),
+                ("age", OperationValue::Integer(12)),
             ])
             .unwrap();
 
-        assert_eq!(message, message_again);
+        assert_eq!(operation, operation_again);
     }
 
     #[rstest]
-    pub fn update_message(#[from(hash)] instance_id: Hash, #[from(hash)] schema_hash: Hash) {
+    pub fn update_operation(#[from(hash)] instance_id: Hash, #[from(hash)] schema_hash: Hash) {
         let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
 
-        // Create a message the long way without validation
-        let mut message_fields = MessageFields::new();
-        message_fields
-            .add("name", MessageValue::Text("Panda".to_owned()))
+        // Create a operation the long way without validation
+        let mut operation_fields = OperationFields::new();
+        operation_fields
+            .add("name", OperationValue::Text("Panda".to_owned()))
             .unwrap();
-        message_fields
-            .add("age", MessageValue::Integer(12))
+        operation_fields
+            .add("age", OperationValue::Integer(12))
             .unwrap();
 
-        let message =
-            Message::new_update(schema_hash, instance_id.to_owned(), message_fields).unwrap();
+        let operation =
+            Operation::new_update(schema_hash, instance_id.to_owned(), operation_fields).unwrap();
 
-        // Create a message the quick way *with* validation
-        let message_again = person_schema
+        // Create a operation the quick way *with* validation
+        let operation_again = person_schema
             .update(
                 instance_id.as_str(),
                 vec![
-                    ("name", MessageValue::Text("Panda".to_string())),
-                    ("age", MessageValue::Integer(12)),
+                    ("name", OperationValue::Text("Panda".to_string())),
+                    ("age", OperationValue::Integer(12)),
                 ],
             )
             .unwrap();
 
-        assert_eq!(message, message_again);
+        assert_eq!(operation, operation_again);
     }
 }

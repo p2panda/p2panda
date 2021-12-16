@@ -4,7 +4,7 @@ import wasm from '~/wasm';
 
 import TEST_DATA from '../test/test-data.json';
 
-const TEST_SCHEMA = TEST_DATA.panda.logs[0].decodedMessages[0].schema;
+const TEST_SCHEMA = TEST_DATA.panda.logs[0].decodedOperations[0].schema;
 
 describe('Web assembly interface', () => {
   describe('KeyPair', () => {
@@ -29,15 +29,15 @@ describe('Web assembly interface', () => {
       const signature = keyPair.sign(message);
       expect(verifySignature(publicKey, message, signature)).toBeTruthy();
       expect(
-        verifySignature(publicKey, 'Wrong Message!', signature),
+        verifySignature(publicKey, 'Wrong Operation!', signature),
       ).toBeFalsy();
     });
   });
 
-  describe('MessageFields', () => {
+  describe('OperationFields', () => {
     it('stores and returns the right fields', async () => {
-      const { MessageFields } = await wasm;
-      const fields = new MessageFields();
+      const { OperationFields } = await wasm;
+      const fields = new OperationFields();
 
       // Set fields of all possible types
       fields.add('description', 'str', 'Hello, Panda');
@@ -58,8 +58,8 @@ describe('Web assembly interface', () => {
     });
 
     it('returns the correct length', async () => {
-      const { MessageFields } = await wasm;
-      const fields = new MessageFields();
+      const { OperationFields } = await wasm;
+      const fields = new OperationFields();
       expect(fields.length()).toBe(0);
       fields.add('message', 'str', 'Good morning');
       expect(fields.length()).toBe(1);
@@ -68,8 +68,8 @@ describe('Web assembly interface', () => {
     });
 
     it('throws when trying to set a field twice', async () => {
-      const { MessageFields } = await wasm;
-      const fields = new MessageFields();
+      const { OperationFields } = await wasm;
+      const fields = new OperationFields();
       fields.add('description', 'str', 'Good morning, Panda');
       expect(() =>
         fields.add('description', 'str', 'Good night, Panda'),
@@ -77,8 +77,8 @@ describe('Web assembly interface', () => {
     });
 
     it('throws when using invalid types or values', async () => {
-      const { MessageFields } = await wasm;
-      const fields = new MessageFields();
+      const { OperationFields } = await wasm;
+      const fields = new OperationFields();
 
       // Throw when type is invalid
       expect(() => fields.add('test', 'lulu', true)).toThrow(
@@ -95,8 +95,8 @@ describe('Web assembly interface', () => {
     });
 
     it('throws when removing an inexistent field', async () => {
-      const { MessageFields } = await wasm;
-      const fields = new MessageFields();
+      const { OperationFields } = await wasm;
+      const fields = new OperationFields();
       expect(() => fields.remove('test')).toThrow();
     });
   });
@@ -108,26 +108,26 @@ describe('Web assembly interface', () => {
 
       const {
         KeyPair,
-        MessageFields,
+        OperationFields,
         decodeEntry,
-        encodeCreateMessage,
+        encodeCreateOperation,
         signEncodeEntry,
       } = await wasm;
 
       // Generate new key pair
       const keyPair = new KeyPair();
 
-      // Create message
-      const fields = new MessageFields();
+      // Create operation
+      const fields = new OperationFields();
       fields.add('description', 'str', 'Hello, Panda');
       expect(fields.get('description')).toBe('Hello, Panda');
 
-      const messageEncoded = encodeCreateMessage(TEST_SCHEMA, fields);
+      const operationEncoded = encodeCreateOperation(TEST_SCHEMA, fields);
 
       // Sign and encode entry
       const { entryEncoded, entryHash } = signEncodeEntry(
         keyPair,
-        messageEncoded,
+        operationEncoded,
         undefined,
         undefined,
         SEQ_NUM,
@@ -137,19 +137,19 @@ describe('Web assembly interface', () => {
       expect(entryHash.length).toBe(68);
 
       // Decode entry and return as JSON
-      const decodedEntry = decodeEntry(entryEncoded, messageEncoded);
+      const decodedEntry = decodeEntry(entryEncoded, operationEncoded);
 
       expect(decodedEntry.entryHashBacklink).toBeNull();
       expect(decodedEntry.entryHashSkiplink).toBeNull();
       expect(decodedEntry.logId).toBe(LOG_ID);
-      expect(decodedEntry.message.action).toBe('create');
-      expect(decodedEntry.message.schema).toBe(TEST_SCHEMA);
-      expect(decodedEntry.message.fields.description.value).toBe(
+      expect(decodedEntry.operation.action).toBe('create');
+      expect(decodedEntry.operation.schema).toBe(TEST_SCHEMA);
+      expect(decodedEntry.operation.fields.description.value).toBe(
         'Hello, Panda',
       );
-      expect(decodedEntry.message.fields.description.type).toBe('str');
+      expect(decodedEntry.operation.fields.description.type).toBe('str');
 
-      // Test decoding entry without message
+      // Test decoding entry without operation
       expect(() => decodeEntry(entryEncoded)).not.toThrow();
     });
   });
