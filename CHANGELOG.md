@@ -19,6 +19,9 @@ Highlights are marked with a pancake 🥞
 
 - Adopt [Blake3](https://github.com/BLAKE3-team/BLAKE3) hashes, which bring us better performance and shorter identifiers [#139](https://github.com/p2panda/p2panda/pull/139) `rs` 🥞
 - Update `ed25519` crate to `1.3.0` and deprecated `Signature` API [#137](https://github.com/p2panda/p2panda/pull/137) `rs`
+- Use new `Operation` naming which replaces `Message` [#156](https://github.com/p2panda/p2panda/pull/156) _BREAKING_ `rs` `js`
+- Remove distinction of system and application log ids [#154](https://github.com/p2panda/p2panda/pull/154) `rs`
+- Update dependencies, remove deprecated eslint-loader [#155](https://github.com/p2panda/p2panda/pull/155) `js`
 
 ### Campfires and boiling pots to sit around
 

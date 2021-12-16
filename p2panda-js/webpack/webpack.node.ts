@@ -2,6 +2,7 @@
 
 import * as webpack from 'webpack';
 import CopyPlugin from 'copy-webpack-plugin';
+import ESLintPlugin from 'eslint-webpack-plugin';
 
 import config, {
   DIR_WASM,
@@ -60,6 +61,7 @@ const configNode: webpack.Configuration = {
         },
       ],
     }),
+    new ESLintPlugin(),
   ],
   optimization: {
     minimize: false,
