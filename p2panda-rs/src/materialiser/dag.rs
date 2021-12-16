@@ -1,29 +1,31 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /// Wrapper type for a Node in the graph
-type Node = String;
+pub type Node = String;
 
 /// Wrapper type for an Edge in the graph
-type Edge = (Option<Node>, Node);
+pub type Edge = (Option<Node>, Node);
 
 /// A directed acyclic graph which can be ordered topologically in a depth-first sort. It is
-/// described by a list of `edges` which in turn descirbe connections between parent and child
+/// described by a list of `edges` which in turn describe connections between parent and child
 /// nodes.
-#[derive(Clone, Debug, Default)]
+///
+/// For p2panda this is an array of tuples of Entry hashes [(Some("00x42asd..."), "00x435d..."), .... ],
+/// but it could be any string. The first string in the tuple is optional as the root of the graph has no parent.
+#[derive(Clone, Debug)]
 pub struct DAG {
-    // the DAG structure
     graph: Vec<Edge>,
 }
 
 impl DAG {
-    /// Create a new DAG
+    /// Instantiate a new empty graph.
     pub fn new() -> Self {
-        DAG {
-            /// An array of edges which make up the graph. For p2panda this is an array of tuples of
-            /// Entry hashes [("00x42asd...", "00x435d..."), .... ], but it can be any string.
-            /// The first string in the tuple is optional as the root of the graph has no parent.
-            graph: Vec::new(),
-        }
+        DAG { graph: Vec::new() }
+    }
+
+    /// New DAG from an existing array of edges.
+    pub fn new_from_graph(graph: Vec<Edge>) -> Self {
+        DAG { graph }
     }
 
     /// Return graph edges as array.
@@ -78,7 +80,7 @@ impl DAG {
         root
     }
 
-    /// Perform depth-first traversal of DAG, merging all forks, and returns an ordered list of
+    /// Perform depth-first traversal of DAG, merging all forks, returns an ordered list of
     /// nodes.
     pub fn topological(&mut self) -> Vec<Node> {
         // Array of queued graph nodes
@@ -122,6 +124,12 @@ impl DAG {
             }
         }
         ordered_nodes
+    }
+}
+
+impl Default for DAG {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

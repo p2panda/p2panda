@@ -33,6 +33,12 @@ pub fn key_pair(private_key: String) -> KeyPair {
     utils::keypair_from_private(private_key)
 }
 
+/// Fixture which injects a random KeyPair into a test method.
+#[fixture]
+pub fn random_key_pair() -> KeyPair {
+    utils::new_key_pair()
+}
+
 /// Fixture which injects the default SeqNum into a test method. Default value can be overridden at testing
 /// time by passing in a custom seq num as i64.
 #[fixture]
