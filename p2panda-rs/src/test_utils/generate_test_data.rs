@@ -2,10 +2,8 @@
 
 /// Generate json formatted test data. This is run with the `cargo run --bin json-test-data` command. The output
 /// data can be used for testing a p2panda implementation. It is currently used in `p2panda-js`.
-use serde_json;
-
-use p2panda_rs::test_utils::mocks::client::Client;
-use p2panda_rs::test_utils::mocks::node::{send_to_node, Node};
+use p2panda_rs::test_utils::mocks::Client;
+use p2panda_rs::test_utils::mocks::{send_to_node, Node};
 use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
 use p2panda_rs::test_utils::{
     create_message, delete_message, hash, message_fields, new_key_pair, update_message,
@@ -70,11 +68,10 @@ fn main() {
 #[cfg(test)]
 mod tests {
     /// Generate json formatted test data
-    use serde_json;
     use serde_json::Value;
 
-    use p2panda_rs::test_utils::mocks::client::Client;
-    use p2panda_rs::test_utils::mocks::node::{send_to_node, Node};
+    use p2panda_rs::test_utils::mocks::Client;
+    use p2panda_rs::test_utils::mocks::{send_to_node, Node};
     use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
     use p2panda_rs::test_utils::{
         create_message, hash, keypair_from_private, message_fields, DEFAULT_PRIVATE_KEY,
@@ -105,52 +102,52 @@ mod tests {
 
         const TEST_DATA: &str = r#"{
             "panda": {
-                "publicKey": "2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96",
-                "privateKey": "eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e2",
-                "logs": [
+              "publicKey": "2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96",
+              "privateKey": "eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e2",
+              "logs": [
+                {
+                  "encodedEntries": [
                     {
-                        "encodedEntries": [
-                            {
-                                "author": "2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96",
-                                "entryBytes": "002f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc960101dc00402d22e064b16c17209a0a60e6326904effa2a34ad442fe9c8d86664a70b313a464b4dca3aa0927a299968e82d79f29e100191b3f32d8eda63b340fb9757b670609ade5b150be29f2334afe86b277153dd587c5fcea2dd82812df0d9fb5db234efe51883e0234242beae89d439a05947e1530d2282dad74e91d2e5915a08929c0c",
-                                "entryHash": "0040f80486aa52d765acaa2d1e349a1ab62d6f3ae254af263da4e94ab746a8a9aa08ec7c81f18fe563faaae05927bc13815aec4c08b23836f2c0504d9bb356f8f4c6",
-                                "payloadBytes": "a466616374696f6e6663726561746566736368656d6178843030343031643736353636373538613562366266633536316631633933366438666338366235623432656132326162316461626634306432343964323764643930363430316664653134376535336634346331303364643032613235343931366265313133653531646531303737613934366133613063313237326239623334383433376776657273696f6e01666669656c6473a1676d657373616765a26474797065637374726576616c7565764f68682c206d79206669727374206d65737361676521",
-                                "payloadHash": "00402d22e064b16c17209a0a60e6326904effa2a34ad442fe9c8d86664a70b313a464b4dca3aa0927a299968e82d79f29e100191b3f32d8eda63b340fb9757b67060",
-                                "logId": 1,
-                                "seqNum": 1
-                            }
-                        ],
-                        "decodedMessages": [
-                            {
-                                "action": "create",
-                                "schema": "00401d76566758a5b6bfc561f1c936d8fc86b5b42ea22ab1dabf40d249d27dd906401fde147e53f44c103dd02a254916be113e51de1077a946a3a0c1272b9b348437",
-                                "version": 1,
-                                "fields": {
-                                    "message": {
-                                        "type": "str",
-                                        "value": "Ohh, my first message!"
-                                    }
-                                }
-                            }
-                        ],
-                        "nextEntryArgs": [
-                            {
-                                "entryHashBacklink": null,
-                                "entryHashSkiplink": null,
-                                "seqNum": 1,
-                                "logId": 1
-                            },
-                            {
-                                "entryHashBacklink": "0040f80486aa52d765acaa2d1e349a1ab62d6f3ae254af263da4e94ab746a8a9aa08ec7c81f18fe563faaae05927bc13815aec4c08b23836f2c0504d9bb356f8f4c6",
-                                "entryHashSkiplink": null,
-                                "seqNum": 2,
-                                "logId": 1
-                            }
-                        ]
+                      "author": "2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96",
+                      "entryBytes": "002f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc9601019c0020bbf34ae370b167c4950df17089ca322965c4e5c92e1b13a1f0fc4d62ce82e4945a5f886704bff7649499fab618e39a38ad8ae8907cb9ee3152b9f646d84b5acefdfe5ab467d60cdc9d495c43a3c9abed169a848eaf90fabd02264c99fcdd4c07",
+                      "entryHash": "00207d5dd2f46f4ea413a078bc6a8df5064c4869558f03727e7b4404298e7b7ac6d6",
+                      "payloadBytes": "a466616374696f6e6663726561746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a1676d657373616765a26474797065637374726576616c7565764f68682c206d79206669727374206d65737361676521",
+                      "payloadHash": "0020bbf34ae370b167c4950df17089ca322965c4e5c92e1b13a1f0fc4d62ce82e494",
+                      "logId": 1,
+                      "seqNum": 1
                     }
-                ]
+                  ],
+                  "decodedMessages": [
+                    {
+                      "action": "create",
+                      "schema": "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
+                      "version": 1,
+                      "fields": {
+                        "message": {
+                          "type": "str",
+                          "value": "Ohh, my first message!"
+                        }
+                      }
+                    }
+                  ],
+                  "nextEntryArgs": [
+                    {
+                      "entryHashBacklink": null,
+                      "entryHashSkiplink": null,
+                      "seqNum": 1,
+                      "logId": 1
+                    },
+                    {
+                      "entryHashBacklink": "00207d5dd2f46f4ea413a078bc6a8df5064c4869558f03727e7b4404298e7b7ac6d6",
+                      "entryHashSkiplink": null,
+                      "seqNum": 2,
+                      "logId": 1
+                    }
+                  ]
+                }
+              ]
             }
-        }"#;
+          }"#;
 
         // Generate test data
         let generated_test_data = generate_test_data(&mut node, vec![panda]);

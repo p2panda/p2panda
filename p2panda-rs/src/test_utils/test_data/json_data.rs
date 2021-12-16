@@ -10,8 +10,8 @@ use crate::hash::Hash;
 use crate::identity::Author;
 use crate::message::{Message, MessageEncoded};
 
-use crate::test_utils::mocks::client::Client;
-use crate::test_utils::mocks::node::Node;
+use crate::test_utils::mocks::Client;
+use crate::test_utils::mocks::Node;
 use crate::test_utils::utils::DEFAULT_SCHEMA_HASH;
 
 /// Next entry args formatted correctly for the test data.

@@ -10,19 +10,19 @@ use rstest_reuse::template;
 #[allow(unused_qualifications)]
 #[should_panic]
 #[case::wrong_message(
-    crate::test_utils::fixtures::create_message(hash(DEFAULT_SCHEMA_HASH), 
+    crate::test_utils::fixtures::create_message(hash(DEFAULT_SCHEMA_HASH),
     crate::test_utils::message_fields(vec![("message", "Boo!")])))
 ]
 #[allow(unused_qualifications)]
 #[should_panic]
 #[case::wrong_message(
-    crate::test_utils::fixtures::create_message(hash(DEFAULT_SCHEMA_HASH), 
+    crate::test_utils::fixtures::create_message(hash(DEFAULT_SCHEMA_HASH),
     crate::test_utils::message_fields(vec![("date", "2021-05-02T20:06:45.430Z")])))
 ]
 #[allow(unused_qualifications)]
 #[should_panic]
 #[case::wrong_message(
-    crate::test_utils::fixtures::create_message(hash(DEFAULT_SCHEMA_HASH), 
+    crate::test_utils::fixtures::create_message(hash(DEFAULT_SCHEMA_HASH),
     crate::test_utils::message_fields(vec![("message", "Hello!"), ("date", "2021-05-02T20:06:45.430Z")])))
 ]
 fn non_default_message_values_panic(entry: Entry, #[case] message: Message, key_pair: KeyPair) {}
@@ -54,7 +54,7 @@ fn all_message_types(entry: Entry, #[case] message: Message, key_pair: KeyPair) 
 // Template which will contain many version fixtures in the future.
 #[template]
 #[rstest]
-#[case::v0_1_0(crate::test_utils::fixtures::v0_1_0_fixture())]
+#[case::v0_3_0(crate::test_utils::fixtures::v0_3_0_fixture())]
 fn version_fixtures(#[case] fixture: Fixture) {}
 
 // Here we export the macros for use in the rest of the crate.

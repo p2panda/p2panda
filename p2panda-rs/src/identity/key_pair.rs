@@ -85,7 +85,7 @@ impl KeyPair {
     pub fn from_private_key_str(private_key: &str) -> Result<Self, KeyPairError> {
         let secret_key_bytes = hex::decode(private_key)?;
         let secret_key = SecretKey::from_bytes(&secret_key_bytes)?;
-        Ok(Self::from_private_key(&secret_key)?)
+        Self::from_private_key(&secret_key)
     }
 
     /// Returns the public half of the key pair.
@@ -128,8 +128,14 @@ impl KeyPair {
         message: &[u8],
         signature: &Signature,
     ) -> Result<(), KeyPairError> {
-        public_key.verify(message, &signature)?;
+        public_key.verify(message, signature)?;
         Ok(())
+    }
+}
+
+impl Default for KeyPair {
+    fn default() -> Self {
+        KeyPair::new()
     }
 }
 
@@ -158,11 +164,11 @@ mod tests {
         let key_pair = KeyPair::new();
         let message = b"test";
         let signature = key_pair.sign(message);
-        assert!(KeyPair::verify(&key_pair.public_key(), message, &signature).is_ok());
+        assert!(KeyPair::verify(key_pair.public_key(), message, &signature).is_ok());
 
-        assert!(KeyPair::verify(&key_pair.public_key(), b"not test", &signature).is_err());
+        assert!(KeyPair::verify(key_pair.public_key(), b"not test", &signature).is_err());
 
         let key_pair_2 = KeyPair::new();
-        assert!(KeyPair::verify(&key_pair_2.public_key(), message, &signature).is_err());
+        assert!(KeyPair::verify(key_pair_2.public_key(), message, &signature).is_err());
     }
 }

@@ -33,7 +33,7 @@ impl fmt::Display for Type {
             Type::Int => "int",
             Type::Float => "float",
             Type::Tstr => "tstr",
-            Type::Relation => "tstr .regexp \"[0-9a-f]{132}\"",
+            Type::Relation => "tstr .regexp \"[0-9a-f]{68}\"",
         };
         write!(f, "{}", cddl_type)
     }
@@ -63,6 +63,7 @@ impl fmt::Display for Field {
 /// they can be merged into schema or used in Vectors, Tables and Structs
 #[derive(Clone, Debug)]
 pub struct Group {
+    #[allow(dead_code)] // Remove when module in use.
     name: String,
     fields: BTreeMap<String, Field>,
 }
@@ -116,7 +117,7 @@ impl SchemaBuilder {
     /// Create a new blank Schema
     pub fn new(name: String) -> Self {
         Self {
-            name: name,
+            name,
             fields: BTreeMap::new(),
         }
     }
@@ -178,13 +179,13 @@ impl fmt::Display for SchemaBuilder {
             }
             write!(f, "{}: {}", value.0, value.1)?;
         }
-        write!(f, " }}\n")
+        writeln!(f, " }}")
     }
 }
 
 impl Schema {
     /// Create a new Schema from a schema hash and schema CDDL string
-    pub fn new(schema_hash: &Hash, schema_str: &String) -> Result<Self, SchemaError> {
+    pub fn new(schema_hash: &Hash, schema_str: &str) -> Result<Self, SchemaError> {
         let mut lexer = Lexer::new(schema_str);
         let parser = Parser::new(lexer.iter(), schema_str);
         let schema_string = match parser {
@@ -311,7 +312,8 @@ mod tests {
     "#;
 
     /// All user schema hash
-    pub const USER_SCHEMA_HASH: &str = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
+    pub const USER_SCHEMA_HASH: &str =
+        "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 
     /// Person schema
     pub const PERSON_SCHEMA: &str = r#"
@@ -322,7 +324,8 @@ mod tests {
     "#;
 
     /// Person schema hash
-    pub const PERSON_SCHEMA_HASH: &str = "004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8";
+    pub const PERSON_SCHEMA_HASH: &str =
+        "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 
     #[test]
     pub fn schema_builder() {
@@ -345,7 +348,7 @@ mod tests {
 
         // Validate message fields against person schema
         let me_bytes = serde_cbor::to_vec(&me).unwrap();
-        assert!(person.validate_message(me_bytes.clone()).is_ok());
+        assert!(person.validate_message(me_bytes).is_ok());
     }
 
     #[test]

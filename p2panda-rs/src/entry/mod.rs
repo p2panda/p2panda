@@ -9,6 +9,7 @@
 //! [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 mod decode;
 mod encode;
+#[allow(clippy::module_inception)]
 mod entry;
 mod entry_signed;
 mod error;
@@ -23,3 +24,5 @@ pub use entry_signed::EntrySigned;
 pub use error::{EntryError, EntrySignedError, SeqNumError};
 pub use log_id::LogId;
 pub use seq_num::SeqNum;
+
+pub(crate) use entry_signed::SIGNATURE_SIZE;

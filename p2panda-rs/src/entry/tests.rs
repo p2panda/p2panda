@@ -2,7 +2,7 @@
 
 //! Test for the entry module. These tests utilise parameter injection and templates from `test_utils` module.
 #[cfg(test)]
-mod tests {
+mod entry_tests {
     use std::convert::TryFrom;
 
     use rstest::rstest;

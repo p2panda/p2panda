@@ -44,8 +44,8 @@ mod tests {
     use crate::test_utils::fixtures::{
         create_message, fields, random_key_pair, schema, update_message,
     };
-    use crate::test_utils::mocks::client::Client;
-    use crate::test_utils::mocks::node::{send_to_node, Node};
+    use crate::test_utils::mocks::Client;
+    use crate::test_utils::mocks::{send_to_node, Node};
 
     use super::{multi_writer_filter, single_writer_filter};
 

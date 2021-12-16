@@ -54,8 +54,8 @@
     unused_import_braces,
     unused_qualifications
 )]
-
 // This must be imported here at the root of the crate in order for the fixture macros to work as expected.
+#![allow(clippy::single_component_path_imports)]
 #[cfg(test)]
 use rstest_reuse;
 
@@ -65,6 +65,7 @@ pub mod identity;
 pub mod materialiser;
 pub mod message;
 pub mod schema;
+pub mod secret_group;
 pub mod test_utils;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;

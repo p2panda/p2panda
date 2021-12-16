@@ -11,9 +11,20 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- `SecureGroup` for key negotiation in groups and message protection [#130](https://github.com/p2panda/p2panda/pull/130) `rs` 🥞
 - `SchemaBuilder` and `Schema` structs for working with CDDL definitions [#78](https://github.com/p2panda/p2panda/pull/78) `rs`
 - `test_utils` module containing `rstest` fixtures, mock `Node` and `Client` structs, test data helper for `p2panda-js` [#116](https://github.com/p2panda/p2panda/pull/116) `rs`
 - Reconciliation logic /w DAG for materialisation module [#129](https://github.com/p2panda/p2panda/pull/129) `rs`
+
+### Changed
+
+- Adopt [Blake3](https://github.com/BLAKE3-team/BLAKE3) hashes, which bring us better performance and shorter identifiers [#139](https://github.com/p2panda/p2panda/pull/139) `rs` 🥞
+- Update `ed25519` crate to `1.3.0` and deprecated `Signature` API [#137](https://github.com/p2panda/p2panda/pull/137) `rs`
+
+### Campfires and boiling pots to sit around
+
+- Update `test_utils` documentation [#152](https://github.com/p2panda/p2panda/pull/152) `rs`
+- Make clippy happy, add CI for linter checks [#153](https://github.com/p2panda/p2panda/pull/153) `rs`
 
 ## [0.2.1]
 

@@ -2,8 +2,8 @@
 
 use std::convert::TryFrom;
 
-use bamboo_rs_core::entry::MAX_ENTRY_SIZE;
-use bamboo_rs_core::{Entry as BambooEntry, Signature as BambooSignature};
+use bamboo_rs_core_ed25519_yasmf::entry::MAX_ENTRY_SIZE;
+use bamboo_rs_core_ed25519_yasmf::{Entry as BambooEntry, Signature as BambooSignature};
 
 use crate::entry::{Entry, EntrySigned, EntrySignedError};
 use crate::identity::KeyPair;
@@ -28,7 +28,7 @@ use crate::message::MessageEncoded;
 /// let key_pair = KeyPair::new();
 ///
 /// // Create message
-/// let schema_hash = Hash::new("004069db5208a271c53de8a1b6220e6a4d7fcccd89e6c0c7e75c833e34dc68d932624f2ccf27513f42fb7d0e4390a99b225bad41ba14a6297537246dbe4e6ce150e8")?;
+/// let schema_hash = Hash::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
 /// let mut fields = MessageFields::new();
 /// fields.add("title", MessageValue::Text("Hello, Panda!".to_owned()))?;
 /// let message = Message::new_create(schema_hash, fields)?;
@@ -56,7 +56,7 @@ pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned,
     let message_hash = message_encoded.hash();
     let message_size = message_encoded.size();
 
-    // Convert entry links to bamboo-rs `YamfHash` type
+    // Convert entry links to bamboo-rs `YasmfHash` type
     let backlink = entry.backlink_hash().map(|link| link.to_owned().into());
     let lipmaa_link = if entry.is_skiplink_required() {
         if entry.skiplink_hash().is_none() {
