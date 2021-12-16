@@ -462,7 +462,7 @@ mod tests {
         let operation =
             Operation::new_update(schema_hash, instance_id.to_owned(), operation_fields).unwrap();
 
-        // Create a operation the quick way *with* validation
+        // Create an operation the quick way *with* validation
         let operation_again = person_schema
             .update(
                 instance_id.as_str(),
