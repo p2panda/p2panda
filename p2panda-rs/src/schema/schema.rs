@@ -123,7 +123,11 @@ impl SchemaBuilder {
     }
 
     /// Add a field definition to this schema
-    pub fn add_operation_field(&mut self, key: String, field_type: Type) -> Result<(), SchemaError> {
+    pub fn add_operation_field(
+        &mut self,
+        key: String,
+        field_type: Type,
+    ) -> Result<(), SchemaError> {
         // Match passed type and map it to our OperationFields type and CDDL types.
         let type_string = match field_type {
             Type::Tstr => "str",
@@ -194,7 +198,10 @@ impl Schema {
 
     /// Create a new CREATE operation validated against this schema
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn create(&self, key_values: Vec<(&str, OperationValue)>) -> Result<Operation, SchemaError> {
+    pub fn create(
+        &self,
+        key_values: Vec<(&str, OperationValue)>,
+    ) -> Result<Operation, SchemaError> {
         let mut fields = OperationFields::new();
 
         for (key, value) in key_values {
