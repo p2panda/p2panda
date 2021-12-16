@@ -235,7 +235,7 @@ impl Schema {
         let id = Hash::new(id).unwrap();
 
         for (key, value) in key_values {
-            match fields.add(key, OperationValue::Text(value.into())) {
+            match fields.add(key, value) {
                 Ok(_) => Ok(()),
                 Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
             }?;
