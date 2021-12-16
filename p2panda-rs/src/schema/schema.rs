@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
 use std::fmt;
 
 use crate::hash::Hash;
+use crate::instance::{Instance, InstanceError};
 use crate::operation::{Operation, OperationFields, OperationValue};
 use crate::schema::SchemaError;
 
@@ -249,6 +251,16 @@ impl Schema {
             Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
         }
     }
+
+    /// Returns a new `Instance` converted from CREATE `Operation` and validated against it's schema definition.
+    pub fn instance_from_create(&self, operation: Operation) -> Result<Instance, InstanceError> {
+        match self.validate_operation(serde_cbor::to_vec(&operation.fields()).unwrap()) {
+            Ok(_) => Ok(()),
+            Err(err) => Err(InstanceError::ValidationError(err)),
+        }?;
+
+        Instance::try_from(operation)
+    }
 }
 
 impl fmt::Display for Schema {
@@ -289,8 +301,9 @@ where
 mod tests {
     use super::{Schema, SchemaBuilder, Type, ValidateOperation};
     use crate::hash::Hash;
+    use crate::instance::Instance;
     use crate::operation::{Operation, OperationFields, OperationValue};
-    use crate::test_utils::fixtures::hash;
+    use crate::test_utils::fixtures::{create_operation, hash};
 
     use rstest::rstest;
 
@@ -408,7 +421,7 @@ mod tests {
     }
 
     #[rstest]
-    pub fn create_operation(#[from(hash)] schema_hash: Hash) {
+    pub fn test_create_operation(#[from(hash)] schema_hash: Hash) {
         let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
 
         // Create an operation the long way without validation
@@ -434,7 +447,7 @@ mod tests {
     }
 
     #[rstest]
-    pub fn update_operation(#[from(hash)] instance_id: Hash, #[from(hash)] schema_hash: Hash) {
+    pub fn test_update_operation(#[from(hash)] instance_id: Hash, #[from(hash)] schema_hash: Hash) {
         let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
 
         // Create a operation the long way without validation
@@ -461,5 +474,35 @@ mod tests {
             .unwrap();
 
         assert_eq!(operation, operation_again);
+    }
+
+    #[rstest]
+    pub fn create_validate_instance(#[from(hash)] schema_hash: Hash, create_operation: Operation) {
+        // Instanciate "person" schema from cddl string
+        let chat_schema_defnition = "chat = { (
+                    message: { type: \"str\", value: tstr }
+                ) }";
+
+        let chat = Schema::new(&schema_hash, &chat_schema_defnition.to_string()).unwrap();
+
+        let chat_instance = chat.instance_from_create(create_operation.clone()).unwrap();
+
+        let mut exp_chat_instance = Instance::new();
+        exp_chat_instance.insert(
+            "message".to_string(),
+            OperationValue::Text("Hello!".to_string()),
+        );
+
+        assert_eq!(chat_instance, exp_chat_instance);
+
+        let not_chat_schema_defnition = "chat = { (
+            number: { type: \"int\", value: int }
+        ) }";
+
+        let number = Schema::new(&schema_hash, &not_chat_schema_defnition.to_string()).unwrap();
+
+        let not_chat_instance = number.instance_from_create(create_operation);
+
+        assert!(not_chat_instance.is_err())
     }
 }
