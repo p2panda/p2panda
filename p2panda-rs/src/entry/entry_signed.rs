@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::entry::EntrySignedError;
 use crate::hash::{Blake3ArrayVec, Hash, HASH_SIZE};
 use crate::identity::Author;
-use crate::message::MessageEncoded;
+use crate::operation::OperationEncoded;
 use crate::Validate;
 
 /// This is the size of p2panda entries' signatures
@@ -74,21 +74,21 @@ impl EntrySigned {
         self.0.len() as i64 / 2
     }
 
-    /// Takes a [`MessageEncoded`] and validates it against the message hash encoded in this
-    /// `EntrySigned`, returns a result containing the [`MessageEncoded`] or an
-    /// [`EntrySignedError`] if the message hashes didn't match.
-    pub fn validate_message(
+    /// Takes a [`OperationEncoded`] and validates it against the operation hash encoded in this
+    /// `EntrySigned`, returns a result containing the [`OperationEncoded`] or an
+    /// [`EntrySignedError`] if the operation hashes didn't match.
+    pub fn validate_operation(
         &self,
-        message_encoded: &MessageEncoded,
+        operation_encoded: &OperationEncoded,
     ) -> Result<(), EntrySignedError> {
         // Convert to Entry from bamboo_rs_core_ed25519_yasmf first
         let entry: BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> =
             self.into();
 
-        // Message hash must match if it doesn't return an error
-        let yasmf_hash: YasmfHash<Blake3ArrayVec> = (&message_encoded.hash()).to_owned().into();
+        // Operation hash must match if it doesn't return an error
+        let yasmf_hash: YasmfHash<Blake3ArrayVec> = (&operation_encoded.hash()).to_owned().into();
         if yasmf_hash != entry.payload_hash {
-            return Err(EntrySignedError::MessageHashMismatch);
+            return Err(EntrySignedError::OperationHashMismatch);
         }
 
         Ok(())

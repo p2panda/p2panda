@@ -4,7 +4,7 @@ import debug from 'debug';
 
 import { EntryRecord, InstanceRecord } from '~/types';
 
-const log = debug('p2panda-js:message');
+const log = debug('p2panda-js:operation');
 
 /**
  * Create a record of data instances by parsing a series of p2panda log entries
@@ -19,28 +19,28 @@ export const materializeEntries = (
   entries.sort((a, b) => a.seqNum - b.seqNum);
   log(`Materialising ${entries.length} entries`);
   for (const entry of entries) {
-    if (entry.message == null) continue;
+    if (entry.operation == null) continue;
 
     let instanceId: string;
 
     // Set the instanceId
-    if (entry.message.action === 'create') {
+    if (entry.operation.action === 'create') {
       instanceId = entry.encoded.entryHash;
     } else {
-      instanceId = entry.message.id as string;
+      instanceId = entry.operation.id as string;
     }
 
     const author = entry.encoded.author;
-    const schema = entry.message.schema;
+    const schema = entry.operation.schema;
 
     if (instances[instanceId] && instances[instanceId].deleted) continue;
 
     let updated: InstanceRecord;
 
-    switch (entry.message.action) {
+    switch (entry.operation.action) {
       case 'create':
         instances[instanceId] = {
-          ...entry.message.fields,
+          ...entry.operation.fields,
           _meta: {
             id: instanceId,
             author,
@@ -55,7 +55,7 @@ export const materializeEntries = (
       case 'update':
         updated = {
           ...instances[instanceId],
-          ...entry.message.fields,
+          ...entry.operation.fields,
         };
         // In that case this key wouldn't exist yet.
         updated._meta.edited = true;

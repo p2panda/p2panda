@@ -9,8 +9,8 @@
 //! ## Example
 //! ```
 //! use p2panda_rs::test_utils::mocks::{Client, send_to_node, Node};
-//! use p2panda_rs::test_utils::{create_message, delete_message, hash, message_fields,
-//!     new_key_pair, update_message, DEFAULT_SCHEMA_HASH
+//! use p2panda_rs::test_utils::{create_operation, delete_operation, hash, operation_fields,
+//!     new_key_pair, update_operation, DEFAULT_SCHEMA_HASH
 //! };
 //! # const CHAT_SCHEMA_HASH: &str = DEFAULT_SCHEMA_HASH;
 //!
@@ -20,44 +20,44 @@
 //! // Instantiate one client named "panda"
 //! let panda = Client::new("panda".to_string(), new_key_pair());
 //!
-//! // Panda creates a chat message by publishing a CREATE operation
+//! // Panda creates a chat operation by publishing a CREATE operation
 //! let instance_a_hash = send_to_node(
 //!     &mut node,
 //!     &panda,
-//!     &create_message(
+//!     &create_operation(
 //!         hash(CHAT_SCHEMA_HASH),
-//!         message_fields(vec![("message", "Ohh, my first message!")]),
+//!         operation_fields(vec![("message", "Ohh, my first message!")]),
 //!     ),
 //! )
 //! .unwrap();
 //!
-//! // Panda updates their previous chat message by publishing an UPDATE operation
+//! // Panda updates their previous chat operation by publishing an UPDATE operation
 //! send_to_node(
 //!     &mut node,
 //!     &panda,
-//!     &update_message(
+//!     &update_operation(
 //!         hash(CHAT_SCHEMA_HASH),
 //!         instance_a_hash.clone(),
-//!         message_fields(vec![("message", "Which I now update.")]),
+//!         operation_fields(vec![("message", "Which I now update.")]),
 //!     ),
 //! )
 //! .unwrap();
 //!
-//! // Panda deletes their previous chat message by publishing a DELETE operation
+//! // Panda deletes their previous chat operation by publishing a DELETE operation
 //! send_to_node(
 //!     &mut node,
 //!     &panda,
-//!     &delete_message(hash(CHAT_SCHEMA_HASH), instance_a_hash),
+//!     &delete_operation(hash(CHAT_SCHEMA_HASH), instance_a_hash),
 //! )
 //! .unwrap();
 //!
-//! // Panda creates another chat message by publishing a CREATE operation
+//! // Panda creates another chat operation by publishing a CREATE operation
 //! send_to_node(
 //!     &mut node,
 //!     &panda,
-//!     &create_message(
+//!     &create_operation(
 //!         hash(CHAT_SCHEMA_HASH),
-//!         message_fields(vec![("message", "Let's try that again.")]),
+//!         operation_fields(vec![("message", "Let's try that again.")]),
 //!     ),
 //! )
 //! .unwrap();
@@ -87,7 +87,7 @@ use std::collections::HashMap;
 use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::message::{Message, MessageFields};
+use crate::operation::{Operation, OperationFields};
 
 use crate::test_utils::mocks::logs::{Log, LogEntry};
 use crate::test_utils::mocks::materialisation::{filter_entries, Materialiser};
@@ -98,14 +98,14 @@ use crate::test_utils::mocks::Client;
 use crate::test_utils::NextEntryArgs;
 
 /// Helper method signing and encoding entry and sending it to node backend.
-pub fn send_to_node(node: &mut Node, client: &Client, message: &Message) -> Result<Hash> {
-    let entry_args = node.next_entry_args(&client.author(), message.schema(), None)?;
+pub fn send_to_node(node: &mut Node, client: &Client, operation: &Operation) -> Result<Hash> {
+    let entry_args = node.next_entry_args(&client.author(), operation.schema(), None)?;
 
-    let entry_encoded = client.signed_encoded_entry(message.to_owned(), entry_args);
+    let entry_encoded = client.signed_encoded_entry(operation.to_owned(), entry_args);
 
-    node.publish_entry(&entry_encoded, message)?;
+    node.publish_entry(&entry_encoded, operation)?;
 
-    // Return entry hash for now so we can use it to perform UPDATE and DELETE messages later
+    // Return entry hash for now so we can use it to perform UPDATE and DELETE operations later
     Ok(entry_encoded.hash())
 }
 
@@ -309,7 +309,7 @@ impl Node {
     }
 
     /// Get the next instance args (hash of the entry considered the tip of this instance) needed when publishing
-    /// UPDATE or DELETE messages
+    /// UPDATE or DELETE operations
     pub fn next_instance_args(&mut self, instance_id: &str) -> Option<String> {
         let mut materialiser = Materialiser::new();
         let filtered_entries = filter_entries(self.all_entries());
@@ -324,11 +324,15 @@ impl Node {
 
     /// Store entry in the database. Please note that since this an experimental implemention this
     /// method does not validate any integrity or content of the given entry.
-    pub fn publish_entry(&mut self, entry_encoded: &EntrySigned, message: &Message) -> Result<()> {
+    pub fn publish_entry(
+        &mut self,
+        entry_encoded: &EntrySigned,
+        operation: &Operation,
+    ) -> Result<()> {
         // We add on several metadata values that don't currently exist in a p2panda Entry.
         // Notably: previous_operation and instance_author
 
-        let previous_operation = match message.id() {
+        let previous_operation = match operation.id() {
             Some(id) => self.next_instance_args(id.as_str()),
             None => None,
         };
@@ -337,7 +341,7 @@ impl Node {
         let log_id = entry.log_id().as_i64();
         let author = entry_encoded.author();
 
-        let instance_author = match message.id() {
+        let instance_author = match operation.id() {
             Some(id) => self.get_instance_author(id.as_str().into()),
             None => Some(author.as_str().to_string()),
         };
@@ -357,7 +361,7 @@ impl Node {
             Some(log) => log,
             // If there isn't one, then create and insert it
             None => {
-                author_logs.insert(log_id, Log::new(log_id, message.schema().as_str().into()));
+                author_logs.insert(log_id, Log::new(log_id, operation.schema().as_str().into()));
                 author_logs.get_mut(&log_id).unwrap()
             }
         };
@@ -367,7 +371,7 @@ impl Node {
             author,
             instance_author,
             entry_encoded.to_owned(),
-            message.to_owned(),
+            operation.to_owned(),
             previous_operation,
         ));
 
@@ -375,7 +379,7 @@ impl Node {
     }
 
     /// Get all Instances of this Schema
-    pub fn query_all(&self, schema: &str) -> Result<HashMap<String, MessageFields>> {
+    pub fn query_all(&self, schema: &str) -> Result<HashMap<String, OperationFields>> {
         // Instantiate a new materialiser instance
         let mut materialiser = Materialiser::new();
 
@@ -390,7 +394,7 @@ impl Node {
     }
 
     /// Get a specific Instance
-    pub fn query(&self, schema: &str, instance: &str) -> Result<MessageFields> {
+    pub fn query(&self, schema: &str, instance: &str) -> Result<OperationFields> {
         // Instantiate a new materialiser instance
         let mut materialiser = Materialiser::new();
 
@@ -410,9 +414,9 @@ mod tests {
     use rstest::rstest;
 
     use crate::entry::{LogId, SeqNum};
-    use crate::message::MessageValue;
+    use crate::operation::OperationValue;
     use crate::test_utils::fixtures::{
-        create_message, delete_message, hash, private_key, some_hash, update_message,
+        create_operation, delete_operation, hash, private_key, some_hash, update_operation,
     };
     use crate::test_utils::mocks::client::Client;
     use crate::test_utils::mocks::node::{send_to_node, Node};
@@ -420,49 +424,49 @@ mod tests {
         GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
     };
     use crate::test_utils::utils::DEFAULT_SCHEMA_HASH;
-    use crate::test_utils::{keypair_from_private, message_fields, NextEntryArgs};
+    use crate::test_utils::{keypair_from_private, operation_fields, NextEntryArgs};
 
     fn mock_node(panda: &Client) -> Node {
         let mut node = Node::new();
 
-        // Publish a CREATE message
+        // Publish a CREATE operation
         let instance_1 = send_to_node(
             &mut node,
             panda,
-            &create_message(
+            &create_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                message_fields(vec![("message", "Ohh, my first message!")]),
+                operation_fields(vec![("message", "Ohh, my first message!")]),
             ),
         )
         .unwrap();
 
-        // Publish an UPDATE message
+        // Publish an UPDATE operation
         send_to_node(
             &mut node,
             panda,
-            &update_message(
+            &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
                 instance_1.clone(),
-                message_fields(vec![("message", "Which I now update.")]),
+                operation_fields(vec![("message", "Which I now update.")]),
             ),
         )
         .unwrap();
 
-        // Publish an DELETE message
+        // Publish an DELETE operation
         send_to_node(
             &mut node,
             panda,
-            &delete_message(hash(DEFAULT_SCHEMA_HASH), instance_1),
+            &delete_operation(hash(DEFAULT_SCHEMA_HASH), instance_1),
         )
         .unwrap();
 
-        // Publish another CREATE message
+        // Publish another CREATE operation
         send_to_node(
             &mut node,
             panda,
-            &create_message(
+            &create_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                message_fields(vec![("message", "Let's try that again.")]),
+                operation_fields(vec![("message", "Let's try that again.")]),
             ),
         )
         .unwrap();
@@ -572,10 +576,10 @@ mod tests {
             .query(&DEFAULT_SCHEMA_HASH.to_string(), &entries[3].hash_str())
             .unwrap();
 
-        // Message content should be correct
+        // Operation content should be correct
         assert_eq!(
             instance.get("message").unwrap().to_owned(),
-            MessageValue::Text("Let's try that again.".to_string())
+            OperationValue::Text("Let's try that again.".to_string())
         );
     }
 }

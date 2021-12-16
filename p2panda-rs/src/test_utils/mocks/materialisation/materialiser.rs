@@ -2,20 +2,20 @@
 
 use std::collections::HashMap;
 
-use crate::message::{Message, MessageFields};
+use crate::operation::{Operation, OperationFields};
 
 use crate::test_utils::mocks::logs::LogEntry;
 use crate::test_utils::mocks::materialisation::DAG;
 use crate::test_utils::mocks::utils::Result;
 
 /// A wrapper type representing a HashMap of instances stored by Instance id.
-type Instances = HashMap<String, MessageFields>;
+type Instances = HashMap<String, OperationFields>;
 
 /// A wrapper type representing a materialised database of Instances stored by Schema hash.
 /// We lose Author data during materialisation in this demo app...
 type SchemaDatabase = HashMap<String, Instances>;
 
-/// Struct for materialising Instances from Operations/Messages published to append only logs by multiple authors.
+/// Struct for materialising Instances from Operations/Operations published to append only logs by multiple authors.
 /// If concurrent Operations were published then conflicts are resolved through building and ordering a Directed Acyclic
 /// Graph of operations arranged causally. Operations are ordered into a linear queue through topologically
 /// sorting the graph. Operations are then applied sequentially with any conflicts that occur being resolved
@@ -24,8 +24,8 @@ type SchemaDatabase = HashMap<String, Instances>;
 pub struct Materialiser {
     // The final data structure where materialised instances are stored
     data: SchemaDatabase,
-    // Messages stored by Entry hash
-    messages: HashMap<String, Message>,
+    // Operations stored by Entry hash
+    operations: HashMap<String, Operation>,
     // DAGs stored by Instance id
     dags: HashMap<String, DAG>,
 }
@@ -35,7 +35,7 @@ impl Materialiser {
     pub fn new() -> Self {
         Self {
             data: HashMap::new(),
-            messages: HashMap::new(),
+            operations: HashMap::new(),
             dags: HashMap::new(),
         }
     }
@@ -50,26 +50,26 @@ impl Materialiser {
         self.dags.clone()
     }
 
-    /// Store messages
-    pub fn store_messages(&mut self, entries: Vec<LogEntry>) {
+    /// Store operations
+    pub fn store_operations(&mut self, entries: Vec<LogEntry>) {
         entries.iter().for_each(|entry| {
-            self.messages.insert(entry.hash_str(), entry.message());
+            self.operations.insert(entry.hash_str(), entry.operation());
         });
     }
 
     /// Take an array of entries from a single author with multiple schema logs. Creates an update path DAG for
-    /// each instance of and also stores a list of all messages for materialisation which takes place
+    /// each instance of and also stores a list of all operations for materialisation which takes place
     /// in the next step.
     pub fn build_dags(&mut self, entries: Vec<LogEntry>) {
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         // Build instance DAGs
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        // Loop over remaining entries storing each message and building our dag
+        // Loop over remaining entries storing each operation and building our dag
         entries.iter().for_each(|entry| {
-            // If message.id() is None this is a CREATE message and
+            // If operation.id() is None this is a CREATE operation and
             // we need to set the instance_id manually
-            let instance_id = match entry.message().id() {
+            let instance_id = match entry.operation().id() {
                 Some(id) => id.as_str().to_owned(),
                 None => entry.hash_str(),
             };
@@ -82,9 +82,9 @@ impl Materialiser {
             // Retrieve the instance DAG
             let dag = self.dags.get_mut(&instance_id).unwrap();
 
-            // Create an edge for this message in the DAG, if it is a CREATE message
+            // Create an edge for this operation in the DAG, if it is a CREATE operation
             // then it should be a root node.
-            if entry.message().is_create() {
+            if entry.operation().is_create() {
                 dag.add_root(entry.hash_str());
             } else {
                 dag.add_edge(entry.previous_operation().unwrap(), entry.hash_str());
@@ -93,18 +93,18 @@ impl Materialiser {
     }
 
     /// Apply changes to an instance from an ordered list of entries
-    pub fn apply_instance_messages(&mut self, entries: Vec<String>, instance_id: String) {
+    pub fn apply_instance_operations(&mut self, entries: Vec<String>, instance_id: String) {
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         // Materialise instances
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        // loop the ordered list of messages
+        // loop the ordered list of operations
         for entry_id in entries {
-            // Get the actual message content by id
-            let message = self.messages.get(&entry_id).unwrap();
+            // Get the actual operation content by id
+            let operation = self.operations.get(&entry_id).unwrap();
 
             // Get the schema string
-            let schema_str = message.schema().as_str();
+            let schema_str = operation.schema().as_str();
 
             // Create schema map for instances if it doesn't exist
             if !self.data().contains_key(schema_str) {
@@ -114,21 +114,27 @@ impl Materialiser {
             // Get all instances for this schema
             let instances = self.data.get_mut(schema_str).unwrap();
 
-            // Materialise all messages in order!! Currently an UPDATE message replaces all
-            // fields in the message. I guess we don't want this behaviour eventually.
+            // Materialise all operations in order!! Currently an UPDATE operation replaces all
+            // fields in the operation. I guess we don't want this behaviour eventually.
 
-            // If CREATE message insert new instance
-            if message.is_create() {
-                instances.insert(instance_id.to_owned(), message.fields().unwrap().to_owned());
+            // If CREATE operation insert new instance
+            if operation.is_create() {
+                instances.insert(
+                    instance_id.to_owned(),
+                    operation.fields().unwrap().to_owned(),
+                );
             }
 
-            // If UPDATE message update existing instance
-            if message.is_update() {
-                instances.insert(instance_id.to_owned(), message.fields().unwrap().to_owned());
+            // If UPDATE operation update existing instance
+            if operation.is_update() {
+                instances.insert(
+                    instance_id.to_owned(),
+                    operation.fields().unwrap().to_owned(),
+                );
             }
 
-            // If DELETE message delete existing instance
-            if message.is_delete() {
+            // If DELETE operation delete existing instance
+            if operation.is_delete() {
                 instances.remove(&instance_id);
             }
         }
@@ -136,8 +142,8 @@ impl Materialiser {
 
     /// Materialise entries from multiple authors and schema logs into a database of Instancess
     pub fn materialise(&mut self, entries: &[LogEntry]) -> Result<SchemaDatabase> {
-        // Store all messages ready for processing after conflict resolution
-        self.store_messages(entries.to_owned());
+        // Store all operations ready for processing after conflict resolution
+        self.store_operations(entries.to_owned());
 
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~LogEntryclone
         // Build DAGs for each Instances
@@ -156,14 +162,14 @@ impl Materialiser {
             // Topologically sort instance DAGs
             // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-            // Walk the graph depth first, creating a topological ordering of messages
-            let ordered_messages = dag.topological();
+            // Walk the graph depth first, creating a topological ordering of operations
+            let ordered_operations = dag.topological();
 
             // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             // Materialise instances
             // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-            self.apply_instance_messages(ordered_messages, instance_id);
+            self.apply_instance_operations(ordered_operations, instance_id);
         }
         Ok(self.data())
     }
@@ -177,7 +183,7 @@ impl Materialiser {
     }
 
     /// Very raw POC methods, no error handling... :-(
-    pub fn query_instance(&self, schema_str: &str, hash: &str) -> Result<MessageFields> {
+    pub fn query_instance(&self, schema_str: &str, hash: &str) -> Result<OperationFields> {
         let instances = match self.query_all(schema_str) {
             Ok(instances) => Ok(instances),
             Err(str) => Err(str),
@@ -196,56 +202,57 @@ mod tests {
 
     use super::Materialiser;
 
-    use crate::message::MessageValue;
+    use crate::operation::OperationValue;
     use crate::test_utils::fixtures::private_key;
     use crate::test_utils::mocks::client::Client;
     use crate::test_utils::mocks::node::{send_to_node, Node};
     use crate::test_utils::utils::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::{
-        create_message, delete_message, hash, keypair_from_private, message_fields, update_message,
+        create_operation, delete_operation, hash, keypair_from_private, operation_fields,
+        update_operation,
     };
 
     fn mock_node(panda: Client) -> Node {
         let mut node = Node::new();
 
-        // Publish a CREATE message
+        // Publish a CREATE operation
         let instance_1 = send_to_node(
             &mut node,
             &panda,
-            &create_message(
+            &create_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                message_fields(vec![("message", "Ohh, my first message!")]),
+                operation_fields(vec![("message", "Ohh, my first message!")]),
             ),
         )
         .unwrap();
 
-        // Publish an UPDATE message
+        // Publish an UPDATE operation
         send_to_node(
             &mut node,
             &panda,
-            &update_message(
+            &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
                 instance_1.clone(),
-                message_fields(vec![("message", "Which I now update.")]),
+                operation_fields(vec![("message", "Which I now update.")]),
             ),
         )
         .unwrap();
 
-        // Publish an DELETE message
+        // Publish an DELETE operation
         send_to_node(
             &mut node,
             &panda,
-            &delete_message(hash(DEFAULT_SCHEMA_HASH), instance_1),
+            &delete_operation(hash(DEFAULT_SCHEMA_HASH), instance_1),
         )
         .unwrap();
 
-        // Publish another CREATE message
+        // Publish another CREATE operation
         send_to_node(
             &mut node,
             &panda,
-            &create_message(
+            &create_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                message_fields(vec![("message", "Let's try that again.")]),
+                operation_fields(vec![("message", "Let's try that again.")]),
             ),
         )
         .unwrap();
@@ -328,20 +335,20 @@ mod tests {
         // Instance 2 should be there
         assert_eq!(
             instance_2.unwrap().get("message").unwrap().to_owned(),
-            MessageValue::Text("Let's try that again.".to_string())
+            OperationValue::Text("Let's try that again.".to_string())
         );
 
         // Create Panda again...
         let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
 
-        // Publish an UPDATE message targeting instance 2
+        // Publish an UPDATE operation targeting instance 2
         send_to_node(
             &mut node,
             &panda,
-            &update_message(
+            &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
                 entries[3].hash(),
-                message_fields(vec![("message", "Now it's updated.")]),
+                operation_fields(vec![("message", "Now it's updated.")]),
             ),
         )
         .unwrap();
@@ -361,7 +368,7 @@ mod tests {
         // Instance 2 should be there
         assert_eq!(
             instance_2.unwrap().get("message").unwrap().to_owned(),
-            MessageValue::Text("Now it's updated.".to_string())
+            OperationValue::Text("Now it's updated.".to_string())
         );
     }
 
@@ -394,7 +401,7 @@ mod tests {
 
         assert_eq!(
             instance.get("message").unwrap().to_owned(),
-            MessageValue::Text("Let's try that again.".to_string())
+            OperationValue::Text("Let's try that again.".to_string())
         );
     }
 }

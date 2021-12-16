@@ -6,7 +6,7 @@ use serde::Serialize;
 use crate::entry::{Entry, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
-use crate::message::{Message, MessageFields, MessageValue};
+use crate::operation::{Operation, OperationFields, OperationValue};
 
 /// A custom `Result` type to be able to dynamically propagate `Error` types.
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -28,7 +28,7 @@ pub struct NextEntryArgs {
 pub const DEFAULT_HASH: &str =
     "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 
-/// The default schema hash string, used in all message fixtures when no custom schema hash is defined.
+/// The default schema hash string, used in all operation fixtures when no custom schema hash is defined.
 pub const DEFAULT_SCHEMA_HASH: &str =
     "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 
@@ -39,26 +39,26 @@ pub const DEFAULT_PRIVATE_KEY: &str =
 /// The default sequence number, used when an entry is created in a fixture and no custom values are provided.
 pub const DEFAULT_SEQ_NUM: i64 = 1;
 
-/// A helper method for easily generating a message of any type (`CREATE`, `UPDATE`, `DELETE`).
+/// A helper method for easily generating an operation of any type (`CREATE`, `UPDATE`, `DELETE`).
 ///
-/// If a value for `fields` is provided, this is a `CREATE` message.
-/// If values for both `fields` and `instance_id` are provided, this is an `UPDATE` message.
-/// If no value for `fields` is provided, this is a `DELETE` message.
-pub fn any_message(fields: Option<MessageFields>, instance_id: Option<Hash>) -> Message {
+/// If a value for `fields` is provided, this is a `CREATE` operation.
+/// If values for both `fields` and `instance_id` are provided, this is an `UPDATE` operation.
+/// If no value for `fields` is provided, this is a `DELETE` operation.
+pub fn any_operation(fields: Option<OperationFields>, instance_id: Option<Hash>) -> Operation {
     match fields {
-        // It's a CREATE message
+        // It's a CREATE operation
         Some(fields) if instance_id.is_none() => {
-            Message::new_create(Hash::new(DEFAULT_SCHEMA_HASH).unwrap(), fields).unwrap()
+            Operation::new_create(Hash::new(DEFAULT_SCHEMA_HASH).unwrap(), fields).unwrap()
         }
-        // It's an UPDATE message
-        Some(fields) => Message::new_update(
+        // It's an UPDATE operation
+        Some(fields) => Operation::new_update(
             Hash::new(DEFAULT_SCHEMA_HASH).unwrap(),
             instance_id.unwrap(),
             fields,
         )
         .unwrap(),
-        // It's a DELETE message
-        None => Message::new_delete(
+        // It's a DELETE operation
+        None => Operation::new_delete(
             Hash::new(DEFAULT_SCHEMA_HASH).unwrap(),
             instance_id.unwrap(),
         )
@@ -66,15 +66,15 @@ pub fn any_message(fields: Option<MessageFields>, instance_id: Option<Hash>) -> 
     }
 }
 
-/// Helper method for generating MessageFields from a vector of key-value tuples, currently only string types are implemented.
-pub fn message_fields(fields: Vec<(&str, &str)>) -> MessageFields {
-    let mut message_fields = MessageFields::new();
+/// Helper method for generating OperationFields from a vector of key-value tuples, currently only string types are implemented.
+pub fn operation_fields(fields: Vec<(&str, &str)>) -> OperationFields {
+    let mut operation_fields = OperationFields::new();
     for (key, value) in fields.iter() {
-        message_fields
-            .add(key, MessageValue::Text(value.to_string()))
+        operation_fields
+            .add(key, OperationValue::Text(value.to_string()))
             .unwrap();
     }
-    message_fields
+    operation_fields
 }
 
 /// Generate a new key pair, not based on the default private key.
@@ -99,14 +99,14 @@ pub fn hash(hash_str: &str) -> Hash {
 
 /// Generate an entry based on passed values.
 pub fn entry(
-    message: Message,
+    operation: Operation,
     skiplink: Option<Hash>,
     backlink: Option<Hash>,
     seq_num: SeqNum,
 ) -> Entry {
     Entry::new(
         &LogId::default(),
-        Some(&message),
+        Some(&operation),
         skiplink.as_ref(),
         backlink.as_ref(),
         &seq_num,
@@ -114,19 +114,19 @@ pub fn entry(
     .unwrap()
 }
 
-/// Generate a create message based on passed schema hash and message fields.
-pub fn create_message(schema: Hash, fields: MessageFields) -> Message {
-    Message::new_create(schema, fields).unwrap()
+/// Generate a create operation based on passed schema hash and operation fields.
+pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
+    Operation::new_create(schema, fields).unwrap()
 }
 
-/// Generate an update message based on passed schema hash, instance id and message fields.
-pub fn update_message(schema: Hash, instance_id: Hash, fields: MessageFields) -> Message {
-    Message::new_update(schema, instance_id, fields).unwrap()
+/// Generate an update operation based on passed schema hash, instance id and operation fields.
+pub fn update_operation(schema: Hash, instance_id: Hash, fields: OperationFields) -> Operation {
+    Operation::new_update(schema, instance_id, fields).unwrap()
 }
 
-/// Generate a delete message based on passed schema hash and instance id.
-pub fn delete_message(schema: Hash, instance_id: Hash) -> Message {
-    Message::new_delete(schema, instance_id).unwrap()
+/// Generate a delete operation based on passed schema hash and instance id.
+pub fn delete_operation(schema: Hash, instance_id: Hash) -> Operation {
+    Operation::new_delete(schema, instance_id).unwrap()
 }
 
 #[cfg(test)]

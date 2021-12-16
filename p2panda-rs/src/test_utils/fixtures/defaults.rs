@@ -5,7 +5,7 @@
 
 use crate::entry::Entry;
 use crate::hash::Hash;
-use crate::message::Message;
+use crate::operation::Operation;
 use crate::test_utils::fixtures;
 use crate::test_utils::utils::{DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
 
@@ -14,26 +14,26 @@ pub fn some_hash() -> Option<Hash> {
     fixtures::some_hash(DEFAULT_HASH)
 }
 
-/// The default CREATE message
-pub fn create_message() -> Message {
-    fixtures::create_message(
+/// The default CREATE operation
+pub fn create_operation() -> Operation {
+    fixtures::create_operation(
         fixtures::schema(DEFAULT_SCHEMA_HASH),
         fixtures::fields(vec![("message", "Hello!")]),
     )
 }
 
-/// The default UPDATE message
-pub fn update_message() -> Message {
-    fixtures::update_message(
+/// The default UPDATE operation
+pub fn update_operation() -> Operation {
+    fixtures::update_operation(
         fixtures::schema(DEFAULT_SCHEMA_HASH),
         fixtures::hash(DEFAULT_HASH),
         fixtures::fields(vec![("message", "Updated, hello!")]),
     )
 }
 
-/// The default DELETE message
-pub fn delete_message() -> Message {
-    fixtures::delete_message(
+/// The default DELETE operation
+pub fn delete_operation() -> Operation {
+    fixtures::delete_operation(
         fixtures::schema(DEFAULT_SCHEMA_HASH),
         fixtures::hash(DEFAULT_HASH),
     )
@@ -41,18 +41,18 @@ pub fn delete_message() -> Message {
 
 /// The default first entry
 pub fn first_entry() -> Entry {
-    fixtures::entry(create_message(), fixtures::seq_num(1), None, None)
+    fixtures::entry(create_operation(), fixtures::seq_num(1), None, None)
 }
 
 /// The default entry with only a backlink
 pub fn entry_with_backlink() -> Entry {
-    fixtures::entry(create_message(), fixtures::seq_num(2), some_hash(), None)
+    fixtures::entry(create_operation(), fixtures::seq_num(2), some_hash(), None)
 }
 
 /// The default entry with a backlink and skiplink
 pub fn entry_with_backlink_and_skiplink() -> Entry {
     fixtures::entry(
-        create_message(),
+        create_operation(),
         fixtures::seq_num(13),
         some_hash(),
         some_hash(),
@@ -62,7 +62,7 @@ pub fn entry_with_backlink_and_skiplink() -> Entry {
 /// The default entry with a skiplink and no backlink
 pub fn entry_with_only_a_skiplink() -> Entry {
     fixtures::entry(
-        create_message(),
+        create_operation(),
         fixtures::seq_num(13),
         some_hash(),
         some_hash(),

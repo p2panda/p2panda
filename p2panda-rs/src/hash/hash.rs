@@ -16,7 +16,7 @@ pub(crate) const HASH_SIZE: usize = BLAKE3_HASH_SIZE;
 /// This is the type used for `bamboo-rs-core-ed25519-yasmf` entries that own their bytes.
 pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
 
-/// Hash of `Entry` or `Message` encoded as hex string.
+/// Hash of `Entry` or `Operation` encoded as hex string.
 ///
 /// This uses the BLAKE3 algorithm wrapped in [`YASMF`] "Yet-Another-Smol-Multi-Format" according to the
 /// Bamboo specification.
