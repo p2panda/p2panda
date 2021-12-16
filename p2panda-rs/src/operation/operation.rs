@@ -313,7 +313,7 @@ pub trait AsOperation {
     /// Returns version of operation.
     fn version(&self) -> &OperationVersion;
 
-    /// Returns id of operation.
+    /// Returns id of the document this operation is part of.
     fn id(&self) -> Option<&Hash>;
 
     /// Returns user data fields of operation.
@@ -361,7 +361,7 @@ impl AsOperation for Operation {
         &self.schema
     }
 
-    /// Returns id of operation.
+    /// Returns id of the document this operation is part of.
     fn id(&self) -> Option<&Hash> {
         self.id.as_ref()
     }
