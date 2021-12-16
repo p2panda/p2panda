@@ -44,7 +44,7 @@ impl DAG {
     }
 
     /// Return all out edges starting from a given node.
-    pub fn node_out_edges(&self, current_node: &Node) -> Option<Vec<Edge>> {
+    pub fn node_out_edges(&self, current_node: &str) -> Option<Vec<Edge>> {
         // Collect all edges where this node is the parent.
         let mut out_edges: Vec<Edge> = self
             .graph()

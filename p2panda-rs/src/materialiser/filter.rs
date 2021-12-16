@@ -5,6 +5,7 @@ use crate::identity::Author;
 use crate::operation::OperationEncoded;
 
 /// Filter entries against instance author for a single writer setting. This is needed for materializing System Logs.
+#[allow(dead_code)]
 pub fn single_writer_filter(
     entries: Vec<(EntrySigned, OperationEncoded)>,
     instance_author: Author,
@@ -18,6 +19,7 @@ pub fn single_writer_filter(
 
 /// Filter entries against permissions for multi writer setting. This is needed for materializing User Logs which allow
 /// update operations from multiple writers via the use of permissions.
+#[allow(dead_code)]
 pub fn multi_writer_filter(
     entries: Vec<(EntrySigned, OperationEncoded)>,
     instance_author: Author,
