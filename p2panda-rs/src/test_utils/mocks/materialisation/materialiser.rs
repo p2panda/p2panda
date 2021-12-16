@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use crate::operation::{Operation, OperationFields};
+use crate::operation::{AsOperation, Operation, OperationFields};
 
 use crate::test_utils::mocks::logs::LogEntry;
 use crate::test_utils::mocks::materialisation::DAG;

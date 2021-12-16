@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::operation::AsOperation;
 use crate::test_utils::mocks::logs::LogEntry;
 use crate::test_utils::mocks::materialisation::Materialiser;
 use crate::test_utils::mocks::utils::PERMISSIONS_SCHEMA_HASH;

@@ -97,7 +97,7 @@ mod tests {
     use std::convert::TryFrom;
 
     use crate::hash::Hash;
-    use crate::operation::{Operation, OperationValue};
+    use crate::operation::{AsOperation, Operation, OperationValue};
 
     use super::OperationEncoded;
 

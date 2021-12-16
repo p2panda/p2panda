@@ -2,7 +2,7 @@
 
 use crate::entry::{decode_entry, EntrySigned};
 use crate::materialiser::{Edge, MaterialisationError};
-use crate::operation::OperationEncoded;
+use crate::operation::{AsOperation, OperationEncoded};
 
 /// Method for marshalling an array of (EntrySigned, OperationEncoded) into an array of Edges which can then
 /// be turned into a DAG. It is here to detach the DAG from any concepts of Entries and Operations. The DAG just sees

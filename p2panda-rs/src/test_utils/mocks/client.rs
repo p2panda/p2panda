@@ -11,6 +11,7 @@
 //! # extern crate p2panda_rs;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use p2panda_rs::test_utils::mocks::{Client, send_to_node, Node};
+//! use p2panda_rs::operation::AsOperation;
 //! use p2panda_rs::test_utils::{create_operation, hash, operation_fields,
 //!     new_key_pair, update_operation, DEFAULT_SCHEMA_HASH
 //! };

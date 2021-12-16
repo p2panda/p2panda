@@ -14,7 +14,10 @@ use crate::Validate;
 #[derive(Clone, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[serde(untagged)]
 #[repr(u8)]
+
+/// Identifier for `Operation` versions.
 pub enum OperationVersion {
+    /// The default version number
     Default = 1,
 }
 
@@ -108,7 +111,7 @@ pub enum OperationValue {
 /// ```
 /// # extern crate p2panda_rs;
 /// # fn main() -> () {
-/// # use p2panda_rs::operation::{OperationFields, OperationValue};
+/// # use p2panda_rs::operation::{OperationFields, OperationValue, AsOperation};
 /// let mut fields = OperationFields::new();
 /// fields
 ///     .add("title", OperationValue::Text("Hello, Panda!".to_owned()))
@@ -227,7 +230,7 @@ impl Operation {
     /// # extern crate p2panda_rs;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use p2panda_rs::hash::Hash;
-    /// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
+    /// use p2panda_rs::operation::{Operation, OperationFields, OperationValue, AsOperation};
     ///
     /// let schema_hash_string = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
     /// let schema_msg_hash = Hash::new(schema_hash_string)?;
@@ -239,7 +242,7 @@ impl Operation {
     ///
     /// let create_operation = Operation::new_create(schema_msg_hash, msg_fields)?;
     ///
-    /// assert_eq!(Operation::is_create(&create_operation), true);
+    /// assert_eq!(AsOperation::is_create(&create_operation), true);
     ///
     /// # Ok(())
     /// # }
@@ -297,55 +300,75 @@ impl Operation {
         // Serialize data to binary CBOR format
         serde_cbor::to_vec(&self).unwrap()
     }
+}
+
+/// Shared methods for `Operation` and `OperationWithMeta`.
+pub trait AsOperation {
+    /// Returns action type of operation.
+    fn action(&self) -> &OperationAction;
+
+    /// Returns schema of operation.
+    fn schema(&self) -> &Hash;
+
+    /// Returns version of operation.
+    fn version(&self) -> &OperationVersion;
+
+    /// Returns id of operation.
+    fn id(&self) -> Option<&Hash>;
+
+    /// Returns user data fields of operation.
+    fn fields(&self) -> Option<&OperationFields>;
+
+    /// Returns true when operation contains an id.
+    fn has_id(&self) -> bool {
+        self.id().is_some()
+    }
+
+    /// Returns true if operation contains fields.
+    fn has_fields(&self) -> bool {
+        self.fields().is_some()
+    }
 
     /// Returns true when instance is create operation.
-    pub fn is_create(&self) -> bool {
-        self.action == OperationAction::Create
+    fn is_create(&self) -> bool {
+        self.action() == &OperationAction::Create
     }
 
     /// Returns true when instance is update operation.
-    pub fn is_update(&self) -> bool {
-        self.action == OperationAction::Update
+    fn is_update(&self) -> bool {
+        self.action() == &OperationAction::Update
     }
 
     /// Returns true when instance is delete operation.
-    pub fn is_delete(&self) -> bool {
-        self.action == OperationAction::Delete
+    fn is_delete(&self) -> bool {
+        self.action() == &OperationAction::Delete
     }
+}
 
+impl AsOperation for Operation {
     /// Returns action type of operation.
-    pub fn action(&self) -> &OperationAction {
+    fn action(&self) -> &OperationAction {
         &self.action
     }
 
     /// Returns version of operation.
-    pub fn version(&self) -> &OperationVersion {
+    fn version(&self) -> &OperationVersion {
         &self.version
     }
 
     /// Returns schema of operation.
-    pub fn schema(&self) -> &Hash {
+    fn schema(&self) -> &Hash {
         &self.schema
     }
 
     /// Returns id of operation.
-    pub fn id(&self) -> Option<&Hash> {
+    fn id(&self) -> Option<&Hash> {
         self.id.as_ref()
     }
 
     /// Returns user data fields of operation.
-    pub fn fields(&self) -> Option<&OperationFields> {
+    fn fields(&self) -> Option<&OperationFields> {
         self.fields.as_ref()
-    }
-
-    /// Returns true when operation contains an id.
-    pub fn has_id(&self) -> bool {
-        self.id.is_some()
-    }
-
-    /// Returns true if operation contains fields.
-    pub fn has_fields(&self) -> bool {
-        self.fields.is_some()
     }
 }
 
@@ -376,7 +399,7 @@ mod tests {
     use crate::hash::Hash;
     use crate::operation::OperationEncoded;
 
-    use super::{Operation, OperationFields, OperationValue};
+    use super::{AsOperation, Operation, OperationFields, OperationValue};
 
     #[test]
     fn operation_fields() {

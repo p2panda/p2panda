@@ -87,7 +87,7 @@ use std::collections::HashMap;
 use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{Operation, OperationFields};
+use crate::operation::{AsOperation, Operation, OperationFields};
 
 use crate::test_utils::mocks::logs::{Log, LogEntry};
 use crate::test_utils::mocks::materialisation::{filter_entries, Materialiser};
