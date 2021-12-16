@@ -8,9 +8,11 @@ mod error;
 #[allow(clippy::module_inception)]
 mod operation;
 mod operation_encoded;
+mod operation_meta;
 
 pub use error::{OperationEncodedError, OperationError, OperationFieldsError};
 pub use operation::{
     AsOperation, Operation, OperationAction, OperationFields, OperationValue, OperationVersion,
 };
 pub use operation_encoded::OperationEncoded;
+pub use operation_meta::OperationWithMeta;
