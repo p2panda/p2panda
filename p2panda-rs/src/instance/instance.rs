@@ -9,7 +9,32 @@ use crate::operation::{Operation, OperationValue};
 use super::error::InstanceError;
 
 /// The materialised view of a reduced collection of `Operations`
-pub type Instance = HashMap<String, OperationValue>;
+#[derive(Debug, PartialEq, Default)]
+pub struct Instance(HashMap<String, OperationValue>);
+
+impl Instance {
+    /// Instantiate a new `Instance`
+    fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    /// Update this `Instance` from an UPDATE `Operation`
+    pub fn update(&mut self, operation: Operation) -> Result<(), InstanceError> {
+        if !operation.is_update() {
+            return Err(InstanceError::NotUpdateOperation);
+        };
+
+        let fields = operation.fields();
+
+        if let Some(fields) = fields {
+            for (key, value) in fields.iter() {
+                self.0.insert(key.to_string(), value.to_owned());
+            }
+        }
+
+        Ok(())
+    }
+}
 
 impl TryFrom<Operation> for Instance {
     type Error = InstanceError;
@@ -19,12 +44,12 @@ impl TryFrom<Operation> for Instance {
             return Err(InstanceError::NotCreateOperation);
         };
 
-        let mut instance = Instance::new();
+        let mut instance: Instance = Instance::new();
         let fields = operation.fields();
 
         if let Some(fields) = fields {
             for (key, value) in fields.iter() {
-                instance.insert(key.to_string(), value.to_owned());
+                instance.0.insert(key.to_string(), value.to_owned());
             }
         }
 
@@ -39,8 +64,10 @@ mod tests {
     use rstest::rstest;
 
     use super::Instance;
-    use crate::operation::{Operation, OperationValue};
-    use crate::test_utils::fixtures::{create_operation, delete_operation, update_operation};
+    use crate::hash::Hash;
+    use crate::operation::Operation;
+    use crate::schema::Schema;
+    use crate::test_utils::fixtures::{create_operation, delete_operation, hash, update_operation};
 
     #[rstest]
     fn try_from_operation(
@@ -49,12 +76,17 @@ mod tests {
         delete_operation: Operation,
     ) {
         // Convert a CREATE `Operation` into an `Instance`
-        let instance: Instance = create_operation.try_into().unwrap();
+        let instance: Instance = create_operation.clone().try_into().unwrap();
 
         let mut expected_instance = Instance::new();
-        expected_instance.insert(
+        expected_instance.0.insert(
             "message".to_string(),
-            OperationValue::Text("Hello!".to_string()),
+            create_operation
+                .fields()
+                .unwrap()
+                .get("message")
+                .unwrap()
+                .to_owned(),
         );
 
         assert_eq!(instance, expected_instance);
@@ -65,5 +97,59 @@ mod tests {
 
         assert!(instance_1.is_err());
         assert!(instance_2.is_err());
+    }
+
+    #[rstest]
+    pub fn update(create_operation: Operation, update_operation: Operation) {
+        let mut chat_instance = Instance::try_from(create_operation.clone()).unwrap();
+
+        chat_instance.update(update_operation.clone()).unwrap();
+
+        let mut exp_chat_instance = Instance::new();
+        exp_chat_instance.0.insert(
+            "message".to_string(),
+            create_operation
+                .fields()
+                .unwrap()
+                .get("message")
+                .unwrap()
+                .to_owned(),
+        );
+        exp_chat_instance.0.insert(
+            "message".to_string(),
+            update_operation
+                .fields()
+                .unwrap()
+                .get("message")
+                .unwrap()
+                .to_owned(),
+        );
+
+        assert_eq!(chat_instance, exp_chat_instance)
+    }
+
+    #[rstest]
+    pub fn create_from_schema(#[from(hash)] schema_hash: Hash, create_operation: Operation) {
+        // Instanciate "person" schema from cddl string
+        let chat_schema_defnition = "chat = { (
+                    message: { type: \"str\", value: tstr }
+                ) }";
+
+        let chat = Schema::new(&schema_hash, &chat_schema_defnition.to_string()).unwrap();
+
+        let chat_instance = chat.instance_from_create(create_operation.clone()).unwrap();
+
+        let mut exp_chat_instance = Instance::new();
+        exp_chat_instance.0.insert(
+            "message".to_string(),
+            create_operation
+                .fields()
+                .unwrap()
+                .get("message")
+                .unwrap()
+                .to_owned(),
+        );
+
+        assert_eq!(chat_instance, exp_chat_instance)
     }
 }

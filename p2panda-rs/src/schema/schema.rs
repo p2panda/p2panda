@@ -302,7 +302,6 @@ where
 mod tests {
     use super::{Schema, SchemaBuilder, Type, ValidateOperation};
     use crate::hash::Hash;
-    use crate::instance::Instance;
     use crate::operation::{Operation, OperationFields, OperationValue};
     use crate::test_utils::fixtures::{create_operation, hash};
 
@@ -486,15 +485,9 @@ mod tests {
 
         let chat = Schema::new(&schema_hash, &chat_schema_defnition.to_string()).unwrap();
 
-        let chat_instance = chat.instance_from_create(create_operation.clone()).unwrap();
+        let chat_instance = chat.instance_from_create(create_operation.clone());
 
-        let mut exp_chat_instance = Instance::new();
-        exp_chat_instance.insert(
-            "message".to_string(),
-            OperationValue::Text("Hello!".to_string()),
-        );
-
-        assert_eq!(chat_instance, exp_chat_instance);
+        assert!(chat_instance.is_ok());
 
         let not_chat_schema_defnition = "chat = { (
             number: { type: \"int\", value: int }

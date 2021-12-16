@@ -9,6 +9,10 @@ pub enum InstanceError {
     #[error("operation must be CREATE")]
     NotCreateOperation,
 
+    /// operation passed to `update()` must be UPDATE.
+    #[error("operation must be UPDATE")]
+    NotUpdateOperation,
+
     /// Validation error
     #[error("error while creating instance")]
     ValidationError(#[from] crate::schema::SchemaError),
