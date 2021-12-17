@@ -5,9 +5,9 @@
 
 use crate::entry::Entry;
 use crate::hash::Hash;
-use crate::operation::Operation;
+use crate::operation::{Operation, OperationValue};
+use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
 use crate::test_utils::fixtures;
-use crate::test_utils::utils::{DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
 
 /// The default hash as an option
 pub fn some_hash() -> Option<Hash> {
@@ -18,7 +18,10 @@ pub fn some_hash() -> Option<Hash> {
 pub fn create_operation() -> Operation {
     fixtures::create_operation(
         fixtures::schema(DEFAULT_SCHEMA_HASH),
-        fixtures::fields(vec![("message", "Hello!")]),
+        fixtures::fields(vec![(
+            "message",
+            OperationValue::Text("Hello!".to_string()),
+        )]),
     )
 }
 
@@ -27,7 +30,10 @@ pub fn update_operation() -> Operation {
     fixtures::update_operation(
         fixtures::schema(DEFAULT_SCHEMA_HASH),
         fixtures::hash(DEFAULT_HASH),
-        fixtures::fields(vec![("message", "Updated, hello!")]),
+        fixtures::fields(vec![(
+            "message",
+            OperationValue::Text("Updated, hello!".to_string()),
+        )]),
     )
 }
 
@@ -37,6 +43,11 @@ pub fn delete_operation() -> Operation {
         fixtures::schema(DEFAULT_SCHEMA_HASH),
         fixtures::hash(DEFAULT_HASH),
     )
+}
+
+/// The default operation value
+pub fn operation_value() -> OperationValue {
+    OperationValue::Text("Hello!".to_string())
 }
 
 /// The default first entry
