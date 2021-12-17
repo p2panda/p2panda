@@ -5,9 +5,14 @@
 
 use crate::entry::Entry;
 use crate::hash::Hash;
-use crate::operation::Operation;
+use crate::operation::{Operation, OperationWithMeta};
 use crate::test_utils::fixtures;
 use crate::test_utils::utils::{DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
+
+/// The default hash
+pub fn hash() -> Hash {
+    fixtures::hash(DEFAULT_HASH)
+}
 
 /// The default hash as an option
 pub fn some_hash() -> Option<Hash> {
@@ -36,6 +41,42 @@ pub fn delete_operation() -> Operation {
     fixtures::delete_operation(
         fixtures::schema(DEFAULT_SCHEMA_HASH),
         fixtures::hash(DEFAULT_HASH),
+    )
+}
+
+/// The default CREATE meta operation
+pub fn create_meta_operation() -> OperationWithMeta {
+    let operation = create_operation();
+    fixtures::meta_operation(
+        fixtures::entry_signed_encoded(
+            fixtures::entry(operation.clone(), fixtures::seq_num(1), None, None),
+            fixtures::key_pair(fixtures::private_key()),
+        ),
+        fixtures::operation_encoded(operation),
+    )
+}
+
+/// The default UPDATE meta operation
+pub fn update_meta_operation() -> OperationWithMeta {
+    let operation = update_operation();
+    fixtures::meta_operation(
+        fixtures::entry_signed_encoded(
+            fixtures::entry(operation.clone(), fixtures::seq_num(2), some_hash(), None),
+            fixtures::key_pair(fixtures::private_key()),
+        ),
+        fixtures::operation_encoded(operation),
+    )
+}
+
+/// The default DELETE meta operation
+pub fn delete_meta_operation() -> OperationWithMeta {
+    let operation = delete_operation();
+    fixtures::meta_operation(
+        fixtures::entry_signed_encoded(
+            fixtures::entry(operation.clone(), fixtures::seq_num(2), some_hash(), None),
+            fixtures::key_pair(fixtures::private_key()),
+        ),
+        fixtures::operation_encoded(operation),
     )
 }
 

@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::TryFrom;
+
 /// General purpose fixtures which can be injected into rstest methods as parameters.
 ///
 /// The fixtures can optionally be passed in with custom parameters which overides the default values.
 use rstest::fixture;
 
-use crate::entry::{Entry, EntrySigned, SeqNum};
+use crate::entry::{sign_and_encode, Entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
-use crate::operation::{Operation, OperationEncoded, OperationFields};
+use crate::operation::{Operation, OperationEncoded, OperationFields, OperationWithMeta};
 use crate::test_utils::utils::{self, DEFAULT_HASH, DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
 
 /// Fixture struct which contains versioned p2panda data for testing
@@ -99,6 +101,16 @@ pub fn some_hash(#[default(DEFAULT_HASH)] str: &str) -> Option<Hash> {
     Some(hash.unwrap())
 }
 
+#[fixture]
+pub fn entry_signed_encoded(entry: Entry, key_pair: KeyPair) -> EntrySigned {
+    sign_and_encode(&entry, &key_pair).unwrap()
+}
+
+#[fixture]
+pub fn operation_encoded(operation: Operation) -> OperationEncoded {
+    OperationEncoded::try_from(&operation).unwrap()
+}
+
 /// Fixture which injects the default CREATE Operation into a test method. Default value can be overridden at testing
 /// time by passing in custom schema hash and operation fields.
 #[fixture]
@@ -122,6 +134,16 @@ pub fn update_operation(
 #[fixture]
 pub fn delete_operation(schema: Hash, #[from(hash)] instance_id: Hash) -> Operation {
     utils::delete_operation(schema, instance_id)
+}
+
+/// Fixture which injects the default CREATE Operation into a test method. Default value can be overridden at testing
+/// time by passing in custom schema hash and operation fields.
+#[fixture]
+pub fn meta_operation(
+    entry_signed_encoded: EntrySigned,
+    operation_encoded: OperationEncoded,
+) -> OperationWithMeta {
+    utils::meta_operation(entry_signed_encoded, operation_encoded)
 }
 
 /// Fixture which injects p2panda testing data from p2panda version 0.3.0

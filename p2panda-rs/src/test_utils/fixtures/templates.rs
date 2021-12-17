@@ -43,7 +43,7 @@ fn non_default_operation_values_panic(
 #[case::entry_with_backlink_and_skiplink(
     crate::test_utils::fixtures::defaults::entry_with_backlink_and_skiplink()
 )]
-fn many_valid_entries(#[case] entry: Entry, key_pair: KeyPair) {}
+fn many_valid_entries(#[case] entry: Entry) {}
 
 // This template contains various types of valid operation.
 #[template]
@@ -54,7 +54,35 @@ fn many_valid_entries(#[case] entry: Entry, key_pair: KeyPair) {}
 #[case::update_operation(crate::test_utils::fixtures::defaults::update_operation())]
 #[allow(unused_qualifications)]
 #[case::delete_operation(crate::test_utils::fixtures::defaults::delete_operation())]
-fn all_operation_types(entry: Entry, #[case] operation: Operation, key_pair: KeyPair) {}
+fn all_operation_types(#[case] operation: Operation) {}
+
+// This template contains various types of valid meta operation.
+#[template]
+#[rstest]
+#[allow(unused_qualifications)]
+#[case::create_meta_operation(crate::test_utils::fixtures::defaults::create_meta_operation())]
+#[allow(unused_qualifications)]
+#[case::update_meta_operation(crate::test_utils::fixtures::defaults::update_meta_operation())]
+#[allow(unused_qualifications)]
+#[case::delete_meta_operation(crate::test_utils::fixtures::defaults::delete_meta_operation())]
+fn all_meta_operation_types(#[case] operation_with_meta: impl OperationWithMeta) {}
+
+// This template contains various types of valid operation.
+#[template]
+#[rstest]
+#[allow(unused_qualifications)]
+#[case::create_meta_operation(crate::test_utils::fixtures::defaults::create_meta_operation())]
+#[allow(unused_qualifications)]
+#[case::update_meta_operation(crate::test_utils::fixtures::defaults::update_meta_operation())]
+#[allow(unused_qualifications)]
+#[case::delete_meta_operation(crate::test_utils::fixtures::defaults::delete_meta_operation())]
+#[allow(unused_qualifications)]
+#[case::create_operation(crate::test_utils::fixtures::defaults::create_operation())]
+#[allow(unused_qualifications)]
+#[case::update_operation(crate::test_utils::fixtures::defaults::update_operation())]
+#[allow(unused_qualifications)]
+#[case::delete_operation(crate::test_utils::fixtures::defaults::delete_operation())]
+fn implements_as_operation(#[case] operation: impl AsOperation) {}
 
 // Template which will contain many version fixtures in the future.
 #[template]
@@ -64,7 +92,11 @@ fn version_fixtures(#[case] fixture: Fixture) {}
 
 // Here we export the macros for use in the rest of the crate.
 #[allow(unused_imports)]
+pub(crate) use all_meta_operation_types;
+#[allow(unused_imports)]
 pub(crate) use all_operation_types;
+#[allow(unused_imports)]
+pub(crate) use implements_as_operation;
 #[allow(unused_imports)]
 pub(crate) use many_valid_entries;
 #[allow(unused_imports)]

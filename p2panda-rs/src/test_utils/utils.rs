@@ -3,10 +3,12 @@
 /// Utility methods and constants for generating common p2panda data objects. Used when generating fixtures and in the mock node and client implementations. The primary reason we seperate this from the main fixture logic is that these methods can be imported and used outside of testing modules, whereas the fixture macros can only be injected into rstest defined methods.
 use serde::Serialize;
 
-use crate::entry::{Entry, LogId, SeqNum};
+use crate::entry::{Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
-use crate::operation::{Operation, OperationFields, OperationValue};
+use crate::operation::{
+    Operation, OperationEncoded, OperationFields, OperationValue, OperationWithMeta,
+};
 
 /// A custom `Result` type to be able to dynamically propagate `Error` types.
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -127,6 +129,14 @@ pub fn update_operation(schema: Hash, instance_id: Hash, fields: OperationFields
 /// Generate a delete operation based on passed schema hash and instance id.
 pub fn delete_operation(schema: Hash, instance_id: Hash) -> Operation {
     Operation::new_delete(schema, instance_id).unwrap()
+}
+
+/// Generate a create meta operation based on passed entry hash, author and operation.
+pub fn meta_operation(
+    entry_signed_encoded: EntrySigned,
+    operation_encoded: OperationEncoded,
+) -> OperationWithMeta {
+    OperationWithMeta::new(&entry_signed_encoded, &operation_encoded).unwrap()
 }
 
 #[cfg(test)]
