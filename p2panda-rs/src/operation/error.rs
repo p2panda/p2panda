@@ -39,3 +39,27 @@ pub enum OperationEncodedError {
     #[error(transparent)]
     SchemaError(#[from] crate::schema::SchemaError),
 }
+
+/// Error types for methods of `OperationWithMeta` struct.
+#[derive(Error, Debug)]
+pub enum OperationWithMetaError {
+    /// Invalid attempt to create an operation with meta with invalid encoded entry.
+    #[error(transparent)]
+    EntrySignedError(#[from] crate::entry::EntrySignedError),
+
+    /// Invalid attempt to create an operation with meta with invalid encoded operation.
+    #[error(transparent)]
+    OperationEncodedError(#[from] OperationEncodedError),
+
+    /// Operation with meta contans invalid operation.
+    #[error(transparent)]
+    OperationError(#[from] OperationError),
+
+    /// Operation with meta contans invalid author.
+    #[error(transparent)]
+    AuthorError(#[from] crate::identity::AuthorError),
+
+    /// Operation with meta contans invalid operation id hash.
+    #[error(transparent)]
+    HashError(#[from] crate::hash::HashError),
+}

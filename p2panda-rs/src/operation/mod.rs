@@ -10,7 +10,9 @@ mod operation;
 mod operation_encoded;
 mod operation_meta;
 
-pub use error::{OperationEncodedError, OperationError, OperationFieldsError};
+pub use error::{
+    OperationEncodedError, OperationError, OperationFieldsError, OperationWithMetaError,
+};
 pub use operation::{
     AsOperation, Operation, OperationAction, OperationFields, OperationValue, OperationVersion,
 };
