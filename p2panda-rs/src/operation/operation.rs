@@ -300,6 +300,16 @@ impl Operation {
         // Serialize data to binary CBOR format
         serde_cbor::to_vec(&self).unwrap()
     }
+
+    /// Returns id of the document this operation is part of.
+    pub fn id(&self) -> Option<&Hash> {
+        self.id.as_ref()
+    }
+
+    /// Returns true when operation contains an id.
+    pub fn has_id(&self) -> bool {
+        self.id().is_some()
+    }
 }
 
 /// Shared methods for `Operation` and `OperationWithMeta`.
@@ -313,16 +323,8 @@ pub trait AsOperation {
     /// Returns version of operation.
     fn version(&self) -> &OperationVersion;
 
-    /// Returns id of the document this operation is part of.
-    fn id(&self) -> Option<&Hash>;
-
     /// Returns user data fields of operation.
     fn fields(&self) -> Option<&OperationFields>;
-
-    /// Returns true when operation contains an id.
-    fn has_id(&self) -> bool {
-        self.id().is_some()
-    }
 
     /// Returns true if operation contains fields.
     fn has_fields(&self) -> bool {
@@ -359,11 +361,6 @@ impl AsOperation for Operation {
     /// Returns schema of operation.
     fn schema(&self) -> &Hash {
         &self.schema
-    }
-
-    /// Returns id of the document this operation is part of.
-    fn id(&self) -> Option<&Hash> {
-        self.id.as_ref()
     }
 
     /// Returns user data fields of operation.

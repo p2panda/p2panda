@@ -56,11 +56,6 @@ impl AsOperation for OperationWithMeta {
         self.operation.schema()
     }
 
-    /// Returns id of the document this operation is part of.
-    fn id(&self) -> Option<&Hash> {
-        self.operation.id()
-    }
-
     /// Returns user data fields of operation.
     fn fields(&self) -> Option<&OperationFields> {
         self.operation.fields()
