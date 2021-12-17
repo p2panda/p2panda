@@ -5,9 +5,11 @@ import debug from 'debug';
 
 import wasm from '~/wasm';
 import {
-  createInstance,
-  deleteInstance,
-  updateInstance,
+  createDocument,
+  deleteDocument,
+  updateDocument,
+} from '~/document';
+import {
   queryInstances,
 } from '~/instance';
 import { marshallResponseFields } from '~/utils';
@@ -233,7 +235,7 @@ export class Session {
     );
   }
 
-  // Instance operations
+  // Document operations
 
   /**
    * Signs and publishes a `create` entry for the given user data and matching schema.
@@ -255,36 +257,36 @@ export class Session {
   async create(fields: Fields, options?: Partial<Context>): Promise<Session> {
     // We should validate the data against the schema here too eventually
     if (!fields) throw new Error('Operation fields must be provided');
-    log('create instance', fields);
+    log('create document', fields);
     const mergedOptions = {
       schema: options?.schema || this.schema,
       keyPair: options?.keyPair || this.keyPair,
       session: this,
     };
-    createInstance(fields, mergedOptions);
+    createDocument(fields, mergedOptions);
     return this;
   }
 
   /**
    * Signs and publishes an `update` entry for the given user data and matching schema.
    * An `update` entry references the entry hash of the `create` entry which is the root
-   * of this materialized instance.
+   * of this materialized document.
    *
    * Caches arguments for creating the next entry of this schema in the given session.
    *
-   * @param id the id of the instance we wish to update, this is the hash of the root `create` entry
+   * @param id the id of the document we wish to update, this is the hash of the root `create` entry
    * @param fields user data to publish with the new entry, needs to match schema
    * @param options optional config object:
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id
    * @example
-   * const instanceId = '0040fd224effd3aa26c2551a380ef9c48a6fae89f388949f24de314027d8ce3e2a5749077afa64a445299ca9528970092a33ef29aa30e5783d958fcee81bed0a197c';
+   * const documentId = '0040fd224effd3aa26c2551a380ef9c48a6fae89f388949f24de314027d8ce3e2a5749077afa64a445299ca9528970092a33ef29aa30e5783d958fcee81bed0a197c';
    * const operationFields = {
    *   message: 'ahoy'
    * };
    * await new Session(endpoint)
    *   .setKeyPair(keyPair)
-   *   .update(instanceId, operationFields, { schema });
+   *   .update(documentId, operationFields, { schema });
    */
   async update(
     id: string,
@@ -292,51 +294,51 @@ export class Session {
     options?: Partial<Context>,
   ): Promise<Session> {
     // We should validate the data against the schema here too eventually
-    if (!id) throw new Error('Instance id must be provided');
+    if (!id) throw new Error('Document id must be provided');
     if (!fields) throw new Error('Operation fields must be provided');
-    log('update instance', id, fields);
+    log('update document', id, fields);
     const mergedOptions = {
       schema: options?.schema || this.schema,
       keyPair: options?.keyPair || this.keyPair,
       session: this,
     };
-    updateInstance(id, fields, mergedOptions);
+    updateDocument(id, fields, mergedOptions);
     return this;
   }
 
   /**
    * Signs and publishes a `delete` entry for the given schema. References the entry hash of the `create` entry which
-   * is the id of this materialized instance.
+   * is the id of this materialized document.
    *
    * Caches arguments for creating the next entry of this schema in the given session.
    *
-   * @param id the id of the instance we wish to update, this is the hash of the root `create` entry
+   * @param id the id of the document we wish to update, this is the hash of the root `create` entry
    * @param options optional config object:
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id
    * @example
-   * const instanceId = '0040fd224effd3aa26c2551a380ef9c48a6fae89f388949f24de314027d8ce3e2a5749077afa64a445299ca9528970092a33ef29aa30e5783d958fcee81bed0a197c';
+   * const documentId = '0040fd224effd3aa26c2551a380ef9c48a6fae89f388949f24de314027d8ce3e2a5749077afa64a445299ca9528970092a33ef29aa30e5783d958fcee81bed0a197c';
    * await new Session(endpoint)
    *   .setKeyPair(keyPair)
-   *   .delete(instanceId, { schema });
+   *   .delete(documentId, { schema });
    */
   async delete(id: string, options?: Partial<Context>): Promise<Session> {
-    if (!id) throw new Error('Instance id must be provided');
-    log('delete instance', id);
+    if (!id) throw new Error('Document id must be provided');
+    log('delete document', id);
     const mergedOptions = {
       schema: options?.schema || this.schema,
       keyPair: options?.keyPair || this.keyPair,
       session: this,
     };
-    deleteInstance(id, mergedOptions);
+    deleteDocument(id, mergedOptions);
     return this;
   }
 
   /**
-   * Query data instances of a specific schema from the node
+   * Query documents of a specific schema from the node.
    *
-   * Calling this method will retrieve all instances of the given schema from
-   * the node and then materialize them locally.
+   * Calling this method will retrieve all entries of the given schema from
+   * the node and then materialize them locally into instances.
    *
    * @param options optional config object:
    * @param options.schema hex-encoded schema id
