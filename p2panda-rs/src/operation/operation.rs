@@ -391,10 +391,14 @@ impl Validate for Operation {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+    use rstest_reuse::apply;
+
     use std::convert::TryFrom;
 
     use crate::hash::Hash;
     use crate::operation::OperationEncoded;
+    use crate::test_utils::fixtures::templates::all_operation_types;
 
     use super::{AsOperation, Operation, OperationFields, OperationValue};
 
@@ -513,5 +517,10 @@ mod tests {
             field_iterator.next().unwrap().1,
             &OperationValue::Text("penguin".to_owned())
         );
+    }
+
+    #[apply(all_operation_types)]
+    fn many_valid_operations_should_encode(#[case] operation: Operation) {
+        assert!(OperationEncoded::try_from(&operation).is_ok())
     }
 }
