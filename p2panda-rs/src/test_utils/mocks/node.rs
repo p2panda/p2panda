@@ -9,9 +9,12 @@
 //! ## Example
 //! ```
 //! use p2panda_rs::test_utils::mocks::{Client, send_to_node, Node};
-//! use p2panda_rs::test_utils::{create_operation, delete_operation, hash, operation_fields,
-//!     new_key_pair, update_operation, DEFAULT_SCHEMA_HASH
+//! use p2panda_rs::test_utils::utils::{create_operation, delete_operation, hash, operation_fields,
+//!     new_key_pair, update_operation
 //! };
+//! use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
+//! use p2panda_rs::operation::OperationValue;
+//!
 //! # const CHAT_SCHEMA_HASH: &str = DEFAULT_SCHEMA_HASH;
 //!
 //! // Instantiate a new mock node
@@ -26,7 +29,7 @@
 //!     &panda,
 //!     &create_operation(
 //!         hash(CHAT_SCHEMA_HASH),
-//!         operation_fields(vec![("message", "Ohh, my first message!")]),
+//!         operation_fields(vec![("message", OperationValue::Text("Ohh, my first message!".to_string()))]),
 //!     ),
 //! )
 //! .unwrap();
@@ -38,7 +41,7 @@
 //!     &update_operation(
 //!         hash(CHAT_SCHEMA_HASH),
 //!         instance_a_hash.clone(),
-//!         operation_fields(vec![("message", "Which I now update.")]),
+//!         operation_fields(vec![("message", OperationValue::Text("Which I now update.".to_string()))]),
 //!     ),
 //! )
 //! .unwrap();
@@ -57,7 +60,7 @@
 //!     &panda,
 //!     &create_operation(
 //!         hash(CHAT_SCHEMA_HASH),
-//!         operation_fields(vec![("message", "Let's try that again.")]),
+//!         operation_fields(vec![("message", OperationValue::Text("Let's try that again.".to_string()))]),
 //!     ),
 //! )
 //! .unwrap();
@@ -89,13 +92,14 @@ use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{AsOperation, Operation, OperationFields};
 
+use crate::test_utils::mocks::constants::{
+    GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
+};
 use crate::test_utils::mocks::logs::{Log, LogEntry};
 use crate::test_utils::mocks::materialisation::{filter_entries, Materialiser};
-use crate::test_utils::mocks::utils::{
-    Result, GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
-};
+use crate::test_utils::mocks::utils::Result;
 use crate::test_utils::mocks::Client;
-use crate::test_utils::NextEntryArgs;
+use crate::test_utils::utils::NextEntryArgs;
 
 /// Helper method signing and encoding entry and sending it to node backend.
 pub fn send_to_node(node: &mut Node, client: &Client, operation: &Operation) -> Result<Hash> {
@@ -415,16 +419,16 @@ mod tests {
 
     use crate::entry::{LogId, SeqNum};
     use crate::operation::OperationValue;
+    use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, hash, private_key, some_hash, update_operation,
     };
     use crate::test_utils::mocks::client::Client;
-    use crate::test_utils::mocks::node::{send_to_node, Node};
-    use crate::test_utils::mocks::utils::{
+    use crate::test_utils::mocks::constants::{
         GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
     };
-    use crate::test_utils::utils::DEFAULT_SCHEMA_HASH;
-    use crate::test_utils::{keypair_from_private, operation_fields, NextEntryArgs};
+    use crate::test_utils::mocks::node::{send_to_node, Node};
+    use crate::test_utils::utils::{keypair_from_private, operation_fields, NextEntryArgs};
 
     fn mock_node(panda: &Client) -> Node {
         let mut node = Node::new();
@@ -435,7 +439,10 @@ mod tests {
             panda,
             &create_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                operation_fields(vec![("message", "Ohh, my first message!")]),
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Ohh, my first message!".to_string()),
+                )]),
             ),
         )
         .unwrap();
@@ -447,7 +454,10 @@ mod tests {
             &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
                 instance_1.clone(),
-                operation_fields(vec![("message", "Which I now update.")]),
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Which I now update.".to_string()),
+                )]),
             ),
         )
         .unwrap();
@@ -466,7 +476,10 @@ mod tests {
             panda,
             &create_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                operation_fields(vec![("message", "Let's try that again.")]),
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Let's try that again.".to_string()),
+                )]),
             ),
         )
         .unwrap();

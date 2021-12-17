@@ -43,6 +43,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::identity::KeyPair;
+    use crate::operation::OperationValue;
     use crate::test_utils::fixtures::{
         create_operation, fields, random_key_pair, schema, update_operation,
     };
@@ -64,7 +65,13 @@ mod tests {
         let panda_entry_1_hash = send_to_node(
             &mut node,
             &panda,
-            &create_operation(schema.clone(), fields(vec![("operation", "Hello!")])),
+            &create_operation(
+                schema.clone(),
+                fields(vec![(
+                    "message",
+                    OperationValue::Text("Hello!".to_string()),
+                )]),
+            ),
         )
         .unwrap();
 
@@ -74,7 +81,10 @@ mod tests {
             &update_operation(
                 schema.clone(),
                 panda_entry_1_hash.clone(),
-                fields(vec![("operation", "Hello too!")]),
+                fields(vec![(
+                    "message",
+                    OperationValue::Text("Hello too!".to_string()),
+                )]),
             ),
         )
         .unwrap();
@@ -85,7 +95,10 @@ mod tests {
             &update_operation(
                 schema,
                 panda_entry_1_hash,
-                fields(vec![("operation", "Hello too!")]),
+                fields(vec![(
+                    "message",
+                    OperationValue::Text("Hello too!".to_string()),
+                )]),
             ),
         )
         .unwrap();

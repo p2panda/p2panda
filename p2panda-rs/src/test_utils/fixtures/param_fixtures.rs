@@ -10,8 +10,12 @@ use rstest::fixture;
 use crate::entry::{sign_and_encode, Entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
-use crate::operation::{Operation, OperationEncoded, OperationFields, OperationWithMeta};
-use crate::test_utils::utils::{self, DEFAULT_HASH, DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
+use crate::operation::{
+    Operation, OperationEncoded, OperationFields, OperationValue, OperationWithMeta,
+};
+use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
+use crate::test_utils::fixtures::defaults;
+use crate::test_utils::utils;
 
 /// Fixture struct which contains versioned p2panda data for testing
 #[derive(Debug)]
@@ -66,9 +70,24 @@ pub fn hash(#[default(DEFAULT_HASH)] hash_str: &str) -> Hash {
 /// time by passing in a custom vector of key-value tuples.
 #[fixture]
 pub fn fields(
-    #[default(vec![("message", "Hello!")])] fields_vec: Vec<(&str, &str)>,
+    #[default(vec![("message", defaults::operation_value())])] fields_vec: Vec<(
+        &str,
+        OperationValue,
+    )>,
 ) -> OperationFields {
     utils::operation_fields(fields_vec)
+}
+
+/// Fixture which injects the default OperationFields value into a test method. Default value can be overridden at testing
+/// time by passing in a custom vector of key-value tuples.
+#[fixture]
+pub fn some_fields(
+    #[default(vec![("message", defaults::operation_value())])] fields_vec: Vec<(
+        &str,
+        OperationValue,
+    )>,
+) -> Option<OperationFields> {
+    Some(utils::operation_fields(fields_vec))
 }
 
 /// Fixture which injects the default Entry into a test method. Default value can be overridden at testing
@@ -87,7 +106,7 @@ pub fn entry(
 /// time by passing in custom operation fields and instance id.
 #[fixture]
 pub fn operation(
-    #[default(Some(fields(vec![("message", "Hello!")])))] fields: Option<OperationFields>,
+    #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] instance_id: Option<Hash>,
 ) -> Operation {
     utils::any_operation(fields, instance_id)
@@ -124,7 +143,8 @@ pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
 pub fn update_operation(
     schema: Hash,
     #[from(hash)] instance_id: Hash,
-    #[default(fields(vec![("message", "Updated, hello!")]))] fields: OperationFields,
+    #[default(fields(vec![("message", OperationValue::Text("Updated, hello!".to_string()))]))]
+    fields: OperationFields,
 ) -> Operation {
     utils::update_operation(schema, instance_id, fields)
 }
@@ -150,8 +170,11 @@ pub fn meta_operation(
 #[fixture]
 pub fn v0_3_0_fixture() -> Fixture {
     let operation_fields = utils::operation_fields(vec![
-        ("name", "chess"),
-        ("description", "for playing chess"),
+        ("name", OperationValue::Text("chess".to_string())),
+        (
+            "description",
+            OperationValue::Text("for playing chess".to_string()),
+        ),
     ]);
     let operation = create_operation(Hash::new(DEFAULT_SCHEMA_HASH).unwrap(), operation_fields);
     let key_pair = utils::keypair_from_private(

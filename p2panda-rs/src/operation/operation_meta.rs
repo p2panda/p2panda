@@ -99,6 +99,7 @@ mod tests {
     use rstest_reuse::apply;
 
     use crate::entry::EntrySigned;
+    use crate::operation::{AsOperation, OperationEncoded, OperationValue};
     use crate::test_utils::fixtures::defaults::hash;
     use crate::test_utils::fixtures::{
         create_operation, defaults, entry_signed_encoded, fields, operation_encoded,
@@ -107,11 +108,10 @@ mod tests {
     use crate::Validate;
 
     use super::OperationWithMeta;
-    use crate::operation::{AsOperation, OperationEncoded};
 
     #[rstest]
     #[should_panic]
-    #[case(operation_encoded(create_operation(hash(), fields(vec![("message", "Not the right message")]))))]
+    #[case(operation_encoded(create_operation(hash(), fields(vec![("message", OperationValue::Text("Not the right message".to_string()))]))))]
     #[case(operation_encoded(defaults::create_operation()))]
     fn create_operation_with_meta(
         entry_signed_encoded: EntrySigned,
