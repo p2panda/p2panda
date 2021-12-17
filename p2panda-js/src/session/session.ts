@@ -4,14 +4,8 @@ import { RequestManager, HTTPTransport, Client } from '@open-rpc/client-js';
 import debug from 'debug';
 
 import wasm from '~/wasm';
-import {
-  createDocument,
-  deleteDocument,
-  updateDocument,
-} from '~/document';
-import {
-  queryInstances,
-} from '~/instance';
+import { createDocument, deleteDocument, updateDocument } from '~/document';
+import { queryInstances } from '~/instance';
 import { marshallResponseFields } from '~/utils';
 
 import type {
@@ -78,7 +72,7 @@ export class Session {
     if (!this._schema) {
       throw new Error(
         'Configure a schema with `session.schema()` or with the `options` ' +
-        'parameter on methods.',
+          'parameter on methods.',
       );
     }
     return this._schema;
@@ -102,7 +96,7 @@ export class Session {
     if (!this._keyPair) {
       throw new Error(
         'Configure a key pair with `session.keyPair()` or with the `options` ' +
-        'parameter on methods.',
+          'parameter on methods.',
       );
     }
     return this._keyPair;

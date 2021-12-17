@@ -1,4 +1,10 @@
-import { Entry, Operation, FieldsTagged, EncodedEntry, EntryArgs } from '~/types';
+import {
+  Entry,
+  Operation,
+  FieldsTagged,
+  EncodedEntry,
+  EntryArgs,
+} from '~/types';
 import TEST_DATA from './test-data.json';
 import { marshallResponseFields } from '~/utils';
 
