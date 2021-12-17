@@ -23,7 +23,7 @@ Highlights are marked with a pancake 🥞
 - Use new `Operation` naming which replaces `Message` [#156](https://github.com/p2panda/p2panda/pull/156) _BREAKING_ `rs` `js`
 - Remove distinction of system and application log ids [#154](https://github.com/p2panda/p2panda/pull/154) `rs`
 - Update dependencies, remove deprecated eslint-loader [#155](https://github.com/p2panda/p2panda/pull/155) `js`
-- Split utils modules in `test_utils` into utils.rs and constants.rs `rs`
+- Split utils modules in `test_utils` into utils.rs and constants.rs [#157](https://github.com/p2panda/p2panda/pull/157) `rs`
 - Use traits for validation methods in `Schema` [#160](https://github.com/p2panda/p2panda/pull/160) `rs`
 
 ### Campfires and boiling pots to sit around
