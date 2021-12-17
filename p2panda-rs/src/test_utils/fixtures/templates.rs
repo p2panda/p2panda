@@ -70,7 +70,7 @@ fn all_operation_types(#[case] operation: Operation) {}
 #[case::delete_meta_operation(crate::test_utils::fixtures::defaults::delete_meta_operation())]
 fn all_meta_operation_types(#[case] operation_with_meta: impl OperationWithMeta) {}
 
-// This template contains various types of valid operation.
+// This template contains all types which implement the AsOperation trait.
 #[template]
 #[rstest]
 #[allow(unused_qualifications)]
