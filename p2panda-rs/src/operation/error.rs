@@ -9,6 +9,14 @@ pub enum OperationError {
     /// Invalid attempt to create an operation without any fields data.
     #[error("operation fields can not be empty")]
     EmptyFields,
+
+    /// Invalid attempt to create an operation without any previous operations data.
+    #[error("previous_operations field can not be empty")]
+    EmptyPreviousOperations,
+
+    /// Invalid attempt to create an operation with previous operations data.
+    #[error("previous_operations field should be empty")]
+    ExistingPreviousOperations,
 }
 
 /// Error types for methods of `OperationFields` struct.

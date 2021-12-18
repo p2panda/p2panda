@@ -410,6 +410,16 @@ impl Validate for Operation {
             return Err(OperationError::EmptyFields);
         }
 
+        // Update and delete operations must contain previous_operations.
+        if !self.is_create() && (!self.has_previous_operations()) {
+            return Err(OperationError::EmptyPreviousOperations);
+        }
+
+        // Create operations must not contain previous_operations.
+        if self.is_create() && (self.has_previous_operations()) {
+            return Err(OperationError::ExistingPreviousOperations);
+        }
+
         Ok(())
     }
 }
