@@ -431,11 +431,14 @@ mod tests {
 
     use std::convert::TryFrom;
 
+    use super::{
+        AsOperation, Operation, OperationAction, OperationFields, OperationValue, OperationVersion,
+    };
     use crate::hash::Hash;
     use crate::operation::OperationEncoded;
     use crate::test_utils::fixtures::templates::all_operation_types;
-
-    use super::{AsOperation, Operation, OperationFields, OperationValue};
+    use crate::test_utils::fixtures::{fields, hash, schema};
+    use crate::Validate;
 
     #[test]
     fn operation_fields() {
@@ -454,6 +457,86 @@ mod tests {
         assert!(fields
             .update("imagine", OperationValue::Text("Pandaparty".to_owned()))
             .is_err());
+    }
+
+    #[rstest]
+    fn operation_validation(
+        fields: OperationFields,
+        schema: Hash,
+        hash: Hash,
+        #[from(hash)] id: Hash,
+    ) {
+        let invalid_create_operation_1 = Operation {
+            action: OperationAction::Create,
+            version: OperationVersion::Default,
+            schema: schema.clone(),
+            previous_operations: None,
+            id: None,
+            // Create operations must contain fields
+            fields: None, // Error
+        };
+
+        assert!(invalid_create_operation_1.validate().is_err());
+
+        let invalid_create_operation_2 = Operation {
+            action: OperationAction::Create,
+            version: OperationVersion::Default,
+            schema: schema.clone(),
+            // Create operations must not contain previous_operations
+            previous_operations: Some(vec![hash.clone()]), // Error
+            id: None,
+            fields: Some(fields.clone()),
+        };
+
+        assert!(invalid_create_operation_2.validate().is_err());
+
+        let invalid_update_operation_1 = Operation {
+            action: OperationAction::Update,
+            version: OperationVersion::Default,
+            schema: schema.clone(),
+            // Update operations must contain previous_operations
+            previous_operations: None, // Error
+            id: Some(id.clone()),
+            fields: Some(fields.clone()),
+        };
+
+        assert!(invalid_update_operation_1.validate().is_err());
+
+        let invalid_update_operation_2 = Operation {
+            action: OperationAction::Update,
+            version: OperationVersion::Default,
+            schema: schema.clone(),
+            previous_operations: Some(vec![hash]),
+            id: Some(id.clone()),
+            // Update operations must contain fields
+            fields: None, // Error
+        };
+
+        assert!(invalid_update_operation_2.validate().is_err());
+
+        let invalid_delete_operation_1 = Operation {
+            action: OperationAction::Delete,
+            version: OperationVersion::Default,
+            schema: schema.clone(),
+            // Delete operations must contain previous_operations
+            previous_operations: None, // Error
+            id: Some(id.clone()),
+            fields: None,
+        };
+
+        assert!(invalid_delete_operation_1.validate().is_err());
+
+        let invalid_delete_operation_2 = Operation {
+            action: OperationAction::Delete,
+            version: OperationVersion::Default,
+            schema,
+            previous_operations: None,
+            id: Some(id),
+            // Delete operations must not contain fields
+            fields: Some(fields), // Error
+        };
+
+        assert!(invalid_delete_operation_2.validate().is_err())
     }
 
     #[test]
