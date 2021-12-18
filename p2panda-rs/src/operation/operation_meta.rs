@@ -155,6 +155,10 @@ mod tests {
         assert_eq!(operation_with_meta.action(), operation.action());
         assert_eq!(operation_with_meta.version(), operation.version());
         assert_eq!(operation_with_meta.schema(), operation.schema());
+        assert_eq!(
+            operation_with_meta.previous_operations(),
+            operation.previous_operations()
+        );
     }
 
     #[apply(implements_as_operation)]
@@ -165,6 +169,8 @@ mod tests {
         operation.action();
         operation.version();
         operation.schema();
+        operation.previous_operations();
         operation.has_fields();
+        operation.has_previous_operations();
     }
 }

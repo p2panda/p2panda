@@ -57,7 +57,28 @@ fn many_valid_entries(#[case] entry: Entry) {}
 #[case::update_operation(crate::test_utils::fixtures::defaults::update_operation())]
 #[allow(unused_qualifications)]
 #[case::delete_operation(crate::test_utils::fixtures::defaults::delete_operation())]
-fn all_operation_types(#[case] operation: Operation) {}
+#[allow(unused_qualifications)]
+#[case::update_operation_many_previous(crate::test_utils::utils::any_operation(
+    Some(crate::test_utils::fixtures::defaults::fields()), 
+    crate::test_utils::fixtures::defaults::some_hash(), 
+    Some(vec![
+        crate::test_utils::fixtures::random_hash(), 
+        crate::test_utils::fixtures::random_hash(), 
+        crate::test_utils::fixtures::random_hash()
+        ])
+    )
+)]
+#[case::delete_operation_many_previous(crate::test_utils::utils::any_operation(
+    None, 
+    crate::test_utils::fixtures::defaults::some_hash(), 
+    Some(vec![
+        crate::test_utils::fixtures::random_hash(), 
+        crate::test_utils::fixtures::random_hash(), 
+        crate::test_utils::fixtures::random_hash()
+        ])
+    )
+)]
+fn many_valid_operations(#[case] operation: Operation) {}
 
 // This template contains various types of valid meta operation.
 #[template]
@@ -97,7 +118,7 @@ fn version_fixtures(#[case] fixture: Fixture) {}
 #[allow(unused_imports)]
 pub(crate) use all_meta_operation_types;
 #[allow(unused_imports)]
-pub(crate) use all_operation_types;
+pub(crate) use many_valid_operations;
 #[allow(unused_imports)]
 pub(crate) use implements_as_operation;
 #[allow(unused_imports)]

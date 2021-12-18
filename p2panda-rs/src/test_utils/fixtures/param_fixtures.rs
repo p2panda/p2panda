@@ -2,6 +2,7 @@
 
 use std::convert::TryFrom;
 
+use rand::Rng;
 /// General purpose fixtures which can be injected into rstest methods as parameters.
 ///
 /// The fixtures can optionally be passed in with custom parameters which overides the default values.
@@ -66,6 +67,13 @@ pub fn hash(#[default(DEFAULT_HASH)] hash_str: &str) -> Hash {
     utils::hash(hash_str)
 }
 
+/// Fixture which injects a random into a test method.
+#[fixture]
+pub fn random_hash() -> Hash {
+    let random_data = rand::thread_rng().gen::<[u8; 32]>().to_vec();
+    Hash::new_from_bytes(random_data).unwrap()
+}
+
 /// Fixture which injects the default OperationFields value into a test method. Default value can be overridden at testing
 /// time by passing in a custom vector of key-value tuples.
 #[fixture]
@@ -108,8 +116,9 @@ pub fn entry(
 pub fn operation(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] instance_id: Option<Hash>,
+    #[default(None)] previous_operations: Option<Vec<Hash>>,
 ) -> Operation {
-    utils::any_operation(fields, instance_id)
+    utils::any_operation(fields, instance_id, previous_operations)
 }
 
 /// Fixture which injects the default Hash into a test method as an Option. Default value can be overridden at testing

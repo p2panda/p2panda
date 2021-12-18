@@ -436,7 +436,7 @@ mod tests {
     };
     use crate::hash::Hash;
     use crate::operation::OperationEncoded;
-    use crate::test_utils::fixtures::templates::all_operation_types;
+    use crate::test_utils::fixtures::templates::many_valid_operations;
     use crate::test_utils::fixtures::{fields, hash, schema};
     use crate::Validate;
 
@@ -638,7 +638,7 @@ mod tests {
         );
     }
 
-    #[apply(all_operation_types)]
+    #[apply(many_valid_operations)]
     fn many_valid_operations_should_encode(#[case] operation: Operation) {
         assert!(OperationEncoded::try_from(&operation).is_ok())
     }

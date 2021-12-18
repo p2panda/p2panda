@@ -34,7 +34,11 @@ pub struct NextEntryArgs {
 /// If a value for `fields` is provided, this is a `CREATE` operation.
 /// If values for both `fields` and `instance_id` are provided, this is an `UPDATE` operation.
 /// If no value for `fields` is provided, this is a `DELETE` operation.
-pub fn any_operation(fields: Option<OperationFields>, instance_id: Option<Hash>) -> Operation {
+pub fn any_operation(
+    fields: Option<OperationFields>,
+    instance_id: Option<Hash>,
+    previous_operations: Option<Vec<Hash>>,
+) -> Operation {
     match fields {
         // It's a CREATE operation
         Some(fields) if instance_id.is_none() => {
@@ -44,7 +48,7 @@ pub fn any_operation(fields: Option<OperationFields>, instance_id: Option<Hash>)
         Some(fields) => Operation::new_update(
             hash(DEFAULT_SCHEMA_HASH),
             instance_id.unwrap(),
-            vec![hash(DEFAULT_HASH)],
+            previous_operations.unwrap(),
             fields,
         )
         .unwrap(),
@@ -52,7 +56,7 @@ pub fn any_operation(fields: Option<OperationFields>, instance_id: Option<Hash>)
         None => Operation::new_delete(
             hash(DEFAULT_SCHEMA_HASH),
             instance_id.unwrap(),
-            vec![hash(DEFAULT_HASH)],
+            previous_operations.unwrap(),
         )
         .unwrap(),
     }
