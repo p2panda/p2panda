@@ -75,7 +75,8 @@ mod tests {
             &client,
             &update_operation(
                 schema,
-                entry_1_hash,
+                entry_1_hash.clone(),
+                vec![entry_1_hash],
                 fields(vec![(
                     "operation",
                     OperationValue::Text("Hello too!".to_string()),

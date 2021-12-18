@@ -35,6 +35,7 @@ pub fn update_operation() -> Operation {
     fixtures::update_operation(
         fixtures::schema(DEFAULT_SCHEMA_HASH),
         fixtures::hash(DEFAULT_HASH),
+        vec![fixtures::hash(DEFAULT_HASH)],
         fixtures::fields(vec![(
             "message",
             OperationValue::Text("Updated, hello!".to_string()),
@@ -47,6 +48,7 @@ pub fn delete_operation() -> Operation {
     fixtures::delete_operation(
         fixtures::schema(DEFAULT_SCHEMA_HASH),
         fixtures::hash(DEFAULT_HASH),
+        vec![fixtures::hash(DEFAULT_HASH)],
     )
 }
 

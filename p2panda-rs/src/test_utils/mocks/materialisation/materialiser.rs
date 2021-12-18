@@ -203,7 +203,7 @@ mod tests {
     use super::Materialiser;
 
     use crate::operation::OperationValue;
-    use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
+    use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
     use crate::test_utils::fixtures::private_key;
     use crate::test_utils::mocks::client::Client;
     use crate::test_utils::mocks::node::{send_to_node, Node};
@@ -236,6 +236,7 @@ mod tests {
             &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
                 instance_1.clone(),
+                vec![hash(DEFAULT_HASH)],
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Which I now update.".to_string()),
@@ -248,7 +249,11 @@ mod tests {
         send_to_node(
             &mut node,
             &panda,
-            &delete_operation(hash(DEFAULT_SCHEMA_HASH), instance_1),
+            &delete_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                instance_1,
+                vec![hash(DEFAULT_HASH)],
+            ),
         )
         .unwrap();
 
@@ -357,6 +362,7 @@ mod tests {
             &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
                 entries[3].hash(),
+                vec![hash(DEFAULT_HASH)],
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Now it's updated.".to_string()),

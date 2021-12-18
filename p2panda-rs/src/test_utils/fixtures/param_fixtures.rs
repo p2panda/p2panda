@@ -143,17 +143,22 @@ pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
 pub fn update_operation(
     schema: Hash,
     #[from(hash)] instance_id: Hash,
+    #[default(vec![hash(DEFAULT_HASH)])] previous_operations: Vec<Hash>,
     #[default(fields(vec![("message", OperationValue::Text("Updated, hello!".to_string()))]))]
     fields: OperationFields,
 ) -> Operation {
-    utils::update_operation(schema, instance_id, fields)
+    utils::update_operation(schema, instance_id, previous_operations, fields)
 }
 
 /// Fixture which injects the default DELETE Operation into a test method. Default value can be overridden at testing
 /// time by passing in custom schema hash and instance id hash.
 #[fixture]
-pub fn delete_operation(schema: Hash, #[from(hash)] instance_id: Hash) -> Operation {
-    utils::delete_operation(schema, instance_id)
+pub fn delete_operation(
+    schema: Hash,
+    #[from(hash)] instance_id: Hash,
+    #[default(vec![hash(DEFAULT_HASH)])] previous_operations: Vec<Hash>,
+) -> Operation {
+    utils::delete_operation(schema, instance_id, previous_operations)
 }
 
 /// Fixture which injects the default CREATE Operation into a test method. Default value can be overridden at testing

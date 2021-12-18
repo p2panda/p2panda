@@ -11,7 +11,7 @@ use crate::identity::KeyPair;
 use crate::operation::{
     Operation, OperationEncoded, OperationFields, OperationValue, OperationWithMeta,
 };
-use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
+use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
 
 /// A custom `Result` type to be able to dynamically propagate `Error` types.
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -38,19 +38,21 @@ pub fn any_operation(fields: Option<OperationFields>, instance_id: Option<Hash>)
     match fields {
         // It's a CREATE operation
         Some(fields) if instance_id.is_none() => {
-            Operation::new_create(Hash::new(DEFAULT_SCHEMA_HASH).unwrap(), fields).unwrap()
+            Operation::new_create(hash(DEFAULT_SCHEMA_HASH), fields).unwrap()
         }
         // It's an UPDATE operation
         Some(fields) => Operation::new_update(
-            Hash::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            hash(DEFAULT_SCHEMA_HASH),
             instance_id.unwrap(),
+            vec![hash(DEFAULT_HASH)],
             fields,
         )
         .unwrap(),
         // It's a DELETE operation
         None => Operation::new_delete(
-            Hash::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            hash(DEFAULT_SCHEMA_HASH),
             instance_id.unwrap(),
+            vec![hash(DEFAULT_HASH)],
         )
         .unwrap(),
     }
@@ -108,13 +110,22 @@ pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
 }
 
 /// Generate an update operation based on passed schema hash, instance id and operation fields.
-pub fn update_operation(schema: Hash, instance_id: Hash, fields: OperationFields) -> Operation {
-    Operation::new_update(schema, instance_id, fields).unwrap()
+pub fn update_operation(
+    schema: Hash,
+    instance_id: Hash,
+    previous_operations: Vec<Hash>,
+    fields: OperationFields,
+) -> Operation {
+    Operation::new_update(schema, instance_id, previous_operations, fields).unwrap()
 }
 
 /// Generate a delete operation based on passed schema hash and instance id.
-pub fn delete_operation(schema: Hash, instance_id: Hash) -> Operation {
-    Operation::new_delete(schema, instance_id).unwrap()
+pub fn delete_operation(
+    schema: Hash,
+    instance_id: Hash,
+    previous_operations: Vec<Hash>,
+) -> Operation {
+    Operation::new_delete(schema, instance_id, previous_operations).unwrap()
 }
 
 /// Generate a create meta operation based on passed entry hash, author and operation.

@@ -212,6 +212,10 @@ pub struct Operation {
     /// Version schema of this operation.
     version: OperationVersion,
 
+    /// Optional array of hashes referring to operations directly preceding this one in the document.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    previous_operations: Option<Vec<Hash>>,
+
     /// Optional id referring to the data instance.
     #[serde(skip_serializing_if = "Option::is_none")]
     id: Option<Hash>,
@@ -252,6 +256,7 @@ impl Operation {
             action: OperationAction::Create,
             version: OperationVersion::Default,
             schema,
+            previous_operations: None,
             id: None,
             fields: Some(fields),
         };
@@ -265,12 +270,14 @@ impl Operation {
     pub fn new_update(
         schema: Hash,
         id: Hash,
+        previous_operations: Vec<Hash>,
         fields: OperationFields,
     ) -> Result<Self, OperationError> {
         let operation = Self {
             action: OperationAction::Update,
             version: OperationVersion::Default,
             schema,
+            previous_operations: Some(previous_operations),
             id: Some(id),
             fields: Some(fields),
         };
@@ -281,11 +288,16 @@ impl Operation {
     }
 
     /// Returns new delete operation.
-    pub fn new_delete(schema: Hash, id: Hash) -> Result<Self, OperationError> {
+    pub fn new_delete(
+        schema: Hash,
+        id: Hash,
+        previous_operations: Vec<Hash>,
+    ) -> Result<Self, OperationError> {
         let operation = Self {
             action: OperationAction::Delete,
             version: OperationVersion::Default,
             schema,
+            previous_operations: Some(previous_operations),
             id: Some(id),
             fields: None,
         };
@@ -449,6 +461,7 @@ mod tests {
         let operation = Operation::new_update(
             Hash::new_from_bytes(vec![1, 255, 0]).unwrap(),
             Hash::new_from_bytes(vec![62, 128]).unwrap(),
+            vec![Hash::new_from_bytes(vec![12, 128]).unwrap()],
             fields,
         )
         .unwrap();
