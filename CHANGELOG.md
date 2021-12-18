@@ -25,6 +25,8 @@ Highlights are marked with a pancake 🥞
 - Update dependencies, remove deprecated eslint-loader [#155](https://github.com/p2panda/p2panda/pull/155) `js`
 - Split utils modules in `test_utils` into utils.rs and constants.rs [#157](https://github.com/p2panda/p2panda/pull/157) `rs`
 - Use traits for validation methods in `Schema` [#160](https://github.com/p2panda/p2panda/pull/160) `rs`
+- Add `previous_operations` field in `Operation` [#163](https://github.com/p2panda/p2panda/pull/163) _BREAKING_ `rs` `js`
+- Introduce `OperationWithMeta` struct [#163](https://github.com/p2panda/p2panda/pull/163) `rs`
 
 ### Campfires and boiling pots to sit around
 
