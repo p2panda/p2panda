@@ -346,6 +346,11 @@ pub trait AsOperation {
         self.fields().is_some()
     }
 
+    /// Returns true if previous_operations contains a value.
+    fn has_previous_operations(&self) -> bool {
+        self.previous_operations().is_some()
+    }
+
     /// Returns true when instance is create operation.
     fn is_create(&self) -> bool {
         self.action() == &OperationAction::Create
