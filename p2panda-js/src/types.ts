@@ -47,6 +47,7 @@ export type Entry = {
 export type Operation = {
   action: 'create' | 'update' | 'delete';
   schema: string;
+  previousOperations?: string[];
   fields?: Fields;
   id?: string;
 };
