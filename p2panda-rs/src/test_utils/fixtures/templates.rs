@@ -59,21 +59,21 @@ fn many_valid_entries(#[case] entry: Entry) {}
 #[case::delete_operation(crate::test_utils::fixtures::defaults::delete_operation())]
 #[allow(unused_qualifications)]
 #[case::update_operation_many_previous(crate::test_utils::utils::any_operation(
-    Some(crate::test_utils::fixtures::defaults::fields()), 
-    crate::test_utils::fixtures::defaults::some_hash(), 
+    Some(crate::test_utils::fixtures::defaults::fields()),
+    crate::test_utils::fixtures::defaults::some_hash(),
     Some(vec![
-        crate::test_utils::fixtures::random_hash(), 
-        crate::test_utils::fixtures::random_hash(), 
+        crate::test_utils::fixtures::random_hash(),
+        crate::test_utils::fixtures::random_hash(),
         crate::test_utils::fixtures::random_hash()
         ])
     )
 )]
 #[case::delete_operation_many_previous(crate::test_utils::utils::any_operation(
-    None, 
-    crate::test_utils::fixtures::defaults::some_hash(), 
+    None,
+    crate::test_utils::fixtures::defaults::some_hash(),
     Some(vec![
-        crate::test_utils::fixtures::random_hash(), 
-        crate::test_utils::fixtures::random_hash(), 
+        crate::test_utils::fixtures::random_hash(),
+        crate::test_utils::fixtures::random_hash(),
         crate::test_utils::fixtures::random_hash()
         ])
     )
@@ -118,11 +118,11 @@ fn version_fixtures(#[case] fixture: Fixture) {}
 #[allow(unused_imports)]
 pub(crate) use all_meta_operation_types;
 #[allow(unused_imports)]
-pub(crate) use many_valid_operations;
-#[allow(unused_imports)]
 pub(crate) use implements_as_operation;
 #[allow(unused_imports)]
 pub(crate) use many_valid_entries;
+#[allow(unused_imports)]
+pub(crate) use many_valid_operations;
 #[allow(unused_imports)]
 pub(crate) use non_default_operation_values_panic;
 #[allow(unused_imports)]
