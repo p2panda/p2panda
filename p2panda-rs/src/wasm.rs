@@ -9,18 +9,18 @@
 use std::convert::{TryFrom, TryInto};
 use std::panic;
 
-use console_error_panic_hook::hook as panic_hook;
-use ed25519_dalek::{PublicKey, Signature};
-use serde::{Deserialize, Serialize};
-use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen::JsValue;
-
 use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair as KeyPairNonWasm;
 use crate::operation::{
     Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationValue,
 };
+use console_error_panic_hook::hook as panic_hook;
+use ed25519_dalek::{PublicKey, Signature};
+use js_sys::Array;
+use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::JsValue;
 
 // Converts any Rust Error type into js_sys:Error while keeping its error message. This helps
 // propagating errors similar like we do in Rust but in WebAssembly contexts. It is possible to
@@ -240,11 +240,21 @@ pub fn encode_create_operation(
 pub fn encode_update_operation(
     instance_id: String,
     schema_hash: String,
+    previous_operations: JsValue,
     fields: OperationFields,
 ) -> Result<String, JsValue> {
     let instance = jserr!(Hash::new(&instance_id));
     let schema = jserr!(Hash::new(&schema_hash));
-    let operation = jserr!(Operation::new_update(schema, instance, fields.0));
+    // decode JsValue into vector of strings
+    let prev_op_strings: Vec<String> = jserr!(previous_operations.into_serde());
+    // create hashes from strings and collect wrapped in a result
+    let prev_op_result: Result<Vec<Hash>, _> = prev_op_strings
+        .iter()
+        .map(|prev_op| Hash::new(&prev_op))
+        .collect();
+    // unwrap with jserr! macro
+    let previous = jserr!(prev_op_result);
+    let operation = jserr!(Operation::new_update(schema, instance, previous, fields.0));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
 }
@@ -256,10 +266,20 @@ pub fn encode_update_operation(
 pub fn encode_delete_operation(
     instance_id: String,
     schema_hash: String,
+    previous_operations: Array,
 ) -> Result<String, JsValue> {
     let instance = jserr!(Hash::new(&instance_id));
     let schema = jserr!(Hash::new(&schema_hash));
-    let operation = jserr!(Operation::new_delete(schema, instance));
+    // decode JsValue into vector of strings
+    let prev_op_strings: Vec<String> = jserr!(previous_operations.into_serde());
+    // create hashes from strings and collect wrapped in a result
+    let prev_op_result: Result<Vec<Hash>, _> = prev_op_strings
+        .iter()
+        .map(|prev_op| Hash::new(&prev_op))
+        .collect();
+    // unwrap with jserr! macro
+    let previous = jserr!(prev_op_result);
+    let operation = jserr!(Operation::new_delete(schema, instance, previous));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
 }
