@@ -289,6 +289,7 @@ export class Session {
   async update(
     id: string,
     fields: Fields,
+    previousOperations: string[],
     options?: Partial<Context>,
   ): Promise<Session> {
     // We should validate the data against the schema here too eventually
@@ -300,7 +301,7 @@ export class Session {
       keyPair: options?.keyPair || this.keyPair,
       session: this,
     };
-    updateInstance(id, fields, mergedOptions);
+    updateInstance(id, fields, previousOperations, mergedOptions);
     return this;
   }
 
@@ -320,7 +321,7 @@ export class Session {
    *   .setKeyPair(keyPair)
    *   .delete(instanceId, { schema });
    */
-  async delete(id: string, options?: Partial<Context>): Promise<Session> {
+  async delete(id: string, previousOperations: string[], options?: Partial<Context>): Promise<Session> {
     if (!id) throw new Error('Instance id must be provided');
     log('delete instance', id);
     const mergedOptions = {
@@ -328,7 +329,7 @@ export class Session {
       keyPair: options?.keyPair || this.keyPair,
       session: this,
     };
-    deleteInstance(id, mergedOptions);
+    deleteInstance(id, previousOperations, mergedOptions);
     return this;
   }
 

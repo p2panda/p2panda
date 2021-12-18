@@ -63,11 +63,14 @@ describe('instance', () => {
       // This is the instance id
       const id = entryFixture(2).operation?.id as string;
 
-      const entryEncoded = await updateInstance(id, fields, {
-        keyPair,
-        schema: schemaFixture(),
-        session,
-      });
+      const previousOperations = entryFixture(2).operation?.previousOperations as string[];
+
+      const entryEncoded = await updateInstance(id, fields, previousOperations,
+        {
+          keyPair,
+          schema: schemaFixture(),
+          session,
+        });
 
       expect(entryEncoded).toEqual(encodedEntryFixture(2).entryBytes);
     });
@@ -89,7 +92,9 @@ describe('instance', () => {
       // This is the instance id
       const id = entryFixture(3).operation?.id as string;
 
-      const entryEncoded = await deleteInstance(id, {
+      const previousOperations = entryFixture(3).operation?.previousOperations as string[];
+
+      const entryEncoded = await deleteInstance(id, previousOperations, {
         keyPair,
         schema: schemaFixture(),
         session,
