@@ -338,6 +338,9 @@ pub trait AsOperation {
     /// Returns user data fields of operation.
     fn fields(&self) -> Option<&OperationFields>;
 
+    /// Returns previous_operations of this operation.
+    fn previous_operations(&self) -> Option<&Vec<Hash>>;
+
     /// Returns true if operation contains fields.
     fn has_fields(&self) -> bool {
         self.fields().is_some()
@@ -378,6 +381,11 @@ impl AsOperation for Operation {
     /// Returns user data fields of operation.
     fn fields(&self) -> Option<&OperationFields> {
         self.fields.as_ref()
+    }
+
+    /// Returns previous_operations of this operation.
+    fn previous_operations(&self) -> Option<&Vec<Hash>> {
+        self.previous_operations.as_ref()
     }
 }
 

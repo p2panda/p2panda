@@ -79,6 +79,11 @@ impl AsOperation for OperationWithMeta {
     fn fields(&self) -> Option<&OperationFields> {
         self.operation.fields()
     }
+
+    /// Returns previous_operations of operation.
+    fn previous_operations(&self) -> Option<&Vec<Hash>> {
+        self.operation.previous_operations()
+    }
 }
 
 impl Validate for OperationWithMeta {
