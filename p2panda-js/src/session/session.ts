@@ -274,6 +274,7 @@ export class Session {
    *
    * @param id the id of the instance we wish to update, this is the hash of the root `create` entry
    * @param fields user data to publish with the new entry, needs to match schema
+   * @param previousOperations array of operation hash ids identifying the tips of all currently un-merged branches in the document graph
    * @param options optional config object:
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id
@@ -312,6 +313,7 @@ export class Session {
    * Caches arguments for creating the next entry of this schema in the given session.
    *
    * @param id the id of the instance we wish to update, this is the hash of the root `create` entry
+   * @param previousOperations array of operation hash ids identifying the tips of all currently un-merged branches in the document graph
    * @param options optional config object:
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id

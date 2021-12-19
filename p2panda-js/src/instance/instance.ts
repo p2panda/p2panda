@@ -36,7 +36,7 @@ export const createInstance = async (
 };
 
 /**
- * Signs and publishes an `update` entry for the given instance id and fields
+ * Signs and publishes an `update` entry for the given instance id, fields and previous operations
  *
  * Returns the encoded entry that was created.
  */
@@ -62,7 +62,7 @@ export const updateInstance = async (
 };
 
 /**
- * Signs and publishes a `delete` entry for the given instance id
+ * Signs and publishes a `delete` entry for the given instance id and previous operations
  *
  * Returns the encoded entry that was created.
  */
