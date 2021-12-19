@@ -3,18 +3,24 @@
 use crate::hash::Hash;
 use crate::operation::OperationFields;
 
-trait AsNode {
-    fn key(&self) -> Hash;
+pub trait AsNode {
+    fn key(&self) -> &Hash;
 
-    fn previous(&self) -> Vec<Hash>;
+    fn previous(&self) -> Option<&Vec<Hash>>;
 
-    fn data(&self) -> OperationFields;
+    fn data(&self) -> Option<&OperationFields>;
 
     fn is_root(&self) -> bool {
-        self.previous().is_empty()
+        self.previous().is_none()
     }
 
     fn has_many_previous(&self) -> bool {
-        self.previous().len() > 1
+        match self.previous() {
+            Some(previous) => previous.len() > 1,
+            None => false,
+        }
+    }
+}
+
     }
 }

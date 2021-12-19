@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::entry::{decode_entry, EntrySigned};
+use crate::graph::node::AsNode;
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{
@@ -83,6 +84,20 @@ impl AsOperation for OperationWithMeta {
     /// Returns previous_operations of operation.
     fn previous_operations(&self) -> Option<&Vec<Hash>> {
         self.operation.previous_operations()
+    }
+}
+
+impl AsNode for OperationWithMeta {
+    fn key(&self) -> &Hash {
+        self.operation_id()
+    }
+
+    fn previous(&self) -> Option<&Vec<Hash>> {
+        self.previous_operations()
+    }
+
+    fn data(&self) -> Option<&OperationFields> {
+        self.fields()
     }
 }
 
