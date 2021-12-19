@@ -49,7 +49,7 @@
                 }
             },
             "DocumentId": {
-                "name": "documentId",
+                "name": "document",
                 "summary": "The hash identifying a document",
                 "description": "",
                 "required": true,
