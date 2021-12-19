@@ -200,6 +200,15 @@ impl OperationFields {
 /// update or delete instances or collections of data.
 ///
 /// The data itself lives in the `fields` object and is formed after an operation schema.
+///
+/// Starting from an initial create operation, the following collection of update operations build
+/// up a causal graph of mutations which can be resolved into a single value or object during a materialisation process.
+/// If a delete operation is publish it signals the deletion of the entire graph and no more update
+/// operations should be published.
+///
+/// All update and delete operations have a `previous_operations` field which contains a vector of operation
+/// hash ids which identify the known branch tips at the time of publication. These allow us to build the graph
+/// and retain knowledge of the graph state at the time the specific operation was published.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Operation {
