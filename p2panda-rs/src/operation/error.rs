@@ -9,6 +9,14 @@ pub enum OperationError {
     /// Invalid attempt to create an operation without any fields data.
     #[error("operation fields can not be empty")]
     EmptyFields,
+
+    /// Invalid attempt to create an operation without any previous operations data.
+    #[error("previous_operations field can not be empty")]
+    EmptyPreviousOperations,
+
+    /// Invalid attempt to create an operation with previous operations data.
+    #[error("previous_operations field should be empty")]
+    ExistingPreviousOperations,
 }
 
 /// Error types for methods of `OperationFields` struct.
@@ -38,4 +46,28 @@ pub enum OperationEncodedError {
     /// Handle errors from validating CBOR schemas.
     #[error(transparent)]
     SchemaError(#[from] crate::schema::SchemaError),
+}
+
+/// Error types for methods of `OperationWithMeta` struct.
+#[derive(Error, Debug)]
+pub enum OperationWithMetaError {
+    /// Invalid attempt to create an operation with meta with invalid encoded entry.
+    #[error(transparent)]
+    EntrySignedError(#[from] crate::entry::EntrySignedError),
+
+    /// Invalid attempt to create an operation with meta with invalid encoded operation.
+    #[error(transparent)]
+    OperationEncodedError(#[from] OperationEncodedError),
+
+    /// Operation with meta contans invalid operation.
+    #[error(transparent)]
+    OperationError(#[from] OperationError),
+
+    /// Operation with meta contans invalid author.
+    #[error(transparent)]
+    AuthorError(#[from] crate::identity::AuthorError),
+
+    /// Operation with meta contans invalid operation id hash.
+    #[error(transparent)]
+    HashError(#[from] crate::hash::HashError),
 }

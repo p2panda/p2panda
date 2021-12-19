@@ -274,6 +274,7 @@ export class Session {
    *
    * @param id the id of the instance we wish to update, this is the hash of the root `create` entry
    * @param fields user data to publish with the new entry, needs to match schema
+   * @param previousOperations array of operation hash ids identifying the tips of all currently un-merged branches in the document graph
    * @param options optional config object:
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id
@@ -289,6 +290,7 @@ export class Session {
   async update(
     id: string,
     fields: Fields,
+    previousOperations: string[],
     options?: Partial<Context>,
   ): Promise<Session> {
     // We should validate the data against the schema here too eventually
@@ -300,7 +302,7 @@ export class Session {
       keyPair: options?.keyPair || this.keyPair,
       session: this,
     };
-    updateInstance(id, fields, mergedOptions);
+    updateInstance(id, fields, previousOperations, mergedOptions);
     return this;
   }
 
@@ -311,6 +313,7 @@ export class Session {
    * Caches arguments for creating the next entry of this schema in the given session.
    *
    * @param id the id of the instance we wish to update, this is the hash of the root `create` entry
+   * @param previousOperations array of operation hash ids identifying the tips of all currently un-merged branches in the document graph
    * @param options optional config object:
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id
@@ -320,7 +323,7 @@ export class Session {
    *   .setKeyPair(keyPair)
    *   .delete(instanceId, { schema });
    */
-  async delete(id: string, options?: Partial<Context>): Promise<Session> {
+  async delete(id: string, previousOperations: string[], options?: Partial<Context>): Promise<Session> {
     if (!id) throw new Error('Instance id must be provided');
     log('delete instance', id);
     const mergedOptions = {
@@ -328,7 +331,7 @@ export class Session {
       keyPair: options?.keyPair || this.keyPair,
       session: this,
     };
-    deleteInstance(id, mergedOptions);
+    deleteInstance(id, previousOperations, mergedOptions);
     return this;
   }
 

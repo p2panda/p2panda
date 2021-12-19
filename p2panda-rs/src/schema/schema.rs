@@ -229,6 +229,7 @@ impl Schema {
     pub fn update(
         &self,
         id: &str,
+        previous_operations: Vec<Hash>,
         key_values: Vec<(&str, OperationValue)>,
     ) -> Result<Operation, SchemaError> {
         let mut fields = OperationFields::new();
@@ -246,7 +247,7 @@ impl Schema {
             Err(err) => Err(SchemaError::ValidationError(err.to_string())),
         }?;
 
-        match Operation::new_update(self.schema_hash(), id, fields) {
+        match Operation::new_update(self.schema_hash(), id, previous_operations, fields) {
             Ok(hash) => Ok(hash),
             Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
         }
@@ -459,13 +460,19 @@ mod tests {
             .add("age", OperationValue::Integer(12))
             .unwrap();
 
-        let operation =
-            Operation::new_update(schema_hash, instance_id.to_owned(), operation_fields).unwrap();
+        let operation = Operation::new_update(
+            schema_hash,
+            instance_id.to_owned(),
+            vec![Hash::new_from_bytes(vec![12, 128]).unwrap()],
+            operation_fields,
+        )
+        .unwrap();
 
         // Create an operation the quick way *with* validation
         let operation_again = person_schema
             .update(
                 instance_id.as_str(),
+                vec![Hash::new_from_bytes(vec![12, 128]).unwrap()],
                 vec![
                     ("name", OperationValue::Text("Panda".to_string())),
                     ("age", OperationValue::Integer(12)),

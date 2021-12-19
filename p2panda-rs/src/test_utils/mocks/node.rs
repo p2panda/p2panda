@@ -23,8 +23,8 @@
 //! // Instantiate one client named "panda"
 //! let panda = Client::new("panda".to_string(), new_key_pair());
 //!
-//! // Panda creates a chat operation by publishing a CREATE operation
-//! let instance_a_hash = send_to_node(
+//! // Panda creates a chat document by publishing a CREATE operation
+//! let entry1_hash = send_to_node(
 //!     &mut node,
 //!     &panda,
 //!     &create_operation(
@@ -34,27 +34,28 @@
 //! )
 //! .unwrap();
 //!
-//! // Panda updates their previous chat operation by publishing an UPDATE operation
-//! send_to_node(
+//! // Panda updates their document by publishing an UPDATE operation
+//! let entry2_hash = send_to_node(
 //!     &mut node,
 //!     &panda,
 //!     &update_operation(
 //!         hash(CHAT_SCHEMA_HASH),
-//!         instance_a_hash.clone(),
+//!         entry1_hash.clone(),
+//!         vec![entry1_hash.clone()],
 //!         operation_fields(vec![("message", OperationValue::Text("Which I now update.".to_string()))]),
 //!     ),
 //! )
 //! .unwrap();
 //!
-//! // Panda deletes their previous chat operation by publishing a DELETE operation
+//! // Panda deletes their document by publishing a DELETE operation
 //! send_to_node(
 //!     &mut node,
 //!     &panda,
-//!     &delete_operation(hash(CHAT_SCHEMA_HASH), instance_a_hash),
+//!     &delete_operation(hash(CHAT_SCHEMA_HASH), entry1_hash, vec![entry2_hash]),
 //! )
 //! .unwrap();
 //!
-//! // Panda creates another chat operation by publishing a CREATE operation
+//! // Panda creates another chat document by publishing a CREATE operation
 //! send_to_node(
 //!     &mut node,
 //!     &panda,
@@ -90,7 +91,7 @@ use std::collections::HashMap;
 use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{Operation, OperationFields};
+use crate::operation::{AsOperation, Operation, OperationFields};
 
 use crate::test_utils::mocks::constants::{
     GROUP_SCHEMA_HASH, KEY_PACKAGE_SCHEMA_HASH, META_SCHEMA_HASH, PERMISSIONS_SCHEMA_HASH,
@@ -434,7 +435,7 @@ mod tests {
         let mut node = Node::new();
 
         // Publish a CREATE operation
-        let instance_1 = send_to_node(
+        let operation_1 = send_to_node(
             &mut node,
             panda,
             &create_operation(
@@ -448,12 +449,13 @@ mod tests {
         .unwrap();
 
         // Publish an UPDATE operation
-        send_to_node(
+        let operation_2 = send_to_node(
             &mut node,
             panda,
             &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                instance_1.clone(),
+                operation_1.clone(),
+                vec![operation_1.clone()],
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Which I now update.".to_string()),
@@ -466,7 +468,7 @@ mod tests {
         send_to_node(
             &mut node,
             panda,
-            &delete_operation(hash(DEFAULT_SCHEMA_HASH), instance_1),
+            &delete_operation(hash(DEFAULT_SCHEMA_HASH), operation_1, vec![operation_2]),
         )
         .unwrap();
 
@@ -528,7 +530,7 @@ mod tests {
             log_id: LogId::new(1),
             seq_num: SeqNum::new(5).unwrap(),
             backlink: some_hash(
-                "00208f742cbae37a03fed0cd73c1a530ff57387456d507b8ccd56a87a5604e376b6f",
+                "0020561988f9eaa7f0963a5cf86d5736f3c7b7b52b5346793c6fd71b5fce7223408e",
             ),
             skiplink: None,
         };
@@ -556,7 +558,7 @@ mod tests {
             log_id: LogId::new(1),
             seq_num: SeqNum::new(3).unwrap(),
             backlink: some_hash(
-                "00204ee7027b834265bcfa43a666dec820b56f6c9fe51791cb68ddab952cf59c95e0",
+                "0020460f9ec29237ce004093927ae066daa2f24b96ba4400a044a3c46092959c5725",
             ),
             skiplink: None,
         };

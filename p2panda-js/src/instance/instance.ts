@@ -36,13 +36,14 @@ export const createInstance = async (
 };
 
 /**
- * Signs and publishes an `update` entry for the given instance id and fields
+ * Signs and publishes an `update` entry for the given instance id, fields and previous operations
  *
  * Returns the encoded entry that was created.
  */
 export const updateInstance = async (
   id: string,
   fields: Fields,
+  previousOperations: string[],
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
   const { encodeUpdateOperation } = await wasm;
@@ -50,7 +51,7 @@ export const updateInstance = async (
   // Create operation
   const fieldsTagged = marshallRequestFields(fields);
   const operationFields = await getOperationFields(session, fieldsTagged);
-  const encodedOperation = encodeUpdateOperation(id, schema, operationFields);
+  const encodedOperation = encodeUpdateOperation(id, schema, previousOperations, operationFields);
   const entryEncoded = await signPublishEntry(encodedOperation, {
     keyPair,
     schema,
@@ -61,18 +62,19 @@ export const updateInstance = async (
 };
 
 /**
- * Signs and publishes a `delete` entry for the given instance id
+ * Signs and publishes a `delete` entry for the given instance id and previous operations
  *
  * Returns the encoded entry that was created.
  */
 export const deleteInstance = async (
   id: string,
+  previousOperations: string[],
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
   const { encodeDeleteOperation } = await wasm;
 
   // Create operation
-  const encodedOperation = encodeDeleteOperation(id, schema);
+  const encodedOperation = encodeDeleteOperation(id, schema, previousOperations);
   const encodedEntry = await signPublishEntry(encodedOperation, {
     keyPair,
     schema,

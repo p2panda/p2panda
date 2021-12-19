@@ -5,24 +5,33 @@
 
 use crate::entry::Entry;
 use crate::hash::Hash;
-use crate::operation::{Operation, OperationValue};
+use crate::operation::{Operation, OperationFields, OperationValue, OperationWithMeta};
 use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
 use crate::test_utils::fixtures;
+
+/// The default hash
+pub fn hash() -> Hash {
+    fixtures::hash(DEFAULT_HASH)
+}
 
 /// The default hash as an option
 pub fn some_hash() -> Option<Hash> {
     fixtures::some_hash(DEFAULT_HASH)
 }
 
+/// The default operation value
+pub fn operation_value() -> OperationValue {
+    OperationValue::Text("Hello!".to_string())
+}
+
+/// The default operation fields
+pub fn fields() -> OperationFields {
+    fixtures::fields(vec![("message", operation_value())])
+}
+
 /// The default CREATE operation
 pub fn create_operation() -> Operation {
-    fixtures::create_operation(
-        fixtures::schema(DEFAULT_SCHEMA_HASH),
-        fixtures::fields(vec![(
-            "message",
-            OperationValue::Text("Hello!".to_string()),
-        )]),
-    )
+    fixtures::create_operation(fixtures::schema(DEFAULT_SCHEMA_HASH), fields())
 }
 
 /// The default UPDATE operation
@@ -30,10 +39,8 @@ pub fn update_operation() -> Operation {
     fixtures::update_operation(
         fixtures::schema(DEFAULT_SCHEMA_HASH),
         fixtures::hash(DEFAULT_HASH),
-        fixtures::fields(vec![(
-            "message",
-            OperationValue::Text("Updated, hello!".to_string()),
-        )]),
+        vec![fixtures::hash(DEFAULT_HASH)],
+        fields(),
     )
 }
 
@@ -42,12 +49,44 @@ pub fn delete_operation() -> Operation {
     fixtures::delete_operation(
         fixtures::schema(DEFAULT_SCHEMA_HASH),
         fixtures::hash(DEFAULT_HASH),
+        vec![fixtures::hash(DEFAULT_HASH)],
     )
 }
 
-/// The default operation value
-pub fn operation_value() -> OperationValue {
-    OperationValue::Text("Hello!".to_string())
+/// The default CREATE meta operation
+pub fn create_meta_operation() -> OperationWithMeta {
+    let operation = create_operation();
+    fixtures::meta_operation(
+        fixtures::entry_signed_encoded(
+            fixtures::entry(operation.clone(), fixtures::seq_num(1), None, None),
+            fixtures::key_pair(fixtures::private_key()),
+        ),
+        fixtures::operation_encoded(operation),
+    )
+}
+
+/// The default UPDATE meta operation
+pub fn update_meta_operation() -> OperationWithMeta {
+    let operation = update_operation();
+    fixtures::meta_operation(
+        fixtures::entry_signed_encoded(
+            fixtures::entry(operation.clone(), fixtures::seq_num(2), some_hash(), None),
+            fixtures::key_pair(fixtures::private_key()),
+        ),
+        fixtures::operation_encoded(operation),
+    )
+}
+
+/// The default DELETE meta operation
+pub fn delete_meta_operation() -> OperationWithMeta {
+    let operation = delete_operation();
+    fixtures::meta_operation(
+        fixtures::entry_signed_encoded(
+            fixtures::entry(operation.clone(), fixtures::seq_num(2), some_hash(), None),
+            fixtures::key_pair(fixtures::private_key()),
+        ),
+        fixtures::operation_encoded(operation),
+    )
 }
 
 /// The default first entry
