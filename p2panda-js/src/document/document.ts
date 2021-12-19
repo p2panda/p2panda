@@ -10,7 +10,7 @@ import type { Fields } from '~/types';
 
 /**
  * Signs and publishes a `create` entry for the given user data and matching
- * schema.
+ * document id.
  *
  * Returns the encoded entry that was created.
  */
@@ -34,12 +34,12 @@ export const createDocument = async (
 };
 
 /**
- * Signs and publishes an `update` entry for the given instance id and fields
+ * Signs and publishes an `update` entry for the given document id and fields.
  *
  * Returns the encoded entry that was created.
  */
 export const updateDocument = async (
-  id: string,
+  documentId: string,
   fields: Fields,
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
@@ -48,34 +48,34 @@ export const updateDocument = async (
   // Create operation
   const fieldsTagged = marshallRequestFields(fields);
   const operationFields = await getOperationFields(session, fieldsTagged);
-  const encodedOperation = encodeUpdateOperation(id, schema, operationFields);
+  const encodedOperation = encodeUpdateOperation(documentId, schema, operationFields);
   const entryEncoded = await signPublishEntry(encodedOperation, {
     keyPair,
     schema,
     session,
-  });
+  }, documentId);
 
   return entryEncoded;
 };
 
 /**
- * Signs and publishes a `delete` entry for the given instance id
+ * Signs and publishes a `delete` entry for the given document id.
  *
  * Returns the encoded entry that was created.
  */
 export const deleteDocument = async (
-  id: string,
+  documentId: string,
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
   const { encodeDeleteOperation } = await wasm;
 
   // Create operation
-  const encodedOperation = encodeDeleteOperation(id, schema);
+  const encodedOperation = encodeDeleteOperation(documentId, schema);
   const encodedEntry = await signPublishEntry(encodedOperation, {
     keyPair,
     schema,
     session,
-  });
+  }, documentId);
 
   return encodedEntry;
 };

@@ -26,27 +26,27 @@ export type Context = {
 };
 
 /**
- * Communicate with the p2panda network through a `Session` instance
+ * Communicate with the p2panda network through a `Session` instance.
  *
  * `Session` provides a high-level interface to create data in the p2panda
- * network by creating, updating and deleting instances of data schemas. It also
- * provides a low-level api for directly accessing and creating entries on the
- * bamboo append-only log structure.
+ * network by creating, updating and deleting documents following data schemas.
+ * It also provides a low-level API for directly accessing and creating
+ * entries on the bamboo append-only log structure.
  *
- * A session is configured with the URL of a p2panda node, which
- * may be running locally or on a remote machine. It is possible to set a fixed
- * key pair and/or data schema for a session by calling `setKeyPair()` and
- * `setSchema()` or you can also configure these through the `options` parameter
- * of methods.
+ * A session is configured with the URL of a p2panda node, which may be running
+ * locally or on a remote machine. It is possible to set a fixed key pair
+ * and/or data schema for a session by calling `setKeyPair()` and `setSchema()`
+ * or you can also configure these through the `options` parameter of
+ * methods.
  *
- * Sessions also provide access to the p2panda web assembly library, which is
+ * Sessions also provide access to the p2panda WebAssembly library, which is
  * why many functions in `p2panda-js` have a `session` parameter.
  */
 export class Session {
   // Address of a p2panda node that we can connect to
   endpoint: string;
 
-  // An rpc client connected to the configured endpoint
+  // An RPC client connected to the configured endpoint
   client: Client;
 
   // Cached arguments for the next entry
@@ -103,8 +103,9 @@ export class Session {
   }
 
   /**
-   * Set a fixed key pair for this session, which will be used by methods unless
-   * a different key pair is configured through their `options` parameters.
+   * Set a fixed key pair for this session, which will be used by methods
+   * unless a different key pair is configured through their `options`
+   * parameters.
    *
    * This does not check the integrity or type of the supplied key pair!
    *
@@ -122,39 +123,45 @@ export class Session {
    * This uses the cache set through `Session._setNextEntryArgs`.
    *
    * @param author public key of the author
-   * @param schema schema id
+   * @param document optional document id
    * @returns an `EntryArgs` object
    */
-  async getNextEntryArgs(author: string, schema: string): Promise<EntryArgs> {
-    if (!author || !schema)
-      throw new Error('Author and schema must be provided');
-    const cacheKey = `${author}/${schema}`;
-    const cachedValue = this.nextEntryArgs[cacheKey];
-    if (cachedValue) {
-      // use cache
-      delete this.nextEntryArgs[cacheKey];
-      log('call panda_getEntryArguments [cached]', cachedValue);
-      return cachedValue;
-    } else {
-      // do rpc call
-      const nextEntryArgs = await this.client.request({
-        method: 'panda_getEntryArguments',
-        params: { author, schema },
-      });
-      log('call panda_getEntryArguments', nextEntryArgs);
-      return nextEntryArgs;
+  async getNextEntryArgs(author: string, documentId?: string): Promise<EntryArgs> {
+    if (!author) {
+      throw new Error('Author must be provided');
     }
+
+    // Use cache only when documentId is set
+    if (documentId) {
+      const cacheKey = `${author}/${documentId}`;
+      const cachedValue = this.nextEntryArgs[cacheKey];
+
+      if (cachedValue) {
+        delete this.nextEntryArgs[cacheKey];
+        log('call panda_getEntryArguments [cached]', cachedValue);
+        return cachedValue;
+      }
+    }
+
+    // Do RPC call
+    const nextEntryArgs = await this.client.request({
+      method: 'panda_getEntryArguments',
+      params: { author, document: documentId },
+    });
+
+    log('call panda_getEntryArguments', nextEntryArgs);
+    return nextEntryArgs;
   }
 
   /**
-   * Cache next entry args for a given author and schema
+   * Cache next entry args for a given author and document id.
    *
    * @param author public key of the author
-   * @param schema schema id
+   * @param document document id
    * @param entryArgs an object with entry arguments
    */
-  setNextEntryArgs(author: string, schema: string, entryArgs: EntryArgs): void {
-    const cacheKey = `${author}/${schema}`;
+  setNextEntryArgs(author: string, documentId: string, entryArgs: EntryArgs): void {
+    const cacheKey = `${author}/${documentId}`;
     this.nextEntryArgs[cacheKey] = entryArgs;
   }
 
@@ -169,8 +176,9 @@ export class Session {
     entryEncoded: string,
     operationEncoded: string,
   ): Promise<EntryArgs> {
-    if (!entryEncoded || !operationEncoded)
+    if (!entryEncoded || !operationEncoded) {
       throw new Error('Encoded entry and operation must be provided');
+    }
 
     const params = { entryEncoded, operationEncoded };
     log('call panda_publishEntry', params);
@@ -178,6 +186,7 @@ export class Session {
       method: 'panda_publishEntry',
       params,
     });
+
     log('response panda_publishEntry', result);
     return result;
   }
@@ -189,13 +198,17 @@ export class Session {
    * @returns an array of encoded entries
    */
   private async queryEntriesEncoded(schema: string): Promise<EncodedEntry[]> {
-    if (!schema) throw new Error('Schema must be provided');
+    if (!schema) {
+      throw new Error('Schema must be provided');
+    }
+
     const params = { schema };
     log('call panda_queryEntries', params);
     const result = await this.client.request({
       method: 'panda_queryEntries',
       params,
     });
+
     log('response panda_queryEntries', result);
     return result.entries;
   }
@@ -209,9 +222,13 @@ export class Session {
    * @returns an array of decoded entries
    */
   async queryEntries(schema: string): Promise<EntryRecord[]> {
-    if (!schema) throw new Error('Schema must be provided');
+    if (!schema) {
+      throw new Error('Schema must be provided');
+    }
+
     const { decodeEntry } = await wasm;
     const result = await this.queryEntriesEncoded(schema);
+
     log(`decoding ${result.length} entries`);
     return Promise.all(
       result.map(async (entry) => {
@@ -234,7 +251,7 @@ export class Session {
   /**
    * Signs and publishes a `create` entry for the given user data and matching schema.
    *
-   * Caches arguments for creating the next entry of this schema in the given session.
+   * Caches arguments for creating the next entry of this document in the given session.
    *
    * @param fields user data to publish with the new entry, needs to match schema
    * @param options optional config object:
@@ -250,7 +267,10 @@ export class Session {
    */
   async create(fields: Fields, options?: Partial<Context>): Promise<Session> {
     // We should validate the data against the schema here too eventually
-    if (!fields) throw new Error('Operation fields must be provided');
+    if (!fields) {
+      throw new Error('Operation fields must be provided');
+    }
+
     log('create document', fields);
     const mergedOptions = {
       schema: options?.schema || this.schema,
@@ -258,23 +278,25 @@ export class Session {
       session: this,
     };
     createDocument(fields, mergedOptions);
+
     return this;
   }
 
   /**
-   * Signs and publishes an `update` entry for the given user data and matching schema.
-   * An `update` entry references the entry hash of the `create` entry which is the root
-   * of this materialized document.
+   * Signs and publishes an `update` entry for the given user data and matching
+   * schema. An `update` entry references the entry hash of the `create` entry
+   * which is the root of this materialized document.
    *
-   * Caches arguments for creating the next entry of this schema in the given session.
+   * Caches arguments for creating the next entry of this schema in the given
+   * session.
    *
-   * @param id the id of the document we wish to update, this is the hash of the root `create` entry
+   * @param documentId id of the document we update, this is the hash of the root `create` entry
    * @param fields user data to publish with the new entry, needs to match schema
    * @param options optional config object:
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id
    * @example
-   * const documentId = '0040fd224effd3aa26c2551a380ef9c48a6fae89f388949f24de314027d8ce3e2a5749077afa64a445299ca9528970092a33ef29aa30e5783d958fcee81bed0a197c';
+   * const documentId = '00200cf84048b0798942deba7b1b9fcd77ca72876643bd3fedfe612d4c6fb60436be';
    * const operationFields = {
    *   message: 'ahoy'
    * };
@@ -283,48 +305,60 @@ export class Session {
    *   .update(documentId, operationFields, { schema });
    */
   async update(
-    id: string,
+    documentId: string,
     fields: Fields,
     options?: Partial<Context>,
   ): Promise<Session> {
     // We should validate the data against the schema here too eventually
-    if (!id) throw new Error('Document id must be provided');
-    if (!fields) throw new Error('Operation fields must be provided');
-    log('update document', id, fields);
+    if (!documentId) {
+      throw new Error('Document id must be provided');
+    }
+
+    if (!fields) {
+      throw new Error('Operation fields must be provided');
+    }
+
+    log('update document', documentId, fields);
     const mergedOptions = {
       schema: options?.schema || this.schema,
       keyPair: options?.keyPair || this.keyPair,
       session: this,
     };
-    updateDocument(id, fields, mergedOptions);
+    updateDocument(documentId, fields, mergedOptions);
+
     return this;
   }
 
   /**
-   * Signs and publishes a `delete` entry for the given schema. References the entry hash of the `create` entry which
-   * is the id of this materialized document.
+   * Signs and publishes a `delete` entry for the given schema. References the
+   * entry hash of the `create` entry which is the id of this materialized
+   * document.
    *
    * Caches arguments for creating the next entry of this schema in the given session.
    *
-   * @param id the id of the document we wish to update, this is the hash of the root `create` entry
+   * @param documentId id of the document we delete, this is the hash of the root `create` entry
    * @param options optional config object:
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id
    * @example
-   * const documentId = '0040fd224effd3aa26c2551a380ef9c48a6fae89f388949f24de314027d8ce3e2a5749077afa64a445299ca9528970092a33ef29aa30e5783d958fcee81bed0a197c';
+   * const documentId = '00200cf84048b0798942deba7b1b9fcd77ca72876643bd3fedfe612d4c6fb60436be';
    * await new Session(endpoint)
    *   .setKeyPair(keyPair)
    *   .delete(documentId, { schema });
    */
-  async delete(id: string, options?: Partial<Context>): Promise<Session> {
-    if (!id) throw new Error('Document id must be provided');
-    log('delete document', id);
+  async delete(documentId: string, options?: Partial<Context>): Promise<Session> {
+    if (!documentId) {
+      throw new Error('Document id must be provided');
+    }
+
+    log('delete document', documentId);
     const mergedOptions = {
       schema: options?.schema || this.schema,
       keyPair: options?.keyPair || this.keyPair,
       session: this,
     };
-    deleteDocument(id, mergedOptions);
+    deleteDocument(documentId, mergedOptions);
+
     return this;
   }
 

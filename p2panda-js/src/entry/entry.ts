@@ -6,6 +6,7 @@ import wasm from '~/wasm';
 import { Context } from '~/session';
 
 const log = debug('p2panda-js:entry');
+
 /**
  * Sign and publish an entry given a prepared `Operation`, `KeyPair` and
  * `Session`.
@@ -16,21 +17,22 @@ const log = debug('p2panda-js:entry');
  */
 export const signPublishEntry = async (
   operationEncoded: string,
-  { keyPair, schema, session }: Context,
+  { keyPair, session }: Context,
+  documentId?: string,
 ): Promise<string> => {
   const { signEncodeEntry } = await wasm;
 
   log('Signing and publishing entry');
 
-  const entryArgs = await session.getNextEntryArgs(keyPair.publicKey(), schema);
+  const entryArgs = await session.getNextEntryArgs(keyPair.publicKey(), documentId);
 
   log('Retrieved next entry args for', {
     keyPair: keyPair.publicKey(),
-    schema,
+    documentId,
     entryArgs,
   });
 
-  const { entryEncoded } = signEncodeEntry(
+  const { entryEncoded, entryHash } = signEncodeEntry(
     keyPair,
     operationEncoded,
     entryArgs.entryHashSkiplink,
@@ -46,8 +48,9 @@ export const signPublishEntry = async (
   );
   log('Published entry');
 
-  // Cache next entry args for next publish
-  session.setNextEntryArgs(keyPair.publicKey(), schema, nextEntryArgs);
+  // Cache next entry args for next publish. Use the entry hash as the document
+  // id for CREATE operations.
+  session.setNextEntryArgs(keyPair.publicKey(), documentId || entryHash, nextEntryArgs);
   log('Cached next entry args');
 
   return entryEncoded;
