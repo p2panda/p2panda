@@ -103,7 +103,7 @@ use crate::test_utils::utils::NextEntryArgs;
 
 /// Helper method signing and encoding entry and sending it to node backend.
 pub fn send_to_node(node: &mut Node, client: &Client, operation: &Operation) -> Result<Hash> {
-    let entry_args = node.next_entry_args(&client.author(), operation.schema(), None)?;
+    let entry_args = node.next_entry_args(&client.author(), operation.id(), None)?;
 
     let entry_encoded = client.signed_encoded_entry(operation.to_owned(), entry_args);
 
@@ -260,15 +260,17 @@ impl Node {
     pub fn next_entry_args(
         &mut self,
         author: &Author,
-        schema: &Hash,
+        document_id: Option<&Hash>,
         seq_num: Option<&SeqNum>,
     ) -> Result<NextEntryArgs> {
-        // Find out the log id for the given schema
-        let log_id = self.get_log_id(schema, author)?;
+        // Find out the log id for the given document
+        let log_id = self.get_log_id(document_id, author)?;
 
         // Find any logs by this author for this schema
         let author_log = match self.get_author_logs_mut(author) {
-            Some(logs) => logs.values().find(|log| log.schema() == schema.as_str()),
+            Some(logs) => logs
+                .values()
+                .find(|log| log.document() == document_id.as_str()),
             // No logs for this author
             None => None,
         };
@@ -350,6 +352,12 @@ impl Node {
             None => Some(author.as_str().to_string()),
         };
 
+        let document_id = if operation.is_create() {
+            entry_encoded.hash()
+        } else {
+            operation.id().unwrap().to_owned()
+        };
+
         // Get all logs by this author
         let author_logs = match self.get_author_logs_mut(&author) {
             Some(logs) => logs,
@@ -360,12 +368,19 @@ impl Node {
             }
         };
 
-        // Get the log for this schema from the author logs
+        // Get the log for this document from the author logs
         let log = match author_logs.get_mut(&log_id) {
             Some(log) => log,
             // If there isn't one, then create and insert it
             None => {
-                author_logs.insert(log_id, Log::new(log_id, operation.schema().as_str().into()));
+                author_logs.insert(
+                    log_id,
+                    Log::new(
+                        log_id,
+                        operation.schema().as_str().into(),
+                        document_id.as_str().into(),
+                    ),
+                );
                 author_logs.get_mut(&log_id).unwrap()
             }
         };

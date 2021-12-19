@@ -20,12 +20,16 @@ use crate::operation::{Operation, OperationEncoded};
 pub struct LogEntry {
     /// The author of this entry
     pub author: Author,
+
     /// The author of the instance this entry is part of
     pub instance_author: Option<String>,
+
     /// The encoded entry
     pub entry_encoded: EntrySigned,
+
     /// The operation
     pub operation: Operation,
+
     /// The hash of the entry this operation/operation acts upon
     pub previous_operation: Option<String>,
 }
@@ -35,8 +39,13 @@ pub struct LogEntry {
 pub struct Log {
     /// The id of this log
     pub id: i64,
+
     /// The schema of this log
     pub schema: String,
+
+    /// The document id of this log
+    pub document_id: String,
+
     /// The entries in this log
     pub entries: Vec<LogEntry>,
 }
@@ -102,10 +111,11 @@ impl LogEntry {
 
 impl Log {
     /// Create a new log
-    pub fn new(log_id: i64, schema: String) -> Self {
+    pub fn new(log_id: i64, schema: String, document_id: String) -> Self {
         Self {
             id: log_id,
             schema,
+            document_id,
             entries: Vec::new(),
         }
     }
@@ -123,6 +133,11 @@ impl Log {
     /// Get the schema of this log
     pub fn schema(&self) -> String {
         self.schema.to_owned()
+    }
+
+    /// Get the document id of this log
+    pub fn document(&self) -> String {
+        self.document_id.to_owned()
     }
 
     /// Add an entry to this log

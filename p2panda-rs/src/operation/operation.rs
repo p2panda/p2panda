@@ -209,7 +209,7 @@ pub struct Operation {
     /// Version schema of this operation.
     version: OperationVersion,
 
-    /// Optional id referring to the data instance.
+    /// Optional id referring to the document.
     #[serde(skip_serializing_if = "Option::is_none")]
     id: Option<Hash>,
 

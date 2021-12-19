@@ -8,7 +8,8 @@ import {
 import TEST_DATA from './test-data.json';
 import { marshallResponseFields } from '~/utils';
 
-// right now we only have one author `panda` who only has one schema log. This could be expanded in the future.
+// Right now we only have one author `panda` who only has one schema log. This
+// could be expanded in the future.
 const PANDA_LOG = TEST_DATA.panda.logs[0];
 
 export const schemaFixture = (): string => {
@@ -16,8 +17,7 @@ export const schemaFixture = (): string => {
 };
 
 /**
- * Return an object with fields for an author's public and
- * private key.
+ * Return an object with fields for an author's public and private key.
  */
 export const authorFixture = (): { publicKey: string; privateKey: string } => {
   const author = {
