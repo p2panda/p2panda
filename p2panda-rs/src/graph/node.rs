@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+/// A rust port of a tangle-js node
 use crate::entry::{Entry, EntrySigned};
 use crate::graph::error::GraphNodeError;
 use crate::hash::Hash;
