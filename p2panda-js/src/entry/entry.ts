@@ -24,7 +24,10 @@ export const signPublishEntry = async (
 
   log('Signing and publishing entry');
 
-  const entryArgs = await session.getNextEntryArgs(keyPair.publicKey(), documentId);
+  const entryArgs = await session.getNextEntryArgs(
+    keyPair.publicKey(),
+    documentId,
+  );
 
   log('Retrieved next entry args for', {
     keyPair: keyPair.publicKey(),
@@ -50,7 +53,11 @@ export const signPublishEntry = async (
 
   // Cache next entry args for next publish. Use the entry hash as the document
   // id for CREATE operations.
-  session.setNextEntryArgs(keyPair.publicKey(), documentId || entryHash, nextEntryArgs);
+  session.setNextEntryArgs(
+    keyPair.publicKey(),
+    documentId || entryHash,
+    nextEntryArgs,
+  );
   log('Cached next entry args');
 
   return entryEncoded;

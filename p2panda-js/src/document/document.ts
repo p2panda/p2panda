@@ -48,12 +48,20 @@ export const updateDocument = async (
   // Create operation
   const fieldsTagged = marshallRequestFields(fields);
   const operationFields = await getOperationFields(session, fieldsTagged);
-  const encodedOperation = encodeUpdateOperation(documentId, schema, operationFields);
-  const entryEncoded = await signPublishEntry(encodedOperation, {
-    keyPair,
+  const encodedOperation = encodeUpdateOperation(
+    documentId,
     schema,
-    session,
-  }, documentId);
+    operationFields,
+  );
+  const entryEncoded = await signPublishEntry(
+    encodedOperation,
+    {
+      keyPair,
+      schema,
+      session,
+    },
+    documentId,
+  );
 
   return entryEncoded;
 };
@@ -71,11 +79,15 @@ export const deleteDocument = async (
 
   // Create operation
   const encodedOperation = encodeDeleteOperation(documentId, schema);
-  const encodedEntry = await signPublishEntry(encodedOperation, {
-    keyPair,
-    schema,
-    session,
-  }, documentId);
+  const encodedEntry = await signPublishEntry(
+    encodedOperation,
+    {
+      keyPair,
+      schema,
+      session,
+    },
+    documentId,
+  );
 
   return encodedEntry;
 };

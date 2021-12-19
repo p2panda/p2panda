@@ -126,7 +126,10 @@ export class Session {
    * @param document optional document id
    * @returns an `EntryArgs` object
    */
-  async getNextEntryArgs(author: string, documentId?: string): Promise<EntryArgs> {
+  async getNextEntryArgs(
+    author: string,
+    documentId?: string,
+  ): Promise<EntryArgs> {
     if (!author) {
       throw new Error('Author must be provided');
     }
@@ -160,7 +163,11 @@ export class Session {
    * @param document document id
    * @param entryArgs an object with entry arguments
    */
-  setNextEntryArgs(author: string, documentId: string, entryArgs: EntryArgs): void {
+  setNextEntryArgs(
+    author: string,
+    documentId: string,
+    entryArgs: EntryArgs,
+  ): void {
     const cacheKey = `${author}/${documentId}`;
     this.nextEntryArgs[cacheKey] = entryArgs;
   }
@@ -346,7 +353,10 @@ export class Session {
    *   .setKeyPair(keyPair)
    *   .delete(documentId, { schema });
    */
-  async delete(documentId: string, options?: Partial<Context>): Promise<Session> {
+  async delete(
+    documentId: string,
+    options?: Partial<Context>,
+  ): Promise<Session> {
     if (!documentId) {
       throw new Error('Document id must be provided');
     }
