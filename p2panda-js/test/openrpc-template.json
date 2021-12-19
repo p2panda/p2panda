@@ -48,6 +48,18 @@
                     "$ref": "#/components/schemas/Hash"
                 }
             },
+            "DocumentId": {
+                "name": "documentId",
+                "summary": "The hash identifying a document",
+                "description": "",
+                "required": true,
+                "schema": {
+                    "type": "string",
+                    "minLength": 68,
+                    "maxLength": 68,
+                    "pattern": "[0-9a-f]{68}"
+                }
+            },
             "QueryEntriesResponse": {
                 "name": "entries",
                 "summary": "The response from a call to panda_queryEntries",
@@ -245,9 +257,16 @@
             },
             "Schema": {
                 "name": "schema",
-                "summary": "The `Schema` which this log is assigned",
+                "summary": "The used `Schema` for the user data",
                 "value": {
                     "$ref": "./test/test-data.json#/panda/logs/0/decodedOperations/0/schema"
+                }
+            },
+            "DocumentId": {
+                "name": "document",
+                "summary": "The `DocumentId` which this log is assigned",
+                "value": {
+                    "$ref": "./test/test-data.json#/panda/logs/0/encodedEntries/0/entryHash"
                 }
             },
             "Entries": {
@@ -264,7 +283,7 @@
     "methods": [
         {
             "name": "panda_getEntryArguments",
-            "summary": "Returns arguments needed for constructing the next entry given author and schema.",
+            "summary": "Returns arguments needed for constructing the next entry given author and document id.",
             "description": "Fetch the required arguments needed when constructing and publishing an `Entry` to a p2panda log. `p2panda` logs are based on the [Bamboo](https://github.com/AljoschaMeyer/bamboo) append only log specification. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
             "paramStructure": "by-name",
             "params": [
@@ -272,7 +291,7 @@
                     "$ref": "#/components/contentDescriptors/Author"
                 },
                 {
-                    "$ref": "#/components/contentDescriptors/Schema"
+                    "$ref": "#/components/contentDescriptors/DocumentId"
                 }
             ],
             "result": {
@@ -287,7 +306,7 @@
                             "$ref": "#/components/examples/Author"
                         },
                         {
-                            "$ref": "#/components/examples/Schema"
+                            "$ref": "#/components/examples/DocumentId"
                         }
                     ],
                     "result": {
