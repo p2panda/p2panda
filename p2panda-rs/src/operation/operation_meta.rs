@@ -144,7 +144,8 @@ mod tests {
 
     #[apply(all_meta_operation_types)]
     fn operations_should_validate(#[case] operation_with_meta: OperationWithMeta) {
-        assert!(operation_with_meta.operation().validate().is_ok())
+        assert!(operation_with_meta.operation().validate().is_ok());
+        assert!(operation_with_meta.validate().is_ok())
     }
 
     #[apply(all_meta_operation_types)]
