@@ -481,7 +481,7 @@ mod tests {
     use crate::hash::Hash;
     use crate::operation::OperationEncoded;
     use crate::test_utils::fixtures::templates::many_valid_operations;
-    use crate::test_utils::fixtures::{fields, hash, schema};
+    use crate::test_utils::fixtures::{fields, random_hash, schema};
     use crate::Validate;
 
     #[test]
@@ -507,8 +507,8 @@ mod tests {
     fn operation_validation(
         fields: OperationFields,
         schema: Hash,
-        hash: Hash,
-        #[from(hash)] id: Hash,
+        #[from(random_hash)] prev_op_id: Hash,
+        #[from(random_hash)] id: Hash,
     ) {
         let invalid_create_operation_1 = Operation {
             action: OperationAction::Create,
@@ -527,7 +527,7 @@ mod tests {
             version: OperationVersion::Default,
             schema: schema.clone(),
             // Create operations must not contain previous_operations
-            previous_operations: Some(vec![hash.clone()]), // Error
+            previous_operations: Some(vec![prev_op_id.clone()]), // Error
             id: None,
             fields: Some(fields.clone()),
         };
@@ -550,7 +550,7 @@ mod tests {
             action: OperationAction::Update,
             version: OperationVersion::Default,
             schema: schema.clone(),
-            previous_operations: Some(vec![hash]),
+            previous_operations: Some(vec![prev_op_id]),
             id: Some(id.clone()),
             // Update operations must contain fields
             fields: None, // Error
@@ -583,8 +583,12 @@ mod tests {
         assert!(invalid_delete_operation_2.validate().is_err())
     }
 
-    #[test]
-    fn encode_and_decode() {
+    #[rstest]
+    fn encode_and_decode(
+        schema: Hash,
+        #[from(random_hash)] prev_op_id: Hash,
+        #[from(random_hash)] id: Hash,
+    ) {
         // Create test operation
         let mut fields = OperationFields::new();
 
@@ -608,13 +612,7 @@ mod tests {
             )
             .unwrap();
 
-        let operation = Operation::new_update(
-            Hash::new_from_bytes(vec![1, 255, 0]).unwrap(),
-            Hash::new_from_bytes(vec![62, 128]).unwrap(),
-            vec![Hash::new_from_bytes(vec![12, 128]).unwrap()],
-            fields,
-        )
-        .unwrap();
+        let operation = Operation::new_update(schema, id, vec![prev_op_id], fields).unwrap();
 
         assert!(operation.is_update());
 
@@ -627,8 +625,8 @@ mod tests {
         assert_eq!(operation, operation_restored);
     }
 
-    #[test]
-    fn field_ordering() {
+    #[rstest]
+    fn field_ordering(schema: Hash) {
         // Create first test operation
         let mut fields = OperationFields::new();
         fields
@@ -638,8 +636,7 @@ mod tests {
             .add("b", OperationValue::Text("penguin".to_owned()))
             .unwrap();
 
-        let first_operation =
-            Operation::new_create(Hash::new_from_bytes(vec![1, 255, 0]).unwrap(), fields).unwrap();
+        let first_operation = Operation::new_create(schema.clone(), fields).unwrap();
 
         // Create second test operation with same values but different order of fields
         let mut second_fields = OperationFields::new();
@@ -650,11 +647,7 @@ mod tests {
             .add("a", OperationValue::Text("sloth".to_owned()))
             .unwrap();
 
-        let second_operation = Operation::new_create(
-            Hash::new_from_bytes(vec![1, 255, 0]).unwrap(),
-            second_fields,
-        )
-        .unwrap();
+        let second_operation = Operation::new_create(schema, second_fields).unwrap();
 
         assert_eq!(first_operation.to_cbor(), second_operation.to_cbor());
     }
