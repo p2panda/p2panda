@@ -93,8 +93,7 @@
             "DocumentId": {
                 "name": "document",
                 "summary": "The hash identifying a document",
-                "description": "",
-                "required": true,
+                "required": false,
                 "schema": {
                     "type": "string",
                     "minLength": 68,
@@ -458,8 +457,7 @@
                 {
                     "name": "document",
                     "summary": "The hash identifying a document",
-                    "description": "",
-                    "required": true,
+                    "required": false,
                     "schema": {
                         "type": "string",
                         "minLength": 68,
