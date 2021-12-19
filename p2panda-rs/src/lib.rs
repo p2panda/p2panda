@@ -62,6 +62,7 @@ use rstest_reuse;
 pub mod entry;
 pub mod hash;
 pub mod identity;
+pub mod instance;
 pub mod materialiser;
 pub mod operation;
 pub mod schema;
