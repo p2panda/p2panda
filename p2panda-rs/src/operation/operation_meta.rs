@@ -87,20 +87,6 @@ impl AsOperation for OperationWithMeta {
     }
 }
 
-impl AsNode for OperationWithMeta {
-    fn key(&self) -> &Hash {
-        self.operation_id()
-    }
-
-    fn previous(&self) -> Option<&Vec<Hash>> {
-        self.previous_operations()
-    }
-
-    fn data(&self) -> Option<&OperationFields> {
-        self.fields()
-    }
-}
-
 impl Validate for OperationWithMeta {
     type Error = OperationWithMetaError;
 

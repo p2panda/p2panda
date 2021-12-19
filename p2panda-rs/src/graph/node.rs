@@ -1,7 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::entry::{Entry, EntrySigned};
+use crate::graph::error::GraphNodeError;
 use crate::hash::Hash;
-use crate::operation::OperationFields;
+use crate::operation::{AsOperation, OperationEncoded, OperationFields, OperationWithMeta};
+
+pub struct GraphNode(OperationWithMeta);
+
+impl GraphNode {
+    pub fn new(
+        entry_encoded: &EntrySigned,
+        operation_encoded: &OperationEncoded,
+    ) -> Result<Self, GraphNodeError> {
+        let graph_node = Self(OperationWithMeta::new(entry_encoded, operation_encoded)?);
+        Ok(graph_node)
+    }
+}
 
 pub trait AsNode {
     fn key(&self) -> &Hash;
@@ -22,6 +36,20 @@ pub trait AsNode {
     }
 }
 
+impl AsNode for GraphNode {
+    fn key(&self) -> &Hash {
+        self.0.operation_id()
+    }
+
+    fn previous(&self) -> Option<&Vec<Hash>> {
+        self.0.previous_operations()
+    }
+
+    fn data(&self) -> Option<&OperationFields> {
+        self.0.fields()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -34,7 +62,7 @@ mod tests {
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
 
-    use super::AsNode;
+    use super::{AsNode, GraphNode};
 
     #[rstest]
     fn as_node(
@@ -119,13 +147,13 @@ mod tests {
         let entry_4 = entries.get(3).unwrap();
 
         let graph_node_1 =
-            OperationWithMeta::new(&entry_1.entry_encoded(), &entry_1.operation_encoded()).unwrap();
+            GraphNode::new(&entry_1.entry_encoded(), &entry_1.operation_encoded()).unwrap();
         let graph_node_2 =
-            OperationWithMeta::new(&entry_2.entry_encoded(), &entry_2.operation_encoded()).unwrap();
+            GraphNode::new(&entry_2.entry_encoded(), &entry_2.operation_encoded()).unwrap();
         let graph_node_3 =
-            OperationWithMeta::new(&entry_3.entry_encoded(), &entry_3.operation_encoded()).unwrap();
+            GraphNode::new(&entry_3.entry_encoded(), &entry_3.operation_encoded()).unwrap();
         let graph_node_4 =
-            OperationWithMeta::new(&entry_4.entry_encoded(), &entry_4.operation_encoded()).unwrap();
+            GraphNode::new(&entry_4.entry_encoded(), &entry_4.operation_encoded()).unwrap();
 
         // Node 1 is the root node and has no previous operations
         assert_eq!(graph_node_1.key(), &panda_entry_1_hash);
