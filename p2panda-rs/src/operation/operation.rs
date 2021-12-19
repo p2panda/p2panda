@@ -196,6 +196,7 @@ impl OperationFields {
     }
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Operations describe data mutations in the p2panda network. Authors send operations to create,
 /// update or delete instances or collections of data.
 ///
@@ -209,6 +210,40 @@ impl OperationFields {
 /// All update and delete operations have a `previous_operations` field which contains a vector of operation
 /// hash ids which identify the known branch tips at the time of publication. These allow us to build the graph
 /// and retain knowledge of the graph state at the time the specific operation was published.
+///
+/// ## Examples
+///
+/// All of the below would be valid operation graphs. Operations which refer to more than one previous operation
+/// help to reconcile branches. However, if branches exist when the graph is resolved, the materialisation process
+/// will still resolves the graph to a single value.
+///
+/// 1)
+/// ```mermaid
+/// flowchart LR
+///     A --- B --- C --- D;
+///     B --- E --- F;
+/// ```
+///
+/// 2)
+/// ```mermaid
+/// flowchart LR
+///     B --- C --- D --- E;
+///     A --- B --- E;
+/// ```
+///
+/// 3)
+/// ```mermaid
+/// flowchart LR
+///     A --- B --- C;
+///     A --- D --- E --- J;
+///     B --- F --- G --- H --- I --- J;
+/// ```
+///
+/// 4)
+/// ```mermaid
+/// flowchart LR
+///     A --- B --- C --- D --- E;
+/// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Operation {
