@@ -6,7 +6,7 @@ use std::fmt;
 
 use crate::hash::Hash;
 use crate::instance::{Instance, InstanceError};
-use crate::operation::{Operation, OperationFields, OperationValue};
+use crate::operation::{AsOperation, Operation, OperationFields, OperationValue};
 use crate::schema::SchemaError;
 
 use cddl::lexer::Lexer;

@@ -4,7 +4,7 @@
 
 use std::{collections::HashMap, convert::TryFrom};
 
-use crate::operation::{Operation, OperationValue};
+use crate::operation::{AsOperation, Operation, OperationValue};
 
 use super::error::InstanceError;
 
@@ -65,7 +65,7 @@ mod tests {
 
     use super::Instance;
     use crate::hash::Hash;
-    use crate::operation::Operation;
+    use crate::operation::{AsOperation, Operation};
     use crate::schema::Schema;
     use crate::test_utils::fixtures::{create_operation, delete_operation, hash, update_operation};
 
