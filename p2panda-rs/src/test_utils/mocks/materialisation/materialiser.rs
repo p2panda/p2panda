@@ -104,15 +104,16 @@ impl Materialiser {
             let operation = self.operations.get(&entry_id).unwrap();
 
             // Get the schema string
-            let schema_str = operation.schema().as_str();
+            let schema = operation.schema();
 
             // Create schema map for instances if it doesn't exist
-            if !self.data().contains_key(schema_str) {
-                self.data.insert(schema_str.into(), Instances::new());
+            if !self.data().contains_key(schema.as_str()) {
+                self.data
+                    .insert(schema.as_str().to_owned(), Instances::new());
             }
 
             // Get all instances for this schema
-            let instances = self.data.get_mut(schema_str).unwrap();
+            let instances = self.data.get_mut(schema.as_str()).unwrap();
 
             // Materialise all operations in order!! Currently an UPDATE operation replaces all
             // fields in the operation. I guess we don't want this behaviour eventually.
