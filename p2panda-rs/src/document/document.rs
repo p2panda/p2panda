@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use crate::document::DocumentBuilderError;
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{AsOperation, OperationWithMeta};
@@ -69,7 +70,7 @@ impl DocumentBuilder {
     }
 
     /// Build the document.
-    pub fn build(self) -> Document {
+    pub fn build(self) -> Result<Document, DocumentBuilderError> {
         // find create message
 
         let collect_create_operation: Vec<&OperationWithMeta> =
@@ -104,26 +105,32 @@ impl DocumentBuilder {
             graph.add_node(op.operation_id().as_str().to_string());
         });
 
-        self.operations.iter().for_each(|op| {
-            // add dependencies derived from each operations previous_operations
-            if let Some(ops) = op.previous_operations() {
-                ops.iter().for_each(|id| {
-                    graph.add_dependency(
-                        &id.as_str().to_string(),
-                        &op.operation_id().as_str().to_string(),
-                    );
-                })
-            };
-        });
+        self.operations
+            .iter()
+            .try_for_each(|successor: &OperationWithMeta| {
+                if let Some(operations) = successor.previous_operations() {
+                    operations.iter().try_for_each(|previous| {
+                        match graph.add_dependency(
+                            &previous.as_str().to_owned(),
+                            &successor.operation_id().as_str().to_owned(),
+                        ) {
+                            Ok(_) => Ok(()),
+                            Err(_) => Err(DocumentBuilderError::IncrementalTopoDepenedencyError),
+                        }
+                    })
+                } else {
+                    Ok(())
+                }
+            })?;
 
-        Document {
+        Ok(Document {
             id: document_id.to_owned(),
             schema,
             author: author.to_owned(),
             permissions: None,
             operations,
             graph,
-        }
+        })
     }
 }
 
@@ -240,7 +247,7 @@ mod tests {
             })
             .collect();
 
-        let document = DocumentBuilder::new(entries).build();
+        let document = DocumentBuilder::new(entries).build().unwrap();
 
         let descendents = document
             .graph

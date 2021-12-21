@@ -59,8 +59,8 @@
 #[cfg(test)]
 use rstest_reuse;
 
+pub mod document;
 pub mod entry;
-pub mod graph;
 pub mod hash;
 pub mod identity;
 pub mod instance;
