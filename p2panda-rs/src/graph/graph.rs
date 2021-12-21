@@ -8,30 +8,52 @@ use crate::operation::{AsOperation, OperationWithMeta};
 use crate::schema::Schema;
 use incremental_topo::IncrementalTopo;
 
-// Instanciate "person" schema from cddl string
+/// Hard coded cddl string for now
 const DOCUMENT_SCHEMA: &str = "wiki = { (
     title: { type: \"str\", value: tstr },
     content: { type: \"str\", value: tstr }
     wordcount: { type: \"int\", value: int }
 ) }";
 
+/// A Document is a resolvable data type which is made up of a linked graph of operations. Documents MUST have a single root ‘CREATE’
+/// operation. All other operations which mutate the initial data are inserted from this point and, due to the nature of operations,
+/// connect together to form a directed acyclic graph.
+///
+/// The graph MUST contain only one root operation and there MUST be a path from the root to every other Operation contained in this
+/// Document. All Operations MUST contain the hash id of both the Document it is operating on as well the previous known operation.
+/// Documents MUST implement a method for topologically sorting the graph, iterating over the ordered list of operations, and applying
+/// all updates onto an Instance following the document schema. This process MUST be deterministic, any Document replicas which
+/// contain the same Operations MUST resolve to the same value.
+///
+/// All operations in a document MUST follow the documents Schema definition. This is defined by the root CREATE operation.
 #[derive(Debug)]
 pub struct Document {
-    // Could use a BiMap here. Is that cool?
+    /// The hash id of this document, it is the hash of the entry of this documents root CREATE operation.
     id: Hash,
+    /// The hash id of the schema operations in this document follow.
     schema: Schema,
+    /// The author (public key) who published the CREATE message which instantiated this document.
     author: Author,
+    /// Permissions, derived from KeyGroup relations which apply to the document as a whole or operation ranges within it.
     permissions: Option<Vec<Author>>,
+    /// A map of all operations contained within this document. This may even include operations by unauthorized authors.
     operations: HashMap<String, OperationWithMeta>,
+    /// A causal graph representation of this documents operations, identified by their hash, which can be topologically sorted.
     graph: IncrementalTopo<String>,
 }
 
+/// A struct for building documents.
+#[derive(Debug)]
 pub struct DocumentBuilder {
-    permissions: Option<Vec<Author>>,
+    /// An unsorted collection of operations which are associated with a particular document id.
     operations: Vec<OperationWithMeta>,
+    /// Permissions for this document.
+    /// TODO: don't know what form this will take yet, this is a placeholder for now.
+    permissions: Option<Vec<Author>>,
 }
 
 impl DocumentBuilder {
+    /// Instantiate a new DocumentBuilder with a collection of operations.
     pub fn new(mut operations: Vec<OperationWithMeta>) -> Self {
         operations.sort_by(|a, b| a.operation_id().as_str().cmp(b.operation_id().as_str()));
         Self {
@@ -40,11 +62,13 @@ impl DocumentBuilder {
         }
     }
 
+    /// Add permissions for this Document.
     pub fn permissions(mut self, permissions: Vec<Author>) -> Self {
         self.permissions = Some(permissions);
         self
     }
 
+    /// Build the document.
     pub fn build(self) -> Document {
         // find create message
 
