@@ -105,6 +105,10 @@ impl DocumentBuilder {
             graph.add_node(op.operation_id().as_str().to_string());
         });
 
+        // Derive graph dependencies from all operations' previous_operations field. Apply to graph handling
+        // errors.
+        // nb. I had some problems capturing the actual errors from IncrementalTopo crate... needs another
+        // go at some point.
         self.operations
             .iter()
             .try_for_each(|successor: &OperationWithMeta| {
