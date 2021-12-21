@@ -72,7 +72,7 @@ impl AsOperation for OperationWithMeta {
 
     /// Returns schema of operation.
     fn schema(&self) -> Hash {
-        self.operation.schema().to_owned()
+        self.operation.schema()
     }
 
     /// Returns user data fields of operation.
