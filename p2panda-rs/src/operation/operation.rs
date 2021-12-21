@@ -371,19 +371,19 @@ impl Operation {
 /// Shared methods for `Operation` and `OperationWithMeta`.
 pub trait AsOperation {
     /// Returns action type of operation.
-    fn action(&self) -> &OperationAction;
+    fn action(&self) -> OperationAction;
 
     /// Returns schema of operation.
-    fn schema(&self) -> &Hash;
+    fn schema(&self) -> Hash;
 
     /// Returns version of operation.
-    fn version(&self) -> &OperationVersion;
+    fn version(&self) -> OperationVersion;
 
     /// Returns user data fields of operation.
-    fn fields(&self) -> Option<&OperationFields>;
+    fn fields(&self) -> Option<OperationFields>;
 
     /// Returns previous_operations of this operation.
-    fn previous_operations(&self) -> Option<&Vec<Hash>>;
+    fn previous_operations(&self) -> Option<Vec<Hash>>;
 
     /// Returns true if operation contains fields.
     fn has_fields(&self) -> bool {
@@ -397,44 +397,44 @@ pub trait AsOperation {
 
     /// Returns true when instance is create operation.
     fn is_create(&self) -> bool {
-        self.action() == &OperationAction::Create
+        self.action() == OperationAction::Create
     }
 
     /// Returns true when instance is update operation.
     fn is_update(&self) -> bool {
-        self.action() == &OperationAction::Update
+        self.action() == OperationAction::Update
     }
 
     /// Returns true when instance is delete operation.
     fn is_delete(&self) -> bool {
-        self.action() == &OperationAction::Delete
+        self.action() == OperationAction::Delete
     }
 }
 
 impl AsOperation for Operation {
     /// Returns action type of operation.
-    fn action(&self) -> &OperationAction {
-        &self.action
+    fn action(&self) -> OperationAction {
+        self.action.to_owned()
     }
 
     /// Returns version of operation.
-    fn version(&self) -> &OperationVersion {
-        &self.version
+    fn version(&self) -> OperationVersion {
+        self.version.to_owned()
     }
 
     /// Returns schema of operation.
-    fn schema(&self) -> &Hash {
-        &self.schema
+    fn schema(&self) -> Hash {
+        self.schema.to_owned()
     }
 
     /// Returns user data fields of operation.
-    fn fields(&self) -> Option<&OperationFields> {
-        self.fields.as_ref()
+    fn fields(&self) -> Option<OperationFields> {
+        self.fields.clone()
     }
 
     /// Returns previous_operations of this operation.
-    fn previous_operations(&self) -> Option<&Vec<Hash>> {
-        self.previous_operations.as_ref()
+    fn previous_operations(&self) -> Option<Vec<Hash>> {
+        self.previous_operations.clone()
     }
 }
 

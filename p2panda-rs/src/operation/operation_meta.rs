@@ -61,27 +61,27 @@ impl OperationWithMeta {
 
 impl AsOperation for OperationWithMeta {
     /// Returns action type of operation.
-    fn action(&self) -> &OperationAction {
-        self.operation.action()
+    fn action(&self) -> OperationAction {
+        self.operation.action().to_owned()
     }
 
     /// Returns version of operation.
-    fn version(&self) -> &OperationVersion {
-        self.operation.version()
+    fn version(&self) -> OperationVersion {
+        self.operation.version().to_owned()
     }
 
     /// Returns schema of operation.
-    fn schema(&self) -> &Hash {
-        self.operation.schema()
+    fn schema(&self) -> Hash {
+        self.operation.schema().to_owned()
     }
 
     /// Returns user data fields of operation.
-    fn fields(&self) -> Option<&OperationFields> {
+    fn fields(&self) -> Option<OperationFields> {
         self.operation.fields()
     }
 
     /// Returns previous_operations of operation.
-    fn previous_operations(&self) -> Option<&Vec<Hash>> {
+    fn previous_operations(&self) -> Option<Vec<Hash>> {
         self.operation.previous_operations()
     }
 }

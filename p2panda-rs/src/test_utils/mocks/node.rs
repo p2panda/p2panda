@@ -104,7 +104,7 @@ use crate::test_utils::utils::NextEntryArgs;
 
 /// Helper method signing and encoding entry and sending it to node backend.
 pub fn send_to_node(node: &mut Node, client: &Client, operation: &Operation) -> Result<Hash> {
-    let entry_args = node.next_entry_args(&client.author(), operation.schema(), None)?;
+    let entry_args = node.next_entry_args(&client.author(), &operation.schema(), None)?;
 
     let entry_encoded = client.signed_encoded_entry(operation.to_owned(), entry_args);
 
