@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-/// Error types for methods of `GraphNode` struct.
+/// Error types for methods of `DocumentBuilder` struct.
 #[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
 pub enum DocumentBuilderError {
@@ -17,4 +17,25 @@ pub enum DocumentBuilderError {
     /// Internal IncrementalTopo error.
     #[error("Error adding dependency to graph")]
     IncrementalTopoDepenedencyError,
+}
+
+/// Error types for methods of `Document` struct.
+#[allow(missing_copy_implementations)]
+#[derive(Error, Debug)]
+pub enum DocumentError {
+    /// No create operation found.
+    #[error("Every document must contain one create operation")]
+    NoCreateOperation,
+
+    /// Internal IncrementalTopo error.
+    #[error("Error sorting graph")]
+    IncrementalTopoError,
+
+    /// Get operation error.
+    #[error("Operation with that id does not exist")]
+    OperationDoesNotExist,
+
+    /// Handle errors from validating CBOR schemas.
+    #[error(transparent)]
+    InstanceError(#[from] crate::instance::InstanceError),
 }

@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::HashMap;
+use std::convert::TryFrom;
 
-use crate::document::DocumentBuilderError;
+use crate::document::{DocumentBuilderError, DocumentError};
 use crate::hash::Hash;
 use crate::identity::Author;
+use crate::instance::Instance;
 use crate::operation::{AsOperation, OperationWithMeta};
 use crate::schema::Schema;
 use incremental_topo::IncrementalTopo;
@@ -35,12 +37,74 @@ pub struct Document {
     schema: Schema,
     /// The author (public key) who published the CREATE message which instantiated this document.
     author: Author,
-    /// Permissions, derived from KeyGroup relations which apply to the document as a whole or operation ranges within it.
+    /// Permissions, derived from KeyGroup relations, which apply to the document as a whole or operation ranges within it.
+    /// TODO: this is a placeholder for now.
+    #[allow(dead_code)]
     permissions: Option<Vec<Author>>,
     /// A map of all operations contained within this document. This may even include operations by unauthorized authors.
     operations: HashMap<String, OperationWithMeta>,
     /// A causal graph representation of this documents operations, identified by their hash, which can be topologically sorted.
     graph: IncrementalTopo<String>,
+}
+
+impl Document {
+    /// The hash id of this document.
+    pub fn id(&self) -> Hash {
+        self.id.clone()
+    }
+
+    /// The hash id of this documents schema.
+    pub fn schema(&self) -> Hash {
+        self.schema.schema_hash()
+    }
+
+    /// The author of this document.
+    pub fn author(&self) -> Author {
+        self.author.clone()
+    }
+
+    /// Returns a map of all operations in this document.
+    pub fn operations(&self) -> HashMap<String, OperationWithMeta> {
+        self.operations.clone()
+    }
+
+    /// Returns a result containing an iterable collection of topologically sorted
+    /// nodes in this graph, _except_ the root, identified by their id.
+    pub fn sort(&self) -> Result<incremental_topo::Descendants<String>, DocumentError> {
+        match self.graph.descendants(self.id().as_str()) {
+            Ok(d) => Ok(d),
+            Err(_) => Err(DocumentError::IncrementalTopoError),
+        }
+    }
+
+    /// Sort the graph topologically, then reduce the linearised operations into a single
+    /// `Instance`.
+    pub fn resolve(&self) -> Result<Instance, DocumentError> {
+        let operations = self.operations();
+
+        let create_operation = operations.get(self.id().as_str());
+
+        if create_operation.is_none() {
+            return Err(DocumentError::NoCreateOperation);
+        }
+
+        // We unwrap here because we checked already
+        let mut instance = Instance::try_from(create_operation.unwrap().to_owned()).unwrap();
+
+        self.sort()?.try_for_each(|id| {
+            let operation = operations.get(id);
+
+            if operation.is_none() {
+                return Err(DocumentError::OperationDoesNotExist);
+            }
+
+            match instance.update(operation.unwrap().to_owned()) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(DocumentError::InstanceError(e)),
+            }
+        })?;
+        Ok(instance)
+    }
 }
 
 /// A struct for building documents.
@@ -63,6 +127,16 @@ impl DocumentBuilder {
         }
     }
 
+    /// Get all operations for this document.
+    pub fn operations(&self) -> Vec<OperationWithMeta> {
+        self.operations.clone()
+    }
+
+    /// Get an iterator over all operations in this document.
+    pub fn operations_iter(&self) -> std::vec::IntoIter<OperationWithMeta> {
+        self.operations.clone().into_iter()
+    }
+
     /// Add permissions for this Document.
     pub fn permissions(mut self, permissions: Vec<Author>) -> Self {
         self.permissions = Some(permissions);
@@ -73,8 +147,8 @@ impl DocumentBuilder {
     pub fn build(self) -> Result<Document, DocumentBuilderError> {
         // find create message
 
-        let collect_create_operation: Vec<&OperationWithMeta> =
-            self.operations.iter().filter(|op| op.is_create()).collect();
+        let collect_create_operation: Vec<OperationWithMeta> =
+            self.operations_iter().filter(|op| op.is_create()).collect();
 
         if collect_create_operation.len() > 1 || collect_create_operation.is_empty() {
             // Error
@@ -98,22 +172,21 @@ impl DocumentBuilder {
         let mut graph = IncrementalTopo::new();
         let mut operations = HashMap::new();
 
-        self.operations.iter().for_each(|op| {
+        for op in self.operations() {
             // Insert operation into map
             operations.insert(op.operation_id().as_str().to_owned(), op.to_owned());
             // Add node to graph
             graph.add_node(op.operation_id().as_str().to_string());
-        });
+        }
 
         // Derive graph dependencies from all operations' previous_operations field. Apply to graph handling
         // errors.
         // nb. I had some problems capturing the actual errors from IncrementalTopo crate... needs another
         // go at some point.
-        self.operations
-            .iter()
-            .try_for_each(|successor: &OperationWithMeta| {
-                if let Some(operations) = successor.previous_operations() {
-                    operations.iter().try_for_each(|previous| {
+        self.operations_iter()
+            .try_for_each(|successor: OperationWithMeta| {
+                if let Some(previous_operations) = successor.previous_operations() {
+                    previous_operations.iter().try_for_each(|previous| {
                         match graph.add_dependency(
                             &previous.as_str().to_owned(),
                             &successor.operation_id().as_str().to_owned(),
@@ -143,7 +216,7 @@ mod tests {
     use super::DocumentBuilder;
     use crate::hash::Hash;
     use crate::identity::KeyPair;
-    use crate::operation::{AsOperation, OperationValue, OperationWithMeta};
+    use crate::operation::{OperationValue, OperationWithMeta};
     use crate::test_utils::fixtures::{
         create_operation, fields, random_key_pair, schema, update_operation,
     };
@@ -233,7 +306,7 @@ mod tests {
             &penguin,
             &update_operation(
                 schema,
-                panda_entry_1_hash.clone(),
+                panda_entry_1_hash,
                 vec![penguin_entry_1_hash, penguin_entry_2_hash],
                 fields(vec![(
                     "cafe_name",
@@ -252,16 +325,6 @@ mod tests {
             .collect();
 
         let document = DocumentBuilder::new(entries).build().unwrap();
-
-        let descendents = document
-            .graph
-            .descendants(panda_entry_1_hash.as_str())
-            .unwrap();
-
-        for hash in descendents {
-            if let Some(op) = document.operations.get(hash) {
-                println!("{:?}", op.fields().unwrap().get("cafe_name"))
-            }
-        }
+        println!("{:?}", document.resolve().unwrap())
     }
 }

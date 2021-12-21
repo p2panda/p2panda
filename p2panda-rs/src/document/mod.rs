@@ -3,4 +3,4 @@
 pub mod document;
 mod error;
 
-pub use error::DocumentBuilderError;
+pub use error::{DocumentBuilderError, DocumentError};

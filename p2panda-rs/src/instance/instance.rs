@@ -4,7 +4,7 @@
 
 use std::{collections::HashMap, convert::TryFrom};
 
-use crate::operation::{AsOperation, Operation, OperationValue};
+use crate::operation::{AsOperation, Operation, OperationValue, OperationWithMeta};
 
 use super::error::InstanceError;
 
@@ -19,7 +19,7 @@ impl Instance {
     }
 
     /// Update this `Instance` from an UPDATE `Operation`
-    pub fn update(&mut self, operation: Operation) -> Result<(), InstanceError> {
+    pub fn update<T: AsOperation>(&mut self, operation: T) -> Result<(), InstanceError> {
         if !operation.is_update() {
             return Err(InstanceError::NotUpdateOperation);
         };
@@ -57,6 +57,26 @@ impl TryFrom<Operation> for Instance {
     }
 }
 
+impl TryFrom<OperationWithMeta> for Instance {
+    type Error = InstanceError;
+
+    fn try_from(operation: OperationWithMeta) -> Result<Instance, InstanceError> {
+        if !operation.is_create() {
+            return Err(InstanceError::NotCreateOperation);
+        };
+
+        let mut instance: Instance = Instance::new();
+        let fields = operation.fields();
+
+        if let Some(fields) = fields {
+            for (key, value) in fields.iter() {
+                instance.0.insert(key.to_string(), value.to_owned());
+            }
+        }
+
+        Ok(instance)
+    }
+}
 #[cfg(test)]
 mod tests {
     use std::convert::{TryFrom, TryInto};
