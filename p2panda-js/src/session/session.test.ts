@@ -130,7 +130,7 @@ describe('Session', () => {
         schemaFixture(),
       );
       expect(nextEntryArgs.entryHashSkiplink).toEqual(
-        entryArgsFixture(5).entryHashSkiplink as string | undefined,
+        entryArgsFixture(5).entryHashSkiplink,
       );
       expect(nextEntryArgs.entryHashBacklink).toEqual(
         entryArgsFixture(5).entryHashBacklink,

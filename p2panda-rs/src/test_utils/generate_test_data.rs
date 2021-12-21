@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-/// Generate json formatted test data. This is run with the `cargo run --bin json-test-data` command. The output
-/// data can be used for testing a p2panda implementation. It is currently used in `p2panda-js`.
+/// Generate JSON formatted test data. This is run with the `cargo run --bin json-test-data`
+/// command. The output data can be used for testing a p2panda implementation. It is currently used
+/// in `p2panda-js`.
 use p2panda_rs::operation::OperationValue;
 use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 use p2panda_rs::test_utils::mocks::Client;
@@ -69,7 +70,8 @@ fn main() {
     )
     .unwrap();
 
-    // Get the database represented as json and formatted ready to be used as test data in `p2panda-js`
+    // Get the database represented as json and formatted ready to be used as test data in
+    // `p2panda-js`
     let formatted_data = generate_test_data(&mut node, vec![panda]);
 
     println!("{}", serde_json::to_string_pretty(&formatted_data).unwrap());
@@ -165,8 +167,10 @@ mod tests {
 
         // Generate test data
         let generated_test_data = generate_test_data(&mut node, vec![panda]);
+
         // Convert to json string
         let generated_test_data_str = serde_json::to_string(&generated_test_data).unwrap();
+
         // Convert both strings into json objects for comparrison
         let generated_test_data_json: Value =
             serde_json::from_str(&generated_test_data_str).unwrap();

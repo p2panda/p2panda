@@ -30,25 +30,25 @@ pub struct NextEntryArgs {
 /// A helper method for easily generating an operation of any type (`CREATE`, `UPDATE`, `DELETE`).
 ///
 /// If a value for `fields` is provided, this is a `CREATE` operation.
-/// If values for both `fields` and `instance_id` are provided, this is an `UPDATE` operation.
+/// If values for both `fields` and `document_id` are provided, this is an `UPDATE` operation.
 /// If no value for `fields` is provided, this is a `DELETE` operation.
-pub fn any_operation(fields: Option<OperationFields>, instance_id: Option<Hash>) -> Operation {
+pub fn any_operation(fields: Option<OperationFields>, document_id: Option<Hash>) -> Operation {
     match fields {
         // It's a CREATE operation
-        Some(fields) if instance_id.is_none() => {
+        Some(fields) if document_id.is_none() => {
             Operation::new_create(Hash::new(DEFAULT_SCHEMA_HASH).unwrap(), fields).unwrap()
         }
         // It's an UPDATE operation
         Some(fields) => Operation::new_update(
             Hash::new(DEFAULT_SCHEMA_HASH).unwrap(),
-            instance_id.unwrap(),
+            document_id.unwrap(),
             fields,
         )
         .unwrap(),
         // It's a DELETE operation
         None => Operation::new_delete(
             Hash::new(DEFAULT_SCHEMA_HASH).unwrap(),
-            instance_id.unwrap(),
+            document_id.unwrap(),
         )
         .unwrap(),
     }
@@ -106,11 +106,11 @@ pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
 }
 
 /// Generate an update operation based on passed schema hash, instance id and operation fields.
-pub fn update_operation(schema: Hash, instance_id: Hash, fields: OperationFields) -> Operation {
-    Operation::new_update(schema, instance_id, fields).unwrap()
+pub fn update_operation(schema: Hash, document_id: Hash, fields: OperationFields) -> Operation {
+    Operation::new_update(schema, document_id, fields).unwrap()
 }
 
 /// Generate a delete operation based on passed schema hash and instance id.
-pub fn delete_operation(schema: Hash, instance_id: Hash) -> Operation {
-    Operation::new_delete(schema, instance_id).unwrap()
+pub fn delete_operation(schema: Hash, document_id: Hash) -> Operation {
+    Operation::new_delete(schema, document_id).unwrap()
 }

@@ -11,27 +11,31 @@ use crate::test_utils::mocks::utils::Result;
 /// A wrapper type representing a HashMap of instances stored by Instance id.
 type Instances = HashMap<String, OperationFields>;
 
-/// A wrapper type representing a materialised database of Instances stored by Schema hash.
-/// We lose Author data during materialisation in this demo app...
+/// A wrapper type representing a materialised database of Instances stored by Schema hash. We lose
+/// Author data during materialisation in this demo app.
 type SchemaDatabase = HashMap<String, Instances>;
 
-/// Struct for materialising Instances from Operations/Operations published to append only logs by multiple authors.
-/// If concurrent Operations were published then conflicts are resolved through building and ordering a Directed Acyclic
-/// Graph of operations arranged causally. Operations are ordered into a linear queue through topologically
-/// sorting the graph. Operations are then applied sequentially with any conflicts that occur being resolved
-/// through last-write-wins rules.  
+/// Struct for materialising Instances from Operations/Operations published to append only logs by
+/// multiple authors.
+///
+/// If concurrent Operations were published then conflicts are resolved through building and
+/// ordering a Directed Acyclic Graph of operations arranged causally. Operations are ordered into
+/// a linear queue through topologically sorting the graph. Operations are then applied
+/// sequentially with any conflicts that occur being resolved through last-write-wins rules.
 #[derive(Debug, Default)]
 pub struct Materialiser {
     // The final data structure where materialised instances are stored
     data: SchemaDatabase,
+
     // Operations stored by Entry hash
     operations: HashMap<String, Operation>,
+
     // DAGs stored by Instance id
     dags: HashMap<String, DAG>,
 }
 
 impl Materialiser {
-    /// Create new materialiser
+    /// Create new materialiser.
     pub fn new() -> Self {
         Self {
             data: HashMap::new(),
@@ -40,7 +44,7 @@ impl Materialiser {
         }
     }
 
-    /// Get the materialised Instances
+    /// Get the materialised Instances.
     pub fn data(&self) -> SchemaDatabase {
         self.data.clone()
     }
@@ -57,9 +61,9 @@ impl Materialiser {
         });
     }
 
-    /// Take an array of entries from a single author with multiple schema logs. Creates an update path DAG for
-    /// each instance of and also stores a list of all operations for materialisation which takes place
-    /// in the next step.
+    /// Take an array of entries from a single author with multiple schema logs. Creates an update
+    /// path DAG for each instance of and also stores a list of all operations for materialisation
+    /// which takes place in the next step.
     pub fn build_dags(&mut self, entries: Vec<LogEntry>) {
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         // Build instance DAGs
