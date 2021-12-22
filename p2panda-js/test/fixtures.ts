@@ -16,6 +16,10 @@ export const schemaFixture = (): string => {
   return PANDA_LOG.decodedOperations[0].schema;
 };
 
+export const documentId = (): string => {
+  return PANDA_LOG.encodedEntries[0].entryHash;
+};
+
 /**
  * Return an object with fields for an author's public and private key.
  */

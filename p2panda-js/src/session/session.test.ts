@@ -12,6 +12,7 @@ import {
   encodedEntryFixture,
   entryArgsFixture,
   schemaFixture,
+  documentId
 } from '../../test/fixtures';
 
 const MOCK_SERVER_URL = 'http://localhost:2020';
@@ -85,11 +86,8 @@ describe('Session', () => {
       const instances = await session.query({
         schema: schemaFixture(),
       });
-      expect(instances.length).toEqual(2);
+      expect(instances.length).toEqual(1);
       expect(instances[0]._meta.deleted).toEqual(true);
-      expect(instances[1].message).toEqual(
-        entryFixture(4).operation?.fields?.message,
-      );
     });
 
     it('throws when missing a required parameter', async () => {
@@ -127,7 +125,7 @@ describe('Session', () => {
       const session = new Session(MOCK_SERVER_URL);
       const nextEntryArgs = await session.getNextEntryArgs(
         authorFixture().publicKey,
-        schemaFixture(),
+        documentId(),
       );
       expect(nextEntryArgs.skiplink).toEqual(
         entryArgsFixture(5).skiplink,
@@ -159,13 +157,13 @@ describe('Session', () => {
       };
       session.setNextEntryArgs(
         authorFixture().publicKey,
-        schemaFixture(),
+        documentId(),
         nextEntryArgs,
       );
 
       const cacheResponse = await session.getNextEntryArgs(
         authorFixture().publicKey,
-        schemaFixture(),
+        documentId(),
       );
       expect(cacheResponse.logId).toEqual(nextEntryArgs.logId);
       expect(mockedFn.mock.calls.length).toBe(0);
