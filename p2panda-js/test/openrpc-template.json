@@ -24,7 +24,7 @@
             "EntryArgs": {
                 "name": "nextEntryArgs",
                 "summary": "Values required for publishing a p2panda entry",
-                "description": "The values for `entryHashSkiplink`, `entryHashBacklink`, `seqNum` and `logId` must be fetched from a node before constructung and publishing a new entry to the specified log. `p2panda` logs are based on the [Bamboo](https://github.com/AljoschaMeyer/bamboo) append only log specification. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
+                "description": "The values for `skiplink`, `backlink`, `seqNum` and `logId` must be fetched from a node before constructung and publishing a new entry to the specified log. `p2panda` logs are based on the [Bamboo](https://github.com/AljoschaMeyer/bamboo) append only log specification. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
                 "required": true,
                 "schema": {
                     "$ref": "#/components/schemas/EntryArgs"
@@ -84,7 +84,7 @@
             "EntryArgs": {
                 "type": "object",
                 "properties": {
-                    "entryHashSkiplink": {
+                    "skiplink": {
                         "oneOf": [
                             {
                                 "type": "null"
@@ -94,7 +94,7 @@
                             }
                         ]
                     },
-                    "entryHashBacklink": {
+                    "backlink": {
                         "oneOf": [
                             {
                                 "type": "null"

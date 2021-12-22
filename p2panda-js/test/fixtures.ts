@@ -51,8 +51,8 @@ export const entryFixture = (seqNum: number): Entry => {
   }
 
   const entry: Entry = {
-    entryHashBacklink: PANDA_LOG.nextEntryArgs[index].entryHashBacklink,
-    entryHashSkiplink: PANDA_LOG.nextEntryArgs[index].entryHashSkiplink,
+    backlink: PANDA_LOG.nextEntryArgs[index].backlink,
+    skiplink: PANDA_LOG.nextEntryArgs[index].skiplink,
     seqNum: PANDA_LOG.nextEntryArgs[index].seqNum,
     logId: PANDA_LOG.nextEntryArgs[index].logId,
     operation,
@@ -90,10 +90,10 @@ export const entryArgsFixture = (seqNum: number): EntryArgs => {
   const index = seqNum - 1;
 
   const entryArgs: EntryArgs = {
-    entryHashBacklink: PANDA_LOG.nextEntryArgs[index].entryHashBacklink as
+    backlink: PANDA_LOG.nextEntryArgs[index].backlink as
       | string
       | undefined,
-    entryHashSkiplink: PANDA_LOG.nextEntryArgs[index].entryHashSkiplink as
+    skiplink: PANDA_LOG.nextEntryArgs[index].skiplink as
       | string
       | undefined,
     seqNum: PANDA_LOG.nextEntryArgs[index].seqNum,

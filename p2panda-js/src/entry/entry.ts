@@ -38,8 +38,8 @@ export const signPublishEntry = async (
   const { entryEncoded, entryHash } = signEncodeEntry(
     keyPair,
     operationEncoded,
-    entryArgs.entryHashSkiplink,
-    entryArgs.entryHashBacklink,
+    entryArgs.skiplink,
+    entryArgs.backlink,
     entryArgs.seqNum,
     entryArgs.logId,
   );
