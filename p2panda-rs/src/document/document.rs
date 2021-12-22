@@ -11,6 +11,8 @@ use crate::operation::{AsOperation, OperationWithMeta};
 use crate::schema::Schema;
 use incremental_topo::IncrementalTopo;
 
+use crate::Validate;
+
 /// Hard coded cddl string for now
 const DOCUMENT_SCHEMA: &str = "wiki = { (
     title: { type: \"str\", value: tstr },
@@ -68,9 +70,25 @@ impl Document {
         self.operations.clone()
     }
 
+    /// Get the create operation for this document. We unwrap and panic if the value is None
+    /// as all documents should contain at least a create message. This was validated when building
+    /// with DocumentBuilder.
+    fn get_create_operation(&self) -> OperationWithMeta {
+        self.get_operation(self.id().as_str())
+            .expect("There should be a CREATE operation")
+    }
+    /// Get an operation from this document by its id. Returns an error if operation
+    /// is not found.
+    fn get_operation(&self, id: &str) -> Result<OperationWithMeta, DocumentError> {
+        match self.operations.get(id) {
+            Some(operation) => Ok(operation.to_owned()),
+            None => Err(DocumentError::OperationNotFound),
+        }
+    }
+
     /// Returns a result containing an iterable collection of topologically sorted
     /// nodes in this graph, _except_ the root, identified by their id.
-    pub fn sort(&self) -> Result<incremental_topo::Descendants<String>, DocumentError> {
+    fn sort(&self) -> Result<incremental_topo::Descendants<String>, DocumentError> {
         match self.graph.descendants(self.id().as_str()) {
             Ok(d) => Ok(d),
             Err(_) => Err(DocumentError::IncrementalTopoError),
@@ -80,30 +98,26 @@ impl Document {
     /// Sort the graph topologically, then reduce the linearised operations into a single
     /// `Instance`.
     pub fn resolve(&self) -> Result<Instance, DocumentError> {
-        let operations = self.operations();
+        let mut instance = Instance::try_from(self.get_create_operation())?;
 
-        let create_operation = operations.get(self.id().as_str());
-
-        if create_operation.is_none() {
-            return Err(DocumentError::NoCreateOperation);
-        }
-
-        // We unwrap here because we checked already
-        let mut instance = Instance::try_from(create_operation.unwrap().to_owned()).unwrap();
-
-        self.sort()?.try_for_each(|id| {
-            let operation = operations.get(id);
-
-            if operation.is_none() {
-                return Err(DocumentError::OperationDoesNotExist);
-            }
-
-            match instance.update(operation.unwrap().to_owned()) {
+        self.sort()?
+            .try_for_each(|id| match instance.update(self.get_operation(id)?) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(DocumentError::InstanceError(e)),
-            }
-        })?;
+            })?;
         Ok(instance)
+    }
+}
+
+impl Validate for Document {
+    type Error = DocumentError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        // Create and update operations can not have empty fields.
+
+        self.get_operation(self.id().as_str())?;
+
+        Ok(())
     }
 }
 
@@ -150,8 +164,10 @@ impl DocumentBuilder {
         let collect_create_operation: Vec<OperationWithMeta> =
             self.operations_iter().filter(|op| op.is_create()).collect();
 
-        if collect_create_operation.len() > 1 || collect_create_operation.is_empty() {
-            // Error
+        if collect_create_operation.len() > 1 {
+            return Err(DocumentBuilderError::MoreThanOneCreateOperation);
+        } else if collect_create_operation.is_empty() {
+            return Err(DocumentBuilderError::NoCreateOperation);
         }
 
         let create_operation = collect_create_operation.get(0).unwrap(); // unwrap as we know there is one item
@@ -166,7 +182,7 @@ impl DocumentBuilder {
         let schema_hash = create_operation.schema();
 
         // Normally we would get the schema string from the DB by it's hash
-        let schema = Schema::new(&schema_hash, DOCUMENT_SCHEMA).unwrap();
+        let schema = Schema::new(&schema_hash, DOCUMENT_SCHEMA)?;
 
         // Instantiate graph and operations map
         let mut graph = IncrementalTopo::new();

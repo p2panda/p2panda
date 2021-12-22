@@ -17,6 +17,10 @@ pub enum DocumentBuilderError {
     /// Internal IncrementalTopo error.
     #[error("Error adding dependency to graph")]
     IncrementalTopoDepenedencyError,
+
+    /// Handle errors from validating CBOR schemas.
+    #[error(transparent)]
+    SchemaError(#[from] crate::schema::SchemaError),
 }
 
 /// Error types for methods of `Document` struct.
@@ -26,6 +30,10 @@ pub enum DocumentError {
     /// No create operation found.
     #[error("Every document must contain one create operation")]
     NoCreateOperation,
+
+    /// No operation found.
+    #[error("No operation found with that id")]
+    OperationNotFound,
 
     /// Internal IncrementalTopo error.
     #[error("Error sorting graph")]
