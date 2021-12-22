@@ -123,7 +123,7 @@ mod tests {
         assert!(operation.is_update());
         assert!(operation.has_id());
         assert_eq!(
-            operation.schema().clone(),
+            operation.schema(),
             Hash::new_from_bytes(vec![1, 255, 0]).unwrap()
         );
 
