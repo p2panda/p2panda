@@ -89,10 +89,9 @@ use std::collections::HashMap;
 use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{Operation, OperationFields};
-
+use crate::materialiser::{marshall_entries, DAG};
+use crate::operation::Operation;
 use crate::test_utils::mocks::logs::{Log, LogEntry};
-use crate::test_utils::mocks::materialisation::{filter_entries, Materialiser};
 use crate::test_utils::mocks::utils::Result;
 use crate::test_utils::mocks::Client;
 use crate::test_utils::utils::NextEntryArgs;
@@ -306,14 +305,19 @@ impl Node {
     /// Get the next instance args (hash of the entry considered the tip of this instance) needed when publishing
     /// UPDATE or DELETE operations
     pub fn next_instance_args(&mut self, document_id: &str) -> Option<String> {
-        let mut materialiser = Materialiser::new();
-        let filtered_entries = filter_entries(self.all_entries());
-        materialiser.build_dags(filtered_entries);
-        // Get the instance with this id
-        match materialiser.dags().get_mut(document_id) {
-            // Sort it topologically and take the last entry hash
-            Some(instance_dag) => instance_dag.topological().pop(),
-            None => None,
+        let edges = marshall_entries(
+            self.all_entries()
+                .iter()
+                .filter(|entry| entry.hash().as_str() == document_id)
+                .map(|entry| (entry.entry_encoded(), entry.operation_encoded()))
+                .collect(),
+        )
+        .unwrap();
+        if !edges.is_empty() {
+            let mut dag = DAG::new_from_graph(edges);
+            dag.topological().pop()
+        } else {
+            None
         }
     }
 
@@ -385,36 +389,6 @@ impl Node {
 
         Ok(())
     }
-
-    /// Get all Instances of this Schema
-    pub fn query_all(&self, schema: &str) -> Result<HashMap<String, OperationFields>> {
-        // Instantiate a new materialiser instance
-        let mut materialiser = Materialiser::new();
-
-        // Filter published entries against permissions published to user system log
-        let filtered_entries = filter_entries(self.all_entries());
-
-        // Materialise Instances resolving merging concurrent edits
-        materialiser.materialise(&filtered_entries)?;
-
-        // Query the materialised Instances
-        materialiser.query_all(schema)
-    }
-
-    /// Get a specific Instance
-    pub fn query(&self, schema: &str, instance: &str) -> Result<OperationFields> {
-        // Instantiate a new materialiser instance
-        let mut materialiser = Materialiser::new();
-
-        // Filter published entries against permissions published to user system log
-        let filtered_entries = filter_entries(self.all_entries());
-
-        // Materialise Instances resolving merging concurrent edits
-        materialiser.materialise(&filtered_entries)?;
-
-        // Query the materialised Instances
-        materialiser.query_instance(schema, instance)
-    }
 }
 
 #[cfg(test)]
@@ -424,20 +398,56 @@ mod tests {
     use crate::entry::{LogId, SeqNum};
     use crate::operation::OperationValue;
     use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
-    use crate::test_utils::fixtures::{
-        create_operation, delete_operation, hash, private_key, some_hash, update_operation,
-    };
+    use crate::test_utils::fixtures::{create_operation, hash, private_key, update_operation};
     use crate::test_utils::mocks::client::Client;
     use crate::test_utils::mocks::node::{send_to_node, Node};
     use crate::test_utils::utils::{keypair_from_private, operation_fields, NextEntryArgs};
 
-    fn mock_node(panda: &Client) -> Node {
+    #[rstest]
+    fn next_entry_args(private_key: String) {
+        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
         let mut node = Node::new();
 
         // Publish a CREATE operation
-        let instance_1 = send_to_node(
+        let entry1_hash = send_to_node(
             &mut node,
-            panda,
+            &panda,
+            &create_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Ohh, my first message!".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let next_entry_args = node
+            .next_entry_args(&panda.author(), Some(&entry1_hash), None)
+            .unwrap();
+
+        let expected_next_entry_args = NextEntryArgs {
+            log_id: LogId::new(1),
+            seq_num: SeqNum::new(2).unwrap(),
+            backlink: Some(entry1_hash),
+            skiplink: None,
+        };
+
+        assert_eq!(next_entry_args.log_id, expected_next_entry_args.log_id);
+        assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
+        assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
+        assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
+    }
+
+    #[rstest]
+    fn next_entry_args_at_specific_seq_num(private_key: String) {
+        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
+        let mut node = Node::new();
+
+        // Publish a CREATE operation
+        let entry1_hash = send_to_node(
+            &mut node,
+            &panda,
             &create_operation(
                 hash(DEFAULT_SCHEMA_HASH),
                 operation_fields(vec![(
@@ -451,10 +461,10 @@ mod tests {
         // Publish an UPDATE operation
         send_to_node(
             &mut node,
-            panda,
+            &panda,
             &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                instance_1.clone(),
+                entry1_hash.clone(),
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Which I now update.".to_string()),
@@ -463,74 +473,18 @@ mod tests {
         )
         .unwrap();
 
-        // Publish an DELETE operation
-        send_to_node(
-            &mut node,
-            panda,
-            &delete_operation(hash(DEFAULT_SCHEMA_HASH), instance_1),
-        )
-        .unwrap();
-
-        // Publish another CREATE operation
-        send_to_node(
-            &mut node,
-            panda,
-            &create_operation(
-                hash(DEFAULT_SCHEMA_HASH),
-                operation_fields(vec![(
-                    "message",
-                    OperationValue::Text("Let's try that again.".to_string()),
-                )]),
-            ),
-        )
-        .unwrap();
-
-        node
-    }
-
-    #[rstest]
-    fn next_entry_args(private_key: String) {
-        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
-        let mut node = mock_node(&panda);
-
-        let next_entry_args = node
-            .next_entry_args(&panda.author(), Some(&hash(DEFAULT_SCHEMA_HASH)), None)
-            .unwrap();
-
-        let expected_next_entry_args = NextEntryArgs {
-            log_id: LogId::new(1),
-            seq_num: SeqNum::new(5).unwrap(),
-            backlink: some_hash(
-                "00208f742cbae37a03fed0cd73c1a530ff57387456d507b8ccd56a87a5604e376b6f",
-            ),
-            skiplink: None,
-        };
-
-        assert_eq!(next_entry_args.log_id, expected_next_entry_args.log_id);
-        assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
-        assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
-        assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
-    }
-
-    #[rstest]
-    fn next_entry_args_at_specific_seq_num(private_key: String) {
-        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
-        let mut node = mock_node(&panda);
-
         let next_entry_args = node
             .next_entry_args(
                 &panda.author(),
-                Some(&hash(DEFAULT_SCHEMA_HASH)),
-                Some(&SeqNum::new(3).unwrap()),
+                Some(&entry1_hash),
+                Some(&SeqNum::new(2).unwrap()),
             )
             .unwrap();
 
         let expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
-            seq_num: SeqNum::new(3).unwrap(),
-            backlink: some_hash(
-                "00204ee7027b834265bcfa43a666dec820b56f6c9fe51791cb68ddab952cf59c95e0",
-            ),
+            seq_num: SeqNum::new(2).unwrap(),
+            backlink: Some(entry1_hash),
             skiplink: None,
         };
 
@@ -538,34 +492,5 @@ mod tests {
         assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
-    }
-
-    #[rstest]
-    fn query(private_key: String) {
-        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
-        let node = mock_node(&panda);
-
-        // Get all entries
-        let entries = node.all_entries();
-
-        // There should be 4 entries
-        assert_eq!(entries.len(), 4);
-
-        // Query all instances
-        let instances = node.query_all(&DEFAULT_SCHEMA_HASH.to_string()).unwrap();
-
-        // There should be one instance
-        assert_eq!(instances.len(), 1);
-
-        // Query for one instance by id
-        let instance = node
-            .query(&DEFAULT_SCHEMA_HASH.to_string(), &entries[3].hash_str())
-            .unwrap();
-
-        // Operation content should be correct
-        assert_eq!(
-            instance.get("message").unwrap().to_owned(),
-            OperationValue::Text("Let's try that again.".to_string())
-        );
     }
 }
