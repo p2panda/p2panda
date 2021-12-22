@@ -67,6 +67,7 @@ impl Document {
         self.get_operation(self.id().as_str())
             .expect("There should be a CREATE operation")
     }
+
     /// Get an operation from this document by its id. Returns an error if operation
     /// is not found.
     fn get_operation(&self, id: &str) -> Result<OperationWithMeta, DocumentError> {
