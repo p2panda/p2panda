@@ -69,17 +69,13 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
                 decoded_operations: Vec::new(),
                 next_entry_args: Vec::new(),
             };
-
+            let document_id = log.entries()[0].hash();
             for log_entry in log.entries().iter() {
                 let operation_encoded = OperationEncoded::try_from(&log_entry.operation).unwrap();
                 let entry =
                     decode_entry(&log_entry.entry_encoded, Some(&operation_encoded)).unwrap();
                 let next_entry_args = node
-                    .next_entry_args(
-                        &author,
-                        Some(&log_entry.entry_encoded.hash()),
-                        Some(entry.seq_num()),
-                    )
+                    .next_entry_args(&author, Some(&document_id), Some(entry.seq_num()))
                     .unwrap();
                 let operation_decoded = entry.operation().unwrap();
                 let entry_data = EncodedEntryData {
