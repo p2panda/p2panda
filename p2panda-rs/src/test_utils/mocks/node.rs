@@ -22,8 +22,8 @@
 //! // Instantiate one client named "panda"
 //! let panda = Client::new("panda".to_string(), new_key_pair());
 //!
-//! // Panda creates a chat operation by publishing a CREATE operation
-//! let instance_a_hash = send_to_node(
+//! // Panda creates a new chat document by publishing a CREATE operation
+//! let document1_hash_id = send_to_node(
 //!     &mut node,
 //!     &panda,
 //!     &create_operation(
@@ -33,13 +33,13 @@
 //! )
 //! .unwrap();
 //!
-//! // Panda updates their previous chat operation by publishing an UPDATE operation
+//! // Panda updates the document by publishing an UPDATE operation
 //! send_to_node(
 //!     &mut node,
 //!     &panda,
 //!     &update_operation(
 //!         hash(CHAT_SCHEMA_HASH),
-//!         instance_a_hash.clone(),
+//!         document1_hash_id.clone(),
 //!         operation_fields(vec![("message", OperationValue::Text("Which I now update.".to_string()))]),
 //!     ),
 //! )
@@ -49,11 +49,11 @@
 //! send_to_node(
 //!     &mut node,
 //!     &panda,
-//!     &delete_operation(hash(CHAT_SCHEMA_HASH), instance_a_hash),
+//!     &delete_operation(hash(CHAT_SCHEMA_HASH), document1_hash_id),
 //! )
 //! .unwrap();
 //!
-//! // Panda creates another chat operation by publishing a CREATE operation
+//! // Panda creates another chat document by publishing a new CREATE operation
 //! send_to_node(
 //!     &mut node,
 //!     &panda,
@@ -70,18 +70,6 @@
 //! // There should be 4 entries
 //! entries.len(); // => 4
 //!
-//! // Query all instances of a certain schema
-//! let instances = node.query_all(&CHAT_SCHEMA_HASH.to_string()).unwrap();
-//!
-//! // There should be one instance, because on was deleted
-//! instances.len(); // => 1
-//!
-//! // Query for one instance by id
-//! let instance = node
-//!     .query(&CHAT_SCHEMA_HASH.to_string(), &entries[3].hash_str())
-//!     .unwrap();
-//!
-//! instance.get("message").unwrap(); // => "Let's try that again."
 //! ```
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use std::collections::HashMap;
