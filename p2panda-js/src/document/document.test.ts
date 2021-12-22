@@ -82,7 +82,7 @@ describe('document', () => {
 
       const asyncFunctionMock = jest
         .fn()
-        .mockResolvedValue(entryArgsFixture(3));
+        .mockResolvedValue(entryArgsFixture(4));
       jest
         .spyOn(session, 'getNextEntryArgs')
         .mockImplementation(asyncFunctionMock);
@@ -96,7 +96,7 @@ describe('document', () => {
         session,
       });
 
-      expect(entryEncoded).toEqual(encodedEntryFixture(3).entryBytes);
+      expect(entryEncoded).toEqual(encodedEntryFixture(4).entryBytes);
     });
   });
 });
