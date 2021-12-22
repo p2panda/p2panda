@@ -158,20 +158,20 @@ impl Node {
 
     /// Get the author of a document.
     pub fn get_document_author(&self, document_id: String) -> Option<String> {
-        let mut instance_author = None;
+        let mut document_author = None;
         self.entries.keys().for_each(|author| {
             let author_logs = self.entries.get(author).unwrap();
             author_logs.iter().for_each(|(_id, log)| {
                 let entries = log.entries();
-                let instance_create_entry = entries
+                let document_create_entry = entries
                     .iter()
                     .find(|log_entry| log_entry.hash_str() == document_id);
-                if instance_create_entry.is_some() {
-                    instance_author = Some(author.to_owned())
+                if document_create_entry.is_some() {
+                    document_author = Some(author.to_owned())
                 };
             });
         });
-        instance_author
+        document_author
     }
 
     /// Find the log id for the given document and author.
@@ -290,9 +290,9 @@ impl Node {
         Ok(entry_args)
     }
 
-    /// Get the next instance args (hash of the entry considered the tip of this instance) needed when publishing
+    /// Get the hash of the current tip of a document. Needed when publishing
     /// UPDATE or DELETE operations
-    pub fn next_instance_args(&mut self, document_id: &str) -> Option<String> {
+    pub fn get_document_tip(&mut self, document_id: &str) -> Option<String> {
         let edges = marshall_entries(
             self.all_entries()
                 .iter()
@@ -317,10 +317,10 @@ impl Node {
         operation: &Operation,
     ) -> Result<()> {
         // We add on several metadata values that don't currently exist in a p2panda Entry.
-        // Notably: previous_operation and instance_author
+        // Notably: previous_operation and document_author
 
         let previous_operation = match operation.id() {
-            Some(id) => self.next_instance_args(id.as_str()),
+            Some(id) => self.get_document_tip(id.as_str()),
             None => None,
         };
 
@@ -328,7 +328,7 @@ impl Node {
         let log_id = entry.log_id().as_i64();
         let author = entry_encoded.author();
 
-        let instance_author = match operation.id() {
+        let document_author = match operation.id() {
             Some(id) => self.get_document_author(id.as_str().into()),
             None => Some(author.as_str().to_string()),
         };
@@ -369,7 +369,7 @@ impl Node {
         // Add this entry to database
         log.add_entry(LogEntry::new(
             author,
-            instance_author,
+            document_author,
             entry_encoded.to_owned(),
             operation.to_owned(),
             previous_operation,
