@@ -396,6 +396,19 @@ mod tests {
         let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
         let mut node = Node::new();
 
+        let mut next_entry_args = node.next_entry_args(&panda.author(), None, None).unwrap();
+
+        let mut expected_next_entry_args = NextEntryArgs {
+            log_id: LogId::new(1),
+            seq_num: SeqNum::new(1).unwrap(),
+            backlink: None,
+            skiplink: None,
+        };
+
+        assert_eq!(next_entry_args.log_id, expected_next_entry_args.log_id);
+        assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
+        assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
+        assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
         // Publish a CREATE operation
         let entry1_hash = send_to_node(
             &mut node,
@@ -410,14 +423,45 @@ mod tests {
         )
         .unwrap();
 
-        let next_entry_args = node
+        next_entry_args = node
             .next_entry_args(&panda.author(), Some(&entry1_hash), None)
             .unwrap();
 
-        let expected_next_entry_args = NextEntryArgs {
+        expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
             seq_num: SeqNum::new(2).unwrap(),
-            backlink: Some(entry1_hash),
+            backlink: Some(entry1_hash.clone()),
+            skiplink: None,
+        };
+
+        assert_eq!(next_entry_args.log_id, expected_next_entry_args.log_id);
+        assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
+        assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
+        assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
+
+        // Publish an UPDATE operation
+        let entry2_hash = send_to_node(
+            &mut node,
+            &panda,
+            &update_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                entry1_hash.clone(),
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Which I now update.".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        next_entry_args = node
+            .next_entry_args(&panda.author(), Some(&entry1_hash), None)
+            .unwrap();
+
+        expected_next_entry_args = NextEntryArgs {
+            log_id: LogId::new(1),
+            seq_num: SeqNum::new(3).unwrap(),
+            backlink: Some(entry2_hash),
             skiplink: None,
         };
 
