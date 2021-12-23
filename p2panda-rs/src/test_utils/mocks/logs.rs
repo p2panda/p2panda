@@ -13,14 +13,14 @@ use crate::identity::Author;
 use crate::operation::{Operation, OperationEncoded};
 
 /// This struct is an augmented version of a simple log entry. It includes extra properties to aid
-/// in testing and materialising instances.
+/// in testing and materialising documents.
 #[derive(Clone, Debug)]
 pub struct LogEntry {
     /// The author of this entry.
     pub author: Author,
 
-    /// The author of the instance this entry is part of.
-    pub instance_author: Option<String>,
+    /// The author of the document this entry is part of.
+    pub document_author: Option<String>,
 
     /// The encoded entry.
     pub entry_encoded: EntrySigned,
@@ -52,14 +52,14 @@ impl LogEntry {
     /// Create a new log.
     pub fn new(
         author: Author,
-        instance_author: Option<String>,
+        document_author: Option<String>,
         entry_encoded: EntrySigned,
         operation: Operation,
         previous_operation: Option<String>,
     ) -> Self {
         Self {
             author,
-            instance_author,
+            document_author,
             entry_encoded,
             operation,
             previous_operation,
@@ -82,8 +82,8 @@ impl LogEntry {
     }
 
     /// Get the author of the instance this entry belongs to.
-    pub fn instance_author(&self) -> String {
-        self.instance_author.clone().unwrap().as_str().to_string()
+    pub fn document_author(&self) -> String {
+        self.document_author.clone().unwrap().as_str().to_string()
     }
 
     /// Get the operation from this entry.

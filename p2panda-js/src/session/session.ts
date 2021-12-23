@@ -293,7 +293,7 @@ export class Session {
   /**
    * Signs and publishes an `update` entry for the given application data and
    * matching schema. An `update` entry references the entry hash of the
-   * `create` entry which is the root of this materialized document.
+   * `create` entry which is the root of this document.
    *
    * Caches arguments for creating the next entry of this schema in the given
    * session.
@@ -339,8 +339,7 @@ export class Session {
 
   /**
    * Signs and publishes a `delete` entry for the given schema. References the
-   * entry hash of the `create` entry which is the id of this materialized
-   * document.
+   * entry hash of the `create` entry which is the id of this document.
    *
    * Caches arguments for creating the next entry of this schema in the given session.
    *

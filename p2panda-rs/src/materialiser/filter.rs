@@ -9,12 +9,12 @@ use crate::operation::OperationEncoded;
 #[allow(dead_code)]
 pub fn single_writer_filter(
     entries: Vec<(EntrySigned, OperationEncoded)>,
-    instance_author: Author,
+    document_author: Author,
 ) -> Vec<(EntrySigned, OperationEncoded)> {
     entries
         .iter()
         .cloned()
-        .filter(|(entry_encoded, _)| entry_encoded.author().as_str() == instance_author.as_str())
+        .filter(|(entry_encoded, _)| entry_encoded.author().as_str() == document_author.as_str())
         .collect()
 }
 
@@ -24,14 +24,14 @@ pub fn single_writer_filter(
 #[allow(dead_code)]
 pub fn multi_writer_filter(
     entries: Vec<(EntrySigned, OperationEncoded)>,
-    instance_author: Author,
+    document_author: Author,
     permitted_authors: Vec<Author>,
 ) -> Vec<(EntrySigned, OperationEncoded)> {
     entries
         .iter()
         .cloned()
         .filter(|(entry_encoded, _)| {
-            entry_encoded.author().as_str() == instance_author.as_str()
+            entry_encoded.author().as_str() == document_author.as_str()
                 || permitted_authors.iter().any(|permitted_author| {
                     permitted_author.as_str() == entry_encoded.author().as_str()
                 })
