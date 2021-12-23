@@ -30,6 +30,7 @@ impl OperationWithMeta {
         let operation = Operation::from(operation_encoded);
 
         // decode entry passing entry_encoded, this validates that the entry and operation
+        // are correctly matching.
         decode_entry(entry_encoded, Some(operation_encoded))?;
 
         let operation_with_meta = Self {
