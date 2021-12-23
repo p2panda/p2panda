@@ -16,7 +16,7 @@ export const schemaFixture = (): string => {
   return PANDA_LOG.decodedOperations[0].schema;
 };
 
-export const documentId = (): string => {
+export const documentIdFixture = (): string => {
   return PANDA_LOG.encodedEntries[0].entryHash;
 };
 

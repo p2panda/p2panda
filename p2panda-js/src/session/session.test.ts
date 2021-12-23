@@ -6,19 +6,20 @@ import { KeyPair } from 'wasm';
 import { recoverKeyPair } from '~/identity';
 import { Session } from '~/session';
 import { Fields } from '~/types';
+
 import {
   authorFixture,
-  entryFixture,
+  documentIdFixture,
   encodedEntryFixture,
   entryArgsFixture,
+  entryFixture,
   schemaFixture,
-  documentId
 } from '../../test/fixtures';
 
 const MOCK_SERVER_URL = 'http://localhost:2020';
 
 /**
- * Test the `Session` class
+ * Test the `Session` class.
  *
  * These tests expect the mock rpc server to be running, which can be started
  * with `npm run test:mock-node`.
@@ -82,7 +83,7 @@ describe('Session', () => {
       expect(session.setSchema(schemaFixture()).query()).resolves;
     });
 
-    it('can materialize instances', async () => {
+    it('can materialize documents to instances', async () => {
       const instances = await session.query({
         schema: schemaFixture(),
       });
@@ -125,7 +126,7 @@ describe('Session', () => {
       const session = new Session(MOCK_SERVER_URL);
       const nextEntryArgs = await session.getNextEntryArgs(
         authorFixture().publicKey,
-        documentId(),
+        documentIdFixture(),
       );
       expect(nextEntryArgs.entryHashSkiplink).toEqual(
         entryArgsFixture(5).entryHashSkiplink,
@@ -157,13 +158,13 @@ describe('Session', () => {
       };
       session.setNextEntryArgs(
         authorFixture().publicKey,
-        documentId(),
+        documentIdFixture(),
         nextEntryArgs,
       );
 
       const cacheResponse = await session.getNextEntryArgs(
         authorFixture().publicKey,
-        documentId(),
+        documentIdFixture(),
       );
       expect(cacheResponse.logId).toEqual(nextEntryArgs.logId);
       expect(mockedFn.mock.calls.length).toBe(0);
@@ -173,7 +174,7 @@ describe('Session', () => {
   describe('create', () => {
     let session: Session;
 
-    // Fields for instance to be created
+    // Fields for document to be created
     const fields = entryFixture(1).operation?.fields as Fields;
 
     beforeEach(async () => {
@@ -207,8 +208,8 @@ describe('Session', () => {
     // These are the fields for an update operation
     const fields = entryFixture(2).operation?.fields as Fields;
 
-    // This is the instance id
-    const id = entryFixture(2).operation?.id as string;
+    // This is the document id
+    const documentId = entryFixture(2).operation?.id as string;
 
     beforeEach(async () => {
       session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
@@ -219,13 +220,14 @@ describe('Session', () => {
 
     it('handles valid arguments', async () => {
       expect(
-        await session.update(id, fields, {
+        await session.update(documentId, fields, {
           schema: schemaFixture(),
         }),
       ).resolves;
 
-      expect(await session.setSchema(schemaFixture()).update(id, fields))
-        .resolves;
+      expect(
+        await session.setSchema(schemaFixture()).update(documentId, fields),
+      ).resolves;
     });
 
     it('throws when missing a required parameter', async () => {
@@ -235,11 +237,11 @@ describe('Session', () => {
       ).rejects.toThrow();
       await expect(
         // @ts-ignore: We deliberately use the API wrong here
-        session.update(id, null, { schema: schemaFixture() }),
+        session.update(documentId, null, { schema: schemaFixture() }),
       ).rejects.toThrow();
       await expect(
         // @ts-ignore: We deliberately use the API wrong here
-        session.update(id, fields),
+        session.update(documentId, fields),
       ).rejects.toThrow();
     });
   });
@@ -247,8 +249,8 @@ describe('Session', () => {
   describe('delete', () => {
     let session: Session;
 
-    // This is the instance id that can be deleted
-    const instanceId = entryFixture(3).operation?.id as string;
+    // This is the document id that can be deleted
+    const documentId = entryFixture(3).operation?.id as string;
 
     beforeEach(async () => {
       session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
@@ -258,8 +260,8 @@ describe('Session', () => {
     });
 
     it('handles valid arguments', async () => {
-      expect(session.delete(instanceId, { schema: schemaFixture() })).resolves;
-      expect(session.setSchema(schemaFixture()).delete(instanceId)).resolves;
+      expect(session.delete(documentId, { schema: schemaFixture() })).resolves;
+      expect(session.setSchema(schemaFixture()).delete(documentId)).resolves;
     });
 
     it('throws when missing a required parameter', async () => {
@@ -270,7 +272,7 @@ describe('Session', () => {
 
       expect(
         // @ts-ignore: We deliberately use the API wrong here
-        session.delete(instanceId),
+        session.delete(documentId),
       ).rejects.toThrow();
     });
   });
