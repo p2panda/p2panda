@@ -105,12 +105,12 @@ pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
     Operation::new_create(schema, fields).unwrap()
 }
 
-/// Generate an update operation based on passed schema hash, instance id and operation fields.
+/// Generate an update operation based on passed schema hash, document id and operation fields.
 pub fn update_operation(schema: Hash, document_id: Hash, fields: OperationFields) -> Operation {
     Operation::new_update(schema, document_id, fields).unwrap()
 }
 
-/// Generate a delete operation based on passed schema hash and instance id.
+/// Generate a delete operation based on passed schema hash and document id.
 pub fn delete_operation(schema: Hash, document_id: Hash) -> Operation {
     Operation::new_delete(schema, document_id).unwrap()
 }

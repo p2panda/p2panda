@@ -16,8 +16,8 @@ use crate::Validate;
 /// stored inside the node database.
 ///
 /// Entries are separated from the actual (off-chain) data to be able to delete user data without
-/// loosing the integrity of the log. Each entry only holds a hash of the operation payload, this is
-/// why an operation instance is required during entry signing.
+/// loosing the integrity of the log. Each entry only holds a hash of the operation payload, this
+/// is why an operation instance is required during entry signing.
 ///
 /// [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 ///

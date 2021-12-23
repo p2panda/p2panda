@@ -57,7 +57,7 @@ Released on 2021-10-25: :package: `p2panda-js` :package: `p2panda-rs`
 - `serde` serialization and deserialization for all atomic structs [#42](https://github.com/p2panda/p2panda/pull/42) `rs`
 - Implement method for iterating over MessageFields [#68](https://github.com/p2panda/p2panda/pull/68) `rs`
 - TypeScript API that wraps wasm bindings, introduce OpenRPC specification [#67](https://github.com/p2panda/p2panda/pull/67) `js` 🥞
-- Methods to update and delete instances [#114](https://github.com/p2panda/p2panda/pull/114) `js` 🥞
+- Methods to update and delete documents [#114](https://github.com/p2panda/p2panda/pull/114) `js` 🥞
 
 ### Changed
 

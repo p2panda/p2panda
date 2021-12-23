@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Create, encode and decode p2pandan operations.
+//! Create, encode and decode p2panda operations.
 //!
 //! Operations describe data mutations in the p2panda network. Authors send operations to create,
-//! update or delete instances or collections of data.
+//! update or delete documents or collections of data.
 mod error;
 #[allow(clippy::module_inception)]
 mod operation;

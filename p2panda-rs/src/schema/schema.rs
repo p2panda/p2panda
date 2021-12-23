@@ -434,7 +434,7 @@ mod tests {
     }
 
     #[rstest]
-    pub fn update_operation(#[from(hash)] instance_id: Hash, #[from(hash)] schema_hash: Hash) {
+    pub fn update_operation(#[from(hash)] document_id: Hash, #[from(hash)] schema_hash: Hash) {
         let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
 
         // Create an operation the long way without validation
@@ -447,12 +447,12 @@ mod tests {
             .unwrap();
 
         let operation =
-            Operation::new_update(schema_hash, instance_id.to_owned(), operation_fields).unwrap();
+            Operation::new_update(schema_hash, document_id.to_owned(), operation_fields).unwrap();
 
         // Create an operation the quick way *with* validation
         let operation_again = person_schema
             .update(
-                instance_id.as_str(),
+                document_id.as_str(),
                 vec![
                     ("name", OperationValue::Text("Panda".to_string())),
                     ("age", OperationValue::Integer(12)),
