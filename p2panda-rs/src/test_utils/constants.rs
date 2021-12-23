@@ -2,11 +2,13 @@
 
 //! Constants used across the test_utils module for default values.
 
-/// The default hash string, used when a hash is needed for testing, it's the default hash in fixtures when a custom value isn't specified.
+/// The default hash string, used when a hash is needed for testing, it's the default hash in
+/// fixtures when a custom value isn't specified.
 pub const DEFAULT_HASH: &str =
     "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 
-/// The default schema hash string, used in all operation fixtures when no custom schema hash is defined.
+/// The default schema hash string, used in all operation fixtures when no custom schema hash is
+/// defined.
 pub const DEFAULT_SCHEMA_HASH: &str =
     "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 
@@ -14,7 +16,8 @@ pub const DEFAULT_SCHEMA_HASH: &str =
 pub const DEFAULT_PRIVATE_KEY: &str =
     "eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e2";
 
-/// The default sequence number, used when an entry is created in a fixture and no custom values are provided.
+/// The default sequence number, used when an entry is created in a fixture and no custom values
+/// are provided.
 pub const DEFAULT_SEQ_NUM: i64 = 1;
 
 #[cfg(test)]

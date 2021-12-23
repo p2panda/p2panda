@@ -2,9 +2,10 @@
 
 import { recoverKeyPair } from '~/identity';
 import { Session } from '~/session';
-import { Fields } from '~/types';
 
-import { createInstance, deleteInstance, updateInstance } from '.';
+import type { Fields } from '~/types';
+
+import { createDocument, deleteDocument, updateDocument } from '.';
 
 import {
   authorFixture,
@@ -18,9 +19,9 @@ jest.mock('~/session');
 
 const MOCK_SERVER_URL = 'http://localhost:2020';
 
-describe('instance', () => {
-  describe('createInstance', () => {
-    it('creates an instance', async () => {
+describe('document', () => {
+  describe('createDocument', () => {
+    it('creates a document', async () => {
       const keyPair = await recoverKeyPair(authorFixture().privateKey);
       const session: Session = new Session(MOCK_SERVER_URL);
       session.setKeyPair(keyPair);
@@ -34,7 +35,7 @@ describe('instance', () => {
 
       const fields = entryFixture(1).operation?.fields as Fields;
 
-      const entryEncoded = await createInstance(fields, {
+      const entryEncoded = await createDocument(fields, {
         keyPair,
         schema: schemaFixture(),
         session,
@@ -44,8 +45,8 @@ describe('instance', () => {
     });
   });
 
-  describe('updateInstance', () => {
-    it('updates an instance', async () => {
+  describe('updateDocument', () => {
+    it('updates a document', async () => {
       const keyPair = await recoverKeyPair(authorFixture().privateKey);
       const session = new Session(MOCK_SERVER_URL);
       session.setKeyPair(keyPair);
@@ -60,10 +61,10 @@ describe('instance', () => {
       // These are the fields for an update operation
       const fields = entryFixture(2).operation?.fields as Fields;
 
-      // This is the instance id
+      // This is the document id
       const id = entryFixture(2).operation?.id as string;
 
-      const entryEncoded = await updateInstance(id, fields, {
+      const entryEncoded = await updateDocument(id, fields, {
         keyPair,
         schema: schemaFixture(),
         session,
@@ -73,29 +74,29 @@ describe('instance', () => {
     });
   });
 
-  describe('deleteInstance', () => {
-    it('deletes an instance', async () => {
+  describe('deleteDocument', () => {
+    it('deletes a document', async () => {
       const keyPair = await recoverKeyPair(authorFixture().privateKey);
       const session = new Session(MOCK_SERVER_URL);
       session.setKeyPair(keyPair);
 
       const asyncFunctionMock = jest
         .fn()
-        .mockResolvedValue(entryArgsFixture(3));
+        .mockResolvedValue(entryArgsFixture(4));
       jest
         .spyOn(session, 'getNextEntryArgs')
         .mockImplementation(asyncFunctionMock);
 
-      // This is the instance id
+      // This is the document id
       const id = entryFixture(3).operation?.id as string;
 
-      const entryEncoded = await deleteInstance(id, {
+      const entryEncoded = await deleteDocument(id, {
         keyPair,
         schema: schemaFixture(),
         session,
       });
 
-      expect(entryEncoded).toEqual(encodedEntryFixture(3).entryBytes);
+      expect(entryEncoded).toEqual(encodedEntryFixture(4).entryBytes);
     });
   });
 });
