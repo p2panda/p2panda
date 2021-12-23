@@ -16,7 +16,6 @@ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Struct which contains the values for the next entry args needed when publishing a new entry.
 #[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
 pub struct NextEntryArgs {
     /// The backlink of the next entry, can be None if this is the first entry published
     pub backlink: Option<Hash>,

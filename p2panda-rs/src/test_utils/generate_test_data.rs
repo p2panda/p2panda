@@ -149,14 +149,14 @@ mod tests {
                   ],
                   "nextEntryArgs": [
                     {
-                      "backlink": null,
-                      "skiplink": null,
+                      "entryHashBacklink": null,
+                      "entryHashSkiplink": null,
                       "seqNum": 1,
                       "logId": 1
                     },
                     {
-                      "backlink": "00207d5dd2f46f4ea413a078bc6a8df5064c4869558f03727e7b4404298e7b7ac6d6",
-                      "skiplink": null,
+                      "entryHashBacklink": "00207d5dd2f46f4ea413a078bc6a8df5064c4869558f03727e7b4404298e7b7ac6d6",
+                      "entryHashSkiplink": null,
                       "seqNum": 2,
                       "logId": 1
                     }
