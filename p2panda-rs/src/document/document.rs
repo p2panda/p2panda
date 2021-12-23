@@ -323,7 +323,7 @@ mod tests {
         )
         .unwrap();
 
-        let entries = node
+        let operations = node
             .all_entries()
             .iter()
             .map(|entry| {
@@ -331,7 +331,10 @@ mod tests {
             })
             .collect();
 
-        let document = DocumentBuilder::new(entries).build().unwrap();
-        println!("{:?}", document.resolve().unwrap())
+        let document = DocumentBuilder::new(operations).build().unwrap();
+
+        let instance = document.resolve().unwrap();
+
+        println!("{:?}", instance)
     }
 }
