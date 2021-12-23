@@ -46,4 +46,8 @@ pub enum DocumentError {
     /// Handle errors from validating CBOR schemas.
     #[error(transparent)]
     InstanceError(#[from] crate::instance::InstanceError),
+
+    /// Handle errors from building documents.
+    #[error(transparent)]
+    DocumentBuilderError(#[from] DocumentBuilderError),
 }

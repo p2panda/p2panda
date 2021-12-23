@@ -221,6 +221,7 @@ impl DocumentBuilder {
 #[cfg(test)]
 mod tests {
     use super::DocumentBuilder;
+    use crate::document::DocumentError;
     use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::{OperationValue, OperationWithMeta};
@@ -235,7 +236,7 @@ mod tests {
         schema: Hash,
         #[from(random_key_pair)] key_pair_1: KeyPair,
         #[from(random_key_pair)] key_pair_2: KeyPair,
-    ) {
+    ) -> Result<(), DocumentError> {
         let panda = Client::new("panda".to_string(), key_pair_1);
         let penguin = Client::new("penguin".to_string(), key_pair_2);
         let mut node = Node::new();
@@ -331,10 +332,12 @@ mod tests {
             })
             .collect();
 
-        let document = DocumentBuilder::new(operations).build().unwrap();
+        let document = DocumentBuilder::new(operations).build()?;
 
-        let instance = document.resolve().unwrap();
+        let instance = document.resolve()?;
 
-        println!("{:?}", instance)
+        println!("{:?}", instance);
+
+        Ok(())
     }
 }
