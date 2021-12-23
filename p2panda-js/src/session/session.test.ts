@@ -102,8 +102,8 @@ describe('Session', () => {
         encodedEntryFixture(4).entryBytes,
         encodedEntryFixture(4).payloadBytes,
       );
-      expect(nextEntryArgs.backlink).toEqual(
-        entryArgsFixture(5).backlink,
+      expect(nextEntryArgs.entryHashBacklink).toEqual(
+        entryArgsFixture(5).entryHashBacklink,
       );
     });
 
@@ -127,11 +127,11 @@ describe('Session', () => {
         authorFixture().publicKey,
         documentId(),
       );
-      expect(nextEntryArgs.skiplink).toEqual(
-        entryArgsFixture(5).skiplink,
+      expect(nextEntryArgs.entryHashSkiplink).toEqual(
+        entryArgsFixture(5).entryHashSkiplink,
       );
-      expect(nextEntryArgs.backlink).toEqual(
-        entryArgsFixture(5).backlink,
+      expect(nextEntryArgs.entryHashBacklink).toEqual(
+        entryArgsFixture(5).entryHashBacklink,
       );
       expect(nextEntryArgs.seqNum).toEqual(entryArgsFixture(5).seqNum);
       expect(nextEntryArgs.logId).toEqual(entryArgsFixture(5).logId);
@@ -146,10 +146,10 @@ describe('Session', () => {
 
       const nextEntryArgs = {
         // convert json null into undefined
-        backlink: entryArgsFixture(5).backlink as
+        entryHashBacklink: entryArgsFixture(5).entryHashBacklink as
           | string
           | undefined,
-        skiplink: entryArgsFixture(5).skiplink as
+        entryHashSkiplink: entryArgsFixture(5).entryHashSkiplink as
           | string
           | undefined,
         logId: entryArgsFixture(5).logId,

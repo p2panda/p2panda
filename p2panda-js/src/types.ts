@@ -4,8 +4,8 @@
  * Arguments for publishing the next entry
  */
 export type EntryArgs = {
-  skiplink: string | undefined;
-  backlink: string | undefined;
+  entryHashSkiplink: string | undefined;
+  entryHashBacklink: string | undefined;
   seqNum: number;
   logId: number;
 };
@@ -34,8 +34,8 @@ export type EntryRecord = Entry & {
  * Decoded entry containing optional `Operation`
  */
 export type Entry = {
-  backlink: string | null;
-  skiplink: string | null;
+  entryHashBacklink: string | null;
+  entryHashSkiplink: string | null;
   logId: number;
   operation: Operation | null;
   seqNum: number;
@@ -62,8 +62,8 @@ export type Fields = {
  * Decoded entry containing optional `Operation`
  */
 export type EntryTagged = {
-  backlink: string | null;
-  skiplink: string | null;
+  entryHashBacklink: string | null;
+  entryHashSkiplink: string | null;
   logId: number;
   operation: OperationTagged | null;
   seqNum: number;
