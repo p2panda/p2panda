@@ -114,7 +114,7 @@ pub fn verify_signature(
     }
 }
 
-/// Use `OperationFields` to attach user data to a [`Operation`].
+/// Use `OperationFields` to attach application data to a [`Operation`].
 ///
 /// See [`crate::atomic::OperationFields`] for further documentation.
 #[wasm_bindgen]
@@ -219,7 +219,7 @@ impl OperationFields {
     }
 }
 
-/// Returns an encoded `create` operation that creates an instance of the provided schema.
+/// Returns an encoded `create` operation that creates a document of the provided schema.
 ///
 /// Use `create` operations by attaching them to an entry that you publish.
 #[wasm_bindgen(js_name = encodeCreateOperation)]
@@ -233,33 +233,33 @@ pub fn encode_create_operation(
     Ok(operation_encoded.as_str().to_owned())
 }
 
-/// Returns an encoded `update` operation that updates fields of a given instance.
+/// Returns an encoded `update` operation that updates fields of a given document.
 ///
 /// Use `update` operations by attaching them to an entry that you publish.
 #[wasm_bindgen(js_name = encodeUpdateOperation)]
 pub fn encode_update_operation(
-    instance_id: String,
+    document_id: String,
     schema_hash: String,
     fields: OperationFields,
 ) -> Result<String, JsValue> {
-    let instance = jserr!(Hash::new(&instance_id));
+    let document = jserr!(Hash::new(&document_id));
     let schema = jserr!(Hash::new(&schema_hash));
-    let operation = jserr!(Operation::new_update(schema, instance, fields.0));
+    let operation = jserr!(Operation::new_update(schema, document, fields.0));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
 }
 
-/// Returns an encoded `delete` operation that deletes a given instance.
+/// Returns an encoded `delete` operation that deletes a given document.
 ///
 /// Use `delete` operations by attaching them to an entry that you publish.
 #[wasm_bindgen(js_name = encodeDeleteOperation)]
 pub fn encode_delete_operation(
-    instance_id: String,
+    document_id: String,
     schema_hash: String,
 ) -> Result<String, JsValue> {
-    let instance = jserr!(Hash::new(&instance_id));
+    let document = jserr!(Hash::new(&document_id));
     let schema = jserr!(Hash::new(&schema_hash));
-    let operation = jserr!(Operation::new_delete(schema, instance));
+    let operation = jserr!(Operation::new_delete(schema, document));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
 }

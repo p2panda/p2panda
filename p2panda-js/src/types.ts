@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * Arguments for publishing the next entry
+ * Arguments for publishing the next entry.
  */
 export type EntryArgs = {
   entryHashSkiplink: string | undefined;
@@ -11,7 +11,7 @@ export type EntryArgs = {
 };
 
 /**
- * Entry record received from aquadoggo
+ * Entry record received from aquadoggo.
  */
 export type EncodedEntry = {
   author: string;
@@ -24,14 +24,14 @@ export type EncodedEntry = {
 };
 
 /**
- * Entry record from aquadoggo with decoded `Entry`
+ * Entry record from aquadoggo with decoded `Entry`.
  */
 export type EntryRecord = Entry & {
   encoded: EncodedEntry;
 };
 
 /**
- * Decoded entry containing optional `Operation`
+ * Decoded entry containing optional `Operation`.
  */
 export type Entry = {
   entryHashBacklink: string | null;
@@ -42,7 +42,7 @@ export type Entry = {
 };
 
 /**
- * Decoded form of an operation, which can create, update or delete instances
+ * Decoded form of an operation, which can create, update or delete documents.
  */
 export type Operation = {
   action: 'create' | 'update' | 'delete';
@@ -52,14 +52,14 @@ export type Operation = {
 };
 
 /**
- * Object containing operation field values
+ * Object containing operation field values.
  */
 export type Fields = {
   [fieldname: string]: boolean | number | string;
 };
 
 /**
- * Decoded entry containing optional `Operation`
+ * Decoded entry containing optional `Operation`.
  */
 export type EntryTagged = {
   entryHashBacklink: string | null;
@@ -70,7 +70,7 @@ export type EntryTagged = {
 };
 
 /**
- * Decoded form of an operation, which can create, update or delete instances
+ * Decoded form of an operation, which can create, update or delete documents.
  */
 export type OperationTagged = {
   action: 'create' | 'update' | 'delete';
@@ -79,10 +79,10 @@ export type OperationTagged = {
 };
 
 /**
- * Object containing operation fields in tagged form
+ * Object containing operation fields in tagged form.
  */
 export type FieldsTagged = {
-  // currently only a schema with a text operation is supported
+  // Currently only a schema with a text operation is supported
   [fieldname: string]: OperationValue;
 };
 
@@ -92,7 +92,7 @@ export type OperationValue =
   | OperationValueInt;
 
 /**
- * An operation value of `boolean` type
+ * An operation value of `boolean` type.
  */
 export type OperationValueBool = {
   value: boolean;
@@ -100,7 +100,7 @@ export type OperationValueBool = {
 };
 
 /**
- * An operation value of `number` type, which must be an integer
+ * An operation value of `number` type, which must be an integer.
  */
 export type OperationValueInt = {
   value: number;
@@ -108,13 +108,16 @@ export type OperationValueInt = {
 };
 
 /**
- * An operation value of `string` type
+ * An operation value of `string` type.
  */
 export type OperationValueText = {
   value: string;
   type: 'str';
 };
 
+/**
+ * A materialized instance item with meta data.
+ */
 export type InstanceRecord = Record<
   string,
   boolean | number | string | unknown
