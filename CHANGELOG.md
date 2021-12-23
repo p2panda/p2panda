@@ -14,7 +14,6 @@ Highlights are marked with a pancake 🥞
 - `SecureGroup` for key negotiation in groups and message protection [#130](https://github.com/p2panda/p2panda/pull/130) `rs` 🥞
 - `SchemaBuilder` and `Schema` structs for working with CDDL definitions [#78](https://github.com/p2panda/p2panda/pull/78) `rs`
 - `test_utils` module containing `rstest` fixtures, mock `Node` and `Client` structs, test data helper for `p2panda-js` [#116](https://github.com/p2panda/p2panda/pull/116) `rs`
-- Reconciliation logic /w DAG for materialisation module [#129](https://github.com/p2panda/p2panda/pull/129) `rs`
 
 ### Changed
 
@@ -25,6 +24,7 @@ Highlights are marked with a pancake 🥞
 - Update dependencies, remove deprecated eslint-loader [#155](https://github.com/p2panda/p2panda/pull/155) `js`
 - Split utils modules in `test_utils` into utils.rs and constants.rs [#157](https://github.com/p2panda/p2panda/pull/157) `rs`
 - Use traits for validation methods in `Schema` [#160](https://github.com/p2panda/p2panda/pull/160) `rs`
+- Update API and mocks to reflect yasmf hash and document flow changes [#165](https://github.com/p2panda/p2panda/pull/165) _BREAKING_ `rs` `js`
 
 ### Campfires and boiling pots to sit around
 
