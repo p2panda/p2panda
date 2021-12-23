@@ -11,6 +11,7 @@ use cddl::validate_cbor_from_slice;
 use cddl::validator::cbor;
 
 use crate::hash::Hash;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::operation::{Operation, OperationFields, OperationValue};
 use crate::schema::SchemaError;
 
