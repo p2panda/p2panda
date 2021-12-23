@@ -256,11 +256,12 @@ export class Session {
   // Document operations
 
   /**
-   * Signs and publishes a `create` entry for the given user data and matching schema.
+   * Signs and publishes a `create` entry for the given application data and
+   * matching schema.
    *
    * Caches arguments for creating the next entry of this document in the given session.
    *
-   * @param fields user data to publish with the new entry, needs to match schema
+   * @param fields application data to publish with the new entry, needs to match schema
    * @param options optional config object:
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id
@@ -290,15 +291,15 @@ export class Session {
   }
 
   /**
-   * Signs and publishes an `update` entry for the given user data and matching
-   * schema. An `update` entry references the entry hash of the `create` entry
-   * which is the root of this materialized document.
+   * Signs and publishes an `update` entry for the given application data and
+   * matching schema. An `update` entry references the entry hash of the
+   * `create` entry which is the root of this materialized document.
    *
    * Caches arguments for creating the next entry of this schema in the given
    * session.
    *
    * @param documentId id of the document we update, this is the hash of the root `create` entry
-   * @param fields user data to publish with the new entry, needs to match schema
+   * @param fields application data to publish with the new entry, needs to match schema
    * @param options optional config object:
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id

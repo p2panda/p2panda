@@ -256,7 +256,7 @@
             },
             "Schema": {
                 "name": "schema",
-                "summary": "The used `Schema` for the user data",
+                "summary": "The used `Schema` for the application data",
                 "value": {
                     "$ref": "./test/test-data.json#/panda/logs/0/decodedOperations/0/schema"
                 }

@@ -114,7 +114,7 @@ pub fn verify_signature(
     }
 }
 
-/// Use `OperationFields` to attach user data to a [`Operation`].
+/// Use `OperationFields` to attach application data to a [`Operation`].
 ///
 /// See [`crate::atomic::OperationFields`] for further documentation.
 #[wasm_bindgen]

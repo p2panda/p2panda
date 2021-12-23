@@ -93,8 +93,8 @@ pub enum OperationValue {
     Relation(Hash),
 }
 
-/// Operation fields are used to store user data. They are implemented as a simple key/value store
-/// with support for a limited number of data types (see [`OperationValue`] for further
+/// Operation fields are used to store application data. They are implemented as a simple key/value
+/// store with support for a limited number of data types (see [`OperationValue`] for further
 /// documentation on this). A `OperationFields` instance can contain any number and types of
 /// fields. However, when a `OperationFields` instance is attached to a `Operation`, the
 /// operation's schema determines which fields may be used.
@@ -333,7 +333,7 @@ impl Operation {
         self.id.as_ref()
     }
 
-    /// Returns user data fields of operation.
+    /// Returns application data fields of operation.
     pub fn fields(&self) -> Option<&OperationFields> {
         self.fields.as_ref()
     }

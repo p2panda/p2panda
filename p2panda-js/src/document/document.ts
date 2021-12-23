@@ -9,8 +9,7 @@ import type { Context } from '~/session';
 import type { Fields } from '~/types';
 
 /**
- * Signs and publishes a `create` entry for the given user data and matching
- * document id.
+ * Signs and publishes a `create` entry for the given application data and matching document id.
  *
  * Returns the encoded entry that was created.
  */
