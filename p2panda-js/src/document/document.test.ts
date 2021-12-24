@@ -90,9 +90,9 @@ describe('document', () => {
         .mockImplementation(asyncFunctionMock);
 
       // This is the document id
-      const id = entryFixture(3).operation?.id as string;
+      const id = entryFixture(4).operation?.id as string;
 
-      const previousOperations = entryFixture(3).operation?.previousOperations as string[];
+      const previousOperations = entryFixture(4).operation?.previousOperations as string[];
 
       const entryEncoded = await deleteDocument(id, previousOperations, {
         keyPair,
