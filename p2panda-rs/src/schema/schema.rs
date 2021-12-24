@@ -16,7 +16,7 @@ use crate::hash::Hash;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::instance::{Instance, InstanceError};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::operation::{Operation, OperationFields, OperationValue, AsOperation};
+use crate::operation::{AsOperation, Operation, OperationFields, OperationValue};
 use crate::schema::SchemaError;
 
 /// CDDL types

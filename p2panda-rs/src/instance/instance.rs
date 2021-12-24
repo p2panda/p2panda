@@ -3,8 +3,8 @@
 //! Types and methods for deriving and maintaining `Instances`.
 use std::{collections::HashMap, convert::TryFrom};
 
-use crate::operation::{Operation, OperationValue, AsOperation};
 use crate::instance::error::InstanceError;
+use crate::operation::{AsOperation, Operation, OperationValue};
 
 /// The materialised view of a reduced collection of `Operations`
 #[derive(Debug, PartialEq, Default)]
@@ -62,7 +62,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::hash::Hash;
-    use crate::operation::{Operation, AsOperation};
+    use crate::operation::{AsOperation, Operation};
     use crate::schema::Schema;
     use crate::test_utils::fixtures::{create_operation, delete_operation, hash, update_operation};
 
