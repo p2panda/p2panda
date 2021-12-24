@@ -66,7 +66,7 @@ describe('document', () => {
 
       const previousOperations = entryFixture(2).operation?.previousOperations as string[];
 
-      const entryEncoded = await updateDocument(id, fields, previousOperations, {
+      const entryEncoded = await updateDocument(id, previousOperations, fields, {
         keyPair,
         schema: schemaFixture(),
         session,

@@ -334,7 +334,7 @@ export class Session {
       keyPair: options?.keyPair || this.keyPair,
       session: this,
     };
-    updateDocument(documentId, fields, previousOperations, mergedOptions);
+    updateDocument(documentId, previousOperations, fields, mergedOptions);
 
     return this;
   }
