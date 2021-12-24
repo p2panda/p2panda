@@ -98,6 +98,7 @@ impl Document {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Validate for Document {
     type Error = DocumentError;
 
@@ -206,7 +207,10 @@ impl DocumentBuilder {
 
         for op in self.operations() {
             // Validate each operation against the document schema before continuing.
-            schema.validate_operation_fields(&op.fields().unwrap())?;
+            // NB. cddl crate not wasm supported yet.
+
+            // schema.validate_operation_fields(&op.fields().unwrap())?;
+
             // Insert operation into map
             operations.insert(op.operation_id().as_str().to_owned(), op.to_owned());
             // Add node to graph
