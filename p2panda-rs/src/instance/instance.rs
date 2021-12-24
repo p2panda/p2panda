@@ -1,19 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Types and methods for deriving and maintaining `Instances`.
-use std::{collections::HashMap, convert::TryFrom};
+use std::collections::btree_map::Iter;
+use std::collections::BTreeMap;
+use std::convert::TryFrom;
 
 use crate::instance::error::InstanceError;
 use crate::operation::{AsOperation, Operation, OperationValue, OperationWithMeta};
 
 /// The materialised view of a reduced collection of `Operations`
 #[derive(Debug, PartialEq, Default)]
-pub struct Instance(HashMap<String, OperationValue>);
+pub struct Instance(BTreeMap<String, OperationValue>);
 
 impl Instance {
     /// Instantiate a new `Instance`
     fn new() -> Self {
-        Self(HashMap::new())
+        Self(BTreeMap::new())
     }
 
     /// Update this `Instance` from an UPDATE `Operation`
@@ -34,7 +36,7 @@ impl Instance {
     }
 
     /// Get the raw hashmap representation of the instance.
-    pub fn raw(&self) -> HashMap<String, OperationValue> {
+    pub fn raw(&self) -> BTreeMap<String, OperationValue> {
         self.0.clone()
     }
 }
@@ -80,6 +82,7 @@ impl TryFrom<OperationWithMeta> for Instance {
         Ok(instance)
     }
 }
+
 #[cfg(test)]
 mod tests {
     use std::convert::{TryFrom, TryInto};
