@@ -34,12 +34,13 @@ fn main() {
     .unwrap();
 
     // Publish an UPDATE operation
-    send_to_node(
+    let entry2_hash = send_to_node(
         &mut node,
         &panda,
         &update_operation(
             hash(DEFAULT_SCHEMA_HASH),
             document_id.clone(),
+            vec![document_id.clone()],
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("Which I now update.".to_string()),
@@ -49,12 +50,13 @@ fn main() {
     .unwrap();
 
     // Publish another UPDATE operation
-    send_to_node(
+    let entry3_hash = send_to_node(
         &mut node,
         &panda,
         &update_operation(
             hash(DEFAULT_SCHEMA_HASH),
             document_id.clone(),
+            vec![entry2_hash],
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("And then update again.".to_string()),
@@ -67,7 +69,7 @@ fn main() {
     send_to_node(
         &mut node,
         &panda,
-        &delete_operation(hash(DEFAULT_SCHEMA_HASH), document_id),
+        &delete_operation(hash(DEFAULT_SCHEMA_HASH), document_id, vec![entry3_hash]),
     )
     .unwrap();
 

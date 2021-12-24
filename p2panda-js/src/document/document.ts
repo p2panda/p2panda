@@ -39,6 +39,7 @@ export const createDocument = async (
  */
 export const updateDocument = async (
   documentId: string,
+  previousOperations: string[],
   fields: Fields,
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
@@ -50,6 +51,7 @@ export const updateDocument = async (
   const encodedOperation = encodeUpdateOperation(
     documentId,
     schema,
+    previousOperations,
     operationFields,
   );
   const entryEncoded = await signPublishEntry(
@@ -72,12 +74,13 @@ export const updateDocument = async (
  */
 export const deleteDocument = async (
   documentId: string,
+  previousOperations: string[],
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
   const { encodeDeleteOperation } = await wasm;
 
   // Create operation
-  const encodedOperation = encodeDeleteOperation(documentId, schema);
+  const encodedOperation = encodeDeleteOperation(documentId, schema, previousOperations);
   const encodedEntry = await signPublishEntry(
     encodedOperation,
     {

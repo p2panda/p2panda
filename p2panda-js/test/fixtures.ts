@@ -54,6 +54,10 @@ export const entryFixture = (seqNum: number): Entry => {
     operation.id = PANDA_LOG.decodedOperations[index].id;
   }
 
+  if (PANDA_LOG.decodedOperations[index].previousOperations) {
+    operation.previousOperations = PANDA_LOG.decodedOperations[index].previousOperations;
+  }
+
   const entry: Entry = {
     entryHashBacklink: PANDA_LOG.nextEntryArgs[index].entryHashBacklink,
     entryHashSkiplink: PANDA_LOG.nextEntryArgs[index].entryHashSkiplink,

@@ -14,6 +14,7 @@
 //! use p2panda_rs::test_utils::utils::{create_operation, hash, operation_fields,
 //!     new_key_pair, update_operation
 //! };
+//! use p2panda_rs::operation::AsOperation;
 //! use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 //! use p2panda_rs::operation::OperationValue;
 //!

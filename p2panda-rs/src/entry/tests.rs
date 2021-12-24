@@ -10,7 +10,7 @@ mod entry_tests {
 
     use crate::entry::{decode_entry, sign_and_encode, Entry, LogId, SeqNum};
     use crate::identity::KeyPair;
-    use crate::operation::{Operation, OperationEncoded};
+    use crate::operation::{AsOperation, Operation, OperationEncoded};
     use crate::test_utils::fixtures::templates::{many_valid_entries, version_fixtures};
     use crate::test_utils::fixtures::{key_pair, Fixture};
 

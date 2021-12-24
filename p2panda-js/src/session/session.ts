@@ -72,7 +72,7 @@ export class Session {
     if (!this._schema) {
       throw new Error(
         'Configure a schema with `session.schema()` or with the `options` ' +
-          'parameter on methods.',
+        'parameter on methods.',
       );
     }
     return this._schema;
@@ -96,7 +96,7 @@ export class Session {
     if (!this._keyPair) {
       throw new Error(
         'Configure a key pair with `session.keyPair()` or with the `options` ' +
-          'parameter on methods.',
+        'parameter on methods.',
       );
     }
     return this._keyPair;
@@ -300,6 +300,7 @@ export class Session {
    *
    * @param documentId id of the document we update, this is the hash of the root `create` entry
    * @param fields application data to publish with the new entry, needs to match schema
+   * @param previousOperations array of operation hash ids identifying the tips of all currently un-merged branches in the document graph
    * @param options optional config object:
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id
@@ -315,6 +316,7 @@ export class Session {
   async update(
     documentId: string,
     fields: Fields,
+    previousOperations: string[],
     options?: Partial<Context>,
   ): Promise<Session> {
     // We should validate the data against the schema here too eventually
@@ -332,7 +334,7 @@ export class Session {
       keyPair: options?.keyPair || this.keyPair,
       session: this,
     };
-    updateDocument(documentId, fields, mergedOptions);
+    updateDocument(documentId, previousOperations, fields, mergedOptions);
 
     return this;
   }
@@ -344,6 +346,7 @@ export class Session {
    * Caches arguments for creating the next entry of this schema in the given session.
    *
    * @param documentId id of the document we delete, this is the hash of the root `create` entry
+   * @param previousOperations array of operation hash ids identifying the tips of all currently un-merged branches in the document graph
    * @param options optional config object:
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id
@@ -355,6 +358,7 @@ export class Session {
    */
   async delete(
     documentId: string,
+    previousOperations: string[],
     options?: Partial<Context>,
   ): Promise<Session> {
     if (!documentId) {
@@ -367,7 +371,7 @@ export class Session {
       keyPair: options?.keyPair || this.keyPair,
       session: this,
     };
-    deleteDocument(documentId, mergedOptions);
+    deleteDocument(documentId, previousOperations, mergedOptions);
 
     return this;
   }

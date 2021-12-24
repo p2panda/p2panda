@@ -34,22 +34,23 @@
 //! .unwrap();
 //!
 //! // Panda updates the document by publishing an UPDATE operation
-//! send_to_node(
+//! let entry2_hash = send_to_node(
 //!     &mut node,
 //!     &panda,
 //!     &update_operation(
 //!         hash(CHAT_SCHEMA_HASH),
 //!         document1_hash_id.clone(),
+//!         vec![document1_hash_id.clone()],
 //!         operation_fields(vec![("message", OperationValue::Text("Which I now update.".to_string()))]),
 //!     ),
 //! )
 //! .unwrap();
 //!
-//! // Panda deletes their previous chat operation by publishing a DELETE operation
+//! // Panda deletes their document by publishing a DELETE operation
 //! send_to_node(
 //!     &mut node,
 //!     &panda,
-//!     &delete_operation(hash(CHAT_SCHEMA_HASH), document1_hash_id),
+//!     &delete_operation(hash(CHAT_SCHEMA_HASH), document1_hash_id, vec![entry2_hash]),
 //! )
 //! .unwrap();
 //!
@@ -78,7 +79,7 @@ use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::materialiser::{marshall_entries, DAG};
-use crate::operation::Operation;
+use crate::operation::{AsOperation, Operation};
 use crate::test_utils::mocks::logs::{Log, LogEntry};
 use crate::test_utils::mocks::utils::Result;
 use crate::test_utils::mocks::Client;
@@ -446,6 +447,7 @@ mod tests {
             &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
                 entry1_hash.clone(),
+                vec![entry1_hash.clone()],
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Which I now update.".to_string()),
@@ -497,6 +499,7 @@ mod tests {
             &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
                 entry1_hash.clone(),
+                vec![entry1_hash.clone()],
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Which I now update.".to_string()),

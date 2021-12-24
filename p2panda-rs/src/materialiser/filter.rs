@@ -77,12 +77,13 @@ mod tests {
         )
         .unwrap();
 
-        send_to_node(
+        let panda_entry_2_hash = send_to_node(
             &mut node,
             &panda,
             &update_operation(
                 schema.clone(),
                 panda_entry_1_hash.clone(),
+                vec![panda_entry_1_hash.clone()],
                 fields(vec![(
                     "message",
                     OperationValue::Text("Hello too!".to_string()),
@@ -97,6 +98,7 @@ mod tests {
             &update_operation(
                 schema,
                 panda_entry_1_hash,
+                vec![panda_entry_2_hash],
                 fields(vec![(
                     "message",
                     OperationValue::Text("Hello too!".to_string()),

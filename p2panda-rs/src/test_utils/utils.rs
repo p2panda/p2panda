@@ -5,10 +5,12 @@
 //! whereas the fixture macros can only be injected into rstest defined methods.
 use serde::Serialize;
 
-use crate::entry::{Entry, LogId, SeqNum};
+use crate::entry::{Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
-use crate::operation::{Operation, OperationFields, OperationValue};
+use crate::operation::{
+    Operation, OperationEncoded, OperationFields, OperationValue, OperationWithMeta,
+};
 use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
 
 /// A custom `Result` type to be able to dynamically propagate `Error` types.
@@ -32,23 +34,29 @@ pub struct NextEntryArgs {
 /// If a value for `fields` is provided, this is a `CREATE` operation.
 /// If values for both `fields` and `document_id` are provided, this is an `UPDATE` operation.
 /// If no value for `fields` is provided, this is a `DELETE` operation.
-pub fn any_operation(fields: Option<OperationFields>, document_id: Option<Hash>) -> Operation {
+pub fn any_operation(
+    fields: Option<OperationFields>,
+    document_id: Option<Hash>,
+    previous_operations: Option<Vec<Hash>>,
+) -> Operation {
     match fields {
         // It's a CREATE operation
         Some(fields) if document_id.is_none() => {
-            Operation::new_create(Hash::new(DEFAULT_SCHEMA_HASH).unwrap(), fields).unwrap()
+            Operation::new_create(hash(DEFAULT_SCHEMA_HASH), fields).unwrap()
         }
         // It's an UPDATE operation
         Some(fields) => Operation::new_update(
-            Hash::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            hash(DEFAULT_SCHEMA_HASH),
             document_id.unwrap(),
+            previous_operations.unwrap(),
             fields,
         )
         .unwrap(),
         // It's a DELETE operation
         None => Operation::new_delete(
-            Hash::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            hash(DEFAULT_SCHEMA_HASH),
             document_id.unwrap(),
+            previous_operations.unwrap(),
         )
         .unwrap(),
     }
@@ -106,11 +114,46 @@ pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
 }
 
 /// Generate an update operation based on passed schema hash, document id and operation fields.
-pub fn update_operation(schema: Hash, document_id: Hash, fields: OperationFields) -> Operation {
-    Operation::new_update(schema, document_id, fields).unwrap()
+pub fn update_operation(
+    schema: Hash,
+    document_id: Hash,
+    previous_operations: Vec<Hash>,
+    fields: OperationFields,
+) -> Operation {
+    Operation::new_update(schema, document_id, previous_operations, fields).unwrap()
 }
 
 /// Generate a delete operation based on passed schema hash and document id.
-pub fn delete_operation(schema: Hash, document_id: Hash) -> Operation {
-    Operation::new_delete(schema, document_id).unwrap()
+pub fn delete_operation(
+    schema: Hash,
+    document_id: Hash,
+    previous_operations: Vec<Hash>,
+) -> Operation {
+    Operation::new_delete(schema, document_id, previous_operations).unwrap()
+}
+
+/// Generate a create meta operation based on passed encoded entry and operation.
+pub fn meta_operation(
+    entry_signed_encoded: EntrySigned,
+    operation_encoded: OperationEncoded,
+) -> OperationWithMeta {
+    OperationWithMeta::new(&entry_signed_encoded, &operation_encoded).unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::constants::DEFAULT_HASH;
+
+    #[test]
+    fn default_hash() {
+        let default_hash = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        assert_eq!(default_hash.as_str(), DEFAULT_HASH)
+    }
+
+    #[test]
+    fn default_schema() {
+        let default_schema_hash = Hash::new_from_bytes(vec![3, 2, 1]).unwrap();
+        assert_eq!(default_schema_hash.as_str(), DEFAULT_SCHEMA_HASH)
+    }
 }

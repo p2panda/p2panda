@@ -64,7 +64,9 @@ describe('document', () => {
       // This is the document id
       const id = entryFixture(2).operation?.id as string;
 
-      const entryEncoded = await updateDocument(id, fields, {
+      const previousOperations = entryFixture(2).operation?.previousOperations as string[];
+
+      const entryEncoded = await updateDocument(id, previousOperations, fields, {
         keyPair,
         schema: schemaFixture(),
         session,
@@ -88,9 +90,11 @@ describe('document', () => {
         .mockImplementation(asyncFunctionMock);
 
       // This is the document id
-      const id = entryFixture(3).operation?.id as string;
+      const id = entryFixture(4).operation?.id as string;
 
-      const entryEncoded = await deleteDocument(id, {
+      const previousOperations = entryFixture(4).operation?.previousOperations as string[];
+
+      const entryEncoded = await deleteDocument(id, previousOperations, {
         keyPair,
         schema: schemaFixture(),
         session,

@@ -211,6 +211,9 @@ describe('Session', () => {
     // This is the document id
     const documentId = entryFixture(2).operation?.id as string;
 
+    // These are the previous operations
+    const previousOperations = entryFixture(2).operation?.previousOperations as string[];
+
     beforeEach(async () => {
       session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
       jest
@@ -220,13 +223,13 @@ describe('Session', () => {
 
     it('handles valid arguments', async () => {
       expect(
-        await session.update(documentId, fields, {
+        await session.update(documentId, fields, previousOperations, {
           schema: schemaFixture(),
         }),
       ).resolves;
 
       expect(
-        await session.setSchema(schemaFixture()).update(documentId, fields),
+        await session.setSchema(schemaFixture()).update(documentId, fields, previousOperations),
       ).resolves;
     });
 
@@ -252,6 +255,9 @@ describe('Session', () => {
     // This is the document id that can be deleted
     const documentId = entryFixture(3).operation?.id as string;
 
+    // These are the previous operations
+    const previousOperations = entryFixture(2).operation?.previousOperations as string[];
+
     beforeEach(async () => {
       session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
       jest
@@ -260,8 +266,8 @@ describe('Session', () => {
     });
 
     it('handles valid arguments', async () => {
-      expect(session.delete(documentId, { schema: schemaFixture() })).resolves;
-      expect(session.setSchema(schemaFixture()).delete(documentId)).resolves;
+      expect(session.delete(documentId, previousOperations, { schema: schemaFixture() })).resolves;
+      expect(session.setSchema(schemaFixture()).delete(documentId, previousOperations)).resolves;
     });
 
     it('throws when missing a required parameter', async () => {

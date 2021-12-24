@@ -1,15 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::TryFrom;
+
+use rand::Rng;
 /// General purpose fixtures which can be injected into rstest methods as parameters.
 ///
 /// The fixtures can optionally be passed in with custom parameters which overides the default
 /// values.
 use rstest::fixture;
 
-use crate::entry::{Entry, EntrySigned, SeqNum};
+use crate::entry::{sign_and_encode, Entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
-use crate::operation::{Operation, OperationEncoded, OperationFields, OperationValue};
+use crate::operation::{
+    Operation, OperationEncoded, OperationFields, OperationValue, OperationWithMeta,
+};
 use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
 use crate::test_utils::fixtures::defaults;
 use crate::test_utils::utils;
@@ -63,6 +68,13 @@ pub fn hash(#[default(DEFAULT_HASH)] hash_str: &str) -> Hash {
     utils::hash(hash_str)
 }
 
+/// Fixture which injects a random hash into a test method.
+#[fixture]
+pub fn random_hash() -> Hash {
+    let random_data = rand::thread_rng().gen::<[u8; 32]>().to_vec();
+    Hash::new_from_bytes(random_data).unwrap()
+}
+
 /// Fixture which injects the default OperationFields value into a test method. Default value can
 /// be overridden at testing time by passing in a custom vector of key-value tuples.
 #[fixture]
@@ -105,8 +117,9 @@ pub fn entry(
 pub fn operation(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] document_id: Option<Hash>,
+    #[default(None)] previous_operations: Option<Vec<Hash>>,
 ) -> Operation {
-    utils::any_operation(fields, document_id)
+    utils::any_operation(fields, document_id, previous_operations)
 }
 
 /// Fixture which injects the default Hash into a test method as an Option. Default value can be
@@ -115,6 +128,16 @@ pub fn operation(
 pub fn some_hash(#[default(DEFAULT_HASH)] str: &str) -> Option<Hash> {
     let hash = Hash::new(str);
     Some(hash.unwrap())
+}
+
+#[fixture]
+pub fn entry_signed_encoded(entry: Entry, key_pair: KeyPair) -> EntrySigned {
+    sign_and_encode(&entry, &key_pair).unwrap()
+}
+
+#[fixture]
+pub fn operation_encoded(operation: Operation) -> OperationEncoded {
+    OperationEncoded::try_from(&operation).unwrap()
 }
 
 /// Fixture which injects the default CREATE Operation into a test method. Default value can be
@@ -131,17 +154,32 @@ pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
 pub fn update_operation(
     schema: Hash,
     #[from(hash)] document_id: Hash,
+    #[default(vec![hash(DEFAULT_HASH)])] previous_operations: Vec<Hash>,
     #[default(fields(vec![("message", OperationValue::Text("Updated, hello!".to_string()))]))]
     fields: OperationFields,
 ) -> Operation {
-    utils::update_operation(schema, document_id, fields)
+    utils::update_operation(schema, document_id, previous_operations, fields)
 }
 
 /// Fixture which injects the default DELETE Operation into a test method. Default value can be
 /// overridden at testing time by passing in custom schema hash and document id hash.
 #[fixture]
-pub fn delete_operation(schema: Hash, #[from(hash)] document_id: Hash) -> Operation {
-    utils::delete_operation(schema, document_id)
+pub fn delete_operation(
+    schema: Hash,
+    #[from(hash)] document_id: Hash,
+    #[default(vec![hash(DEFAULT_HASH)])] previous_operations: Vec<Hash>,
+) -> Operation {
+    utils::delete_operation(schema, document_id, previous_operations)
+}
+
+/// Fixture which injects the default CREATE Operation into a test method. Default value can be overridden at testing
+/// time by passing in custom schema hash and operation fields.
+#[fixture]
+pub fn meta_operation(
+    entry_signed_encoded: EntrySigned,
+    operation_encoded: OperationEncoded,
+) -> OperationWithMeta {
+    utils::meta_operation(entry_signed_encoded, operation_encoded)
 }
 
 /// Fixture which injects p2panda testing data from p2panda version 0.3.0.

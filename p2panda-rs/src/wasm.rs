@@ -11,6 +11,7 @@ use std::panic;
 
 use console_error_panic_hook::hook as panic_hook;
 use ed25519_dalek::{PublicKey, Signature};
+use js_sys::Array;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
@@ -240,11 +241,21 @@ pub fn encode_create_operation(
 pub fn encode_update_operation(
     document_id: String,
     schema_hash: String,
+    previous_operations: JsValue,
     fields: OperationFields,
 ) -> Result<String, JsValue> {
     let document = jserr!(Hash::new(&document_id));
     let schema = jserr!(Hash::new(&schema_hash));
-    let operation = jserr!(Operation::new_update(schema, document, fields.0));
+    // decode JsValue into vector of strings
+    let prev_op_strings: Vec<String> = jserr!(previous_operations.into_serde());
+    // create hashes from strings and collect wrapped in a result
+    let prev_op_result: Result<Vec<Hash>, _> = prev_op_strings
+        .iter()
+        .map(|prev_op| Hash::new(&prev_op))
+        .collect();
+    // unwrap with jserr! macro
+    let previous = jserr!(prev_op_result);
+    let operation = jserr!(Operation::new_update(schema, document, previous, fields.0));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
 }
@@ -256,10 +267,20 @@ pub fn encode_update_operation(
 pub fn encode_delete_operation(
     document_id: String,
     schema_hash: String,
+    previous_operations: Array,
 ) -> Result<String, JsValue> {
     let document = jserr!(Hash::new(&document_id));
     let schema = jserr!(Hash::new(&schema_hash));
-    let operation = jserr!(Operation::new_delete(schema, document));
+    // decode JsValue into vector of strings
+    let prev_op_strings: Vec<String> = jserr!(previous_operations.into_serde());
+    // create hashes from strings and collect wrapped in a result
+    let prev_op_result: Result<Vec<Hash>, _> = prev_op_strings
+        .iter()
+        .map(|prev_op| Hash::new(&prev_op))
+        .collect();
+    // unwrap with jserr! macro
+    let previous = jserr!(prev_op_result);
+    let operation = jserr!(Operation::new_delete(schema, document, previous));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
 }

@@ -14,7 +14,10 @@ use crate::Validate;
 #[derive(Clone, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[serde(untagged)]
 #[repr(u8)]
+
+/// Identifier for `Operation` versions.
 pub enum OperationVersion {
+    /// The default version number
     Default = 1,
 }
 
@@ -108,7 +111,7 @@ pub enum OperationValue {
 /// ```
 /// # extern crate p2panda_rs;
 /// # fn main() -> () {
-/// # use p2panda_rs::operation::{OperationFields, OperationValue};
+/// # use p2panda_rs::operation::{OperationFields, OperationValue, AsOperation};
 /// let mut fields = OperationFields::new();
 /// fields
 ///     .add("title", OperationValue::Text("Hello, Panda!".to_owned()))
@@ -193,10 +196,54 @@ impl OperationFields {
     }
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Operations describe data mutations in the p2panda network. Authors send operations to create,
 /// update or delete documents or collections of data.
 ///
 /// The data itself lives in the `fields` object and is formed after an operation schema.
+///
+/// Starting from an initial create operation, the following collection of update operations build
+/// up a causal graph of mutations which can be resolved into a single value or object during a materialisation process.
+/// If a delete operation is publish it signals the deletion of the entire graph and no more update
+/// operations should be published.
+///
+/// All update and delete operations have a `previous_operations` field which contains a vector of operation
+/// hash ids which identify the known branch tips at the time of publication. These allow us to build the graph
+/// and retain knowledge of the graph state at the time the specific operation was published.
+///
+/// ## Examples
+///
+/// All of the below would be valid operation graphs. Operations which refer to more than one previous operation
+/// help to reconcile branches. However, if branches exist when the graph is resolved, the materialisation process
+/// will still resolves the graph to a single value.
+///
+/// 1)
+/// ```mermaid
+/// flowchart LR
+///     A --- B --- C --- D;
+///     B --- E --- F;
+/// ```
+///
+/// 2)
+/// ```mermaid
+/// flowchart LR
+///     B --- C --- D --- E;
+///     A --- B --- E;
+/// ```
+///
+/// 3)
+/// ```mermaid
+/// flowchart LR
+///     A --- B --- C;
+///     A --- D --- E --- J;
+///     B --- F --- G --- H --- I --- J;
+/// ```
+///
+/// 4)
+/// ```mermaid
+/// flowchart LR
+///     A --- B --- C --- D --- E;
+/// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Operation {
@@ -208,6 +255,10 @@ pub struct Operation {
 
     /// Version schema of this operation.
     version: OperationVersion,
+
+    /// Optional array of hashes referring to operations directly preceding this one in the document.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    previous_operations: Option<Vec<Hash>>,
 
     /// Optional id referring to the document.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -227,7 +278,7 @@ impl Operation {
     /// # extern crate p2panda_rs;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use p2panda_rs::hash::Hash;
-    /// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
+    /// use p2panda_rs::operation::{Operation, OperationFields, OperationValue, AsOperation};
     ///
     /// let schema_hash_string = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
     /// let schema_msg_hash = Hash::new(schema_hash_string)?;
@@ -239,7 +290,7 @@ impl Operation {
     ///
     /// let create_operation = Operation::new_create(schema_msg_hash, msg_fields)?;
     ///
-    /// assert_eq!(Operation::is_create(&create_operation), true);
+    /// assert_eq!(AsOperation::is_create(&create_operation), true);
     ///
     /// # Ok(())
     /// # }
@@ -249,6 +300,7 @@ impl Operation {
             action: OperationAction::Create,
             version: OperationVersion::Default,
             schema,
+            previous_operations: None,
             id: None,
             fields: Some(fields),
         };
@@ -262,12 +314,14 @@ impl Operation {
     pub fn new_update(
         schema: Hash,
         id: Hash,
+        previous_operations: Vec<Hash>,
         fields: OperationFields,
     ) -> Result<Self, OperationError> {
         let operation = Self {
             action: OperationAction::Update,
             version: OperationVersion::Default,
             schema,
+            previous_operations: Some(previous_operations),
             id: Some(id),
             fields: Some(fields),
         };
@@ -278,11 +332,16 @@ impl Operation {
     }
 
     /// Returns new delete operation.
-    pub fn new_delete(schema: Hash, id: Hash) -> Result<Self, OperationError> {
+    pub fn new_delete(
+        schema: Hash,
+        id: Hash,
+        previous_operations: Vec<Hash>,
+    ) -> Result<Self, OperationError> {
         let operation = Self {
             action: OperationAction::Delete,
             version: OperationVersion::Default,
             schema,
+            previous_operations: Some(previous_operations),
             id: Some(id),
             fields: None,
         };
@@ -298,54 +357,84 @@ impl Operation {
         serde_cbor::to_vec(&self).unwrap()
     }
 
-    /// Returns true when instance is create operation.
-    pub fn is_create(&self) -> bool {
-        self.action == OperationAction::Create
-    }
-
-    /// Returns true when instance is update operation.
-    pub fn is_update(&self) -> bool {
-        self.action == OperationAction::Update
-    }
-
-    /// Returns true when instance is delete operation.
-    pub fn is_delete(&self) -> bool {
-        self.action == OperationAction::Delete
-    }
-
-    /// Returns action type of operation.
-    pub fn action(&self) -> &OperationAction {
-        &self.action
-    }
-
-    /// Returns version of operation.
-    pub fn version(&self) -> &OperationVersion {
-        &self.version
-    }
-
-    /// Returns schema of operation.
-    pub fn schema(&self) -> &Hash {
-        &self.schema
-    }
-
-    /// Returns id of operation.
+    /// Returns id of the document this operation is part of.
     pub fn id(&self) -> Option<&Hash> {
         self.id.as_ref()
     }
 
-    /// Returns application data fields of operation.
-    pub fn fields(&self) -> Option<&OperationFields> {
-        self.fields.as_ref()
-    }
-
     /// Returns true when operation contains an id.
     pub fn has_id(&self) -> bool {
-        self.id.is_some()
+        self.id().is_some()
     }
+}
+
+/// Shared methods for `Operation` and `OperationWithMeta`.
+pub trait AsOperation {
+    /// Returns action type of operation.
+    fn action(&self) -> OperationAction;
+
+    /// Returns schema of operation.
+    fn schema(&self) -> Hash;
+
+    /// Returns version of operation.
+    fn version(&self) -> OperationVersion;
+
+    /// Returns user data fields of operation.
+    fn fields(&self) -> Option<OperationFields>;
+
+    /// Returns previous_operations of this operation.
+    fn previous_operations(&self) -> Option<Vec<Hash>>;
 
     /// Returns true if operation contains fields.
-    pub fn has_fields(&self) -> bool {
-        self.fields.is_some()
+    fn has_fields(&self) -> bool {
+        self.fields().is_some()
+    }
+
+    /// Returns true if previous_operations contains a value.
+    fn has_previous_operations(&self) -> bool {
+        self.previous_operations().is_some()
+    }
+
+    /// Returns true when instance is create operation.
+    fn is_create(&self) -> bool {
+        self.action() == OperationAction::Create
+    }
+
+    /// Returns true when instance is update operation.
+    fn is_update(&self) -> bool {
+        self.action() == OperationAction::Update
+    }
+
+    /// Returns true when instance is delete operation.
+    fn is_delete(&self) -> bool {
+        self.action() == OperationAction::Delete
+    }
+}
+
+impl AsOperation for Operation {
+    /// Returns action type of operation.
+    fn action(&self) -> OperationAction {
+        self.action.to_owned()
+    }
+
+    /// Returns version of operation.
+    fn version(&self) -> OperationVersion {
+        self.version.to_owned()
+    }
+
+    /// Returns schema of operation.
+    fn schema(&self) -> Hash {
+        self.schema.to_owned()
+    }
+
+    /// Returns application data fields of operation.
+    fn fields(&self) -> Option<OperationFields> {
+        self.fields.clone()
+    }
+
+    /// Returns previous_operations of this operation.
+    fn previous_operations(&self) -> Option<Vec<Hash>> {
+        self.previous_operations.clone()
     }
 }
 
@@ -365,18 +454,35 @@ impl Validate for Operation {
             return Err(OperationError::EmptyFields);
         }
 
+        // Update and delete operations must contain previous_operations.
+        if !self.is_create() && (!self.has_previous_operations()) {
+            return Err(OperationError::EmptyPreviousOperations);
+        }
+
+        // Create operations must not contain previous_operations.
+        if self.is_create() && (self.has_previous_operations()) {
+            return Err(OperationError::ExistingPreviousOperations);
+        }
+
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+    use rstest_reuse::apply;
+
     use std::convert::TryFrom;
 
+    use super::{
+        AsOperation, Operation, OperationAction, OperationFields, OperationValue, OperationVersion,
+    };
     use crate::hash::Hash;
     use crate::operation::OperationEncoded;
-
-    use super::{Operation, OperationFields, OperationValue};
+    use crate::test_utils::fixtures::templates::many_valid_operations;
+    use crate::test_utils::fixtures::{fields, random_hash, schema};
+    use crate::Validate;
 
     #[test]
     fn operation_fields() {
@@ -397,8 +503,92 @@ mod tests {
             .is_err());
     }
 
-    #[test]
-    fn encode_and_decode() {
+    #[rstest]
+    fn operation_validation(
+        fields: OperationFields,
+        schema: Hash,
+        #[from(random_hash)] prev_op_id: Hash,
+        #[from(random_hash)] id: Hash,
+    ) {
+        let invalid_create_operation_1 = Operation {
+            action: OperationAction::Create,
+            version: OperationVersion::Default,
+            schema: schema.clone(),
+            previous_operations: None,
+            id: None,
+            // Create operations must contain fields
+            fields: None, // Error
+        };
+
+        assert!(invalid_create_operation_1.validate().is_err());
+
+        let invalid_create_operation_2 = Operation {
+            action: OperationAction::Create,
+            version: OperationVersion::Default,
+            schema: schema.clone(),
+            // Create operations must not contain previous_operations
+            previous_operations: Some(vec![prev_op_id.clone()]), // Error
+            id: None,
+            fields: Some(fields.clone()),
+        };
+
+        assert!(invalid_create_operation_2.validate().is_err());
+
+        let invalid_update_operation_1 = Operation {
+            action: OperationAction::Update,
+            version: OperationVersion::Default,
+            schema: schema.clone(),
+            // Update operations must contain previous_operations
+            previous_operations: None, // Error
+            id: Some(id.clone()),
+            fields: Some(fields.clone()),
+        };
+
+        assert!(invalid_update_operation_1.validate().is_err());
+
+        let invalid_update_operation_2 = Operation {
+            action: OperationAction::Update,
+            version: OperationVersion::Default,
+            schema: schema.clone(),
+            previous_operations: Some(vec![prev_op_id]),
+            id: Some(id.clone()),
+            // Update operations must contain fields
+            fields: None, // Error
+        };
+
+        assert!(invalid_update_operation_2.validate().is_err());
+
+        let invalid_delete_operation_1 = Operation {
+            action: OperationAction::Delete,
+            version: OperationVersion::Default,
+            schema: schema.clone(),
+            // Delete operations must contain previous_operations
+            previous_operations: None, // Error
+            id: Some(id.clone()),
+            fields: None,
+        };
+
+        assert!(invalid_delete_operation_1.validate().is_err());
+
+        let invalid_delete_operation_2 = Operation {
+            action: OperationAction::Delete,
+            version: OperationVersion::Default,
+            schema,
+            previous_operations: None,
+            id: Some(id),
+            // Delete operations must not contain fields
+            fields: Some(fields), // Error
+        };
+
+        assert!(invalid_delete_operation_2.validate().is_err())
+    }
+
+    #[rstest]
+    fn encode_and_decode(
+        schema: Hash,
+        #[from(random_hash)] prev_op_id: Hash,
+        #[from(random_hash)] id: Hash,
+    ) {
         // Create test operation
         let mut fields = OperationFields::new();
 
@@ -422,12 +612,7 @@ mod tests {
             )
             .unwrap();
 
-        let operation = Operation::new_update(
-            Hash::new_from_bytes(vec![1, 255, 0]).unwrap(),
-            Hash::new_from_bytes(vec![62, 128]).unwrap(),
-            fields,
-        )
-        .unwrap();
+        let operation = Operation::new_update(schema, id, vec![prev_op_id], fields).unwrap();
 
         assert!(operation.is_update());
 
@@ -440,8 +625,8 @@ mod tests {
         assert_eq!(operation, operation_restored);
     }
 
-    #[test]
-    fn field_ordering() {
+    #[rstest]
+    fn field_ordering(schema: Hash) {
         // Create first test operation
         let mut fields = OperationFields::new();
         fields
@@ -451,8 +636,7 @@ mod tests {
             .add("b", OperationValue::Text("penguin".to_owned()))
             .unwrap();
 
-        let first_operation =
-            Operation::new_create(Hash::new_from_bytes(vec![1, 255, 0]).unwrap(), fields).unwrap();
+        let first_operation = Operation::new_create(schema.clone(), fields).unwrap();
 
         // Create second test operation with same values but different order of fields
         let mut second_fields = OperationFields::new();
@@ -463,11 +647,7 @@ mod tests {
             .add("a", OperationValue::Text("sloth".to_owned()))
             .unwrap();
 
-        let second_operation = Operation::new_create(
-            Hash::new_from_bytes(vec![1, 255, 0]).unwrap(),
-            second_fields,
-        )
-        .unwrap();
+        let second_operation = Operation::new_create(schema, second_fields).unwrap();
 
         assert_eq!(first_operation.to_cbor(), second_operation.to_cbor());
     }
@@ -493,5 +673,10 @@ mod tests {
             field_iterator.next().unwrap().1,
             &OperationValue::Text("penguin".to_owned())
         );
+    }
+
+    #[apply(many_valid_operations)]
+    fn many_valid_operations_should_encode(#[case] operation: Operation) {
+        assert!(OperationEncoded::try_from(&operation).is_ok())
     }
 }

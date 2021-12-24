@@ -15,8 +15,8 @@ pub const MESSAGE_SCHEMA: &str = r#"
     ; Create operation
     operation-body = (
         action: "create", fields: operation-fields //
-        action: "update", id: hash, fields: operation-fields //
-        action: "delete", id: hash,
+        action: "update", id: hash, fields: operation-fields, previousOperations: [1* hash] //
+        action: "delete", id: hash, previousOperations: [1* hash]
     )
 
     ; Operation fields with key and value
