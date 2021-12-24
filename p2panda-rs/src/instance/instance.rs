@@ -17,7 +17,7 @@ impl Instance {
     }
 
     /// Update this `Instance` from an UPDATE `Operation`
-    pub fn update<T: AsOperation>(&mut self, operation: T) -> Result<(), InstanceError> {
+    pub fn apply_update<T: AsOperation>(&mut self, operation: T) -> Result<(), InstanceError> {
         if !operation.is_update() {
             return Err(InstanceError::NotUpdateOperation);
         };
@@ -122,7 +122,9 @@ mod tests {
     pub fn update(create_operation: Operation, update_operation: Operation) {
         let mut chat_instance = Instance::try_from(create_operation.clone()).unwrap();
 
-        chat_instance.update(update_operation.clone()).unwrap();
+        chat_instance
+            .apply_update(update_operation.clone())
+            .unwrap();
 
         let mut exp_chat_instance = Instance::new();
         exp_chat_instance.0.insert(

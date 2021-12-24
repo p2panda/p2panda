@@ -92,7 +92,7 @@ impl Document {
         let mut instance = Instance::try_from(self.get_create_operation())?;
 
         self.sort()?
-            .try_for_each(|id| match instance.update(self.get_operation(id)?) {
+            .try_for_each(|id| match instance.apply_update(self.get_operation(id)?) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(DocumentError::InstanceError(e)),
             })?;
