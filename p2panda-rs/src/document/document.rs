@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
 use crate::document::{DocumentBuilderError, DocumentError};
@@ -34,7 +34,7 @@ pub struct Document {
     #[allow(dead_code)]
     permissions: Option<Vec<Author>>,
     /// A map of all operations contained within this document. This may even include operations by unauthorized authors.
-    operations: HashMap<String, OperationWithMeta>,
+    operations: BTreeMap<String, OperationWithMeta>,
     /// A causal graph representation of this documents operations, identified by their hash, which can be topologically sorted.
     graph: IncrementalTopo<String>,
 }
@@ -56,7 +56,7 @@ impl Document {
     }
 
     /// Returns a map of all operations in this document.
-    pub fn operations(&self) -> HashMap<String, OperationWithMeta> {
+    pub fn operations(&self) -> BTreeMap<String, OperationWithMeta> {
         self.operations.clone()
     }
 
@@ -177,7 +177,7 @@ impl DocumentBuilder {
 
         // Instantiate graph and operations map
         let mut graph = IncrementalTopo::new();
-        let mut operations = HashMap::new();
+        let mut operations = BTreeMap::new();
 
         for op in self.operations() {
             // Insert operation into map
