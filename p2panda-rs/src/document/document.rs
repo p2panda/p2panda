@@ -359,15 +359,15 @@ mod tests {
         )
         .unwrap();
 
-        let operations = node
+        let operations: Vec<OperationWithMeta> = node
             .all_entries()
-            .iter()
+            .into_iter()
             .map(|entry| {
                 OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap()
             })
             .collect();
 
-        let document = DocumentBuilder::new(operations).build()?;
+        let document = DocumentBuilder::new(operations.clone()).build()?;
 
         // Document should be valid
         assert!(document.validate().is_ok());
@@ -383,6 +383,43 @@ mod tests {
         // Document should resolve to expected value
         assert_eq!(instance.raw(), exp_result);
 
+        // Multiple replicas receiving operations in different orders should resolve to same value.
+
+        let op_1 = operations.get(0).unwrap();
+        let op_2 = operations.get(1).unwrap();
+        let op_3 = operations.get(2).unwrap();
+        let op_4 = operations.get(3).unwrap();
+        let op_5 = operations.get(4).unwrap();
+
+        let replica_1 = DocumentBuilder::new(vec![
+            op_5.clone(),
+            op_4.clone(),
+            op_3.clone(),
+            op_2.clone(),
+            op_1.clone(),
+        ])
+        .build()?;
+
+        let replica_2 = DocumentBuilder::new(vec![
+            op_3.clone(),
+            op_2.clone(),
+            op_1.clone(),
+            op_5.clone(),
+            op_4.clone(),
+        ])
+        .build()?;
+
+        let replica_3 = DocumentBuilder::new(vec![
+            op_2.clone(),
+            op_1.clone(),
+            op_4.clone(),
+            op_3.clone(),
+            op_5.clone(),
+        ])
+        .build()?;
+
+        assert_eq!(replica_1.resolve().unwrap(), replica_2.resolve().unwrap());
+        assert_eq!(replica_1.resolve().unwrap(), replica_3.resolve().unwrap());
         Ok(())
     }
 
