@@ -4,32 +4,34 @@ use crate::entry::EntrySigned;
 use crate::identity::Author;
 use crate::operation::OperationEncoded;
 
-/// Filter entries against instance author for a single writer setting. This is needed for materializing System Logs.
+/// Filter entries against instance author for a single writer setting. This is needed for
+/// materializing system Logs.
 #[allow(dead_code)]
 pub fn single_writer_filter(
     entries: Vec<(EntrySigned, OperationEncoded)>,
-    instance_author: Author,
+    document_author: Author,
 ) -> Vec<(EntrySigned, OperationEncoded)> {
     entries
         .iter()
         .cloned()
-        .filter(|(entry_encoded, _)| entry_encoded.author().as_str() == instance_author.as_str())
+        .filter(|(entry_encoded, _)| entry_encoded.author().as_str() == document_author.as_str())
         .collect()
 }
 
-/// Filter entries against permissions for multi writer setting. This is needed for materializing User Logs which allow
-/// update operations from multiple writers via the use of permissions.
+/// Filter entries against permissions for multi writer setting. This is needed for materializing
+/// application logs which allow update operations from multiple writers via the use of
+/// permissions.
 #[allow(dead_code)]
 pub fn multi_writer_filter(
     entries: Vec<(EntrySigned, OperationEncoded)>,
-    instance_author: Author,
+    document_author: Author,
     permitted_authors: Vec<Author>,
 ) -> Vec<(EntrySigned, OperationEncoded)> {
     entries
         .iter()
         .cloned()
         .filter(|(entry_encoded, _)| {
-            entry_encoded.author().as_str() == instance_author.as_str()
+            entry_encoded.author().as_str() == document_author.as_str()
                 || permitted_authors.iter().any(|permitted_author| {
                     permitted_author.as_str() == entry_encoded.author().as_str()
                 })
@@ -43,6 +45,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::identity::KeyPair;
+    use crate::operation::OperationValue;
     use crate::test_utils::fixtures::{
         create_operation, fields, random_key_pair, schema, update_operation,
     };
@@ -64,7 +67,13 @@ mod tests {
         let panda_entry_1_hash = send_to_node(
             &mut node,
             &panda,
-            &create_operation(schema.clone(), fields(vec![("operation", "Hello!")])),
+            &create_operation(
+                schema.clone(),
+                fields(vec![(
+                    "message",
+                    OperationValue::Text("Hello!".to_string()),
+                )]),
+            ),
         )
         .unwrap();
 
@@ -74,7 +83,10 @@ mod tests {
             &update_operation(
                 schema.clone(),
                 panda_entry_1_hash.clone(),
-                fields(vec![("operation", "Hello too!")]),
+                fields(vec![(
+                    "message",
+                    OperationValue::Text("Hello too!".to_string()),
+                )]),
             ),
         )
         .unwrap();
@@ -85,7 +97,10 @@ mod tests {
             &update_operation(
                 schema,
                 panda_entry_1_hash,
-                fields(vec![("operation", "Hello too!")]),
+                fields(vec![(
+                    "message",
+                    OperationValue::Text("Hello too!".to_string()),
+                )]),
             ),
         )
         .unwrap();
