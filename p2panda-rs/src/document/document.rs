@@ -8,16 +8,14 @@ use crate::hash::Hash;
 use crate::identity::Author;
 use crate::instance::Instance;
 use crate::operation::{AsOperation, OperationWithMeta};
-use crate::schema::Schema;
+use crate::schema::{Schema, ValidateOperation};
 use incremental_topo::IncrementalTopo;
 
 use crate::Validate;
 
 /// Hard coded cddl string for now
 const DOCUMENT_SCHEMA: &str = "wiki = { (
-    title: { type: \"str\", value: tstr },
-    content: { type: \"str\", value: tstr }
-    wordcount: { type: \"int\", value: int }
+    cafe_name: { type: \"str\", value: tstr }
 ) }";
 
 /// A resolvable data type made up of a collection of causally linked operations.
@@ -104,9 +102,36 @@ impl Validate for Document {
     type Error = DocumentError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        // Create and update operations can not have empty fields.
+        // NB. This validation is quite excessive as it's normally not possible to get to this
+        // point while having broken some of these basic data restraints.
 
-        self.get_operation(self.id().as_str())?;
+        // There must be a CREATE operation matching the document_id
+        let create_operation = self.get_operation(self.id().as_str())?;
+        if !create_operation.is_create() {
+            return Err(DocumentError::ValidationError(
+                "All documents must contain a CREATE operation identified by the document_id"
+                    .to_string(),
+            ));
+        }
+
+        // Validate each operation in this document.
+        self.operations().iter().try_for_each(|(_, op)| {
+            // If this is a delete operation check there are no fields.
+            if op.is_delete() {
+                if op.fields().is_none() {
+                    return Ok(())
+                } else {
+                    return Err(DocumentError::ValidationError("DELETE operations should not contain any fields".to_string()))
+                };
+            };
+            // Validate each create and update operation against the document schema.
+            match self.schema.validate_operation_fields(&op.fields().unwrap()) {
+                Ok(_) => Ok(()),
+                Err(_) => Err(DocumentError::ValidationError(
+                    "All CREATE and UPDATE operations in document must follow the schema description".to_string(),
+                )),
+            }
+        })?;
 
         Ok(())
     }
@@ -180,6 +205,8 @@ impl DocumentBuilder {
         let mut operations = BTreeMap::new();
 
         for op in self.operations() {
+            // Validate each operation against the document schema before continuing.
+            schema.validate_operation_fields(&op.fields().unwrap())?;
             // Insert operation into map
             operations.insert(op.operation_id().as_str().to_owned(), op.to_owned());
             // Add node to graph
@@ -231,6 +258,7 @@ mod tests {
         create_operation, fields, random_key_pair, schema, update_operation,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
+    use crate::Validate;
 
     use super::DocumentBuilder;
 
@@ -337,6 +365,9 @@ mod tests {
 
         let document = DocumentBuilder::new(operations).build()?;
 
+        // Document should be valid
+        assert!(document.validate().is_ok());
+
         let instance = document.resolve()?;
 
         let mut exp_result = BTreeMap::new();
@@ -345,8 +376,58 @@ mod tests {
             OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
         );
 
+        // Document should resolve to expected value
         assert_eq!(instance.raw(), exp_result);
 
         Ok(())
+    }
+
+    #[rstest]
+    fn must_have_create_operation(schema: Hash, #[from(random_key_pair)] key_pair_1: KeyPair) {
+        let panda = Client::new("panda".to_string(), key_pair_1);
+        let mut node = Node::new();
+
+        // Panda publishes a create operation.
+        // This instantiates a new document.
+        let panda_entry_1_hash = send_to_node(
+            &mut node,
+            &panda,
+            &create_operation(
+                schema.clone(),
+                fields(vec![(
+                    "cafe_name",
+                    OperationValue::Text("Panda Cafe".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        // Panda publishes an update operation.
+        // It contains the hash of the previous operation in it's `previous_operations` array
+        let panda_entry_2_hash = send_to_node(
+            &mut node,
+            &panda,
+            &update_operation(
+                schema,
+                panda_entry_1_hash.clone(),
+                vec![panda_entry_1_hash],
+                fields(vec![(
+                    "cafe_name",
+                    OperationValue::Text("Panda Cafe!".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let operations = node
+            .all_entries()
+            .iter()
+            .filter(|entry| entry.hash() == panda_entry_2_hash)
+            .map(|entry| {
+                OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap()
+            })
+            .collect();
+
+        assert!(DocumentBuilder::new(operations).build().is_err());
     }
 }

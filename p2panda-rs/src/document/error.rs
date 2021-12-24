@@ -50,4 +50,8 @@ pub enum DocumentError {
     /// Handle errors from building documents.
     #[error(transparent)]
     DocumentBuilderError(#[from] DocumentBuilderError),
+
+    /// Validation errors
+    #[error("document contains invalid values")]
+    ValidationError(String),
 }
