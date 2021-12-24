@@ -14,7 +14,7 @@ use cddl::validator::cbor;
 use crate::hash::Hash;
 use crate::instance::{Instance, InstanceError};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::operation::{Operation, OperationFields, OperationValue};
+use crate::operation::{Operation, OperationFields, OperationValue, AsOperation};
 use crate::schema::SchemaError;
 
 /// CDDL types

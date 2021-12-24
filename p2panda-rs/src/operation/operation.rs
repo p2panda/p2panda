@@ -203,19 +203,20 @@ impl OperationFields {
 /// The data itself lives in the `fields` object and is formed after an operation schema.
 ///
 /// Starting from an initial create operation, the following collection of update operations build
-/// up a causal graph of mutations which can be resolved into a single value or object during a materialisation process.
-/// If a delete operation is publish it signals the deletion of the entire graph and no more update
-/// operations should be published.
+/// up a causal graph of mutations which can be resolved into a single value or object during a
+/// materialisation process. If a delete operation is publish it signals the deletion of the entire
+/// graph and no more update operations should be published.
 ///
-/// All update and delete operations have a `previous_operations` field which contains a vector of operation
-/// hash ids which identify the known branch tips at the time of publication. These allow us to build the graph
-/// and retain knowledge of the graph state at the time the specific operation was published.
+/// All update and delete operations have a `previous_operations` field which contains a vector of
+/// operation hash ids which identify the known branch tips at the time of publication. These allow
+/// us to build the graph and retain knowledge of the graph state at the time the specific
+/// operation was published.
 ///
 /// ## Examples
 ///
-/// All of the below would be valid operation graphs. Operations which refer to more than one previous operation
-/// help to reconcile branches. However, if branches exist when the graph is resolved, the materialisation process
-/// will still resolves the graph to a single value.
+/// All of the below would be valid operation graphs. Operations which refer to more than one
+/// previous operation help to reconcile branches. However, if branches exist when the graph is
+/// resolved, the materialisation process will still resolves the graph to a single value.
 ///
 /// 1)
 /// ```mermaid
@@ -470,19 +471,20 @@ impl Validate for Operation {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
+
     use rstest::rstest;
     use rstest_reuse::apply;
 
-    use std::convert::TryFrom;
-
-    use super::{
-        AsOperation, Operation, OperationAction, OperationFields, OperationValue, OperationVersion,
-    };
     use crate::hash::Hash;
     use crate::operation::OperationEncoded;
     use crate::test_utils::fixtures::templates::many_valid_operations;
     use crate::test_utils::fixtures::{fields, random_hash, schema};
     use crate::Validate;
+
+    use super::{
+        AsOperation, Operation, OperationAction, OperationFields, OperationValue, OperationVersion,
+    };
 
     #[test]
     fn operation_fields() {
