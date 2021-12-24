@@ -220,7 +220,9 @@ impl DocumentBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::DocumentBuilder;
+    use rstest::rstest;
+    use std::collections::BTreeMap;
+
     use crate::document::DocumentError;
     use crate::hash::Hash;
     use crate::identity::KeyPair;
@@ -229,7 +231,8 @@ mod tests {
         create_operation, fields, random_key_pair, schema, update_operation,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
-    use rstest::rstest;
+
+    use super::DocumentBuilder;
 
     #[rstest]
     fn as_node(
@@ -336,7 +339,13 @@ mod tests {
 
         let instance = document.resolve()?;
 
-        println!("{:?}", instance);
+        let mut exp_result = BTreeMap::new();
+        exp_result.insert(
+            "cafe_name".to_string(),
+            OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
+        );
+
+        assert_eq!(instance.raw(), exp_result);
 
         Ok(())
     }
