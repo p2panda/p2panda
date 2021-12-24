@@ -9,18 +9,19 @@
 use std::convert::{TryFrom, TryInto};
 use std::panic;
 
-use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
-use crate::hash::Hash;
-use crate::identity::KeyPair as KeyPairNonWasm;
-use crate::operation::{
-    Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationValue,
-};
 use console_error_panic_hook::hook as panic_hook;
 use ed25519_dalek::{PublicKey, Signature};
 use js_sys::Array;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
+
+use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
+use crate::hash::Hash;
+use crate::identity::KeyPair as KeyPairNonWasm;
+use crate::operation::{
+    Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationValue,
+};
 
 // Converts any Rust Error type into js_sys:Error while keeping its error message. This helps
 // propagating errors similar like we do in Rust but in WebAssembly contexts. It is possible to
