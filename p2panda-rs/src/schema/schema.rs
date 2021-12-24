@@ -215,7 +215,7 @@ impl Schema {
             }?;
         }
 
-        match self.validate_operation(serde_cbor::to_vec(&fields.clone()).unwrap()) {
+        match self.validate_operation_fields(&fields.clone()) {
             Ok(_) => Ok(()),
             Err(err) => Err(SchemaError::ValidationError(err.to_string())),
         }?;
@@ -244,7 +244,7 @@ impl Schema {
             }?;
         }
 
-        match self.validate_operation(serde_cbor::to_vec(&fields.clone()).unwrap()) {
+        match self.validate_operation_fields(&fields.clone()) {
             Ok(_) => Ok(()),
             Err(err) => Err(SchemaError::ValidationError(err.to_string())),
         }?;
@@ -258,7 +258,7 @@ impl Schema {
     /// Returns a new `Instance` converted from CREATE `Operation` and validated against it's schema definition.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn instance_from_create(&self, operation: Operation) -> Result<Instance, InstanceError> {
-        match self.validate_operation(serde_cbor::to_vec(&operation.fields()).unwrap()) {
+        match self.validate_operation_fields(&operation.fields().unwrap()) {
             Ok(_) => Ok(()),
             Err(err) => Err(InstanceError::ValidationError(err)),
         }?;
@@ -273,16 +273,21 @@ impl fmt::Display for Schema {
     }
 }
 
-impl ValidateOperation for Schema {}
-
-trait ValidateOperation
+/// Validate an operations fields against this schema
+pub trait ValidateOperation
 where
     Self: fmt::Display,
 {
     /// Validate an operation against this application schema.
     #[cfg(not(target_arch = "wasm32"))]
-    fn validate_operation(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
-        match validate_cbor_from_slice(&format!("{}", self), &bytes) {
+    fn validate_operation_fields(
+        &self,
+        operation_fields: &OperationFields,
+    ) -> Result<(), SchemaError> {
+        match validate_cbor_from_slice(
+            &format!("{}", self),
+            &serde_cbor::to_vec(operation_fields).unwrap(),
+        ) {
             Err(cbor::Error::Validation(err)) => {
                 let err = err
                     .iter()
@@ -300,6 +305,8 @@ where
         }
     }
 }
+
+impl ValidateOperation for Schema {}
 
 #[cfg(test)]
 mod tests {
@@ -358,8 +365,7 @@ mod tests {
         me.add("age", OperationValue::Integer(35)).unwrap();
 
         // Validate operation fields against person schema
-        let me_bytes = serde_cbor::to_vec(&me).unwrap();
-        assert!(person.validate_operation(me_bytes).is_ok());
+        assert!(person.validate_operation_fields(&me).is_ok());
     }
 
     #[rstest]
@@ -379,8 +385,7 @@ mod tests {
         let person_from_string = Schema::new(&schema_hash, &cddl_str.to_string()).unwrap();
 
         // Validate operation fields against person schema
-        let me_bytes = serde_cbor::to_vec(&me).unwrap();
-        assert!(person_from_string.validate_operation(me_bytes).is_ok());
+        assert!(person_from_string.validate_operation_fields(&me).is_ok());
     }
 
     #[rstest]
@@ -406,12 +411,9 @@ mod tests {
             .unwrap();
 
         // Validate operation fields against application schema
-        let me_bytes = serde_cbor::to_vec(&me).unwrap();
-        let my_address_bytes = serde_cbor::to_vec(&my_address).unwrap();
-
-        assert!(application_schema.validate_operation(me_bytes).is_ok());
+        assert!(application_schema.validate_operation_fields(&me).is_ok());
         assert!(application_schema
-            .validate_operation(my_address_bytes)
+            .validate_operation_fields(&my_address)
             .is_ok());
 
         // Operations not matching one of the application schema should fail
@@ -423,9 +425,8 @@ mod tests {
             .add("colour", OperationValue::Text("pink & orange".to_owned()))
             .unwrap();
 
-        let naughty_panda_bytes = serde_cbor::to_vec(&naughty_panda).unwrap();
         assert!(application_schema
-            .validate_operation(naughty_panda_bytes)
+            .validate_operation_fields(&naughty_panda)
             .is_err());
     }
 
