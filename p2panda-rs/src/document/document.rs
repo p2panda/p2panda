@@ -235,7 +235,7 @@ mod tests {
     use super::DocumentBuilder;
 
     #[rstest]
-    fn as_node(
+    fn sort_and_resolve_graph(
         schema: Hash,
         #[from(random_key_pair)] key_pair_1: KeyPair,
         #[from(random_key_pair)] key_pair_2: KeyPair,
