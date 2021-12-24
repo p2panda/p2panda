@@ -32,6 +32,11 @@ impl Instance {
 
         Ok(())
     }
+
+    /// Get the raw hashmap representation of the instance.
+    pub fn raw(&self) -> HashMap<String, OperationValue> {
+        self.0.clone()
+    }
 }
 
 impl TryFrom<Operation> for Instance {
