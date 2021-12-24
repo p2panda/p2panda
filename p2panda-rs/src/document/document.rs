@@ -14,8 +14,8 @@ use incremental_topo::IncrementalTopo;
 use crate::Validate;
 
 /// Hard coded cddl string for now
-const DOCUMENT_SCHEMA: &str = "wiki = { (
-    cafe_name: { type: \"str\", value: tstr }
+const DOCUMENT_SCHEMA: &str = "cafe = { (
+    name: { type: \"str\", value: tstr }
 ) }";
 
 /// A resolvable data type made up of a collection of causally linked operations.
@@ -280,7 +280,7 @@ mod tests {
             &create_operation(
                 schema.clone(),
                 fields(vec![(
-                    "cafe_name",
+                    "name",
                     OperationValue::Text("Panda Cafe".to_string()),
                 )]),
             ),
@@ -297,7 +297,7 @@ mod tests {
                 panda_entry_1_hash.clone(),
                 vec![panda_entry_1_hash.clone()],
                 fields(vec![(
-                    "cafe_name",
+                    "name",
                     OperationValue::Text("Panda Cafe!".to_string()),
                 )]),
             ),
@@ -314,7 +314,7 @@ mod tests {
                 panda_entry_1_hash.clone(),
                 vec![panda_entry_1_hash.clone()],
                 fields(vec![(
-                    "cafe_name",
+                    "name",
                     OperationValue::Text("Penguin Cafe".to_string()),
                 )]),
             ),
@@ -331,7 +331,7 @@ mod tests {
                 panda_entry_1_hash.clone(),
                 vec![penguin_entry_1_hash.clone(), panda_entry_2_hash],
                 fields(vec![(
-                    "cafe_name",
+                    "name",
                     OperationValue::Text("Polar Bear Cafe".to_string()),
                 )]),
             ),
@@ -348,7 +348,7 @@ mod tests {
                 panda_entry_1_hash,
                 vec![penguin_entry_1_hash, penguin_entry_2_hash],
                 fields(vec![(
-                    "cafe_name",
+                    "name",
                     OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
                 )]),
             ),
@@ -372,7 +372,7 @@ mod tests {
 
         let mut exp_result = BTreeMap::new();
         exp_result.insert(
-            "cafe_name".to_string(),
+            "name".to_string(),
             OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
         );
 
@@ -395,7 +395,7 @@ mod tests {
             &create_operation(
                 schema.clone(),
                 fields(vec![(
-                    "cafe_name",
+                    "name",
                     OperationValue::Text("Panda Cafe".to_string()),
                 )]),
             ),
@@ -412,7 +412,7 @@ mod tests {
                 panda_entry_1_hash.clone(),
                 vec![panda_entry_1_hash],
                 fields(vec![(
-                    "cafe_name",
+                    "name",
                     OperationValue::Text("Panda Cafe!".to_string()),
                 )]),
             ),
