@@ -39,6 +39,11 @@ impl Instance {
     pub fn raw(&self) -> BTreeMap<String, OperationValue> {
         self.0.clone()
     }
+
+    /// Returns an iterator of existing instance fields.
+    pub fn iter(&self) -> Iter<String, OperationValue> {
+        self.0.iter()
+    }
 }
 
 impl TryFrom<Operation> for Instance {
