@@ -6,4 +6,4 @@ Describe your changes here.
 - [ ] Add this PR to the _Unreleased_ section in `CHANGELOG.md`
 - [ ] Link this PR to any issues it closes
 - [ ] New files contain a SPDX license header
-- [ ] Do descriptions and terminology match `handbook` content (and visa-versa) 
+- [ ] Check if descriptions and terminology match `handbook` content (and visa-versa) 

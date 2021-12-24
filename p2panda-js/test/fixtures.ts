@@ -1,17 +1,27 @@
-import { Entry, Operation, FieldsTagged, EncodedEntry, EntryArgs } from '~/types';
+import {
+  Entry,
+  Operation,
+  FieldsTagged,
+  EncodedEntry,
+  EntryArgs,
+} from '~/types';
 import TEST_DATA from './test-data.json';
 import { marshallResponseFields } from '~/utils';
 
-// right now we only have one author `panda` who only has one schema log. This could be expanded in the future.
+// Right now we only have one author `panda` who only has one schema log. This
+// could be expanded in the future.
 const PANDA_LOG = TEST_DATA.panda.logs[0];
 
 export const schemaFixture = (): string => {
   return PANDA_LOG.decodedOperations[0].schema;
 };
 
+export const documentIdFixture = (): string => {
+  return PANDA_LOG.encodedEntries[0].entryHash;
+};
+
 /**
- * Return an object with fields for an author's public and
- * private key.
+ * Return an object with fields for an author's public and private key.
  */
 export const authorFixture = (): { publicKey: string; privateKey: string } => {
   const author = {

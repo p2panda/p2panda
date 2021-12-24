@@ -26,16 +26,16 @@ impl Copy for OperationVersion {}
 /// Operations are categorized by their `action` type.
 ///
 /// An action defines the operation format and if this operation creates, updates or deletes a data
-/// instance.
+/// document.
 #[derive(Clone, Debug, PartialEq)]
 pub enum OperationAction {
-    /// Operation creates a new data instance.
+    /// Operation creates a new document.
     Create,
 
-    /// Operation updates an existing data instance.
+    /// Operation updates an existing document.
     Update,
 
-    /// Operation deletes an existing data instance.
+    /// Operation deletes an existing document.
     Delete,
 }
 
@@ -91,16 +91,16 @@ pub enum OperationValue {
     #[serde(rename = "str")]
     Text(String),
 
-    /// Reference to an instance.
+    /// Reference to a document.
     #[serde(rename = "relation")]
     Relation(Hash),
 }
 
-/// Operation fields are used to store user data. They are implemented as a simple key/value store
-/// with support for a limited number of data types (see [`OperationValue`] for further documentation
-/// on this). A `OperationFields` instance can contain any number and types of fields. However, when
-/// a `OperationFields` instance is attached to a `Operation`, the operation's schema determines which
-/// fields may be used.
+/// Operation fields are used to store application data. They are implemented as a simple key/value
+/// store with support for a limited number of data types (see [`OperationValue`] for further
+/// documentation on this). A `OperationFields` instance can contain any number and types of
+/// fields. However, when a `OperationFields` instance is attached to a `Operation`, the
+/// operation's schema determines which fields may be used.
 ///
 /// Internally operation fields use sorted B-Tree maps to assure ordering of the fields. If the
 /// operation fields would not be sorted consistently we would get different hash results for the
@@ -198,7 +198,7 @@ impl OperationFields {
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Operations describe data mutations in the p2panda network. Authors send operations to create,
-/// update or delete instances or collections of data.
+/// update or delete documents or collections of data.
 ///
 /// The data itself lives in the `fields` object and is formed after an operation schema.
 ///
@@ -260,7 +260,7 @@ pub struct Operation {
     #[serde(skip_serializing_if = "Option::is_none")]
     previous_operations: Option<Vec<Hash>>,
 
-    /// Optional id referring to the data instance.
+    /// Optional id referring to the document.
     #[serde(skip_serializing_if = "Option::is_none")]
     id: Option<Hash>,
 
@@ -427,7 +427,7 @@ impl AsOperation for Operation {
         self.schema.to_owned()
     }
 
-    /// Returns user data fields of operation.
+    /// Returns application data fields of operation.
     fn fields(&self) -> Option<OperationFields> {
         self.fields.clone()
     }

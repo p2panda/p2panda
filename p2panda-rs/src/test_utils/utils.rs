@@ -32,22 +32,22 @@ pub struct NextEntryArgs {
 /// A helper method for easily generating an operation of any type (`CREATE`, `UPDATE`, `DELETE`).
 ///
 /// If a value for `fields` is provided, this is a `CREATE` operation.
-/// If values for both `fields` and `instance_id` are provided, this is an `UPDATE` operation.
+/// If values for both `fields` and `document_id` are provided, this is an `UPDATE` operation.
 /// If no value for `fields` is provided, this is a `DELETE` operation.
 pub fn any_operation(
     fields: Option<OperationFields>,
-    instance_id: Option<Hash>,
+    document_id: Option<Hash>,
     previous_operations: Option<Vec<Hash>>,
 ) -> Operation {
     match fields {
         // It's a CREATE operation
-        Some(fields) if instance_id.is_none() => {
+        Some(fields) if document_id.is_none() => {
             Operation::new_create(hash(DEFAULT_SCHEMA_HASH), fields).unwrap()
         }
         // It's an UPDATE operation
         Some(fields) => Operation::new_update(
             hash(DEFAULT_SCHEMA_HASH),
-            instance_id.unwrap(),
+            document_id.unwrap(),
             previous_operations.unwrap(),
             fields,
         )
@@ -55,7 +55,7 @@ pub fn any_operation(
         // It's a DELETE operation
         None => Operation::new_delete(
             hash(DEFAULT_SCHEMA_HASH),
-            instance_id.unwrap(),
+            document_id.unwrap(),
             previous_operations.unwrap(),
         )
         .unwrap(),
@@ -113,26 +113,26 @@ pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
     Operation::new_create(schema, fields).unwrap()
 }
 
-/// Generate an update operation based on passed schema hash, instance id and operation fields.
+/// Generate an update operation based on passed schema hash, document id and operation fields.
 pub fn update_operation(
     schema: Hash,
-    instance_id: Hash,
+    document_id: Hash,
     previous_operations: Vec<Hash>,
     fields: OperationFields,
 ) -> Operation {
-    Operation::new_update(schema, instance_id, previous_operations, fields).unwrap()
+    Operation::new_update(schema, document_id, previous_operations, fields).unwrap()
 }
 
-/// Generate a delete operation based on passed schema hash and instance id.
+/// Generate a delete operation based on passed schema hash and document id.
 pub fn delete_operation(
     schema: Hash,
-    instance_id: Hash,
+    document_id: Hash,
     previous_operations: Vec<Hash>,
 ) -> Operation {
-    Operation::new_delete(schema, instance_id, previous_operations).unwrap()
+    Operation::new_delete(schema, document_id, previous_operations).unwrap()
 }
 
-/// Generate a create meta operation based on passed entry hash, author and operation.
+/// Generate a create meta operation based on passed encoded entry and operation.
 pub fn meta_operation(
     entry_signed_encoded: EntrySigned,
     operation_encoded: OperationEncoded,
