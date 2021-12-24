@@ -24,7 +24,10 @@ Highlights are marked with a pancake 🥞
 - Use new `Operation` naming which replaces `Message` [#156](https://github.com/p2panda/p2panda/pull/156) _BREAKING_ `rs` `js`
 - Remove distinction of system and application log ids [#154](https://github.com/p2panda/p2panda/pull/154) `rs`
 - Update dependencies, remove deprecated eslint-loader [#155](https://github.com/p2panda/p2panda/pull/155) `js`
+- Split utils modules in `test_utils` into utils.rs and constants.rs [#157](https://github.com/p2panda/p2panda/pull/157) `rs`
 - Use traits for validation methods in `Schema` [#160](https://github.com/p2panda/p2panda/pull/160) `rs`
+- Update API and mocks to reflect yasmf hash and document flow changes [#165](https://github.com/p2panda/p2panda/pull/165) _BREAKING_ `rs` `js`
+- Change to new `rustdoc::missing_doc_code_examples` linter name [#168](https://github.com/p2panda/p2panda/pull/168) `rs`
 
 ### Campfires and boiling pots to sit around
 
@@ -56,7 +59,7 @@ Released on 2021-10-25: :package: `p2panda-js` :package: `p2panda-rs`
 - `serde` serialization and deserialization for all atomic structs [#42](https://github.com/p2panda/p2panda/pull/42) `rs`
 - Implement method for iterating over MessageFields [#68](https://github.com/p2panda/p2panda/pull/68) `rs`
 - TypeScript API that wraps wasm bindings, introduce OpenRPC specification [#67](https://github.com/p2panda/p2panda/pull/67) `js` 🥞
-- Methods to update and delete instances [#114](https://github.com/p2panda/p2panda/pull/114) `js` 🥞
+- Methods to update and delete documents [#114](https://github.com/p2panda/p2panda/pull/114) `js` 🥞
 
 ### Changed
 

@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-/// Generate json formatted test data. This is run with the `cargo run --bin json-test-data` command. The output
-/// data can be used for testing a p2panda implementation. It is currently used in `p2panda-js`.
+/// Generate JSON formatted test data. This is run with the `cargo run --bin json-test-data`
+/// command. The output data can be used for testing a p2panda implementation. It is currently used
+/// in `p2panda-js`.
+use p2panda_rs::operation::OperationValue;
+use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 use p2panda_rs::test_utils::mocks::Client;
 use p2panda_rs::test_utils::mocks::{send_to_node, Node};
 use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
-use p2panda_rs::test_utils::{
+use p2panda_rs::test_utils::utils::{
     create_operation, delete_operation, hash, new_key_pair, operation_fields, update_operation,
-    DEFAULT_SCHEMA_HASH,
 };
 
 fn main() {
@@ -18,12 +20,15 @@ fn main() {
     let panda = Client::new("panda".to_string(), new_key_pair());
 
     // Publish a CREATE operation
-    let instance_a_hash = send_to_node(
+    let document_id = send_to_node(
         &mut node,
         &panda,
         &create_operation(
             hash(DEFAULT_SCHEMA_HASH),
-            operation_fields(vec![("message", "Ohh, my first message!")]),
+            operation_fields(vec![(
+                "message",
+                OperationValue::Text("Ohh, my first message!".to_string()),
+            )]),
         ),
     )
     .unwrap();
@@ -34,8 +39,26 @@ fn main() {
         &panda,
         &update_operation(
             hash(DEFAULT_SCHEMA_HASH),
-            instance_a_hash.clone(),
-            operation_fields(vec![("message", "Which I now update.")]),
+            document_id.clone(),
+            operation_fields(vec![(
+                "message",
+                OperationValue::Text("Which I now update.".to_string()),
+            )]),
+        ),
+    )
+    .unwrap();
+
+    // Publish another UPDATE operation
+    send_to_node(
+        &mut node,
+        &panda,
+        &update_operation(
+            hash(DEFAULT_SCHEMA_HASH),
+            document_id.clone(),
+            operation_fields(vec![(
+                "message",
+                OperationValue::Text("And then update again.".to_string()),
+            )]),
         ),
     )
     .unwrap();
@@ -44,22 +67,12 @@ fn main() {
     send_to_node(
         &mut node,
         &panda,
-        &delete_operation(hash(DEFAULT_SCHEMA_HASH), instance_a_hash),
+        &delete_operation(hash(DEFAULT_SCHEMA_HASH), document_id),
     )
     .unwrap();
 
-    // Publish another CREATE operation
-    send_to_node(
-        &mut node,
-        &panda,
-        &create_operation(
-            hash(DEFAULT_SCHEMA_HASH),
-            operation_fields(vec![("message", "Let's try that again.")]),
-        ),
-    )
-    .unwrap();
-
-    // Get the database represented as json and formatted ready to be used as test data in `p2panda-js`
+    // Get the database represented as json and formatted ready to be used as test data in
+    // `p2panda-js`
     let formatted_data = generate_test_data(&mut node, vec![panda]);
 
     println!("{}", serde_json::to_string_pretty(&formatted_data).unwrap());
@@ -70,12 +83,13 @@ mod tests {
     /// Generate json formatted test data
     use serde_json::Value;
 
+    use p2panda_rs::operation::OperationValue;
+    use p2panda_rs::test_utils::constants::{DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
     use p2panda_rs::test_utils::mocks::Client;
     use p2panda_rs::test_utils::mocks::{send_to_node, Node};
     use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
-    use p2panda_rs::test_utils::{
-        create_operation, hash, keypair_from_private, operation_fields, DEFAULT_PRIVATE_KEY,
-        DEFAULT_SCHEMA_HASH,
+    use p2panda_rs::test_utils::utils::{
+        create_operation, hash, keypair_from_private, operation_fields,
     };
 
     #[test]
@@ -95,7 +109,10 @@ mod tests {
             &panda,
             &create_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                operation_fields(vec![("message", "Ohh, my first message!")]),
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Ohh, my first message!".to_string()),
+                )]),
             ),
         )
         .unwrap();
@@ -151,8 +168,10 @@ mod tests {
 
         // Generate test data
         let generated_test_data = generate_test_data(&mut node, vec![panda]);
+
         // Convert to json string
         let generated_test_data_str = serde_json::to_string(&generated_test_data).unwrap();
+
         // Convert both strings into json objects for comparrison
         let generated_test_data_json: Value =
             serde_json::from_str(&generated_test_data_str).unwrap();
