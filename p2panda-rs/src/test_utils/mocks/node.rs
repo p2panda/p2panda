@@ -79,7 +79,7 @@ use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::materialiser::{marshall_entries, DAG};
-use crate::operation::{AsOperation, Operation, OperationFields};
+use crate::operation::{AsOperation, Operation};
 use crate::test_utils::mocks::logs::{Log, LogEntry};
 use crate::test_utils::mocks::utils::Result;
 use crate::test_utils::mocks::Client;
