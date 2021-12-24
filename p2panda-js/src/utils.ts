@@ -3,7 +3,7 @@
 import { Fields, FieldsTagged } from './types';
 
 /**
- * Lookup the type of a schema's fields
+ * Look up the type of a schema's fields.
  *
  * While we don't have proper schema support in the node this function
  * just guesses the schema's field type from a supplied fields record.

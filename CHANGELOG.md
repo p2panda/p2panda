@@ -15,7 +15,7 @@ Highlights are marked with a pancake 🥞
 - `SchemaBuilder` and `Schema` structs for working with CDDL definitions [#78](https://github.com/p2panda/p2panda/pull/78) `rs`
 - `test_utils` module containing `rstest` fixtures, mock `Node` and `Client` structs, test data helper for `p2panda-js` [#116](https://github.com/p2panda/p2panda/pull/116) `rs`
 - Reconciliation logic /w DAG for materialisation module [#129](https://github.com/p2panda/p2panda/pull/129) `rs`
-- `Instance` fwhich encapsulates the materialised view of a reduced collection of `Operations` `rs`
+- `Instance` which encapsulates the materialised view of a reduced collection of `Operations` [#161](https://github.com/p2panda/p2panda/pull/161) `rs`
 
 ### Changed
 
@@ -28,6 +28,8 @@ Highlights are marked with a pancake 🥞
 - Use traits for validation methods in `Schema` [#160](https://github.com/p2panda/p2panda/pull/160) `rs`
 - Add `previous_operations` field in `Operation` [#163](https://github.com/p2panda/p2panda/pull/163) _BREAKING_ `rs` `js`
 - Introduce `OperationWithMeta` struct [#163](https://github.com/p2panda/p2panda/pull/163) `rs`
+- Update API and mocks to reflect yasmf hash and document flow changes [#165](https://github.com/p2panda/p2panda/pull/165) _BREAKING_ `rs` `js`
+- Change to new `rustdoc::missing_doc_code_examples` linter name [#168](https://github.com/p2panda/p2panda/pull/168) `rs`
 
 ### Campfires and boiling pots to sit around
 
@@ -59,7 +61,7 @@ Released on 2021-10-25: :package: `p2panda-js` :package: `p2panda-rs`
 - `serde` serialization and deserialization for all atomic structs [#42](https://github.com/p2panda/p2panda/pull/42) `rs`
 - Implement method for iterating over MessageFields [#68](https://github.com/p2panda/p2panda/pull/68) `rs`
 - TypeScript API that wraps wasm bindings, introduce OpenRPC specification [#67](https://github.com/p2panda/p2panda/pull/67) `js` 🥞
-- Methods to update and delete instances [#114](https://github.com/p2panda/p2panda/pull/114) `js` 🥞
+- Methods to update and delete documents [#114](https://github.com/p2panda/p2panda/pull/114) `js` 🥞
 
 ### Changed
 

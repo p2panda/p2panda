@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::BTreeMap;
+#[cfg(not(target_arch = "wasm32"))]
 use std::convert::TryFrom;
 use std::fmt;
-
-use crate::hash::Hash;
-use crate::instance::{Instance, InstanceError};
-use crate::operation::{AsOperation, Operation, OperationFields, OperationValue};
-use crate::schema::SchemaError;
 
 use cddl::lexer::Lexer;
 use cddl::parser::Parser;
@@ -15,6 +11,13 @@ use cddl::parser::Parser;
 use cddl::validate_cbor_from_slice;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
+
+use crate::hash::Hash;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::instance::{Instance, InstanceError};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::operation::{AsOperation, Operation, OperationFields, OperationValue};
+use crate::schema::SchemaError;
 
 /// CDDL types
 #[derive(Clone, Debug, Copy)]
@@ -41,7 +44,7 @@ impl fmt::Display for Type {
     }
 }
 
-/// CDDL field types
+/// CDDL field types.
 #[derive(Clone, Debug)]
 pub enum Field {
     String(String),
@@ -60,9 +63,8 @@ impl fmt::Display for Field {
     }
 }
 
-/// Struct for building and representing CDDL groups.
-/// CDDL uses groups to define reuseable data structures
-/// they can be merged into schema or used in Vectors, Tables and Structs
+/// Struct for building and representing CDDL groups. CDDL uses groups to define reuseable data
+/// structures they can be merged into schema or used in Vectors, Tables and Structs.
 #[derive(Clone, Debug)]
 pub struct Group {
     #[allow(dead_code)] // Remove when module in use.
@@ -71,7 +73,7 @@ pub struct Group {
 }
 
 impl Group {
-    /// Create a new CDDL group
+    /// Create a new CDDL group.
     pub fn new(name: String) -> Self {
         Self {
             name,
@@ -90,7 +92,7 @@ impl fmt::Display for Group {
         let map = &self.fields;
         write!(f, "( ")?;
         for (count, value) in map.iter().enumerate() {
-            // For every element except the first, add a comma.
+            // For every element except the first, add a comma
             if count != 0 {
                 write!(f, ", ")?;
             }
@@ -100,14 +102,14 @@ impl fmt::Display for Group {
     }
 }
 
-/// SchemaBuilder struct for programatically creating CDDL schemas and valdating OperationFields.
+/// SchemaBuilder struct for programatically creating CDDL schemas and validating OperationFields.
 #[derive(Clone, Debug)]
 pub struct SchemaBuilder {
     name: String,
     fields: BTreeMap<String, Field>,
 }
 
-/// Schema struct for creating CDDL schemas, valdating OperationFields and creating operations
+/// Schema struct for creating CDDL schemas, validating OperationFields and creating operations
 /// following the defined schema.
 #[derive(Clone, Debug)]
 pub struct Schema {
@@ -193,12 +195,12 @@ impl Schema {
         })
     }
 
-    /// Return the hash id of this schema
+    /// Return the hash id of this schema.
     pub fn schema_hash(&self) -> Hash {
         self.schema_hash.clone()
     }
 
-    /// Create a new CREATE operation validated against this schema
+    /// Create a new CREATE operation validated against this schema.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn create(
         &self,
@@ -224,7 +226,7 @@ impl Schema {
         }
     }
 
-    /// Create a new UPDATE operation validated against this schema
+    /// Create a new UPDATE operation validated against this schema.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn update(
         &self,
@@ -277,7 +279,7 @@ trait ValidateOperation
 where
     Self: fmt::Display,
 {
-    /// Validate an operation against this user schema
+    /// Validate an operation against this application schema.
     #[cfg(not(target_arch = "wasm32"))]
     fn validate_operation(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
         match validate_cbor_from_slice(&format!("{}", self), &bytes) {
@@ -301,38 +303,39 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{Schema, SchemaBuilder, Type, ValidateOperation};
+    use rstest::rstest;
+
     use crate::hash::Hash;
     use crate::operation::{Operation, OperationFields, OperationValue};
     use crate::test_utils::fixtures::{create_operation, hash};
 
-    use rstest::rstest;
+    use super::{Schema, SchemaBuilder, Type, ValidateOperation};
 
-    /// All user schema
-    pub const USER_SCHEMA: &str = r#"
-    userSchema = {
-        address //
-        person
-    }
+    /// Complete application schema.
+    pub const APPLICATION_SCHEMA: &str = r#"
+        applicationSchema = {
+            address //
+            person
+        }
 
-    address = (
-        city: { type: "str", value: tstr },
-        street: { type: "str", value: tstr },
-        house-number: { type: "int", value: int },
-    )
+        address = (
+            city: { type: "str", value: tstr },
+            street: { type: "str", value: tstr },
+            house-number: { type: "int", value: int },
+        )
 
-    person = (
-        name: { type: "str", value: tstr },
-        age: { type: "int", value: int },
-    )
+        person = (
+            name: { type: "str", value: tstr },
+            age: { type: "int", value: int },
+        )
     "#;
 
-    /// Person schema
+    /// Only `person` schema.
     pub const PERSON_SCHEMA: &str = r#"
-    person = (
-        name: { type: "str", value: tstr },
-        age: { type: "int", value: int },
-    )
+        person = (
+            name: { type: "str", value: tstr },
+            age: { type: "int", value: int },
+        )
     "#;
 
     #[test]
@@ -382,8 +385,9 @@ mod tests {
 
     #[rstest]
     pub fn validate_against_megaschema(#[from(hash)] schema_hash: Hash) {
-        // Instanciate global user schema from mega schema string and it's hash
-        let user_schema = Schema::new(&schema_hash, &USER_SCHEMA.to_string()).unwrap();
+        // Instantiate global application schema from mega schema string and it's hash
+        let application_schema =
+            Schema::new(&schema_hash, &APPLICATION_SCHEMA.to_string()).unwrap();
 
         let mut me = OperationFields::new();
         me.add("name", OperationValue::Text("Sam".to_owned()))
@@ -401,14 +405,16 @@ mod tests {
             .add("city", OperationValue::Text("Bamboo Town".to_owned()))
             .unwrap();
 
-        // Validate operation fields against user schema
+        // Validate operation fields against application schema
         let me_bytes = serde_cbor::to_vec(&me).unwrap();
         let my_address_bytes = serde_cbor::to_vec(&my_address).unwrap();
 
-        assert!(user_schema.validate_operation(me_bytes).is_ok());
-        assert!(user_schema.validate_operation(my_address_bytes).is_ok());
+        assert!(application_schema.validate_operation(me_bytes).is_ok());
+        assert!(application_schema
+            .validate_operation(my_address_bytes)
+            .is_ok());
 
-        // Operations not matching one of the user schema should fail
+        // Operations not matching one of the application schema should fail
         let mut naughty_panda = OperationFields::new();
         naughty_panda
             .add("name", OperationValue::Text("Naughty Panda".to_owned()))
@@ -418,7 +424,9 @@ mod tests {
             .unwrap();
 
         let naughty_panda_bytes = serde_cbor::to_vec(&naughty_panda).unwrap();
-        assert!(user_schema.validate_operation(naughty_panda_bytes).is_err());
+        assert!(application_schema
+            .validate_operation(naughty_panda_bytes)
+            .is_err());
     }
 
     #[rstest]
@@ -448,7 +456,7 @@ mod tests {
     }
 
     #[rstest]
-    pub fn test_update_operation(#[from(hash)] instance_id: Hash, #[from(hash)] schema_hash: Hash) {
+    pub fn test_update_operation(#[from(hash)] document_id: Hash, #[from(hash)] schema_hash: Hash) {
         let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
 
         // Create a operation the long way without validation
@@ -462,7 +470,7 @@ mod tests {
 
         let operation = Operation::new_update(
             schema_hash,
-            instance_id.to_owned(),
+            document_id.to_owned(),
             vec![Hash::new_from_bytes(vec![12, 128]).unwrap()],
             operation_fields,
         )
@@ -471,7 +479,7 @@ mod tests {
         // Create an operation the quick way *with* validation
         let operation_again = person_schema
             .update(
-                instance_id.as_str(),
+                document_id.as_str(),
                 vec![Hash::new_from_bytes(vec![12, 128]).unwrap()],
                 vec![
                     ("name", OperationValue::Text("Panda".to_string())),

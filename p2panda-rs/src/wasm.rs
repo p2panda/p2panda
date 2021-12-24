@@ -9,18 +9,19 @@
 use std::convert::{TryFrom, TryInto};
 use std::panic;
 
-use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
-use crate::hash::Hash;
-use crate::identity::KeyPair as KeyPairNonWasm;
-use crate::operation::{
-    Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationValue,
-};
 use console_error_panic_hook::hook as panic_hook;
 use ed25519_dalek::{PublicKey, Signature};
 use js_sys::Array;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
+
+use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
+use crate::hash::Hash;
+use crate::identity::KeyPair as KeyPairNonWasm;
+use crate::operation::{
+    Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationValue,
+};
 
 // Converts any Rust Error type into js_sys:Error while keeping its error message. This helps
 // propagating errors similar like we do in Rust but in WebAssembly contexts. It is possible to
@@ -114,7 +115,7 @@ pub fn verify_signature(
     }
 }
 
-/// Use `OperationFields` to attach user data to a [`Operation`].
+/// Use `OperationFields` to attach application data to a [`Operation`].
 ///
 /// See [`crate::atomic::OperationFields`] for further documentation.
 #[wasm_bindgen]
@@ -219,7 +220,7 @@ impl OperationFields {
     }
 }
 
-/// Returns an encoded `create` operation that creates an instance of the provided schema.
+/// Returns an encoded `create` operation that creates a document of the provided schema.
 ///
 /// Use `create` operations by attaching them to an entry that you publish.
 #[wasm_bindgen(js_name = encodeCreateOperation)]
@@ -233,17 +234,17 @@ pub fn encode_create_operation(
     Ok(operation_encoded.as_str().to_owned())
 }
 
-/// Returns an encoded `update` operation that updates fields of a given instance.
+/// Returns an encoded `update` operation that updates fields of a given document.
 ///
 /// Use `update` operations by attaching them to an entry that you publish.
 #[wasm_bindgen(js_name = encodeUpdateOperation)]
 pub fn encode_update_operation(
-    instance_id: String,
+    document_id: String,
     schema_hash: String,
     previous_operations: JsValue,
     fields: OperationFields,
 ) -> Result<String, JsValue> {
-    let instance = jserr!(Hash::new(&instance_id));
+    let document = jserr!(Hash::new(&document_id));
     let schema = jserr!(Hash::new(&schema_hash));
     // decode JsValue into vector of strings
     let prev_op_strings: Vec<String> = jserr!(previous_operations.into_serde());
@@ -254,21 +255,21 @@ pub fn encode_update_operation(
         .collect();
     // unwrap with jserr! macro
     let previous = jserr!(prev_op_result);
-    let operation = jserr!(Operation::new_update(schema, instance, previous, fields.0));
+    let operation = jserr!(Operation::new_update(schema, document, previous, fields.0));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
 }
 
-/// Returns an encoded `delete` operation that deletes a given instance.
+/// Returns an encoded `delete` operation that deletes a given document.
 ///
 /// Use `delete` operations by attaching them to an entry that you publish.
 #[wasm_bindgen(js_name = encodeDeleteOperation)]
 pub fn encode_delete_operation(
-    instance_id: String,
+    document_id: String,
     schema_hash: String,
     previous_operations: Array,
 ) -> Result<String, JsValue> {
-    let instance = jserr!(Hash::new(&instance_id));
+    let document = jserr!(Hash::new(&document_id));
     let schema = jserr!(Hash::new(&schema_hash));
     // decode JsValue into vector of strings
     let prev_op_strings: Vec<String> = jserr!(previous_operations.into_serde());
@@ -279,7 +280,7 @@ pub fn encode_delete_operation(
         .collect();
     // unwrap with jserr! macro
     let previous = jserr!(prev_op_result);
-    let operation = jserr!(Operation::new_delete(schema, instance, previous));
+    let operation = jserr!(Operation::new_delete(schema, document, previous));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
 }

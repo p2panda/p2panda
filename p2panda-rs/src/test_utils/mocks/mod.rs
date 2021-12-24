@@ -5,7 +5,6 @@
 mod client;
 pub mod constants;
 pub mod logs;
-pub mod materialisation;
 mod node;
 pub mod utils;
 

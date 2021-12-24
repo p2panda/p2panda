@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Types and methods for deriving and maintaining `Instances`.
-
 use std::{collections::HashMap, convert::TryFrom};
 
+use crate::instance::error::InstanceError;
 use crate::operation::{AsOperation, Operation, OperationValue, OperationWithMeta};
-
-use super::error::InstanceError;
 
 /// The materialised view of a reduced collection of `Operations`
 #[derive(Debug, PartialEq, Default)]
@@ -83,11 +81,12 @@ mod tests {
 
     use rstest::rstest;
 
-    use super::Instance;
     use crate::hash::Hash;
     use crate::operation::{AsOperation, Operation};
     use crate::schema::Schema;
     use crate::test_utils::fixtures::{create_operation, delete_operation, hash, update_operation};
+
+    use super::Instance;
 
     #[rstest]
     fn try_from_operation(
