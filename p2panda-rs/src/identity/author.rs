@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::identity::AuthorError;
 use crate::Validate;
 
-/// Authors are hex encoded ed25519 public key strings.
+/// Authors are hex encoded Ed25519 public key strings.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(
     feature = "db-sqlx",
@@ -18,7 +18,7 @@ use crate::Validate;
 pub struct Author(String);
 
 impl Author {
-    /// Validates and wraps author string into a new `Author` instance.
+    /// Validates and wraps Ed25519 public key string into a new `Author` instance.
     ///
     /// ## Example
     ///
