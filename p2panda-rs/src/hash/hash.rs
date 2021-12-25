@@ -11,7 +11,7 @@ use crate::hash::HashError;
 use crate::Validate;
 
 /// Size of p2panda entries' hashes.
-pub(crate) const HASH_SIZE: usize = BLAKE3_HASH_SIZE;
+pub const HASH_SIZE: usize = BLAKE3_HASH_SIZE;
 
 /// Type used for `bamboo-rs-core-ed25519-yasmf` entries that own their bytes.
 pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
