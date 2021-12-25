@@ -56,7 +56,6 @@ impl TryFrom<&Operation> for OperationEncoded {
     type Error = OperationEncodedError;
 
     fn try_from(operation: &Operation) -> Result<Self, Self::Error> {
-        // Encode bytes as hex string
         let encoded = hex::encode(&operation.to_cbor());
         OperationEncoded::new(&encoded)
     }
@@ -84,7 +83,7 @@ impl Validate for OperationEncoded {
 
     /// Checks encoded operation value against hex format.
     ///
-    /// Skips CDDL schema validation as this is not supported for wasm targets. See:
+    /// Skips CDDL schema validation as this is not supported for wasm targets.See:
     /// https://github.com/anweiss/cddl/issues/83
     fn validate(&self) -> Result<(), Self::Error> {
         hex::decode(&self.0).map_err(|_| OperationEncodedError::InvalidHexEncoding)?;
