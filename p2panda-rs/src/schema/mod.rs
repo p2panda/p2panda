@@ -15,12 +15,12 @@ mod operation;
 mod schema;
 
 pub use error::SchemaError;
-pub use operation::MESSAGE_SCHEMA;
+pub use operation::OPERATION_SCHEMA;
 pub use schema::{Schema, SchemaBuilder, Type};
 
 /// Checks CBOR bytes against CDDL schemas.
 ///
-/// This helper method also converts validation errors coming from the cddl crate into an
+/// This helper method also converts validation errors coming from the `cddl` crate into an
 /// concatenated error operation and returns it.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaError> {

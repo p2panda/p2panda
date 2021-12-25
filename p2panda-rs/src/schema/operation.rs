@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-/// This schema is used to verify the data integrity of all incoming operations. This does only
-/// validate the "meta" operation schema and does not check against application data fields as this
-/// is part of an additional process called application schema validation.
-pub const MESSAGE_SCHEMA: &str = r#"
+/// This schema is used to verify the data integrity of all incoming operations.
+///
+/// This does only validate the "meta" operation schema and does not check against application data
+/// fields as this is part of an additional process called application schema validation.
+pub const OPERATION_SCHEMA: &str = r#"
     operation = {
         schema: hash,
         version: 1,

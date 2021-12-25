@@ -13,23 +13,23 @@ pub enum SchemaError {
     #[error("invalid CBOR format")]
     InvalidCBOR,
 
-    /// There is no schema set
+    /// There is no schema set.
     #[error("no CDDL schema present")]
     NoSchema,
 
-    /// Error while parsing CDDL
+    /// Error while parsing CDDL.
     #[error("error while parsing CDDL: {0}")]
     ParsingError(String),
 
-    /// Operation validation error
+    /// Operation contains invalid values.
     #[error("invalid operation values")]
     ValidationError(String),
 
-    /// Operation fields error
+    /// `OperationFields` error.
     #[error("error while adding operation fields")]
     OperationFieldsError(#[from] crate::operation::OperationFieldsError),
 
-    /// Operation error
+    /// `Operation` error.
     #[error("error while creating operation")]
     OperationError(#[from] crate::operation::OperationError),
 }

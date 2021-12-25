@@ -19,7 +19,7 @@ use crate::instance::{Instance, InstanceError};
 use crate::operation::{AsOperation, Operation, OperationFields, OperationValue};
 use crate::schema::SchemaError;
 
-/// CDDL types
+/// CDDL types.
 #[derive(Clone, Debug, Copy)]
 #[allow(missing_docs)]
 pub enum Type {
@@ -30,7 +30,7 @@ pub enum Type {
     Relation,
 }
 
-/// CDDL schema type string formats
+/// CDDL schema type string formats.
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let cddl_type = match self {
@@ -67,7 +67,6 @@ impl fmt::Display for Field {
 /// structures they can be merged into schema or used in Vectors, Tables and Structs.
 #[derive(Clone, Debug)]
 pub struct Group {
-    #[allow(dead_code)] // Remove when module in use.
     name: String,
     fields: BTreeMap<String, Field>,
 }
@@ -81,7 +80,7 @@ impl Group {
         }
     }
 
-    /// Add an Field to the group.
+    /// Add a field to the group.
     pub fn add_field(&mut self, key: &str, field_type: Field) {
         self.fields.insert(key.to_owned(), field_type);
     }
@@ -118,7 +117,7 @@ pub struct Schema {
 }
 
 impl SchemaBuilder {
-    /// Create a new blank Schema
+    /// Create a new blank `Schema`.
     pub fn new(name: String) -> Self {
         Self {
             name,
@@ -126,13 +125,13 @@ impl SchemaBuilder {
         }
     }
 
-    /// Add a field definition to this schema
+    /// Add a field definition to this schema.
     pub fn add_operation_field(
         &mut self,
         key: String,
         field_type: Type,
     ) -> Result<(), SchemaError> {
-        // Match passed type and map it to our OperationFields type and CDDL types.
+        // Match passed type and map it to our OperationFields type and CDDL types
         let type_string = match field_type {
             Type::Tstr => "str",
             Type::Int => "int",
@@ -149,9 +148,8 @@ impl SchemaBuilder {
         // Format operation fields group as a struct
         let operation_fields = Field::Struct(operation_fields);
 
-        // Insert new operation field into Schema fields.
-        // If this Schema was created from a cddl string
-        // `fields` will be None.
+        // Insert new operation field into Schema fields. If this Schema was created from a cddl
+        // string `fields` will be None
         self.fields.insert(key, operation_fields);
         Ok(())
     }
@@ -173,10 +171,11 @@ impl fmt::Display for SchemaBuilder {
 }
 
 impl Schema {
-    /// Create a new Schema from a schema hash and schema CDDL string
+    /// Create a new Schema from a schema hash and schema CDDL string.
     pub fn new(schema_hash: &Hash, schema_str: &str) -> Result<Self, SchemaError> {
         let mut lexer = Lexer::new(schema_str);
         let parser = Parser::new(lexer.iter(), schema_str);
+
         let schema_string = match parser {
             Ok(mut parser) => match parser.parse_cddl() {
                 Ok(cddl) => Ok(cddl.to_string()),
@@ -184,6 +183,7 @@ impl Schema {
             },
             Err(err) => Err(SchemaError::ParsingError(err.to_string())),
         }?;
+
         let schema_hash = match Hash::new(schema_hash.as_str()) {
             Ok(hash) => Ok(hash),
             Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
@@ -255,7 +255,8 @@ impl Schema {
         }
     }
 
-    /// Returns a new `Instance` converted from CREATE `Operation` and validated against it's schema definition.
+    /// Returns a new `Instance` converted from CREATE `Operation` and validated against it's
+    /// schema definition.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn instance_from_create(&self, operation: Operation) -> Result<Instance, InstanceError> {
         match self.validate_operation(serde_cbor::to_vec(&operation.fields()).unwrap()) {
@@ -311,7 +312,7 @@ mod tests {
 
     use super::{Schema, SchemaBuilder, Type, ValidateOperation};
 
-    /// Complete application schema.
+    // Complete application schema.
     pub const APPLICATION_SCHEMA: &str = r#"
         applicationSchema = {
             address //
@@ -330,7 +331,7 @@ mod tests {
         )
     "#;
 
-    /// Only `person` schema.
+    // Only `person` schema.
     pub const PERSON_SCHEMA: &str = r#"
         person = (
             name: { type: "str", value: tstr },
@@ -340,7 +341,7 @@ mod tests {
 
     #[test]
     pub fn schema_builder() {
-        // Instanciate new empty schema named "person"
+        // Instantiate new empty schema named "person"
         let mut person = SchemaBuilder::new("person".to_owned());
 
         // Add two operation fields to the schema
@@ -370,7 +371,7 @@ mod tests {
             .unwrap();
         me.add("age", OperationValue::Integer(35)).unwrap();
 
-        // Instanciate "person" schema from cddl string
+        // Instantiate "person" schema from cddl string
         let cddl_str = "person = { (
             age: { type: \"int\", value: int },
             name: { type: \"str\", value: tstr }
@@ -493,7 +494,7 @@ mod tests {
 
     #[rstest]
     pub fn create_validate_instance(#[from(hash)] schema_hash: Hash, create_operation: Operation) {
-        // Instanciate "person" schema from cddl string
+        // Instantiate "person" schema from cddl string
         let chat_schema_defnition = "chat = { (
                     message: { type: \"str\", value: tstr }
                 ) }";
