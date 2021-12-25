@@ -33,6 +33,7 @@ path = "src/test_utils/generate_test_data.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+aquamarine = "0.1.11"
 arrayvec = "0.5.2"
 bamboo-rs-core-ed25519-yasmf = "0.1.0"
 cddl = "0.8.7"
@@ -86,7 +87,6 @@ rand = { version = "0.7.3", features = ["wasm-bindgen"] }
 wasm-bindgen = "0.2.78"
 
 [dev-dependencies]
-aquamarine = "0.1.11"
 wasm-bindgen-test = "0.3.28"
 rstest = "0.11.0"
 rstest_reuse = "0.1.3"
