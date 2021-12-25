@@ -2,39 +2,38 @@
 
 //! Methods for generating some useful default values without any passed parameters. These are used
 //! when composing test templates where default fixtures can't be injected in the usual way.
-
 use crate::entry::Entry;
 use crate::hash::Hash;
 use crate::operation::{Operation, OperationFields, OperationValue, OperationWithMeta};
 use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
 use crate::test_utils::fixtures;
 
-/// The default hash
+/// The default hash.
 pub fn hash() -> Hash {
     fixtures::hash(DEFAULT_HASH)
 }
 
-/// The default hash as an option
+/// The default hash as an option.
 pub fn some_hash() -> Option<Hash> {
     fixtures::some_hash(DEFAULT_HASH)
 }
 
-/// The default operation value
+/// The default operation value.
 pub fn operation_value() -> OperationValue {
     OperationValue::Text("Hello!".to_string())
 }
 
-/// The default operation fields
+/// The default operation fields.
 pub fn fields() -> OperationFields {
     fixtures::fields(vec![("message", operation_value())])
 }
 
-/// The default CREATE operation
+/// The default CREATE operation.
 pub fn create_operation() -> Operation {
     fixtures::create_operation(fixtures::schema(DEFAULT_SCHEMA_HASH), fields())
 }
 
-/// The default UPDATE operation
+/// The default UPDATE operation.
 pub fn update_operation() -> Operation {
     fixtures::update_operation(
         fixtures::schema(DEFAULT_SCHEMA_HASH),
@@ -44,7 +43,7 @@ pub fn update_operation() -> Operation {
     )
 }
 
-/// The default DELETE operation
+/// The default DELETE operation.
 pub fn delete_operation() -> Operation {
     fixtures::delete_operation(
         fixtures::schema(DEFAULT_SCHEMA_HASH),
@@ -53,7 +52,7 @@ pub fn delete_operation() -> Operation {
     )
 }
 
-/// The default CREATE meta operation
+/// The default CREATE meta-operation.
 pub fn create_meta_operation() -> OperationWithMeta {
     let operation = create_operation();
     fixtures::meta_operation(
@@ -65,7 +64,7 @@ pub fn create_meta_operation() -> OperationWithMeta {
     )
 }
 
-/// The default UPDATE meta operation
+/// The default UPDATE meta operation.
 pub fn update_meta_operation() -> OperationWithMeta {
     let operation = update_operation();
     fixtures::meta_operation(
@@ -77,7 +76,7 @@ pub fn update_meta_operation() -> OperationWithMeta {
     )
 }
 
-/// The default DELETE meta operation
+/// The default DELETE meta-operation.
 pub fn delete_meta_operation() -> OperationWithMeta {
     let operation = delete_operation();
     fixtures::meta_operation(
@@ -89,17 +88,17 @@ pub fn delete_meta_operation() -> OperationWithMeta {
     )
 }
 
-/// The default first entry
+/// The default first entry.
 pub fn first_entry() -> Entry {
     fixtures::entry(create_operation(), fixtures::seq_num(1), None, None)
 }
 
-/// The default entry with only a backlink
+/// The default entry with only a backlink.
 pub fn entry_with_backlink() -> Entry {
     fixtures::entry(create_operation(), fixtures::seq_num(2), some_hash(), None)
 }
 
-/// The default entry with a backlink and skiplink
+/// The default entry with a backlink and skiplink.
 pub fn entry_with_backlink_and_skiplink() -> Entry {
     fixtures::entry(
         create_operation(),
@@ -109,7 +108,7 @@ pub fn entry_with_backlink_and_skiplink() -> Entry {
     )
 }
 
-/// The default entry with a skiplink and no backlink
+/// The default entry with a skiplink and no backlink.
 pub fn entry_with_only_a_skiplink() -> Entry {
     fixtures::entry(
         create_operation(),

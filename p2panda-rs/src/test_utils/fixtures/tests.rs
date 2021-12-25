@@ -30,12 +30,12 @@ fn encode_entry(entry: Entry, key_pair: KeyPair) {
 }
 
 // Here `entry` and `key_pair` are still injected automatically and we also test against several
-// different `operation` calue cases which are manually passed in via the #[case] macro. We can name
-// the cases for nice test reult printouts.
+// different operation value cases which are manually passed in via the `#[case]` macro. We can
+// name the cases for nice test result printouts.
 #[rstest]
-// This case should pass as the default create operation matches the content of the default entry
+// This case should pass as the default CREATE operation matches the content of the default entry.
 #[case::default_operation(defaults::create_operation())]
-// This case should panic as we are passing in a non-default operation value
+// This case should panic as we are passing in a non-default operation value.
 #[should_panic] // panic macro flag
 #[case::non_default_operation(create_operation(hash(DEFAULT_SCHEMA_HASH), operation_fields(vec![("message", OperationValue::Text("Boo!".to_string()))])))]
 fn operation_validation(entry: Entry, #[case] operation: Operation, key_pair: KeyPair) {
@@ -47,7 +47,7 @@ fn operation_validation(entry: Entry, #[case] operation: Operation, key_pair: Ke
 }
 
 // This test is similar to the one seen above, but now uses a template to run the test against many
-// non default operation values. These are defined in fixtures/templates.rs. We also set a custom
+// non default operation values. These are defined in `fixtures/templates.rs`. We also set a custom
 // case which should pass.
 #[apply(non_default_operation_values_panic)]
 #[case(defaults::create_operation())]

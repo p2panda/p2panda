@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Mock p2panda node and client for demo and testing purposes.
-
 mod client;
 pub mod constants;
 pub mod logs;

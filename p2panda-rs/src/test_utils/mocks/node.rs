@@ -6,6 +6,7 @@
 //! so in a simplistic manner and should only be used in a testing environment or demo environment.
 //!
 //! ## Example
+//!
 //! ```
 //! use p2panda_rs::test_utils::mocks::{Client, send_to_node, Node};
 //! use p2panda_rs::test_utils::utils::{create_operation, delete_operation, hash, operation_fields,
@@ -123,8 +124,10 @@ fn calculate_links(seq_num: &SeqNum, log: &Log) -> (Option<Hash>, Option<Hash>) 
 /// Mock database type.
 pub type Database = HashMap<String, HashMap<i64, Log>>;
 
-/// This node mocks functionality which would be implemented in a real world p2panda node. It does
-/// so in a simplistic manner and should only be used in a testing environment or demo environment.
+/// This node mocks functionality which would be implemented in a real world p2panda node.
+///
+/// It does so in a simplistic manner and should only be used in a testing environment or demo
+/// environment.
 #[derive(Debug, Default)]
 pub struct Node {
     /// Internal database which maps authors and log ids to Bamboo logs with entries inside.
@@ -291,8 +294,8 @@ impl Node {
         Ok(entry_args)
     }
 
-    /// Get the hash of the current tip of a document. Needed when publishing
-    /// UPDATE or DELETE operations
+    /// Get the hash of the current tip of a document. Needed when publishing UPDATE or DELETE
+    /// operations.
     pub fn get_document_tip(&mut self, document_id: &str) -> Option<String> {
         let edges = marshall_entries(
             self.all_entries()
@@ -310,8 +313,10 @@ impl Node {
         }
     }
 
-    /// Store entry in the database. Please note that since this an experimental implemention this
-    /// method does not validate any integrity or content of the given entry.
+    /// Store entry in the database.
+    ///
+    /// Please note that since this an experimental implemention this method does not validate any
+    /// integrity or content of the given entry.
     pub fn publish_entry(
         &mut self,
         entry_encoded: &EntrySigned,
@@ -389,8 +394,9 @@ mod tests {
     use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::fixtures::{create_operation, hash, private_key, update_operation};
     use crate::test_utils::mocks::client::Client;
-    use crate::test_utils::mocks::node::{send_to_node, Node};
     use crate::test_utils::utils::{keypair_from_private, operation_fields, NextEntryArgs};
+
+    use super::{send_to_node, Node};
 
     #[rstest]
     fn next_entry_args(private_key: String) {
@@ -410,6 +416,7 @@ mod tests {
         assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
+
         // Publish a CREATE operation
         let entry1_hash = send_to_node(
             &mut node,

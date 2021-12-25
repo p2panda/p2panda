@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Helper methods for generating common p2panda data objects. Used when generating fixtures and in the mock node and client implementations.
-//! The primary reason we seperate this from the main fixture logic is that these methods can be imported and used outside of testing modules,
-//! whereas the fixture macros can only be injected into rstest defined methods.
+//! Helper methods for generating common p2panda data objects.
+//!
+//! Used when generating fixtures and in the mock node and client implementations.
+//!
+//! The primary reason we seperate this from the main fixture logic is that these methods can be
+//! imported and used outside of testing modules, whereas the fixture macros can only be injected
+//! into `rstest` defined methods.
 use serde::Serialize;
 
 use crate::entry::{Entry, EntrySigned, LogId, SeqNum};
@@ -19,21 +23,24 @@ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 /// Struct which contains the values for the next entry args needed when publishing a new entry.
 #[derive(Serialize, Debug)]
 pub struct NextEntryArgs {
-    /// The backlink of the next entry, can be None if this is the first entry published
+    /// The backlink of the next entry, can be None if this is the first entry published.
     pub backlink: Option<Hash>,
-    /// The skiplink of the next entry, can be None if it's the same as the backlink
+
+    /// The skiplink of the next entry, can be None if it's the same as the backlink.
     pub skiplink: Option<Hash>,
-    /// The seq number for the next entry
+
+    /// The seq number for the next entry.
     pub seq_num: SeqNum,
-    /// The log id of this log
+
+    /// The log id of this log.
     pub log_id: LogId,
 }
 
-/// A helper method for easily generating an operation of any type (`CREATE`, `UPDATE`, `DELETE`).
+/// A helper method for easily generating an operation of any type (CREATE, UPDATE or DELETE).
 ///
-/// If a value for `fields` is provided, this is a `CREATE` operation.
-/// If values for both `fields` and `document_id` are provided, this is an `UPDATE` operation.
-/// If no value for `fields` is provided, this is a `DELETE` operation.
+/// If a value for `fields` is provided, this is a CREATE operation. If values for both `fields`
+/// and `document_id` are provided, this is an UPDATE operation. If no value for `fields` is
+/// provided, this is a DELETE operation.
 pub fn any_operation(
     fields: Option<OperationFields>,
     document_id: Option<Hash>,
@@ -62,7 +69,8 @@ pub fn any_operation(
     }
 }
 
-/// Helper method for generating OperationFields from a vector of key-value tuples, currently only string types are implemented.
+/// Helper method for generating OperationFields from a vector of key-value tuples, currently only
+/// string types are implemented.
 pub fn operation_fields(fields: Vec<(&str, OperationValue)>) -> OperationFields {
     let mut operation_fields = OperationFields::new();
     for (key, value) in fields.iter() {
@@ -81,7 +89,7 @@ pub fn keypair_from_private(private_key: String) -> KeyPair {
     KeyPair::from_private_key_str(&private_key).unwrap()
 }
 
-/// Generate a sequence number based on passed i64 value.
+/// Generate a sequence number based on i64 value.
 pub fn seq_num(n: i64) -> SeqNum {
     SeqNum::new(n).unwrap()
 }
@@ -108,12 +116,12 @@ pub fn entry(
     .unwrap()
 }
 
-/// Generate a create operation based on passed schema hash and operation fields.
+/// Generate a CREATE operation based on passed schema hash and operation fields.
 pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
     Operation::new_create(schema, fields).unwrap()
 }
 
-/// Generate an update operation based on passed schema hash, document id and operation fields.
+/// Generate an UPDATE operation based on passed schema hash, document id and operation fields.
 pub fn update_operation(
     schema: Hash,
     document_id: Hash,
@@ -123,7 +131,7 @@ pub fn update_operation(
     Operation::new_update(schema, document_id, previous_operations, fields).unwrap()
 }
 
-/// Generate a delete operation based on passed schema hash and document id.
+/// Generate a DELETE operation based on passed schema hash and document id.
 pub fn delete_operation(
     schema: Hash,
     document_id: Hash,
@@ -132,7 +140,7 @@ pub fn delete_operation(
     Operation::new_delete(schema, document_id, previous_operations).unwrap()
 }
 
-/// Generate a create meta operation based on passed encoded entry and operation.
+/// Generate a CREATE meta-operation based on passed encoded entry and operation.
 pub fn meta_operation(
     entry_signed_encoded: EntrySigned,
     operation_encoded: OperationEncoded,
@@ -142,8 +150,9 @@ pub fn meta_operation(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::test_utils::constants::DEFAULT_HASH;
+
+    use super::*;
 
     #[test]
     fn default_hash() {

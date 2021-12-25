@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
-
-use rand::Rng;
 /// General purpose fixtures which can be injected into rstest methods as parameters.
 ///
 /// The fixtures can optionally be passed in with custom parameters which overides the default
 /// values.
+use std::convert::TryFrom;
+
+use rand::Rng;
 use rstest::fixture;
 
 use crate::entry::{sign_and_encode, Entry, EntrySigned, SeqNum};
@@ -75,8 +75,10 @@ pub fn random_hash() -> Hash {
     Hash::new_from_bytes(random_data).unwrap()
 }
 
-/// Fixture which injects the default OperationFields value into a test method. Default value can
-/// be overridden at testing time by passing in a custom vector of key-value tuples.
+/// Fixture which injects the default OperationFields value into a test method.cold
+///
+/// Default value can be overridden at testing time by passing in a custom vector of key-value
+/// tuples.
 #[fixture]
 pub fn fields(
     #[default(vec![("message", defaults::operation_value())])] fields_vec: Vec<(
@@ -87,8 +89,10 @@ pub fn fields(
     utils::operation_fields(fields_vec)
 }
 
-/// Fixture which injects the default OperationFields value into a test method. Default value can
-/// be overridden at testing time by passing in a custom vector of key-value tuples.
+/// Fixture which injects the default OperationFields value into a test method.
+///
+/// Default value can be overridden at testing time by passing in a custom vector of key-value
+/// tuples.
 #[fixture]
 pub fn some_fields(
     #[default(vec![("message", defaults::operation_value())])] fields_vec: Vec<(
@@ -99,8 +103,10 @@ pub fn some_fields(
     Some(utils::operation_fields(fields_vec))
 }
 
-/// Fixture which injects the default Entry into a test method. Default value can be overridden at
-/// testing time by passing in custom operation, seq number, backlink and skiplink.
+/// Fixture which injects the default Entry into a test method.
+///
+/// Default value can be overridden at testing time by passing in custom operation, seq number,
+/// backlink and skiplink.
 #[fixture]
 pub fn entry(
     operation: Operation,
@@ -111,8 +117,10 @@ pub fn entry(
     utils::entry(operation, skiplink, backlink, seq_num)
 }
 
-/// Fixture which injects the default Operation into a test method. Default value can be overridden
-/// at testing time by passing in custom operation fields and document id.
+/// Fixture which injects the default Operation into a test method.
+///
+/// Default value can be overridden at testing time by passing in custom operation fields and
+/// document id.
 #[fixture]
 pub fn operation(
     #[from(some_fields)] fields: Option<OperationFields>,
@@ -122,8 +130,9 @@ pub fn operation(
     utils::any_operation(fields, document_id, previous_operations)
 }
 
-/// Fixture which injects the default Hash into a test method as an Option. Default value can be
-/// overridden at testing time by passing in custom hash string.
+/// Fixture which injects the default Hash into a test method as an Option.
+///
+/// Default value can be overridden at testing time by passing in custom hash string.
 #[fixture]
 pub fn some_hash(#[default(DEFAULT_HASH)] str: &str) -> Option<Hash> {
     let hash = Hash::new(str);
@@ -140,16 +149,19 @@ pub fn operation_encoded(operation: Operation) -> OperationEncoded {
     OperationEncoded::try_from(&operation).unwrap()
 }
 
-/// Fixture which injects the default CREATE Operation into a test method. Default value can be
-/// overridden at testing time by passing in custom schema hash and operation fields.
+/// Fixture which injects the default CREATE Operation into a test method.
+///
+/// Default value can be overridden at testing time by passing in custom schema hash and operation
+/// fields.
 #[fixture]
 pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
     utils::create_operation(schema, fields)
 }
 
-/// Fixture which injects the default UPDATE Operation into a test method. Default value can be
-/// overridden at testing time by passing in custom schema hash, document id hash and operation
-/// fields.
+/// Fixture which injects the default UPDATE Operation into a test method.
+///
+/// Default value can be overridden at testing time by passing in custom schema hash, document id
+/// hash and operation fields.
 #[fixture]
 pub fn update_operation(
     schema: Hash,
@@ -161,8 +173,10 @@ pub fn update_operation(
     utils::update_operation(schema, document_id, previous_operations, fields)
 }
 
-/// Fixture which injects the default DELETE Operation into a test method. Default value can be
-/// overridden at testing time by passing in custom schema hash and document id hash.
+/// Fixture which injects the default DELETE Operation into a test method.
+///
+/// Default value can be overridden at testing time by passing in custom schema hash and document
+/// id hash.
 #[fixture]
 pub fn delete_operation(
     schema: Hash,
@@ -172,8 +186,10 @@ pub fn delete_operation(
     utils::delete_operation(schema, document_id, previous_operations)
 }
 
-/// Fixture which injects the default CREATE Operation into a test method. Default value can be overridden at testing
-/// time by passing in custom schema hash and operation fields.
+/// Fixture which injects the default CREATE Operation into a test method.
+///
+/// Default value can be overridden at testing time by passing in custom schema hash and operation
+/// fields.
 #[fixture]
 pub fn meta_operation(
     entry_signed_encoded: EntrySigned,
@@ -182,7 +198,7 @@ pub fn meta_operation(
     utils::meta_operation(entry_signed_encoded, operation_encoded)
 }
 
-/// Fixture which injects p2panda testing data from p2panda version 0.3.0.
+/// Fixture which injects p2panda testing data from p2panda version `0.3.0`.
 #[fixture]
 pub fn v0_3_0_fixture() -> Fixture {
     let operation_fields = utils::operation_fields(vec![
@@ -198,7 +214,6 @@ pub fn v0_3_0_fixture() -> Fixture {
     );
 
     // Comment out to regenerate fixture:
-
     // let entry_signed_encoded = sign_and_encode(
     //     &entry(operation.clone(), seq_num(1), None, None),
     //     &key_pair,

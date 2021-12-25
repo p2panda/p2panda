@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! `rstest` fixtures and templates which can be injected into tests
+//! `rstest` fixtures and templates which can be injected into tests.
 //!
-//! From the `rstest` docs: "rstest uses procedural macros to help you on writing fixtures and table-based tests.
-//! The core idea is that you can inject your test dependencies by passing them as test arguments."
+//! From the `rstest` docs: "rstest uses procedural macros to help you on writing fixtures and
+//! table-based tests. The core idea is that you can inject your test dependencies by passing them
+//! as test arguments."
 //!
 //! With templates you can apply many rstest cases to a single test. They utilize the
 //! [rstest_reuse](https://github.com/la10736/rstest/tree/master/rstest_reuse) crate.
@@ -11,6 +12,7 @@
 //! <https://github.com/la10736/rstest>
 //!
 //! ## Example
+//!
 //! ```
 //! # extern crate p2panda_rs;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -22,8 +24,6 @@
 //! # use crate::entry::{sign_and_encode, Entry};
 //! # use crate::identity::KeyPair;
 //! # use crate::operation::{Operation, OperationEncoded};
-//! // **hidden imports used, see code for full import list**
-//!
 //! // These are the fixtures we will be using below
 //! use crate::test_utils::fixtures::{create_operation, defaults, entry, key_pair, Fixture};
 //! // And these are the templates we can run tests against
@@ -95,7 +95,6 @@
 //! # Ok(())
 //! # }
 //! ```
-
 #[cfg(test)]
 pub mod defaults;
 #[cfg(test)]
