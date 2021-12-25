@@ -35,7 +35,8 @@ fn non_default_operation_values_panic(
     entry: Entry,
     #[case] operation: Operation,
     key_pair: KeyPair,
-) {}
+) {
+}
 
 /// This template contains various types of valid entries.
 #[template]
