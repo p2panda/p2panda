@@ -8,16 +8,17 @@ use crate::hash::Hash;
 use crate::operation::Operation;
 use crate::Validate;
 
-/// Entry of an append-only log based on [`Bamboo`] specification. It describes the actual data in
-/// the p2p network and is shared between nodes.
+/// Entry of an append-only log based on [`Bamboo`] specification.
 ///
-/// Bamboo entries are the main data type of p2panda. Entries are organized in a distributed,
-/// single-writer append-only log structure, created and signed by holders of private keys and
-/// stored inside the node database.
+/// Bamboo entries are the main data type of p2panda. They describe the actual data in the p2p
+/// network and are shared between nodes. Entries are organized in a distributed, single-writer
+/// append-only log structure, created and signed by holders of private keys and stored inside the
+/// node database.
 ///
 /// Entries are separated from the actual (off-chain) data to be able to delete application data
-/// without loosing the integrity of the log. Each entry only holds a hash of the operation
-/// payload, this is why an operation instance is required during entry signing.
+/// without loosing the integrity of the log. Payload data is formatted as "operations" in p2panda.
+/// Each entry only holds a hash of the operation payload, this is why an [`Operation`] instance is
+/// required during entry signing.
 ///
 /// [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 ///
@@ -64,7 +65,6 @@ use crate::Validate;
 ///
 /// // == ENTRY IN EXISTING LOG ==
 /// # let backlink_hash_string = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
-/// # let skiplink_hash_string = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 /// # let schema_hash_string = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 ///
 /// // Create schema hash
@@ -83,9 +83,6 @@ use crate::Validate;
 /// // Create sequence number from i64
 /// let seq_no = SeqNum::new(2)?;
 ///
-/// // Create skiplink hash from string
-/// let skiplink_hash = Hash::new(&skiplink_hash_string)?;
-///
 /// // Create backlink hash from string
 /// let backlink_hash = Hash::new(&backlink_hash_string)?;
 ///
@@ -93,7 +90,7 @@ use crate::Validate;
 /// let next_entry = Entry::new(
 ///     &log_id,
 ///     Some(&operation),
-///     Some(&skiplink_hash),
+///     None,
 ///     Some(&backlink_hash),
 ///     &seq_no,
 /// )?;
@@ -170,7 +167,7 @@ impl Entry {
         self.operation.as_ref()
     }
 
-    /// Returns log_id of entry.
+    /// Returns log id of entry.
     pub fn log_id(&self) -> &LogId {
         &self.log_id
     }
@@ -246,7 +243,7 @@ mod tests {
         )
         .is_err());
 
-        // Any following entry requires backreferences
+        // Any following entry requires backlinks
         assert!(Entry::new(
             &LogId::default(),
             Some(&operation),

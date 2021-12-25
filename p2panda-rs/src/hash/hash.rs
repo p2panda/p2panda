@@ -10,16 +10,16 @@ use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 use crate::hash::HashError;
 use crate::Validate;
 
-/// This is the size of p2panda entries' hashes
+/// Size of p2panda entries' hashes.
 pub(crate) const HASH_SIZE: usize = BLAKE3_HASH_SIZE;
 
-/// This is the type used for `bamboo-rs-core-ed25519-yasmf` entries that own their bytes.
+/// Type used for `bamboo-rs-core-ed25519-yasmf` entries that own their bytes.
 pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
 
 /// Hash of `Entry` or `Operation` encoded as hex string.
 ///
-/// This uses the BLAKE3 algorithm wrapped in [`YASMF`] "Yet-Another-Smol-Multi-Format" according to the
-/// Bamboo specification.
+/// This uses the BLAKE3 algorithm wrapped in [`YASMF`] "Yet-Another-Smol-Multi-Format" according
+/// to the Bamboo specification.
 ///
 /// [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
 #[derive(Clone, Debug, Serialize, Deserialize)]
