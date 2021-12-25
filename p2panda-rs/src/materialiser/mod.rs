@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Materialise data `Instance`s from p2panda `Message`s. Create a causal graph of p2panda `Message`s (aka `Operation`s),
-//! reconcile any conflicts, order operations deterministically, and reduce operations into data `Instance`s.
-
+//! Materialise data instances from p2panda operations. Create a causal graph of p2panda operations
+//! reconcile branches, solve version conflicts automatically, order operations deterministically
+//! and reduce them into data instances.
 mod dag;
 mod error;
 mod filter;

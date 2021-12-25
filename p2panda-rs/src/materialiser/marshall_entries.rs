@@ -4,9 +4,12 @@ use crate::entry::{decode_entry, EntrySigned};
 use crate::materialiser::{Edge, MaterialisationError};
 use crate::operation::OperationEncoded;
 
-/// Method for marshalling an array of (EntrySigned, OperationEncoded) into an array of Edges which can then
-/// be turned into a DAG. It is here to detach the DAG from any concepts of Entries and Operations. The DAG just sees
-/// Strings. This step will look different once have some more instance related fields in our Operation struct.
+/// Method for marshalling an array of entries and operations into an array of graph edges which
+/// can then be turned into a DAG.
+///
+/// This serves as a helper to detach the DAG logic from any concepts of Entries and Operations.
+/// The DAG just sees strings. This step will look different once have some more instance related
+/// fields in our Operation struct.
 pub fn marshall_entries(
     entries: Vec<(EntrySigned, OperationEncoded)>,
 ) -> Result<Vec<Edge>, MaterialisationError> {
@@ -22,8 +25,8 @@ pub fn marshall_entries(
             continue;
         }
 
-        // `id` should not be optional (even CREATE operations should have it set) then
-        // we wouldn't need the EntrySigned here at all.
+        // `id` should not be optional (even CREATE operations should have it set) then we wouldn't
+        // need the EntrySigned here at all.
         let (link, id) = match entry.operation().unwrap().id() {
             Some(_) => (
                 Some(entry.backlink_hash().unwrap().as_str().to_owned()),
@@ -47,8 +50,7 @@ mod tests {
     use crate::test_utils::fixtures::{
         create_operation, fields, key_pair, schema, update_operation,
     };
-    use crate::test_utils::mocks::Client;
-    use crate::test_utils::mocks::{send_to_node, Node};
+    use crate::test_utils::mocks::{send_to_node, Client, Node};
 
     use super::marshall_entries;
 
