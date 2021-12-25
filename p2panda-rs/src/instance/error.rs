@@ -2,18 +2,18 @@
 
 use thiserror::Error;
 
-/// Custom error types for instance.
+/// Custom error types for `Instance`.
 #[derive(Error, Debug)]
 pub enum InstanceError {
     /// TryFrom operation must be CREATE.
     #[error("operation must be CREATE")]
     NotCreateOperation,
 
-    /// operation passed to `update()` must be UPDATE.
+    /// Operation passed to `update()` must be UPDATE.
     #[error("operation must be UPDATE")]
     NotUpdateOperation,
 
-    /// Validation error
+    /// Validation error.
     #[error("error while creating instance")]
     ValidationError(#[from] crate::schema::SchemaError),
 }
