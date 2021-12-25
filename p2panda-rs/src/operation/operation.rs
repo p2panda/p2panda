@@ -371,7 +371,8 @@ impl Operation {
     }
 }
 
-/// Shared methods for [`Operation`] and [`OperationWithMeta`].
+/// Shared methods for [`Operation`] and
+/// [`OperationWithMeta`][crate::operation::OperationWithMeta].
 pub trait AsOperation {
     /// Returns action type of operation.
     fn action(&self) -> OperationAction;
