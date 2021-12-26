@@ -27,7 +27,7 @@ impl Author {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use std::convert::TryFrom;
     ///
-    /// use p2panda_rs::identity::{KeyPair, Author};
+    /// use p2panda_rs::identity::{Author, KeyPair};
     ///
     /// // Generate new Ed25519 key pair
     /// let key_pair = KeyPair::new();

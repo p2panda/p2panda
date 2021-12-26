@@ -10,13 +10,13 @@
 //! ```
 //! # extern crate p2panda_rs;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! use p2panda_rs::test_utils::mocks::{Client, send_to_node, Node};
-//! use p2panda_rs::test_utils::utils::{create_operation, hash, operation_fields,
-//!     new_key_pair, update_operation
-//! };
 //! use p2panda_rs::operation::AsOperation;
-//! use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 //! use p2panda_rs::operation::OperationValue;
+//! use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
+//! use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
+//! use p2panda_rs::test_utils::utils::{
+//!     create_operation, hash, new_key_pair, operation_fields, update_operation,
+//! };
 //!
 //! # const CHAT_SCHEMA_HASH: &str = DEFAULT_SCHEMA_HASH;
 //!
@@ -29,7 +29,10 @@
 //! // Create a new operation to publish
 //! let operation = create_operation(
 //!     hash(DEFAULT_SCHEMA_HASH),
-//!     operation_fields(vec![("message", OperationValue::Text("Ohh, my first message!".to_string()))]),
+//!     operation_fields(vec![(
+//!         "message",
+//!         OperationValue::Text("Ohh, my first message!".to_string()),
+//!     )]),
 //! );
 //!
 //! // Retrieve the next entry args from the node

@@ -8,12 +8,12 @@
 //! ## Example
 //!
 //! ```
-//! use p2panda_rs::test_utils::mocks::{Client, send_to_node, Node};
-//! use p2panda_rs::test_utils::utils::{create_operation, delete_operation, hash, operation_fields,
-//!     new_key_pair, update_operation
-//! };
-//! use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 //! use p2panda_rs::operation::OperationValue;
+//! use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
+//! use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
+//! use p2panda_rs::test_utils::utils::{
+//!     create_operation, delete_operation, hash, new_key_pair, operation_fields, update_operation,
+//! };
 //!
 //! # const CHAT_SCHEMA_HASH: &str = DEFAULT_SCHEMA_HASH;
 //!
@@ -29,7 +29,10 @@
 //!     &panda,
 //!     &create_operation(
 //!         hash(CHAT_SCHEMA_HASH),
-//!         operation_fields(vec![("message", OperationValue::Text("Ohh, my first message!".to_string()))]),
+//!         operation_fields(vec![(
+//!             "message",
+//!             OperationValue::Text("Ohh, my first message!".to_string()),
+//!         )]),
 //!     ),
 //! )
 //! .unwrap();
@@ -42,7 +45,10 @@
 //!         hash(CHAT_SCHEMA_HASH),
 //!         document1_hash_id.clone(),
 //!         vec![document1_hash_id.clone()],
-//!         operation_fields(vec![("message", OperationValue::Text("Which I now update.".to_string()))]),
+//!         operation_fields(vec![(
+//!             "message",
+//!             OperationValue::Text("Which I now update.".to_string()),
+//!         )]),
 //!     ),
 //! )
 //! .unwrap();
@@ -61,7 +67,10 @@
 //!     &panda,
 //!     &create_operation(
 //!         hash(CHAT_SCHEMA_HASH),
-//!         operation_fields(vec![("message", OperationValue::Text("Let's try that again.".to_string()))]),
+//!         operation_fields(vec![(
+//!             "message",
+//!             OperationValue::Text("Let's try that again.".to_string()),
+//!         )]),
 //!     ),
 //! )
 //! .unwrap();
@@ -71,7 +80,6 @@
 //!
 //! // There should be 4 entries
 //! entries.len(); // => 4
-//!
 //! ```
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use std::collections::HashMap;

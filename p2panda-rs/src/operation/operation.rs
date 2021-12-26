@@ -282,14 +282,17 @@ impl Operation {
     /// # extern crate p2panda_rs;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use p2panda_rs::hash::Hash;
-    /// use p2panda_rs::operation::{Operation, OperationFields, OperationValue, AsOperation};
+    /// use p2panda_rs::operation::{AsOperation, Operation, OperationFields, OperationValue};
     ///
     /// let schema_hash_string = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
     /// let schema_msg_hash = Hash::new(schema_hash_string)?;
     /// let mut msg_fields = OperationFields::new();
     ///
     /// msg_fields
-    ///     .add("Zoo", OperationValue::Text("Pandas, Doggos, Cats, and Parrots!".to_owned()))
+    ///     .add(
+    ///         "Zoo",
+    ///         OperationValue::Text("Pandas, Doggos, Cats, and Parrots!".to_owned()),
+    ///     )
     ///     .unwrap();
     ///
     /// let create_operation = Operation::new_create(schema_msg_hash, msg_fields)?;
