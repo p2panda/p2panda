@@ -521,7 +521,7 @@ mod tests {
             schema: schema.clone(),
             previous_operations: None,
             id: None,
-            // Create operations must contain fields
+            // CREATE operations must contain fields
             fields: None, // Error
         };
 
@@ -531,7 +531,7 @@ mod tests {
             action: OperationAction::Create,
             version: OperationVersion::Default,
             schema: schema.clone(),
-            // Create operations must not contain previous_operations
+            // CREATE operations must not contain previous_operations
             previous_operations: Some(vec![prev_op_id.clone()]), // Error
             id: None,
             fields: Some(fields.clone()),
@@ -543,7 +543,7 @@ mod tests {
             action: OperationAction::Update,
             version: OperationVersion::Default,
             schema: schema.clone(),
-            // Update operations must contain previous_operations
+            // UPDATE operations must contain previous_operations
             previous_operations: None, // Error
             id: Some(id.clone()),
             fields: Some(fields.clone()),
@@ -557,7 +557,7 @@ mod tests {
             schema: schema.clone(),
             previous_operations: Some(vec![prev_op_id]),
             id: Some(id.clone()),
-            // Update operations must contain fields
+            // UPDATE operations must contain fields
             fields: None, // Error
         };
 
@@ -567,7 +567,7 @@ mod tests {
             action: OperationAction::Delete,
             version: OperationVersion::Default,
             schema: schema.clone(),
-            // Delete operations must contain previous_operations
+            // DELETE operations must contain previous_operations
             previous_operations: None, // Error
             id: Some(id.clone()),
             fields: None,
@@ -581,7 +581,7 @@ mod tests {
             schema,
             previous_operations: None,
             id: Some(id),
-            // Delete operations must not contain fields
+            // DELETE operations must not contain fields
             fields: Some(fields), // Error
         };
 
