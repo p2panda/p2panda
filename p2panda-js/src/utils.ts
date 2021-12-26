@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { Fields, FieldsTagged } from './types';
+import type { Fields, FieldsTagged } from './types';
 
 /**
  * Look up the type of a schema's fields.

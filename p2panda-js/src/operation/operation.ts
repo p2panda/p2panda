@@ -3,8 +3,8 @@
 import debug from 'debug';
 
 import wasm from '~/wasm';
-import { FieldsTagged } from '~/types';
 
+import type { FieldsTagged } from '~/types';
 import type { OperationFields } from 'wasm';
 
 const log = debug('p2panda-js:operation');

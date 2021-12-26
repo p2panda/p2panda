@@ -5,7 +5,8 @@
 import { KeyPair } from 'wasm';
 import { recoverKeyPair } from '~/identity';
 import { Session } from '~/session';
-import { Fields } from '~/types';
+
+import type { Fields } from '~/types';
 
 import {
   authorFixture,

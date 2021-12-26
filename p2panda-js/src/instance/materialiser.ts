@@ -2,7 +2,7 @@
 
 import debug from 'debug';
 
-import { EntryRecord, InstanceRecord } from '~/types';
+import type { EntryRecord, InstanceRecord } from '~/types';
 
 const log = debug('p2panda-js:operation');
 
