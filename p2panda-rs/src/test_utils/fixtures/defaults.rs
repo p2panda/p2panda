@@ -64,7 +64,7 @@ pub fn create_meta_operation() -> OperationWithMeta {
     )
 }
 
-/// The default UPDATE meta operation.
+/// The default UPDATE meta-operation.
 pub fn update_meta_operation() -> OperationWithMeta {
     let operation = update_operation();
     fixtures::meta_operation(

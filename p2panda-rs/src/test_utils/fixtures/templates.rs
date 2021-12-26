@@ -84,7 +84,7 @@ fn many_valid_entries(#[case] entry: Entry) {}
 )]
 fn many_valid_operations(#[case] operation: Operation) {}
 
-/// This template contains various types of valid meta operation.
+/// This template contains various types of valid meta-operation.
 #[template]
 #[rstest]
 #[allow(unused_qualifications)]
