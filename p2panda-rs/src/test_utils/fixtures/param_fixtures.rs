@@ -75,7 +75,7 @@ pub fn random_hash() -> Hash {
     Hash::new_from_bytes(random_data).unwrap()
 }
 
-/// Fixture which injects the default OperationFields value into a test method.cold
+/// Fixture which injects the default OperationFields value into a test method.
 ///
 /// Default value can be overridden at testing time by passing in a custom vector of key-value
 /// tuples.
