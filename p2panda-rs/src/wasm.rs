@@ -178,7 +178,7 @@ impl OperationFields {
 
     /// Removes an existing field from this `OperationFields` instance.
     ///
-    /// This might throw an error when trying to remove an inexistent field.
+    /// This might throw an error when trying to remove an nonexistent field.
     #[wasm_bindgen]
     pub fn remove(&mut self, name: String) -> Result<(), JsValue> {
         jserr!(self.0.remove(&name));
@@ -339,7 +339,7 @@ pub fn sign_encode_entry(
     // Finally sign and encode entry
     let entry_signed = jserr!(sign_and_encode(&entry, key_pair.as_inner()));
 
-    // Serialize result to JSON
+    // Serialise result to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&SignEncodeEntryResult {
         entry_encoded: entry_signed.as_str().into(),
         entry_hash: entry_signed.hash().as_str().into(),
@@ -367,7 +367,7 @@ pub fn decode_entry(
     let entry_signed = jserr!(EntrySigned::new(&entry_encoded));
     let entry: Entry = jserr!(decode(&entry_signed, operation_encoded.as_ref()));
 
-    // Serialize struct to JSON
+    // Serialise struct to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&entry));
     Ok(result)
 }

@@ -4,7 +4,7 @@
 //!
 //! Used when generating fixtures and in the mock node and client implementations.
 //!
-//! The primary reason we seperate this from the main fixture logic is that these methods can be
+//! The primary reason we separate this from the main fixture logic is that these methods can be
 //! imported and used outside of testing modules, whereas the fixture macros can only be injected
 //! into `rstest` defined methods.
 use serde::Serialize;

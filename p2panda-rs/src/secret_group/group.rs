@@ -121,7 +121,7 @@ impl SecretGroup {
     /// Add new members to the group.
     ///
     /// This method advances the group to the next MLS epoch and returns a [`SecretGroupCommit`]
-    /// message which needs to be broadcasted in the network to then be downloaded and processed by
+    /// message which needs to be broadcast in the network to then be downloaded and processed by
     /// all old and new group members to sync group state.
     ///
     /// The returned [`SecretGroupCommit`] contains `Welcome` messages which are used by new
@@ -157,7 +157,7 @@ impl SecretGroup {
     /// Remove members from the group.
     ///
     /// This method advances the group to the next MLS epoch and returns a [`SecretGroupCommit`]
-    /// message which needs to be broadcasted in the network to then be downloaded and processed by
+    /// message which needs to be broadcast in the network to then be downloaded and processed by
     /// all other group members to sync group state.
     ///
     /// Note: Only group owners can maintain group members.
@@ -215,7 +215,7 @@ impl SecretGroup {
     // then processed after they got received again to assure correct ordering, but in the p2panda
     // case they need to be processed directly to be able to encrypt long-term secrets based on the
     // new MLS group state. Also we don't have to worry about ordering here as commits are
-    // organized by only one single append-only log (single-writer).
+    // organised by only one single append-only log (single-writer).
     fn process_commit_directly(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
@@ -370,7 +370,7 @@ impl SecretGroup {
         // Determine length of AEAD nonce.
         let nonce_length = self.long_term_ciphersuite.aead_nonce_length();
 
-        // Retreive nonce from MLS exporter
+        // Retrieve nonce from MLS exporter
         let nonce = self
             .mls_group
             .export_secret(provider, label, nonce_length)?;

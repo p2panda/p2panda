@@ -92,7 +92,7 @@ impl MlsMember {
             vec![lifetime_extension],
         )?;
 
-        // Retreive [KeyPackage] from bundle which is the public part of it
+        // Retrieve [KeyPackage] from bundle which is the public part of it
         let key_package = key_package_bundle.key_package().clone();
         let key_package_hash = key_package.hash(provider);
 

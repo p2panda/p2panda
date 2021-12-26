@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Validations for operation payloads and definitions of system schemas.
+//! Validations for operation payloads and definitions of system schemata.
 //!
 //! This uses [`Concise Data Definition Language`] (CDDL) internally to verify CBOR data of p2panda
 //! operations.
@@ -18,7 +18,7 @@ pub use error::SchemaError;
 pub use operation::OPERATION_SCHEMA;
 pub use schema::{Schema, SchemaBuilder, Type};
 
-/// Checks CBOR bytes against CDDL schemas.
+/// Checks CBOR bytes against CDDL schemata.
 ///
 /// This helper method also converts validation errors coming from the `cddl` crate into an
 /// concatenated error operation and returns it.

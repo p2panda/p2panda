@@ -315,7 +315,7 @@ impl Node {
 
     /// Store entry in the database.
     ///
-    /// Please note that since this an experimental implemention this method does not validate any
+    /// Please note that since this an experimental implementation this method does not validate any
     /// integrity or content of the given entry.
     pub fn publish_entry(
         &mut self,

@@ -39,11 +39,11 @@ pub enum OperationEncodedError {
     #[error("invalid hex encoding in operation")]
     InvalidHexEncoding,
 
-    /// Operation can't be deserialized from invalid CBOR encoding.
+    /// Operation can't be deserialised from invalid CBOR encoding.
     #[error("invalid CBOR format")]
     InvalidCBOR,
 
-    /// Handle errors from validating CBOR schemas.
+    /// Handle errors from validating CBOR schemata.
     #[error(transparent)]
     SchemaError(#[from] crate::schema::SchemaError),
 }

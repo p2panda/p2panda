@@ -47,7 +47,7 @@ impl KeyPair {
     ///
     /// **WARNING:** "Absolutely no validation is done on the key. If you give this function bytes
     /// which do not represent a valid point, or which do not represent corresponding parts of the
-    /// key, then your Keypair will be broken and it will be your fault." See [`ed25519-dalek`]
+    /// key, then your KeyPair will be broken and it will be your fault." See [`ed25519-dalek`]
     /// crate.
     ///
     /// [`ed25519-dalek`]: https://docs.rs/ed25519-dalek/1.0.1/ed25519_dalek/struct.Keypair.html#warning

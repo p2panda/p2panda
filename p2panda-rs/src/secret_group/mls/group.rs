@@ -20,7 +20,7 @@ impl MlsGroup {
             // Size of padding in bytes
             .padding_size(MLS_PADDING_SIZE)
             // Flag to indicate the Ratchet Tree Extension should be used, otherwise we would need
-            // to tell clients via an external solution about the current Rachet Tree. Read more in
+            // to tell clients via an external solution about the current Ratchet Tree. Read more in
             // MLS specification Section 11.3.
             .use_ratchet_tree_extension(true)
             .build()
@@ -38,7 +38,7 @@ impl MlsGroup {
         group_id: GroupId,
         key_package: KeyPackage,
     ) -> Result<Self, MlsError> {
-        // Retreive hash from key package
+        // Retrieve hash from key package
         let key_package_hash = key_package.hash(provider);
 
         // Create MLS group with one member inside

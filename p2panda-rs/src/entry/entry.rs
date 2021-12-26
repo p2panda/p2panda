@@ -11,7 +11,7 @@ use crate::Validate;
 /// Entry of an append-only log based on [`Bamboo`] specification.
 ///
 /// Bamboo entries are the main data type of p2panda. They describe the actual data in the p2p
-/// network and are shared between nodes. Entries are organized in a distributed, single-writer
+/// network and are shared between nodes. Entries are organised in a distributed, single-writer
 /// append-only log structure, created and signed by holders of private keys and stored inside the
 /// node database.
 ///

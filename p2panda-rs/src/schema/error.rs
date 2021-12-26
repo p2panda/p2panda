@@ -9,7 +9,7 @@ pub enum SchemaError {
     #[error("invalid operation schema: {0}")]
     InvalidSchema(String),
 
-    /// Operation can't be deserialized from invalid CBOR encoding.
+    /// Operation can't be deserialised from invalid CBOR encoding.
     #[error("invalid CBOR format")]
     InvalidCBOR,
 

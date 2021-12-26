@@ -63,7 +63,7 @@ impl fmt::Display for Field {
     }
 }
 
-/// Struct for building and representing CDDL groups. CDDL uses groups to define reuseable data
+/// Struct for building and representing CDDL groups. CDDL uses groups to define reusable data
 /// structures they can be merged into schema or used in Vectors, Tables and Structs.
 #[derive(Clone, Debug)]
 pub struct Group {
@@ -102,14 +102,14 @@ impl fmt::Display for Group {
     }
 }
 
-/// SchemaBuilder struct for programatically creating CDDL schemas and validating OperationFields.
+/// SchemaBuilder struct for programmatically creating CDDL schemata and validating OperationFields.
 #[derive(Clone, Debug)]
 pub struct SchemaBuilder {
     name: String,
     fields: BTreeMap<String, Field>,
 }
 
-/// Schema struct for creating CDDL schemas, validating OperationFields and creating operations
+/// Schema struct for creating CDDL schemata, validating OperationFields and creating operations
 /// following the defined schema.
 #[derive(Clone, Debug)]
 pub struct Schema {

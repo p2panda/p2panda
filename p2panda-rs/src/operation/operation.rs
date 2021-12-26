@@ -25,7 +25,7 @@ pub enum OperationVersion {
 
 impl Copy for OperationVersion {}
 
-/// Operations are categorized by their action type.
+/// Operations are categorised by their action type.
 ///
 /// An action defines the operation format and if this operation creates, updates or deletes a data
 /// document.

@@ -2,7 +2,7 @@
 
 /// General purpose fixtures which can be injected into rstest methods as parameters.
 ///
-/// The fixtures can optionally be passed in with custom parameters which overides the default
+/// The fixtures can optionally be passed in with custom parameters which overrides the default
 /// values.
 use std::convert::TryFrom;
 

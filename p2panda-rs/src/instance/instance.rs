@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Types and methods for deriving and maintaining materialized documents.
+//! Types and methods for deriving and maintaining materialised documents.
 use std::{collections::HashMap, convert::TryFrom};
 
 use crate::instance::error::InstanceError;

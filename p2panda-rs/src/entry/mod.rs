@@ -2,7 +2,7 @@
 
 //! Create, sign, encode and decode [`Bamboo`] entries.
 //!
-//! Bamboo entries are the main data type of p2panda. Entries are organized in a distributed,
+//! Bamboo entries are the main data type of p2panda. Entries are organised in a distributed,
 //! single-writer append-only log structure, created and signed by holders of private keys and
 //! stored inside the node database.
 //!
