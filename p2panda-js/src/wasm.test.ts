@@ -6,7 +6,7 @@ import TEST_DATA from '../test/test-data.json';
 
 const TEST_SCHEMA = TEST_DATA.panda.logs[0].decodedOperations[0].schema;
 
-describe('Web assembly interface', () => {
+describe('WebAssembly interface', () => {
   describe('KeyPair', () => {
     it('creates a key pair', async () => {
       const { KeyPair } = await wasm;

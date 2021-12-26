@@ -9,26 +9,28 @@ use crate::entry::{Entry, EntrySigned, EntrySignedError, LogId, SeqNum, SIGNATUR
 use crate::hash::{Hash, HASH_SIZE};
 use crate::operation::{Operation, OperationEncoded};
 
-/// Takes [`EntrySigned`] and optionally [`OperationEncoded`] as arguments, returns a decoded and
-/// unsigned [`Entry`]. When a [`OperationEncoded`] is passed it will automatically check its
-/// integrity with this [`Entry`] by comparing their hashes. Valid operations will be included in the
-/// returned [`Entry`], if an invalid operation is passed an error will be returned.
+/// Method to decode an entry and optionally its payload.
 ///
-/// Entries are separated from the operations they refer to. Since operations can independently be
-/// deleted they can be passed on as an optional argument. When a [`Operation`] is passed it will
-/// automatically check its integrity with this Entry by comparing their hashes.
+/// Takes [`EntrySigned`] and optionally [`OperationEncoded`] as arguments, returns a decoded and
+/// unsigned [`Entry`].
+///
+/// Entries are separated from the operations they refer to and serve as "off-chain data". Since
+/// operations can independently be deleted they have to be passed on as an optional argument.
+///
+/// When a [`OperationEncoded`] is passed it will automatically check its integrity with this
+/// [`Entry`] by comparing their hashes. Valid operations will be included in the returned
+/// [`Entry`], if an invalid operation is passed an error will be returned.
 pub fn decode_entry(
     entry_encoded: &EntrySigned,
     operation_encoded: Option<&OperationEncoded>,
 ) -> Result<Entry, EntrySignedError> {
-    // Convert to Entry from bamboo_rs_core_ed25519_yasmf first
     let entry: BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> =
         entry_encoded.into();
 
     let operation = match operation_encoded {
-        Some(msg) => {
-            entry_encoded.validate_operation(msg)?;
-            Some(Operation::from(msg))
+        Some(payload) => {
+            entry_encoded.validate_operation(payload)?;
+            Some(Operation::from(payload))
         }
         None => None,
     };

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! With these templates you can apply many rstest cases to a single test. They utilise the somewhat experimental
-//! [rstest_reuse](https://github.com/la10736/rstest/tree/master/rstest_reuse) crate.
-
+//! With these templates you can apply many rstest cases to a single test. They utilise the
+//! somewhat experimental [rstest_reuse] crate.
+//!
+//! [tstest_reuse]: https://github.com/la10736/rstest/tree/master/rstest_reuse
 use rstest_reuse::template;
-// This template contains several different operations which don't match the default `Entry` fixture
+
+/// This template contains several different operations which don't match the default `Entry`
+/// fixture.
 #[template]
 #[rstest]
 #[allow(unused_qualifications)]
@@ -24,7 +27,7 @@ use rstest_reuse::template;
 #[case::wrong_operation(
     crate::test_utils::fixtures::create_operation(hash(DEFAULT_SCHEMA_HASH),
     crate::test_utils::utils::operation_fields(vec![
-        ("message", crate::operation::OperationValue::Text("Hello!".to_string())), 
+        ("message", crate::operation::OperationValue::Text("Hello!".to_string())),
         ("date", crate::operation::OperationValue::Text("2021-05-02T20:06:45.430Z".to_string()))
     ])))
 ]
@@ -35,7 +38,7 @@ fn non_default_operation_values_panic(
 ) {
 }
 
-// This template contains various types of valid entries.
+/// This template contains various types of valid entries.
 #[template]
 #[rstest]
 #[allow(unused_qualifications)]
@@ -48,7 +51,7 @@ fn non_default_operation_values_panic(
 )]
 fn many_valid_entries(#[case] entry: Entry) {}
 
-// This template contains various types of valid operation.
+/// This template contains various types of valid operation.
 #[template]
 #[rstest]
 #[allow(unused_qualifications)]
@@ -81,7 +84,7 @@ fn many_valid_entries(#[case] entry: Entry) {}
 )]
 fn many_valid_operations(#[case] operation: Operation) {}
 
-// This template contains various types of valid meta operation.
+/// This template contains various types of valid meta-operation.
 #[template]
 #[rstest]
 #[allow(unused_qualifications)]
@@ -92,7 +95,7 @@ fn many_valid_operations(#[case] operation: Operation) {}
 #[case::delete_meta_operation(crate::test_utils::fixtures::defaults::delete_meta_operation())]
 fn all_meta_operation_types(#[case] operation_with_meta: impl OperationWithMeta) {}
 
-// This template contains examples of all structs which implement the AsOperation trait.
+/// This template contains examples of all structs which implement the `AsOperation` trait.
 #[template]
 #[rstest]
 #[allow(unused_qualifications)]
@@ -109,7 +112,7 @@ fn all_meta_operation_types(#[case] operation_with_meta: impl OperationWithMeta)
 #[case::delete_operation(crate::test_utils::fixtures::defaults::delete_operation())]
 fn implements_as_operation(#[case] operation: impl AsOperation) {}
 
-// Template which will contain many version fixtures in the future.
+/// Template which will contain many version fixtures in the future.
 #[template]
 #[rstest]
 #[case::v0_3_0(crate::test_utils::fixtures::v0_3_0_fixture())]

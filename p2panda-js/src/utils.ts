@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { Fields, FieldsTagged } from './types';
+import type { Fields, FieldsTagged } from './types';
 
 /**
  * Look up the type of a schema's fields.
  *
- * While we don't have proper schema support in the node this function
- * just guesses the schema's field type from a supplied fields record.
+ * While we don't have proper schema support in the node this function just
+ * guesses the schema's field type from a supplied fields record.
  *
  * @param fields assumed to be correct operation fields for an instance
  * @param field name of the field for which to look up the type
@@ -30,14 +30,14 @@ const getFieldType = (
 };
 
 /**
- * Add type tags to operation fields before sending to node
+ * Add type tags to operation fields before sending to node.
  */
 export const marshallRequestFields = (fields: Fields): FieldsTagged => {
   const rv: FieldsTagged = {};
   Object.keys(fields).forEach((k) => {
     switch (getFieldType(fields, k)) {
       case 'int':
-        // this case is entered for any `number` type so the value is rounded
+        // This case is entered for any `number` type so the value is rounded
         // to get an integer
         rv[k] = { value: Math.round(fields[k] as number), type: 'int' };
         break;
@@ -52,7 +52,7 @@ export const marshallRequestFields = (fields: Fields): FieldsTagged => {
 };
 
 /**
- * Remove type tagging from operation fields on an entry received from node
+ * Remove type tagging from operation fields on an entry received from node.
  */
 export const marshallResponseFields = (fieldsTagged: FieldsTagged): Fields => {
   const fields: Fields = {};

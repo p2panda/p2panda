@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-/// Custom error types for key-pairs.
+/// Custom error types for key pairs.
 #[derive(Error, Debug)]
 pub enum KeyPairError {
     /// Handle errors from `ed25519` crate.

@@ -3,7 +3,7 @@
 //! Methods exported for WebAssembly targets.
 //!
 //! Wrappers for these methods are available in [p2panda-js], which allows idiomatic usage of
-//! `p2panda-rs` in a Javascript/Typescript environment.
+//! `p2panda-rs` in a JavaScript/TypeScript environment.
 //!
 //! [p2panda-js]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 use std::convert::{TryFrom, TryInto};
@@ -46,7 +46,7 @@ pub fn set_wasm_panic_hook() {
     panic::set_hook(Box::new(panic_hook));
 }
 
-/// Ed25519 key pair for authors to sign bamboo entries with.
+/// Ed25519 key pair for authors to sign Bamboo entries with.
 #[wasm_bindgen]
 #[derive(Debug)]
 pub struct KeyPair(KeyPairNonWasm);
@@ -87,7 +87,7 @@ impl KeyPair {
     }
 
     /// Internal method to access non-wasm instance of `KeyPair`.
-    pub(crate) fn as_inner(&self) -> &KeyPairNonWasm {
+    pub(super) fn as_inner(&self) -> &KeyPairNonWasm {
         &self.0
     }
 }
@@ -124,7 +124,7 @@ pub struct OperationFields(OperationFieldsNonWasm);
 
 #[wasm_bindgen]
 impl OperationFields {
-    /// Returns a `OperationFields` instance.
+    /// Returns an `OperationFields` instance.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self(OperationFieldsNonWasm::new())
@@ -153,9 +153,9 @@ impl OperationFields {
                 Ok(())
             }
             "int" => {
-                // Bear in mind JavaScript does not represent numbers as integers, all numbers
-                // are represented as floats therefore if a float is passed incorrectly it will
-                // simply be cast to an int.
+                // Bear in mind JavaScript does not represent numbers as integers, all numbers are
+                // represented as floats therefore if a float is passed incorrectly it will simply
+                // be cast to an int.
                 // See: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number
                 let value_int = jserr!(value.as_f64().ok_or("Invalid integer value")) as i64;
                 jserr!(self.0.add(&name, OperationValue::Integer(value_int)));
@@ -178,7 +178,7 @@ impl OperationFields {
 
     /// Removes an existing field from this `OperationFields` instance.
     ///
-    /// This might throw an error when trying to remove an inexistent field.
+    /// This might throw an error when trying to remove an nonexistent field.
     #[wasm_bindgen]
     pub fn remove(&mut self, name: String) -> Result<(), JsValue> {
         jserr!(self.0.remove(&name));
@@ -220,9 +220,7 @@ impl OperationFields {
     }
 }
 
-/// Returns an encoded `create` operation that creates a document of the provided schema.
-///
-/// Use `create` operations by attaching them to an entry that you publish.
+/// Returns an encoded CREATE operation that creates a document of the provided schema.
 #[wasm_bindgen(js_name = encodeCreateOperation)]
 pub fn encode_create_operation(
     schema_hash: String,
@@ -234,9 +232,7 @@ pub fn encode_create_operation(
     Ok(operation_encoded.as_str().to_owned())
 }
 
-/// Returns an encoded `update` operation that updates fields of a given document.
-///
-/// Use `update` operations by attaching them to an entry that you publish.
+/// Returns an encoded UPDATE operation that updates fields of a given document.
 #[wasm_bindgen(js_name = encodeUpdateOperation)]
 pub fn encode_update_operation(
     document_id: String,
@@ -246,23 +242,23 @@ pub fn encode_update_operation(
 ) -> Result<String, JsValue> {
     let document = jserr!(Hash::new(&document_id));
     let schema = jserr!(Hash::new(&schema_hash));
-    // decode JsValue into vector of strings
+
+    // Decode JsValue into vector of strings
     let prev_op_strings: Vec<String> = jserr!(previous_operations.into_serde());
-    // create hashes from strings and collect wrapped in a result
+
+    // Create hashes from strings and collect wrapped in a result
     let prev_op_result: Result<Vec<Hash>, _> = prev_op_strings
         .iter()
         .map(|prev_op| Hash::new(&prev_op))
         .collect();
-    // unwrap with jserr! macro
+
     let previous = jserr!(prev_op_result);
     let operation = jserr!(Operation::new_update(schema, document, previous, fields.0));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
 }
 
-/// Returns an encoded `delete` operation that deletes a given document.
-///
-/// Use `delete` operations by attaching them to an entry that you publish.
+/// Returns an encoded DELETE operation that deletes a given document.
 #[wasm_bindgen(js_name = encodeDeleteOperation)]
 pub fn encode_delete_operation(
     document_id: String,
@@ -271,21 +267,23 @@ pub fn encode_delete_operation(
 ) -> Result<String, JsValue> {
     let document = jserr!(Hash::new(&document_id));
     let schema = jserr!(Hash::new(&schema_hash));
-    // decode JsValue into vector of strings
+
+    // Decode JsValue into vector of strings
     let prev_op_strings: Vec<String> = jserr!(previous_operations.into_serde());
-    // create hashes from strings and collect wrapped in a result
+
+    // Create hashes from strings and collect wrapped in a result
     let prev_op_result: Result<Vec<Hash>, _> = prev_op_strings
         .iter()
         .map(|prev_op| Hash::new(&prev_op))
         .collect();
-    // unwrap with jserr! macro
+
     let previous = jserr!(prev_op_result);
     let operation = jserr!(Operation::new_delete(schema, document, previous));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
 }
 
-/// Return value of [`sign_encode_entry`] that holds the encoded entry and its hash
+/// Return value of [`sign_encode_entry`] that holds the encoded entry and its hash.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SignEncodeEntryResult {
@@ -299,7 +297,7 @@ struct SignEncodeEntryResult {
 /// `entry_backlink_hash`, `entry_skiplink_hash`, `seq_num` and `log_id` are obtained by querying
 /// the `getEntryArguments` method of a p2panda node.
 ///
-/// `seq_num` and `log_id` are `i32` parameters even though they have 64 bits in the bamboo spec.
+/// `seq_num` and `log_id` are `i32` parameters even though they have 64 bits in the Bamboo spec.
 /// Webkit doesn't support `BigInt` so it can't handle those large values.
 #[wasm_bindgen(js_name = signEncodeEntry)]
 pub fn sign_encode_entry(
@@ -341,7 +339,7 @@ pub fn sign_encode_entry(
     // Finally sign and encode entry
     let entry_signed = jserr!(sign_and_encode(&entry, key_pair.as_inner()));
 
-    // Serialize result to JSON
+    // Serialise result to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&SignEncodeEntryResult {
         entry_encoded: entry_signed.as_str().into(),
         entry_hash: entry_signed.hash().as_str().into(),
@@ -369,7 +367,7 @@ pub fn decode_entry(
     let entry_signed = jserr!(EntrySigned::new(&entry_encoded));
     let entry: Entry = jserr!(decode(&entry_signed, operation_encoded.as_ref()));
 
-    // Serialize struct to JSON
+    // Serialise struct to JSON
     let result = jserr!(wasm_bindgen::JsValue::from_serde(&entry));
     Ok(result)
 }

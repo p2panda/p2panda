@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::identity::KeyPairError;
 
-/// Ed25519 key pair for authors to sign bamboo entries with.
+/// Ed25519 key pair for authors to sign Bamboo entries with.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KeyPair(Ed25519Keypair);
 
@@ -47,7 +47,7 @@ impl KeyPair {
     ///
     /// **WARNING:** "Absolutely no validation is done on the key. If you give this function bytes
     /// which do not represent a valid point, or which do not represent corresponding parts of the
-    /// key, then your Keypair will be broken and it will be your fault." See [`ed25519-dalek`]
+    /// key, then your KeyPair will be broken and it will be your fault." See [`ed25519-dalek`]
     /// crate.
     ///
     /// [`ed25519-dalek`]: https://docs.rs/ed25519-dalek/1.0.1/ed25519_dalek/struct.Keypair.html#warning
@@ -98,7 +98,7 @@ impl KeyPair {
         &self.0.secret
     }
 
-    /// Sign an operation using this key pair.
+    /// Sign any data using this key pair.
     ///
     /// ## Example
     ///
@@ -110,19 +110,19 @@ impl KeyPair {
     /// // Generate new Ed25519 key pair
     /// let key_pair = KeyPair::new();
     ///
-    /// // Sign an operation with this key pair
-    /// let operation = b"test";
-    /// let signature = key_pair.sign(operation);
+    /// // Sign bytes with this key pair
+    /// let bytes = b"test";
+    /// let signature = key_pair.sign(bytes);
     ///
-    /// assert!(KeyPair::verify(&key_pair.public_key(), operation, &signature).is_ok());
+    /// assert!(KeyPair::verify(&key_pair.public_key(), bytes, &signature).is_ok());
     /// # Ok(())
     /// # }
     /// ```
-    pub fn sign(&self, operation: &[u8]) -> Signature {
-        self.0.sign(operation)
+    pub fn sign(&self, bytes: &[u8]) -> Signature {
+        self.0.sign(bytes)
     }
 
-    /// Verify the integrity of a signed operation.
+    /// Verify the integrity of signed data.
     pub fn verify(
         public_key: &PublicKey,
         operation: &[u8],
@@ -162,13 +162,15 @@ mod tests {
     #[test]
     fn signing() {
         let key_pair = KeyPair::new();
-        let operation = b"test";
-        let signature = key_pair.sign(operation);
-        assert!(KeyPair::verify(key_pair.public_key(), operation, &signature).is_ok());
+        let bytes = b"test";
+        let signature = key_pair.sign(bytes);
+        assert!(KeyPair::verify(key_pair.public_key(), bytes, &signature).is_ok());
 
+        // Invalid data
         assert!(KeyPair::verify(key_pair.public_key(), b"not test", &signature).is_err());
 
+        // Invalid public key
         let key_pair_2 = KeyPair::new();
-        assert!(KeyPair::verify(key_pair_2.public_key(), operation, &signature).is_err());
+        assert!(KeyPair::verify(key_pair_2.public_key(), bytes, &signature).is_err());
     }
 }

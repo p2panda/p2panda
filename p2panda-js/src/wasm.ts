@@ -2,10 +2,10 @@
 
 type WebAssembly = typeof import('wasm');
 
-// Helper to extract resolved promise
+// Helper to extract resolved promise.
 type Resolved<T> = T extends PromiseLike<infer U> ? Resolved<U> : T;
 
-// p2panda is exported without WebAssembly utilities
+// p2panda is exported without WebAssembly utilities.
 export type P2Panda = Omit<
   Resolved<WebAssembly>,
   'setWasmPanicHook' | 'init' | 'default'

@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-/// Error types for methods of `Materializer` struct.
+/// Error types for methods of `materialiser` module.
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum MaterialisationError {

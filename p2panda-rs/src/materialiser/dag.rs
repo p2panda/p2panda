@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-/// Wrapper type for a Node in the graph
+/// Wrapper type for a Node in the graph.
 pub type Node = String;
 
-/// Wrapper type for an Edge in the graph
+/// Wrapper type for an Edge in the graph.
 pub type Edge = (Option<Node>, Node);
 
 /// A directed acyclic graph which can be ordered topologically in a depth-first sort. It is
 /// described by a list of `edges` which in turn describe connections between parent and child
 /// nodes.
 ///
-/// For p2panda this is an array of tuples of Entry hashes [(Some("00x42asd..."), "00x435d..."), .... ],
-/// but it could be any string. The first string in the tuple is optional as the root of the graph has no parent.
+/// For p2panda this is an array of tuples of Entry hashes [(Some("00x42asd..."), "00x435d..."),
+/// .... ]. The first string in the tuple is optional as the root of the graph has no parent.
 #[derive(Clone, Debug)]
 pub struct DAG {
     graph: Vec<Edge>,
@@ -45,7 +45,7 @@ impl DAG {
 
     /// Return all out edges starting from a given node.
     pub fn node_out_edges(&self, current_node: &str) -> Option<Vec<Edge>> {
-        // Collect all edges where this node is the parent.
+        // Collect all edges where this node is the parent
         let mut out_edges: Vec<Edge> = self
             .graph()
             .iter()
@@ -56,8 +56,9 @@ impl DAG {
             .cloned()
             .collect();
 
-        // Sort edges in alphabetical order according to the hash id of the entry addressed by the out_edge.
-        // This means our topological sorting will be consistent across nodes who know about the same entries.
+        // Sort edges in alphabetical order according to the hash id of the entry addressed by the
+        // out_edge. This means our topological sorting will be consistent across nodes who know
+        // about the same entries
         out_edges.sort_by(|(_, out_edge_a), (_, out_edge_b)| out_edge_a.cmp(out_edge_b));
 
         // If there are no edges then this is the end of this branch we should return None
@@ -68,7 +69,7 @@ impl DAG {
         }
     }
 
-    /// Find the initial starting node for this DAG (the node with no parent)
+    /// Find the initial starting node for this DAG (the node with no parent).
     pub fn initial_root(&self) -> Option<Node> {
         let mut root = None;
         for (parent, child) in self.graph.iter() {
@@ -80,8 +81,7 @@ impl DAG {
         root
     }
 
-    /// Perform depth-first traversal of DAG, merging all forks, returns an ordered list of
-    /// nodes.
+    /// Perform depth-first traversal of DAG, merging all forks, returns an ordered list of nodes.
     pub fn topological(&mut self) -> Vec<Node> {
         // Array of queued graph nodes
         let mut queue: Vec<Node> = Vec::new();
@@ -97,16 +97,15 @@ impl DAG {
             queue.insert(0, node)
         }
 
-        // Pop next root node from end of queue.
-        // Continue while there are items in the queue.
+        // Pop next root node from end of queue. Continue while there are items in the queue.
         while let Some(mut current_node) = queue.pop() {
             // Push the current node into final array of ordered nodes. This means it has been
             // visited, we don't need a visited nodes array as we are using a queue.
             ordered_nodes.push(current_node.to_owned());
 
             // Walk from this node until reaching a tip (leaf) of the graph (a node with no edges).
-            // edges are returned in alphabetical order which is how we consistently resolve concurrent edits
-            // (last write wins).
+            // edges are returned in alphabetical order which is how we consistently resolve
+            // concurrent edits (last write wins).
             while let Some(mut out_edges) = self.node_out_edges(&current_node) {
                 // The next node we will visit
                 let next_edge = out_edges.remove(0);
@@ -140,7 +139,6 @@ mod tests {
     #[test]
     fn topological_sort() {
         // Same graph construct in different orders should order in the same way
-
         let ordered_dag = vec![
             "0x0a", "0x1a", "0x2a", "0x3a", "0x4a", "0x2b", "0x3b", "0x3c", "0x4c",
         ];

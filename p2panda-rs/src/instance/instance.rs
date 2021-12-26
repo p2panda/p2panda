@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Types and methods for deriving and maintaining `Instances`.
+//! Types and methods for deriving and maintaining materialised documents.
 use std::{collections::HashMap, convert::TryFrom};
 
 use crate::instance::error::InstanceError;
 use crate::operation::{AsOperation, Operation, OperationValue};
 
-/// The materialised view of a reduced collection of `Operations`
+/// The materialised view of a reduced collection of `Operations` describing a document.
 #[derive(Debug, PartialEq, Default)]
 pub struct Instance(HashMap<String, OperationValue>);
 
 impl Instance {
-    /// Instantiate a new `Instance`
+    /// Returns a new `Instance`.
     fn new() -> Self {
         Self(HashMap::new())
     }
 
-    /// Update this `Instance` from an UPDATE `Operation`
+    /// Apply an UPDATE [`Operation`] on this `Instance`.
     pub fn update(&mut self, operation: Operation) -> Result<(), InstanceError> {
         if !operation.is_update() {
             return Err(InstanceError::NotUpdateOperation);
@@ -87,7 +87,6 @@ mod tests {
                 .unwrap()
                 .to_owned(),
         );
-
         assert_eq!(instance, expected_instance);
 
         // Convert an UPDATE or DELETE `Operation` into an `Instance`
@@ -101,10 +100,10 @@ mod tests {
     #[rstest]
     pub fn update(create_operation: Operation, update_operation: Operation) {
         let mut chat_instance = Instance::try_from(create_operation.clone()).unwrap();
-
         chat_instance.update(update_operation.clone()).unwrap();
 
         let mut exp_chat_instance = Instance::new();
+
         exp_chat_instance.0.insert(
             "message".to_string(),
             create_operation
@@ -114,6 +113,7 @@ mod tests {
                 .unwrap()
                 .to_owned(),
         );
+
         exp_chat_instance.0.insert(
             "message".to_string(),
             update_operation
@@ -129,13 +129,14 @@ mod tests {
 
     #[rstest]
     pub fn create_from_schema(#[from(hash)] schema_hash: Hash, create_operation: Operation) {
-        // Instanciate "person" schema from cddl string
-        let chat_schema_defnition = "chat = { (
-                    message: { type: \"str\", value: tstr }
-                ) }";
+        // Instantiate "person" schema from CDDL string
+        let chat_schema_definition = "
+            chat = { (
+                message: { type: \"str\", value: tstr }
+            ) }
+        ";
 
-        let chat = Schema::new(&schema_hash, &chat_schema_defnition.to_string()).unwrap();
-
+        let chat = Schema::new(&schema_hash, &chat_schema_definition.to_string()).unwrap();
         let chat_instance = chat.instance_from_create(create_operation.clone()).unwrap();
 
         let mut exp_chat_instance = Instance::new();
