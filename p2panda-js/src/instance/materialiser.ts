@@ -7,7 +7,8 @@ import { EntryRecord, InstanceRecord } from '~/types';
 const log = debug('p2panda-js:operation');
 
 /**
- * Create a record of data instances by parsing a series of p2panda log entries
+ * Create a record of data instances by parsing a series of p2panda log
+ * entries.
  *
  * @param entries entry records from node
  * @returns records of the instance's data and metadata

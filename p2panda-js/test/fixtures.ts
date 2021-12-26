@@ -55,7 +55,8 @@ export const entryFixture = (seqNum: number): Entry => {
   }
 
   if (PANDA_LOG.decodedOperations[index].previousOperations) {
-    operation.previousOperations = PANDA_LOG.decodedOperations[index].previousOperations;
+    operation.previousOperations =
+      PANDA_LOG.decodedOperations[index].previousOperations;
   }
 
   const entry: Entry = {

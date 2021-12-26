@@ -146,7 +146,7 @@ describe('Session', () => {
       session.client.request = mockedFn;
 
       const nextEntryArgs = {
-        // convert json null into undefined
+        // Convert json null into undefined
         entryHashBacklink: entryArgsFixture(5).entryHashBacklink as
           | string
           | undefined,
@@ -212,7 +212,8 @@ describe('Session', () => {
     const documentId = entryFixture(2).operation?.id as string;
 
     // These are the previous operations
-    const previousOperations = entryFixture(2).operation?.previousOperations as string[];
+    const previousOperations = entryFixture(2).operation
+      ?.previousOperations as string[];
 
     beforeEach(async () => {
       session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
@@ -229,7 +230,9 @@ describe('Session', () => {
       ).resolves;
 
       expect(
-        await session.setSchema(schemaFixture()).update(documentId, fields, previousOperations),
+        await session
+          .setSchema(schemaFixture())
+          .update(documentId, fields, previousOperations),
       ).resolves;
     });
 
@@ -256,7 +259,8 @@ describe('Session', () => {
     const documentId = entryFixture(3).operation?.id as string;
 
     // These are the previous operations
-    const previousOperations = entryFixture(2).operation?.previousOperations as string[];
+    const previousOperations = entryFixture(2).operation
+      ?.previousOperations as string[];
 
     beforeEach(async () => {
       session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
@@ -266,8 +270,16 @@ describe('Session', () => {
     });
 
     it('handles valid arguments', async () => {
-      expect(session.delete(documentId, previousOperations, { schema: schemaFixture() })).resolves;
-      expect(session.setSchema(schemaFixture()).delete(documentId, previousOperations)).resolves;
+      expect(
+        session.delete(documentId, previousOperations, {
+          schema: schemaFixture(),
+        }),
+      ).resolves;
+      expect(
+        session
+          .setSchema(schemaFixture())
+          .delete(documentId, previousOperations),
+      ).resolves;
     });
 
     it('throws when missing a required parameter', async () => {

@@ -3,7 +3,7 @@
 import wasm from '~/wasm';
 
 /**
- * Returns a new p2panda key pair
+ * Returns a new p2panda key pair.
  */
 // Remove this eslint rule once we have proper typescript types
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
@@ -14,7 +14,7 @@ export const createKeyPair = async () => {
 };
 
 /**
- * Load a p2panda key pair from its private key
+ * Load a p2panda key pair from its private key.
  *
  * @param privateKey string representation of a private key
  * @returns KeyPair instance

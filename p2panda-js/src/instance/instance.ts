@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { InstanceRecord } from '~/types';
+
 import { materializeEntries } from './materialiser';
 
 import type { Context } from '~/session';

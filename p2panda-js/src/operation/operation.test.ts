@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { Session } from '~/session';
 import { getOperationFields } from '~/operation';
 import { marshallRequestFields } from '~/utils';
 
@@ -16,8 +15,7 @@ describe('message', () => {
         'OperationFields(OperationFields({"channel": Integer(5), "message": ' +
         'Text("chin chin"), "serious": Boolean(false)}))';
 
-      const session = new Session('http://localhost:2020');
-      const operationFields = await getOperationFields(session, fields);
+      const operationFields = await getOperationFields(fields);
       expect(operationFields.toString()).toEqual(outputRepresentation);
     });
   });
