@@ -29,7 +29,7 @@ export type Context = {
  * Communicate with the p2panda network through a `Session` instance.
  *
  * `Session` provides a high-level interface to create data in the p2panda
- * network by creating, updating and deleting documents following data schemas.
+ * network by creating, updating and deleting documents following data schemata.
  * It also provides a low-level API for directly accessing and creating
  * entries on the bamboo append-only log structure.
  *
@@ -380,7 +380,7 @@ export class Session {
    * Query documents of a specific schema from the node.
    *
    * Calling this method will retrieve all entries of the given schema from
-   * the node and then materialize them locally into instances.
+   * the node and then materialise them locally into instances.
    *
    * @param options optional config object:
    * @param options.schema hex-encoded schema id

@@ -83,7 +83,7 @@ describe('Session', () => {
       expect(session.setSchema(schemaFixture()).query()).resolves;
     });
 
-    it('can materialize documents to instances', async () => {
+    it('can materialise documents to instances', async () => {
       const instances = await session.query({
         schema: schemaFixture(),
       });

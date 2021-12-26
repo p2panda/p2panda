@@ -117,7 +117,7 @@ export type OperationValueText = {
 };
 
 /**
- * A materialized instance item with meta data.
+ * A materialised instance item with meta data.
  */
 export type InstanceRecord = Record<
   string,
