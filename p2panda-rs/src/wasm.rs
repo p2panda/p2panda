@@ -283,7 +283,7 @@ pub fn encode_delete_operation(
     Ok(operation_encoded.as_str().to_owned())
 }
 
-/// Return value of [`sign_encode_entry`] that holds the encoded entry and its hash
+/// Return value of [`sign_encode_entry`] that holds the encoded entry and its hash.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SignEncodeEntryResult {
