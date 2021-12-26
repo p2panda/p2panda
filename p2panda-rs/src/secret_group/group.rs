@@ -121,7 +121,7 @@ impl SecretGroup {
     /// Add new members to the group.
     ///
     /// This method advances the group to the next MLS epoch and returns a [`SecretGroupCommit`]
-    /// message which needs to be broadcast in the network to then be downloaded and processed by
+    /// message which needs to be broadcasted in the network to then be downloaded and processed by
     /// all old and new group members to sync group state.
     ///
     /// The returned [`SecretGroupCommit`] contains `Welcome` messages which are used by new
@@ -157,7 +157,7 @@ impl SecretGroup {
     /// Remove members from the group.
     ///
     /// This method advances the group to the next MLS epoch and returns a [`SecretGroupCommit`]
-    /// message which needs to be broadcast in the network to then be downloaded and processed by
+    /// message which needs to be broadcasted in the network to then be downloaded and processed by
     /// all other group members to sync group state.
     ///
     /// Note: Only group owners can maintain group members.

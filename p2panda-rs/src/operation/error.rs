@@ -43,7 +43,7 @@ pub enum OperationEncodedError {
     #[error("invalid CBOR format")]
     InvalidCBOR,
 
-    /// Handle errors from validating CBOR schemata.
+    /// Handle errors from validating CBOR schemas.
     #[error(transparent)]
     SchemaError(#[from] crate::schema::SchemaError),
 }

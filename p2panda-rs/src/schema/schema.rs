@@ -102,14 +102,14 @@ impl fmt::Display for Group {
     }
 }
 
-/// SchemaBuilder struct for programmatically creating CDDL schemata and validating OperationFields.
+/// SchemaBuilder struct for programmatically creating CDDL schemas and validating OperationFields.
 #[derive(Clone, Debug)]
 pub struct SchemaBuilder {
     name: String,
     fields: BTreeMap<String, Field>,
 }
 
-/// Schema struct for creating CDDL schemata, validating OperationFields and creating operations
+/// Schema struct for creating CDDL schemas, validating OperationFields and creating operations
 /// following the defined schema.
 #[derive(Clone, Debug)]
 pub struct Schema {

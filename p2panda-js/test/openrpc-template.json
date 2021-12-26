@@ -42,7 +42,7 @@
             "Schema": {
                 "name": "schema",
                 "summary": "The hash of a p2panda schema",
-                "description": "Validation for operation payloads and definitions of system schemata. This uses `Concise Data Definition Language` ([CDDL](https://datatracker.ietf.org/doc/html/rfc8610)) internally to verify [CBOR](https://cbor.io/) data of p2panda operations. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
+                "description": "Validation for operation payloads and definitions of system schemas. This uses `Concise Data Definition Language` ([CDDL](https://datatracker.ietf.org/doc/html/rfc8610)) internally to verify [CBOR](https://cbor.io/) data of p2panda operations. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
                 "required": true,
                 "schema": {
                     "$ref": "#/components/schemas/Hash"

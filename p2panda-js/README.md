@@ -59,7 +59,7 @@ npm i p2panda-js
 import { createKeyPair, Session } from 'p2panda-js';
 
 // This example uses the "chat" schema at which this hash is pointing. We are
-// still working on a good way for you to create and access data schemata. For
+// still working on a good way for you to create and access data schemas. For
 // now you can use https://github.com/p2panda/fishyfish to do so
 const CHAT_SCHEMA = '00200cf84048b0798942deba7b1b9fcd77ca72876643bd3fedfe612d4c6fb60436be';
 

@@ -29,7 +29,7 @@ export type Context = {
  * Communicate with the p2panda network through a `Session` instance.
  *
  * `Session` provides a high-level interface to create data in the p2panda
- * network by creating, updating and deleting documents following data schemata.
+ * network by creating, updating and deleting documents following data schemas.
  * It also provides a low-level API for directly accessing and creating
  * entries on the Bamboo append-only log structure.
  *
