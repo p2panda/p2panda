@@ -31,7 +31,7 @@ export type Context = {
  * `Session` provides a high-level interface to create data in the p2panda
  * network by creating, updating and deleting documents following data schemata.
  * It also provides a low-level API for directly accessing and creating
- * entries on the bamboo append-only log structure.
+ * entries on the Bamboo append-only log structure.
  *
  * A session is configured with the URL of a p2panda node, which may be running
  * locally or on a remote machine. It is possible to set a fixed key pair

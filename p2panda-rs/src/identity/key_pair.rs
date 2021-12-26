@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::identity::KeyPairError;
 
-/// Ed25519 key pair for authors to sign bamboo entries with.
+/// Ed25519 key pair for authors to sign Bamboo entries with.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KeyPair(Ed25519Keypair);
 

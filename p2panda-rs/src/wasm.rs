@@ -46,7 +46,7 @@ pub fn set_wasm_panic_hook() {
     panic::set_hook(Box::new(panic_hook));
 }
 
-/// Ed25519 key pair for authors to sign bamboo entries with.
+/// Ed25519 key pair for authors to sign Bamboo entries with.
 #[wasm_bindgen]
 #[derive(Debug)]
 pub struct KeyPair(KeyPairNonWasm);
@@ -297,7 +297,7 @@ struct SignEncodeEntryResult {
 /// `entry_backlink_hash`, `entry_skiplink_hash`, `seq_num` and `log_id` are obtained by querying
 /// the `getEntryArguments` method of a p2panda node.
 ///
-/// `seq_num` and `log_id` are `i32` parameters even though they have 64 bits in the bamboo spec.
+/// `seq_num` and `log_id` are `i32` parameters even though they have 64 bits in the Bamboo spec.
 /// Webkit doesn't support `BigInt` so it can't handle those large values.
 #[wasm_bindgen(js_name = signEncodeEntry)]
 pub fn sign_encode_entry(

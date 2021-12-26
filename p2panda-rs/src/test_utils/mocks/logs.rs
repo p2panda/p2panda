@@ -32,7 +32,7 @@ pub struct LogEntry {
     pub previous_operation: Option<String>,
 }
 
-/// Struct to represent a bamboo log.
+/// Struct to represent a Bamboo log.
 #[derive(Clone, Debug)]
 pub struct Log {
     /// The id of this log.

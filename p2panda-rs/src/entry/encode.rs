@@ -68,7 +68,7 @@ pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned,
         None
     };
 
-    // Create bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
+    // Create Bamboo entry. See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding
     // details and definition of entry fields.
     let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
         log_id: entry.log_id().as_i64() as u64,

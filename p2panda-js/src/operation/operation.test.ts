@@ -5,7 +5,7 @@ import { marshallRequestFields } from '~/utils';
 
 describe('message', () => {
   describe('getOperationFields', () => {
-    it('creates a web assembly OperationField', async () => {
+    it('creates a WebAssembly OperationField', async () => {
       const fields = marshallRequestFields({
         channel: 5,
         message: 'chin chin',

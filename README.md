@@ -48,11 +48,11 @@ This library provides all tools required to write a client for the [`p2panda`] n
 ## Features
 
 - Generate Ed25519 author key pairs.
-- Create and encode [`bamboo`] entries.
+- Create and encode [`Bamboo`] entries.
 - Send operations to [`node`] servers via JSON RPC calls.
 - Query and filter data in the network.
 
-[`bamboo`]: https://github.com/AljoschaMeyer/bamboo
+[`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 [`node`]: https://github.com/p2panda/node
 
 ## Usage
