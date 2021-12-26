@@ -14,7 +14,7 @@ use crate::identity::KeyPair;
 use crate::operation::{Operation, OperationEncoded, OperationValue};
 // Import the fixtures we will be using
 use crate::test_utils::fixtures::{create_operation, defaults, entry, key_pair, Fixture};
-// Import the templates we want to run tests aginst
+// Import the templates we want to run tests against
 use crate::test_utils::fixtures::templates::{
     many_valid_entries, non_default_operation_values_panic, version_fixtures,
 };

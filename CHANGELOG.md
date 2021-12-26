@@ -59,7 +59,7 @@ Released on 2021-10-25: :package: `p2panda-js` :package: `p2panda-rs`
 - `Relation` message values [#33](https://github.com/p2panda/p2panda/pull/33) `rs`
 - Atomic data types like `Message`, `Entry`, `LogId`, `SeqNum`, etc. [#23](https://github.com/p2panda/p2panda/pull/23) `rs` 🥞
 - `sqlx` [Type](https://docs.rs/sqlx/0.5.1/sqlx/trait.Type.html) traits to atomic structs, introduce `db-sqlx` feature flag [#43](https://github.com/p2panda/p2panda/pull/43) `rs`
-- `serde` serialization and deserialization for all atomic structs [#42](https://github.com/p2panda/p2panda/pull/42) `rs`
+- `serde` serialisation and deserialisation for all atomic structs [#42](https://github.com/p2panda/p2panda/pull/42) `rs`
 - Implement method for iterating over MessageFields [#68](https://github.com/p2panda/p2panda/pull/68) `rs`
 - TypeScript API that wraps wasm bindings, introduce OpenRPC specification [#67](https://github.com/p2panda/p2panda/pull/67) `js` 🥞
 - Methods to update and delete documents [#114](https://github.com/p2panda/p2panda/pull/114) `js` 🥞
