@@ -23,13 +23,15 @@ Highlights are marked with a pancake 🥞
 - Update `ed25519` crate to `1.3.0` and deprecated `Signature` API [#137](https://github.com/p2panda/p2panda/pull/137) `rs`
 - Use new `Operation` naming which replaces `Message` [#156](https://github.com/p2panda/p2panda/pull/156) _BREAKING_ `rs` `js`
 - Remove distinction of system and application log ids [#154](https://github.com/p2panda/p2panda/pull/154) `rs`
-- Update dependencies, remove deprecated eslint-loader [#155](https://github.com/p2panda/p2panda/pull/155) `js`
+- Update JavaScript dependencies, remove deprecated eslint-loader [#155](https://github.com/p2panda/p2panda/pull/155) `js`
 - Split utils modules in `test_utils` into utils.rs and constants.rs [#157](https://github.com/p2panda/p2panda/pull/157) `rs`
 - Use traits for validation methods in `Schema` [#160](https://github.com/p2panda/p2panda/pull/160) `rs`
 - Add `previous_operations` field in `Operation` [#163](https://github.com/p2panda/p2panda/pull/163) _BREAKING_ `rs` `js`
 - Introduce `OperationWithMeta` struct [#163](https://github.com/p2panda/p2panda/pull/163) `rs`
 - Update API and mocks to reflect yasmf hash and document flow changes [#165](https://github.com/p2panda/p2panda/pull/165) _BREAKING_ `rs` `js`
 - Change to new `rustdoc::missing_doc_code_examples` linter name [#168](https://github.com/p2panda/p2panda/pull/168) `rs`
+- Update Rust dependencies [#171](https://github.com/p2panda/p2panda/pull/171) `rs`
+- Convert JavaScript configuration files to TypeScript or JSON [#172](https://github.com/p2panda/p2panda/pull/172) `js`
 
 ### Campfires and boiling pots to sit around
 
