@@ -31,6 +31,7 @@ Highlights are marked with a pancake 🥞
 - Update API and mocks to reflect yasmf hash and document flow changes [#165](https://github.com/p2panda/p2panda/pull/165) _BREAKING_ `rs` `js`
 - Change to new `rustdoc::missing_doc_code_examples` linter name [#168](https://github.com/p2panda/p2panda/pull/168) `rs`
 - Update Rust dependencies [#171](https://github.com/p2panda/p2panda/pull/171) `rs`
+- Convert JavaScript configuration files to TypeScript or JSON [#172](https://github.com/p2panda/p2panda/pull/172) `js`
 
 ### Campfires and boiling pots to sit around
 
