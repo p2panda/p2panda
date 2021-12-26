@@ -149,10 +149,10 @@ mod tests {
     }
 
     #[test]
-    fn convert_yamf_hash() {
+    fn convert_yasmf() {
         let hash = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
-        let yamf_hash = Into::<YasmfHash<Blake3ArrayVec>>::into(hash.to_owned());
-        let hash_restored = TryInto::<Hash>::try_into(yamf_hash).unwrap();
+        let yasmf_hash = Into::<YasmfHash<Blake3ArrayVec>>::into(hash.to_owned());
+        let hash_restored = TryInto::<Hash>::try_into(yasmf_hash).unwrap();
         assert_eq!(hash, hash_restored);
     }
 }
