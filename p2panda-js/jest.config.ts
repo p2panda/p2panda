@@ -1,5 +1,6 @@
-/** @type {import('ts-jest/dist/types').InitialOptionsTsJest} */
-module.exports = {
+import type { Config } from '@jest/types';
+
+export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
   moduleNameMapper: {
@@ -16,4 +17,4 @@ module.exports = {
     // during Jest testing we have to set it here as well.
     BUILD_TARGET_WEB: false,
   },
-};
+} as Config.InitialOptions;
