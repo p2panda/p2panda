@@ -3,7 +3,7 @@ name: Prepare Rust environment and toolset
 on:
   workflow_call:
     inputs:
-      cache_paths:
+      cache_path:
         required: true
         type: string
       cargo_manifest:
