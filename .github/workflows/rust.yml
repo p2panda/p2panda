@@ -1,4 +1,4 @@
-name: Build and test
+name: Check formatting and test
 
 on: push
 
@@ -10,10 +10,12 @@ jobs:
     uses: p2panda/p2panda/.github/workflows/rust-setup.yml@clippy-ci
 
   rust-test:
-    runs-on: ubuntu-latest
     needs: rust-setup
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
       - name: Check formatting
         uses: actions-rs/cargo@v1
         with:
@@ -21,7 +23,6 @@ jobs:
           args: --verbose --manifest-path p2panda-rs/Cargo.toml
 
   rust-fmt:
-    runs-on: ubuntu-latest
     needs: rust-setup
 
     steps:
@@ -32,7 +33,6 @@ jobs:
           args: --manifest-path p2panda-rs/Cargo.toml -- --check
 
   rust-clippy:
-    runs-on: ubuntu-latest
     needs: rust-setup
 
     steps:

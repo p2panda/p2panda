@@ -7,8 +7,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  prepare:
-    name: p2panda-rs
+  install:
     runs-on: ubuntu-latest
 
     steps:
