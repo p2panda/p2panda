@@ -2,6 +2,13 @@ name: Prepare Rust environment and toolset
 
 on:
   workflow_call:
+    inputs:
+      cache_paths:
+        required: true
+        type: string
+      cargo_manifest:
+        required: true
+        type: string
 
 env:
   CARGO_TERM_COLOR: always
@@ -25,17 +32,11 @@ jobs:
       - name: Restore from cargo cache
         uses: actions/cache@v2
         with:
-          path: |
-            ~/work/p2panda/p2panda/p2panda-rs/target
-            ~/work/p2panda/p2panda/p2panda-rs/Cargo.lock
-            ~/.cargo/bin
-            ~/.cargo/git/db
-            ~/.cargo/registry/cache
-            ~/.cargo/registry/index
+          path: ${{ inputs.cache_path }}
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Run tests and warm cache
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --manifest-path p2panda-rs/Cargo.toml
+          args: --manifest-path ${{ inputs.cargo_manifest }}
