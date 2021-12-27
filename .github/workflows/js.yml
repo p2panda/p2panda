@@ -17,9 +17,6 @@ jobs:
       matrix:
         node: [12, 15, 16]
 
-    defaults:
-      run:
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
