@@ -1,4 +1,4 @@
-name: Check formatting and clippy for p2panda-js
+name: Test and build p2panda-js
 
 on: push
 
@@ -41,8 +41,36 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run build
-        run: npm run build
-
       - name: Run tests
         run: npm run test
+
+  js-build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: p2panda-js
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup node
+        uses: actions/setup-node@v1
+        with:
+          node-version: 16
+
+      - name: Restore from cargo and npm cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.cache_path }}
+          key: ${{ runner.os }}-npm-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run build
+        run: npm run build
