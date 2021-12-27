@@ -4,8 +4,8 @@ on: push
 
 env:
   cache_path: |
-    p2panda-rs/target
-    p2panda-rs/Cargo.lock
+    /home/runner/p2panda/p2panda/p2panda-rs/target
+    /home/runner/p2panda/p2panda/p2panda-rs/Cargo.lock
     ~/.cargo
 
 jobs:
