@@ -117,4 +117,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --manifest-path ${{ env.cargo_manifest }} --no-deps -- -D warnings
+          args: --manifest-path ${{ env.cargo_manifest }} -- -D warnings --no-deps
