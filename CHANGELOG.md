@@ -38,6 +38,7 @@ Highlights are marked with a pancake 🥞
 - Update `test_utils` documentation [#152](https://github.com/p2panda/p2panda/pull/152) `rs`
 - Make clippy happy, add CI for linter checks [#153](https://github.com/p2panda/p2panda/pull/153) `rs`
 - Clean up documentation and update new terminology [#170](https://github.com/p2panda/p2panda/pull/170) `rs` `js`
+- Improve CI, make it faster, add code coverage report [#173](https://github.com/p2panda/p2panda/pull/173) `rs` `js`
 
 ## [0.2.1]
 

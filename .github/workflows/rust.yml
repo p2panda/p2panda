@@ -1,0 +1,148 @@
+name: p2panda-rs
+
+on: push
+
+env:
+  CARGO_TERM_COLOR: always
+  cache_path: |
+    p2panda-rs/target
+    ~/.cargo
+  cargo_manifest: p2panda-rs/Cargo.toml
+
+jobs:
+  rust-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Restore from cargo cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.cache_path }}
+          key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Run tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --manifest-path ${{ env.cargo_manifest }}
+
+  rust-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Restore from cargo cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.cache_path }}
+          key: ${{ runner.os }}-check-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Check project and dependencies
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --manifest-path ${{ env.cargo_manifest }}
+
+  rust-fmt:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: rustfmt
+          override: true
+
+      - name: Restore from cargo cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.cache_path }}
+          key: ${{ runner.os }}-fmt-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Check formatting
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --manifest-path ${{ env.cargo_manifest }} -- --check
+
+  rust-clippy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: clippy
+          override: true
+
+      - name: Restore from cargo cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.cache_path }}
+          key: ${{ runner.os }}-clippy-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Check code with clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --manifest-path ${{ env.cargo_manifest }} -- -D warnings --no-deps
+
+  rust-coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Restore from cargo cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.cache_path }}
+          key: ${{ runner.os }}-tarpaulin-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Run cargo-tarpaulin
+        uses: actions-rs/tarpaulin@v0.1
+        with:
+          # Skip cleaning via `--skip-clean` flag to be able to use cache
+          args: --manifest-path ${{ env.cargo_manifest }} --skip-clean --locked
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v1.0.2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
