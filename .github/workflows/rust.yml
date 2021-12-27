@@ -5,6 +5,8 @@ on: push
 env:
   CARGO_TERM_COLOR: always
   cache_path: |
+    # These paths have to be set explicitly like this, unlike the official
+    # examples since our Rust project does not live in the root folder
     p2panda-rs/target
     p2panda-rs/Cargo.lock
     ~/.cargo
