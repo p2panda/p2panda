@@ -75,7 +75,10 @@ pub struct Group {
 impl Group {
     /// Create a new CDDL group.
     pub fn new(name: String) -> Self {
-        Self { name, fields: BTreeMap::new(), }
+        Self {
+            name,
+            fields: BTreeMap::new(),
+        }
     }
 
     /// Add a field to the group.
