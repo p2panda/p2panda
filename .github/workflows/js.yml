@@ -4,10 +4,10 @@ on: push
 
 env:
   cache_path: |
-    # This only works with the full path since we've set a `working-directory`
-    ~/work/p2panda/p2panda/p2panda-rs/target
-    ~/work/p2panda/p2panda/p2panda-rs/Cargo.lock
+    p2panda-rs/target
+    p2panda-rs/Cargo.lock
     ~/.cargo
+  working_directory: p2panda-js
 
 jobs:
   js-test:
@@ -19,7 +19,6 @@ jobs:
 
     defaults:
       run:
-        working-directory: p2panda-js
 
     steps:
       - name: Checkout repository
@@ -36,23 +35,21 @@ jobs:
           path: ${{ env.cache_path }}
           # The cache key also contains the `Cargo.toml` to make sure it gets
           # invalidated when something changes in the Rust codebase
-          key: ${{ runner.os }}-npm-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}
+          key: ${{ runner.os }}-npm-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Install dependencies
         run: npm ci
+        working-directory: ${{ env.working_directory }}
 
       - name: Run tests
         run: npm run test
+        working-directory: ${{ env.working_directory }}
 
   js-build:
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: p2panda-js
 
     steps:
       - name: Checkout repository
@@ -69,13 +66,15 @@ jobs:
           path: ${{ env.cache_path }}
           # The cache key also contains the `Cargo.toml` to make sure it gets
           # invalidated when something changes in the Rust codebase
-          key: ${{ runner.os }}-npm-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}
+          key: ${{ runner.os }}-npm-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Install dependencies
         run: npm ci
+        working-directory: ${{ env.working_directory }}
 
       - name: Run build
         run: npm run build
+        working-directory: ${{ env.working_directory }}
