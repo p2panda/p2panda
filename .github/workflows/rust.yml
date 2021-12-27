@@ -1,4 +1,4 @@
-name: Check formatting and test
+name: Check and test p2panda-rs
 
 on: push
 
@@ -14,10 +14,28 @@ jobs:
     needs: rust-setup
 
     steps:
-      - name: Download files from setup workflow
-        uses: actions/download-artifact@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
         with:
-          name: files
+          profile: minimal
+          toolchain: stable
+          components: clippy, rustfmt
+          override: true
+
+      - name: Restore from cargo cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            target
+            Cargo.lock
+            ~/.cargo/bin
+            ~/.cargo/git/db
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Run tests
         uses: actions-rs/cargo@v1
@@ -30,10 +48,28 @@ jobs:
     needs: rust-setup
 
     steps:
-      - name: Download files from setup workflow
-        uses: actions/download-artifact@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
         with:
-          name: files
+          profile: minimal
+          toolchain: stable
+          components: clippy, rustfmt
+          override: true
+
+      - name: Restore from cargo cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            target
+            Cargo.lock
+            ~/.cargo/bin
+            ~/.cargo/git/db
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Check formatting
         uses: actions-rs/cargo@v1
@@ -46,10 +82,28 @@ jobs:
     needs: rust-setup
 
     steps:
-      - name: Download files from setup workflow
-        uses: actions/download-artifact@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
         with:
-          name: files
+          profile: minimal
+          toolchain: stable
+          components: clippy, rustfmt
+          override: true
+
+      - name: Restore from cargo cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            target
+            Cargo.lock
+            ~/.cargo/bin
+            ~/.cargo/git/db
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Check code with clippy
         uses: actions-rs/clippy-check@v1

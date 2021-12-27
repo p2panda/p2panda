@@ -27,6 +27,7 @@ jobs:
         with:
           path: |
             target
+            Cargo.lock
             ~/.cargo/bin
             ~/.cargo/git/db
             ~/.cargo/registry/cache
@@ -45,6 +46,7 @@ jobs:
           name: files
           path: |
             target
+            Cargo.lock
             p2panda-rs
             ~/.cargo/bin
             ~/.cargo/git/db
