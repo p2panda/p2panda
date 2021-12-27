@@ -5,6 +5,10 @@ on: push
 env:
   CARGO_TERM_COLOR: always
 
+defaults:
+  run:
+    working-directory: p2panda-rs
+
 jobs:
   rust-setup:
     uses: p2panda/p2panda/.github/workflows/rust-setup.yml@clippy-ci
@@ -16,7 +20,6 @@ jobs:
     steps:
       - name: Check formatting
         uses: actions-rs/cargo@v1
-        working-directory: p2panda-rs
         with:
           command: test
           args: --verbose
@@ -28,7 +31,6 @@ jobs:
     steps:
       - name: Check formatting
         uses: actions-rs/cargo@v1
-        working-directory: p2panda-rs
         with:
           command: fmt
           args: -- --check
