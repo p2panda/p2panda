@@ -11,10 +11,6 @@ jobs:
     name: p2panda-rs
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: p2panda-rs
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -24,6 +20,7 @@ jobs:
         with:
           profile: minimal
           toolchain: stable
+          components: clippy, rustfmt
           override: true
 
       - name: Restore from cargo cache
