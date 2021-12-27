@@ -5,10 +5,6 @@ on: push
 env:
   CARGO_TERM_COLOR: always
 
-defaults:
-  run:
-    working-directory: p2panda-rs
-
 jobs:
   rust-setup:
     uses: p2panda/p2panda/.github/workflows/rust-setup.yml@clippy-ci
@@ -16,6 +12,10 @@ jobs:
   rust-test:
     runs-on: ubuntu-latest
     needs: rust-setup
+
+    defaults:
+      run:
+        working-directory: p2panda-rs
 
     steps:
       - name: Check formatting
@@ -28,6 +28,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: rust-setup
 
+    defaults:
+      run:
+        working-directory: p2panda-rs
+
     steps:
       - name: Check formatting
         uses: actions-rs/cargo@v1
@@ -39,6 +43,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: rust-setup
 
+    defaults:
+      run:
+        working-directory: p2panda-rs
+
     steps:
-      - name: Run clippy
-        uses: qernal/github-actions-rust-clippy@v1.4.0
+      - name: Install clippy
+        run: rustup component add clippy
+
+      - name: Check code with clippy
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features
