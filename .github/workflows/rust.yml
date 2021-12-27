@@ -135,11 +135,14 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+          # This action has its own cache key since tarpaulin builds the Rust
+          # project differently
+          key: ${{ runner.os }}-cargo-tarpaulin-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Run cargo-tarpaulin
         uses: actions-rs/tarpaulin@v0.1
         with:
+          # Skip cleaning via `--skip-clean` flag to be able to use cache
           args: --manifest-path ${{ env.cargo_manifest }} --skip-clean --locked
 
       - name: Upload to codecov.io
