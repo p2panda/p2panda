@@ -13,12 +13,6 @@ env:
 jobs:
   rust-test:
     uses: p2panda/p2panda/.github/workflows/rust-test.yml@clippy-ci
-    with:
-      cache_path: |
-        ~/work/p2panda/p2panda/p2panda-rs/target
-        ~/work/p2panda/p2panda/p2panda-rs/Cargo.lock
-        ~/.cargo
-      cargo_manifest: p2panda-rs/Cargo.toml
 
   rust-check:
     runs-on: ubuntu-latest
