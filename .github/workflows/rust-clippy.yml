@@ -12,4 +12,4 @@ jobs:
 
     steps:
       - name: Run clippy
-      - uses: qernal/github-actions-rust-clippy@v1.4.0
+        uses: qernal/github-actions-rust-clippy@v1.4.0
