@@ -1,4 +1,4 @@
-name: Run tests and warm cache for p2panda-rs
+name: p2panda-rs - run tests and warm cache
 
 on:
   workflow_call:

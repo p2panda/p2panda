@@ -1,4 +1,4 @@
-name: Check and test p2panda-rs
+name: p2panda-rs
 
 on: push
 
