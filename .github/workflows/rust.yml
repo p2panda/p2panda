@@ -11,16 +11,47 @@ env:
   cargo_manifest: p2panda-rs/Cargo.toml
 
 jobs:
-  rust-prepare:
-    uses: p2panda/p2panda/.github/workflows/rust-test.yml@clippy-ci
-
-  rust-check:
+  rust-test:
     runs-on: ubuntu-latest
-    needs: rust-prepare
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: clippy, rustfmt
+          override: true
+
+      - name: Restore from cargo cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.cache_path }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Run tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --manifest-path ${{ env.cargo_manifest }}
+
+  rust-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: clippy, rustfmt
+          override: true
 
       - name: Restore from cargo cache
         uses: actions/cache@v2
@@ -36,11 +67,24 @@ jobs:
 
   rust-fmt:
     runs-on: ubuntu-latest
-    needs: rust-prepare
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: clippy, rustfmt
+          override: true
+
+      - name: Restore from cargo cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.cache_path }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Check formatting
         uses: actions-rs/cargo@v1
@@ -50,11 +94,24 @@ jobs:
 
   rust-clippy:
     runs-on: ubuntu-latest
-    needs: rust-prepare
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: clippy, rustfmt
+          override: true
+
+      - name: Restore from cargo cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.cache_path }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Restore from cargo cache
         uses: actions/cache@v2
