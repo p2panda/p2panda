@@ -17,6 +17,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
+      - name: Restore from cargo cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            target
+            Cargo.lock
+            ~/.cargo/bin
+            ~/.cargo/git/db
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+
       - name: Check project and dependencies
         uses: actions-rs/cargo@v1
         with:
@@ -44,6 +56,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
+
+      - name: Restore from cargo cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            target
+            Cargo.lock
+            ~/.cargo/bin
+            ~/.cargo/git/db
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Check code with clippy
         uses: actions-rs/clippy-check@v1
