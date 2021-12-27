@@ -4,8 +4,8 @@ on: push
 
 env:
   cache_path: |
-    /home/runner/work/p2panda/p2panda/p2panda-rs/target
-    /home/runner/work/p2panda/p2panda/p2panda-rs/Cargo.lock
+    ~/work/p2panda/p2panda/p2panda-rs/target
+    ~/work/p2panda/p2panda/p2panda-rs/Cargo.lock
     ~/.cargo
 
 jobs:
@@ -33,7 +33,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-npm-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}
+          key: ${{ runner.os }}-npm-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('../p2panda-rs/Cargo.toml') }}
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
@@ -64,7 +64,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-npm-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}
+          key: ${{ runner.os }}-npm-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('../p2panda-rs/Cargo.toml') }}
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
