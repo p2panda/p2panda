@@ -5,8 +5,8 @@ on: push
 env:
   CARGO_TERM_COLOR: always
   cache_path: |
-    ~/work/p2panda/p2panda/p2panda-rs/target
-    ~/work/p2panda/p2panda/p2panda-rs/Cargo.lock
+    p2panda-rs/target
+    p2panda-rs/Cargo.lock
     ~/.cargo
   cargo_manifest: p2panda-rs/Cargo.toml
 
