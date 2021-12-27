@@ -32,6 +32,10 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ${{ env.cache_path }}
+          # Note that this caching action does NOT cache node dependencies.
+          # This is done by "actions/setup-node" instead. Here we're caching
+          # Rust and npm artifacts.
+          #
           # The cache key also contains the `Cargo.toml` to make sure it gets
           # invalidated when there are changes in the Rust codebase
           key: ${{ runner.os }}-npm-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/Cargo.toml') }}
