@@ -21,8 +21,8 @@ jobs:
         uses: actions/cache@v2
         with:
           path: |
-            target
-            Cargo.lock
+            ~/work/p2panda/p2panda/p2panda-rs/target
+            ~/work/p2panda/p2panda/p2panda-rs/Cargo.lock
             ~/.cargo/bin
             ~/.cargo/git/db
             ~/.cargo/registry/cache
