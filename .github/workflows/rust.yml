@@ -113,12 +113,6 @@ jobs:
           path: ${{ env.cache_path }}
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
-      - name: Restore from cargo cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
-
       - name: Check code with clippy
         uses: actions-rs/cargo@v1
         with:
