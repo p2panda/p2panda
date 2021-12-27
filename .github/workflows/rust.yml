@@ -6,7 +6,6 @@ env:
   CARGO_TERM_COLOR: always
   cache_path: |
     p2panda-rs/target
-    p2panda-rs/Cargo.lock
     ~/.cargo
   cargo_manifest: p2panda-rs/Cargo.toml
 
