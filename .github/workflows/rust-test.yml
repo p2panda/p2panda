@@ -1,4 +1,4 @@
-name: Prepare Rust environment and toolset
+name: Run tests and warm cache for p2panda-rs
 
 on:
   workflow_call:
