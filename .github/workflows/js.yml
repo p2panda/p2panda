@@ -56,7 +56,8 @@ jobs:
       - name: Setup node
         # This action also handles dependency caching for us
         uses: actions/setup-node@v2
-        node-version-file: '.nvmrc'
+        with:
+          node-version-file: '.nvmrc'
 
       - name: Restore from cargo and npm cache
         uses: actions/cache@v2
