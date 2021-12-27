@@ -125,10 +125,10 @@ impl KeyPair {
     /// Verify the integrity of signed data.
     pub fn verify(
         public_key: &PublicKey,
-        operation: &[u8],
+        bytes: &[u8],
         signature: &Signature,
     ) -> Result<(), KeyPairError> {
-        public_key.verify(operation, signature)?;
+        public_key.verify(bytes, signature)?;
         Ok(())
     }
 }
