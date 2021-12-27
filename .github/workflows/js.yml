@@ -31,7 +31,7 @@ jobs:
         with:
           path: ${{ env.cache_path }}
           # The cache key also contains the `Cargo.toml` to make sure it gets
-          # invalidated when something changes in the Rust codebase
+          # invalidated when there are changes in the Rust codebase
           key: ${{ runner.os }}-npm-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Install wasm-pack
