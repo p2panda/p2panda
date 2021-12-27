@@ -1,0 +1,15 @@
+name: Build and test
+
+on: push
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-clippy:
+    name: p2panda-rs
+    uses: p2panda/p2panda/.github/workflows/rust-setup.yml@clippy-ci
+
+    steps:
+      - name: Run clippy
+      - uses: qernal/github-actions-rust-clippy@v1.4.0
