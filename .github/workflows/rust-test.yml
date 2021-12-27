@@ -12,7 +12,7 @@ env:
   cargo_manifest: p2panda-rs/Cargo.toml
 
 jobs:
-  install:
+  rust-test:
     runs-on: ubuntu-latest
 
     steps:

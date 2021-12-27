@@ -11,12 +11,12 @@ env:
   cargo_manifest: p2panda-rs/Cargo.toml
 
 jobs:
-  rust-test:
+  rust-prepare:
     uses: p2panda/p2panda/.github/workflows/rust-test.yml@clippy-ci
 
   rust-check:
     runs-on: ubuntu-latest
-    needs: rust-test
+    needs: rust-prepare
 
     steps:
       - name: Checkout repository
@@ -36,7 +36,7 @@ jobs:
 
   rust-fmt:
     runs-on: ubuntu-latest
-    needs: rust-test
+    needs: rust-prepare
 
     steps:
       - name: Checkout repository
@@ -50,7 +50,7 @@ jobs:
 
   rust-clippy:
     runs-on: ubuntu-latest
-    needs: rust-test
+    needs: rust-prepare
 
     steps:
       - name: Checkout repository
