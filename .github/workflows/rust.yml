@@ -70,7 +70,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Check code with clippy
-        uses: actions-rs/clippy-check@v1
+        uses: actions-rs/cargo@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features --manifest-path p2panda-rs/Cargo.toml
+          command: clippy
+          args: --manifest-path p2panda-rs/Cargo.toml -- -D warnings
