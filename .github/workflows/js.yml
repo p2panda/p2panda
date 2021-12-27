@@ -35,7 +35,7 @@ jobs:
           # Note that this caching action does NOT cache node dependencies.
           # This is done by "actions/setup-node" instead. Here we're caching
           # Rust and npm artifacts.
-          key: ${{ runner.os }}-npm-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}
+          key: ${{ runner.os }}-test-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
@@ -65,7 +65,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
