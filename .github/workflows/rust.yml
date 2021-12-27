@@ -17,7 +17,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Check formatting
+      - name: Run tests
         uses: actions-rs/cargo@v1
         with:
           command: test
@@ -28,6 +28,9 @@ jobs:
     needs: rust-setup
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
       - name: Check formatting
         uses: actions-rs/cargo@v1
         with:
@@ -39,6 +42,9 @@ jobs:
     needs: rust-setup
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
       - name: Check code with clippy
         uses: actions-rs/clippy-check@v1
         with:

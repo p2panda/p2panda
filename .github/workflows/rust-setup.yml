@@ -30,3 +30,9 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run check and warm cache
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --manifest-path p2panda-rs/Cargo.toml
