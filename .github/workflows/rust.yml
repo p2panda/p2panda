@@ -131,12 +131,6 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Restore from cargo cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
-
       - name: Run cargo-tarpaulin
         uses: actions-rs/tarpaulin@v0.1
         with:
@@ -145,4 +139,4 @@ jobs:
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1.0.2
         with:
-          token: ${{secrets.CODECOV_TOKEN}}
+          token: ${{ secrets.CODECOV_TOKEN }}
