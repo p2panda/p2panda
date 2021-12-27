@@ -30,8 +30,10 @@ jobs:
           cache-name: cache-node-modules
         with:
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
+            p2panda-js/node_modules
+            p2panda-rs/Cargo.lock
+            p2panda-rs/target
+            ~/.cargo
             ~/.npm
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
