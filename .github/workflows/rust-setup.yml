@@ -38,3 +38,15 @@ jobs:
         with:
           command: check
           args: --manifest-path p2panda-rs/Cargo.toml
+
+      - name: Upload files for later use in other workflows
+        uses: actions/upload-artifact@v2
+        with:
+          name: files
+          path: |
+            target
+            p2panda-rs
+            ~/.cargo/bin
+            ~/.cargo/git/db
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index

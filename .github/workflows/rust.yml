@@ -14,8 +14,10 @@ jobs:
     needs: rust-setup
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+      - name: Download files from setup workflow
+        uses: actions/download-artifact@v2
+        with:
+          name: files
 
       - name: Run tests
         uses: actions-rs/cargo@v1
@@ -28,8 +30,10 @@ jobs:
     needs: rust-setup
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+      - name: Download files from setup workflow
+        uses: actions/download-artifact@v2
+        with:
+          name: files
 
       - name: Check formatting
         uses: actions-rs/cargo@v1
@@ -42,19 +46,10 @@ jobs:
     needs: rust-setup
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Restore from cargo cache
-        uses: actions/cache@v2
+      - name: Download files from setup workflow
+        uses: actions/download-artifact@v2
         with:
-          path: |
-            target
-            ~/.cargo/bin
-            ~/.cargo/git/db
-            ~/.cargo/registry/cache
-            ~/.cargo/registry/index
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+          name: files
 
       - name: Check code with clippy
         uses: actions-rs/clippy-check@v1
