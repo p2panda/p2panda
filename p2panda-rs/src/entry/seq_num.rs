@@ -7,12 +7,11 @@ use crate::entry::SeqNumError;
 use crate::Validate;
 
 /// Start counting entries from here.
-pub const FIRST_SEQ_NUM: i64 = 1;
+pub const FIRST_SEQ_NUM: u64 = 1;
 
 /// Sequence number describing the position of an entry in its append-only log.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "db-sqlx", derive(sqlx::Type), sqlx(transparent))]
-pub struct SeqNum(i64);
+pub struct SeqNum(u64);
 
 impl SeqNum {
     /// Validates and wraps value into a new `SeqNum` instance.
@@ -30,7 +29,7 @@ impl SeqNum {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(value: i64) -> Result<Self, SeqNumError> {
+    pub fn new(value: u64) -> Result<Self, SeqNumError> {
         let seq_num = Self(value);
         seq_num.validate()?;
         Ok(seq_num)
@@ -63,7 +62,7 @@ impl SeqNum {
     ///
     /// [Bamboo]: https://github.com/AljoschaMeyer/bamboo#links-and-entry-verification
     pub fn skiplink_seq_num(&self) -> Option<Self> {
-        Some(Self(lipmaa(self.0 as u64) as i64))
+        Some(Self(lipmaa(self.0)))
     }
 
     /// Returns true when sequence number marks first entry in log.
@@ -71,8 +70,8 @@ impl SeqNum {
         self.0 == FIRST_SEQ_NUM
     }
 
-    /// Returns `SeqNum` as i64 integer.
-    pub fn as_i64(&self) -> i64 {
+    /// Returns `SeqNum` as u64 integer.
+    pub fn as_u64(&self) -> u64 {
         self.0
     }
 }

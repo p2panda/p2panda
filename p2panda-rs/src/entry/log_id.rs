@@ -3,25 +3,17 @@
 use serde::{Deserialize, Serialize};
 
 /// Authors can write entries to multiple logs identified by log ids.
-///
-/// While the Bamboo spec calls for unsigned 64 bit integers, these are not supported by SQLite,
-/// which we want to support. Therefore, we use `i64` here.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "db-sqlx",
-    derive(sqlx::Type, sqlx::FromRow),
-    sqlx(transparent)
-)]
-pub struct LogId(i64);
+pub struct LogId(u64);
 
 impl LogId {
     /// Validates and wraps log id value into a new `LogId` instance.
-    pub fn new(value: i64) -> Self {
+    pub fn new(value: u64) -> Self {
         Self(value)
     }
 
-    /// Returns `LogId` as i64 integer.
-    pub fn as_i64(&self) -> i64 {
+    /// Returns `LogId` as u64 integer.
+    pub fn as_u64(&self) -> u64 {
         self.0
     }
 }

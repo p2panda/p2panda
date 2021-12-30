@@ -82,7 +82,7 @@ pub enum OperationValue {
 
     /// Basic signed `integer` value.
     #[serde(rename = "int")]
-    Integer(i64),
+    Integer(u64),
 
     /// Basic signed `float` value.
     #[serde(rename = "float")]

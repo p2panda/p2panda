@@ -110,9 +110,9 @@ pub fn send_to_node(node: &mut Node, client: &Client, operation: &Operation) -> 
 fn calculate_links(seq_num: &SeqNum, log: &Log) -> (Option<Hash>, Option<Hash>) {
     // Next skiplink hash
     let skiplink = match seq_num.skiplink_seq_num() {
-        Some(seq) if is_lipmaa_required(seq_num.as_i64() as u64) => Some(
+        Some(seq) if is_lipmaa_required(seq_num.as_u64()) => Some(
             log.entries()
-                .get(seq.as_i64() as usize - 1)
+                .get(seq.as_u64() as usize - 1)
                 .expect("Skiplink missing!")
                 .hash(),
         ),
@@ -122,7 +122,7 @@ fn calculate_links(seq_num: &SeqNum, log: &Log) -> (Option<Hash>, Option<Hash>) 
     // Next backlink hash
     let backlink = seq_num.backlink_seq_num().map(|seq| {
         log.entries()
-            .get(seq.as_i64() as usize - 1)
+            .get(seq.as_u64() as usize - 1)
             .expect("Backlink missing!")
             .hash()
     });
@@ -130,7 +130,7 @@ fn calculate_links(seq_num: &SeqNum, log: &Log) -> (Option<Hash>, Option<Hash>) 
 }
 
 /// Mock database type.
-pub type Database = HashMap<String, HashMap<i64, Log>>;
+pub type Database = HashMap<String, HashMap<u64, Log>>;
 
 /// This node mocks functionality which would be implemented in a real world p2panda node.
 ///
@@ -151,7 +151,7 @@ impl Node {
     }
 
     /// Get a mutable map of all logs published by a certain author.
-    fn get_author_logs_mut(&mut self, author: &Author) -> Option<&mut HashMap<i64, Log>> {
+    fn get_author_logs_mut(&mut self, author: &Author) -> Option<&mut HashMap<u64, Log>> {
         let author_str = author.as_str();
         if !self.entries.contains_key(author_str) {
             return None;
@@ -160,7 +160,7 @@ impl Node {
     }
 
     /// Get a map of all logs published by a certain author.
-    fn get_author_logs(&self, author: &Author) -> Option<&HashMap<i64, Log>> {
+    fn get_author_logs(&self, author: &Author) -> Option<&HashMap<u64, Log>> {
         let author_str = author.as_str();
         if !self.entries.contains_key(author_str) {
             return None;
@@ -270,14 +270,14 @@ impl Node {
                     Some(s) => {
                         // ... trim the log to the point in time we are interested in
                         log.to_owned().entries =
-                            log.entries()[..s.as_i64() as usize - 1].to_owned();
+                            log.entries()[..s.as_u64() as usize - 1].to_owned();
                         // ... and return the sequence number.
                         s.to_owned()
                     }
                     None => {
                         // If no sequence number was passed calculate and return the next sequence
                         // number for this log
-                        SeqNum::new((log.entries().len() + 1) as i64).unwrap()
+                        SeqNum::new((log.entries().len() + 1) as u64).unwrap()
                     }
                 };
 
@@ -339,7 +339,7 @@ impl Node {
         };
 
         let entry = decode_entry(entry_encoded, None)?;
-        let log_id = entry.log_id().as_i64();
+        let log_id = entry.log_id().as_u64();
         let author = entry_encoded.author();
 
         let document_author = match operation.id() {

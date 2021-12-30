@@ -157,7 +157,7 @@ impl OperationFields {
                 // represented as floats therefore if a float is passed incorrectly it will simply
                 // be cast to an int.
                 // See: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number
-                let value_int = jserr!(value.as_f64().ok_or("Invalid integer value")) as i64;
+                let value_int = jserr!(value.as_f64().ok_or("Invalid integer value")) as u64;
                 jserr!(self.0.add(&name, OperationValue::Integer(value_int)));
                 Ok(())
             }
@@ -186,11 +186,6 @@ impl OperationFields {
     }
 
     /// Returns field of this `OperationFields` instance when existing.
-    ///
-    /// When trying to access an integer field the method might throw an error when the internal
-    /// value is larger than an i32 number. The wasm API will use i32 numbers in JavaScript
-    /// contexts instead of i64 / BigInt as long as BigInt support is not given in Safari on MacOS
-    /// and iOS.
     #[wasm_bindgen]
     pub fn get(&mut self, name: String) -> Result<JsValue, JsValue> {
         match self.0.get(&name) {
@@ -199,8 +194,7 @@ impl OperationFields {
             Some(OperationValue::Relation(value)) => Ok(JsValue::from_str(&value.as_str())),
             Some(OperationValue::Float(value)) => Ok(JsValue::from_f64(value.to_owned())),
             Some(OperationValue::Integer(value)) => {
-                // Downcast i64 to i32 and throw error when value too large
-                let converted: i32 = jserr!(value.to_owned().try_into());
+                let converted: u64 = jserr!(value.to_owned().try_into());
                 Ok(converted.into())
             }
             None => Ok(JsValue::NULL),

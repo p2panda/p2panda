@@ -36,7 +36,7 @@ pub struct LogEntry {
 #[derive(Clone, Debug)]
 pub struct Log {
     /// The id of this log.
-    pub id: i64,
+    pub id: u64,
 
     /// The schema of this log.
     pub schema: String,
@@ -109,7 +109,7 @@ impl LogEntry {
 
 impl Log {
     /// Create a new log.
-    pub fn new(log_id: i64, schema: String, document_id: String) -> Self {
+    pub fn new(log_id: u64, schema: String, document_id: String) -> Self {
         Self {
             id: log_id,
             schema,
@@ -124,7 +124,7 @@ impl Log {
     }
 
     /// Get the id of this log.
-    pub fn id(&self) -> i64 {
+    pub fn id(&self) -> u64 {
         self.id.to_owned()
     }
 

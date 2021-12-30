@@ -10,11 +10,6 @@ use crate::Validate;
 
 /// Authors are hex encoded Ed25519 public key strings.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[cfg_attr(
-    feature = "db-sqlx",
-    derive(sqlx::Type, sqlx::FromRow),
-    sqlx(transparent)
-)]
 pub struct Author(String);
 
 impl Author {
