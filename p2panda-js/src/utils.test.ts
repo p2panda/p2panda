@@ -30,6 +30,7 @@ describe('Utils', () => {
       expect(marshallRequestFields(REQUEST)).toEqual(RESPONSE);
     });
   });
+
   describe('marshallResponseFields', () => {
     it("handles aquadoggo's response format", () => {
       expect(marshallResponseFields(RESPONSE)).toEqual(REQUEST);

@@ -33,7 +33,7 @@
             "Author": {
                 "name": "author",
                 "summary": "The public key of a p2panda author",
-                "description": "Authors are hex encoded ed25519 public key strings. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
+                "description": "Authors are hex encoded Ed25519 public key strings. See the [p2panda-rs](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) and [p2panda-js](https://github.com/p2panda/p2panda/tree/main/p2panda-js) libraries or the p2panda [handbook](https://github.com/p2panda/handbook) for more information.",
                 "required": true,
                 "schema": {
                     "$ref": "#/components/schemas/Author"

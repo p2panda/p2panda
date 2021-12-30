@@ -3,9 +3,8 @@
 import debug from 'debug';
 
 import wasm from '~/wasm';
-import { FieldsTagged } from '~/types';
-import { Session } from '~/index';
 
+import type { FieldsTagged } from '~/types';
 import type { OperationFields } from 'wasm';
 
 const log = debug('p2panda-js:operation');
@@ -14,7 +13,6 @@ const log = debug('p2panda-js:operation');
  * Returns an operation fields instance for the given field contents and schema.
  */
 export const getOperationFields = async (
-  session: Session,
   fields: FieldsTagged,
 ): Promise<OperationFields> => {
   const { OperationFields } = await wasm;

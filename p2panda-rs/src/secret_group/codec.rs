@@ -75,7 +75,7 @@ impl tls_codec::Deserialize for SecretGroupMessage {
             Ok(message_type) => message_type,
             Err(error) => {
                 return Err(tls_codec::Error::DecodingError(format!(
-                    "Deserialization error {}",
+                    "Deserialisation error {}",
                     error
                 )))
             }

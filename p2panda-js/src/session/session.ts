@@ -31,7 +31,7 @@ export type Context = {
  * `Session` provides a high-level interface to create data in the p2panda
  * network by creating, updating and deleting documents following data schemas.
  * It also provides a low-level API for directly accessing and creating
- * entries on the bamboo append-only log structure.
+ * entries on the Bamboo append-only log structure.
  *
  * A session is configured with the URL of a p2panda node, which may be running
  * locally or on a remote machine. It is possible to set a fixed key pair
@@ -72,7 +72,7 @@ export class Session {
     if (!this._schema) {
       throw new Error(
         'Configure a schema with `session.schema()` or with the `options` ' +
-        'parameter on methods.',
+          'parameter on methods.',
       );
     }
     return this._schema;
@@ -96,7 +96,7 @@ export class Session {
     if (!this._keyPair) {
       throw new Error(
         'Configure a key pair with `session.keyPair()` or with the `options` ' +
-        'parameter on methods.',
+          'parameter on methods.',
       );
     }
     return this._keyPair;
@@ -177,7 +177,7 @@ export class Session {
    *
    * @param entryEncoded
    * @param operationEncoded
-   * @returns
+   * @returns next entry arguments
    */
   async publishEntry(
     entryEncoded: string,
@@ -256,10 +256,11 @@ export class Session {
   // Document operations
 
   /**
-   * Signs and publishes a `create` entry for the given application data and
+   * Signs and publishes a CREATE operation for the given application data and
    * matching schema.
    *
-   * Caches arguments for creating the next entry of this document in the given session.
+   * Caches arguments for creating the next entry of this document in the given
+   * session.
    *
    * @param fields application data to publish with the new entry, needs to match schema
    * @param options optional config object:
@@ -291,9 +292,9 @@ export class Session {
   }
 
   /**
-   * Signs and publishes an `update` entry for the given application data and
-   * matching schema. An `update` entry references the entry hash of the
-   * `create` entry which is the root of this document.
+   * Signs and publishes an UPDATE operation for the given application data and
+   * matching schema. An UPDATE operation references the entry hash of the
+   * CREATE operation which is the root of this document.
    *
    * Caches arguments for creating the next entry of this schema in the given
    * session.
@@ -307,11 +308,14 @@ export class Session {
    * @example
    * const documentId = '00200cf84048b0798942deba7b1b9fcd77ca72876643bd3fedfe612d4c6fb60436be';
    * const operationFields = {
-   *   message: 'ahoy'
+   *   message: 'ahoy',
    * };
+   * const previousOperations = [
+   *   '00203341c9dd226525886ee77c95127cd12f74366703e02f9b48f3561a9866270f07',
+   * ];
    * await new Session(endpoint)
    *   .setKeyPair(keyPair)
-   *   .update(documentId, operationFields, { schema });
+   *   .update(documentId, operationFields, previousOperations, { schema });
    */
   async update(
     documentId: string,
@@ -340,8 +344,8 @@ export class Session {
   }
 
   /**
-   * Signs and publishes a `delete` entry for the given schema. References the
-   * entry hash of the `create` entry which is the id of this document.
+   * Signs and publishes a DELETE operation for the given schema. References
+   * the entry hash of the CREATE operation which is the id of this document.
    *
    * Caches arguments for creating the next entry of this schema in the given session.
    *
@@ -352,9 +356,12 @@ export class Session {
    * @param options.schema hex-encoded schema id
    * @example
    * const documentId = '00200cf84048b0798942deba7b1b9fcd77ca72876643bd3fedfe612d4c6fb60436be';
+   * const previousOperations = [
+   *   '00203341c9dd226525886ee77c95127cd12f74366703e02f9b48f3561a9866270f07',
+   * ];
    * await new Session(endpoint)
    *   .setKeyPair(keyPair)
-   *   .delete(documentId, { schema });
+   *   .delete(documentId, previousOperations, { schema });
    */
   async delete(
     documentId: string,
@@ -379,8 +386,8 @@ export class Session {
   /**
    * Query documents of a specific schema from the node.
    *
-   * Calling this method will retrieve all entries of the given schema from
-   * the node and then materialize them locally into instances.
+   * Calling this method will retrieve all entries of the given schema from the
+   * node and then materialise them locally into instances.
    *
    * @param options optional config object:
    * @param options.schema hex-encoded schema id

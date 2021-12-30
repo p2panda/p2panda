@@ -14,8 +14,8 @@ use crate::identity::Author;
 use crate::operation::OperationEncoded;
 use crate::Validate;
 
-/// This is the size of p2panda entries' signatures
-pub(crate) const SIGNATURE_SIZE: usize = ED25519_SIGNATURE_SIZE;
+/// Size of p2panda entries' signatures.
+pub const SIGNATURE_SIZE: usize = ED25519_SIGNATURE_SIZE;
 
 /// Bamboo entry bytes represented in hex encoding format.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -34,7 +34,7 @@ impl EntrySigned {
         Ok(inner)
     }
 
-    /// Returns YASMF BLAKE3 hash of encoded entry.
+    /// Generates and returns YASMF BLAKE3 hash of encoded entry.
     pub fn hash(&self) -> Hash {
         Hash::new_from_bytes(self.to_bytes()).unwrap()
     }
@@ -74,7 +74,7 @@ impl EntrySigned {
         self.0.len() as i64 / 2
     }
 
-    /// Takes a [`OperationEncoded`] and validates it against the operation hash encoded in this
+    /// Takes an [`OperationEncoded`] and validates it against the operation hash encoded in this
     /// `EntrySigned`, returns a result containing the [`OperationEncoded`] or an
     /// [`EntrySignedError`] if the operation hashes didn't match.
     pub fn validate_operation(
@@ -95,7 +95,8 @@ impl EntrySigned {
     }
 }
 
-/// Converts an `EntrySigned` into a Bamboo Entry to interact with the `bamboo_rs` crate.
+/// Converts an `EntrySigned` into a Bamboo Entry to interact with the
+/// `bamboo_rs_core_ed25519_yasmf` crate.
 impl From<&EntrySigned> for BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> {
     fn from(signed_entry: &EntrySigned) -> Self {
         let entry_bytes = signed_entry.clone().to_bytes();

@@ -4,8 +4,8 @@ use crate::entry::EntrySigned;
 use crate::identity::Author;
 use crate::operation::OperationEncoded;
 
-/// Filter entries against instance author for a single writer setting. This is needed for
-/// materializing system Logs.
+/// Remove all entries which are not created by instance author for a single-writer setting. This
+/// is needed for materialising system logs.
 #[allow(dead_code)]
 pub fn single_writer_filter(
     entries: Vec<(EntrySigned, OperationEncoded)>,
@@ -18,8 +18,8 @@ pub fn single_writer_filter(
         .collect()
 }
 
-/// Filter entries against permissions for multi writer setting. This is needed for materializing
-/// application logs which allow update operations from multiple writers via the use of
+/// Filter entries against permissions for multi-writer setting. This is needed for materialising
+/// application logs which allow UPDATE operations from multiple writers via the use of
 /// permissions.
 #[allow(dead_code)]
 pub fn multi_writer_filter(
@@ -49,8 +49,7 @@ mod tests {
     use crate::test_utils::fixtures::{
         create_operation, fields, random_key_pair, schema, update_operation,
     };
-    use crate::test_utils::mocks::Client;
-    use crate::test_utils::mocks::{send_to_node, Node};
+    use crate::test_utils::mocks::{send_to_node, Client, Node};
 
     use super::{multi_writer_filter, single_writer_filter};
 

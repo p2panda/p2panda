@@ -1,12 +1,14 @@
-import {
+import { marshallResponseFields } from '~/utils';
+
+import TEST_DATA from './test-data.json';
+
+import type {
   Entry,
   Operation,
   FieldsTagged,
   EncodedEntry,
   EntryArgs,
 } from '~/types';
-import TEST_DATA from './test-data.json';
-import { marshallResponseFields } from '~/utils';
 
 // Right now we only have one author `panda` who only has one schema log. This
 // could be expanded in the future.
@@ -55,7 +57,8 @@ export const entryFixture = (seqNum: number): Entry => {
   }
 
   if (PANDA_LOG.decodedOperations[index].previousOperations) {
-    operation.previousOperations = PANDA_LOG.decodedOperations[index].previousOperations;
+    operation.previousOperations =
+      PANDA_LOG.decodedOperations[index].previousOperations;
   }
 
   const entry: Entry = {

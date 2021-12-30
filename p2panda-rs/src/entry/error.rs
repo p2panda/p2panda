@@ -27,7 +27,7 @@ pub enum EntrySignedError {
     #[error("invalid hex encoding in entry")]
     InvalidHexEncoding,
 
-    /// Operation needs to match payload hash of encoded entry
+    /// Operation needs to match payload hash of encoded entry.
     #[error("operation needs to match payload hash of encoded entry")]
     OperationHashMismatch,
 

@@ -64,13 +64,19 @@ describe('document', () => {
       // This is the document id
       const id = entryFixture(2).operation?.id as string;
 
-      const previousOperations = entryFixture(2).operation?.previousOperations as string[];
+      const previousOperations = entryFixture(2).operation
+        ?.previousOperations as string[];
 
-      const entryEncoded = await updateDocument(id, previousOperations, fields, {
-        keyPair,
-        schema: schemaFixture(),
-        session,
-      });
+      const entryEncoded = await updateDocument(
+        id,
+        previousOperations,
+        fields,
+        {
+          keyPair,
+          schema: schemaFixture(),
+          session,
+        },
+      );
 
       expect(entryEncoded).toEqual(encodedEntryFixture(2).entryBytes);
     });
@@ -92,7 +98,8 @@ describe('document', () => {
       // This is the document id
       const id = entryFixture(4).operation?.id as string;
 
-      const previousOperations = entryFixture(4).operation?.previousOperations as string[];
+      const previousOperations = entryFixture(4).operation
+        ?.previousOperations as string[];
 
       const entryEncoded = await deleteDocument(id, previousOperations, {
         keyPair,

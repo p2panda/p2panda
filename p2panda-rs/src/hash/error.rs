@@ -18,7 +18,7 @@ pub enum HashError {
     #[error("can not decode YASMF BLAKE3 hash")]
     DecodingFailed,
 
-    /// Internal YasmfHash crate error.
+    /// Internal `yasmf_hash` crate error.
     #[error(transparent)]
     YasmfHashError(#[from] yasmf_hash::error::Error),
 }

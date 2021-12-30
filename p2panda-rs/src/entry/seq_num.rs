@@ -59,9 +59,9 @@ impl SeqNum {
 
     /// Return sequence number of the lipmaa entry (skiplink).
     ///
-    /// See [`Bamboo specification`] for more details about how skiplinks are calculated.
+    /// See [Bamboo] specification for more details about how skiplinks are calculated.
     ///
-    /// [`Bamboo specification`]: https://github.com/AljoschaMeyer/bamboo#links-and-entry-verification
+    /// [Bamboo]: https://github.com/AljoschaMeyer/bamboo#links-and-entry-verification
     pub fn skiplink_seq_num(&self) -> Option<Self> {
         Some(Self(lipmaa(self.0 as u64) as i64))
     }
