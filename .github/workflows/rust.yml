@@ -143,6 +143,4 @@ jobs:
           args: --manifest-path ${{ env.cargo_manifest }} --skip-clean --locked
 
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v1.0.2
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+        uses: codecov/codecov-action@v2
