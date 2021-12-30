@@ -82,6 +82,15 @@ impl From<Hash> for YasmfHash<Blake3ArrayVec> {
     }
 }
 
+/// Convert any hex-encoded string representation of a hash into a `Hash` instance.
+impl TryFrom<&str> for Hash {
+    type Error = HashError;
+
+    fn try_from(str: &str) -> Result<Self, Self::Error> {
+        Self::new(str)
+    }
+}
+
 impl Validate for Hash {
     type Error = HashError;
 
@@ -149,5 +158,12 @@ mod tests {
         let yasmf_hash = Into::<YasmfHash<Blake3ArrayVec>>::into(hash.to_owned());
         let hash_restored = TryInto::<Hash>::try_into(yasmf_hash).unwrap();
         assert_eq!(hash, hash_restored);
+    }
+
+    #[test]
+    fn convert_string() {
+        let hash_str = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
+        let hash: Hash = hash_str.try_into().unwrap();
+        assert_eq!(hash_str, hash.as_str());
     }
 }

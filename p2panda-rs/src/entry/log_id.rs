@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::TryFrom;
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
+
+use crate::entry::error::LogIdError;
 
 /// Authors can write entries to multiple logs identified by log ids.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -40,8 +45,21 @@ impl PartialEq for LogId {
     }
 }
 
+/// Convert any string representation of an u64 integer into an `LogId` instance.
+impl TryFrom<&str> for LogId {
+    type Error = LogIdError;
+
+    fn try_from(str: &str) -> Result<Self, Self::Error> {
+        Ok(Self::new(
+            u64::from_str(str).map_err(|_| LogIdError::InvalidU64String)?,
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
+
     use super::LogId;
 
     #[test]
@@ -53,5 +71,12 @@ mod tests {
 
         let next_log_id = next_log_id.next().unwrap();
         assert_eq!(next_log_id, LogId::new(3));
+    }
+
+    #[test]
+    fn u64_conversion() {
+        let large_number = "291919188205818203";
+        let log_id = LogId::try_from(large_number).unwrap();
+        assert_eq!(291919188205818203, log_id.as_u64());
     }
 }

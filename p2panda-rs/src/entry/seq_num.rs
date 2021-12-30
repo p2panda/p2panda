@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::TryFrom;
+use std::str::FromStr;
+
 use bamboo_rs_core_ed25519_yasmf::lipmaa;
 use serde::{Deserialize, Serialize};
 
@@ -111,8 +114,19 @@ impl PartialEq for SeqNum {
     }
 }
 
+/// Convert any string representation of an u64 integer into an `SeqNum` instance.
+impl TryFrom<&str> for SeqNum {
+    type Error = SeqNumError;
+
+    fn try_from(str: &str) -> Result<Self, Self::Error> {
+        Self::new(u64::from_str(str).map_err(|_| SeqNumError::InvalidU64String)?)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
+
     use super::SeqNum;
 
     #[test]
@@ -137,5 +151,12 @@ mod tests {
         );
 
         assert!(SeqNum::new(1).unwrap().backlink_seq_num().is_none());
+    }
+
+    #[test]
+    fn u64_conversion() {
+        let large_number = "8733212187399111232";
+        let seq_num = SeqNum::try_from(large_number).unwrap();
+        assert_eq!(8733212187399111232, seq_num.as_u64());
     }
 }
