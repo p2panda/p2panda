@@ -39,6 +39,7 @@ Highlights are marked with a pancake 🥞
 - Make clippy happy, add CI for linter checks [#153](https://github.com/p2panda/p2panda/pull/153) `rs`
 - Clean up documentation and update new terminology [#170](https://github.com/p2panda/p2panda/pull/170) `rs` `js`
 - Improve CI, make it faster, add code coverage report [#173](https://github.com/p2panda/p2panda/pull/173) `rs` `js`
+- Update Codecov GH action [#176](https://github.com/p2panda/p2panda/pull/176) `rs`
 
 ## [0.2.1]
 
