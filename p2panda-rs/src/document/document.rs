@@ -139,19 +139,13 @@ impl Validate for Document {
 pub struct DocumentBuilder {
     /// An unsorted collection of operations which are associated with a particular document id.
     operations: Vec<OperationWithMeta>,
-    /// Permissions for this document.
-    /// TODO: don't know what form this will take yet, this is a placeholder for now.
-    permissions: Option<Vec<Author>>,
 }
 
 impl DocumentBuilder {
     /// Instantiate a new DocumentBuilder with a collection of operations.
     pub fn new(mut operations: Vec<OperationWithMeta>) -> Self {
         operations.sort_by(|a, b| a.operation_id().as_str().cmp(b.operation_id().as_str()));
-        Self {
-            operations,
-            permissions: None,
-        }
+        Self { operations }
     }
 
     /// Get all operations for this document.
@@ -162,12 +156,6 @@ impl DocumentBuilder {
     /// Get an iterator over all operations in this document.
     pub fn operations_iter(&self) -> std::vec::IntoIter<OperationWithMeta> {
         self.operations.clone().into_iter()
-    }
-
-    /// Add permissions for this Document.
-    pub fn permissions(mut self, permissions: Vec<Author>) -> Self {
-        self.permissions = Some(permissions);
-        self
     }
 
     /// Build the document.
