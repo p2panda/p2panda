@@ -27,10 +27,6 @@ pub struct Document {
     schema: Schema,
     /// The author (public key) who published the CREATE message which instantiated this document.
     author: Author,
-    /// Permissions, derived from KeyGroup relations, which apply to the document as a whole or operation ranges within it.
-    /// TODO: this is a placeholder for now.
-    #[allow(dead_code)]
-    permissions: Option<Vec<Author>>,
     /// A map of all operations contained within this document. This may even include operations by unauthorized authors.
     operations: BTreeMap<String, OperationWithMeta>,
     /// A causal graph representation of this documents operations, identified by their hash, which can be topologically sorted.
@@ -242,7 +238,6 @@ impl DocumentBuilder {
             id: document_id.to_owned(),
             schema,
             author: author.to_owned(),
-            permissions: None,
             operations,
             graph,
         })
