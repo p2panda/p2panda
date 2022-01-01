@@ -144,6 +144,10 @@ pub struct DocumentBuilder {
 impl DocumentBuilder {
     /// Instantiate a new DocumentBuilder with a collection of operations.
     pub fn new(mut operations: Vec<OperationWithMeta>) -> Self {
+        // Sort operations alphabetically by their hash id.
+        // This is important for graph building and sorting, operations must be added
+        // to a IncrementalTopo graph in the correct (alphabetical) order to assure consistent
+        // traversal.
         operations.sort_by(|a, b| a.operation_id().as_str().cmp(b.operation_id().as_str()));
         Self { operations }
     }
