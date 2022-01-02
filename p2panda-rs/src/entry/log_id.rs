@@ -9,6 +9,7 @@ use crate::entry::error::LogIdError;
 
 /// Authors can write entries to multiple logs identified by log ids.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(try_from = "&str")]
 pub struct LogId(u64);
 
 impl LogId {

@@ -48,7 +48,7 @@ describe('WebAssembly interface', () => {
 
       // Returns the correct fields
       expect(fields.get('description')).toBe('Hello, Panda');
-      expect(fields.get('temperature')).toBe(23);
+      expect(fields.get('temperature') === BigInt(23)).toBe(true);
       expect(fields.get('isCute')).toBe(true);
       expect(fields.get('degree')).toBe(12.322);
       expect(fields.get('username')).toBe(TEST_SCHEMA);
@@ -130,8 +130,8 @@ describe('WebAssembly interface', () => {
         operationEncoded,
         undefined,
         undefined,
-        SEQ_NUM,
-        LOG_ID,
+        BigInt(SEQ_NUM),
+        BigInt(LOG_ID),
       );
 
       expect(entryHash.length).toBe(68);
@@ -139,9 +139,10 @@ describe('WebAssembly interface', () => {
       // Decode entry and return as JSON
       const decodedEntry = decodeEntry(entryEncoded, operationEncoded);
 
+      expect(decodedEntry.logId).toBe(LOG_ID);
+      expect(decodedEntry.seqNum).toBe(SEQ_NUM);
       expect(decodedEntry.entryHashBacklink).toBeNull();
       expect(decodedEntry.entryHashSkiplink).toBeNull();
-      expect(decodedEntry.logId).toBe(LOG_ID);
       expect(decodedEntry.operation.action).toBe('create');
       expect(decodedEntry.operation.schema).toBe(TEST_SCHEMA);
       expect(decodedEntry.operation.fields.description.value).toBe(
@@ -151,6 +152,41 @@ describe('WebAssembly interface', () => {
 
       // Test decoding entry without operation
       expect(() => decodeEntry(entryEncoded)).not.toThrow();
+    });
+
+    it('encodes and decodes large integers correctly', async () => {
+      const {
+        KeyPair,
+        OperationFields,
+        decodeEntry,
+        encodeCreateOperation,
+        signEncodeEntry,
+      } = await wasm;
+
+      // Generate new key pair
+      const keyPair = new KeyPair();
+
+      // Create operation
+      const fields = new OperationFields();
+      fields.add('description', 'str', 'Hello, Panda');
+
+      const operationEncoded = encodeCreateOperation(TEST_SCHEMA, fields);
+
+      // Sign and encode entry
+      const { entryEncoded, entryHash } = signEncodeEntry(
+        keyPair,
+        operationEncoded,
+        undefined,
+        undefined,
+        BigInt('1'),
+        BigInt('22345678912345678912'),
+      );
+
+      // Decode entry and return as JSON
+      const decodedEntry = decodeEntry(entryEncoded, operationEncoded);
+
+      expect(decodedEntry.logId).toBe('1');
+      expect(decodedEntry.seqNum).toBe('22345678912345678912');
     });
   });
 });
