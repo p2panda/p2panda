@@ -29,8 +29,8 @@ pub struct Document {
     author: Author,
     /// A map of all operations contained within this document. This may even include operations by unauthorized authors.
     operations: BTreeMap<String, OperationWithMeta>,
-    /// A causal graph representation of this documents operations, identified by their hash, which can be topologically sorted.
-    graph: IncrementalTopo<String>,
+    /// A causal graph of this documents operations which can be topologically sorted.
+    graph: IncrementalTopo<OperationWithMeta>,
 }
 
 impl Document {
@@ -73,8 +73,8 @@ impl Document {
 
     /// Returns a result containing an iterable collection of topologically sorted
     /// nodes in this graph, _except_ the root, identified by their id.
-    fn sort(&self) -> Result<incremental_topo::Descendants<String>, DocumentError> {
-        match self.graph.descendants(self.id().as_str()) {
+    fn sort(&self) -> Result<incremental_topo::Descendants<OperationWithMeta>, DocumentError> {
+        match self.graph.descendants(&self.get_create_operation()) {
             Ok(d) => Ok(d),
             Err(_) => Err(DocumentError::IncrementalTopoError),
         }
@@ -86,7 +86,7 @@ impl Document {
         let mut instance = Instance::try_from(self.get_create_operation())?;
 
         self.sort()?
-            .try_for_each(|id| match instance.apply_update(self.get_operation(id)?) {
+            .try_for_each(|op| match instance.apply_update(op.to_owned()) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(DocumentError::InstanceError(e)),
             })?;
@@ -202,29 +202,28 @@ impl DocumentBuilder {
             // Insert operation into map
             operations.insert(op.operation_id().as_str().to_owned(), op.to_owned());
             // Add node to graph
-            graph.add_node(op.operation_id().as_str().to_string());
+            graph.add_node(op);
         }
 
         // Derive graph dependencies from all operations' previous_operations field. Apply to graph handling
         // errors.
         // nb. I had some problems capturing the actual errors from IncrementalTopo crate... needs another
         // go at some point.
-        self.operations_iter()
-            .try_for_each(|successor: OperationWithMeta| {
-                if let Some(previous_operations) = successor.previous_operations() {
-                    previous_operations.iter().try_for_each(|previous| {
-                        match graph.add_dependency(
-                            &previous.as_str().to_owned(),
-                            &successor.operation_id().as_str().to_owned(),
-                        ) {
-                            Ok(_) => Ok(()),
-                            Err(_) => Err(DocumentBuilderError::IncrementalTopoDepenedencyError),
-                        }
-                    })
-                } else {
-                    Ok(())
-                }
-            })?;
+        operations.iter().try_for_each(|(_, successor)| {
+            if let Some(previous_operations) = successor.previous_operations() {
+                previous_operations.iter().try_for_each(|previous| {
+                    match graph.add_dependency(
+                        operations.get(previous.as_str()).unwrap(),
+                        &successor.to_owned(),
+                    ) {
+                        Ok(_) => Ok(()),
+                        Err(_) => Err(DocumentBuilderError::IncrementalTopoDepenedencyError),
+                    }
+                })
+            } else {
+                Ok(())
+            }
+        })?;
 
         Ok(Document {
             id: document_id.to_owned(),
