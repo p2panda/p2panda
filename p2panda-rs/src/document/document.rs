@@ -18,6 +18,10 @@ const DOCUMENT_SCHEMA: &str = "cafe = { (
     name: { type: \"str\", value: tstr }
 ) }";
 
+/// An iterator struct for Document.
+#[derive(Debug)]
+pub struct DocumentIter(Vec<OperationWithMeta>);
+
 /// A resolvable data type made up of a collection of causally linked operations.
 #[derive(Debug)]
 pub struct Document {
@@ -54,43 +58,52 @@ impl Document {
         self.operations.clone()
     }
 
-    /// Get the create operation for this document. We unwrap and panic if the value is None
-    /// as all documents should contain at least a create message. This was validated when building
-    /// with DocumentBuilder.
-    fn get_create_operation(&self) -> OperationWithMeta {
-        self.get_operation(self.id().as_str())
-            .expect("There should be a CREATE operation")
-    }
-
-    /// Get an operation from this document by its id. Returns an error if operation
-    /// is not found.
-    fn get_operation(&self, id: &str) -> Result<OperationWithMeta, DocumentError> {
-        match self.operations.get(id) {
-            Some(operation) => Ok(operation.to_owned()),
-            None => Err(DocumentError::OperationNotFound),
-        }
-    }
-
-    /// Returns a result containing an iterable collection of topologically sorted
-    /// nodes in this graph, _except_ the root, identified by their id.
-    fn sort(&self) -> Result<incremental_topo::Descendants<OperationWithMeta>, DocumentError> {
-        match self.graph.descendants(&self.get_create_operation()) {
-            Ok(d) => Ok(d),
+    /// Returns an iterator over all operations in this document ordered topologically.
+    pub fn iter(&self) -> Result<DocumentIter, DocumentError> {
+        let mut iter = vec![self.get_create_operation()];
+        let sorted = match self.graph.descendants(&self.get_create_operation()) {
+            Ok(descendants) => Ok(descendants),
             Err(_) => Err(DocumentError::IncrementalTopoError),
+        }?;
+
+        for op in sorted {
+            iter.insert(0, op.to_owned())
         }
+
+        Ok(DocumentIter(iter))
+    }
+
+    /// Get the create operation for this document. We unwrap and panic if the value is None
+    /// as all documents should contain at least a create operation identified by this documents id.
+    /// This was validated when building with DocumentBuilder.
+    fn get_create_operation(&self) -> OperationWithMeta {
+        self.operations
+            .get(self.id().as_str())
+            .expect("There should be a CREATE operation")
+            .to_owned()
     }
 
     /// Sort the graph topologically, then reduce the linearised operations into a single
     /// `Instance`.
     pub fn resolve(&self) -> Result<Instance, DocumentError> {
-        let mut instance = Instance::try_from(self.get_create_operation())?;
+        let mut document_iter = self.iter()?;
 
-        self.sort()?
-            .try_for_each(|op| match instance.apply_update(op.to_owned()) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(DocumentError::InstanceError(e)),
-            })?;
+        let create_message = document_iter
+            .next()
+            .expect("There should be a CREATE operation");
+        let mut instance = Instance::try_from(create_message)?;
+
+        document_iter.try_for_each(|op| instance.apply_update(op))?;
+
         Ok(instance)
+    }
+}
+
+impl Iterator for DocumentIter {
+    type Item = OperationWithMeta;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.pop()
     }
 }
 
@@ -103,7 +116,7 @@ impl Validate for Document {
         // point while having broken some of these basic data restraints.
 
         // There must be a CREATE operation matching the document_id
-        let create_operation = self.get_operation(self.id().as_str())?;
+        let create_operation = self.get_create_operation();
         if !create_operation.is_create() {
             return Err(DocumentError::ValidationError(
                 "All documents must contain a CREATE operation identified by the document_id"
