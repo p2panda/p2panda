@@ -16,7 +16,7 @@ pub enum DocumentBuilderError {
 
     /// Internal IncrementalTopo error.
     #[error("Error adding dependency to graph")]
-    IncrementalTopoDepenedencyError,
+    IncrementalTopoDependencyError,
 
     /// Handle errors from validating CBOR schemas.
     #[error(transparent)]

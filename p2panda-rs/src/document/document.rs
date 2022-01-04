@@ -231,7 +231,7 @@ impl DocumentBuilder {
                         &successor.to_owned(),
                     ) {
                         Ok(_) => Ok(()),
-                        Err(_) => Err(DocumentBuilderError::IncrementalTopoDepenedencyError),
+                        Err(_) => Err(DocumentBuilderError::IncrementalTopoDependencyError),
                     }
                 })
             } else {
