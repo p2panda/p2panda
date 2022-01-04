@@ -9,7 +9,7 @@
 //!
 //! A group of users sharing that secret state is called a _secret group_ in p2panda. Sender
 //! ratchet encryption is interesting for applications with high security standards where every
-//! message is individually protected with an epheremal key, whereas long-term secret encryption is
+//! message is individually protected with an ephemeral key, whereas long-term secret encryption is
 //! useful for building application where keys material is reused for multiple messages over longer
 //! time, so past data can still be decrypted, even when a member joins the secret group later.
 //!

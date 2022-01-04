@@ -11,19 +11,21 @@ use crate::operation::{OperationEncoded, OperationError, OperationFieldsError};
 use crate::Validate;
 
 /// Operation format versions to introduce API changes in the future.
+///
+/// Operations contain the actual data of applications in the p2panda network and will be stored
+/// for an indefinite time on different machines. To allow an upgrade path in the future and
+/// support backwards compatibility for old data we can use this version number.
 #[derive(Clone, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
 #[serde(untagged)]
 #[repr(u8)]
-
-/// Identifier for `Operation` versions.
 pub enum OperationVersion {
-    /// The default version number
+    /// The default version number.
     Default = 1,
 }
 
 impl Copy for OperationVersion {}
 
-/// Operations are categorized by their `action` type.
+/// Operations are categorised by their action type.
 ///
 /// An action defines the operation format and if this operation creates, updates or deletes a data
 /// document.
@@ -71,7 +73,6 @@ impl<'de> Deserialize<'de> for OperationAction {
 impl Copy for OperationAction {}
 
 /// Enum of possible data types which can be added to the operations fields as values.
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
 pub enum OperationValue {
@@ -197,26 +198,27 @@ impl OperationFields {
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// Operations describe data mutations in the p2panda network. Authors send operations to create,
-/// update or delete documents or collections of data.
+/// Operations describe data mutations of "documents" in the p2panda network. Authors send
+/// operations to CREATE, UPDATE or DELETE documents.
 ///
-/// The data itself lives in the `fields` object and is formed after an operation schema.
+/// The data itself lives in the "fields" object and is formed after an operation schema.
 ///
-/// Starting from an initial create operation, the following collection of update operations build
-/// up a causal graph of mutations which can be resolved into a single value or object during a
-/// materialisation process. If a delete operation is publish it signals the deletion of the entire
-/// graph and no more update operations should be published.
+/// Starting from an initial CREATE operation, the following collection of UPDATE operations build
+/// up a causal graph of mutations which can be resolved into a single object during a
+/// "materialisation" process. If a DELETE operation is published it signals the deletion of the
+/// entire graph and no more UPDATE operations should be published.
 ///
-/// All update and delete operations have a `previous_operations` field which contains a vector of
+/// All UPDATE and DELETE operations have a `previous_operations` field which contains a vector of
 /// operation hash ids which identify the known branch tips at the time of publication. These allow
 /// us to build the graph and retain knowledge of the graph state at the time the specific
 /// operation was published.
 ///
 /// ## Examples
 ///
-/// All of the below would be valid operation graphs. Operations which refer to more than one
-/// previous operation help to reconcile branches. However, if branches exist when the graph is
-/// resolved, the materialisation process will still resolves the graph to a single value.
+/// All of the examples are valid operation graphs. Operations which refer to more than one
+/// previous operation help to reconcile branches. However, if other, unknown branches exist when
+/// the graph is resolved, the materialisation process will still resolves the graph to a single
+/// value.
 ///
 /// 1)
 /// ```mermaid
@@ -257,7 +259,8 @@ pub struct Operation {
     /// Version schema of this operation.
     version: OperationVersion,
 
-    /// Optional array of hashes referring to operations directly preceding this one in the document.
+    /// Optional array of hashes referring to operations directly preceding this one in the
+    /// document.
     #[serde(skip_serializing_if = "Option::is_none")]
     previous_operations: Option<Vec<Hash>>,
 
@@ -271,7 +274,7 @@ pub struct Operation {
 }
 
 impl Operation {
-    /// Returns new create operation.
+    /// Returns new CREATE operation.
     ///
     /// ## Example
     ///
@@ -279,14 +282,17 @@ impl Operation {
     /// # extern crate p2panda_rs;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use p2panda_rs::hash::Hash;
-    /// use p2panda_rs::operation::{Operation, OperationFields, OperationValue, AsOperation};
+    /// use p2panda_rs::operation::{AsOperation, Operation, OperationFields, OperationValue};
     ///
     /// let schema_hash_string = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
     /// let schema_msg_hash = Hash::new(schema_hash_string)?;
     /// let mut msg_fields = OperationFields::new();
     ///
     /// msg_fields
-    ///     .add("Zoo", OperationValue::Text("Pandas, Doggos, Cats, and Parrots!".to_owned()))
+    ///     .add(
+    ///         "Zoo",
+    ///         OperationValue::Text("Pandas, Doggos, Cats, and Parrots!".to_owned()),
+    ///     )
     ///     .unwrap();
     ///
     /// let create_operation = Operation::new_create(schema_msg_hash, msg_fields)?;
@@ -311,7 +317,7 @@ impl Operation {
         Ok(operation)
     }
 
-    /// Returns new update operation.
+    /// Returns new UPDATE operation.
     pub fn new_update(
         schema: Hash,
         id: Hash,
@@ -332,7 +338,7 @@ impl Operation {
         Ok(operation)
     }
 
-    /// Returns new delete operation.
+    /// Returns new DELETE operation.
     pub fn new_delete(
         schema: Hash,
         id: Hash,
@@ -354,11 +360,10 @@ impl Operation {
 
     /// Encodes operation in CBOR format and returns bytes.
     pub fn to_cbor(&self) -> Vec<u8> {
-        // Serialize data to binary CBOR format
         serde_cbor::to_vec(&self).unwrap()
     }
 
-    /// Returns id of the document this operation is part of.
+    /// Returns identifier of the document this operation is part of.
     pub fn id(&self) -> Option<&Hash> {
         self.id.as_ref()
     }
@@ -369,7 +374,8 @@ impl Operation {
     }
 }
 
-/// Shared methods for `Operation` and `OperationWithMeta`.
+/// Shared methods for [`Operation`] and
+/// [`OperationWithMeta`][crate::operation::OperationWithMeta].
 pub trait AsOperation {
     /// Returns action type of operation.
     fn action(&self) -> OperationAction;
@@ -380,10 +386,10 @@ pub trait AsOperation {
     /// Returns version of operation.
     fn version(&self) -> OperationVersion;
 
-    /// Returns user data fields of operation.
+    /// Returns application data fields of operation.
     fn fields(&self) -> Option<OperationFields>;
 
-    /// Returns previous_operations of this operation.
+    /// Returns vector of known previous operation hashes of this operation.
     fn previous_operations(&self) -> Option<Vec<Hash>>;
 
     /// Returns true if operation contains fields.
@@ -396,17 +402,17 @@ pub trait AsOperation {
         self.previous_operations().is_some()
     }
 
-    /// Returns true when instance is create operation.
+    /// Returns true when instance is CREATE operation.
     fn is_create(&self) -> bool {
         self.action() == OperationAction::Create
     }
 
-    /// Returns true when instance is update operation.
+    /// Returns true when instance is UPDATE operation.
     fn is_update(&self) -> bool {
         self.action() == OperationAction::Update
     }
 
-    /// Returns true when instance is delete operation.
+    /// Returns true when instance is DELETE operation.
     fn is_delete(&self) -> bool {
         self.action() == OperationAction::Delete
     }
@@ -433,7 +439,7 @@ impl AsOperation for Operation {
         self.fields.clone()
     }
 
-    /// Returns previous_operations of this operation.
+    /// Returns known previous operations vector of this operation.
     fn previous_operations(&self) -> Option<Vec<Hash>> {
         self.previous_operations.clone()
     }
@@ -450,17 +456,17 @@ impl Validate for Operation {
     type Error = OperationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        // Create and update operations can not have empty fields.
+        // CREATE and UPDATE operations can not have empty fields.
         if !self.is_delete() && (!self.has_fields() || self.fields().unwrap().is_empty()) {
             return Err(OperationError::EmptyFields);
         }
 
-        // Update and delete operations must contain previous_operations.
+        // UPDATE and DELETE operations must contain previous_operations.
         if !self.is_create() && (!self.has_previous_operations()) {
             return Err(OperationError::EmptyPreviousOperations);
         }
 
-        // Create operations must not contain previous_operations.
+        // CREATE operations must not contain previous_operations.
         if self.is_create() && (self.has_previous_operations()) {
             return Err(OperationError::ExistingPreviousOperations);
         }
@@ -518,7 +524,7 @@ mod tests {
             schema: schema.clone(),
             previous_operations: None,
             id: None,
-            // Create operations must contain fields
+            // CREATE operations must contain fields
             fields: None, // Error
         };
 
@@ -528,7 +534,7 @@ mod tests {
             action: OperationAction::Create,
             version: OperationVersion::Default,
             schema: schema.clone(),
-            // Create operations must not contain previous_operations
+            // CREATE operations must not contain previous_operations
             previous_operations: Some(vec![prev_op_id.clone()]), // Error
             id: None,
             fields: Some(fields.clone()),
@@ -540,7 +546,7 @@ mod tests {
             action: OperationAction::Update,
             version: OperationVersion::Default,
             schema: schema.clone(),
-            // Update operations must contain previous_operations
+            // UPDATE operations must contain previous_operations
             previous_operations: None, // Error
             id: Some(id.clone()),
             fields: Some(fields.clone()),
@@ -554,7 +560,7 @@ mod tests {
             schema: schema.clone(),
             previous_operations: Some(vec![prev_op_id]),
             id: Some(id.clone()),
-            // Update operations must contain fields
+            // UPDATE operations must contain fields
             fields: None, // Error
         };
 
@@ -564,7 +570,7 @@ mod tests {
             action: OperationAction::Delete,
             version: OperationVersion::Default,
             schema: schema.clone(),
-            // Delete operations must contain previous_operations
+            // DELETE operations must contain previous_operations
             previous_operations: None, // Error
             id: Some(id.clone()),
             fields: None,
@@ -578,7 +584,7 @@ mod tests {
             schema,
             previous_operations: None,
             id: Some(id),
-            // Delete operations must not contain fields
+            // DELETE operations must not contain fields
             fields: Some(fields), // Error
         };
 

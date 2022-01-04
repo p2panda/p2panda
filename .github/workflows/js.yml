@@ -1,0 +1,78 @@
+name: p2panda-js
+
+on: push
+
+env:
+  cache_path: |
+    p2panda-rs/target
+    ~/.cargo
+    ~/.npm
+  working_directory: p2panda-js
+
+jobs:
+  js-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node: [12, 14, 16]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup node ${{ matrix.node }}
+        # This action handles node dependency caching for us
+        uses: actions/setup-node@v2
+        with:
+          node-version: "${{ matrix.node }}"
+
+      - name: Restore from cargo and npm cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.cache_path }}
+          # Note that this caching action does NOT cache node dependencies.
+          # This is done by "actions/setup-node" instead. Here we're caching
+          # Rust and npm artifacts.
+          key: ${{ runner.os }}-test-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ${{ env.working_directory }}
+
+      - name: Run tests
+        run: npm run test
+        working-directory: ${{ env.working_directory }}
+
+  js-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup node
+        # This action also handles dependency caching for us
+        uses: actions/setup-node@v2
+        with:
+          node-version-file: ${{ env.working_directory}}/.nvmrc
+
+      - name: Restore from cargo and npm cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.cache_path }}
+          key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ${{ env.working_directory }}
+
+      - name: Run build
+        run: npm run build
+        working-directory: ${{ env.working_directory }}

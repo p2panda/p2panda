@@ -24,18 +24,23 @@ Highlights are marked with a pancake 🥞
 - Update `ed25519` crate to `1.3.0` and deprecated `Signature` API [#137](https://github.com/p2panda/p2panda/pull/137) `rs`
 - Use new `Operation` naming which replaces `Message` [#156](https://github.com/p2panda/p2panda/pull/156) _BREAKING_ `rs` `js`
 - Remove distinction of system and application log ids [#154](https://github.com/p2panda/p2panda/pull/154) `rs`
-- Update dependencies, remove deprecated eslint-loader [#155](https://github.com/p2panda/p2panda/pull/155) `js`
+- Update JavaScript dependencies, remove deprecated eslint-loader [#155](https://github.com/p2panda/p2panda/pull/155) `js`
 - Split utils modules in `test_utils` into utils.rs and constants.rs [#157](https://github.com/p2panda/p2panda/pull/157) `rs`
 - Use traits for validation methods in `Schema` [#160](https://github.com/p2panda/p2panda/pull/160) `rs`
 - Add `previous_operations` field in `Operation` [#163](https://github.com/p2panda/p2panda/pull/163) _BREAKING_ `rs` `js`
 - Introduce `OperationWithMeta` struct [#163](https://github.com/p2panda/p2panda/pull/163) `rs`
 - Update API and mocks to reflect yasmf hash and document flow changes [#165](https://github.com/p2panda/p2panda/pull/165) _BREAKING_ `rs` `js`
 - Change to new `rustdoc::missing_doc_code_examples` linter name [#168](https://github.com/p2panda/p2panda/pull/168) `rs`
+- Update Rust dependencies [#171](https://github.com/p2panda/p2panda/pull/171) `rs`
+- Convert JavaScript configuration files to TypeScript or JSON [#172](https://github.com/p2panda/p2panda/pull/172) `js`
 
 ### Campfires and boiling pots to sit around
 
 - Update `test_utils` documentation [#152](https://github.com/p2panda/p2panda/pull/152) `rs`
 - Make clippy happy, add CI for linter checks [#153](https://github.com/p2panda/p2panda/pull/153) `rs`
+- Clean up documentation and update new terminology [#170](https://github.com/p2panda/p2panda/pull/170) `rs` `js`
+- Improve CI, make it faster, add code coverage report [#173](https://github.com/p2panda/p2panda/pull/173) `rs` `js`
+- Update Codecov GH action [#176](https://github.com/p2panda/p2panda/pull/176) `rs`
 
 ## [0.2.1]
 
@@ -59,7 +64,7 @@ Released on 2021-10-25: :package: `p2panda-js` :package: `p2panda-rs`
 - `Relation` message values [#33](https://github.com/p2panda/p2panda/pull/33) `rs`
 - Atomic data types like `Message`, `Entry`, `LogId`, `SeqNum`, etc. [#23](https://github.com/p2panda/p2panda/pull/23) `rs` 🥞
 - `sqlx` [Type](https://docs.rs/sqlx/0.5.1/sqlx/trait.Type.html) traits to atomic structs, introduce `db-sqlx` feature flag [#43](https://github.com/p2panda/p2panda/pull/43) `rs`
-- `serde` serialization and deserialization for all atomic structs [#42](https://github.com/p2panda/p2panda/pull/42) `rs`
+- `serde` serialisation and deserialisation for all atomic structs [#42](https://github.com/p2panda/p2panda/pull/42) `rs`
 - Implement method for iterating over MessageFields [#68](https://github.com/p2panda/p2panda/pull/68) `rs`
 - TypeScript API that wraps wasm bindings, introduce OpenRPC specification [#67](https://github.com/p2panda/p2panda/pull/67) `js` 🥞
 - Methods to update and delete documents [#114](https://github.com/p2panda/p2panda/pull/114) `js` 🥞

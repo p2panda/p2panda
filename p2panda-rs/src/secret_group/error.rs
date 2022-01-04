@@ -38,8 +38,8 @@ pub enum SecretGroupError {
     #[error("could not decode long-term secret")]
     LTSDecodingError,
 
-    /// Member's public key cannot be decoded as an ED25519 public key.
-    #[error("member's public key is not a valid ED25519 public key")]
+    /// Member's public key cannot be decoded as an Ed25519 public key.
+    #[error("member's public key is not a valid Ed25519 public key")]
     InvalidMemberPublicKey,
 
     /// Decoding failed with unknown value.

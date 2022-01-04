@@ -37,10 +37,10 @@ pub struct SecretGroupMember {
 }
 
 impl SecretGroupMember {
-    /// Creates a new secret group member based on a p2panda [KeyPair].
+    /// Creates a new secret group member based on a p2panda [`KeyPair`].
     ///
-    /// The [KeyPair] is used to authenticate the secret group member and its generated
-    /// [KeyPackage] towards others.
+    /// The [`KeyPair`] is used to authenticate the secret group member and its generated
+    /// [`KeyPackage`] towards others.
     pub fn new(
         provider: &impl OpenMlsCryptoProvider,
         key_pair: &KeyPair,
@@ -49,7 +49,7 @@ impl SecretGroupMember {
         Ok(SecretGroupMember { mls_member })
     }
 
-    /// Generates a new [KeyPackage] which can be used by others to invite this member into their
+    /// Generates a new [`KeyPackage`] which can be used by others to invite this member into their
     /// groups.
     pub fn key_package(
         &self,
@@ -58,7 +58,7 @@ impl SecretGroupMember {
         Ok(self.mls_member.key_package(provider)?)
     }
 
-    /// Returns the MLS Credential of this group member to identify itself.
+    /// Returns the MLS [`Credential`] of this group member to identify itself.
     pub fn credential(&self) -> &Credential {
         self.mls_member.credential()
     }

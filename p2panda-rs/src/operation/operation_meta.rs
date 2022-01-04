@@ -11,13 +11,16 @@ use crate::Validate;
 use core::hash::Hash as CoreHash;
 use std::hash::Hasher;
 
-/// Wrapper struct containing an operation, the hash of its entry, and the public key of its author.
+/// Wrapper struct containing an operation, the hash of its entry, and the public key of its
+/// author.
 #[derive(Debug, Clone)]
 pub struct OperationWithMeta {
     /// The hash of this operations entry.
     operation_id: Hash,
+
     /// The public key of the author who published this operation.
     public_key: Author,
+
     /// The actual operation this struct wraps.
     operation: Operation,
 }
@@ -25,16 +28,14 @@ pub struct OperationWithMeta {
 impl Eq for OperationWithMeta {}
 
 impl OperationWithMeta {
-    /// Create a new `OperationWithMeta`.
+    /// Returns a new `OperationWithMeta` instance.
     pub fn new(
         entry_encoded: &EntrySigned,
         operation_encoded: &OperationEncoded,
     ) -> Result<Self, OperationWithMetaError> {
-        // decode operation
         let operation = Operation::from(operation_encoded);
 
-        // decode entry passing entry_encoded, this validates that the entry and operation
-        // are correctly matching.
+        // This validates that the entry and operation are correctly matching
         decode_entry(entry_encoded, Some(operation_encoded))?;
 
         let operation_with_meta = Self {
@@ -48,7 +49,7 @@ impl OperationWithMeta {
         Ok(operation_with_meta)
     }
 
-    /// Returns the operation_id for this operation.
+    /// Returns the identifier for this operation.
     pub fn operation_id(&self) -> &Hash {
         &self.operation_id
     }
@@ -58,7 +59,7 @@ impl OperationWithMeta {
         &self.public_key
     }
 
-    /// Returns this operation.
+    /// Returns the wrapped operation.
     pub fn operation(&self) -> &Operation {
         &self.operation
     }
@@ -80,12 +81,12 @@ impl AsOperation for OperationWithMeta {
         self.operation.schema()
     }
 
-    /// Returns user data fields of operation.
+    /// Returns data fields of operation.
     fn fields(&self) -> Option<OperationFields> {
         self.operation.fields()
     }
 
-    /// Returns previous_operations of operation.
+    /// Returns vector of previous operations.
     fn previous_operations(&self) -> Option<Vec<Hash>> {
         self.operation.previous_operations()
     }
@@ -123,9 +124,11 @@ mod tests {
     use crate::entry::EntrySigned;
     use crate::operation::{AsOperation, OperationEncoded, OperationValue};
     use crate::test_utils::fixtures::defaults::hash;
+    use crate::test_utils::fixtures::templates::{
+        all_meta_operation_types, implements_as_operation,
+    };
     use crate::test_utils::fixtures::{
         create_operation, defaults, entry_signed_encoded, fields, operation_encoded,
-        templates::{all_meta_operation_types, implements_as_operation},
     };
     use crate::Validate;
 
@@ -140,7 +143,6 @@ mod tests {
         #[case] operation_encoded: OperationEncoded,
     ) {
         let operation_with_meta = OperationWithMeta::new(&entry_signed_encoded, &operation_encoded);
-
         assert!(operation_with_meta.is_ok())
     }
 
@@ -168,7 +170,6 @@ mod tests {
     #[apply(all_meta_operation_types)]
     fn trait_methods_should_match(#[case] operation_with_meta: OperationWithMeta) {
         let operation = operation_with_meta.operation();
-
         assert_eq!(operation_with_meta.fields(), operation.fields());
         assert_eq!(operation_with_meta.action(), operation.action());
         assert_eq!(operation_with_meta.version(), operation.version());

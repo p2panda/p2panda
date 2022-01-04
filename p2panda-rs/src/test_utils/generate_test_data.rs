@@ -174,7 +174,7 @@ mod tests {
         // Convert to json string
         let generated_test_data_str = serde_json::to_string(&generated_test_data).unwrap();
 
-        // Convert both strings into json objects for comparrison
+        // Convert both strings into json objects for comparison
         let generated_test_data_json: Value =
             serde_json::from_str(&generated_test_data_str).unwrap();
         let fixture_test_data_json: Value = serde_json::from_str(TEST_DATA).unwrap();
