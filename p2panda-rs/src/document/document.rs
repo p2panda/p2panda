@@ -60,8 +60,9 @@ impl Document {
 
     /// Returns an iterator over all operations in this document ordered topologically.
     pub fn iter(&self) -> Result<DocumentIter, DocumentError> {
-        let mut iter = vec![self.get_create_operation()];
-        let sorted = match self.graph.descendants(&self.get_create_operation()) {
+        let create_operation = self.get_create_operation();
+        let mut iter = vec![create_operation.clone()];
+        let sorted = match self.graph.descendants(&create_operation) {
             Ok(descendants) => Ok(descendants),
             Err(_) => Err(DocumentError::IncrementalTopoError),
         }?;

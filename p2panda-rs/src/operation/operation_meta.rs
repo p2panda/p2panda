@@ -25,8 +25,6 @@ pub struct OperationWithMeta {
     operation: Operation,
 }
 
-impl Eq for OperationWithMeta {}
-
 impl OperationWithMeta {
     /// Returns a new `OperationWithMeta` instance.
     pub fn new(
@@ -103,6 +101,8 @@ impl PartialEq for OperationWithMeta {
         self.operation_id == other.operation_id
     }
 }
+
+impl Eq for OperationWithMeta {}
 
 impl Validate for OperationWithMeta {
     type Error = OperationWithMetaError;
