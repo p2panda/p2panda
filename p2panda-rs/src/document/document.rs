@@ -27,7 +27,7 @@ pub struct Document {
     schema: Schema,
     /// The author (public key) who published the CREATE message which instantiated this document.
     author: Author,
-    /// A map of all operations contained within this document. This may even include operations by unauthorized authors.
+    /// A map of all operations contained within this document.
     operations: BTreeMap<String, OperationWithMeta>,
     /// A causal graph of this documents operations which can be topologically sorted.
     graph: IncrementalTopo<OperationWithMeta>,
