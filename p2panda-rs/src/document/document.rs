@@ -3,14 +3,14 @@
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
+use incremental_topo::IncrementalTopo;
+
 use crate::document::{DocumentBuilderError, DocumentError};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::instance::Instance;
 use crate::operation::{AsOperation, OperationWithMeta};
 use crate::schema::{Schema, ValidateOperation};
-use incremental_topo::IncrementalTopo;
-
 use crate::Validate;
 
 /// Hard coded cddl string for now
