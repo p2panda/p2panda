@@ -216,7 +216,10 @@ impl Schema {
             }?;
         }
 
-        match self.validate_operation(serde_cbor::to_vec(&fields.clone()).unwrap()) {
+        let mut cbor_bytes = Vec::new();
+        ciborium::ser::into_writer(&fields.clone(), &mut cbor_bytes).unwrap();
+
+        match self.validate_operation(cbor_bytes) {
             Ok(_) => Ok(()),
             Err(err) => Err(SchemaError::ValidationError(err.to_string())),
         }?;
@@ -245,7 +248,10 @@ impl Schema {
             }?;
         }
 
-        match self.validate_operation(serde_cbor::to_vec(&fields.clone()).unwrap()) {
+        let mut cbor_bytes = Vec::new();
+        ciborium::ser::into_writer(&fields.clone(), &mut cbor_bytes).unwrap();
+
+        match self.validate_operation(cbor_bytes) {
             Ok(_) => Ok(()),
             Err(err) => Err(SchemaError::ValidationError(err.to_string())),
         }?;
@@ -260,7 +266,10 @@ impl Schema {
     /// schema definition.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn instance_from_create(&self, operation: Operation) -> Result<Instance, InstanceError> {
-        match self.validate_operation(serde_cbor::to_vec(&operation.fields()).unwrap()) {
+        let mut cbor_bytes = Vec::new();
+        ciborium::ser::into_writer(&operation.fields(), &mut cbor_bytes).unwrap();
+
+        match self.validate_operation(cbor_bytes) {
             Ok(_) => Ok(()),
             Err(err) => Err(InstanceError::ValidationError(err)),
         }?;
@@ -360,7 +369,9 @@ mod tests {
         me.add("age", OperationValue::Integer(35)).unwrap();
 
         // Validate operation fields against person schema
-        let me_bytes = serde_cbor::to_vec(&me).unwrap();
+        let mut me_bytes = Vec::new();
+        ciborium::ser::into_writer(&me, &mut me_bytes).unwrap();
+
         assert!(person.validate_operation(me_bytes).is_ok());
     }
 
@@ -381,7 +392,9 @@ mod tests {
         let person_from_string = Schema::new(&schema_hash, &cddl_str.to_string()).unwrap();
 
         // Validate operation fields against person schema
-        let me_bytes = serde_cbor::to_vec(&me).unwrap();
+        let mut me_bytes = Vec::new();
+        ciborium::ser::into_writer(&me, &mut me_bytes).unwrap();
+
         assert!(person_from_string.validate_operation(me_bytes).is_ok());
     }
 
@@ -408,8 +421,11 @@ mod tests {
             .unwrap();
 
         // Validate operation fields against application schema
-        let me_bytes = serde_cbor::to_vec(&me).unwrap();
-        let my_address_bytes = serde_cbor::to_vec(&my_address).unwrap();
+        let mut me_bytes = Vec::new();
+        ciborium::ser::into_writer(&me, &mut me_bytes).unwrap();
+
+        let mut my_address_bytes = Vec::new();
+        ciborium::ser::into_writer(&my_address, &mut my_address_bytes).unwrap();
 
         assert!(application_schema.validate_operation(me_bytes).is_ok());
         assert!(application_schema
@@ -425,7 +441,9 @@ mod tests {
             .add("colour", OperationValue::Text("pink & orange".to_owned()))
             .unwrap();
 
-        let naughty_panda_bytes = serde_cbor::to_vec(&naughty_panda).unwrap();
+        let mut naughty_panda_bytes = Vec::new();
+        ciborium::ser::into_writer(&naughty_panda, &mut naughty_panda_bytes).unwrap();
+
         assert!(application_schema
             .validate_operation(naughty_panda_bytes)
             .is_err());

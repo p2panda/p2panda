@@ -3,6 +3,7 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
+use ciborium;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -360,7 +361,9 @@ impl Operation {
 
     /// Encodes operation in CBOR format and returns bytes.
     pub fn to_cbor(&self) -> Vec<u8> {
-        serde_cbor::to_vec(&self).unwrap()
+        let mut cbor_bytes = Vec::new();
+        ciborium::ser::into_writer(&self, &mut cbor_bytes).unwrap();
+        cbor_bytes
     }
 
     /// Returns identifier of the document this operation is part of.
@@ -448,7 +451,7 @@ impl AsOperation for Operation {
 /// Decodes an encoded operation and returns it.
 impl From<&OperationEncoded> for Operation {
     fn from(operation_encoded: &OperationEncoded) -> Self {
-        serde_cbor::from_slice(&operation_encoded.to_bytes()).unwrap()
+        ciborium::de::from_reader(&operation_encoded.to_bytes()[..]).unwrap()
     }
 }
 
