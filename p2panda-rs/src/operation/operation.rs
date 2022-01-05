@@ -492,6 +492,7 @@ impl Validate for Operation {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::convert::TryFrom;
 
     use rstest::rstest;
@@ -701,5 +702,14 @@ mod tests {
     #[apply(many_valid_operations)]
     fn many_valid_operations_should_encode(#[case] operation: Operation) {
         assert!(OperationEncoded::try_from(&operation).is_ok())
+    }
+
+    #[apply(many_valid_operations)]
+    fn it_hashes(#[case] operation: Operation) {
+        let mut hash_map = HashMap::new();
+        let key_value = "Value identified by a hash".to_string();
+        hash_map.insert(&operation, key_value.clone());
+        let key_value_retrieved = hash_map.get(&operation).unwrap().to_owned();
+        assert_eq!(key_value, key_value_retrieved)
     }
 }

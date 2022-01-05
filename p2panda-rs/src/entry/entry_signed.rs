@@ -139,11 +139,31 @@ impl Validate for EntrySigned {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
+    use rstest::rstest;
+    use rstest_reuse::apply;
+
+    use crate::entry::{sign_and_encode, Entry};
+    use crate::identity::KeyPair;
+    use crate::test_utils::fixtures::key_pair;
+    use crate::test_utils::fixtures::templates::many_valid_entries;
+
     use super::EntrySigned;
 
     #[test]
     fn validate() {
         // Invalid hex string
         assert!(EntrySigned::new("123456789Z").is_err());
+    }
+
+    #[apply(many_valid_entries)]
+    fn sign_and_encode_roundtrip(#[case] entry: Entry, key_pair: KeyPair) {
+        let entry_first_encoded = sign_and_encode(&entry, &key_pair).unwrap();
+        let mut hash_map = HashMap::new();
+        let key_value = "Value identified by a hash".to_string();
+        hash_map.insert(&entry_first_encoded, key_value.clone());
+        let key_value_retrieved = hash_map.get(&entry_first_encoded).unwrap().to_owned();
+        assert_eq!(key_value, key_value_retrieved)
     }
 }
