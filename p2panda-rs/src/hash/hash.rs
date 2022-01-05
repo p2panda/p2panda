@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
-
 use arrayvec::ArrayVec;
 use bamboo_rs_core_ed25519_yasmf::yasmf_hash::new_blake3;
+use core::hash::{Hash as CoreHash, Hasher};
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
 use crate::hash::HashError;
@@ -118,8 +118,17 @@ impl PartialEq for Hash {
     }
 }
 
+impl Eq for Hash {}
+
+impl CoreHash for Hash {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::convert::TryInto;
 
     use yasmf_hash::YasmfHash;
@@ -154,5 +163,15 @@ mod tests {
         let yasmf_hash = Into::<YasmfHash<Blake3ArrayVec>>::into(hash.to_owned());
         let hash_restored = TryInto::<Hash>::try_into(yasmf_hash).unwrap();
         assert_eq!(hash, hash_restored);
+    }
+
+    #[test]
+    fn the_hash_hashes() {
+        let hash = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let mut hash_map = HashMap::new();
+        let key_value = "Value identified by a hash".to_string();
+        hash_map.insert(&hash, key_value.clone());
+        let key_value_retrieved = hash_map.get(&hash).unwrap().to_owned();
+        assert_eq!(key_value, key_value_retrieved)
     }
 }
