@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::fmt;
 use std::convert::TryFrom;
 use std::str::FromStr;
 
@@ -111,6 +112,20 @@ impl Iterator for SeqNum {
 impl PartialEq for SeqNum {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
+    }
+}
+
+impl fmt::Display for SeqNum {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl FromStr for SeqNum {
+    type Err = SeqNumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        SeqNum::try_from(s)
     }
 }
 

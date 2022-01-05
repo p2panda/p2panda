@@ -56,7 +56,7 @@ export type Operation = {
  * Object containing operation field values.
  */
 export type Fields = {
-  [fieldname: string]: boolean | number | string;
+  [fieldname: string]: boolean | BigInt | number | string;
 };
 
 /**

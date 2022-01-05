@@ -7,7 +7,7 @@ describe('message', () => {
   describe('getOperationFields', () => {
     it('creates a WebAssembly OperationField', async () => {
       const fields = marshallRequestFields({
-        channel: 5,
+        channel: BigInt(5),
         message: 'chin chin',
         serious: false,
       });

@@ -107,12 +107,14 @@ pub struct Entry {
     entry_hash_skiplink: Option<Hash>,
 
     /// Used log for this entry.
+    #[serde(with = "serde_with::rust::display_fromstr")]
     log_id: LogId,
 
     /// Operation payload of entry, can be deleted.
     operation: Option<Operation>,
 
     /// Sequence number of this entry.
+    #[serde(with = "serde_with::rust::display_fromstr")]
     seq_num: SeqNum,
 }
 
@@ -211,6 +213,28 @@ mod tests {
     use crate::operation::{Operation, OperationFields, OperationValue};
 
     use super::Entry;
+
+    #[test]
+    fn safe_json_serialization() {
+        let mut fields = OperationFields::new();
+        fields
+            .add("large_num", OperationValue::Integer(4328432984329898432))
+            .unwrap();
+        let operation =
+            Operation::new_create(Hash::new_from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
+        let entry = Entry::new(
+            &LogId::default(),
+            Some(&operation),
+            None,
+            None,
+            &SeqNum::new(1).unwrap(),
+        )
+        .unwrap();
+
+        // Large numbers should be serialized as strings
+        let json = serde_json::to_string(&entry).unwrap();
+        assert_eq!(json, "{\"entryHashBacklink\":null,\"entryHashSkiplink\":null,\"logId\":\"1\",\"operation\":{\"action\":\"create\",\"schema\":\"0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543\",\"version\":1,\"fields\":{\"large_num\":{\"type\":\"int\",\"value\":\"4328432984329898432\"}}},\"seqNum\":\"1\"}");
+    }
 
     #[test]
     fn validation() {

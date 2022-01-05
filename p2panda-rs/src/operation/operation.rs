@@ -82,10 +82,12 @@ pub enum OperationValue {
 
     /// Basic signed `integer` value.
     #[serde(rename = "int")]
+    #[serde(with = "serde_with::rust::display_fromstr")]
     Integer(u64),
 
     /// Basic signed `float` value.
     #[serde(rename = "float")]
+    #[serde(with = "serde_with::rust::display_fromstr")]
     Float(f64),
 
     /// Basic `string` value.

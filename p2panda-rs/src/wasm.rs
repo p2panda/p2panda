@@ -6,7 +6,7 @@
 //! `p2panda-rs` in a JavaScript/TypeScript environment.
 //!
 //! [p2panda-js]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::panic;
 
 use console_error_panic_hook::hook as panic_hook;
@@ -153,12 +153,11 @@ impl OperationFields {
                 Ok(())
             }
             "int" => {
-                // Bear in mind JavaScript does not represent numbers as integers, all numbers are
-                // represented as floats therefore if a float is passed incorrectly it will simply
-                // be cast to an int.
-                // See: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number
-                let value_int = jserr!(value.as_f64().ok_or("Invalid integer value")) as u64;
-                jserr!(self.0.add(&name, OperationValue::Integer(value_int)));
+                jserr!(value
+                    .is_bigint() // Convert bool to Result
+                    .then(|| true)
+                    .ok_or("Invalid BigInt value"));
+                jserr!(self.0.add(&name, OperationValue::Integer(value)));
                 Ok(())
             }
             "float" => {
@@ -193,10 +192,7 @@ impl OperationFields {
             Some(OperationValue::Text(value)) => Ok(JsValue::from_str(value)),
             Some(OperationValue::Relation(value)) => Ok(JsValue::from_str(&value.as_str())),
             Some(OperationValue::Float(value)) => Ok(JsValue::from_f64(value.to_owned())),
-            Some(OperationValue::Integer(value)) => {
-                let converted: u64 = jserr!(value.to_owned().try_into());
-                Ok(converted.into())
-            }
+            Some(OperationValue::Integer(value)) => Ok(JsValue::from(value.to_owned())),
             None => Ok(JsValue::NULL),
         }
     }

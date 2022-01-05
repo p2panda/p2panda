@@ -41,14 +41,14 @@ describe('WebAssembly interface', () => {
 
       // Set fields of all possible types
       fields.add('description', 'str', 'Hello, Panda');
-      fields.add('temperature', 'int', 23);
+      fields.add('temperature', 'int', BigInt('32'));
       fields.add('isCute', 'bool', true);
       fields.add('degree', 'float', 12.322);
       fields.add('username', 'relation', TEST_SCHEMA);
 
       // Returns the correct fields
       expect(fields.get('description')).toBe('Hello, Panda');
-      expect(fields.get('temperature') === BigInt(23)).toBe(true);
+      expect(fields.get('temperature') === BigInt(32)).toBe(true);
       expect(fields.get('isCute')).toBe(true);
       expect(fields.get('degree')).toBe(12.322);
       expect(fields.get('username')).toBe(TEST_SCHEMA);
@@ -85,7 +85,7 @@ describe('WebAssembly interface', () => {
         'Unknown type value',
       );
       expect(() => fields.add('test', 'int', true)).toThrow(
-        'Invalid integer value',
+        'Invalid BigInt value',
       );
 
       // Throw when relation is an invalid hash
@@ -103,8 +103,8 @@ describe('WebAssembly interface', () => {
 
   describe('Entries', () => {
     it('creates, signs and decodes an entry', async () => {
-      const LOG_ID = 5;
-      const SEQ_NUM = 1;
+      const LOG_ID = '5';
+      const SEQ_NUM = '1';
 
       const {
         KeyPair,
@@ -169,24 +169,27 @@ describe('WebAssembly interface', () => {
       // Create operation
       const fields = new OperationFields();
       fields.add('description', 'str', 'Hello, Panda');
+      fields.add('large_num', 'int', BigInt('89321983219832198'));
 
       const operationEncoded = encodeCreateOperation(TEST_SCHEMA, fields);
 
       // Sign and encode entry
-      const { entryEncoded, entryHash } = signEncodeEntry(
+      const { entryEncoded } = signEncodeEntry(
         keyPair,
         operationEncoded,
         undefined,
         undefined,
         BigInt('1'),
-        BigInt('22345678912345678912'),
+        BigInt('12345678912345678912'),
+             // 18446744073709551615
       );
 
       // Decode entry and return as JSON
       const decodedEntry = decodeEntry(entryEncoded, operationEncoded);
+      console.log(decodedEntry);
 
-      expect(decodedEntry.logId).toBe('1');
-      expect(decodedEntry.seqNum).toBe('22345678912345678912');
+      expect(decodedEntry.seqNum).toBe('1');
+      expect(decodedEntry.logId).toBe('12345678912345678912');
     });
   });
 });
