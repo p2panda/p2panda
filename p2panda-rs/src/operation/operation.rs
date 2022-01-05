@@ -2,6 +2,7 @@
 
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
+use std::hash::{Hash as StdHash, Hasher};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -247,7 +248,7 @@ impl OperationFields {
 /// flowchart LR
 ///     A --- B --- C --- D --- E;
 /// ```
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Operation {
     /// Describes if this operation creates, updates or deletes data.
@@ -449,6 +450,20 @@ impl AsOperation for Operation {
 impl From<&OperationEncoded> for Operation {
     fn from(operation_encoded: &OperationEncoded) -> Self {
         serde_cbor::from_slice(&operation_encoded.to_bytes()).unwrap()
+    }
+}
+
+impl PartialEq for Operation {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Operation {}
+
+impl StdHash for Operation {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
     }
 }
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::{TryFrom, TryInto};
+use std::hash::{Hash as StdHash, Hasher};
 
 use arrayvec::ArrayVec;
 use bamboo_rs_core_ed25519_yasmf::signature::ED25519_SIGNATURE_SIZE;
@@ -116,6 +117,14 @@ impl TryFrom<&[u8]> for EntrySigned {
 impl PartialEq for EntrySigned {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
+    }
+}
+
+impl Eq for EntrySigned {}
+
+impl StdHash for EntrySigned {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
     }
 }
 

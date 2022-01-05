@@ -2,9 +2,9 @@
 
 use arrayvec::ArrayVec;
 use bamboo_rs_core_ed25519_yasmf::yasmf_hash::new_blake3;
-use core::hash::{Hash as CoreHash, Hasher};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
+use std::hash::{Hash as StdHash, Hasher};
 use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
 use crate::hash::HashError;
@@ -120,7 +120,7 @@ impl PartialEq for Hash {
 
 impl Eq for Hash {}
 
-impl CoreHash for Hash {
+impl StdHash for Hash {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.hash(state);
     }
