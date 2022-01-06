@@ -20,7 +20,7 @@ export const materializeEntries = (
 
   log(`Materialising ${entries.length} entries`);
 
-  // Initiate all instances from their create message
+  // Initiate all instances from their create operation.
   entries.forEach((entry) => {
     if (entry.operation && entry.operation.action == 'create') {
       const instanceId = entry.encoded.entryHash;
@@ -40,10 +40,9 @@ export const materializeEntries = (
   });
 
   for (const instanceId in instances) {
-    // Find and apply update or delete operations until this instance is
-
+    // Find and apply update or delete operations until this instance is.
     while (true) {
-      // Find the next entry by matching previousEntries against the instance's last_operation
+      // Find the next entry by matching previousEntries against the instance's last_operation.
       const nextEntry = entries.find((entry) => {
         if (entry.operation && entry.operation.previousOperations) {
           return entry.operation.previousOperations.includes(
@@ -64,7 +63,6 @@ export const materializeEntries = (
       }
 
       // Apply update or delete operations as usual.
-
       let updated: InstanceRecord;
 
       switch (nextEntry.operation.action) {
