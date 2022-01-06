@@ -7,68 +7,38 @@
 //! For these reasons this code is only intended for testing or demo purposes.
 use std::convert::TryFrom;
 
-use crate::entry::EntrySigned;
+use crate::entry::{decode_entry, EntrySigned, LogId};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{Operation, OperationEncoded};
+use crate::operation::{AsOperation, Operation, OperationEncoded};
 
-/// This struct is an augmented version of a simple log entry. It includes extra properties to aid
-/// in testing and materialising documents.
+/// Entry of an append-only log based on Bamboo specification. It describes the actual data in the
+/// p2p network and is shared between nodes.
+///
+/// Bamboo entries are the main data type of p2panda. Entries are organized in a distributed,
+/// single-writer append-only log structure, created and signed by holders of private keys and
+/// stored inside the node database.
 #[derive(Clone, Debug)]
 pub struct LogEntry {
-    /// The author of this entry.
-    pub author: Author,
-
-    /// The author of the document this entry is part of.
-    pub document_author: Option<String>,
-
-    /// The encoded entry.
+    /// Public key of the author.
     pub entry_encoded: EntrySigned,
 
-    /// The operation.
-    pub operation: Operation,
-
-    /// The hash of the entry this operation acts upon.
-    pub previous_operation: Option<String>,
-}
-
-/// Struct to represent a Bamboo log.
-#[derive(Clone, Debug)]
-pub struct Log {
-    /// The id of this log.
-    pub id: i64,
-
-    /// The schema of this log.
-    pub schema: String,
-
-    /// The document id of this log.
-    pub document_id: String,
-
-    /// The entries in this log.
-    pub entries: Vec<LogEntry>,
+    /// Actual Bamboo entry data.
+    pub operation_encoded: OperationEncoded,
 }
 
 impl LogEntry {
     /// Create a new log.
-    pub fn new(
-        author: Author,
-        document_author: Option<String>,
-        entry_encoded: EntrySigned,
-        operation: Operation,
-        previous_operation: Option<String>,
-    ) -> Self {
+    pub fn new(entry_encoded: EntrySigned, operation_encoded: OperationEncoded) -> Self {
         Self {
-            author,
-            document_author,
             entry_encoded,
-            operation,
-            previous_operation,
+            operation_encoded,
         }
     }
 
     /// Get the author of this entry.
     pub fn author(&self) -> String {
-        self.author.as_str().to_string()
+        self.entry_encoded.author().as_str().to_string()
     }
 
     /// Get the hash of this entry.
@@ -81,14 +51,9 @@ impl LogEntry {
         self.entry_encoded.hash().as_str().to_string()
     }
 
-    /// Get the author of the instance this entry belongs to.
-    pub fn document_author(&self) -> String {
-        self.document_author.clone().unwrap().as_str().to_string()
-    }
-
     /// Get the operation from this entry.
     pub fn operation(&self) -> Operation {
-        self.operation.clone()
+        Operation::try_from(&self.operation_encoded).unwrap()
     }
 
     /// Get the encoded entry from this entry.
@@ -98,22 +63,46 @@ impl LogEntry {
 
     /// Get the encoded operation from this entry.
     pub fn operation_encoded(&self) -> OperationEncoded {
-        OperationEncoded::try_from(&self.operation).unwrap()
+        self.operation_encoded.clone()
     }
 
     /// Get the previous operation hash for this entry.
-    pub fn previous_operation(&self) -> Option<String> {
-        self.previous_operation.to_owned()
+    pub fn previous_operations(&self) -> Option<Vec<Hash>> {
+        self.operation().previous_operations()
     }
+}
+
+/// Tracks the assigment of an author's logs to documents and records their schema.
+///
+/// This serves as an indexing layer on top of the lower-level bamboo entries. The node updates
+/// this data according to what it sees in the newly incoming entries.
+#[derive(Debug, Clone)]
+pub struct Log {
+    /// Public key of the author.
+    author: Author,
+
+    /// Log id used for this document.
+    log_id: LogId,
+
+    /// Hash that identifies the document this log is for.
+    document: Hash,
+
+    /// Schema hash used by author.
+    schema: Hash,
+
+    /// The entries in this log.
+    entries: Vec<LogEntry>,
 }
 
 impl Log {
     /// Create a new log.
-    pub fn new(log_id: i64, schema: String, document_id: String) -> Self {
+    pub fn new(entry_signed: &EntrySigned, operation_encoded: &OperationEncoded) -> Self {
+        let entry = decode_entry(entry_signed, Some(operation_encoded)).unwrap();
         Self {
-            id: log_id,
-            schema,
-            document_id,
+            author: entry_signed.author(),
+            log_id: entry.log_id().to_owned(),
+            document: entry_signed.hash(),
+            schema: entry.operation().unwrap().schema(),
             entries: Vec::new(),
         }
     }
@@ -123,19 +112,24 @@ impl Log {
         self.entries.to_owned()
     }
 
+    /// Get the author of this log.
+    pub fn author(&self) -> Author {
+        self.author.to_owned()
+    }
+
     /// Get the id of this log.
-    pub fn id(&self) -> i64 {
-        self.id.to_owned()
+    pub fn id(&self) -> LogId {
+        self.log_id.to_owned()
     }
 
     /// Get the schema of this log.
-    pub fn schema(&self) -> String {
+    pub fn schema(&self) -> Hash {
         self.schema.to_owned()
     }
 
     /// Get the document id of this log.
-    pub fn document(&self) -> String {
-        self.document_id.to_owned()
+    pub fn document(&self) -> Hash {
+        self.document.to_owned()
     }
 
     /// Add an entry to this log.
