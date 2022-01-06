@@ -33,6 +33,7 @@ Highlights are marked with a pancake 🥞
 - Update Rust dependencies [#171](https://github.com/p2panda/p2panda/pull/171) `rs`
 - Convert JavaScript configuration files to TypeScript or JSON [#172](https://github.com/p2panda/p2panda/pull/172) `js`
 - Implement `Hash`, `Eq` and `PartialEq` traits for several core data types [#178](https://github.com/p2panda/p2panda/pull/178) `rs`
+- Use `ciborium` for cbor de/serialization [180](https://github.com/p2panda/p2panda/pull/180) `rs`
 
 ### Campfires and boiling pots to sit around
 
