@@ -130,5 +130,6 @@ export type InstanceRecord = Record<
     edited: boolean;
     entries: EntryRecord[];
     schema: string;
+    last_operation: string;
   };
 };

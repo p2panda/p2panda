@@ -52,10 +52,6 @@ export const entryFixture = (seqNum: number): Entry => {
     fields: fields,
   };
 
-  if (PANDA_LOG.decodedOperations[index].id != null) {
-    operation.id = PANDA_LOG.decodedOperations[index].id;
-  }
-
   if (PANDA_LOG.decodedOperations[index].previousOperations) {
     operation.previousOperations =
       PANDA_LOG.decodedOperations[index].previousOperations;
