@@ -455,7 +455,7 @@ impl From<&OperationEncoded> for Operation {
 
 impl PartialEq for Operation {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
+        self.to_cbor() == other.to_cbor()
     }
 }
 
@@ -463,7 +463,7 @@ impl Eq for Operation {}
 
 impl StdHash for Operation {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
+        self.to_cbor().hash(state);
     }
 }
 
