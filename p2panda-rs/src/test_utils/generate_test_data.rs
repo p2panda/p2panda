@@ -30,6 +30,7 @@ fn main() {
                 OperationValue::Text("Ohh, my first message!".to_string()),
             )]),
         ),
+        None,
     )
     .unwrap();
 
@@ -46,6 +47,7 @@ fn main() {
                 OperationValue::Text("Which I now update.".to_string()),
             )]),
         ),
+        Some(&document_id),
     )
     .unwrap();
 
@@ -62,6 +64,7 @@ fn main() {
                 OperationValue::Text("And then update again.".to_string()),
             )]),
         ),
+        Some(&document_id),
     )
     .unwrap();
 
@@ -69,7 +72,12 @@ fn main() {
     send_to_node(
         &mut node,
         &panda,
-        &delete_operation(hash(DEFAULT_SCHEMA_HASH), document_id, vec![entry3_hash]),
+        &delete_operation(
+            hash(DEFAULT_SCHEMA_HASH),
+            document_id.clone(),
+            vec![entry3_hash],
+        ),
+        Some(&document_id),
     )
     .unwrap();
 
@@ -116,6 +124,7 @@ mod tests {
                     OperationValue::Text("Ohh, my first message!".to_string()),
                 )]),
             ),
+            None,
         )
         .unwrap();
 

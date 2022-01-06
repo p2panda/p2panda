@@ -34,6 +34,7 @@
 //!             OperationValue::Text("Ohh, my first message!".to_string()),
 //!         )]),
 //!     ),
+//!     None
 //! )
 //! .unwrap();
 //!
@@ -50,6 +51,7 @@
 //!             OperationValue::Text("Which I now update.".to_string()),
 //!         )]),
 //!     ),
+//!     Some(&document1_hash_id)
 //! )
 //! .unwrap();
 //!
@@ -57,7 +59,12 @@
 //! send_to_node(
 //!     &mut node,
 //!     &panda,
-//!     &delete_operation(hash(CHAT_SCHEMA_HASH), document1_hash_id, vec![entry2_hash]),
+//!     &delete_operation(
+//!         hash(CHAT_SCHEMA_HASH),
+//!         document1_hash_id.clone(),
+//!         vec![entry2_hash]
+//!     ),
+//!     Some(&document1_hash_id)     
 //! )
 //! .unwrap();
 //!
@@ -72,6 +79,7 @@
 //!             OperationValue::Text("Let's try that again.".to_string()),
 //!         )]),
 //!     ),
+//!     None
 //! )
 //! .unwrap();
 //!
@@ -95,8 +103,13 @@ use crate::test_utils::mocks::Client;
 use crate::test_utils::utils::NextEntryArgs;
 
 /// Helper method signing and encoding entry and sending it to node backend.
-pub fn send_to_node(node: &mut Node, client: &Client, operation: &Operation) -> Result<Hash> {
-    let entry_args = node.next_entry_args(&client.author(), operation.id(), None)?;
+pub fn send_to_node(
+    node: &mut Node,
+    client: &Client,
+    operation: &Operation,
+    document_id: Option<&Hash>,
+) -> Result<Hash> {
+    let entry_args = node.next_entry_args(&client.author(), document_id, None)?;
 
     let entry_encoded = client.signed_encoded_entry(operation.to_owned(), entry_args);
 
@@ -361,6 +374,7 @@ mod tests {
                     OperationValue::Text("Ohh, my first message!".to_string()),
                 )]),
             ),
+            None,
         )
         .unwrap();
 
@@ -393,6 +407,7 @@ mod tests {
                     OperationValue::Text("Which I now update.".to_string()),
                 )]),
             ),
+            Some(&entry1_hash.clone()),
         )
         .unwrap();
 
@@ -429,6 +444,7 @@ mod tests {
                     OperationValue::Text("Ohh, my first message!".to_string()),
                 )]),
             ),
+            None,
         )
         .unwrap();
 
@@ -445,6 +461,7 @@ mod tests {
                     OperationValue::Text("Which I now update.".to_string()),
                 )]),
             ),
+            Some(&entry1_hash.clone()),
         )
         .unwrap();
 

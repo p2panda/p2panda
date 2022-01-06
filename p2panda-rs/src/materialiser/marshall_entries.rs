@@ -69,6 +69,7 @@ mod tests {
                     OperationValue::Text("Hello!".to_string()),
                 )]),
             ),
+            None,
         )
         .unwrap();
 
@@ -78,12 +79,13 @@ mod tests {
             &update_operation(
                 schema,
                 entry_1_hash.clone(),
-                vec![entry_1_hash],
+                vec![entry_1_hash.clone()],
                 fields(vec![(
                     "operation",
                     OperationValue::Text("Hello too!".to_string()),
                 )]),
             ),
+            Some(&entry_1_hash),
         )
         .unwrap();
 

@@ -48,7 +48,7 @@ pub fn any_operation(
 ) -> Operation {
     match fields {
         // It's a CREATE operation
-        Some(fields) if document_id.is_none() => {
+        Some(fields) if previous_operations.is_none() => {
             Operation::new_create(hash(DEFAULT_SCHEMA_HASH), fields).unwrap()
         }
         // It's an UPDATE operation
