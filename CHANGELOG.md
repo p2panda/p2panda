@@ -33,6 +33,7 @@ Highlights are marked with a pancake 🥞
 - Update Rust dependencies [#171](https://github.com/p2panda/p2panda/pull/171) `rs`
 - Convert JavaScript configuration files to TypeScript or JSON [#172](https://github.com/p2panda/p2panda/pull/172) `js`
 - Changes to `mocks` module in `test_utils` [181](https://github.com/p2panda/p2panda/pull/181) `rs`
+- Use `ciborium` for cbor de/serialization [180](https://github.com/p2panda/p2panda/pull/180) `rs`
 
 ### Campfires and boiling pots to sit around
 
