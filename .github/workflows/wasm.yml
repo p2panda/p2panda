@@ -1,0 +1,39 @@
+name: p2panda-rs
+
+on: push
+
+env:
+  CARGO_TERM_COLOR: always
+  cache_path: |
+    p2panda-rs/target
+    ~/.cargo
+  cargo_manifest: p2panda-rs/Cargo.toml
+
+jobs:
+  wasm-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Restore from cargo cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.cache_path }}
+          key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Run wasm tests
+        run: |
+          wasm-pack test --headless --chrome p2panda-rs/
+          wasm-pack test --headless --firefox p2panda-rs/
