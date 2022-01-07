@@ -1,17 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Tests for `wasm` module in `p2panda_rs`.
-
+#[cfg(target_arch = "wasm32")]
 use js_sys::Array;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::*;
 
 use p2panda_rs::hash::Hash;
 use p2panda_rs::operation::OperationEncoded;
+#[cfg(target_arch = "wasm32")]
 use p2panda_rs::wasm::{
     encode_create_operation, encode_delete_operation, encode_update_operation, OperationFields,
 };
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen_test]
 fn operation_fields() {
     let mut fields = OperationFields::new();
@@ -89,6 +93,7 @@ fn operation_fields() {
     assert!(result.is_err());
 }
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen_test]
 fn encodes_operations() {
     let schema = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
