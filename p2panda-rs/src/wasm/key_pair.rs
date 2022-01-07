@@ -44,13 +44,19 @@ impl KeyPair {
     /// Sign an operation using this key pair, returns signature encoded as a hex string.
     #[wasm_bindgen]
     pub fn sign(&self, operation: String) -> String {
-        let signature = self.0.sign(&operation.as_bytes());
+        let signature = self.0.sign(operation.as_bytes());
         hex::encode(signature.to_bytes())
     }
 
     /// Internal method to access non-wasm instance of `KeyPair`.
     pub(super) fn as_inner(&self) -> &KeyPairNonWasm {
         &self.0
+    }
+}
+
+impl Default for KeyPair {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -71,7 +77,7 @@ pub fn verify_signature(
     let signature = jserr!(Signature::try_from(&signature_bytes[..]));
 
     // Verify signature for given public key and operation
-    match KeyPairNonWasm::verify(&public_key, &operation_bytes, &signature) {
+    match KeyPairNonWasm::verify(&public_key, operation_bytes, &signature) {
         Ok(_) => Ok(JsValue::TRUE),
         Err(_) => Ok(JsValue::FALSE),
     }
