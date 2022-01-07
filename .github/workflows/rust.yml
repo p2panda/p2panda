@@ -24,6 +24,9 @@ jobs:
           toolchain: stable
           override: true
 
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
       - name: Restore from cargo cache
         uses: actions/cache@v2
         with:
@@ -35,6 +38,11 @@ jobs:
         with:
           command: test
           args: --manifest-path ${{ env.cargo_manifest }}
+
+      - name: Run wasm tests
+        run: |
+          wasm-pack test --headless --chrome
+          wasm-pack test --headless --firefox
 
   rust-check:
     runs-on: ubuntu-latest
