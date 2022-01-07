@@ -92,7 +92,7 @@ impl OperationFields {
         match self.0.get(&name) {
             Some(OperationValue::Boolean(value)) => Ok(JsValue::from_bool(value.to_owned())),
             Some(OperationValue::Text(value)) => Ok(JsValue::from_str(value)),
-            Some(OperationValue::Relation(value)) => Ok(JsValue::from_str(&value.as_str())),
+            Some(OperationValue::Relation(value)) => Ok(JsValue::from_str(value.as_str())),
             Some(OperationValue::Float(value)) => Ok(JsValue::from_f64(value.to_owned())),
             Some(OperationValue::Integer(value)) => {
                 // Downcast i64 to i32 and throw error when value too large
@@ -113,6 +113,12 @@ impl OperationFields {
     #[wasm_bindgen(js_name = toString)]
     pub fn to_string(&self) -> String {
         format!("{:?}", self)
+    }
+}
+
+impl Default for OperationFields {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -145,7 +151,7 @@ pub fn encode_update_operation(
     // Create hashes from strings and collect wrapped in a result
     let prev_op_result: Result<Vec<Hash>, _> = prev_op_strings
         .iter()
-        .map(|prev_op| Hash::new(&prev_op))
+        .map(|prev_op| Hash::new(prev_op))
         .collect();
 
     let previous = jserr!(prev_op_result);
@@ -170,7 +176,7 @@ pub fn encode_delete_operation(
     // Create hashes from strings and collect wrapped in a result
     let prev_op_result: Result<Vec<Hash>, _> = prev_op_strings
         .iter()
-        .map(|prev_op| Hash::new(&prev_op))
+        .map(|prev_op| Hash::new(prev_op))
         .collect();
 
     let previous = jserr!(prev_op_result);
