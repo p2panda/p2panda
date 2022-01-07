@@ -41,8 +41,8 @@ jobs:
 
       - name: Run wasm tests
         run: |
-          wasm-pack test --headless --chrome
-          wasm-pack test --headless --firefox
+          wasm-pack test --headless --chrome p2panda-rs/
+          wasm-pack test --headless --firefox p2panda-rs/
 
   rust-check:
     runs-on: ubuntu-latest
