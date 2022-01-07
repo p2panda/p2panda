@@ -8,6 +8,8 @@ use wasm_bindgen::JsValue;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::*;
 
+wasm_bindgen_test_configure!(run_in_browser);
+
 use p2panda_rs::hash::Hash;
 use p2panda_rs::operation::OperationEncoded;
 #[cfg(target_arch = "wasm32")]
