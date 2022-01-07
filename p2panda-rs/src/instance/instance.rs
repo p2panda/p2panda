@@ -55,6 +55,7 @@ impl TryFrom<Operation> for Instance {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
     use std::convert::{TryFrom, TryInto};
