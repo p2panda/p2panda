@@ -15,7 +15,7 @@ use crate::wasm::error::jserr;
 ///
 /// See [`crate::atomic::OperationFields`] for further documentation.
 #[wasm_bindgen]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OperationFields(OperationFieldsNonWasm);
 
 #[wasm_bindgen]
@@ -139,7 +139,7 @@ pub fn encode_create_operation(
 pub fn encode_update_operation(
     document_id: String,
     schema_hash: String,
-    previous_operations: JsValue,
+    previous_operations: Array,
     fields: OperationFields,
 ) -> Result<String, JsValue> {
     let document = jserr!(Hash::new(&document_id));
