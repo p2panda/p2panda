@@ -1,4 +1,4 @@
-name: p2panda-rs (wasm target)
+name: p2panda-rs
 
 on: push
 
@@ -25,7 +25,7 @@ jobs:
           override: true
 
       - name: Install wasm-pack
-        uses: jetli/wasm-pack-action@v0.3
+        uses: jetli/wasm-pack-action@v0.3.0
 
       - name: Restore from cargo cache
         uses: actions/cache@v2
