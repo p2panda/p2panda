@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::entry::{decode_entry, EntrySigned};
+use crate::entry::EntrySigned;
 use crate::materialiser::{Edge, MaterialisationError};
-use crate::operation::OperationEncoded;
+use crate::operation::{AsOperation, OperationEncoded, OperationWithMeta};
 
 /// Method for marshalling an array of entries and operations into an array of graph edges which
 /// can then be turned into a DAG.
@@ -15,24 +15,21 @@ pub fn marshall_entries(
 ) -> Result<Vec<Edge>, MaterialisationError> {
     let mut edges = Vec::new();
     for (entry_signed, operation_encoded) in entries {
-        let entry = match decode_entry(&entry_signed, Some(&operation_encoded)) {
-            Ok(entry) => Ok(entry),
-            Err(err) => Err(MaterialisationError::EntrySignedError(err)),
+        let operation_with_meta = match OperationWithMeta::new(&entry_signed, &operation_encoded) {
+            Ok(operation_with_meta) => Ok(operation_with_meta),
+            Err(err) => Err(MaterialisationError::OperationWithMetaError(err)),
         }?;
 
-        if entry.operation().is_none() {
-            // The operation has been deleted.
-            continue;
-        }
-
-        // `id` should not be optional (even CREATE operations should have it set) then we wouldn't
-        // need the EntrySigned here at all.
-        let (link, id) = match entry.operation().unwrap().id() {
-            Some(_) => (
-                Some(entry.backlink_hash().unwrap().as_str().to_owned()),
-                entry_signed.hash().as_str().to_owned(),
+        let (link, id) = match operation_with_meta.previous_operations() {
+            Some(previous) => (
+                // Just take the first previous operation as we don't
+                // have a concept of multiple previous_operations
+                // in this DAG implementation (it will be replaced by
+                // `Document` in the near future).
+                Some(previous[0].as_str().to_owned()),
+                operation_with_meta.operation_id().as_str().to_owned(),
             ),
-            None => (None, entry_signed.hash().as_str().to_owned()),
+            None => (None, operation_with_meta.operation_id().as_str().to_owned()),
         };
         edges.push((link, id));
     }
@@ -69,6 +66,7 @@ mod tests {
                     OperationValue::Text("Hello!".to_string()),
                 )]),
             ),
+            None,
         )
         .unwrap();
 
@@ -77,13 +75,13 @@ mod tests {
             &client,
             &update_operation(
                 schema,
-                entry_1_hash.clone(),
-                vec![entry_1_hash],
+                vec![entry_1_hash.clone()],
                 fields(vec![(
                     "operation",
                     OperationValue::Text("Hello too!".to_string()),
                 )]),
             ),
+            Some(&entry_1_hash),
         )
         .unwrap();
 

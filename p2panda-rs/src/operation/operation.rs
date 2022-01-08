@@ -3,6 +3,7 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
+use ciborium;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -265,10 +266,6 @@ pub struct Operation {
     #[serde(skip_serializing_if = "Option::is_none")]
     previous_operations: Option<Vec<Hash>>,
 
-    /// Optional id referring to the document.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    id: Option<Hash>,
-
     /// Optional fields map holding the operation data.
     #[serde(skip_serializing_if = "Option::is_none")]
     fields: Option<OperationFields>,
@@ -309,7 +306,6 @@ impl Operation {
             version: OperationVersion::Default,
             schema,
             previous_operations: None,
-            id: None,
             fields: Some(fields),
         };
 
@@ -321,7 +317,6 @@ impl Operation {
     /// Returns new UPDATE operation.
     pub fn new_update(
         schema: Hash,
-        id: Hash,
         previous_operations: Vec<Hash>,
         fields: OperationFields,
     ) -> Result<Self, OperationError> {
@@ -330,7 +325,6 @@ impl Operation {
             version: OperationVersion::Default,
             schema,
             previous_operations: Some(previous_operations),
-            id: Some(id),
             fields: Some(fields),
         };
 
@@ -342,7 +336,6 @@ impl Operation {
     /// Returns new DELETE operation.
     pub fn new_delete(
         schema: Hash,
-        id: Hash,
         previous_operations: Vec<Hash>,
     ) -> Result<Self, OperationError> {
         let operation = Self {
@@ -350,7 +343,6 @@ impl Operation {
             version: OperationVersion::Default,
             schema,
             previous_operations: Some(previous_operations),
-            id: Some(id),
             fields: None,
         };
 
@@ -361,17 +353,9 @@ impl Operation {
 
     /// Encodes operation in CBOR format and returns bytes.
     pub fn to_cbor(&self) -> Vec<u8> {
-        serde_cbor::to_vec(&self).unwrap()
-    }
-
-    /// Returns identifier of the document this operation is part of.
-    pub fn id(&self) -> Option<&Hash> {
-        self.id.as_ref()
-    }
-
-    /// Returns true when operation contains an id.
-    pub fn has_id(&self) -> bool {
-        self.id().is_some()
+        let mut cbor_bytes = Vec::new();
+        ciborium::ser::into_writer(&self, &mut cbor_bytes).unwrap();
+        cbor_bytes
     }
 }
 
@@ -449,7 +433,7 @@ impl AsOperation for Operation {
 /// Decodes an encoded operation and returns it.
 impl From<&OperationEncoded> for Operation {
     fn from(operation_encoded: &OperationEncoded) -> Self {
-        serde_cbor::from_slice(&operation_encoded.to_bytes()).unwrap()
+        ciborium::de::from_reader(&operation_encoded.to_bytes()[..]).unwrap()
     }
 }
 
@@ -517,14 +501,12 @@ mod tests {
         fields: OperationFields,
         schema: Hash,
         #[from(random_hash)] prev_op_id: Hash,
-        #[from(random_hash)] id: Hash,
     ) {
         let invalid_create_operation_1 = Operation {
             action: OperationAction::Create,
             version: OperationVersion::Default,
             schema: schema.clone(),
             previous_operations: None,
-            id: None,
             // CREATE operations must contain fields
             fields: None, // Error
         };
@@ -537,7 +519,6 @@ mod tests {
             schema: schema.clone(),
             // CREATE operations must not contain previous_operations
             previous_operations: Some(vec![prev_op_id.clone()]), // Error
-            id: None,
             fields: Some(fields.clone()),
         };
 
@@ -549,7 +530,6 @@ mod tests {
             schema: schema.clone(),
             // UPDATE operations must contain previous_operations
             previous_operations: None, // Error
-            id: Some(id.clone()),
             fields: Some(fields.clone()),
         };
 
@@ -560,7 +540,6 @@ mod tests {
             version: OperationVersion::Default,
             schema: schema.clone(),
             previous_operations: Some(vec![prev_op_id]),
-            id: Some(id.clone()),
             // UPDATE operations must contain fields
             fields: None, // Error
         };
@@ -573,7 +552,6 @@ mod tests {
             schema: schema.clone(),
             // DELETE operations must contain previous_operations
             previous_operations: None, // Error
-            id: Some(id.clone()),
             fields: None,
         };
 
@@ -584,7 +562,6 @@ mod tests {
             version: OperationVersion::Default,
             schema,
             previous_operations: None,
-            id: Some(id),
             // DELETE operations must not contain fields
             fields: Some(fields), // Error
         };
@@ -593,11 +570,7 @@ mod tests {
     }
 
     #[rstest]
-    fn encode_and_decode(
-        schema: Hash,
-        #[from(random_hash)] prev_op_id: Hash,
-        #[from(random_hash)] id: Hash,
-    ) {
+    fn encode_and_decode(schema: Hash, #[from(random_hash)] prev_op_id: Hash) {
         // Create test operation
         let mut fields = OperationFields::new();
 
@@ -621,7 +594,7 @@ mod tests {
             )
             .unwrap();
 
-        let operation = Operation::new_update(schema, id, vec![prev_op_id], fields).unwrap();
+        let operation = Operation::new_update(schema, vec![prev_op_id], fields).unwrap();
 
         assert!(operation.is_update());
 

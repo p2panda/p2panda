@@ -131,5 +131,7 @@ export type InstanceRecord = Record<
     edited: boolean;
     entries: EntryRecord[];
     schema: string;
+    // The tip of the operation graph which produced this instance.
+    last_operation: string;
   };
 };
