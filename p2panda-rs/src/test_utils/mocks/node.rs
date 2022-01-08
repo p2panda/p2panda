@@ -44,7 +44,6 @@
 //!     &panda,
 //!     &update_operation(
 //!         hash(CHAT_SCHEMA_HASH),
-//!         document1_hash_id.clone(),
 //!         vec![document1_hash_id.clone()],
 //!         operation_fields(vec![(
 //!             "message",
@@ -61,7 +60,6 @@
 //!     &panda,
 //!     &delete_operation(
 //!         hash(CHAT_SCHEMA_HASH),
-//!         document1_hash_id.clone(),
 //!         vec![entry2_hash]
 //!     ),
 //!     Some(&document1_hash_id)     
@@ -400,7 +398,6 @@ mod tests {
             &panda,
             &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                entry1_hash.clone(),
                 vec![entry1_hash.clone()],
                 operation_fields(vec![(
                     "message",
@@ -454,7 +451,6 @@ mod tests {
             &panda,
             &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                entry1_hash.clone(),
                 vec![entry1_hash.clone()],
                 operation_fields(vec![(
                     "message",

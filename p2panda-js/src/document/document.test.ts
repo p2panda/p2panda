@@ -9,6 +9,7 @@ import { createDocument, deleteDocument, updateDocument } from '.';
 
 import {
   authorFixture,
+  documentIdFixture,
   entryFixture,
   encodedEntryFixture,
   entryArgsFixture,
@@ -62,7 +63,7 @@ describe('document', () => {
       const fields = entryFixture(2).operation?.fields as Fields;
 
       // This is the document id
-      const id = entryFixture(2).operation?.id as string;
+      const id = documentIdFixture();
 
       const previousOperations = entryFixture(2).operation
         ?.previousOperations as string[];
@@ -96,7 +97,7 @@ describe('document', () => {
         .mockImplementation(asyncFunctionMock);
 
       // This is the document id
-      const id = entryFixture(4).operation?.id as string;
+      const id = documentIdFixture();
 
       const previousOperations = entryFixture(4).operation
         ?.previousOperations as string[];

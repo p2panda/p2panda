@@ -82,7 +82,6 @@ mod tests {
             &panda,
             &update_operation(
                 schema.clone(),
-                panda_entry_1_hash.clone(),
                 vec![panda_entry_1_hash.clone()],
                 fields(vec![(
                     "message",
@@ -98,7 +97,6 @@ mod tests {
             &penguin,
             &update_operation(
                 schema,
-                panda_entry_1_hash.clone(),
                 vec![panda_entry_2_hash],
                 fields(vec![(
                     "message",
