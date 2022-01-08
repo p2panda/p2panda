@@ -1,4 +1,4 @@
-name: p2panda-rs
+name: p2panda-rs (wasm target)
 
 on: push
 
@@ -7,7 +7,6 @@ env:
   cache_path: |
     p2panda-rs/target
     ~/.cargo
-  cargo_manifest: p2panda-rs/Cargo.toml
 
 jobs:
   wasm-test:
@@ -22,18 +21,17 @@ jobs:
         with:
           profile: minimal
           toolchain: stable
+          target: wasm32-unknown-unknown
           override: true
 
       - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        uses: jetli/wasm-pack-action@v0.3
 
       - name: Restore from cargo cache
         uses: actions/cache@v2
         with:
           path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.toml') }}
+          key: ${{ runner.os }}-wasm-test-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Run wasm tests
-        run: |
-          wasm-pack test --headless --chrome p2panda-rs/
-          wasm-pack test --headless --firefox p2panda-rs/
+        run: wasm-pack test --headless --chrome --firefox --node p2panda-rs
