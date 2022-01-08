@@ -249,6 +249,9 @@ impl DocumentBuilder {
     }
 }
 
+// @TODO: This currently makes sure the wasm tests work as cddl does not have any wasm support
+// (yet). Remove this with: https://github.com/p2panda/p2panda/issues/99
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -333,13 +336,13 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![penguin_entry_1_hash.clone(), panda_entry_2_hash],
+                vec![penguin_entry_1_hash, panda_entry_2_hash],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Polar Bear Cafe".to_string()),
                 )]),
             ),
-            Some(&panda_entry_1_hash.clone()),
+            Some(&panda_entry_1_hash),
         )
         .unwrap();
 
