@@ -140,11 +140,8 @@ fn encodes_operations() {
     let previous_operations = Array::new();
     previous_operations.push(&JsValue::from_str(document_id.as_str()));
 
-    let update_operation = encode_update_operation(
-        schema.as_str().into(),
-        previous_operations,
-        fields,
-    );
+    let update_operation =
+        encode_update_operation(schema.as_str().into(), previous_operations, fields);
 
     assert!(update_operation.is_ok());
 
@@ -155,10 +152,7 @@ fn encodes_operations() {
     let previous_operations = Array::new();
     previous_operations.push(&JsValue::from_str(update_op_hash.as_str()));
 
-    let delete_operation = encode_delete_operation(
-        schema.as_str().into(),
-        previous_operations,
-    );
+    let delete_operation = encode_delete_operation(schema.as_str().into(), previous_operations);
 
     assert!(delete_operation.is_ok());
 }
