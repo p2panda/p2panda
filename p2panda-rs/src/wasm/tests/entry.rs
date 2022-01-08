@@ -1,18 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Tests for `wasm` module in `p2panda_rs`.
-
 use std::convert::TryFrom;
 
-use p2panda_rs::test_utils::utils::create_operation;
 use wasm_bindgen_test::*;
 
-wasm_bindgen_test_configure!(run_in_browser);
+use crate::entry::{Entry, LogId, SeqNum};
+use crate::hash::Hash;
+use crate::operation::{OperationEncoded, OperationFields, OperationValue};
+use crate::test_utils::utils::create_operation;
+use crate::wasm::{decode_entry, sign_encode_entry, KeyPair, SignEncodeEntryResult};
 
-use p2panda_rs::entry::{Entry, LogId, SeqNum};
-use p2panda_rs::hash::Hash;
-use p2panda_rs::operation::{OperationEncoded, OperationFields, OperationValue};
-use p2panda_rs::wasm::{decode_entry, sign_encode_entry, KeyPair, SignEncodeEntryResult};
+wasm_bindgen_test_configure!(run_in_browser);
 
 #[wasm_bindgen_test]
 fn encodes_decodes_entries() {

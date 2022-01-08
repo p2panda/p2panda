@@ -9,7 +9,6 @@ use wasm_bindgen::JsValue;
 use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::operation::{Operation, OperationEncoded};
-
 use crate::wasm::error::jserr;
 use crate::wasm::KeyPair;
 
@@ -19,8 +18,10 @@ use crate::wasm::KeyPair;
 pub struct SignEncodeEntryResult {
     /// Encoded p2panda entry.
     pub entry_encoded: String,
+
     /// The hash of a p2panda entry.
     pub entry_hash: String,
+
     /// The hash of a p2panda operation.
     pub operation_hash: String,
 }

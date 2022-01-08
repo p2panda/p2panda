@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Tests for `wasm` module in `p2panda_rs`.
 use js_sys::Array;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 
-wasm_bindgen_test_configure!(run_in_browser);
-
-use p2panda_rs::hash::Hash;
-use p2panda_rs::operation::OperationEncoded;
-use p2panda_rs::wasm::{
+use crate::hash::Hash;
+use crate::operation::OperationEncoded;
+use crate::wasm::{
     encode_create_operation, encode_delete_operation, encode_update_operation, OperationFields,
 };
+
+wasm_bindgen_test_configure!(run_in_browser);
 
 #[wasm_bindgen_test]
 fn operation_fields() {

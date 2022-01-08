@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Tests for `wasm` module in `p2panda_rs`.
-
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 
-wasm_bindgen_test_configure!(run_in_browser);
+use crate::identity::KeyPair as NonWasmKeyPair;
+use crate::wasm::{verify_signature, KeyPair};
 
-use p2panda_rs::identity::KeyPair as NonWasmKeyPair;
-use p2panda_rs::wasm::{verify_signature, KeyPair};
+wasm_bindgen_test_configure!(run_in_browser);
 
 #[wasm_bindgen_test]
 fn verifies_data() {
     // Wasm KeyPair
     let wasm_key_pair = KeyPair::new();
+
     // Non-wasm KeyPair (derived from wasm KeyPair).
     let key_pair = NonWasmKeyPair::from_private_key_str(&wasm_key_pair.private_key()).unwrap();
 

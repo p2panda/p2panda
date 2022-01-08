@@ -6,11 +6,12 @@
 //! `p2panda-rs` in a JavaScript/TypeScript environment.
 //!
 //! [p2panda-js]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
-
 mod entry;
 mod error;
 mod key_pair;
 mod operation;
+#[cfg(test)]
+mod tests;
 
 pub use entry::{decode_entry, sign_encode_entry, SignEncodeEntryResult};
 pub use key_pair::{verify_signature, KeyPair};
