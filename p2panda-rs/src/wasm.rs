@@ -153,11 +153,9 @@ impl OperationFields {
                 Ok(())
             }
             "int" => {
-                jserr!(value
-                    .is_bigint() // Convert bool to Result
-                    .then(|| true)
-                    .ok_or("Invalid BigInt value"));
-                jserr!(self.0.add(&name, OperationValue::Integer(value)));
+                let str = jserr!(value.as_string().ok_or("Must be passed as a string"));
+                let value_int: i64 = jserr!(str.parse(), "Invalid integer value");
+                jserr!(self.0.add(&name, OperationValue::Integer(value_int)));
                 Ok(())
             }
             "float" => {
@@ -171,7 +169,7 @@ impl OperationFields {
                 jserr!(self.0.add(&name, OperationValue::Relation(hash)));
                 Ok(())
             }
-            _ => Err(js_sys::Error::new("Unknown type value").into()),
+            _ => Err(js_sys::Error::new("Unknown value type").into()),
         }
     }
 

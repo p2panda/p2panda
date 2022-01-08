@@ -4,14 +4,14 @@ import { marshallRequestFields, marshallResponseFields } from '~/utils';
 import { Fields, FieldsTagged } from '~/types';
 
 const REQUEST: Fields = {
-  channel: 5,
+  channel: '5',
   operation: 'chin chin',
   serious: false,
 };
 
 const RESPONSE: FieldsTagged = {
   channel: {
-    value: 5,
+    value: '5',
     type: 'int',
   },
   operation: {

@@ -41,14 +41,14 @@ describe('WebAssembly interface', () => {
 
       // Set fields of all possible types
       fields.add('description', 'str', 'Hello, Panda');
-      fields.add('temperature', 'int', BigInt('32'));
+      fields.add('temperature', 'int', '32');
       fields.add('isCute', 'bool', true);
       fields.add('degree', 'float', 12.322);
       fields.add('username', 'relation', TEST_SCHEMA);
 
       // Returns the correct fields
       expect(fields.get('description')).toBe('Hello, Panda');
-      expect(fields.get('temperature') === BigInt(32)).toBe(true);
+      // expect(fields.get('temperature')).toBe(32);
       expect(fields.get('isCute')).toBe(true);
       expect(fields.get('degree')).toBe(12.322);
       expect(fields.get('username')).toBe(TEST_SCHEMA);
@@ -82,10 +82,10 @@ describe('WebAssembly interface', () => {
 
       // Throw when type is invalid
       expect(() => fields.add('test', 'lulu', true)).toThrow(
-        'Unknown type value',
+        'Unknown value type',
       );
-      expect(() => fields.add('test', 'int', true)).toThrow(
-        'Invalid BigInt value',
+      expect(() => fields.add('test', 'int', 'notanumber')).toThrow(
+        'Invalid integer value',
       );
 
       // Throw when relation is an invalid hash
@@ -133,7 +133,6 @@ describe('WebAssembly interface', () => {
         BigInt(SEQ_NUM),
         BigInt(LOG_ID),
       );
-
       expect(entryHash.length).toBe(68);
 
       // Decode entry and return as JSON
@@ -155,6 +154,19 @@ describe('WebAssembly interface', () => {
     });
 
     it('encodes and decodes large integers correctly', async () => {
+      // A couple of large operation field values representing large 64 bit
+      // signed integer and float numbers
+      const LARGE_I64 = '8932198321983219';
+      const LARGE_I64_NEGATIVE = '-8932198321983219';
+      const LARGE_F64 = Number.MAX_VALUE;
+      const LARGE_F64_NEGATIVE = Number.MIN_VALUE;
+
+      // Needs to be a string value since it is still a BigInt
+      const SEQ_NUM = '1';
+
+      // Maximum unsigned u64 integer is 18446744073709551615
+      const LARGE_LOG_ID = '12345678912345678912';
+
       const {
         KeyPair,
         OperationFields,
@@ -163,33 +175,38 @@ describe('WebAssembly interface', () => {
         signEncodeEntry,
       } = await wasm;
 
-      // Generate new key pair
       const keyPair = new KeyPair();
 
-      // Create operation
+      // Use large numbers as operation field values
       const fields = new OperationFields();
-      fields.add('description', 'str', 'Hello, Panda');
-      fields.add('large_num', 'int', BigInt('89321983219832198'));
+      fields.add('large_i64', 'int', LARGE_I64);
+      fields.add('large_i64_negative', 'int', LARGE_I64_NEGATIVE);
+      fields.add('large_f64', 'float', LARGE_F64);
+      fields.add('large_f64_negative', 'float', LARGE_F64_NEGATIVE);
 
       const operationEncoded = encodeCreateOperation(TEST_SCHEMA, fields);
 
-      // Sign and encode entry
+      // Sign and encode entry with a very high `log_id` value
       const { entryEncoded } = signEncodeEntry(
         keyPair,
         operationEncoded,
         undefined,
         undefined,
-        BigInt('1'),
-        BigInt('12345678912345678912'),
-             // 18446744073709551615
+        BigInt(SEQ_NUM),
+        BigInt(LARGE_LOG_ID),
       );
 
-      // Decode entry and return as JSON
       const decodedEntry = decodeEntry(entryEncoded, operationEncoded);
-      console.log(decodedEntry);
-
-      expect(decodedEntry.seqNum).toBe('1');
-      expect(decodedEntry.logId).toBe('12345678912345678912');
+      expect(decodedEntry.seqNum).toBe(SEQ_NUM);
+      expect(decodedEntry.logId).toBe(LARGE_LOG_ID);
+      expect(decodedEntry.operation.fields.large_i64.value).toBe(LARGE_I64);
+      expect(decodedEntry.operation.fields.large_i64_negative.value).toBe(
+        LARGE_I64_NEGATIVE,
+      );
+      expect(decodedEntry.operation.fields.large_f64.value).toBe(LARGE_F64);
+      expect(decodedEntry.operation.fields.large_f64_negative.value).toBe(
+        LARGE_F64_NEGATIVE,
+      );
     });
   });
 });

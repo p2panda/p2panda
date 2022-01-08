@@ -56,7 +56,7 @@ export type Operation = {
  * Object containing operation field values.
  */
 export type Fields = {
-  [fieldname: string]: boolean | BigInt | number | string;
+  [fieldname: string]: boolean | number | string;
 };
 
 /**
@@ -104,7 +104,8 @@ export type OperationValueBool = {
  * An operation value of `number` type, which must be an integer.
  */
 export type OperationValueInt = {
-  value: number;
+  // Internally it is stored as a string to give support for very large numbers
+  value: string;
   type: 'int';
 };
 

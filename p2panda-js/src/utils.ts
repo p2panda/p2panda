@@ -37,9 +37,20 @@ export const marshallRequestFields = (fields: Fields): FieldsTagged => {
   Object.keys(fields).forEach((k) => {
     switch (getFieldType(fields, k)) {
       case 'int':
-        // This case is entered for any `number` type so the value is rounded
-        // to get an integer
-        rv[k] = { value: Math.round(fields[k] as number), type: 'int' };
+        if (typeof fields[k] === 'number') {
+          // Round the number in case we passed a float here
+          rv[k] = {
+            value: Math.round(fields[k] as number).toString(),
+            type: 'int',
+          };
+        } else if (typeof fields[k] === 'bigint') {
+          rv[k] = { value: fields[k].toString(), type: 'int' };
+        } else if (typeof fields[k] === 'string') {
+          rv[k] = { value: fields[k] as string, type: 'int' };
+        } else {
+          throw new Error('Invalid integer type');
+        }
+
         break;
       case 'bool':
         rv[k] = { value: fields[k] as boolean, type: 'bool' };

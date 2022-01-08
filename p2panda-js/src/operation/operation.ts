@@ -21,6 +21,7 @@ export const getOperationFields = async (
   for (const k of Object.keys(fields)) {
     operationFields.add(k, fields[k]['type'], fields[k]['value']);
   }
+
   log('getOperationFields', operationFields.toString());
   return operationFields;
 };
