@@ -64,12 +64,12 @@ impl Default for KeyPair {
 #[wasm_bindgen(js_name = verifySignature)]
 pub fn verify_signature(
     public_key: String,
-    operation: String,
+    byte_string: String,
     signature: String,
 ) -> Result<JsValue, JsValue> {
     // Convert all strings to byte sequences
     let public_key_bytes = jserr!(hex::decode(public_key));
-    let operation_bytes = operation.as_bytes();
+    let unsigned_bytes = byte_string.as_bytes();
     let signature_bytes = jserr!(hex::decode(signature));
 
     // Create `PublicKey` and `Signature` instances from bytes
@@ -77,7 +77,7 @@ pub fn verify_signature(
     let signature = jserr!(Signature::try_from(&signature_bytes[..]));
 
     // Verify signature for given public key and operation
-    match KeyPairNonWasm::verify(&public_key, operation_bytes, &signature) {
+    match KeyPairNonWasm::verify(&public_key, unsigned_bytes, &signature) {
         Ok(_) => Ok(JsValue::TRUE),
         Err(_) => Ok(JsValue::FALSE),
     }
