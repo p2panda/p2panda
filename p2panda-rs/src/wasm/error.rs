@@ -3,7 +3,6 @@
 use std::panic;
 
 use console_error_panic_hook::hook as panic_hook;
-
 use wasm_bindgen::prelude::wasm_bindgen;
 
 // Converts any Rust Error type into js_sys:Error while keeping its error message. This helps
