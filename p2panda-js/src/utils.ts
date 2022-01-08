@@ -17,9 +17,10 @@ const getFieldType = (
   field: string,
 ): 'string' | 'bool' | 'int' => {
   const mapping = {
-    string: 'str',
+    bigint: 'int',
     boolean: 'bool',
     number: 'int',
+    string: 'str',
   };
   const type = typeof fields[field];
   if (!Object.keys(mapping).includes(type)) {
@@ -38,15 +39,15 @@ export const marshallRequestFields = (fields: Fields): FieldsTagged => {
     switch (getFieldType(fields, k)) {
       case 'int':
         if (typeof fields[k] === 'number') {
-          // Round the number in case we passed a float here
+          // Round the number in case we passed a float here and store as
+          // string
           rv[k] = {
             value: Math.round(fields[k] as number).toString(),
             type: 'int',
           };
         } else if (typeof fields[k] === 'bigint') {
+          // Convert bigints into strings
           rv[k] = { value: fields[k].toString(), type: 'int' };
-        } else if (typeof fields[k] === 'string') {
-          rv[k] = { value: fields[k] as string, type: 'int' };
         } else {
           throw new Error('Invalid integer type');
         }
@@ -66,9 +67,16 @@ export const marshallRequestFields = (fields: Fields): FieldsTagged => {
  * Remove type tagging from operation fields on an entry received from node.
  */
 export const marshallResponseFields = (fieldsTagged: FieldsTagged): Fields => {
-  const fields: Fields = {};
-  Object.keys(fieldsTagged).forEach((k) => {
-    fields[k] = fieldsTagged[k].value;
-  });
-  return fields;
+  return Object.keys(fieldsTagged).reduce((acc: Fields, key) => {
+    const { value, type } = fieldsTagged[key];
+
+    // Convert smaller integers to 'number', keep large ones as strings
+    if (type === 'int' && BigInt(value) <= Number.MAX_SAFE_INTEGER) {
+      acc[key] = parseInt(value as string, 10);
+    } else {
+      acc[key] = value;
+    }
+
+    return acc;
+  }, {});
 };

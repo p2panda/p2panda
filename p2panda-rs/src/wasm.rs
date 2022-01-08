@@ -153,8 +153,8 @@ impl OperationFields {
                 Ok(())
             }
             "int" => {
-                let str = jserr!(value.as_string().ok_or("Must be passed as a string"));
-                let value_int: i64 = jserr!(str.parse(), "Invalid integer value");
+                let value_str = jserr!(value.as_string().ok_or("Must be passed as a string"));
+                let value_int: i64 = jserr!(value_str.parse(), "Invalid integer value");
                 jserr!(self.0.add(&name, OperationValue::Integer(value_int)));
                 Ok(())
             }
