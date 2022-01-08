@@ -32,8 +32,8 @@ Highlights are marked with a pancake 🥞
 - Change to new `rustdoc::missing_doc_code_examples` linter name [#168](https://github.com/p2panda/p2panda/pull/168) `rs`
 - Update Rust dependencies [#171](https://github.com/p2panda/p2panda/pull/171) `rs`
 - Convert JavaScript configuration files to TypeScript or JSON [#172](https://github.com/p2panda/p2panda/pull/172) `js`
-- Use `ciborium` for cbor de/serialization [180](https://github.com/p2panda/p2panda/pull/180) `rs`
-- Break `wasm` module down into sub-files [184](https://github.com/p2panda/p2panda/pull/184) `rs`
+- Use `ciborium` for cbor de/serialization [#180](https://github.com/p2panda/p2panda/pull/180) `rs`
+- Break `wasm` module down into sub-files, add wasm target tests [#184](https://github.com/p2panda/p2panda/pull/184) `rs`
 
 ### Campfires and boiling pots to sit around
 
