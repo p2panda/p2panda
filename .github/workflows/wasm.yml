@@ -34,4 +34,4 @@ jobs:
           key: ${{ runner.os }}-wasm-test-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Run wasm tests
-        run: wasm-pack test --headless --chrome --firefox --node p2panda-rs
+        run: wasm-pack test --headless --chrome --firefox p2panda-rs
