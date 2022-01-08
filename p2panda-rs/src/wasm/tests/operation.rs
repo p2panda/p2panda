@@ -141,7 +141,6 @@ fn encodes_operations() {
     previous_operations.push(&JsValue::from_str(document_id.as_str()));
 
     let update_operation = encode_update_operation(
-        document_id.as_str().into(),
         schema.as_str().into(),
         previous_operations,
         fields,
@@ -157,7 +156,6 @@ fn encodes_operations() {
     previous_operations.push(&JsValue::from_str(update_op_hash.as_str()));
 
     let delete_operation = encode_delete_operation(
-        document_id.as_str().into(),
         schema.as_str().into(),
         previous_operations,
     );
