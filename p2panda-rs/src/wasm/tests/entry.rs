@@ -30,8 +30,8 @@ fn encodes_decodes_entries() {
         operation_encoded.as_str().into(),
         None,
         None,
-        SeqNum::default().as_i64() as i32,
-        LogId::default().as_i64() as i32,
+        SeqNum::default(),
+        LogId::default(),
     );
 
     assert!(encode_result.is_ok());

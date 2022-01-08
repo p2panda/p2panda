@@ -123,8 +123,8 @@ pub fn send_to_node(
 fn calculate_links(seq_num: &SeqNum, log: &[LogEntry]) -> (Option<Hash>, Option<Hash>) {
     // Next skiplink hash
     let skiplink = match seq_num.skiplink_seq_num() {
-        Some(seq) if is_lipmaa_required(seq_num.as_i64() as u64) => Some(
-            log.get(seq.as_i64() as usize - 1)
+        Some(seq) if is_lipmaa_required(seq_num.as_u64()) => Some(
+            log.get(seq.as_u64() as usize - 1)
                 .expect("Skiplink missing!")
                 .hash(),
         ),
@@ -133,7 +133,7 @@ fn calculate_links(seq_num: &SeqNum, log: &[LogEntry]) -> (Option<Hash>, Option<
 
     // Next backlink hash
     let backlink = seq_num.backlink_seq_num().map(|seq| {
-        log.get(seq.as_i64() as usize - 1)
+        log.get(seq.as_u64() as usize - 1)
             .expect("Backlink missing!")
             .hash()
     });
@@ -143,7 +143,7 @@ fn calculate_links(seq_num: &SeqNum, log: &[LogEntry]) -> (Option<Hash>, Option<
 /// Mock database type.
 ///
 /// Maps the public key of an authors against a map of their logs identified by log id.
-pub type Database = HashMap<String, HashMap<i64, Log>>;
+pub type Database = HashMap<String, HashMap<u64, Log>>;
 
 /// This node mocks functionality which would be implemented in a real world p2panda node.
 ///
@@ -164,12 +164,12 @@ impl Node {
     }
 
     /// Get a mutable map of all logs published by a certain author.
-    fn get_author_logs_mut(&mut self, author: &Author) -> Option<&mut HashMap<i64, Log>> {
+    fn get_author_logs_mut(&mut self, author: &Author) -> Option<&mut HashMap<u64, Log>> {
         self.entries.get_mut(author.as_str())
     }
 
     /// Get a map of all logs published by a certain author.
-    fn get_author_logs(&self, author: &Author) -> Option<&HashMap<i64, Log>> {
+    fn get_author_logs(&self, author: &Author) -> Option<&HashMap<u64, Log>> {
         self.entries.get(author.as_str())
     }
 
@@ -179,7 +179,7 @@ impl Node {
             Some(logs) => {
                 // Find the highest existing log id and increment it
                 let next_free_log_id =
-                    logs.values().map(|log| log.id().as_i64()).max().unwrap() + 1;
+                    logs.values().map(|log| log.id().as_u64()).max().unwrap() + 1;
 
                 match document_id {
                     Some(document) => {
@@ -251,14 +251,14 @@ impl Node {
                     // If a sequence number was passed ...
                     Some(s) => {
                         // ... trim the log to the point in time we are interested in
-                        entries = entries[..s.as_i64() as usize - 1].to_owned();
+                        entries = entries[..s.as_u64() as usize - 1].to_owned();
                         // ... and return the sequence number.
                         *s
                     }
                     None => {
                         // If no sequence number was passed calculate and return the next sequence
                         // number for this log
-                        SeqNum::new((log.entries().len() + 1) as i64).unwrap()
+                        SeqNum::new((log.entries().len() + 1) as u64).unwrap()
                     }
                 };
 
@@ -293,7 +293,7 @@ impl Node {
         operation_encoded: &OperationEncoded,
     ) -> Result<()> {
         let entry = decode_entry(entry_encoded, Some(operation_encoded))?;
-        let log_id = entry.log_id().as_i64();
+        let log_id = entry.log_id().as_u64();
         let author = entry_encoded.author();
 
         // Get all logs by this author
