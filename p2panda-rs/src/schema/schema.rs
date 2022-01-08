@@ -310,6 +310,9 @@ where
     }
 }
 
+// @TODO: This currently makes sure the wasm tests work as cddl does not have any wasm support
+// (yet). Remove this with: https://github.com/p2panda/p2panda/issues/99
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
