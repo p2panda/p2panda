@@ -40,7 +40,6 @@ fn main() {
         &panda,
         &update_operation(
             hash(DEFAULT_SCHEMA_HASH),
-            document_id.clone(),
             vec![document_id.clone()],
             operation_fields(vec![(
                 "message",
@@ -57,7 +56,6 @@ fn main() {
         &panda,
         &update_operation(
             hash(DEFAULT_SCHEMA_HASH),
-            document_id.clone(),
             vec![entry2_hash],
             operation_fields(vec![(
                 "message",
@@ -72,11 +70,7 @@ fn main() {
     send_to_node(
         &mut node,
         &panda,
-        &delete_operation(
-            hash(DEFAULT_SCHEMA_HASH),
-            document_id.clone(),
-            vec![entry3_hash],
-        ),
+        &delete_operation(hash(DEFAULT_SCHEMA_HASH), vec![entry3_hash]),
         Some(&document_id),
     )
     .unwrap();

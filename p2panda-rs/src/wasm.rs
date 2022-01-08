@@ -235,12 +235,10 @@ pub fn encode_create_operation(
 /// Returns an encoded UPDATE operation that updates fields of a given document.
 #[wasm_bindgen(js_name = encodeUpdateOperation)]
 pub fn encode_update_operation(
-    document_id: String,
     schema_hash: String,
     previous_operations: JsValue,
     fields: OperationFields,
 ) -> Result<String, JsValue> {
-    let document = jserr!(Hash::new(&document_id));
     let schema = jserr!(Hash::new(&schema_hash));
 
     // Decode JsValue into vector of strings
@@ -253,7 +251,7 @@ pub fn encode_update_operation(
         .collect();
 
     let previous = jserr!(prev_op_result);
-    let operation = jserr!(Operation::new_update(schema, document, previous, fields.0));
+    let operation = jserr!(Operation::new_update(schema, previous, fields.0));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
 }
@@ -261,11 +259,9 @@ pub fn encode_update_operation(
 /// Returns an encoded DELETE operation that deletes a given document.
 #[wasm_bindgen(js_name = encodeDeleteOperation)]
 pub fn encode_delete_operation(
-    document_id: String,
     schema_hash: String,
     previous_operations: Array,
 ) -> Result<String, JsValue> {
-    let document = jserr!(Hash::new(&document_id));
     let schema = jserr!(Hash::new(&schema_hash));
 
     // Decode JsValue into vector of strings
@@ -278,7 +274,7 @@ pub fn encode_delete_operation(
         .collect();
 
     let previous = jserr!(prev_op_result);
-    let operation = jserr!(Operation::new_delete(schema, document, previous));
+    let operation = jserr!(Operation::new_delete(schema, previous));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
 }
