@@ -231,12 +231,10 @@ impl Schema {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn update(
         &self,
-        id: &str,
         previous_operations: Vec<Hash>,
         key_values: Vec<(&str, OperationValue)>,
     ) -> Result<Operation, SchemaError> {
         let mut fields = OperationFields::new();
-        let id = Hash::new(id).unwrap();
 
         for (key, value) in key_values {
             match fields.add(key, value) {
@@ -250,7 +248,7 @@ impl Schema {
             Err(err) => Err(SchemaError::ValidationError(err.to_string())),
         }?;
 
-        match Operation::new_update(self.schema_hash(), id, previous_operations, fields) {
+        match Operation::new_update(self.schema_hash(), previous_operations, fields) {
             Ok(hash) => Ok(hash),
             Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
         }
@@ -286,10 +284,10 @@ where
         &self,
         operation_fields: &OperationFields,
     ) -> Result<(), SchemaError> {
-        match validate_cbor_from_slice(
-            &format!("{}", self),
-            &serde_cbor::to_vec(operation_fields).unwrap(),
-        ) {
+        let mut cbor_bytes = Vec::new();
+        ciborium::ser::into_writer(&operation_fields.clone(), &mut cbor_bytes).unwrap();
+
+        match validate_cbor_from_slice(&format!("{}", self), &cbor_bytes) {
             Err(cbor::Error::Validation(err)) => {
                 let err = err
                     .iter()
@@ -310,6 +308,9 @@ where
 
 impl ValidateOperation for Schema {}
 
+// @TODO: This currently makes sure the wasm tests work as cddl does not have any wasm support
+// (yet). Remove this with: https://github.com/p2panda/p2panda/issues/99
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -459,7 +460,7 @@ mod tests {
     }
 
     #[rstest]
-    pub fn test_update_operation(#[from(hash)] document_id: Hash, #[from(hash)] schema_hash: Hash) {
+    pub fn test_update_operation(#[from(hash)] schema_hash: Hash) {
         let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
 
         // Create a operation the long way without validation
@@ -473,7 +474,6 @@ mod tests {
 
         let operation = Operation::new_update(
             schema_hash,
-            document_id.to_owned(),
             vec![Hash::new_from_bytes(vec![12, 128]).unwrap()],
             operation_fields,
         )
@@ -482,7 +482,6 @@ mod tests {
         // Create an operation the quick way *with* validation
         let operation_again = person_schema
             .update(
-                document_id.as_str(),
                 vec![Hash::new_from_bytes(vec![12, 128]).unwrap()],
                 vec![
                     ("name", OperationValue::Text("Panda".to_string())),

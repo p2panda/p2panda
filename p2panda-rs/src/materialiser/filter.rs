@@ -73,6 +73,7 @@ mod tests {
                     OperationValue::Text("Hello!".to_string()),
                 )]),
             ),
+            None,
         )
         .unwrap();
 
@@ -81,13 +82,13 @@ mod tests {
             &panda,
             &update_operation(
                 schema.clone(),
-                panda_entry_1_hash.clone(),
                 vec![panda_entry_1_hash.clone()],
                 fields(vec![(
                     "message",
                     OperationValue::Text("Hello too!".to_string()),
                 )]),
             ),
+            Some(&panda_entry_1_hash),
         )
         .unwrap();
 
@@ -96,13 +97,13 @@ mod tests {
             &penguin,
             &update_operation(
                 schema,
-                panda_entry_1_hash,
                 vec![panda_entry_2_hash],
                 fields(vec![(
                     "message",
                     OperationValue::Text("Hello too!".to_string()),
                 )]),
             ),
+            Some(&panda_entry_1_hash),
         )
         .unwrap();
 

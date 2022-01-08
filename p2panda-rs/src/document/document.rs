@@ -288,6 +288,7 @@ mod tests {
                     OperationValue::Text("Panda Cafe".to_string()),
                 )]),
             ),
+            None,
         )
         .unwrap();
 
@@ -298,13 +299,13 @@ mod tests {
             &panda,
             &update_operation(
                 schema.clone(),
-                panda_entry_1_hash.clone(),
                 vec![panda_entry_1_hash.clone()],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Panda Cafe!".to_string()),
                 )]),
             ),
+            Some(&panda_entry_1_hash.clone()),
         )
         .unwrap();
 
@@ -315,13 +316,13 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                panda_entry_1_hash.clone(),
                 vec![panda_entry_1_hash.clone()],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Penguin Cafe".to_string()),
                 )]),
             ),
+            Some(&panda_entry_1_hash.clone()),
         )
         .unwrap();
 
@@ -332,30 +333,29 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                panda_entry_1_hash.clone(),
                 vec![penguin_entry_1_hash.clone(), panda_entry_2_hash],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Polar Bear Cafe".to_string()),
                 )]),
             ),
+            Some(&panda_entry_1_hash.clone()),
         )
         .unwrap();
 
-        // Penguin publishes a new operation while now being aware of the previous branching situation.
-        // Their `previous_operations` field now contains 2 operation hash id's.
+        // Penguin publishes a new update operation which points at the current graph tip.
         send_to_node(
             &mut node,
             &penguin,
             &update_operation(
                 schema,
-                panda_entry_1_hash,
-                vec![penguin_entry_1_hash, penguin_entry_2_hash],
+                vec![penguin_entry_2_hash],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
                 )]),
             ),
+            Some(&panda_entry_1_hash.clone()),
         )
         .unwrap();
 
@@ -440,6 +440,7 @@ mod tests {
                     OperationValue::Text("Panda Cafe".to_string()),
                 )]),
             ),
+            None,
         )
         .unwrap();
 
@@ -450,13 +451,13 @@ mod tests {
             &panda,
             &update_operation(
                 schema,
-                panda_entry_1_hash.clone(),
-                vec![panda_entry_1_hash],
+                vec![panda_entry_1_hash.clone()],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Panda Cafe!".to_string()),
                 )]),
             ),
+            Some(&panda_entry_1_hash),
         )
         .unwrap();
 

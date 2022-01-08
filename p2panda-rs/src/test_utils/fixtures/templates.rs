@@ -63,7 +63,6 @@ fn many_valid_entries(#[case] entry: Entry) {}
 #[allow(unused_qualifications)]
 #[case::update_operation_many_previous(crate::test_utils::utils::any_operation(
     Some(crate::test_utils::fixtures::defaults::fields()),
-    crate::test_utils::fixtures::defaults::some_hash(),
     Some(vec![
         crate::test_utils::fixtures::random_hash(),
         crate::test_utils::fixtures::random_hash(),
@@ -73,7 +72,6 @@ fn many_valid_entries(#[case] entry: Entry) {}
 )]
 #[case::delete_operation_many_previous(crate::test_utils::utils::any_operation(
     None,
-    crate::test_utils::fixtures::defaults::some_hash(),
     #[allow(unused_qualifications)]
     Some(vec![
         crate::test_utils::fixtures::random_hash(),

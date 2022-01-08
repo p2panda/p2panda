@@ -17,64 +17,79 @@ export const materializeEntries = (
   entries: EntryRecord[],
 ): { [instanceId: string]: InstanceRecord } => {
   const instances: { [instanceId: string]: InstanceRecord } = {};
-  entries.sort((a, b) => a.seqNum - b.seqNum);
+
   log(`Materialising ${entries.length} entries`);
-  for (const entry of entries) {
-    if (entry.operation == null) continue;
 
-    let instanceId: string;
-
-    // Set the instanceId
-    if (entry.operation.action === 'create') {
-      instanceId = entry.encoded.entryHash;
-    } else {
-      instanceId = entry.operation.id as string;
+  // Initiate all instances from their create operation.
+  entries.forEach((entry) => {
+    if (entry.operation && entry.operation.action == 'create') {
+      const instanceId = entry.encoded.entryHash;
+      instances[instanceId] = {
+        ...entry.operation.fields,
+        _meta: {
+          id: instanceId,
+          author: entry.encoded.author,
+          deleted: false,
+          edited: false,
+          entries: [entry],
+          schema: entry.operation.schema,
+          last_operation: entry.encoded.entryHash,
+        },
+      };
     }
+  });
 
-    const author = entry.encoded.author;
-    const schema = entry.operation.schema;
+  for (const instanceId in instances) {
+    // Find and apply update or delete operations until this instance is.
+    while (true) {
+      // Find the next entry by matching previousEntries against the instance's last_operation.
+      const nextEntry = entries.find((entry) => {
+        if (entry.operation && entry.operation.previousOperations) {
+          return entry.operation.previousOperations.includes(
+            instances[instanceId]._meta.last_operation,
+          );
+        }
+      });
 
-    if (instances[instanceId] && instances[instanceId].deleted) continue;
+      // If there are no more entries for this instance, we break here.
+      if (!nextEntry) break;
 
-    let updated: InstanceRecord;
+      // If there is an entry, but it's operation was deleted, we only update some meta values, then continue.
+      if (!nextEntry.operation) {
+        instances[instanceId]._meta.entries.push(nextEntry);
+        instances[instanceId]._meta.last_operation =
+          nextEntry.encoded.entryHash;
+        continue;
+      }
 
-    switch (entry.operation.action) {
-      case 'create':
-        instances[instanceId] = {
-          ...entry.operation.fields,
-          _meta: {
-            id: instanceId,
-            author,
-            deleted: false,
-            edited: false,
-            entries: [entry],
-            schema,
-          },
-        };
-        break;
+      // Apply update or delete operations as usual.
+      let updated: InstanceRecord;
 
-      case 'update':
-        updated = {
-          ...instances[instanceId],
-          ...entry.operation.fields,
-        };
-        // In that case this key wouldn't exist yet.
-        updated._meta.edited = true;
-        updated._meta.entries.push(entry);
-        instances[instanceId] = updated;
-        break;
+      switch (nextEntry.operation.action) {
+        case 'update':
+          updated = {
+            ...instances[instanceId],
+            ...nextEntry.operation.fields,
+          };
+          updated._meta.edited = true;
+          updated._meta.last_operation = nextEntry.encoded.entryHash;
+          updated._meta.entries.push(nextEntry);
+          instances[instanceId] = updated;
+          continue;
 
-      case 'delete':
-        // Same as above
-        updated = { _meta: instances[instanceId]._meta };
-        updated._meta.deleted = true;
-        updated._meta.entries.push(entry);
-        instances[instanceId] = updated;
-        break;
-      default:
-        throw new Error('Unhandled mesage action');
+        case 'delete':
+          updated = { _meta: instances[instanceId]._meta };
+          updated._meta.deleted = true;
+          updated._meta.last_operation = nextEntry.encoded.entryHash;
+          updated._meta.entries.push(nextEntry);
+          instances[instanceId] = updated;
+          break;
+        default:
+          throw new Error('Unhandled mesage action');
+      }
     }
   }
+
   log(`Materialisation yields ${Object.keys(instances).length} instances`);
   return instances;
 };
