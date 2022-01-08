@@ -48,7 +48,7 @@ describe('WebAssembly interface', () => {
 
       // Returns the correct fields
       expect(fields.get('description')).toBe('Hello, Panda');
-      // expect(fields.get('temperature')).toBe(32);
+      expect(fields.get('temperature') === BigInt(32)).toBe(true);
       expect(fields.get('isCute')).toBe(true);
       expect(fields.get('degree')).toBe(12.322);
       expect(fields.get('username')).toBe(TEST_SCHEMA);
