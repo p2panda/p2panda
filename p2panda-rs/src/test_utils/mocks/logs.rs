@@ -12,18 +12,13 @@ use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{AsOperation, Operation, OperationEncoded};
 
-/// Entry of an append-only log based on Bamboo specification. It describes the actual data in the
-/// p2p network and is shared between nodes.
-///
-/// Bamboo entries are the main data type of p2panda. Entries are organized in a distributed,
-/// single-writer append-only log structure, created and signed by holders of private keys and
-/// stored inside the node database.
+/// Entry of an append-only which contains an encoded entry and operation.
 #[derive(Clone, Debug)]
 pub struct LogEntry {
-    /// Public key of the author.
+    /// Encoded entry.
     pub entry_encoded: EntrySigned,
 
-    /// Actual Bamboo entry data.
+    /// Encoded operation.
     pub operation_encoded: OperationEncoded,
 }
 
