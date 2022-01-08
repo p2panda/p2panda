@@ -14,11 +14,14 @@ use crate::wasm::error::jserr;
 use crate::wasm::KeyPair;
 
 /// Return value of [`sign_encode_entry`] that holds the encoded entry and its hash.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-struct SignEncodeEntryResult {
+pub struct SignEncodeEntryResult {
+    /// Encoded p2panda entry.
     pub entry_encoded: String,
+    /// The hash of a p2panda entry.
     pub entry_hash: String,
+    /// The hash of a p2panda operation.
     pub operation_hash: String,
 }
 

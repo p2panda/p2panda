@@ -12,7 +12,7 @@ mod error;
 mod key_pair;
 mod operation;
 
-pub use entry::{decode_entry, sign_encode_entry};
+pub use entry::{decode_entry, sign_encode_entry, SignEncodeEntryResult};
 pub use key_pair::{verify_signature, KeyPair};
 pub use operation::{
     encode_create_operation, encode_delete_operation, encode_update_operation, OperationFields,
