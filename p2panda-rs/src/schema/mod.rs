@@ -24,7 +24,7 @@ pub use schema::{Schema, SchemaBuilder, Type};
 /// concatenated error operation and returns it.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaError> {
-    match cddl::validate_cbor_from_slice(cddl_schema, &bytes) {
+    match cddl::validate_cbor_from_slice(cddl_schema, &bytes, None) {
         Err(cbor::Error::Validation(err)) => {
             let err_str = err
                 .iter()

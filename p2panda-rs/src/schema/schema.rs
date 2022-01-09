@@ -291,7 +291,7 @@ where
     /// Validate an operation against this application schema.
     #[cfg(not(target_arch = "wasm32"))]
     fn validate_operation(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
-        match validate_cbor_from_slice(&format!("{}", self), &bytes) {
+        match validate_cbor_from_slice(&format!("{}", self), &bytes, None) {
             Err(cbor::Error::Validation(err)) => {
                 let err = err
                     .iter()
