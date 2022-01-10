@@ -10,6 +10,7 @@ use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, 
 use crate::hash::Hash;
 use crate::operation::{Operation, OperationEncoded};
 use crate::wasm::error::jserr;
+use crate::wasm::serde::serialize_to_js;
 use crate::wasm::KeyPair;
 
 /// Return value of [`sign_encode_entry`] that holds the encoded entry and its hash.
@@ -70,18 +71,13 @@ pub fn sign_encode_entry(
     // Finally sign and encode entry
     let entry_signed = jserr!(sign_and_encode(&entry, key_pair.as_inner()));
 
-    // Use `serde_wasm_bindgen` serializer, both for bundle size but also for its support of large
-    // number types. With this serializer all i64 and u64 numbers get turned into BigInt instances.
-    let serializer =
-        serde_wasm_bindgen::Serializer::new().serialize_large_number_types_as_bigints(true);
-
     // Serialise result to JavaScript object
     let entry_operation_bundle = SignEncodeEntryResult {
         entry_encoded: entry_signed.as_str().into(),
         entry_hash: entry_signed.hash().as_str().into(),
         operation_hash: operation_encoded.hash().as_str().into(),
     };
-    let result = jserr!(entry_operation_bundle.serialize(&serializer));
+    let result = jserr!(serialize_to_js(&entry_operation_bundle));
     Ok(result)
 }
 
@@ -105,11 +101,6 @@ pub fn decode_entry(
     let entry: Entry = jserr!(decode(&entry_signed, operation_encoded.as_ref()));
 
     // Serialize struct to JavaScript object.
-    //
-    // Use `serde_wasm_bindgen` serializer, both for bundle size but also for its support of large
-    // number types. With this serializer all i64 and u64 numbers get turned into BigInt instances.
-    let serializer =
-        serde_wasm_bindgen::Serializer::new().serialize_large_number_types_as_bigints(true);
-    let result = jserr!(entry.serialize(&serializer));
+    let result = jserr!(serialize_to_js(&entry));
     Ok(result)
 }
