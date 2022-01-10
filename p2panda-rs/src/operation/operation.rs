@@ -83,7 +83,6 @@ pub enum OperationValue {
 
     /// Signed integer value.
     #[serde(rename = "int")]
-    #[serde(with = "serde_with::rust::display_fromstr")]
     Integer(i64),
 
     /// Floating point value.

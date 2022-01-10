@@ -32,7 +32,7 @@ fn operation_fields() {
         .unwrap();
 
     fields
-        .add("age".to_string(), "int".to_string(), JsValue::from_f64(5.0))
+        .add("age".to_string(), "int".to_string(), JsValue::from_str("5"))
         .unwrap();
 
     fields

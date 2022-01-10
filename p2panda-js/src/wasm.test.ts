@@ -48,7 +48,7 @@ describe('WebAssembly interface', () => {
 
       // Returns the correct fields
       expect(fields.get('description')).toBe('Hello, Panda');
-      expect(fields.get('temperature') === BigInt(32)).toBe(true);
+      expect(fields.get('temperature')).toEqual(BigInt(32));
       expect(fields.get('isCute')).toBe(true);
       expect(fields.get('degree')).toBe(12.322);
       expect(fields.get('username')).toBe(TEST_SCHEMA);
@@ -103,8 +103,8 @@ describe('WebAssembly interface', () => {
 
   describe('Entries', () => {
     it('creates, signs and decodes an entry', async () => {
-      const LOG_ID = '5';
-      const SEQ_NUM = '1';
+      const LOG_ID = 5;
+      const SEQ_NUM = 1;
 
       const {
         KeyPair,
@@ -117,7 +117,7 @@ describe('WebAssembly interface', () => {
       // Generate new key pair
       const keyPair = new KeyPair();
 
-      // Create operation
+      // Create operation with fields
       const fields = new OperationFields();
       fields.add('description', 'str', 'Hello, Panda');
       expect(fields.get('description')).toBe('Hello, Panda');
@@ -137,17 +137,17 @@ describe('WebAssembly interface', () => {
 
       // Decode entry and return as JSON
       const decodedEntry = decodeEntry(entryEncoded, operationEncoded);
-
-      expect(decodedEntry.logId).toBe(LOG_ID);
-      expect(decodedEntry.seqNum).toBe(SEQ_NUM);
-      expect(decodedEntry.entryHashBacklink).toBeNull();
-      expect(decodedEntry.entryHashSkiplink).toBeNull();
+      expect(decodedEntry.logId).toEqual(BigInt(LOG_ID));
+      expect(decodedEntry.seqNum).toEqual(BigInt(SEQ_NUM));
+      expect(decodedEntry.entryHashBacklink).toBeUndefined();
+      expect(decodedEntry.entryHashSkiplink).toBeUndefined();
       expect(decodedEntry.operation.action).toBe('create');
       expect(decodedEntry.operation.schema).toBe(TEST_SCHEMA);
-      expect(decodedEntry.operation.fields.description.value).toBe(
-        'Hello, Panda',
-      );
-      expect(decodedEntry.operation.fields.description.type).toBe('str');
+
+      // Test operation fields map
+      const { fields: operationFields } = decodedEntry.operation;
+      expect(operationFields.get('description').value).toBe('Hello, Panda');
+      expect(operationFields.get('description').type).toBe('str');
 
       // Test decoding entry without operation
       expect(() => decodeEntry(entryEncoded)).not.toThrow();
@@ -161,11 +161,9 @@ describe('WebAssembly interface', () => {
       const LARGE_F64 = Number.MAX_VALUE;
       const LARGE_F64_NEGATIVE = Number.MIN_VALUE;
 
-      // Needs to be a string value since it is still a BigInt
-      const SEQ_NUM = '1';
-
       // Maximum unsigned u64 integer is 18446744073709551615
       const LARGE_LOG_ID = '12345678912345678912';
+      const SEQ_NUM = 1;
 
       const {
         KeyPair,
@@ -197,14 +195,16 @@ describe('WebAssembly interface', () => {
       );
 
       const decodedEntry = decodeEntry(entryEncoded, operationEncoded);
-      expect(decodedEntry.seqNum).toBe(SEQ_NUM);
-      expect(decodedEntry.logId).toBe(LARGE_LOG_ID);
-      expect(decodedEntry.operation.fields.large_i64.value).toBe(LARGE_I64);
-      expect(decodedEntry.operation.fields.large_i64_negative.value).toBe(
-        LARGE_I64_NEGATIVE,
+      expect(decodedEntry.seqNum).toEqual(BigInt(SEQ_NUM));
+      expect(decodedEntry.logId).toEqual(BigInt(LARGE_LOG_ID));
+
+      const { fields: operationFields } = decodedEntry.operation;
+      expect(operationFields.get('large_i64').value).toEqual(BigInt(LARGE_I64));
+      expect(operationFields.get('large_i64_negative').value).toEqual(
+        BigInt(LARGE_I64_NEGATIVE),
       );
-      expect(decodedEntry.operation.fields.large_f64.value).toBe(LARGE_F64);
-      expect(decodedEntry.operation.fields.large_f64_negative.value).toBe(
+      expect(operationFields.get('large_f64').value).toEqual(LARGE_F64);
+      expect(operationFields.get('large_f64_negative').value).toEqual(
         LARGE_F64_NEGATIVE,
       );
     });
