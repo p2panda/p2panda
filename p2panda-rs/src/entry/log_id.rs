@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::fmt;
 use std::convert::TryFrom;
+use std::fmt;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
