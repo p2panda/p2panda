@@ -50,6 +50,11 @@ impl OperationFields {
                 Ok(())
             }
             "int" => {
+                // We expect a string here instead of a number, to assure we can pass large numbers
+                // coming from the JavaScript world.
+                //
+                // The largest JavaScript integer is 53 bits but we support 64 bits in the
+                // protocol.
                 let value_str = jserr!(value.as_string().ok_or("Must be passed as a string"));
                 let value_int: i64 = jserr!(value_str.parse(), "Invalid integer value");
                 jserr!(self.0.add(&name, OperationValue::Integer(value_int)));
