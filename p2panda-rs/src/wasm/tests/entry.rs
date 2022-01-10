@@ -30,8 +30,8 @@ fn encodes_decodes_entries() {
         operation_encoded.as_str().into(),
         None,
         None,
-        SeqNum::default(),
-        LogId::default(),
+        1,
+        1,
     );
 
     assert!(encode_result.is_ok());
@@ -48,8 +48,8 @@ fn encodes_decodes_entries() {
 
     let decoded_entry: Entry = decode_result.unwrap().into_serde().unwrap();
 
-    assert_eq!(*decoded_entry.log_id(), LogId::default());
-    assert_eq!(*decoded_entry.seq_num(), SeqNum::default());
+    assert_eq!(*decoded_entry.log_id(), LogId::new(1));
+    assert_eq!(*decoded_entry.seq_num(), SeqNum::new(1).unwrap());
     assert_eq!(decoded_entry.backlink_hash(), None);
     assert_eq!(decoded_entry.skiplink_hash(), None);
     assert_eq!(decoded_entry.operation(), Some(&operation));
