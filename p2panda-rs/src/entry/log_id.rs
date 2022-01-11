@@ -9,7 +9,6 @@ use crate::entry::error::LogIdError;
 
 /// Authors can write entries to multiple logs identified by log ids.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(try_from = "&str")]
 pub struct LogId(u64);
 
 impl LogId {
@@ -46,21 +45,24 @@ impl PartialEq for LogId {
     }
 }
 
+/// Convert any borrowed string representation of an u64 integer into an `LogId` instance.
 impl FromStr for LogId {
     type Err = LogIdError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        LogId::try_from(s)
+        Ok(Self::new(
+            u64::from_str(s).map_err(|_| LogIdError::InvalidU64String)?,
+        ))
     }
 }
 
-/// Convert any string representation of an u64 integer into an `LogId` instance.
-impl TryFrom<&str> for LogId {
+/// Convert any owned string representation of an u64 integer into an `LogId` instance.
+impl TryFrom<String> for LogId {
     type Error = LogIdError;
 
-    fn try_from(str: &str) -> Result<Self, Self::Error> {
+    fn try_from(str: String) -> Result<Self, Self::Error> {
         Ok(Self::new(
-            u64::from_str(str).map_err(|_| LogIdError::InvalidU64String)?,
+            u64::from_str(&str).map_err(|_| LogIdError::InvalidU64String)?,
         ))
     }
 }
@@ -83,9 +85,11 @@ mod tests {
     }
 
     #[test]
-    fn u64_conversion() {
+    fn string_conversions() {
         let large_number = "291919188205818203";
-        let log_id = LogId::try_from(large_number).unwrap();
-        assert_eq!(291919188205818203, log_id.as_u64());
+        let log_id_from_str: LogId = large_number.parse().unwrap();
+        let log_id_try_from = LogId::try_from(String::from(large_number)).unwrap();
+        assert_eq!(291919188205818203, log_id_from_str.as_u64());
+        assert_eq!(log_id_from_str, log_id_try_from);
     }
 }

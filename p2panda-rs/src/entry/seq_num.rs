@@ -114,20 +114,21 @@ impl PartialEq for SeqNum {
     }
 }
 
+/// Convert any borrowed string representation of an u64 integer into an `SeqNum` instance.
 impl FromStr for SeqNum {
     type Err = SeqNumError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        SeqNum::try_from(s)
+        Self::new(u64::from_str(s).map_err(|_| SeqNumError::InvalidU64String)?)
     }
 }
 
-/// Convert any string representation of an u64 integer into an `SeqNum` instance.
-impl TryFrom<&str> for SeqNum {
+/// Convert any owned string representation of an u64 integer into an `SeqNum` instance.
+impl TryFrom<String> for SeqNum {
     type Error = SeqNumError;
 
-    fn try_from(str: &str) -> Result<Self, Self::Error> {
-        Self::new(u64::from_str(str).map_err(|_| SeqNumError::InvalidU64String)?)
+    fn try_from(str: String) -> Result<Self, Self::Error> {
+        Self::new(u64::from_str(&str).map_err(|_| SeqNumError::InvalidU64String)?)
     }
 }
 
@@ -162,9 +163,11 @@ mod tests {
     }
 
     #[test]
-    fn u64_conversion() {
-        let large_number = "8733212187399111232";
-        let seq_num = SeqNum::try_from(large_number).unwrap();
-        assert_eq!(8733212187399111232, seq_num.as_u64());
+    fn string_conversions() {
+        let large_number = "91772991776239";
+        let seq_num_from_str: SeqNum = large_number.parse().unwrap();
+        let seq_num_try_from = SeqNum::try_from(String::from(large_number)).unwrap();
+        assert_eq!(91772991776239, seq_num_from_str.as_u64());
+        assert_eq!(seq_num_from_str, seq_num_try_from);
     }
 }
