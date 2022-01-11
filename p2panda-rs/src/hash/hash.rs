@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
+use std::str::FromStr;
 
 use arrayvec::ArrayVec;
 use bamboo_rs_core_ed25519_yasmf::yasmf_hash::new_blake3;
@@ -91,6 +92,24 @@ impl TryFrom<&str> for Hash {
     }
 }
 
+/// Convert any borrowed string representation into a `Hash` instance.
+impl FromStr for Hash {
+    type Err = HashError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::new(s)
+    }
+}
+
+/// Convert any owned string representation into a `Hash` instance.
+impl TryFrom<String> for Hash {
+    type Error = HashError;
+
+    fn try_from(str: String) -> Result<Self, Self::Error> {
+        Self::new(&str)
+    }
+}
+
 impl Validate for Hash {
     type Error = HashError;
 
@@ -124,7 +143,7 @@ impl PartialEq for Hash {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryInto;
+    use std::convert::{TryFrom, TryInto};
 
     use yasmf_hash::YasmfHash;
 
@@ -163,7 +182,9 @@ mod tests {
     #[test]
     fn convert_string() {
         let hash_str = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
-        let hash: Hash = hash_str.try_into().unwrap();
-        assert_eq!(hash_str, hash.as_str());
+        let hash_from_str: Hash = hash_str.parse().unwrap();
+        let hash_try_from = Hash::try_from(String::from(hash_str)).unwrap();
+        assert_eq!(hash_str, hash_from_str.as_str());
+        assert_eq!(hash_from_str, hash_try_from);
     }
 }
