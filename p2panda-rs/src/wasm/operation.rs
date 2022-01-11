@@ -103,10 +103,10 @@ impl OperationFields {
         self.0.len()
     }
 
-    /// Returns this instance formatted for debugging.
-    #[wasm_bindgen(js_name = toString)]
-    pub fn to_string(&self) -> String {
-        format!("{:?}", self)
+    /// Returns true when no field exists.
+    #[wasm_bindgen(js_name = isEmpty)]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 

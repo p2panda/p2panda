@@ -53,7 +53,7 @@ pub fn sign_encode_entry(
     };
 
     // Create SeqNum instance
-    let seq_num = jserr!(SeqNum::new(seq_num.into()));
+    let seq_num = jserr!(SeqNum::new(seq_num));
 
     // Convert to Operation
     let operation_encoded = jserr!(OperationEncoded::new(&encoded_operation));
@@ -61,7 +61,7 @@ pub fn sign_encode_entry(
 
     // Create Entry instance
     let entry = jserr!(Entry::new(
-        &LogId::new(log_id.into()),
+        &LogId::new(log_id),
         Some(&operation),
         skiplink_hash.as_ref(),
         backlink_hash.as_ref(),
