@@ -7,6 +7,7 @@ const REQUEST: Fields = {
   channel: 5,
   operation: 'chin chin',
   serious: false,
+  temperature: 19.5,
 };
 
 const RESPONSE: FieldsTagged = {
@@ -21,6 +22,10 @@ const RESPONSE: FieldsTagged = {
   serious: {
     value: false,
     type: 'bool',
+  },
+  temperature: {
+    value: 19.5,
+    type: 'float',
   },
 };
 

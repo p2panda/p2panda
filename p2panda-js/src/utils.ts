@@ -2,6 +2,13 @@
 
 import type { Fields, FieldsTagged } from './types';
 
+const FIELD_TYPE_MAPPING = {
+  bigint: 'int',
+  boolean: 'bool',
+  number: 'int',
+  string: 'str',
+};
+
 /**
  * Look up the type of a schema's fields.
  *
@@ -16,18 +23,14 @@ const getFieldType = (
   fields: Fields,
   field: string,
 ): 'string' | 'bool' | 'int' => {
-  const mapping = {
-    bigint: 'int',
-    boolean: 'bool',
-    number: 'int',
-    string: 'str',
-  };
   const type = typeof fields[field];
-  if (!Object.keys(mapping).includes(type)) {
+
+  if (!Object.keys(FIELD_TYPE_MAPPING).includes(type)) {
     throw new Error(`Unsupported field type: ${typeof field}`);
   }
+
   // @ts-expect-error we have made sure that `type` is a key of `mapping`
-  return mapping[type];
+  return FIELD_TYPE_MAPPING[type];
 };
 
 /**
@@ -35,31 +38,40 @@ const getFieldType = (
  */
 export const marshallRequestFields = (fields: Fields): FieldsTagged => {
   const rv: FieldsTagged = {};
-  Object.keys(fields).forEach((k) => {
-    switch (getFieldType(fields, k)) {
+
+  Object.keys(fields).forEach((key) => {
+    const value = fields[key];
+
+    switch (getFieldType(fields, key)) {
       case 'int':
-        if (typeof fields[k] === 'number') {
-          // Round the number in case we passed a float here and store as
-          // string
-          rv[k] = {
-            value: Math.round(fields[k] as number).toString(),
+        // "int" can be a BigInt instance or "number" which again can be a
+        // float or integer type in the JavaScript world
+        if (typeof value === 'number' && value.toString().includes('.')) {
+          // This is a float number
+          rv[key] = {
+            value: value as number,
+            type: 'float',
+          };
+        } else if (typeof value === 'bigint') {
+          // Convert bigints into strings and store as "int"
+          rv[key] = { value: value.toString(), type: 'int' };
+        } else {
+          // This is a regular integer, convert it to string and store as "int"
+          rv[key] = {
+            value: (value as number).toString(),
             type: 'int',
           };
-        } else if (typeof fields[k] === 'bigint') {
-          // Convert bigints into strings
-          rv[k] = { value: fields[k].toString(), type: 'int' };
-        } else {
-          throw new Error('Invalid integer type');
         }
 
         break;
       case 'bool':
-        rv[k] = { value: fields[k] as boolean, type: 'bool' };
+        rv[key] = { value: value as boolean, type: 'bool' };
         break;
       default:
-        rv[k] = { value: fields[k] as string, type: 'str' };
+        rv[key] = { value: value as string, type: 'str' };
     }
   });
+
   return rv;
 };
 

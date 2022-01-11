@@ -90,7 +90,8 @@ export type FieldsTagged = {
 export type OperationValue =
   | OperationValueText
   | OperationValueBool
-  | OperationValueInt;
+  | OperationValueInt
+  | OperationValueFloat;
 
 /**
  * An operation value of `boolean` type.
@@ -101,12 +102,20 @@ export type OperationValueBool = {
 };
 
 /**
- * An operation value of `number` type, which must be an integer.
+ * An operation value of `integer` type.
  */
 export type OperationValueInt = {
-  // Internally it is stored as a string to give support for very large numbers
+  // Internally stored as a string to give support for very large numbers
   value: string;
   type: 'int';
+};
+
+/**
+ * An operation value of `float` type.
+ */
+export type OperationValueFloat = {
+  value: number;
+  type: 'float';
 };
 
 /**
