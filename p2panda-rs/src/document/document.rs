@@ -33,18 +33,18 @@ pub struct Document {
 
 impl Document {
     /// The hash id of this document.
-    pub fn id(&self) -> &Hash {
-        self.create_operation.operation_id()
+    pub fn id(&self) -> Hash {
+        self.create_operation.operation_id().to_owned()
     }
 
     /// The hash id of this documents schema.
-    pub fn schema_hash(&self) -> &Hash {
-        &self.create_operation.schema()
+    pub fn schema_hash(&self) -> Hash {
+        self.create_operation.schema()
     }
 
     /// The author of this document.
-    pub fn author(&self) -> &Author {
-        self.create_operation.public_key()
+    pub fn author(&self) -> Author {
+        self.create_operation.public_key().to_owned()
     }
 
     /// Get the create operation for this document.
@@ -54,7 +54,7 @@ impl Document {
 
     /// The schema for this document.
     pub fn schema(&self) -> Schema {
-        Schema::new(self.schema_hash(), DOCUMENT_SCHEMA).unwrap()
+        Schema::new(&self.schema_hash(), DOCUMENT_SCHEMA).unwrap()
     }
 
     /// Returns an iterator over all operations in unsorted order (this is more efficient than ordered iteration).
