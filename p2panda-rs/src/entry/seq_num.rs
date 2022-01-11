@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
-use std::fmt;
 use std::str::FromStr;
 
 use bamboo_rs_core_ed25519_yasmf::lipmaa;
@@ -112,12 +111,6 @@ impl Iterator for SeqNum {
 impl PartialEq for SeqNum {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
-    }
-}
-
-impl fmt::Display for SeqNum {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
     }
 }
 
