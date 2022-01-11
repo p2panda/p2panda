@@ -11,11 +11,12 @@ describe('message', () => {
         message: 'chin chin',
         serious: false,
       });
+
+      const operationFields = await getOperationFields(fields);
+
       const outputRepresentation =
         'OperationFields(OperationFields({"channel": Integer(5), "message": ' +
         'Text("chin chin"), "serious": Boolean(false)}))';
-
-      const operationFields = await getOperationFields(fields);
       expect(operationFields.toString()).toEqual(outputRepresentation);
     });
   });

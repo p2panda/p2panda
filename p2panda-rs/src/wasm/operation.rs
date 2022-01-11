@@ -108,6 +108,13 @@ impl OperationFields {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    /// Returns this instance formatted for debugging.
+    #[wasm_bindgen(js_name = toString)]
+    #[allow(clippy::inherent_to_string)]
+    pub fn to_string(&self) -> String {
+        format!("{:?}", self)
+    }
 }
 
 impl Default for OperationFields {
