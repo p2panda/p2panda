@@ -25,12 +25,6 @@ pub struct DocumentIter(Vec<OperationWithMeta>);
 /// A resolvable data type made up of a collection of causally linked operations.
 #[derive(Debug)]
 pub struct Document {
-    /// The hash id of this document, it is the hash of the entry of this documents root CREATE operation.
-    id: Hash,
-    /// The hash id of the schema operations in this document follow.
-    schema: Schema,
-    /// The author (public key) who published the CREATE message which instantiated this document.
-    author: Author,
     /// The create operation which is the root of this document.
     create_operation: OperationWithMeta,
     /// A causal graph of this documents operations which can be topologically sorted.
@@ -39,30 +33,35 @@ pub struct Document {
 
 impl Document {
     /// The hash id of this document.
-    pub fn id(&self) -> Hash {
-        self.id.clone()
+    pub fn id(&self) -> &Hash {
+        self.create_operation.operation_id()
     }
 
     /// The hash id of this documents schema.
-    pub fn schema(&self) -> Hash {
-        self.schema.schema_hash()
+    pub fn schema_hash(&self) -> &Hash {
+        &self.create_operation.schema()
     }
 
     /// The author of this document.
-    pub fn author(&self) -> Author {
-        self.author.clone()
+    pub fn author(&self) -> &Author {
+        self.create_operation.public_key()
     }
 
     /// Get the create operation for this document.
-    fn create_operation(&self) -> &OperationWithMeta {
-        &self.create_operation
+    fn create_operation(&self) -> OperationWithMeta {
+        self.create_operation.clone()
+    }
+
+    /// The schema for this document.
+    pub fn schema(&self) -> Schema {
+        Schema::new(self.schema_hash(), DOCUMENT_SCHEMA).unwrap()
     }
 
     /// Returns an iterator over all operations in unsorted order (this is more efficient than ordered iteration).
     pub fn iter(&self) -> Result<DocumentIter, DocumentError> {
         let create_operation = self.create_operation();
         let mut iter = vec![create_operation.clone()];
-        let sorted = match self.graph.descendants_unsorted(create_operation) {
+        let sorted = match self.graph.descendants_unsorted(&create_operation) {
             Ok(descendants) => Ok(descendants),
             Err(_) => Err(DocumentError::IncrementalTopoError),
         }?;
@@ -78,7 +77,7 @@ impl Document {
     pub fn iter_topo(&self) -> Result<DocumentIter, DocumentError> {
         let create_operation = self.create_operation();
         let mut iter = vec![create_operation.clone()];
-        let sorted = match self.graph.descendants(create_operation) {
+        let sorted = match self.graph.descendants(&create_operation) {
             Ok(descendants) => Ok(descendants),
             Err(_) => Err(DocumentError::IncrementalTopoError),
         }?;
@@ -131,7 +130,7 @@ impl Validate for Document {
                 };
             };
             // Validate each update operation against the document schema.
-            match self.schema.validate_operation_fields(&op.fields().unwrap()) {
+            match self.schema().validate_operation_fields(&op.fields().unwrap()) {
                 Ok(_) => Ok(()),
                 Err(_) => Err(DocumentError::ValidationError(
                     "All CREATE and UPDATE operations in document must follow the schema description".to_string(),
@@ -186,17 +185,8 @@ impl DocumentBuilder {
 
         let create_operation = collect_create_operation.get(0).unwrap(); // unwrap as we know there is one item
 
-        // Get the author of this document from the create message
-        let author = create_operation.public_key();
-
-        // Get the document id from the create message
-        let document_id = create_operation.operation_id();
-
-        // Get the document id from the create message
-        let schema_hash = create_operation.schema();
-
-        // Normally we would get the schema string from the DB by it's hash
-        let schema = Schema::new(&schema_hash, DOCUMENT_SCHEMA)?;
+        // Validate the provided schema
+        Schema::new(&create_operation.schema(), DOCUMENT_SCHEMA)?;
 
         // Instantiate graph and operations map
         let mut graph = IncrementalTopo::new();
@@ -235,9 +225,6 @@ impl DocumentBuilder {
         })?;
 
         Ok(Document {
-            id: document_id.to_owned(),
-            schema,
-            author: author.to_owned(),
             create_operation: create_operation.to_owned(),
             graph,
         })
