@@ -31,8 +31,8 @@ pub struct Document {
     schema: Schema,
     /// The author (public key) who published the CREATE message which instantiated this document.
     author: Author,
-    /// A map of all operations contained within this document.
-    operations: BTreeMap<String, OperationWithMeta>,
+    /// The create operation which is the root of this document.
+    create_operation: OperationWithMeta,
     /// A causal graph of this documents operations which can be topologically sorted.
     graph: IncrementalTopo<OperationWithMeta>,
 }
@@ -53,16 +53,32 @@ impl Document {
         self.author.clone()
     }
 
-    /// Returns a map of all operations in this document.
-    pub fn operations(&self) -> BTreeMap<String, OperationWithMeta> {
-        self.operations.clone()
+    /// Get the create operation for this document.
+    fn create_operation(&self) -> &OperationWithMeta {
+        &self.create_operation
+    }
+
+    /// Returns an iterator over all operations in unsorted order (this is more efficient than ordered iteration).
+    pub fn iter(&self) -> Result<DocumentIter, DocumentError> {
+        let create_operation = self.create_operation();
+        let mut iter = vec![create_operation.clone()];
+        let sorted = match self.graph.descendants_unsorted(create_operation) {
+            Ok(descendants) => Ok(descendants),
+            Err(_) => Err(DocumentError::IncrementalTopoError),
+        }?;
+
+        for (_topo_order, op) in sorted {
+            iter.insert(0, op.to_owned())
+        }
+
+        Ok(DocumentIter(iter))
     }
 
     /// Returns an iterator over all operations in this document ordered topologically.
-    pub fn iter(&self) -> Result<DocumentIter, DocumentError> {
-        let create_operation = self.get_create_operation();
+    pub fn iter_topo(&self) -> Result<DocumentIter, DocumentError> {
+        let create_operation = self.create_operation();
         let mut iter = vec![create_operation.clone()];
-        let sorted = match self.graph.descendants(&create_operation) {
+        let sorted = match self.graph.descendants(create_operation) {
             Ok(descendants) => Ok(descendants),
             Err(_) => Err(DocumentError::IncrementalTopoError),
         }?;
@@ -74,24 +90,12 @@ impl Document {
         Ok(DocumentIter(iter))
     }
 
-    /// Get the create operation for this document. We unwrap and panic if the value is None
-    /// as all documents should contain at least a create operation identified by this documents id.
-    /// This was validated when building with DocumentBuilder.
-    fn get_create_operation(&self) -> OperationWithMeta {
-        self.operations
-            .get(self.id().as_str())
-            .expect("There should be a CREATE operation")
-            .to_owned()
-    }
-
     /// Sort the graph topologically, then reduce the linearised operations into a single
     /// `Instance`.
     pub fn resolve(&self) -> Result<Instance, DocumentError> {
-        let mut document_iter = self.iter()?;
+        let mut document_iter = self.iter_topo()?;
 
-        let create_message = document_iter
-            .next()
-            .expect("There should be a CREATE operation");
+        let create_message = document_iter.next().unwrap();
         let mut instance = Instance::try_from(create_message)?;
 
         document_iter.try_for_each(|op| instance.apply_update(op))?;
@@ -116,17 +120,8 @@ impl Validate for Document {
         // NB. This validation is quite excessive as it's normally not possible to get to this
         // point while having broken some of these basic data restraints.
 
-        // There must be a CREATE operation matching the document_id
-        let create_operation = self.get_create_operation();
-        if !create_operation.is_create() {
-            return Err(DocumentError::ValidationError(
-                "All documents must contain a CREATE operation identified by the document_id"
-                    .to_string(),
-            ));
-        }
-
         // Validate each operation in this document.
-        self.operations().iter().try_for_each(|(_, op)| {
+        self.iter()?.try_for_each(|op| {
             // If this is a delete operation check there are no fields.
             if op.is_delete() {
                 if op.fields().is_none() {
@@ -135,7 +130,7 @@ impl Validate for Document {
                     return Err(DocumentError::ValidationError("DELETE operations should not contain any fields".to_string()))
                 };
             };
-            // Validate each create and update operation against the document schema.
+            // Validate each update operation against the document schema.
             match self.schema.validate_operation_fields(&op.fields().unwrap()) {
                 Ok(_) => Ok(()),
                 Err(_) => Err(DocumentError::ValidationError(
@@ -243,7 +238,7 @@ impl DocumentBuilder {
             id: document_id.to_owned(),
             schema,
             author: author.to_owned(),
-            operations,
+            create_operation: create_operation.to_owned(),
             graph,
         })
     }
