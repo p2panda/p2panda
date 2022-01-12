@@ -27,9 +27,7 @@ const decodedOperations = TEST_DATA.panda.logs[0].decodedOperations.map(
       const fields: FieldsTagged = new Map();
 
       Object.keys(operation.fields).forEach((key: string) => {
-        const value: OperationValue = operation.fields[
-          'message'
-        ] as OperationValue;
+        const value: OperationValue = operation.fields[key] as OperationValue;
         fields.set(key, value);
       });
 
