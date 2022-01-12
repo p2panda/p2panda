@@ -6,8 +6,8 @@
 export type EntryArgs = {
   entryHashSkiplink: string | undefined;
   entryHashBacklink: string | undefined;
-  seqNum: number;
-  logId: number;
+  seqNum: string;
+  logId: string;
 };
 
 /**
@@ -17,10 +17,10 @@ export type EncodedEntry = {
   author: string;
   entryBytes: string;
   entryHash: string;
-  logId: number;
+  logId: BigInt;
   payloadBytes: string;
   payloadHash: string;
-  seqNum: number;
+  seqNum: BigInt;
 };
 
 /**
@@ -34,11 +34,11 @@ export type EntryRecord = Entry & {
  * Decoded entry containing optional `Operation`.
  */
 export type Entry = {
-  entryHashBacklink: string | null;
-  entryHashSkiplink: string | null;
-  logId: number;
-  operation: Operation | null;
-  seqNum: number;
+  entryHashBacklink: string | undefined;
+  entryHashSkiplink: string | undefined;
+  logId: BigInt;
+  operation: Operation | undefined;
+  seqNum: BigInt;
 };
 
 /**
@@ -56,18 +56,18 @@ export type Operation = {
  * Object containing operation field values.
  */
 export type Fields = {
-  [fieldname: string]: boolean | number | string | bigint;
+  [fieldname: string]: boolean | number | string | BigInt;
 };
 
 /**
  * Decoded entry containing optional `Operation`.
  */
 export type EntryTagged = {
-  entryHashBacklink: string | null;
-  entryHashSkiplink: string | null;
-  logId: number;
-  operation: OperationTagged | null;
-  seqNum: number;
+  entryHashBacklink: string | undefined;
+  entryHashSkiplink: string | undefined;
+  logId: BigInt;
+  operation: OperationTagged | undefined;
+  seqNum: BigInt;
 };
 
 /**
@@ -75,6 +75,7 @@ export type EntryTagged = {
  */
 export type OperationTagged = {
   action: 'create' | 'update' | 'delete';
+  previousOperations?: string[];
   schema: string;
   fields: FieldsTagged;
 };
@@ -82,10 +83,7 @@ export type OperationTagged = {
 /**
  * Object containing operation fields in tagged form.
  */
-export type FieldsTagged = {
-  // Currently only a schema with a text operation is supported
-  [fieldname: string]: OperationValue;
-};
+export type FieldsTagged = Map<string, OperationValue>;
 
 export type OperationValue =
   | OperationValueText

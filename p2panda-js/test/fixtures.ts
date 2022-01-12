@@ -1,25 +1,51 @@
+import { OperationFields } from 'wasm';
+
 import { marshallResponseFields } from '~/utils';
+
+import type {
+  EncodedEntry,
+  Entry,
+  EntryArgs,
+  FieldsTagged,
+  Operation,
+  OperationTagged,
+  OperationValue,
+} from '~/types';
 
 import TEST_DATA from './test-data.json';
 
-import type {
-  Entry,
-  Operation,
-  FieldsTagged,
-  EncodedEntry,
-  EntryArgs,
-} from '~/types';
-
 // Right now we only have one author `panda` who only has one schema log. This
 // could be expanded in the future.
-const PANDA_LOG = TEST_DATA.panda.logs[0];
+const encodedEntries = TEST_DATA.panda.logs[0].encodedEntries;
+const nextEntryArgs = TEST_DATA.panda.logs[0].nextEntryArgs;
+
+// Convert regular JavaScript object for operation fields into Map
+// @TODO: I'm horribly lost here in TypeScript land AAAAAAAAAAAAH!
+const decodedOperations = TEST_DATA.panda.logs[0].decodedOperations.map(
+  (operation): OperationTagged => {
+    if (operation.fields) {
+      const fields: FieldsTagged = new Map();
+
+      Object.keys(operation.fields).forEach((key: string) => {
+        const value: OperationValue = operation.fields[
+          'message'
+        ] as OperationValue;
+        fields.set(key, value);
+      });
+
+      operation.fields = fields;
+    }
+
+    return operation;
+  },
+);
 
 export const schemaFixture = (): string => {
-  return PANDA_LOG.decodedOperations[0].schema;
+  return decodedOperations[0].schema;
 };
 
 export const documentIdFixture = (): string => {
-  return PANDA_LOG.encodedEntries[0].entryHash;
+  return encodedEntries[0].entryHash;
 };
 
 /**
@@ -40,28 +66,27 @@ export const entryFixture = (seqNum: number): Entry => {
   const index = seqNum - 1;
 
   let fields = undefined;
-  if (PANDA_LOG.decodedOperations[index].action !== 'delete') {
+  if (decodedOperations[index].action !== 'delete') {
     fields = marshallResponseFields(
-      PANDA_LOG.decodedOperations[index].fields as FieldsTagged,
+      decodedOperations[index].fields as FieldsTagged,
     );
   }
 
   const operation: Operation = {
-    action: PANDA_LOG.decodedOperations[index].action as Operation['action'],
-    schema: PANDA_LOG.decodedOperations[index].schema,
+    action: decodedOperations[index].action as Operation['action'],
+    schema: decodedOperations[index].schema,
     fields: fields,
   };
 
-  if (PANDA_LOG.decodedOperations[index].previousOperations) {
-    operation.previousOperations =
-      PANDA_LOG.decodedOperations[index].previousOperations;
+  if (decodedOperations[index].previousOperations) {
+    operation.previousOperations = decodedOperations[index].previousOperations;
   }
 
   const entry: Entry = {
-    entryHashBacklink: PANDA_LOG.nextEntryArgs[index].entryHashBacklink,
-    entryHashSkiplink: PANDA_LOG.nextEntryArgs[index].entryHashSkiplink,
-    seqNum: PANDA_LOG.nextEntryArgs[index].seqNum,
-    logId: PANDA_LOG.nextEntryArgs[index].logId,
+    entryHashBacklink: nextEntryArgs[index].entryHashBacklink,
+    entryHashSkiplink: nextEntryArgs[index].entryHashSkiplink,
+    seqNum: nextEntryArgs[index].seqNum,
+    logId: nextEntryArgs[index].logId,
     operation,
   };
 
@@ -76,12 +101,12 @@ export const encodedEntryFixture = (seqNum: number): EncodedEntry => {
 
   const encodedEntry: EncodedEntry = {
     author: TEST_DATA.panda.publicKey,
-    entryBytes: PANDA_LOG.encodedEntries[index].entryBytes,
-    entryHash: PANDA_LOG.encodedEntries[index].entryHash,
-    logId: PANDA_LOG.encodedEntries[index].logId,
-    payloadBytes: PANDA_LOG.encodedEntries[index].payloadBytes,
-    payloadHash: PANDA_LOG.encodedEntries[index].payloadHash,
-    seqNum: PANDA_LOG.encodedEntries[index].seqNum,
+    entryBytes: encodedEntries[index].entryBytes,
+    entryHash: encodedEntries[index].entryHash,
+    logId: encodedEntries[index].logId,
+    payloadBytes: encodedEntries[index].payloadBytes,
+    payloadHash: encodedEntries[index].payloadHash,
+    seqNum: encodedEntries[index].seqNum,
   };
 
   return encodedEntry;
@@ -97,14 +122,14 @@ export const entryArgsFixture = (seqNum: number): EntryArgs => {
   const index = seqNum - 1;
 
   const entryArgs: EntryArgs = {
-    entryHashBacklink: PANDA_LOG.nextEntryArgs[index].entryHashBacklink as
+    entryHashBacklink: nextEntryArgs[index].entryHashBacklink as
       | string
       | undefined,
-    entryHashSkiplink: PANDA_LOG.nextEntryArgs[index].entryHashSkiplink as
+    entryHashSkiplink: nextEntryArgs[index].entryHashSkiplink as
       | string
       | undefined,
-    seqNum: PANDA_LOG.nextEntryArgs[index].seqNum,
-    logId: PANDA_LOG.nextEntryArgs[index].logId,
+    seqNum: nextEntryArgs[index].seqNum,
+    logId: nextEntryArgs[index].logId,
   };
 
   return entryArgs;

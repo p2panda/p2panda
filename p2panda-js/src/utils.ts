@@ -37,7 +37,7 @@ const getFieldType = (
  * Add type tags to operation fields before sending to node.
  */
 export const marshallRequestFields = (fields: Fields): FieldsTagged => {
-  const rv: FieldsTagged = {};
+  const map: FieldsTagged = new Map();
 
   Object.keys(fields).forEach((key) => {
     const value = fields[key];
@@ -48,47 +48,49 @@ export const marshallRequestFields = (fields: Fields): FieldsTagged => {
         // float or integer type in the JavaScript world
         if (typeof value === 'number' && value.toString().includes('.')) {
           // This is a float number
-          rv[key] = {
+          map.set(key, {
             value: value as number,
             type: 'float',
-          };
+          });
         } else if (typeof value === 'bigint') {
           // Convert bigints into strings and store as "int"
-          rv[key] = { value: value.toString(), type: 'int' };
+          map.set(key, { value: value.toString(), type: 'int' });
         } else {
           // This is a regular integer, convert it to string and store as "int"
-          rv[key] = {
+          map.set(key, {
             value: (value as number).toString(),
             type: 'int',
-          };
+          });
         }
 
         break;
       case 'bool':
-        rv[key] = { value: value as boolean, type: 'bool' };
+        map.set(key, { value: value as boolean, type: 'bool' });
         break;
       default:
-        rv[key] = { value: value as string, type: 'str' };
+        map.set(key, { value: value as string, type: 'str' });
     }
   });
 
-  return rv;
+  return map;
 };
 
 /**
- * Remove type tagging from operation fields on an entry received from node.
+ * Remove type tags from operation fields on an entry received from node.
  */
 export const marshallResponseFields = (fieldsTagged: FieldsTagged): Fields => {
-  return Object.keys(fieldsTagged).reduce((acc: Fields, key) => {
-    const { value, type } = fieldsTagged[key];
+  const fields: Fields = {};
+
+  for (const [key, fieldValue] of fieldsTagged.entries()) {
+    const { type, value } = fieldValue;
 
     // Convert smaller integers to 'number', keep large ones as strings
     if (type === 'int' && BigInt(value) <= Number.MAX_SAFE_INTEGER) {
-      acc[key] = parseInt(value as string, 10);
+      fields[key] = parseInt(value as string, 10);
     } else {
-      acc[key] = value;
+      fields[key] = value;
     }
+  }
 
-    return acc;
-  }, {});
+  return fields;
 };
