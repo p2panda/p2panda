@@ -105,12 +105,10 @@
                         ]
                     },
                     "seqNum": {
-                        "type": "number",
-                        "minimum": 1
+                        "type": "string"
                     },
                     "logId": {
-                        "type": "number",
-                        "minimum": 1
+                        "type": "string"
                     }
                 }
             },
@@ -127,8 +125,7 @@
                         "$ref": "#/components/schemas/Hash"
                     },
                     "logId": {
-                        "type": "number",
-                        "minimum": 1
+                        "type": "string"
                     },
                     "payloadBytes": {
                         "type": "string"
@@ -137,8 +134,7 @@
                         "$ref": "#/components/schemas/Hash"
                     },
                     "seqNum": {
-                        "type": "number",
-                        "minimum": 1
+                        "type": "string"
                     }
                 }
             },
