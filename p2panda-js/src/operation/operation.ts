@@ -18,7 +18,7 @@ export const getOperationFields = async (
   const { OperationFields } = await wasm;
 
   const operationFields = new OperationFields();
-  for (const [key, fieldValue] of Object.entries(fields)) {
+  for (const [key, fieldValue] of fields.entries()) {
     const { type, value } = fieldValue;
     operationFields.add(key, type, value);
   }
