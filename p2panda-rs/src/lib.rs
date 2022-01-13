@@ -69,6 +69,8 @@ pub mod operation;
 pub mod schema;
 pub mod secret_group;
 pub mod test_utils;
+#[cfg(test)]
+mod tests;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 

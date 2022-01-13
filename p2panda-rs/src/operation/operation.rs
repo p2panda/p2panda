@@ -4,6 +4,8 @@ use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
 use ciborium;
+#[cfg(test)]
+use proptest_derive::Arbitrary;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -31,6 +33,7 @@ impl Copy for OperationVersion {}
 /// An action defines the operation format and if this operation creates, updates or deletes a data
 /// document.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub enum OperationAction {
     /// Operation creates a new document.
     Create,
@@ -76,6 +79,7 @@ impl Copy for OperationAction {}
 /// Enum of possible data types which can be added to the operations fields as values.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
+#[cfg_attr(test, derive(Arbitrary))]
 pub enum OperationValue {
     /// Basic `boolean` value.
     #[serde(rename = "bool")]
@@ -121,6 +125,7 @@ pub enum OperationValue {
 /// }
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct OperationFields(BTreeMap<String, OperationValue>);
 
 impl OperationFields {

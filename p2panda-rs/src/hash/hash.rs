@@ -4,6 +4,8 @@ use std::convert::TryFrom;
 
 use arrayvec::ArrayVec;
 use bamboo_rs_core_ed25519_yasmf::yasmf_hash::new_blake3;
+#[cfg(test)]
+use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
@@ -28,7 +30,8 @@ pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
     derive(sqlx::Type, sqlx::FromRow),
     sqlx(transparent)
 )]
-pub struct Hash(String);
+#[cfg_attr(test, derive(Arbitrary))]
+pub struct Hash(#[cfg_attr(test, proptest(regex = "[0-9a-f]{68}"))] String);
 
 impl Hash {
     /// Validates and wraps encoded hash string into new `Hash` instance.
