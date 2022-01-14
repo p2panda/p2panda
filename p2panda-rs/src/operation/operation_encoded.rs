@@ -8,6 +8,7 @@ use crate::hash::Hash;
 use crate::operation::{Operation, OperationEncodedError};
 use crate::schema::{validate_schema, OPERATION_SCHEMA};
 use crate::Validate;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;
 
 /// Operation represented in hex encoded CBOR format.

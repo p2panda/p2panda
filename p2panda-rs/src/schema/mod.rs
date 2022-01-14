@@ -7,6 +7,7 @@
 //!
 //! [`Concise Data Definition Language`]: https://tools.ietf.org/html/rfc8610
 use cddl::validator::{cbor, validate_cbor_from_slice};
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;
 
 mod error;
