@@ -31,6 +31,10 @@ pub enum EntrySignedError {
     #[error("operation needs to match payload hash of encoded entry")]
     OperationHashMismatch,
 
+    /// Handle errors when encoding operation.
+    #[error("error occured when encoding operation")]
+    OperationEncodingError(String),
+
     /// Can not sign and encode an entry without a `Operation`.
     #[error("entry does not contain any operation")]
     OperationMissing,

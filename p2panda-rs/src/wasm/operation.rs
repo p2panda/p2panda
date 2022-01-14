@@ -155,7 +155,7 @@ pub fn encode_update_operation(
 
     let previous = jserr!(prev_op_result);
     let operation = jserr!(Operation::new_update(schema, previous, fields.0));
-    let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
+    let operation_encoded = OperationEncoded::try_from(&operation)?;
     Ok(operation_encoded.as_str().to_owned())
 }
 

@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::hash::Hash;
 use crate::operation::{Operation, OperationEncodedError};
-#[cfg(not(target_arch = "wasm32"))]
 use crate::schema::{validate_schema, OPERATION_SCHEMA};
 use crate::Validate;
+use wasm_bindgen::JsValue;
 
 /// Operation represented in hex encoded CBOR format.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -21,7 +21,16 @@ pub struct OperationEncoded(String);
 
 impl OperationEncoded {
     /// Validates and wraps encoded operation string into a new `OperationEncoded` instance.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new(value: &str) -> Result<OperationEncoded, OperationEncodedError> {
+        let inner = Self(value.to_owned());
+        inner.validate()?;
+        Ok(inner)
+    }
+
+    /// Validates and wraps encoded operation string into a new `OperationEncoded` instance.
+    #[cfg(target_arch = "wasm32")]
+    pub fn new(value: &str) -> Result<OperationEncoded, JsValue> {
         let inner = Self(value.to_owned());
         inner.validate()?;
         Ok(inner)
@@ -52,8 +61,20 @@ impl OperationEncoded {
 }
 
 /// Returns an encoded version of this operation.
+#[cfg(not(target_arch = "wasm32"))]
 impl TryFrom<&Operation> for OperationEncoded {
     type Error = OperationEncodedError;
+
+    fn try_from(operation: &Operation) -> Result<Self, Self::Error> {
+        let encoded = hex::encode(&operation.to_cbor());
+        OperationEncoded::new(&encoded)
+    }
+}
+
+/// Returns an encoded version of this operation.
+#[cfg(target_arch = "wasm32")]
+impl TryFrom<&Operation> for OperationEncoded {
+    type Error = JsValue;
 
     fn try_from(operation: &Operation) -> Result<Self, Self::Error> {
         let encoded = hex::encode(&operation.to_cbor());
@@ -79,14 +100,16 @@ impl Validate for OperationEncoded {
 
 #[cfg(target_arch = "wasm32")]
 impl Validate for OperationEncoded {
-    type Error = OperationEncodedError;
+    type Error = JsValue;
 
-    /// Checks encoded operation value against hex format.
-    ///
-    /// Skips CDDL schema validation as this is not supported for wasm targets. See:
-    /// https://github.com/anweiss/cddl/issues/83
+    /// Checks encoded operation value against hex format and CDDL schema.
     fn validate(&self) -> Result<(), Self::Error> {
-        hex::decode(&self.0).map_err(|_| OperationEncodedError::InvalidHexEncoding)?;
+        // Validate hex encoding
+        let bytes = hex::decode(&self.0).map_err(|_| JsValue::from_str("Hex encoding error"))?;
+
+        // Validate CDDL schema
+        validate_schema(OPERATION_SCHEMA, bytes)?;
+
         Ok(())
     }
 }

@@ -51,7 +51,13 @@ use crate::operation::OperationEncoded;
 pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned, EntrySignedError> {
     // Generate operation hash
     let operation_encoded = match entry.operation() {
-        Some(operation) => OperationEncoded::try_from(operation)?,
+        Some(operation) => match OperationEncoded::try_from(operation) {
+            Ok(op) => Ok(op),
+            // Handling JsValue errors coming from cddl crate when compiling for wasm target....
+            Err(e) => Err(EntrySignedError::OperationEncodingError(
+                e.as_string().unwrap(),
+            )),
+        }?,
         None => return Err(EntrySignedError::OperationMissing),
     };
     let operation_hash = operation_encoded.hash();

@@ -6,8 +6,8 @@
 //! operations.
 //!
 //! [`Concise Data Definition Language`]: https://tools.ietf.org/html/rfc8610
-#[cfg(not(target_arch = "wasm32"))]
-use cddl::validator::cbor;
+use cddl::validator::{cbor, validate_cbor_from_slice};
+use wasm_bindgen::JsValue;
 
 mod error;
 mod operation;
@@ -24,7 +24,7 @@ pub use schema::{Schema, SchemaBuilder, Type};
 /// concatenated error operation and returns it.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaError> {
-    match cddl::validate_cbor_from_slice(cddl_schema, &bytes, None) {
+    match validate_cbor_from_slice(cddl_schema, &bytes, None) {
         Err(cbor::Error::Validation(err)) => {
             let err_str = err
                 .iter()
@@ -40,4 +40,14 @@ pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaEr
         }
         _ => Ok(()),
     }
+}
+
+/// Checks CBOR bytes against CDDL schemas.
+///
+/// This helper method also converts validation errors coming from the `cddl` crate into an
+/// concatenated error operation and returns it.
+#[cfg(target_arch = "wasm32")]
+pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), JsValue> {
+    validate_cbor_from_slice(cddl_schema, &bytes, None)?;
+    Ok(())
 }

@@ -11,7 +11,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 macro_rules! jserr {
     // Convert error to js_sys::Error with original error message
     ($l:expr) => {
-        $l.map_err::<JsValue, _>(|err| js_sys::Error::new(&format!("{}", err)).into())?
+        $l.map_err::<JsValue, _>(|err| js_sys::Error::new(&format!("{:?}", err)).into())?
     };
 
     // Convert error to js_sys::Error with custom error message
