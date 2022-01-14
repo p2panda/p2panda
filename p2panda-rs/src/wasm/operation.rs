@@ -131,7 +131,7 @@ pub fn encode_create_operation(
 ) -> Result<String, JsValue> {
     let schema = jserr!(Hash::new(&schema_hash));
     let operation = jserr!(Operation::new_create(schema, fields.0));
-    let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
+    let operation_encoded = OperationEncoded::try_from(&operation)?;
     Ok(operation_encoded.as_str().to_owned())
 }
 
@@ -178,6 +178,6 @@ pub fn encode_delete_operation(
 
     let previous = jserr!(prev_op_result);
     let operation = jserr!(Operation::new_delete(schema, previous));
-    let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
+    let operation_encoded = OperationEncoded::try_from(&operation)?;
     Ok(operation_encoded.as_str().to_owned())
 }

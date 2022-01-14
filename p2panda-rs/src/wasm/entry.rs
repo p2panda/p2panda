@@ -58,7 +58,7 @@ pub fn sign_encode_entry(
     let seq_num = jserr!(SeqNum::new(seq_num.into()));
 
     // Convert to Operation
-    let operation_encoded = jserr!(OperationEncoded::new(&encoded_operation));
+    let operation_encoded = OperationEncoded::new(&encoded_operation)?;
     let operation = jserr!(Operation::try_from(&operation_encoded));
 
     // Create Entry instance
@@ -91,7 +91,7 @@ pub fn decode_entry(
     // Convert encoded operation
     let operation_encoded = match operation_encoded {
         Some(msg) => {
-            let inner = jserr!(OperationEncoded::new(&msg));
+            let inner = OperationEncoded::new(&msg)?;
             Some(inner)
         }
         None => None,
