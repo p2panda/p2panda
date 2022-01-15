@@ -7,6 +7,7 @@
 mod dag;
 mod error;
 mod filter;
+mod graph;
 mod marshall_entries;
 
 pub use dag::{Edge, Node, DAG};
