@@ -9,11 +9,17 @@ pub struct Graph<T: PartialEq> {
 }
 
 #[derive(Debug, PartialEq)]
-struct Node<T: PartialEq> {
+pub struct Node<T: PartialEq> {
     id: String,
     elem: T,
     previous: Vec<String>,
     next: Vec<String>,
+}
+
+pub enum NodeResult<'a, T: PartialEq> {
+    Connected(&'a Node<T>),
+    Disconnected(&'a Node<T>),
+    NotFound,
 }
 
 impl<T: PartialEq> Node<T> {
@@ -23,6 +29,14 @@ impl<T: PartialEq> Node<T> {
 
     pub fn is_merge(&self) -> bool {
         self.previous.len() > 1
+    }
+
+    pub fn is_branch(&self) -> bool {
+        self.next.len() > 1
+    }
+
+    pub fn is_tip(&self) -> bool {
+        self.next.is_empty()
     }
 
     pub fn id(&self) -> String {
@@ -69,6 +83,70 @@ impl<'a, T: PartialEq> Graph<T> {
         if let Some(to_node) = self.get_node_mut_by_id(to) {
             to_node.previous.push(from.to_string())
         }
+    }
+
+    pub fn get_node(&self, key: &str) -> NodeResult<T> {
+        if let Some(node) = self.nodes.get(key) {
+            if self.is_connected(key) {
+                return NodeResult::Connected(node);
+            }
+            NodeResult::Disconnected(node)
+        } else {
+            NodeResult::NotFound
+        }
+    }
+
+    pub fn is_connected(&self, key: &str) -> bool {
+        matches!(self.get_node(key), NodeResult::Connected(_))
+    }
+
+    pub fn get_next(&self, key: &str) -> Option<Vec<String>> {
+        match self.get_node(key) {
+            NodeResult::Connected(node) => Some(node.next()),
+            _ => None,
+        }
+    }
+
+    pub fn get_previous(&self, key: &str) -> Option<Vec<String>> {
+        match self.get_node(key) {
+            NodeResult::Connected(node) => Some(node.previous()),
+            _ => None,
+        }
+    }
+
+    pub fn is_merge_node(&self, key: &str) -> bool {
+        match self.get_node(key) {
+            NodeResult::Connected(node) => node.is_merge(),
+            _ => false,
+        }
+    }
+
+    pub fn is_branch_node(&self, key: &str) -> bool {
+        match self.get_node(key) {
+            NodeResult::Connected(node) => node.is_branch(),
+            _ => false,
+        }
+    }
+
+    pub fn is_tip_node(&self, key: &str) -> bool {
+        match self.get_node(key) {
+            NodeResult::Connected(node) => node.is_tip(),
+            _ => false,
+        }
+    }
+
+    // pub fn invalidate_keys(&self, keys: Vec<String>) {}
+
+    pub fn root_node(&self) -> &Node<T> {
+        self.nodes.values().find(|node| node.is_root()).unwrap()
+    }
+
+    pub fn root_node_key(&self) -> String {
+        self.nodes
+            .values()
+            .find(|node| node.is_root())
+            .unwrap()
+            .id()
     }
 
     fn get_node_by_id(&'a self, id: &str) -> Option<&'a Node<T>> {
