@@ -1,81 +1,98 @@
 use std::collections::HashMap;
 
+/// Directed acyclic casaul graph who's nodes can be sorted topologically.
+///
+/// Graph API based on [tangle-graph](https://gitlab.com/tangle-js/tangle-graph).
 #[derive(Debug)]
-pub struct Graph<T: PartialEq> {
-    nodes: HashMap<String, Node<T>>,
-    visited: Vec<String>,
-    sorted: Vec<String>,
-    queue: Vec<String>,
-}
+pub struct Graph<T: PartialEq + Clone>(HashMap<String, Node<T>>);
 
-#[derive(Debug, PartialEq)]
-pub struct Node<T: PartialEq> {
-    id: String,
-    elem: T,
+#[derive(Debug, PartialEq, Clone)]
+pub struct Node<T: PartialEq + Clone> {
+    key: String,
+    data: T,
     previous: Vec<String>,
     next: Vec<String>,
 }
 
-pub enum NodeResult<'a, T: PartialEq> {
-    Connected(&'a Node<T>),
-    Disconnected(&'a Node<T>),
-    NotFound,
-}
-
-impl<T: PartialEq> Node<T> {
-    pub fn is_root(&self) -> bool {
+impl<T: PartialEq + Clone> Node<T> {
+    /// Returns true if this node is the root of this graph.
+    fn is_root(&self) -> bool {
         self.previous.is_empty()
     }
 
-    pub fn is_merge(&self) -> bool {
+    /// Returns true if this is a merge node.
+    fn is_merge(&self) -> bool {
         self.previous.len() > 1
     }
 
-    pub fn is_branch(&self) -> bool {
+    /// Returns true if this is a branch node.
+    fn is_branch(&self) -> bool {
         self.next.len() > 1
     }
 
-    pub fn is_tip(&self) -> bool {
+    /// Returns true if this is a graph tip.
+    fn is_tip(&self) -> bool {
         self.next.is_empty()
     }
 
-    pub fn id(&self) -> String {
-        self.id.to_owned()
+    /// Returns the key for this node.
+    fn key(&self) -> String {
+        self.key.to_owned()
     }
 
-    pub fn previous(&self) -> Vec<String> {
+    /// Returns a vector of keys for the nodes preceding this node in the graph.
+    fn previous(&self) -> Vec<String> {
         self.previous.clone()
     }
 
-    pub fn next(&self) -> Vec<String> {
+    /// Returns a vector of keys for the nodes following this node in the graph.
+    fn next(&self) -> Vec<String> {
         self.next.clone()
+    }
+
+    fn data(&self) -> T {
+        self.data.clone()
     }
 }
 
-impl<'a, T: PartialEq> Graph<T> {
+impl<'a, T: PartialEq + Clone> Graph<T> {
+    /// Instantiate a new empty graph.
     pub fn new() -> Self {
-        Graph {
-            nodes: HashMap::new(),
-            visited: Vec::new(),
-            sorted: Vec::new(),
-            queue: Vec::new(),
-        }
+        Self(HashMap::new())
     }
 
-    pub fn add_node(&mut self, id: &str, elem: T) {
+    /// Instantiate a graph from a vec of nodes.
+    pub fn new_from_nodes(nodes: Vec<Node<T>>) -> Self {
+        let mut graph = HashMap::new();
+        for node in &nodes {
+            graph.insert(node.key(), node.to_owned());
+        }
+
+        let mut graph = Self(graph);
+
+        for node in nodes {
+            for previous in node.previous() {
+                graph.add_link(&previous, &node.key())
+            }
+        }
+
+        Self(HashMap::new())
+    }
+
+    /// Add a node to the graph. This node will be detached until it is linked to another node.
+    pub fn add_node(&mut self, key: &str, data: T) {
         let new_node = Node {
-            id: id.to_string(),
+            key: key.to_string(),
             next: Vec::new(),
             previous: Vec::new(),
-            elem,
+            data,
         };
 
-        self.nodes.insert(id.to_string(), new_node);
+        self.0.insert(key.to_string(), new_node);
     }
 
+    /// Add a link between existing nodes to the graph.
     pub fn add_link(&mut self, from: &str, to: &str) {
-        // Check "to" and "from" nodes exist.
-
         if let Some(from_node) = self.get_node_mut_by_id(from) {
             from_node.next.push(to.to_string())
         }
@@ -85,157 +102,168 @@ impl<'a, T: PartialEq> Graph<T> {
         }
     }
 
-    pub fn get_node(&self, key: &str) -> NodeResult<T> {
-        if let Some(node) = self.nodes.get(key) {
-            if self.is_connected(key) {
-                return NodeResult::Connected(node);
-            }
-            NodeResult::Disconnected(node)
-        } else {
-            NodeResult::NotFound
-        }
+    /// Get node from the graph by key, returns `None` if it wasn't found.
+    pub fn get_node(&self, key: &str) -> Option<&Node<T>> {
+        self.0.get(key)
     }
 
+    /// Get the data payload from this node.
+    pub fn get_node_data(&self, id: &str) -> Option<&T> {
+        self.0.get(id).map(|node| &node.data)
+    }
+
+    /// Returns true if this node key is connected to the graph.
     pub fn is_connected(&self, key: &str) -> bool {
-        matches!(self.get_node(key), NodeResult::Connected(_))
+        if let Some(node) = self.get_node(key) {
+            !node.previous().is_empty() || !node.next().is_empty()
+        } else {
+            false
+        }
     }
 
+    /// Returns the keys for nodes which follows this node key.
     pub fn get_next(&self, key: &str) -> Option<Vec<String>> {
-        match self.get_node(key) {
-            NodeResult::Connected(node) => Some(node.next()),
-            _ => None,
-        }
+        self.get_node(key).map(|node| node.next())
     }
 
+    /// Returns the keys for nodes which precede this node key.
     pub fn get_previous(&self, key: &str) -> Option<Vec<String>> {
-        match self.get_node(key) {
-            NodeResult::Connected(node) => Some(node.previous()),
-            _ => None,
-        }
+        self.get_node(key).map(|node| node.previous())
     }
 
+    /// Returns true if this node key is a merge node.
     pub fn is_merge_node(&self, key: &str) -> bool {
         match self.get_node(key) {
-            NodeResult::Connected(node) => node.is_merge(),
-            _ => false,
+            Some(node) => node.is_merge(),
+            None => false,
         }
     }
 
+    /// Returns true if this node key is a branch node.
     pub fn is_branch_node(&self, key: &str) -> bool {
         match self.get_node(key) {
-            NodeResult::Connected(node) => node.is_branch(),
-            _ => false,
+            Some(node) => node.is_branch(),
+            None => false,
         }
     }
 
+    /// Returns true if this node key is a graph tip.
     pub fn is_tip_node(&self, key: &str) -> bool {
         match self.get_node(key) {
-            NodeResult::Connected(node) => node.is_tip(),
-            _ => false,
+            Some(node) => node.is_tip(),
+            None => false,
         }
     }
 
+    // NOT IMPLEMENTED //
     // pub fn invalidate_keys(&self, keys: Vec<String>) {}
 
+    /// Returns a reference to the root node of this graph.
     pub fn root_node(&self) -> &Node<T> {
-        self.nodes.values().find(|node| node.is_root()).unwrap()
+        self.0.values().find(|node| node.is_root()).unwrap()
     }
 
+    /// Returns the root node key.
     pub fn root_node_key(&self) -> String {
-        self.nodes
-            .values()
-            .find(|node| node.is_root())
-            .unwrap()
-            .id()
+        self.0.values().find(|node| node.is_root()).unwrap().key()
     }
 
-    fn get_node_by_id(&'a self, id: &str) -> Option<&'a Node<T>> {
-        self.nodes.get(id)
-    }
-
+    /// Get a mutable reference to a node in the graph identified by it's key.
     fn get_node_mut_by_id(&mut self, id: &str) -> Option<&mut Node<T>> {
-        self.nodes.get_mut(id)
+        self.0.get_mut(id)
     }
 
-    fn dependencies_visited(&self, visited: &[String], node: &Node<T>) -> bool {
+    /// Check if all a nodes dependencies have been visited.
+    fn dependencies_visited(&self, sorted: &[String], node: &Node<T>) -> bool {
         let mut has_dependencies = true;
         for previous_node in node.previous() {
-            if !visited.contains(&previous_node) && node.id() != previous_node {
+            if !sorted.contains(&previous_node) {
                 has_dependencies = false
             }
         }
         has_dependencies
     }
 
-    fn children_visited(&self, visited: &[String], node: &Node<T>) -> bool {
-        let mut children_visited = true;
-        for next_node in node.next() {
-            if !visited.contains(&next_node) {
-                children_visited = false
-            }
-        }
-        children_visited
-    }
-
-    pub fn get(&self, id: &str) -> Option<&T> {
-        self.nodes.get(id).map(|node| &node.elem)
-    }
-
-    fn next(&self, visited: &[String], node: &'a Node<T>) -> Option<Vec<String>> {
-        let mut next_node_ids = Vec::new();
+    /// Returns the next un-visited node following the passed node.
+    fn next(&self, sorted: &[String], node: &'a Node<T>) -> Option<Vec<String>> {
+        let mut next_node_keys = Vec::new();
         for link in &node.next() {
-            if !visited.contains(link) {
-                next_node_ids.push(link.to_string())
+            if !sorted.contains(link) {
+                next_node_keys.push(link.to_string())
             };
         }
-        if next_node_ids.is_empty() {
+        if next_node_keys.is_empty() {
             return None;
         };
-        next_node_ids.reverse();
-        Some(next_node_ids)
+        next_node_keys.reverse();
+        Some(next_node_keys)
     }
 
-    pub fn walk(&'a mut self) -> Vec<String> {
-        let root_node = self.nodes.values().find(|node| node.is_root()).unwrap();
+    /// Sorts the graph topologically and returns the sorted
+    pub fn walk(&'a mut self) -> Vec<T> {
+        let root_node = self.0.values().find(|node| node.is_root()).unwrap();
         let mut queue = vec![root_node];
-        let mut visited = Vec::new();
+        let mut sorted = Vec::new();
 
-        let push_to_queue = |queue: &mut Vec<&'a Node<T>>, node_id: &str| {
-            let node = self.get_node_by_id(node_id).unwrap();
+        // Helper closure for pushing node to the queue.
+        let push_to_queue = |queue: &mut Vec<&'a Node<T>>, node_key: &str| {
+            let node = self.get_node(node_key).unwrap();
             if !queue.contains(&node) {
-                println!("{}: push to queue", node_id);
+                println!("{}: push to queue", node_key);
                 queue.push(node)
+            } else {
+                println!("{}: already in queue", node_key);
             };
         };
 
-        let push_to_visited = |visited: &mut Vec<String>, node_id| visited.push(node_id);
+        // Helper closure for pushing node to the sorted stack.
+        let push_to_sorted = |sorted: &mut Vec<String>, node_key: String| {
+            sorted.push(node_key.clone());
+            println!("{}: sorted to postion {}", node_key, sorted.len());
+        };
 
+        // Pop from the queue while it has items.
         while let Some(mut current_node) = queue.pop() {
-            push_to_visited(&mut visited, current_node.id());
-            while let Some(mut next_node_ids) = self.next(&visited, current_node) {
-                let next_node_id = next_node_ids.pop().unwrap();
-                while let Some(node_to_be_queued) = next_node_ids.pop() {
+            // Push this node to the sorted stack...
+            push_to_sorted(&mut sorted, current_node.key());
+
+            // ...and then walk the graph starting from this node.
+            while let Some(mut next_node_keys) = self.next(&sorted, current_node) {
+                // Pop off the next node we will visit.
+                let next_node_key = next_node_keys.pop().unwrap();
+
+                // Push all other nodes connected to this one to the queue, we will visit these later.
+                while let Some(node_to_be_queued) = next_node_keys.pop() {
                     push_to_queue(&mut queue, &node_to_be_queued)
                 }
-                if let Some(next_node) = self.get_node_by_id(&next_node_id) {
+
+                // Retrieve the next node by it's key.
+                if let Some(next_node) = self.get_node(&next_node_key) {
+                    // If it's a merge node, check it's dependencies have all been visited.
                     if next_node.is_merge() {
-                        if self.dependencies_visited(&visited, next_node) {
-                            println!("{}: is merge and has all dependencies met", next_node.id());
-                            push_to_queue(&mut queue, &next_node.id());
+                        if self.dependencies_visited(&sorted, next_node) {
+                            // If they have been, push this node to the queue and exit this loop.
+                            push_to_queue(&mut queue, &next_node.key());
+                            println!("{}: is merge and has all dependencies met", next_node.key());
                             break;
                         }
+                        // Else don't do anything and break out of this loop.
                         println!(
                             "{}: is merge and does not have dependencies met",
-                            next_node.id()
+                            next_node.key()
                         );
                         break;
                     }
-                    push_to_visited(&mut visited, next_node.id());
+                    // If it wasn't a merge node, push it to the sorted stack and keep walking.
+                    push_to_sorted(&mut sorted, next_node.key());
                     current_node = next_node;
                 }
             }
         }
-        visited
+        sorted
+            .iter()
+            .map(|key| self.get_node(key).unwrap().data())
+            .collect()
     }
 }
 
@@ -246,17 +274,17 @@ mod test {
     #[test]
     fn basics() {
         let mut graph = Graph::new();
-        graph.add_node("a", 1);
-        graph.add_node("b", 2);
-        graph.add_node("c", 3);
-        graph.add_node("d", 3);
-        graph.add_node("e", 3);
-        graph.add_node("f", 3);
-        graph.add_node("g", 3);
-        graph.add_node("h", 3);
-        graph.add_node("i", 3);
-        graph.add_node("j", 3);
-        graph.add_node("k", 3);
+        graph.add_node("a", "Wake Up");
+        graph.add_node("b", "Make Coffee");
+        graph.add_node("c", "Drink Coffee");
+        graph.add_node("d", "Stroke Cat");
+        graph.add_node("e", "Look Out The Window");
+        graph.add_node("f", "Start The Day");
+        graph.add_node("g", "Cat Jumps Off Bed");
+        graph.add_node("h", "Cat Meows");
+        graph.add_node("i", "Brain Receives Caffeine");
+        graph.add_node("j", "Brain Starts Engine");
+        graph.add_node("k", "Brain Starts Thinking");
 
         graph.add_link("a", "b");
         graph.add_link("b", "c");
@@ -275,7 +303,19 @@ mod test {
 
         assert_eq!(
             graph.walk(),
-            ["a", "b", "c", "i", "j", "k", "g", "h", "d", "e", "f",]
+            [
+                "Wake Up",
+                "Make Coffee",
+                "Drink Coffee",
+                "Brain Receives Caffeine",
+                "Brain Starts Engine",
+                "Brain Starts Thinking",
+                "Cat Jumps Off Bed",
+                "Cat Meows",
+                "Stroke Cat",
+                "Look Out The Window",
+                "Start The Day"
+            ]
         )
     }
 }
