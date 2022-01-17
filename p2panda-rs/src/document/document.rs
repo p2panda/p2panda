@@ -49,11 +49,6 @@ impl Document {
         self.create_operation.public_key().to_owned()
     }
 
-    /// Get the create operation for this document.
-    fn create_operation(&self) -> OperationWithMeta {
-        self.create_operation.clone()
-    }
-
     /// The schema for this document.
     pub fn schema(&self) -> Schema {
         Schema::new(&self.schema_hash(), DOCUMENT_SCHEMA).unwrap()
