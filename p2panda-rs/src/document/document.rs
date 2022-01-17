@@ -3,12 +3,14 @@
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
-use incremental_topo::IncrementalTopo;
+// // Now we use our own graph for topo sorting :-)
+// use incremental_topo::IncrementalTopo;
 
 use crate::document::{DocumentBuilderError, DocumentError};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::instance::Instance;
+use crate::materialiser::Graph;
 use crate::operation::{AsOperation, OperationWithMeta};
 use crate::schema::{Schema, ValidateOperation};
 use crate::Validate;
@@ -28,7 +30,7 @@ pub struct Document {
     /// The create operation which is the root of this document.
     create_operation: OperationWithMeta,
     /// A causal graph of this documents operations which can be topologically sorted.
-    graph: IncrementalTopo<OperationWithMeta>,
+    graph: Graph<OperationWithMeta>,
 }
 
 impl Document {
@@ -57,42 +59,20 @@ impl Document {
         Schema::new(&self.schema_hash(), DOCUMENT_SCHEMA).unwrap()
     }
 
-    /// Returns an iterator over all operations in unsorted order (this is more efficient than ordered iteration).
-    pub fn iter(&self) -> Result<DocumentIter, DocumentError> {
-        let create_operation = self.create_operation();
-        let mut iter = vec![create_operation.clone()];
-        let sorted = match self.graph.descendants_unsorted(&create_operation) {
-            Ok(descendants) => Ok(descendants),
-            Err(_) => Err(DocumentError::IncrementalTopoError),
-        }?;
-
-        for (_topo_order, op) in sorted {
-            iter.insert(0, op.to_owned())
-        }
-
-        Ok(DocumentIter(iter))
-    }
-
     /// Returns an iterator over all operations in this document ordered topologically.
-    pub fn iter_topo(&self) -> Result<DocumentIter, DocumentError> {
-        let create_operation = self.create_operation();
-        let mut iter = vec![create_operation.clone()];
-        let sorted = match self.graph.descendants(&create_operation) {
-            Ok(descendants) => Ok(descendants),
-            Err(_) => Err(DocumentError::IncrementalTopoError),
+    pub fn iter(&self) -> Result<DocumentIter, DocumentError> {
+        let sorted = match self.graph.sort() {
+            Ok(operations) => Ok(operations.into_iter().rev().collect()),
+            Err(_) => Err(DocumentError::GraphSortingError),
         }?;
 
-        for op in sorted {
-            iter.insert(0, op.to_owned())
-        }
-
-        Ok(DocumentIter(iter))
+        Ok(DocumentIter(sorted))
     }
 
     /// Sort the graph topologically, then reduce the linearised operations into a single
     /// `Instance`.
     pub fn resolve(&self) -> Result<Instance, DocumentError> {
-        let mut document_iter = self.iter_topo()?;
+        let mut document_iter = self.iter()?;
 
         let create_message = document_iter.next().unwrap();
         let mut instance = Instance::try_from(create_message)?;
@@ -189,7 +169,7 @@ impl DocumentBuilder {
         Schema::new(&create_operation.schema(), DOCUMENT_SCHEMA)?;
 
         // Instantiate graph and operations map
-        let mut graph = IncrementalTopo::new();
+        let mut graph = Graph::new();
         let mut operations = BTreeMap::new();
 
         for op in self.operations() {
@@ -201,28 +181,20 @@ impl DocumentBuilder {
             // Insert operation into map
             operations.insert(op.operation_id().as_str().to_owned(), op.to_owned());
             // Add node to graph
-            graph.add_node(op);
+            graph.add_node(op.operation_id().as_str(), op.clone());
         }
 
         // Derive graph dependencies from all operations' previous_operations field. Apply to graph handling
         // errors.
         // nb. I had some problems capturing the actual errors from IncrementalTopo crate... needs another
         // go at some point.
-        operations.iter().try_for_each(|(_, successor)| {
-            if let Some(previous_operations) = successor.previous_operations() {
-                previous_operations.iter().try_for_each(|previous| {
-                    match graph.add_dependency(
-                        operations.get(previous.as_str()).unwrap(),
-                        &successor.to_owned(),
-                    ) {
-                        Ok(_) => Ok(()),
-                        Err(_) => Err(DocumentBuilderError::IncrementalTopoDependencyError),
-                    }
-                })
-            } else {
-                Ok(())
+        for (_, node) in operations {
+            if let Some(previous_operations) = node.previous_operations() {
+                for previous in previous_operations {
+                    graph.add_link(previous.as_str(), node.operation_id().as_str())
+                }
             }
-        })?;
+        }
 
         Ok(Document {
             create_operation: create_operation.to_owned(),
@@ -431,7 +403,7 @@ mod tests {
 
         // Panda publishes an update operation.
         // It contains the hash of the previous operation in it's `previous_operations` array
-        let panda_entry_2_hash = send_to_node(
+        send_to_node(
             &mut node,
             &panda,
             &update_operation(
@@ -446,15 +418,16 @@ mod tests {
         )
         .unwrap();
 
-        let operations = node
-            .all_entries()
-            .iter()
-            .filter(|entry| entry.hash() == panda_entry_2_hash)
-            .map(|entry| {
-                OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap()
-            })
-            .collect();
+        // Only retrieve the update operation.
+        let only_the_update_operation = &node.all_entries()[1];
 
+        let operations = vec![OperationWithMeta::new(
+            &only_the_update_operation.entry_encoded(),
+            &only_the_update_operation.operation_encoded(),
+        )
+        .unwrap()];
+
+        // Building a Document without a create operation should fail.
         assert!(DocumentBuilder::new(operations).build().is_err());
     }
 }

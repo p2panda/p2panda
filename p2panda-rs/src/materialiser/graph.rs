@@ -205,7 +205,7 @@ impl<'a, T: PartialEq + Clone> Graph<T> {
     }
 
     /// Sorts the graph topologically and returns the sorted
-    pub fn walk_from(&'a mut self, key: &str) -> Result<Vec<T>, GraphError> {
+    pub fn walk_from(&'a self, key: &str) -> Result<Vec<T>, GraphError> {
         let root_node = self.get_node(key).unwrap();
         let mut queue = vec![root_node];
         let mut sorted = Vec::new();
@@ -278,6 +278,12 @@ impl<'a, T: PartialEq + Clone> Graph<T> {
             .iter()
             .map(|key| self.get_node(key).unwrap().data())
             .collect())
+    }
+
+    /// Sort the entire graph, starting from the root node.
+    pub fn sort(&'a self) -> Result<Vec<T>, GraphError> {
+        let root_node = self.root_node();
+        self.walk_from(&root_node.key())
     }
 }
 

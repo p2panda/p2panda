@@ -35,9 +35,9 @@ pub enum DocumentError {
     #[error("No operation found with that id")]
     OperationNotFound,
 
-    /// Internal IncrementalTopo error.
+    /// Error when sorting the graph.
     #[error("Error sorting graph")]
-    IncrementalTopoError,
+    GraphSortingError,
 
     /// Get operation error.
     #[error("Operation with that id does not exist")]
