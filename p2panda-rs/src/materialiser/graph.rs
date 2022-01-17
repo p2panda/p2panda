@@ -219,7 +219,7 @@ impl<'a, T: PartialEq + Clone> Graph<T> {
 
         // Helper closure for pushing node to the sorted stack.
         let push_to_sorted = |sorted: &mut Vec<String>, node_key: String| {
-            sorted.push(node_key.clone());
+            sorted.push(node_key);
             // println!("{}: sorted to postion {}", node_key, sorted.len());
         };
 
@@ -278,6 +278,12 @@ impl<'a, T: PartialEq + Clone> Graph<T> {
             .iter()
             .map(|key| self.get_node(key).unwrap().data())
             .collect())
+    }
+}
+
+impl<'a, T: PartialEq + Clone> Default for Graph<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
