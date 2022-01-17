@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
+use super::GraphError;
+
 /// Directed acyclic casaul graph who's nodes can be sorted topologically.
 ///
 /// Graph API based on [tangle-graph](https://gitlab.com/tangle-js/tangle-graph).
-#[derive(Debug)]
-pub struct Graph<T: PartialEq + Clone>(HashMap<String, Node<T>>);
+#[derive(Debug, PartialEq, Clone)]
+pub struct Graph<T: PartialEq + Clone>(HashMap<String, Node<T>>); // Could use a HashSet here instead.
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Node<T: PartialEq + Clone> {
@@ -93,6 +95,9 @@ impl<'a, T: PartialEq + Clone> Graph<T> {
 
     /// Add a link between existing nodes to the graph.
     pub fn add_link(&mut self, from: &str, to: &str) {
+        if from == to {
+            return;
+        }
         if let Some(from_node) = self.get_node_mut_by_id(from) {
             from_node.next.push(to.to_string())
         }
@@ -200,30 +205,30 @@ impl<'a, T: PartialEq + Clone> Graph<T> {
     }
 
     /// Sorts the graph topologically and returns the sorted
-    pub fn walk(&'a mut self) -> Vec<T> {
-        let root_node = self.0.values().find(|node| node.is_root()).unwrap();
+    pub fn walk_from(&'a mut self, key: &str) -> Result<Vec<T>, GraphError> {
+        let root_node = self.get_node(key).unwrap();
         let mut queue = vec![root_node];
         let mut sorted = Vec::new();
 
         // Helper closure for pushing node to the queue.
         let push_to_queue = |queue: &mut Vec<&'a Node<T>>, node_key: &str| {
             let node = self.get_node(node_key).unwrap();
-            if !queue.contains(&node) {
-                println!("{}: push to queue", node_key);
-                queue.push(node)
-            } else {
-                println!("{}: already in queue", node_key);
-            };
+            // println!("{}: push to queue", node_key);
+            queue.push(node);
         };
 
         // Helper closure for pushing node to the sorted stack.
         let push_to_sorted = |sorted: &mut Vec<String>, node_key: String| {
             sorted.push(node_key.clone());
-            println!("{}: sorted to postion {}", node_key, sorted.len());
+            // println!("{}: sorted to postion {}", node_key, sorted.len());
         };
 
         // Pop from the queue while it has items.
         while let Some(mut current_node) = queue.pop() {
+            // If the sorted stack is bigger than the number of existing nodes we have a cycle.
+            if sorted.len() > self.0.len() {
+                return Err(GraphError::CycleDetected);
+            }
             // Push this node to the sorted stack...
             push_to_sorted(&mut sorted, current_node.key());
 
@@ -234,24 +239,33 @@ impl<'a, T: PartialEq + Clone> Graph<T> {
 
                 // Push all other nodes connected to this one to the queue, we will visit these later.
                 while let Some(node_to_be_queued) = next_node_keys.pop() {
-                    push_to_queue(&mut queue, &node_to_be_queued)
+                    push_to_queue(&mut queue, &node_to_be_queued);
                 }
 
                 // Retrieve the next node by it's key.
                 if let Some(next_node) = self.get_node(&next_node_key) {
+                    // If pushing this node to the sorted stack would make it's length greater than
+                    // the total number of nodes, then we have a cycle.
+                    if sorted.len() + 1 > self.0.len() {
+                        return Err(GraphError::CycleDetected);
+                    }
                     // If it's a merge node, check it's dependencies have all been visited.
                     if next_node.is_merge() {
                         if self.dependencies_visited(&sorted, next_node) {
                             // If they have been, push this node to the queue and exit this loop.
                             push_to_queue(&mut queue, &next_node.key());
-                            println!("{}: is merge and has all dependencies met", next_node.key());
+                            // println!("{}: is merge and has all dependencies met", next_node.key());
                             break;
+                        } else if queue.is_empty() {
+                            // The queue is empty, but this node has dependencies missing then there
+                            // is either a cycle or missing links.
+                            return Err(GraphError::BadlyFormedGraph);
                         }
-                        // Else don't do anything and break out of this loop.
-                        println!(
-                            "{}: is merge and does not have dependencies met",
-                            next_node.key()
-                        );
+                        // // Else don't do anything and break out of this loop.
+                        // println!(
+                        //     "{}: is merge and does not have dependencies met",
+                        //     next_node.key()
+                        // );
                         break;
                     }
                     // If it wasn't a merge node, push it to the sorted stack and keep walking.
@@ -260,10 +274,10 @@ impl<'a, T: PartialEq + Clone> Graph<T> {
                 }
             }
         }
-        sorted
+        Ok(sorted
             .iter()
             .map(|key| self.get_node(key).unwrap().data())
-            .collect()
+            .collect())
     }
 }
 
@@ -302,7 +316,7 @@ mod test {
         graph.add_link("k", "f");
 
         assert_eq!(
-            graph.walk(),
+            graph.walk_from("a").unwrap(),
             [
                 "Wake Up",
                 "Make Coffee",
@@ -317,5 +331,21 @@ mod test {
                 "Start The Day"
             ]
         )
+    }
+
+    #[test]
+    fn has_cycle() {
+        let mut graph = Graph::new();
+        graph.add_node("a", 1);
+        graph.add_node("b", 2);
+        graph.add_node("c", 3);
+        graph.add_node("d", 4);
+
+        graph.add_link("a", "b");
+        graph.add_link("b", "c");
+        graph.add_link("c", "d");
+        graph.add_link("d", "b");
+
+        assert!(graph.walk_from("a").is_err())
     }
 }

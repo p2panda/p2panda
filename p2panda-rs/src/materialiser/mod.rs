@@ -11,5 +11,6 @@ mod graph;
 mod marshall_entries;
 
 pub use dag::{Edge, Node, DAG};
-pub use error::MaterialisationError;
+pub use error::{GraphError, MaterialisationError};
+pub use graph::Graph;
 pub use marshall_entries::marshall_entries;
