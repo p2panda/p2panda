@@ -8,8 +8,6 @@ use crate::operation::{
     OperationWithMetaError,
 };
 use crate::Validate;
-use core::hash::Hash as CoreHash;
-use std::hash::Hasher;
 
 /// Wrapper struct containing an operation, the hash of its entry, and the public key of its
 /// author.
@@ -87,12 +85,6 @@ impl AsOperation for OperationWithMeta {
     /// Returns vector of previous operations.
     fn previous_operations(&self) -> Option<Vec<Hash>> {
         self.operation.previous_operations()
-    }
-}
-
-impl CoreHash for OperationWithMeta {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.operation_id().as_str().hash(state);
     }
 }
 
