@@ -1,5 +1,3 @@
-import { OperationFields } from 'wasm';
-
 import { marshallResponseFields } from '~/utils';
 
 import type {
@@ -19,22 +17,25 @@ import TEST_DATA from './test-data.json';
 const encodedEntries = TEST_DATA.panda.logs[0].encodedEntries;
 const nextEntryArgs = TEST_DATA.panda.logs[0].nextEntryArgs;
 
-// Convert regular JavaScript object for operation fields into Map
-// @TODO: I'm horribly lost here in TypeScript land AAAAAAAAAAAAH!
+// Convert JSON-imported operations to use `Map`s instead of objects for
+// reporesenting operation fields.
 const decodedOperations = TEST_DATA.panda.logs[0].decodedOperations.map(
-  (operation): OperationTagged => {
+  (operation) => {
     if (operation.fields) {
       const fields: FieldsTagged = new Map();
 
-      Object.keys(operation.fields).forEach((key: string) => {
-        const value: OperationValue = operation.fields[key] as OperationValue;
-        fields.set(key, value);
+      Object.entries(operation.fields).forEach(([key, value]) => {
+        fields.set(key, value as OperationValue);
       });
 
-      operation.fields = fields;
+      // assert the type of the JSON-imported `fields` as `unknown` so that
+      // Typescript allows writing our new `Map`-based value to it
+      (operation.fields as unknown) = fields;
     }
 
-    return operation;
+    // also asserting the type as unknown to be able to change it the correct
+    // return value type
+    return operation as unknown as OperationTagged;
   },
 );
 
@@ -81,10 +82,10 @@ export const entryFixture = (seqNum: number): Entry => {
   }
 
   const entry: Entry = {
-    entryHashBacklink: nextEntryArgs[index].entryHashBacklink,
-    entryHashSkiplink: nextEntryArgs[index].entryHashSkiplink,
-    seqNum: nextEntryArgs[index].seqNum,
-    logId: nextEntryArgs[index].logId,
+    entryHashBacklink: nextEntryArgs[index].entryHashBacklink as string | undefined,
+    entryHashSkiplink: nextEntryArgs[index].entryHashSkiplink as string | undefined,
+    seqNum: BigInt(nextEntryArgs[index].seqNum),
+    logId: BigInt(nextEntryArgs[index].logId),
     operation,
   };
 
@@ -101,10 +102,10 @@ export const encodedEntryFixture = (seqNum: number): EncodedEntry => {
     author: TEST_DATA.panda.publicKey,
     entryBytes: encodedEntries[index].entryBytes,
     entryHash: encodedEntries[index].entryHash,
-    logId: encodedEntries[index].logId,
+    logId: BigInt(encodedEntries[index].logId),
     payloadBytes: encodedEntries[index].payloadBytes,
     payloadHash: encodedEntries[index].payloadHash,
-    seqNum: encodedEntries[index].seqNum,
+    seqNum: BigInt(encodedEntries[index].seqNum),
   };
 
   return encodedEntry;
