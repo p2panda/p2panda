@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use super::GraphError;
 
-/// Directed acyclic casaul graph who's nodes can be sorted topologically.
+/// Directed acyclic casaul graph which can be sorted topologically.
 ///
 /// Graph API based on [tangle-graph](https://gitlab.com/tangle-js/tangle-graph).
 #[derive(Debug, PartialEq, Clone)]
-pub struct Graph<T: PartialEq + Clone>(HashMap<String, Node<T>>); // Could use a HashSet here instead.
+pub struct Graph<T: PartialEq + Clone>(HashMap<String, Node<T>>);
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Node<T: PartialEq + Clone> {
