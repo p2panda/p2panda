@@ -25,7 +25,7 @@ const DOCUMENT_SCHEMA: &str = "cafe = { (
 pub struct DocumentIter(Vec<OperationWithMeta>);
 
 /// A resolvable data type made up of a collection of causally linked operations.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Document {
     /// The create operation which is the root of this document.
     create_operation: OperationWithMeta,
@@ -191,10 +191,12 @@ impl DocumentBuilder {
             }
         }
 
-        Ok(Document {
+        let document = Document {
             create_operation: create_operation.to_owned(),
             graph,
-        })
+        };
+
+        Ok(document.clone())
     }
 }
 
