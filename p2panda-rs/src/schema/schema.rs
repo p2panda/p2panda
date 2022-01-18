@@ -58,7 +58,7 @@ impl fmt::Display for Field {
         match self {
             Field::String(s) => write!(f, "\"{}\"", s),
             Field::Type(cddl_type) => write!(f, "{}", cddl_type),
-            Field::Struct(group) => write!(f, "{{ {} }}", format!("{}", group)),
+            Field::Struct(group) => write!(f, "{{ {} }}", group),
         }
     }
 }
