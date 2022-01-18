@@ -6,17 +6,17 @@ use super::GraphError;
 ///
 /// Graph API based on [tangle-graph](https://gitlab.com/tangle-js/tangle-graph).
 #[derive(Debug, PartialEq, Clone)]
-pub struct Graph<T: PartialEq + Clone>(HashMap<String, Node<T>>);
+pub struct Graph<T: PartialEq + Clone + std::fmt::Debug>(HashMap<String, Node<T>>);
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Node<T: PartialEq + Clone> {
+pub struct Node<T: PartialEq + Clone + std::fmt::Debug> {
     key: String,
     data: T,
     previous: Vec<String>,
     next: Vec<String>,
 }
 
-impl<T: PartialEq + Clone> Node<T> {
+impl<'a, T: PartialEq + Clone + std::fmt::Debug> Node<T> {
     /// Returns true if this node is the root of this graph.
     fn is_root(&self) -> bool {
         self.previous.is_empty()
@@ -57,27 +57,9 @@ impl<T: PartialEq + Clone> Node<T> {
     }
 }
 
-impl<'a, T: PartialEq + Clone> Graph<T> {
+impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
     /// Instantiate a new empty graph.
     pub fn new() -> Self {
-        Self(HashMap::new())
-    }
-
-    /// Instantiate a graph from a vec of nodes.
-    pub fn new_from_nodes(nodes: Vec<Node<T>>) -> Self {
-        let mut graph = HashMap::new();
-        for node in &nodes {
-            graph.insert(node.key(), node.to_owned());
-        }
-
-        let mut graph = Self(graph);
-
-        for node in nodes {
-            for previous in node.previous() {
-                graph.add_link(&previous, &node.key())
-            }
-        }
-
         Self(HashMap::new())
     }
 
@@ -98,17 +80,27 @@ impl<'a, T: PartialEq + Clone> Graph<T> {
         if from == to {
             return;
         }
-        if let Some(from_node) = self.get_node_mut_by_id(from) {
-            from_node.next.push(to.to_string())
+
+        let nodes = std::mem::take(&mut self.0);
+        let mut nodes_cloned = nodes.clone();
+
+        if let Some(from_node_mut) = nodes_cloned.get_mut(from) {
+            from_node_mut.next.push(nodes.get(to).unwrap().key());
+        } else {
+            return;
         }
 
-        if let Some(to_node) = self.get_node_mut_by_id(to) {
-            to_node.previous.push(from.to_string())
+        if let Some(to_node_mut) = nodes_cloned.get_mut(to) {
+            to_node_mut.previous.push(nodes.get(from).unwrap().key());
+        } else {
+            return;
         }
+
+        self.0 = nodes_cloned;
     }
 
     /// Get node from the graph by key, returns `None` if it wasn't found.
-    pub fn get_node(&self, key: &str) -> Option<&Node<T>> {
+    pub fn get_node(&'a self, key: &str) -> Option<&Node<T>> {
         self.0.get(key)
     }
 
@@ -127,12 +119,12 @@ impl<'a, T: PartialEq + Clone> Graph<T> {
     }
 
     /// Returns the keys for nodes which follows this node key.
-    pub fn get_next(&self, key: &str) -> Option<Vec<String>> {
+    pub fn get_next(&'a self, key: &str) -> Option<Vec<String>> {
         self.get_node(key).map(|node| node.next())
     }
 
     /// Returns the keys for nodes which precede this node key.
-    pub fn get_previous(&self, key: &str) -> Option<Vec<String>> {
+    pub fn get_previous(&'a self, key: &str) -> Option<Vec<String>> {
         self.get_node(key).map(|node| node.previous())
     }
 
@@ -173,55 +165,51 @@ impl<'a, T: PartialEq + Clone> Graph<T> {
         self.0.values().find(|node| node.is_root()).unwrap().key()
     }
 
-    /// Get a mutable reference to a node in the graph identified by it's key.
-    fn get_node_mut_by_id(&mut self, id: &str) -> Option<&mut Node<T>> {
-        self.0.get_mut(id)
-    }
-
     /// Check if all a nodes dependencies have been visited.
-    fn dependencies_visited(&self, sorted: &[String], node: &Node<T>) -> bool {
+    fn dependencies_visited(&self, sorted: &[Node<T>], node: &Node<T>) -> bool {
         let mut has_dependencies = true;
-        for previous_node in node.previous() {
-            if !sorted.contains(&previous_node) {
+        let previous_nodes = node.previous();
+
+        for previous in previous_nodes {
+            if !sorted
+                .iter()
+                .map(|node| node.key())
+                .any(|node| node == previous)
+            {
                 has_dependencies = false
-            }
+            };
         }
+
         has_dependencies
     }
 
     /// Returns the next un-visited node following the passed node.
-    fn next(&self, sorted: &[String], node: &'a Node<T>) -> Option<Vec<String>> {
-        let mut next_node_keys = Vec::new();
-        for link in &node.next() {
-            if !sorted.contains(link) {
-                next_node_keys.push(link.to_string())
-            };
+    fn next(&'a self, sorted: &[Node<T>], node: &Node<T>) -> Option<Vec<Node<T>>> {
+        let mut next_nodes: Vec<Node<T>> = Vec::new();
+
+        for node_key in node.next() {
+            if !sorted
+                .iter()
+                .map(|node| node.key())
+                .any(|key| key == node_key)
+            {
+                next_nodes.push(self.get_node(&node_key).unwrap().to_owned())
+            }
         }
-        if next_node_keys.is_empty() {
+
+        if next_nodes.is_empty() {
             return None;
         };
-        next_node_keys.reverse();
-        Some(next_node_keys)
+        next_nodes.sort_by_key(|node_a| node_a.key());
+        next_nodes.reverse();
+        Some(next_nodes)
     }
 
     /// Sorts the graph topologically and returns the sorted
     pub fn walk_from(&'a self, key: &str) -> Result<Vec<T>, GraphError> {
         let root_node = self.get_node(key).unwrap();
-        let mut queue = vec![root_node];
-        let mut sorted = Vec::new();
-
-        // Helper closure for pushing node to the queue.
-        let push_to_queue = |queue: &mut Vec<&'a Node<T>>, node_key: &str| {
-            let node = self.get_node(node_key).unwrap();
-            // println!("{}: push to queue", node_key);
-            queue.push(node);
-        };
-
-        // Helper closure for pushing node to the sorted stack.
-        let push_to_sorted = |sorted: &mut Vec<String>, node_key: String| {
-            sorted.push(node_key);
-            // println!("{}: sorted to postion {}", node_key, sorted.len());
-        };
+        let mut queue = vec![root_node.to_owned()];
+        let mut sorted = vec![];
 
         // Pop from the queue while it has items.
         while let Some(mut current_node) = queue.pop() {
@@ -230,54 +218,53 @@ impl<'a, T: PartialEq + Clone> Graph<T> {
                 return Err(GraphError::CycleDetected);
             }
             // Push this node to the sorted stack...
-            push_to_sorted(&mut sorted, current_node.key());
+            sorted.push(current_node.to_owned());
+            // println!(
+            //     "{}: sorted to position {}",
+            //     current_node.key(),
+            //     sorted.len()
+            // );
 
             // ...and then walk the graph starting from this node.
-            while let Some(mut next_node_keys) = self.next(&sorted, current_node) {
+            while let Some(mut next_nodes) = self.next(&sorted, &current_node) {
                 // Pop off the next node we will visit.
-                let next_node_key = next_node_keys.pop().unwrap();
+                let next_node = next_nodes.pop().unwrap();
+                // println!("visiting: {}", next_node.key());
 
                 // Push all other nodes connected to this one to the queue, we will visit these later.
-                while let Some(node_to_be_queued) = next_node_keys.pop() {
-                    push_to_queue(&mut queue, &node_to_be_queued);
+                while let Some(node_to_be_queued) = next_nodes.pop() {
+                    queue.push(node_to_be_queued.clone());
+                    // println!("{}: pushed to queue", node_to_be_queued.key());
                 }
 
-                // Retrieve the next node by it's key.
-                if let Some(next_node) = self.get_node(&next_node_key) {
-                    // If pushing this node to the sorted stack would make it's length greater than
-                    // the total number of nodes, then we have a cycle.
-                    if sorted.len() + 1 > self.0.len() {
-                        return Err(GraphError::CycleDetected);
-                    }
-                    // If it's a merge node, check it's dependencies have all been visited.
-                    if next_node.is_merge() {
-                        if self.dependencies_visited(&sorted, next_node) {
-                            // If they have been, push this node to the queue and exit this loop.
-                            push_to_queue(&mut queue, &next_node.key());
-                            // println!("{}: is merge and has all dependencies met", next_node.key());
-                            break;
-                        } else if queue.is_empty() {
-                            // The queue is empty, but this node has dependencies missing then there
-                            // is either a cycle or missing links.
-                            return Err(GraphError::BadlyFormedGraph);
-                        }
-                        // // Else don't do anything and break out of this loop.
-                        // println!(
-                        //     "{}: is merge and does not have dependencies met",
-                        //     next_node.key()
-                        // );
+                // If it's a merge node, check it's dependencies have all been visited.
+                if next_node.is_merge() {
+                    if self.dependencies_visited(&sorted, &next_node) {
+                        // If they have been, push this node to the queue and exit this loop.
+                        // println!("{}: is merge and has all dependencies met", next_node.key());
+                        queue.push(next_node.clone());
+                        // println!("{}: pushed to queue", next_node.key(),);
+
                         break;
+                    } else if queue.is_empty() {
+                        // The queue is empty, but this node has dependencies missing then there
+                        // is either a cycle or missing links.
+                        return Err(GraphError::BadlyFormedGraph);
                     }
-                    // If it wasn't a merge node, push it to the sorted stack and keep walking.
-                    push_to_sorted(&mut sorted, next_node.key());
-                    current_node = next_node;
+                    // Else don't do anything and break out of this loop.
+                    // println!(
+                    //     "{}: is merge and does not have dependencies met",
+                    //     next_node.key()
+                    // );
+                    break;
                 }
+                // If it wasn't a merge node, push it to the sorted stack and keep walking.
+                sorted.push(next_node.clone());
+                // println!("{}: sorted to position {}", next_node.key(), sorted.len());
+                current_node = next_node;
             }
         }
-        Ok(sorted
-            .iter()
-            .map(|key| self.get_node(key).unwrap().data())
-            .collect())
+        Ok(sorted.iter().map(|node| node.data()).collect())
     }
 
     /// Sort the entire graph, starting from the root node.
@@ -287,7 +274,7 @@ impl<'a, T: PartialEq + Clone> Graph<T> {
     }
 }
 
-impl<'a, T: PartialEq + Clone> Default for Graph<T> {
+impl<'a, T: PartialEq + Clone + std::fmt::Debug> Default for Graph<T> {
     fn default() -> Self {
         Self::new()
     }
@@ -327,6 +314,7 @@ mod test {
         graph.add_link("j", "k");
         graph.add_link("k", "f");
 
+        println!("{:#?}", graph);
         assert_eq!(
             graph.walk_from("a").unwrap(),
             [
