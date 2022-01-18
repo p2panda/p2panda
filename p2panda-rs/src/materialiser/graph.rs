@@ -81,22 +81,15 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
             return;
         }
 
-        let nodes = std::mem::take(&mut self.0);
-        let mut nodes_cloned = nodes.clone();
-
-        if let Some(from_node_mut) = nodes_cloned.get_mut(from) {
-            from_node_mut.next.push(nodes.get(to).unwrap().key());
+        if let Some(from_node_mut) = self.0.get_mut(from) {
+            from_node_mut.next.push(to.to_owned());
         } else {
             return;
         }
 
-        if let Some(to_node_mut) = nodes_cloned.get_mut(to) {
-            to_node_mut.previous.push(nodes.get(from).unwrap().key());
-        } else {
-            return;
+        if let Some(to_node_mut) = self.0.get_mut(to) {
+            to_node_mut.previous.push(from.to_owned());
         }
-
-        self.0 = nodes_cloned;
     }
 
     /// Get node from the graph by key, returns `None` if it wasn't found.
