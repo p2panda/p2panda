@@ -12,11 +12,11 @@ pub struct Graph<T: PartialEq + Clone + std::fmt::Debug>(HashMap<String, Node<T>
 pub struct Node<T: PartialEq + Clone + std::fmt::Debug> {
     key: String,
     data: T,
-    previous: Vec<Box<String>>,
-    next: Vec<Box<String>>,
+    previous: Vec<String>,
+    next: Vec<String>,
 }
 
-impl<T: PartialEq + Clone + std::fmt::Debug> Node<T> {
+impl<'a, T: PartialEq + Clone + std::fmt::Debug> Node<T> {
     /// Returns true if this node is the root of this graph.
     fn is_root(&self) -> bool {
         self.previous.is_empty()
@@ -38,18 +38,18 @@ impl<T: PartialEq + Clone + std::fmt::Debug> Node<T> {
     }
 
     /// Returns the key for this node.
-    fn key(&self) -> &str {
-        &self.key
+    fn key(&self) -> String {
+        self.key.to_owned()
     }
 
     /// Returns a vector of keys for the nodes preceding this node in the graph.
-    fn previous(&self) -> &Vec<Box<String>> {
-        &self.previous
+    fn previous(&self) -> Vec<String> {
+        self.previous.clone()
     }
 
     /// Returns a vector of keys for the nodes following this node in the graph.
-    fn next(&self) -> &Vec<Box<String>> {
-        &self.next
+    fn next(&self) -> Vec<String> {
+        self.next.clone()
     }
 
     fn data(&self) -> T {
@@ -82,18 +82,18 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
         }
 
         if let Some(from_node_mut) = self.0.get_mut(from) {
-            from_node_mut.next.push(Box::new(to.to_owned()));
+            from_node_mut.next.push(to.to_owned());
         } else {
             return;
         }
 
         if let Some(to_node_mut) = self.0.get_mut(to) {
-            to_node_mut.previous.push(Box::new(from.to_owned()));
+            to_node_mut.previous.push(from.to_owned());
         }
     }
 
     /// Get node from the graph by key, returns `None` if it wasn't found.
-    pub fn get_node(&self, key: &str) -> Option<&Node<T>> {
+    pub fn get_node(&'a self, key: &str) -> Option<&Node<T>> {
         self.0.get(key)
     }
 
@@ -112,12 +112,12 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
     }
 
     /// Returns the keys for nodes which follows this node key.
-    pub fn get_next(&'a self, key: &'a str) -> Option<&Vec<Box<String>>> {
+    pub fn get_next(&'a self, key: &str) -> Option<Vec<String>> {
         self.get_node(key).map(|node| node.next())
     }
 
     /// Returns the keys for nodes which precede this node key.
-    pub fn get_previous(&'a self, key: &'a str) -> Option<&Vec<Box<String>>> {
+    pub fn get_previous(&'a self, key: &str) -> Option<Vec<String>> {
         self.get_node(key).map(|node| node.previous())
     }
 
@@ -154,46 +154,48 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
     }
 
     /// Returns the root node key.
-    pub fn root_node_key(&self) -> &str {
+    pub fn root_node_key(&self) -> String {
         self.0.values().find(|node| node.is_root()).unwrap().key()
     }
 
     /// Check if all a nodes dependencies have been visited.
-    fn dependencies_visited(&self, sorted: &[Node<T>], node: &Node<T>) -> bool {
+    fn dependencies_visited(&self, sorted: &[&Node<T>], node: &Node<T>) -> bool {
         let mut has_dependencies = true;
         let previous_nodes = node.previous();
 
-        for previous in previous_nodes {
-            if !sorted.contains(&self.get_node(&previous).unwrap()) {
+        for node_key in previous_nodes {
+            let node = self.get_node(&node_key).unwrap();
+            if !sorted.contains(&node) {
                 has_dependencies = false
-            };
+            }
         }
 
         has_dependencies
     }
 
     /// Returns the next un-visited node following the passed node.
-    fn next(&self, sorted: &[Node<T>], node: &Node<T>) -> Option<Vec<Node<T>>> {
-        let mut next_nodes: Vec<Node<T>> = Vec::new();
+    fn next(&'a self, sorted: &[&Node<T>], node: &Node<T>) -> Option<Vec<&'a Node<T>>> {
+        let mut next_nodes: Vec<&'a Node<T>> = Vec::new();
 
-        for next in node.next() {
-            let next_node = self.get_node(&next).unwrap();
-            if !sorted.contains(next_node) {
-                next_nodes.push(next_node.to_owned());
+        for node_key in node.next() {
+            let node = self.get_node(&node_key).unwrap();
+            if !sorted.contains(&node) {
+                next_nodes.push(node)
             }
         }
 
         if next_nodes.is_empty() {
             return None;
         };
-        next_nodes.sort_by(|node_a, node_b| node_b.key().cmp(node_a.key()));
+        next_nodes.sort_by_key(|node_a| node_a.key());
+        next_nodes.reverse();
         Some(next_nodes)
     }
 
     /// Sorts the graph topologically and returns the sorted
-    pub fn walk_from(&self, key: &str) -> Result<Vec<T>, GraphError> {
+    pub fn walk_from(&'a self, key: &str) -> Result<Vec<T>, GraphError> {
         let root_node = self.get_node(key).unwrap();
-        let mut queue = vec![root_node.to_owned()];
+        let mut queue = vec![root_node];
         let mut sorted = vec![];
 
         // Pop from the queue while it has items.
@@ -203,7 +205,7 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
                 return Err(GraphError::CycleDetected);
             }
             // Push this node to the sorted stack...
-            sorted.push(current_node.to_owned());
+            sorted.push(current_node);
             // println!(
             //     "{}: sorted to position {}",
             //     current_node.key(),
@@ -211,23 +213,23 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
             // );
 
             // ...and then walk the graph starting from this node.
-            while let Some(mut next_nodes) = self.next(&sorted, &current_node) {
+            while let Some(mut next_nodes) = self.next(&sorted, current_node) {
                 // Pop off the next node we will visit.
                 let next_node = next_nodes.pop().unwrap();
                 // println!("visiting: {}", next_node.key());
 
                 // Push all other nodes connected to this one to the queue, we will visit these later.
                 while let Some(node_to_be_queued) = next_nodes.pop() {
-                    queue.push(node_to_be_queued.clone());
+                    queue.push(node_to_be_queued);
                     // println!("{}: pushed to queue", node_to_be_queued.key());
                 }
 
                 // If it's a merge node, check it's dependencies have all been visited.
                 if next_node.is_merge() {
-                    if self.dependencies_visited(&sorted, &next_node) {
+                    if self.dependencies_visited(&sorted, next_node) {
                         // If they have been, push this node to the queue and exit this loop.
                         // println!("{}: is merge and has all dependencies met", next_node.key());
-                        queue.push(next_node.clone());
+                        queue.push(next_node);
                         // println!("{}: pushed to queue", next_node.key(),);
 
                         break;
@@ -244,7 +246,7 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
                     break;
                 }
                 // If it wasn't a merge node, push it to the sorted stack and keep walking.
-                sorted.push(next_node.clone());
+                sorted.push(next_node);
                 // println!("{}: sorted to position {}", next_node.key(), sorted.len());
                 current_node = next_node;
             }
@@ -253,13 +255,13 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
     }
 
     /// Sort the entire graph, starting from the root node.
-    pub fn sort(&self) -> Result<Vec<T>, GraphError> {
+    pub fn sort(&'a self) -> Result<Vec<T>, GraphError> {
         let root_node = self.root_node();
         self.walk_from(&root_node.key())
     }
 }
 
-impl<T: PartialEq + Clone + std::fmt::Debug> Default for Graph<T> {
+impl<'a, T: PartialEq + Clone + std::fmt::Debug> Default for Graph<T> {
     fn default() -> Self {
         Self::new()
     }
