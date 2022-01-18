@@ -543,7 +543,7 @@ mod tests {
             action: OperationAction::Update,
             version: OperationVersion::Default,
             schema: schema.clone(),
-            previous_operations: Some(vec![prev_op_id]),
+            previous_operations: Some(vec![prev_op_id.clone()]),
             // UPDATE operations must contain fields
             fields: None, // Error
         };
@@ -565,7 +565,7 @@ mod tests {
             action: OperationAction::Delete,
             version: OperationVersion::Default,
             schema,
-            previous_operations: None,
+            previous_operations: Some(vec![prev_op_id]),
             // DELETE operations must not contain fields
             fields: Some(fields), // Error
         };
