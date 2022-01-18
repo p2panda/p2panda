@@ -96,14 +96,6 @@ impl Validate for Document {
 
         // Validate each operation in this document.
         self.iter()?.try_for_each(|op| {
-            // If this is a delete operation check there are no fields.
-            if op.is_delete() {
-                if op.fields().is_none() {
-                    return Ok(())
-                } else {
-                    return Err(DocumentError::ValidationError("DELETE operations should not contain any fields".to_string()))
-                };
-            };
             // Validate each update operation against the document schema.
             match self.schema().validate_operation_fields(&op.fields().unwrap()) {
                 Ok(_) => Ok(()),

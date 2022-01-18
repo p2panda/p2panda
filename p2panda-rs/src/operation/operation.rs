@@ -445,6 +445,11 @@ impl Validate for Operation {
             return Err(OperationError::EmptyFields);
         }
 
+        // DELETE must have empty fields
+        if self.is_delete() && self.has_fields() {
+            return Err(OperationError::DeleteWithFields);
+        }
+
         // UPDATE and DELETE operations must contain previous_operations.
         if !self.is_create() && (!self.has_previous_operations()) {
             return Err(OperationError::EmptyPreviousOperations);
