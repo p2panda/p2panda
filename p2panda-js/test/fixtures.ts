@@ -33,7 +33,7 @@ const decodedOperations = TEST_DATA.panda.logs[0].decodedOperations.map(
       (operation.fields as unknown) = fields;
     }
 
-    // also asserting the type as unknown to be able to change it the correct
+    // also asserting the type as unknown to be able to change it to the correct
     // return value type
     return operation as unknown as OperationTagged;
   },
