@@ -118,7 +118,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             &dag,
             |b, dag| {
                 b.iter(|| {
-                    let mut dag = dag.clone();
+                    let dag = dag.clone();
                     let _ = dag.walk_from(&0.to_string());
                 });
             },
@@ -147,7 +147,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             &dag,
             |b, dag| {
                 b.iter(|| {
-                    let mut dag = dag.clone();
+                    let dag = dag.clone();
                     let _ = dag.walk_from(&0.to_string());
                 });
             },
