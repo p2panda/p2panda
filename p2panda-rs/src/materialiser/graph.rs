@@ -75,8 +75,8 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
         self.0.insert(key.to_string(), new_node);
     }
 
-    /// Add a link between existing nodes to the graph. Returns true if the link was added. 
-    /// Returns false if the link was unable to be added. This happens if either of the nodes were not 
+    /// Add a link between existing nodes to the graph. Returns true if the link was added.
+    /// Returns false if the link was unable to be added. This happens if either of the nodes were not
     /// present in the graph, or if the link creates a single node loop.
     pub fn add_link(&mut self, from: &str, to: &str) -> bool {
         if from == to {
@@ -95,7 +95,7 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
             return false;
         }
 
-        return true;
+        true
     }
 
     /// Get node from the graph by key, returns `None` if it wasn't found.
