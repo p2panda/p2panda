@@ -11,8 +11,7 @@ use crate::identity::Author;
 use crate::instance::Instance;
 use crate::materialiser::Graph;
 use crate::operation::{AsOperation, OperationWithMeta};
-use crate::schema::{Schema, ValidateOperation};
-use crate::Validate;
+use crate::schema::Schema;
 
 /// Hard coded cddl string for now
 const DOCUMENT_SCHEMA: &str = "cafe = { (
@@ -85,29 +84,6 @@ impl Iterator for DocumentIter {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-impl Validate for Document {
-    type Error = DocumentError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        // NB. This validation is quite excessive as it's normally not possible to get to this
-        // point while having broken some of these basic data restraints.
-
-        // Validate each operation in this document.
-        self.iter()?.try_for_each(|op| {
-            // Validate each update operation against the document schema.
-            match self.schema().validate_operation_fields(&op.fields().unwrap()) {
-                Ok(_) => Ok(()),
-                Err(_) => Err(DocumentError::ValidationError(
-                    "All CREATE and UPDATE operations in document must follow the schema description".to_string(),
-                )),
-            }
-        })?;
-
-        Ok(())
-    }
-}
-
 /// A struct for building documents.
 #[derive(Debug)]
 pub struct DocumentBuilder {
@@ -146,6 +122,8 @@ impl DocumentBuilder {
 
         let create_operation = &collect_create_operation[0];
 
+        let document_schema = create_operation.schema();
+
         // Validate the provided schema's CDDL definition.
         Schema::new(&create_operation.schema(), DOCUMENT_SCHEMA)?;
 
@@ -154,6 +132,12 @@ impl DocumentBuilder {
 
         // Add all operations to the graph.
         for operation in self.operations() {
+            // Validate all operations refer to the same document schema.
+            if operation.schema() != document_schema {
+                return Err(DocumentBuilderError::OperationSchemaNotMatching(
+                    operation.operation_id().as_str().into(),
+                ));
+            }
             graph.add_node(operation.operation_id().as_str(), operation.clone());
         }
 
@@ -161,7 +145,13 @@ impl DocumentBuilder {
         for operation in self.operations() {
             if let Some(previous_operations) = operation.previous_operations() {
                 for previous in previous_operations {
-                    graph.add_link(previous.as_str(), operation.operation_id().as_str())
+                    let success =
+                        graph.add_link(previous.as_str(), operation.operation_id().as_str());
+                    if !success {
+                        return Err(DocumentBuilderError::InvalidOperationLink(
+                            operation.operation_id().as_str().into(),
+                        ));
+                    }
                 }
             }
         }
@@ -189,7 +179,6 @@ mod tests {
         create_operation, fields, random_key_pair, schema, update_operation,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
-    use crate::Validate;
 
     use super::DocumentBuilder;
 
@@ -295,9 +284,6 @@ mod tests {
             .collect();
 
         let document = DocumentBuilder::new(operations.clone()).build()?;
-
-        // Document should be valid
-        assert!(document.validate().is_ok());
 
         let instance = document.resolve()?;
 

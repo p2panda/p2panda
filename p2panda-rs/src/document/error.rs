@@ -14,13 +14,17 @@ pub enum DocumentBuilderError {
     #[error("Multiple create operations found")]
     MoreThanOneCreateOperation,
 
-    /// Internal IncrementalTopo error.
-    #[error("Error adding dependency to graph")]
-    IncrementalTopoDependencyError,
-
     /// Handle errors from validating CBOR schemas.
     #[error(transparent)]
     SchemaError(#[from] crate::schema::SchemaError),
+
+    /// All operation in a document must follow the same schema.
+    #[error("Operation {0} contains a schema not mathing this document.")]
+    OperationSchemaNotMatching(String),
+
+    /// An operation with invalid id or previous operations was added to the document.
+    #[error("Operation {0} cannot be connected to the document graph")]
+    InvalidOperationLink(String),
 }
 
 /// Error types for methods of `Document` struct.

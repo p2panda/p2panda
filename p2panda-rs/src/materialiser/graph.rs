@@ -75,21 +75,27 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
         self.0.insert(key.to_string(), new_node);
     }
 
-    /// Add a link between existing nodes to the graph.
-    pub fn add_link(&mut self, from: &str, to: &str) {
+    /// Add a link between existing nodes to the graph. Returns true if the link was added. 
+    /// Returns false if the link was unable to be added. This happens if either of the nodes were not 
+    /// present in the graph, or if the link creates a single node loop.
+    pub fn add_link(&mut self, from: &str, to: &str) -> bool {
         if from == to {
-            return;
+            return false;
         }
 
         if let Some(from_node_mut) = self.0.get_mut(from) {
             from_node_mut.next.push(to.to_owned());
         } else {
-            return;
+            return false;
         }
 
         if let Some(to_node_mut) = self.0.get_mut(to) {
             to_node_mut.previous.push(from.to_owned());
+        } else {
+            return false;
         }
+
+        return true;
     }
 
     /// Get node from the graph by key, returns `None` if it wasn't found.
