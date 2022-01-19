@@ -157,7 +157,7 @@ impl DocumentBuilder {
             graph.add_node(operation.operation_id().as_str(), operation.clone());
         }
 
-        // Ad dlinks between operations in the graph.
+        // Add links between operations in the graph.
         for operation in self.operations() {
             if let Some(previous_operations) = operation.previous_operations() {
                 for previous in previous_operations {
