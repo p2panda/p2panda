@@ -39,9 +39,9 @@ pub enum DocumentError {
     #[error("No operation found with that id")]
     OperationNotFound,
 
-    /// Error when sorting the graph.
-    #[error("Error sorting graph")]
-    GraphSortingError,
+    /// Handle errors when sorting the graph.
+    #[error(transparent)]
+    GraphSortingError(#[from] crate::materialiser::GraphError),
 
     /// Get operation error.
     #[error("Operation with that id does not exist")]

@@ -56,7 +56,7 @@ impl Document {
     pub fn iter(&self) -> Result<DocumentIter, DocumentError> {
         let sorted = match self.graph.sort() {
             Ok(operations) => Ok(operations.into_iter().rev().collect()),
-            Err(_) => Err(DocumentError::GraphSortingError),
+            Err(e) => Err(DocumentError::GraphSortingError(e)),
         }?;
 
         Ok(DocumentIter(sorted))
