@@ -188,7 +188,7 @@ impl DocumentBuilder {
             graph,
         };
 
-        Ok(document.clone())
+        Ok(document)
     }
 }
 
