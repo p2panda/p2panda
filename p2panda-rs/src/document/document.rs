@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
 // // Now we use our own graph for topo sorting :-)
@@ -118,12 +117,7 @@ pub struct DocumentBuilder {
 
 impl DocumentBuilder {
     /// Instantiate a new DocumentBuilder with a collection of operations.
-    pub fn new(mut operations: Vec<OperationWithMeta>) -> Self {
-        // Sort operations alphabetically by their hash id.
-        // This is important for graph building and sorting, operations must be added
-        // to a IncrementalTopo graph in the correct (alphabetical) order to assure consistent
-        // traversal.
-        operations.sort_by(|a, b| a.operation_id().as_str().cmp(b.operation_id().as_str()));
+    pub fn new(operations: Vec<OperationWithMeta>) -> Self {
         Self { operations }
     }
 
@@ -139,56 +133,43 @@ impl DocumentBuilder {
 
     /// Build the document.
     pub fn build(self) -> Result<Document, DocumentBuilderError> {
-        // find create message
-
+        // find create message.
         let collect_create_operation: Vec<OperationWithMeta> =
             self.operations_iter().filter(|op| op.is_create()).collect();
 
+        // Check we have only one create operation in the document.
         if collect_create_operation.len() > 1 {
             return Err(DocumentBuilderError::MoreThanOneCreateOperation);
         } else if collect_create_operation.is_empty() {
             return Err(DocumentBuilderError::NoCreateOperation);
         }
 
-        let create_operation = collect_create_operation.get(0).unwrap(); // unwrap as we know there is one item
+        let create_operation = &collect_create_operation[0];
 
-        // Validate the provided schema
+        // Validate the provided schema's CDDL definition.
         Schema::new(&create_operation.schema(), DOCUMENT_SCHEMA)?;
 
-        // Instantiate graph and operations map
+        // Instantiate graph and operations map.
         let mut graph = Graph::new();
-        let mut operations = BTreeMap::new();
 
-        for op in self.operations() {
-            // Validate each operation against the document schema before continuing.
-            // NB. cddl crate not wasm supported yet.
-
-            // schema.validate_operation_fields(&op.fields().unwrap())?;
-
-            // Insert operation into map
-            operations.insert(op.operation_id().as_str().to_owned(), op.to_owned());
-            // Add node to graph
-            graph.add_node(op.operation_id().as_str(), op.clone());
+        // Add all operations to the graph.
+        for operation in self.operations() {
+            graph.add_node(operation.operation_id().as_str(), operation.clone());
         }
 
-        // Derive graph dependencies from all operations' previous_operations field. Apply to graph handling
-        // errors.
-        // nb. I had some problems capturing the actual errors from IncrementalTopo crate... needs another
-        // go at some point.
-        for (_, node) in operations {
-            if let Some(previous_operations) = node.previous_operations() {
+        // Ad dlinks between operations in the graph.
+        for operation in self.operations() {
+            if let Some(previous_operations) = operation.previous_operations() {
                 for previous in previous_operations {
-                    graph.add_link(previous.as_str(), node.operation_id().as_str())
+                    graph.add_link(previous.as_str(), operation.operation_id().as_str())
                 }
             }
         }
 
-        let document = Document {
+        Ok(Document {
             create_operation: create_operation.to_owned(),
             graph,
-        };
-
-        Ok(document)
+        })
     }
 }
 
