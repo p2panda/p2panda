@@ -171,7 +171,6 @@ mod tests {
     use rstest::rstest;
     use std::collections::BTreeMap;
 
-    use crate::document::DocumentError;
     use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::{OperationValue, OperationWithMeta};
@@ -187,7 +186,7 @@ mod tests {
         schema: Hash,
         #[from(random_key_pair)] key_pair_1: KeyPair,
         #[from(random_key_pair)] key_pair_2: KeyPair,
-    ) -> Result<(), DocumentError> {
+    ) {
         let panda = Client::new("panda".to_string(), key_pair_1);
         let penguin = Client::new("penguin".to_string(), key_pair_2);
         let mut node = Node::new();
@@ -283,9 +282,9 @@ mod tests {
             })
             .collect();
 
-        let document = DocumentBuilder::new(operations.clone()).build()?;
+        let document = DocumentBuilder::new(operations.clone()).build().unwrap();
 
-        let instance = document.resolve()?;
+        let instance = document.resolve().unwrap();
 
         let mut exp_result = BTreeMap::new();
         exp_result.insert(
@@ -311,7 +310,8 @@ mod tests {
             op_2.clone(),
             op_1.clone(),
         ])
-        .build()?;
+        .build()
+        .unwrap();
 
         let replica_2 = DocumentBuilder::new(vec![
             op_3.clone(),
@@ -320,7 +320,8 @@ mod tests {
             op_5.clone(),
             op_4.clone(),
         ])
-        .build()?;
+        .build()
+        .unwrap();
 
         let replica_3 = DocumentBuilder::new(vec![
             op_2.clone(),
@@ -329,11 +330,11 @@ mod tests {
             op_3.clone(),
             op_5.clone(),
         ])
-        .build()?;
+        .build()
+        .unwrap();
 
         assert_eq!(replica_1.resolve().unwrap(), replica_2.resolve().unwrap());
         assert_eq!(replica_1.resolve().unwrap(), replica_3.resolve().unwrap());
-        Ok(())
     }
 
     #[rstest]

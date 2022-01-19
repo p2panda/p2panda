@@ -31,31 +31,11 @@ pub enum DocumentBuilderError {
 #[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
 pub enum DocumentError {
-    /// No create operation found.
-    #[error("Every document must contain one create operation")]
-    NoCreateOperation,
-
-    /// No operation found.
-    #[error("No operation found with that id")]
-    OperationNotFound,
-
     /// Handle errors when sorting the graph.
     #[error(transparent)]
     GraphSortingError(#[from] crate::materialiser::GraphError),
 
-    /// Get operation error.
-    #[error("Operation with that id does not exist")]
-    OperationDoesNotExist,
-
     /// Handle errors from validating CBOR schemas.
     #[error(transparent)]
     InstanceError(#[from] crate::instance::InstanceError),
-
-    /// Handle errors from building documents.
-    #[error(transparent)]
-    DocumentBuilderError(#[from] DocumentBuilderError),
-
-    /// Validation errors
-    #[error("document contains invalid values")]
-    ValidationError(String),
 }
