@@ -127,6 +127,8 @@ impl DocumentBuilder {
         let schema = Schema::new(&create_operation.schema(), &self.schema_definition)?;
 
         // Validate the create message for this document against the document schema.
+        // @TODO: Exclude from wasm target until cddl issues sorted (https://github.com/p2panda/p2panda/issues/99).
+        #[cfg(not(target_arch = "wasm32"))]
         schema.validate_operation_fields(&create_operation.fields().unwrap())?;
 
         // Instantiate graph and operations map.
