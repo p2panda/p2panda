@@ -11,7 +11,7 @@ use crate::identity::Author;
 use crate::instance::Instance;
 use crate::materialiser::Graph;
 use crate::operation::{AsOperation, OperationWithMeta};
-use crate::schema::Schema;
+use crate::schema::{Schema, ValidateOperation};
 
 /// Hard coded cddl string for now
 const DOCUMENT_SCHEMA: &str = "cafe = { (
@@ -38,18 +38,13 @@ impl Document {
     }
 
     /// The hash id of this documents schema.
-    pub fn schema_hash(&self) -> Hash {
+    pub fn schema(&self) -> Hash {
         self.create_operation.schema()
     }
 
     /// The author of this document.
     pub fn author(&self) -> Author {
         self.create_operation.public_key().to_owned()
-    }
-
-    /// The schema for this document.
-    pub fn schema(&self) -> Schema {
-        Schema::new(&self.schema_hash(), DOCUMENT_SCHEMA).unwrap()
     }
 
     /// Returns an iterator over all operations in this document ordered topologically.
@@ -89,12 +84,16 @@ impl Iterator for DocumentIter {
 pub struct DocumentBuilder {
     /// An unsorted collection of operations which are associated with a particular document id.
     operations: Vec<OperationWithMeta>,
+    schema_definition: String,
 }
 
 impl DocumentBuilder {
     /// Instantiate a new DocumentBuilder with a collection of operations.
-    pub fn new(operations: Vec<OperationWithMeta>) -> Self {
-        Self { operations }
+    pub fn new(operations: Vec<OperationWithMeta>, schema_definition: String) -> Self {
+        Self {
+            operations,
+            schema_definition,
+        }
     }
 
     /// Get all operations for this document.
@@ -124,8 +123,11 @@ impl DocumentBuilder {
 
         let document_schema = create_operation.schema();
 
-        // Validate the provided schema's CDDL definition.
-        Schema::new(&create_operation.schema(), DOCUMENT_SCHEMA)?;
+        // Create instantiate a schema, which validates the provided schema's CDDL definition.
+        let schema = Schema::new(&create_operation.schema(), &self.schema_definition)?;
+
+        // Validate the create message for this document against the document schema.
+        schema.validate_operation_fields(&create_operation.fields().unwrap())?;
 
         // Instantiate graph and operations map.
         let mut graph = Graph::new();
@@ -179,7 +181,7 @@ mod tests {
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
 
-    use super::DocumentBuilder;
+    use super::{DocumentBuilder, DOCUMENT_SCHEMA};
 
     #[rstest]
     fn sort_and_resolve_graph(
@@ -282,7 +284,9 @@ mod tests {
             })
             .collect();
 
-        let document = DocumentBuilder::new(operations.clone()).build().unwrap();
+        let document = DocumentBuilder::new(operations.clone(), DOCUMENT_SCHEMA.to_owned())
+            .build()
+            .unwrap();
 
         let instance = document.resolve().unwrap();
 
@@ -303,33 +307,42 @@ mod tests {
         let op_4 = operations.get(3).unwrap();
         let op_5 = operations.get(4).unwrap();
 
-        let replica_1 = DocumentBuilder::new(vec![
-            op_5.clone(),
-            op_4.clone(),
-            op_3.clone(),
-            op_2.clone(),
-            op_1.clone(),
-        ])
+        let replica_1 = DocumentBuilder::new(
+            vec![
+                op_5.clone(),
+                op_4.clone(),
+                op_3.clone(),
+                op_2.clone(),
+                op_1.clone(),
+            ],
+            DOCUMENT_SCHEMA.to_owned(),
+        )
         .build()
         .unwrap();
 
-        let replica_2 = DocumentBuilder::new(vec![
-            op_3.clone(),
-            op_2.clone(),
-            op_1.clone(),
-            op_5.clone(),
-            op_4.clone(),
-        ])
+        let replica_2 = DocumentBuilder::new(
+            vec![
+                op_3.clone(),
+                op_2.clone(),
+                op_1.clone(),
+                op_5.clone(),
+                op_4.clone(),
+            ],
+            DOCUMENT_SCHEMA.to_owned(),
+        )
         .build()
         .unwrap();
 
-        let replica_3 = DocumentBuilder::new(vec![
-            op_2.clone(),
-            op_1.clone(),
-            op_4.clone(),
-            op_3.clone(),
-            op_5.clone(),
-        ])
+        let replica_3 = DocumentBuilder::new(
+            vec![
+                op_2.clone(),
+                op_1.clone(),
+                op_4.clone(),
+                op_3.clone(),
+                op_5.clone(),
+            ],
+            DOCUMENT_SCHEMA.to_owned(),
+        )
         .build()
         .unwrap();
 
@@ -385,6 +398,8 @@ mod tests {
         .unwrap()];
 
         // Building a Document without a create operation should fail.
-        assert!(DocumentBuilder::new(operations).build().is_err());
+        assert!(DocumentBuilder::new(operations, DOCUMENT_SCHEMA.to_owned())
+            .build()
+            .is_err());
     }
 }
