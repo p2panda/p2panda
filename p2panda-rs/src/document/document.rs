@@ -13,11 +13,6 @@ use crate::materialiser::Graph;
 use crate::operation::{AsOperation, OperationWithMeta};
 use crate::schema::{Schema, ValidateOperation};
 
-/// Hard coded cddl string for now
-const DOCUMENT_SCHEMA: &str = "cafe = { (
-    name: { type: \"str\", value: tstr }
-) }";
-
 /// An iterator struct for Document.
 #[derive(Debug)]
 pub struct DocumentIter(Vec<OperationWithMeta>);
@@ -183,7 +178,11 @@ mod tests {
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
 
-    use super::{DocumentBuilder, DOCUMENT_SCHEMA};
+    use super::DocumentBuilder;
+
+    const DOCUMENT_SCHEMA: &str = "cafe = { (
+        name: { type: \"str\", value: tstr }
+    ) }";
 
     #[rstest]
     fn sort_and_resolve_graph(
