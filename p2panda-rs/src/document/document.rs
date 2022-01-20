@@ -11,7 +11,6 @@ use crate::identity::Author;
 use crate::instance::Instance;
 use crate::materialiser::Graph;
 use crate::operation::{AsOperation, OperationWithMeta};
-use crate::schema::{Schema, ValidateOperation};
 
 /// An iterator struct for Document.
 #[derive(Debug)]
@@ -79,16 +78,12 @@ impl Iterator for DocumentIter {
 pub struct DocumentBuilder {
     /// An unsorted collection of operations which are associated with a particular document id.
     operations: Vec<OperationWithMeta>,
-    schema_definition: String,
 }
 
 impl DocumentBuilder {
     /// Instantiate a new DocumentBuilder with a collection of operations.
-    pub fn new(operations: Vec<OperationWithMeta>, schema_definition: String) -> Self {
-        Self {
-            operations,
-            schema_definition,
-        }
+    pub fn new(operations: Vec<OperationWithMeta>) -> Self {
+        Self { operations }
     }
 
     /// Get all operations for this document.
@@ -117,14 +112,6 @@ impl DocumentBuilder {
         let create_operation = &collect_create_operation[0];
 
         let document_schema = create_operation.schema();
-
-        // Create instantiate a schema, which validates the provided schema's CDDL definition.
-        let schema = Schema::new(&create_operation.schema(), &self.schema_definition)?;
-
-        // Validate the create message for this document against the document schema.
-        // @TODO: Exclude from wasm target until cddl issues sorted (https://github.com/p2panda/p2panda/issues/99).
-        #[cfg(not(target_arch = "wasm32"))]
-        schema.validate_operation_fields(&create_operation.fields().unwrap())?;
 
         // Instantiate graph and operations map.
         let mut graph = Graph::new();
@@ -179,10 +166,6 @@ mod tests {
     use crate::test_utils::mocks::{send_to_node, Client, Node};
 
     use super::DocumentBuilder;
-
-    const DOCUMENT_SCHEMA: &str = "cafe = { (
-        name: { type: \"str\", value: tstr }
-    ) }";
 
     #[rstest]
     fn sort_and_resolve_graph(
@@ -285,9 +268,7 @@ mod tests {
             })
             .collect();
 
-        let document = DocumentBuilder::new(operations.clone(), DOCUMENT_SCHEMA.to_owned())
-            .build()
-            .unwrap();
+        let document = DocumentBuilder::new(operations.clone()).build().unwrap();
 
         let instance = document.resolve().unwrap();
 
@@ -308,42 +289,33 @@ mod tests {
         let op_4 = operations.get(3).unwrap();
         let op_5 = operations.get(4).unwrap();
 
-        let replica_1 = DocumentBuilder::new(
-            vec![
-                op_5.clone(),
-                op_4.clone(),
-                op_3.clone(),
-                op_2.clone(),
-                op_1.clone(),
-            ],
-            DOCUMENT_SCHEMA.to_owned(),
-        )
+        let replica_1 = DocumentBuilder::new(vec![
+            op_5.clone(),
+            op_4.clone(),
+            op_3.clone(),
+            op_2.clone(),
+            op_1.clone(),
+        ])
         .build()
         .unwrap();
 
-        let replica_2 = DocumentBuilder::new(
-            vec![
-                op_3.clone(),
-                op_2.clone(),
-                op_1.clone(),
-                op_5.clone(),
-                op_4.clone(),
-            ],
-            DOCUMENT_SCHEMA.to_owned(),
-        )
+        let replica_2 = DocumentBuilder::new(vec![
+            op_3.clone(),
+            op_2.clone(),
+            op_1.clone(),
+            op_5.clone(),
+            op_4.clone(),
+        ])
         .build()
         .unwrap();
 
-        let replica_3 = DocumentBuilder::new(
-            vec![
-                op_2.clone(),
-                op_1.clone(),
-                op_4.clone(),
-                op_3.clone(),
-                op_5.clone(),
-            ],
-            DOCUMENT_SCHEMA.to_owned(),
-        )
+        let replica_3 = DocumentBuilder::new(vec![
+            op_2.clone(),
+            op_1.clone(),
+            op_4.clone(),
+            op_3.clone(),
+            op_5.clone(),
+        ])
         .build()
         .unwrap();
 
@@ -399,8 +371,6 @@ mod tests {
         .unwrap()];
 
         // Building a Document without a create operation should fail.
-        assert!(DocumentBuilder::new(operations, DOCUMENT_SCHEMA.to_owned())
-            .build()
-            .is_err());
+        assert!(DocumentBuilder::new(operations).build().is_err());
     }
 }
