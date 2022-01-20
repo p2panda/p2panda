@@ -231,8 +231,8 @@ impl OperationFields {
 /// 2)
 /// ```mermaid
 /// flowchart LR
-///     B --- C --- D --- E;
-///     A --- B --- E;
+///     B --- C --- D --- F;
+///     A --- B --- E --- F;
 /// ```
 ///
 /// 3)
