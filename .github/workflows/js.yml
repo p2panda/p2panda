@@ -44,8 +44,12 @@ jobs:
         working-directory: ${{ env.working_directory }}
 
       - name: Run tests
-        run: npm run test
+        run: npm run test --coverage
         working-directory: ${{ env.working_directory }}
+
+      - uses: codecov/codecov-action@v2
+        with:
+          dry_run: true
 
   js-build:
     runs-on: ubuntu-latest
