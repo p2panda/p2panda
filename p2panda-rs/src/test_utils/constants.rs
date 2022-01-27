@@ -18,7 +18,7 @@ pub const DEFAULT_PRIVATE_KEY: &str =
 
 /// The default sequence number, used when an entry is created in a fixture and no custom values
 /// are provided.
-pub const DEFAULT_SEQ_NUM: i64 = 1;
+pub const DEFAULT_SEQ_NUM: u64 = 1;
 
 #[cfg(test)]
 mod tests {

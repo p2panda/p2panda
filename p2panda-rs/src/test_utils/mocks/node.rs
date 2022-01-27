@@ -154,8 +154,8 @@ pub fn send_to_node(
 fn calculate_links(seq_num: &SeqNum, log: &[LogEntry]) -> (Option<Hash>, Option<Hash>) {
     // Next skiplink hash
     let skiplink = match seq_num.skiplink_seq_num() {
-        Some(seq) if is_lipmaa_required(seq_num.as_i64() as u64) => Some(
-            log.get(seq.as_i64() as usize - 1)
+        Some(seq) if is_lipmaa_required(seq_num.as_u64()) => Some(
+            log.get(seq.as_u64() as usize - 1)
                 .expect("Skiplink missing!")
                 .hash(),
         ),
@@ -164,7 +164,7 @@ fn calculate_links(seq_num: &SeqNum, log: &[LogEntry]) -> (Option<Hash>, Option<
 
     // Next backlink hash
     let backlink = seq_num.backlink_seq_num().map(|seq| {
-        log.get(seq.as_i64() as usize - 1)
+        log.get(seq.as_u64() as usize - 1)
             .expect("Backlink missing!")
             .hash()
     });
@@ -255,7 +255,7 @@ impl Node {
             author.as_str(),
             document_id.map(|id| id.as_str()).unwrap_or("not provided"),
             seq_num
-                .map(|seq_num| format!("at sequence number {}", seq_num.as_i64()))
+                .map(|seq_num| format!("at sequence number {}", seq_num.as_u64()))
                 .unwrap_or_else(|| "".into())
         );
 
@@ -265,8 +265,8 @@ impl Node {
 
         info!(
             "[next_entry_args] RESPONSE: log id: {} seq num: {} backlink: {} skiplink: {}",
-            next_entry_args.log_id.as_i64(),
-            next_entry_args.seq_num.as_i64(),
+            next_entry_args.log_id.as_u64(),
+            next_entry_args.seq_num.as_u64(),
             next_entry_args
                 .backlink
                 .as_ref()
@@ -321,7 +321,7 @@ impl Node {
                     // If a sequence number was passed ...
                     Some(s) => {
                         // ... trim the log to the point in time we are interested in
-                        entries = entries[..s.as_i64() as usize - 1].to_owned();
+                        entries = entries[..s.as_u64() as usize - 1].to_owned();
                         // ... and return the sequence number.
                         *s
                     }
@@ -431,8 +431,8 @@ impl Node {
                 if *log_id != expected_log_id {
                     return Err(format!(
                         "Passed log id {} does not match expected log id {}",
-                        log_id.as_i64(),
-                        expected_log_id.as_i64()
+                        log_id.as_u64(),
+                        expected_log_id.as_u64()
                     )
                     .into());
                 };
@@ -448,7 +448,7 @@ impl Node {
         info!(
             "[publish_entry] RESPONSE: succesfully published entry: {} to log: {} and returning next entry args",
             entry_encoded.hash().as_str(),
-            log_id.as_i64()
+            log_id.as_u64()
         );
 
         debug!("\n{:?}", next_entry_args);

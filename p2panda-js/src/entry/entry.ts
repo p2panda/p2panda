@@ -40,8 +40,8 @@ export const signPublishEntry = async (
     operationEncoded,
     entryArgs.entryHashSkiplink,
     entryArgs.entryHashBacklink,
-    entryArgs.seqNum,
-    entryArgs.logId,
+    BigInt(entryArgs.seqNum),
+    BigInt(entryArgs.logId),
   );
   log('Signed and encoded entry');
 

@@ -77,19 +77,19 @@ impl Copy for OperationAction {}
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
 pub enum OperationValue {
-    /// Basic `boolean` value.
+    /// Boolean value.
     #[serde(rename = "bool")]
     Boolean(bool),
 
-    /// Basic signed `integer` value.
+    /// Signed integer value.
     #[serde(rename = "int")]
     Integer(i64),
 
-    /// Basic signed `float` value.
+    /// Floating point value.
     #[serde(rename = "float")]
     Float(f64),
 
-    /// Basic `string` value.
+    /// String value.
     #[serde(rename = "str")]
     Text(String),
 
