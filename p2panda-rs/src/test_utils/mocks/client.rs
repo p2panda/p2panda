@@ -38,7 +38,7 @@
 //! );
 //!
 //! // Retrieve the next entry args from the node
-//! let entry_args = node.next_entry_args(&panda.author(), None, None)?;
+//! let entry_args = node.get_next_entry_args(&panda.author(), None, None)?;
 //!
 //! // Sign and encode an entry
 //! let entry_encoded = panda.signed_encoded_entry(operation.to_owned(), entry_args);

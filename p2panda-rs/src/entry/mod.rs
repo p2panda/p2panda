@@ -22,6 +22,6 @@ pub use decode::decode_entry;
 pub use encode::sign_and_encode;
 pub use entry::Entry;
 pub use entry_signed::{EntrySigned, SIGNATURE_SIZE};
-pub use error::{EntryError, EntrySignedError, SeqNumError};
+pub use error::{EntryError, EntrySignedError, LogIdError, SeqNumError};
 pub use log_id::LogId;
 pub use seq_num::SeqNum;

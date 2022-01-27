@@ -20,11 +20,6 @@ debug-js-glue = false
 demangle-name-section = true
 dwarf-debug-info = false
 
-[features]
-default = []
-# Adds sql database support for atomic structs via sqlx crate
-db-sqlx = ["sqlx"]
-
 [[bin]]
 name = "json-test-data"
 path = "src/test_utils/generate_test_data.rs"
@@ -42,21 +37,17 @@ ed25519 = "1.3.0"
 ed25519-dalek = "1.0.1"
 hex = "0.4.3"
 incremental-topo = "0.1.2"
+log = "0.4"
 serde = { version = "1.0.132", features = ["derive"] }
-serde_repr = "0.1.7"
+serde-wasm-bindgen = "0.4.1"
 serde_json = "1.0.73"
+serde_repr = "0.1.7"
 thiserror = "1.0.30"
 tls_codec = { version = "0.2.0-pre.3", features = [
   "derive",
   "serde_serialize",
 ] }
 yasmf-hash = "0.1.0"
-
-# Optional dependencies (behind feature flags)
-sqlx = { version = "0.5.9", features = [
-  "runtime-async-std-rustls",
-  "all-databases",
-], optional = true }
 
 # @TODO: Use `openmls` crate as soon as changes got merged into `main` in
 # upstream and released as version `0.4.0`.
@@ -89,7 +80,9 @@ wasm-bindgen = "0.2.78"
 
 [dev-dependencies]
 criterion = "0.3.4"
+ctor = "0.1.2"
 wasm-bindgen-test = "0.3.28"
+pretty_env_logger = "0.4"
 rstest = "0.12.0"
 rstest_reuse = "0.1.3"
 

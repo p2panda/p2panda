@@ -20,7 +20,7 @@ fn main() {
     let panda = Client::new("panda".to_string(), new_key_pair());
 
     // Publish a CREATE operation
-    let document_id = send_to_node(
+    let (entry1_hash, _) = send_to_node(
         &mut node,
         &panda,
         &create_operation(
@@ -34,12 +34,12 @@ fn main() {
     .unwrap();
 
     // Publish an UPDATE operation
-    let entry2_hash = send_to_node(
+    let (entry2_hash, _) = send_to_node(
         &mut node,
         &panda,
         &update_operation(
             hash(DEFAULT_SCHEMA_HASH),
-            vec![document_id],
+            vec![entry1_hash],
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("Which I now update.".to_string()),
@@ -49,7 +49,7 @@ fn main() {
     .unwrap();
 
     // Publish another UPDATE operation
-    let entry3_hash = send_to_node(
+    let (entry3_hash, _) = send_to_node(
         &mut node,
         &panda,
         &update_operation(
@@ -130,8 +130,8 @@ mod tests {
                       "entryHash": "00207d5dd2f46f4ea413a078bc6a8df5064c4869558f03727e7b4404298e7b7ac6d6",
                       "payloadBytes": "a466616374696f6e6663726561746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a1676d657373616765a26474797065637374726576616c7565764f68682c206d79206669727374206d65737361676521",
                       "payloadHash": "0020bbf34ae370b167c4950df17089ca322965c4e5c92e1b13a1f0fc4d62ce82e494",
-                      "logId": 1,
-                      "seqNum": 1
+                      "logId": "1",
+                      "seqNum": "1"
                     }
                   ],
                   "decodedOperations": [
@@ -151,14 +151,14 @@ mod tests {
                     {
                       "entryHashBacklink": null,
                       "entryHashSkiplink": null,
-                      "seqNum": 1,
-                      "logId": 1
+                      "seqNum": "1",
+                      "logId": "1"
                     },
                     {
                       "entryHashBacklink": "00207d5dd2f46f4ea413a078bc6a8df5064c4869558f03727e7b4404298e7b7ac6d6",
                       "entryHashSkiplink": null,
-                      "seqNum": 2,
-                      "logId": 1
+                      "seqNum": "2",
+                      "logId": "1"
                     }
                   ]
                 }
@@ -179,5 +179,11 @@ mod tests {
 
         // Both should be equal
         assert_eq!(generated_test_data_json, fixture_test_data_json);
+    }
+
+    #[test]
+    fn test_main() {
+        // Check that example values actually work
+        crate::main();
     }
 }

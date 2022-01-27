@@ -8,7 +8,7 @@ use std::convert::TryFrom;
 
 use serde::Serialize;
 
-use crate::entry::{decode_entry, LogId, SeqNum};
+use crate::entry::decode_entry;
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{Operation, OperationEncoded};
@@ -21,8 +21,8 @@ use crate::test_utils::mocks::Node;
 pub struct NextEntryArgs {
     entry_hash_backlink: Option<Hash>,
     entry_hash_skiplink: Option<Hash>,
-    seq_num: SeqNum,
-    log_id: LogId,
+    seq_num: String,
+    log_id: String,
 }
 
 /// Encoded entry data formatted correctly for the test data.
@@ -34,8 +34,8 @@ pub struct EncodedEntryData {
     entry_hash: Hash,
     payload_bytes: String,
     payload_hash: Hash,
-    log_id: LogId,
-    seq_num: SeqNum,
+    log_id: String,
+    seq_num: String,
 }
 
 /// Log data formatted correctly for the test data.
@@ -95,20 +95,20 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
                     entry_hash: log_entry.entry_encoded().hash(),
                     payload_bytes: operation_encoded.as_str().into(),
                     payload_hash: operation_encoded.hash(),
-                    log_id: entry.log_id().to_owned(),
-                    seq_num: entry.seq_num().to_owned(),
+                    log_id: entry.log_id().as_u64().to_string(),
+                    seq_num: entry.seq_num().as_u64().to_string(),
                 };
 
                 // Get next entry args for this document log
                 let next_entry_args = node
-                    .next_entry_args(&author, Some(&document_id), Some(entry.seq_num()))
+                    .get_next_entry_args(&author, Some(&document_id), Some(entry.seq_num()))
                     .unwrap();
 
                 let json_entry_args = NextEntryArgs {
                     entry_hash_backlink: next_entry_args.backlink,
                     entry_hash_skiplink: next_entry_args.skiplink,
-                    seq_num: next_entry_args.seq_num,
-                    log_id: next_entry_args.log_id,
+                    seq_num: next_entry_args.seq_num.as_u64().to_string(),
+                    log_id: next_entry_args.log_id.as_u64().to_string(),
                 };
 
                 // Push all data for this entry to the log
@@ -119,14 +119,14 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
 
             // Get the final next entry args for this log
             let final_next_entry_args = node
-                .next_entry_args(&author, Some(&log.document()), None)
+                .get_next_entry_args(&author, Some(&log.document()), None)
                 .unwrap();
 
             let json_entry_args = NextEntryArgs {
                 entry_hash_backlink: final_next_entry_args.backlink,
                 entry_hash_skiplink: final_next_entry_args.skiplink,
-                seq_num: final_next_entry_args.seq_num,
-                log_id: final_next_entry_args.log_id,
+                seq_num: final_next_entry_args.seq_num.as_u64().to_string(),
+                log_id: final_next_entry_args.log_id.as_u64().to_string(),
             };
 
             // Push next entry args to the log data
