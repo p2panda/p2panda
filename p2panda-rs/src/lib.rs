@@ -87,5 +87,7 @@ pub trait Validate {
 #[cfg(test)]
 #[ctor::ctor]
 fn init() {
-    pretty_env_logger::init();
+    if std::env::var("RUST_LOG").is_ok() {
+        pretty_env_logger::init();
+    }
 }
