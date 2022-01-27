@@ -4,13 +4,8 @@
 //!
 //! Create a causal graph of p2panda operations reconcile branches, solve version conflicts
 //! automatically, order operations deterministically and reduce them into data instances.
-mod dag;
 mod error;
-mod filter;
 mod graph;
-mod marshall_entries;
 
-pub use dag::{Edge, Node, DAG};
-pub use error::{GraphError, MaterialisationError};
+pub use error::GraphError;
 pub use graph::Graph;
-pub use marshall_entries::marshall_entries;
