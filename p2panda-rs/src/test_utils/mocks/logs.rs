@@ -141,7 +141,7 @@ impl Log {
 
     /// Returns the next sequence number for this log.
     pub fn next_seq_num(&self) -> SeqNum {
-        SeqNum::new((self.entries.len() + 1) as i64).unwrap()
+        SeqNum::new((self.entries.len() + 1) as u64).unwrap()
     }
 }
 
@@ -173,7 +173,7 @@ impl AuthorLogs {
 
     /// Get the next available log id for this author.
     pub fn next_log_id(&self) -> LogId {
-        LogId::new((self.0.len() + 1) as i64)
+        LogId::new((self.0.len() + 1) as u64)
     }
 
     /// Returns an iterator over all logs by this author.
