@@ -33,8 +33,7 @@
 //!             "message",
 //!             OperationValue::Text("Ohh, my first message!".to_string()),
 //!         )]),
-//!     ),
-//!     None
+//!     )
 //! )
 //! .unwrap();
 //!
@@ -49,8 +48,7 @@
 //!             "message",
 //!             OperationValue::Text("Which I now update.".to_string()),
 //!         )]),
-//!     ),
-//!     Some(&document1_hash_id)
+//!     )
 //! )
 //! .unwrap();
 //!
@@ -61,8 +59,7 @@
 //!     &delete_operation(
 //!         hash(CHAT_SCHEMA_HASH),
 //!         vec![entry2_hash]
-//!     ),
-//!     Some(&document1_hash_id)     
+//!     )
 //! )
 //! .unwrap();
 //!
@@ -76,8 +73,7 @@
 //!             "message",
 //!             OperationValue::Text("Let's try that again.".to_string()),
 //!         )]),
-//!     ),
-//!     None
+//!     )
 //! )
 //! .unwrap();
 //!
@@ -88,34 +84,64 @@
 //! entries.len(); // => 4
 //! ```
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
+
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
 use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{Operation, OperationEncoded};
-use crate::test_utils::mocks::logs::{Log, LogEntry};
+use crate::operation::{AsOperation, Operation, OperationEncoded};
+use crate::test_utils::mocks::logs::{AuthorLogs, LogEntry};
 use crate::test_utils::mocks::utils::Result;
 use crate::test_utils::mocks::Client;
 use crate::test_utils::utils::NextEntryArgs;
 
 /// Helper method signing and encoding entry and sending it to node backend.
-pub fn send_to_node(
-    node: &mut Node,
-    client: &Client,
-    operation: &Operation,
-    document_id: Option<&Hash>,
-) -> Result<Hash> {
-    let entry_args = node.next_entry_args(&client.author(), document_id, None)?;
+pub fn send_to_node(node: &mut Node, client: &Client, operation: &Operation) -> Result<Hash> {
+    // We need to establish which document this operation is targeting before proceeding.
+    // First we check if this is a create message, which would mean no document exists yet.
+    let document_id = if operation.is_create() {
+        None
+    } else {
+        // If this isn't a create message, then there must be an existing document
+        // this operation to be valid.
 
+        // We get the previous_operations field first.
+        let previous_operations = operation
+            .previous_operations()
+            .expect("UPDATE / DELETE operations must contain previous_operations");
+
+        // If it's an empty collection we have a problem as all UPDATE and DELETE operations
+        // must be pointing at other existing operations.
+        if previous_operations.is_empty() {
+            return Err(
+                "UPDATE / DELETE operations must have more than 1 previous operation".into(),
+            );
+        };
+
+        // Using the first previous operation in the list we retrieve the associated document
+        // id from the database.
+        let document_id = node.get_document_by_entry(&previous_operations[0]);
+
+        Some(document_id.expect("This node does not contain the required document"))
+    };
+
+    // Here we can retrieve the correct entry arguments for constructing an entry.
+    let entry_args = node.next_entry_args(&client.author(), document_id.as_ref(), None)?;
+
+    // The entry is constructed, signed and encoded.
     let entry_encoded = client.signed_encoded_entry(operation.to_owned(), entry_args);
 
+    // The operation is also encoded.
     let operation_encoded = OperationEncoded::try_from(operation).unwrap();
 
+    // Both are published to the node.
     node.publish_entry(&entry_encoded, &operation_encoded)?;
 
-    // Return entry hash for now so we can use it to perform UPDATE and DELETE operations later
+    // Return entry hash so we can use it to perform UPDATE and DELETE operations later.
+    // @TODO: We really want to return the next entry args here which would include
+    // the document graph tips. This requires integrating Document into the test utils.
     Ok(entry_encoded.hash())
 }
 
@@ -142,8 +168,8 @@ fn calculate_links(seq_num: &SeqNum, log: &[LogEntry]) -> (Option<Hash>, Option<
 
 /// Mock database type.
 ///
-/// Maps the public key of an authors against a map of their logs identified by log id.
-pub type Database = HashMap<String, HashMap<i64, Log>>;
+/// Maps the public key of an author against a map of their logs identified by log id.
+pub type Database = HashMap<String, AuthorLogs>;
 
 /// This node mocks functionality which would be implemented in a real world p2panda node.
 ///
@@ -152,66 +178,57 @@ pub type Database = HashMap<String, HashMap<i64, Log>>;
 #[derive(Debug, Default)]
 pub struct Node {
     /// Internal database structure.
-    entries: Database,
+    db: Database,
 }
 
 impl Node {
     /// Create a new mock Node.
     pub fn new() -> Self {
         Self {
-            entries: Database::new(),
+            db: Database::new(),
         }
+    }
+
+    /// Return the entire database.
+    pub fn db(&self) -> Database {
+        self.db.clone()
     }
 
     /// Get a mutable map of all logs published by a certain author.
-    fn get_author_logs_mut(&mut self, author: &Author) -> Option<&mut HashMap<i64, Log>> {
-        self.entries.get_mut(author.as_str())
+    fn get_author_logs_mut(&mut self, author: &Author) -> Option<&mut AuthorLogs> {
+        self.db.get_mut(author.as_str())
     }
 
     /// Get a map of all logs published by a certain author.
-    fn get_author_logs(&self, author: &Author) -> Option<&HashMap<i64, Log>> {
-        self.entries.get(author.as_str())
+    fn get_author_logs(&self, author: &Author) -> Option<&AuthorLogs> {
+        self.db.get(author.as_str())
     }
 
-    /// Find the log id for the given document and author.
-    pub fn get_log_id(&mut self, document_id: Option<&Hash>, author: &Author) -> Result<LogId> {
-        match self.get_author_logs(author) {
-            Some(logs) => {
-                // Find the highest existing log id and increment it
-                let next_free_log_id =
-                    logs.values().map(|log| log.id().as_i64()).max().unwrap() + 1;
-
-                match document_id {
-                    Some(document) => {
-                        match logs.values().find(|log| log.document() == *document) {
-                            // If a log with this hash already exists, return the existing id
-                            Some(log) => Ok(log.id()),
-                            // Otherwise return the next free one
-                            None => Ok(LogId::new(next_free_log_id)),
-                        }
-                    }
-                    None => Ok(LogId::new(next_free_log_id)),
+    /// Get the document id associated with the passed entry hash.
+    fn get_document_by_entry(&self, entry: &Hash) -> Option<Hash> {
+        let mut document_id = None;
+        self.db.iter().any(|(_author, logs)| {
+            let document_log = logs.find_document_log_by_entry(entry);
+            match document_log {
+                Some(log) => {
+                    document_id = Some(log.document());
+                    true
                 }
+                None => false,
             }
-            // If there aren't any then this is the first log
-            None => Ok(LogId::default()),
-        }
+        });
+        document_id
     }
 
     /// Get an array of all entries in database.
     pub fn all_entries(&self) -> Vec<LogEntry> {
         let mut all_entries: Vec<LogEntry> = Vec::new();
-        self.entries.iter().for_each(|(_id, author_logs)| {
+        self.db.iter().for_each(|(_id, author_logs)| {
             author_logs
                 .iter()
-                .for_each(|(_id, log)| all_entries.append(log.entries().as_mut()))
+                .for_each(|log| all_entries.append(log.entries().as_mut()))
         });
         all_entries
-    }
-
-    /// Return the entire database.
-    pub fn db(&self) -> Database {
-        self.entries.clone()
     }
 
     /// Returns the log id, sequence number, skiplink and backlink hash for a given author and
@@ -221,32 +238,32 @@ impl Node {
     /// point* in this log are returned. This is helpful when generating test data and wanting to
     /// test the flow from requesting entry args through to publishing an entry.
     pub fn next_entry_args(
-        &mut self,
+        &self,
         author: &Author,
         document_id: Option<&Hash>,
         seq_num: Option<&SeqNum>,
     ) -> Result<NextEntryArgs> {
-        // Find out the log id for the given document and author
-        let log_id = self.get_log_id(document_id, author)?;
+        // Get or instantiate a collection of logs for this author.
+        let author_logs = match self.get_author_logs(author) {
+            Some(logs) => logs.clone(),
+            None => AuthorLogs::new(),
+        };
 
-        // Find any logs by this author for this document
-        let author_log = match document_id {
-            Some(document) => {
-                match self.get_author_logs_mut(author) {
-                    // Try to find logs of this document
-                    Some(logs) => logs.values().find(|log| log.document() == *document),
-                    // No logs for this author
-                    None => None,
-                }
-            }
-            // Document was not given, there is none yet!
+        // Find the log for this document and author if it exists.
+        let document_log = match document_id {
+            Some(document_id) => author_logs.get_log_by_document_id(document_id),
             None => None,
         };
 
-        // Find out the sequence number, skip- and backlink hash for the next entry in this log
-        let entry_args = match author_log {
+        // Construct the next entry args.
+        let entry_args = match document_log {
             Some(log) => {
+                // If a document log already we retrieve all the entries.
                 let mut entries = log.entries();
+                // If a seq num was passed to this method it means we are
+                // requesting entry args for a specific point in this log.
+                // NB: This is a functionality only implemented in the mock node
+                //for testing purposes.
                 let seq_num_inner = match seq_num {
                     // If a sequence number was passed ...
                     Some(s) => {
@@ -258,72 +275,104 @@ impl Node {
                     None => {
                         // If no sequence number was passed calculate and return the next sequence
                         // number for this log
-                        SeqNum::new((log.entries().len() + 1) as i64).unwrap()
+                        log.next_seq_num()
                     }
                 };
 
-                // Calculate backlink and skiplink
+                // Calculate backlink and skiplink.
                 let (backlink, skiplink) = calculate_links(&seq_num_inner, &entries);
 
+                // Construct the next entry args.
                 NextEntryArgs {
-                    log_id,
+                    log_id: log.id(),
                     seq_num: seq_num_inner,
                     skiplink,
                     backlink,
                 }
             }
-            // This is the first entry in the log ..
+            // This is the first entry in the log so we construct next entry args
+            // from default values.
             None => NextEntryArgs {
-                log_id,
-                seq_num: SeqNum::new(1).unwrap(),
+                log_id: LogId::default(),
+                seq_num: SeqNum::default(),
                 skiplink: None,
                 backlink: None,
             },
         };
+
         Ok(entry_args)
     }
 
-    /// Store entry in the database.
-    ///
-    /// Please note that since this an experimental implementation this method does not validate any
-    /// integrity or content of the given entry.
+    /// Store an entry in the database and return the hash of the newly created entry.
     pub fn publish_entry(
         &mut self,
         entry_encoded: &EntrySigned,
         operation_encoded: &OperationEncoded,
     ) -> Result<()> {
         let entry = decode_entry(entry_encoded, Some(operation_encoded))?;
-        let log_id = entry.log_id().as_i64();
+        let log_id = entry.log_id();
         let author = entry_encoded.author();
+        let operation = entry.operation().unwrap();
 
-        // Get all logs by this author
+        let document_id = if !operation.is_create() {
+            let previous_operations = operation.previous_operations().unwrap_or_else(|| {
+                panic!(
+                    "Document log for entry {} not found on node",
+                    entry_encoded.hash().as_str()
+                )
+            });
+            self.get_document_by_entry(&previous_operations[0])
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Document log for entry {} not found on node",
+                        entry_encoded.hash().as_str()
+                    )
+                })
+        } else {
+            entry_encoded.hash()
+        };
+
+        // Get all logs by this author.
         let author_logs = match self.get_author_logs_mut(&author) {
             Some(logs) => logs,
             // If there aren't any, then instantiate a new log collection
+            // and insert it into the db.
             None => {
-                self.entries.insert(author.as_str().into(), HashMap::new());
+                self.db.insert(author.as_str().into(), AuthorLogs::new());
                 self.get_author_logs_mut(&author).unwrap()
             }
         };
 
-        // Get the log for this document from the author logs
-        let log = match author_logs.get_mut(&log_id) {
-            Some(log) => log,
-            // If there isn't one, then create and insert it.
-            // Here we assume single writer scenario for now.
-            // With multi-writers we will need to find the document
-            // id by traversing the operation graph back to it's root.
+        // Get the log for this document from the author logs.
+        match author_logs.get_log_mut(log_id) {
+            Some(log) => {
+                // If there is one, insert this new entry.
+                log.add_entry(LogEntry::new(
+                    entry_encoded.to_owned(),
+                    operation_encoded.to_owned(),
+                ));
+            }
             None => {
-                author_logs.insert(log_id, Log::new(entry_encoded, operation_encoded));
-                author_logs.get_mut(&log_id).unwrap()
+                // If there isn't one, then create and insert it.
+
+                // First checking if the passed log id matches what we expect the next log
+                // id for this log to be.
+                let expected_log_id = author_logs.next_log_id();
+
+                if *log_id != expected_log_id {
+                    return Err(format!(
+                        "Passed log id {} does not match expected log id {}",
+                        log_id.as_i64(),
+                        expected_log_id.as_i64()
+                    )
+                    .into());
+                };
+
+                // If it matches then we now create and insert the new log with it's
+                // first entry included.
+                author_logs.create_new_log(document_id, entry_encoded, operation_encoded);
             }
         };
-
-        // Add this entry to database
-        log.add_entry(LogEntry::new(
-            entry_encoded.to_owned(),
-            operation_encoded.to_owned(),
-        ));
 
         Ok(())
     }
@@ -334,6 +383,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::entry::{LogId, SeqNum};
+    use crate::identity::KeyPair;
     use crate::operation::OperationValue;
     use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::fixtures::{create_operation, hash, private_key, update_operation};
@@ -372,7 +422,6 @@ mod tests {
                     OperationValue::Text("Ohh, my first message!".to_string()),
                 )]),
             ),
-            None,
         )
         .unwrap();
 
@@ -404,7 +453,6 @@ mod tests {
                     OperationValue::Text("Which I now update.".to_string()),
                 )]),
             ),
-            Some(&entry1_hash.clone()),
         )
         .unwrap();
 
@@ -415,7 +463,56 @@ mod tests {
         expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
             seq_num: SeqNum::new(3).unwrap(),
-            backlink: Some(entry2_hash),
+            backlink: Some(entry2_hash.clone()),
+            skiplink: None,
+        };
+
+        assert_eq!(next_entry_args.log_id, expected_next_entry_args.log_id);
+        assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
+        assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
+        assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
+
+        let penguin = Client::new("penguin".to_string(), KeyPair::new());
+
+        next_entry_args = node
+            .next_entry_args(&penguin.author(), Some(&entry1_hash), None)
+            .unwrap();
+
+        expected_next_entry_args = NextEntryArgs {
+            log_id: LogId::new(1),
+            seq_num: SeqNum::new(1).unwrap(),
+            backlink: None,
+            skiplink: None,
+        };
+
+        assert_eq!(next_entry_args.log_id, expected_next_entry_args.log_id);
+        assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
+        assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
+        assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
+
+        // Publish an UPDATE operation
+        let penguin_entry_1_hash = send_to_node(
+            &mut node,
+            &penguin,
+            &update_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                vec![entry2_hash],
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Which I now update.".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        next_entry_args = node
+            .next_entry_args(&penguin.author(), Some(&entry1_hash), None)
+            .unwrap();
+
+        expected_next_entry_args = NextEntryArgs {
+            log_id: LogId::new(1),
+            seq_num: SeqNum::new(2).unwrap(),
+            backlink: Some(penguin_entry_1_hash),
             skiplink: None,
         };
 
@@ -441,7 +538,6 @@ mod tests {
                     OperationValue::Text("Ohh, my first message!".to_string()),
                 )]),
             ),
-            None,
         )
         .unwrap();
 
@@ -457,7 +553,6 @@ mod tests {
                     OperationValue::Text("Which I now update.".to_string()),
                 )]),
             ),
-            Some(&entry1_hash.clone()),
         )
         .unwrap();
 

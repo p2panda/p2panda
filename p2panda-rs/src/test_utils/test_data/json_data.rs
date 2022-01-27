@@ -68,7 +68,7 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
         let mut author_logs_data = Vec::new();
 
         // Iterate over the authors logs
-        for (_log_id, log) in author_logs.iter() {
+        for log in author_logs.iter() {
             // Init empty log data
             let mut log_data = LogData {
                 encoded_entries: Vec::new(),
