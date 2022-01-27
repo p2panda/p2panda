@@ -49,6 +49,11 @@ impl Instance {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+
+    /// Returns true if the instance is empty, otherwise false.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl TryFrom<Operation> for Instance {
@@ -118,7 +123,7 @@ mod tests {
     use super::Instance;
 
     #[rstest]
-    fn keys(schema: Hash) {
+    fn basic_methods(schema: Hash) {
         let operation = create_operation(
             schema,
             fields(vec![
@@ -139,7 +144,14 @@ mod tests {
         assert_eq!(
             instance.keys(),
             vec!["age", "height", "is_admin", "profile_picture", "username"]
-        )
+        );
+
+        assert!(!instance.is_empty());
+
+        let empty_instance = Instance::new();
+        assert!(empty_instance.is_empty());
+
+        assert_eq!(instance.len(), 5)
     }
 
     #[rstest]
