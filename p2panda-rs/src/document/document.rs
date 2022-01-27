@@ -274,7 +274,7 @@ mod tests {
         );
 
         // Document should resolve to expected value
-        assert_eq!(instance.raw(), exp_result);
+        assert_eq!(instance, exp_result.into());
 
         // Multiple replicas receiving operations in different orders should resolve to same value.
 

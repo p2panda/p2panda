@@ -44,11 +44,6 @@ impl Instance {
     pub fn iter(&self) -> BTreeMapIter<String, OperationValue> {
         self.0.iter()
     }
-
-    /// Get the raw hashmap representation of the instance.
-    pub fn raw(&self) -> BTreeMap<String, OperationValue> {
-        self.0.clone()
-    }
 }
 
 impl TryFrom<Operation> for Instance {
@@ -90,6 +85,12 @@ impl TryFrom<OperationWithMeta> for Instance {
         }
 
         Ok(instance)
+    }
+}
+
+impl From<BTreeMap<String, OperationValue>> for Instance {
+    fn from(map: BTreeMap<String, OperationValue>) -> Self {
+        Self(map)
     }
 }
 
