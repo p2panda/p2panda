@@ -89,7 +89,8 @@ pub trait Validate {
 /// while running our tests.
 ///
 /// This will also capture and output any logs emitted from our dependencies. This behaviour
-/// can be customised at runtime. With eg. `RUST_LOG=p2panda=info cargo t`.
+/// can be customised at runtime. With eg. `RUST_LOG=p2panda=info cargo t` or
+/// `RUST_LOG=openmls=debug cargo t`.
 ///
 /// The `ctor` crate is used to define a global constructor function. This method
 /// will be run before any of the test suites.
