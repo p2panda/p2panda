@@ -182,9 +182,17 @@ mod tests {
     #[test]
     fn convert_string() {
         let hash_str = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
-        let hash_from_str: Hash = hash_str.parse().unwrap();
-        let hash_try_from = Hash::try_from(String::from(hash_str)).unwrap();
+
+        // Using TryFrom<&str>
+        let hash_from_str: Hash = hash_str.try_into().unwrap();
         assert_eq!(hash_str, hash_from_str.as_str());
-        assert_eq!(hash_from_str, hash_try_from);
+
+        // Using FromStr
+        let hash_from_parse: Hash = hash_str.parse().unwrap();
+        assert_eq!(hash_str, hash_from_parse.as_str());
+
+        // Using TryFrom<String>
+        let hash_from_string = Hash::try_from(String::from(hash_str)).unwrap();
+        assert_eq!(hash_str, hash_from_string.as_str());
     }
 }
