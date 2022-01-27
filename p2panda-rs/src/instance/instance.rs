@@ -118,7 +118,7 @@ mod tests {
     use super::Instance;
 
     #[rstest]
-    fn encode_and_decode(schema: Hash) {
+    fn keys(schema: Hash) {
         let operation = create_operation(
             schema,
             fields(vec![
