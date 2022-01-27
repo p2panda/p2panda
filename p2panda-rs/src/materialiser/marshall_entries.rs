@@ -56,7 +56,7 @@ mod tests {
         let client = Client::new("panda".to_string(), key_pair);
         let mut node = Node::new();
 
-        let entry_1_hash = send_to_node(
+        let (entry_1_hash, _) = send_to_node(
             &mut node,
             &client,
             &create_operation(
@@ -66,7 +66,6 @@ mod tests {
                     OperationValue::Text("Hello!".to_string()),
                 )]),
             ),
-            None,
         )
         .unwrap();
 
@@ -75,13 +74,12 @@ mod tests {
             &client,
             &update_operation(
                 schema,
-                vec![entry_1_hash.clone()],
+                vec![entry_1_hash],
                 fields(vec![(
                     "operation",
                     OperationValue::Text("Hello too!".to_string()),
                 )]),
             ),
-            Some(&entry_1_hash),
         )
         .unwrap();
 

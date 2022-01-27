@@ -68,7 +68,7 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
         let mut author_logs_data = Vec::new();
 
         // Iterate over the authors logs
-        for (_log_id, log) in author_logs.iter() {
+        for log in author_logs.iter() {
             // Init empty log data
             let mut log_data = LogData {
                 encoded_entries: Vec::new(),
@@ -101,7 +101,7 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
 
                 // Get next entry args for this document log
                 let next_entry_args = node
-                    .next_entry_args(&author, Some(&document_id), Some(entry.seq_num()))
+                    .get_next_entry_args(&author, Some(&document_id), Some(entry.seq_num()))
                     .unwrap();
 
                 let json_entry_args = NextEntryArgs {
@@ -119,7 +119,7 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
 
             // Get the final next entry args for this log
             let final_next_entry_args = node
-                .next_entry_args(&author, Some(&log.document()), None)
+                .get_next_entry_args(&author, Some(&log.document()), None)
                 .unwrap();
 
             let json_entry_args = NextEntryArgs {

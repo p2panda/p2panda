@@ -63,7 +63,7 @@ mod tests {
         let penguin = Client::new("penguin".to_string(), key_pair_2);
         let mut node = Node::new();
 
-        let panda_entry_1_hash = send_to_node(
+        let (panda_entry_1_hash, _) = send_to_node(
             &mut node,
             &panda,
             &create_operation(
@@ -73,22 +73,20 @@ mod tests {
                     OperationValue::Text("Hello!".to_string()),
                 )]),
             ),
-            None,
         )
         .unwrap();
 
-        let panda_entry_2_hash = send_to_node(
+        let (panda_entry_2_hash, _) = send_to_node(
             &mut node,
             &panda,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone()],
+                vec![panda_entry_1_hash],
                 fields(vec![(
                     "message",
                     OperationValue::Text("Hello too!".to_string()),
                 )]),
             ),
-            Some(&panda_entry_1_hash),
         )
         .unwrap();
 
@@ -103,7 +101,6 @@ mod tests {
                     OperationValue::Text("Hello too!".to_string()),
                 )]),
             ),
-            Some(&panda_entry_1_hash),
         )
         .unwrap();
 

@@ -20,7 +20,7 @@ fn main() {
     let panda = Client::new("panda".to_string(), new_key_pair());
 
     // Publish a CREATE operation
-    let document_id = send_to_node(
+    let (entry1_hash, _) = send_to_node(
         &mut node,
         &panda,
         &create_operation(
@@ -30,28 +30,26 @@ fn main() {
                 OperationValue::Text("Ohh, my first message!".to_string()),
             )]),
         ),
-        None,
     )
     .unwrap();
 
     // Publish an UPDATE operation
-    let entry2_hash = send_to_node(
+    let (entry2_hash, _) = send_to_node(
         &mut node,
         &panda,
         &update_operation(
             hash(DEFAULT_SCHEMA_HASH),
-            vec![document_id.clone()],
+            vec![entry1_hash],
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("Which I now update.".to_string()),
             )]),
         ),
-        Some(&document_id),
     )
     .unwrap();
 
     // Publish another UPDATE operation
-    let entry3_hash = send_to_node(
+    let (entry3_hash, _) = send_to_node(
         &mut node,
         &panda,
         &update_operation(
@@ -62,7 +60,6 @@ fn main() {
                 OperationValue::Text("And then update again.".to_string()),
             )]),
         ),
-        Some(&document_id),
     )
     .unwrap();
 
@@ -71,7 +68,6 @@ fn main() {
         &mut node,
         &panda,
         &delete_operation(hash(DEFAULT_SCHEMA_HASH), vec![entry3_hash]),
-        Some(&document_id),
     )
     .unwrap();
 
@@ -118,7 +114,6 @@ mod tests {
                     OperationValue::Text("Ohh, my first message!".to_string()),
                 )]),
             ),
-            None,
         )
         .unwrap();
 
