@@ -80,3 +80,11 @@ pub trait Validate {
     /// Validates p2panda data type instance.
     fn validate(&self) -> Result<(), Self::Error>;
 }
+
+/// Init pretty_env_logger before the test suite runs to handle logging outputs.
+/// Uses the `ctor` crate to define a global constructor function.
+#[cfg(test)]
+#[ctor::ctor]
+fn init() {
+    pretty_env_logger::init();
+}
