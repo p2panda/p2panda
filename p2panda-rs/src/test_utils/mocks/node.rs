@@ -412,7 +412,7 @@ mod tests {
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
         // Publish a CREATE operation
-        let entry1_hash = send_to_node(
+        let panda_entry_1_hash = send_to_node(
             &mut node,
             &panda,
             &create_operation(
@@ -426,13 +426,13 @@ mod tests {
         .unwrap();
 
         next_entry_args = node
-            .next_entry_args(&panda.author(), Some(&entry1_hash), None)
+            .next_entry_args(&panda.author(), Some(&panda_entry_1_hash), None)
             .expect("No entry args returned!");
 
         expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
             seq_num: SeqNum::new(2).unwrap(),
-            backlink: Some(entry1_hash.clone()),
+            backlink: Some(panda_entry_1_hash.clone()),
             skiplink: None,
         };
 
@@ -442,12 +442,12 @@ mod tests {
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
         // Publish an UPDATE operation
-        let entry2_hash = send_to_node(
+        let panda_entry_2_hash = send_to_node(
             &mut node,
             &panda,
             &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                vec![entry1_hash.clone()],
+                vec![panda_entry_1_hash.clone()],
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Which I now update.".to_string()),
@@ -457,13 +457,13 @@ mod tests {
         .unwrap();
 
         next_entry_args = node
-            .next_entry_args(&panda.author(), Some(&entry1_hash), None)
+            .next_entry_args(&panda.author(), Some(&panda_entry_1_hash), None)
             .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
             seq_num: SeqNum::new(3).unwrap(),
-            backlink: Some(entry2_hash.clone()),
+            backlink: Some(panda_entry_2_hash.clone()),
             skiplink: None,
         };
 
@@ -475,7 +475,7 @@ mod tests {
         let penguin = Client::new("penguin".to_string(), KeyPair::new());
 
         next_entry_args = node
-            .next_entry_args(&penguin.author(), Some(&entry1_hash), None)
+            .next_entry_args(&penguin.author(), Some(&panda_entry_1_hash), None)
             .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
@@ -496,7 +496,7 @@ mod tests {
             &penguin,
             &update_operation(
                 hash(DEFAULT_SCHEMA_HASH),
-                vec![entry2_hash],
+                vec![panda_entry_2_hash],
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Which I now update.".to_string()),
@@ -506,13 +506,44 @@ mod tests {
         .unwrap();
 
         next_entry_args = node
-            .next_entry_args(&penguin.author(), Some(&entry1_hash), None)
+            .next_entry_args(&penguin.author(), Some(&panda_entry_1_hash), None)
             .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
             seq_num: SeqNum::new(2).unwrap(),
-            backlink: Some(penguin_entry_1_hash),
+            backlink: Some(penguin_entry_1_hash.clone()),
+            skiplink: None,
+        };
+
+        assert_eq!(next_entry_args.log_id, expected_next_entry_args.log_id);
+        assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
+        assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
+        assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
+
+        // Publish an UPDATE operation
+        let penguin_entry_2_hash = send_to_node(
+            &mut node,
+            &penguin,
+            &update_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                vec![penguin_entry_1_hash],
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Which I now update again.".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        next_entry_args = node
+            .next_entry_args(&penguin.author(), Some(&panda_entry_1_hash), None)
+            .unwrap();
+
+        expected_next_entry_args = NextEntryArgs {
+            log_id: LogId::new(1),
+            seq_num: SeqNum::new(3).unwrap(),
+            backlink: Some(penguin_entry_2_hash),
             skiplink: None,
         };
 
