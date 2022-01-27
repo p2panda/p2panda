@@ -185,4 +185,10 @@ mod tests {
         // Both should be equal
         assert_eq!(generated_test_data_json, fixture_test_data_json);
     }
+
+    #[test]
+    fn test_main() {
+        // Check that example values actually work
+        crate::main();
+    }
 }
