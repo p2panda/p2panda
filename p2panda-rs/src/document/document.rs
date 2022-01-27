@@ -179,7 +179,7 @@ mod tests {
 
         // Panda publishes a create operation.
         // This instantiates a new document.
-        let panda_entry_1_hash = send_to_node(
+        let (panda_entry_1_hash, _) = send_to_node(
             &mut node,
             &panda,
             &create_operation(
@@ -194,7 +194,7 @@ mod tests {
 
         // Panda publishes an update operation.
         // It contains the hash of the previous operation in it's `previous_operations` array
-        let panda_entry_2_hash = send_to_node(
+        let (panda_entry_2_hash, _) = send_to_node(
             &mut node,
             &panda,
             &update_operation(
@@ -210,7 +210,7 @@ mod tests {
 
         // Penguin publishes an update operation which creates a new branch in the graph.
         // This is because they didn't know about Panda's second operation.
-        let penguin_entry_1_hash = send_to_node(
+        let (penguin_entry_1_hash, _) = send_to_node(
             &mut node,
             &penguin,
             &update_operation(
@@ -226,7 +226,7 @@ mod tests {
 
         // Penguin publishes a new operation while now being aware of the previous branching situation.
         // Their `previous_operations` field now contains 2 operation hash id's.
-        let penguin_entry_2_hash = send_to_node(
+        let (penguin_entry_2_hash, _) = send_to_node(
             &mut node,
             &penguin,
             &update_operation(
@@ -325,7 +325,7 @@ mod tests {
 
         // Panda publishes a create operation.
         // This instantiates a new document.
-        let panda_entry_1_hash = send_to_node(
+        let (panda_entry_1_hash, _) = send_to_node(
             &mut node,
             &panda,
             &create_operation(
