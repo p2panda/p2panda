@@ -56,7 +56,7 @@ mod tests {
         let client = Client::new("panda".to_string(), key_pair);
         let mut node = Node::new();
 
-        let entry_1_hash = send_to_node(
+        let (entry_1_hash, _) = send_to_node(
             &mut node,
             &client,
             &create_operation(

@@ -20,7 +20,7 @@ fn main() {
     let panda = Client::new("panda".to_string(), new_key_pair());
 
     // Publish a CREATE operation
-    let document_id = send_to_node(
+    let (entry1_hash, _) = send_to_node(
         &mut node,
         &panda,
         &create_operation(
@@ -34,12 +34,12 @@ fn main() {
     .unwrap();
 
     // Publish an UPDATE operation
-    let entry2_hash = send_to_node(
+    let (entry2_hash, _) = send_to_node(
         &mut node,
         &panda,
         &update_operation(
             hash(DEFAULT_SCHEMA_HASH),
-            vec![document_id],
+            vec![entry1_hash],
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("Which I now update.".to_string()),
@@ -49,7 +49,7 @@ fn main() {
     .unwrap();
 
     // Publish another UPDATE operation
-    let entry3_hash = send_to_node(
+    let (entry3_hash, _) = send_to_node(
         &mut node,
         &panda,
         &update_operation(

@@ -24,7 +24,7 @@
 //! let panda = Client::new("panda".to_string(), new_key_pair());
 //!
 //! // Panda creates a new chat document by publishing a CREATE operation
-//! let document1_hash_id = send_to_node(
+//! let (document1_hash_id, _) = send_to_node(
 //!     &mut node,
 //!     &panda,
 //!     &create_operation(
@@ -38,7 +38,7 @@
 //! .unwrap();
 //!
 //! // Panda updates the document by publishing an UPDATE operation
-//! let entry2_hash = send_to_node(
+//! let (entry2_hash, _) = send_to_node(
 //!     &mut node,
 //!     &panda,
 //!     &update_operation(
@@ -99,7 +99,11 @@ use crate::test_utils::mocks::Client;
 use crate::test_utils::utils::NextEntryArgs;
 
 /// Helper method signing and encoding entry and sending it to node backend.
-pub fn send_to_node(node: &mut Node, client: &Client, operation: &Operation) -> Result<Hash> {
+pub fn send_to_node(
+    node: &mut Node,
+    client: &Client,
+    operation: &Operation,
+) -> Result<(Hash, NextEntryArgs)> {
     // We need to establish which document this operation is targeting before proceeding.
     // First we check if this is a create message, which would mean no document exists yet.
     let document_id = if operation.is_create() {
@@ -129,7 +133,7 @@ pub fn send_to_node(node: &mut Node, client: &Client, operation: &Operation) -> 
     };
 
     // Here we can retrieve the correct entry arguments for constructing an entry.
-    let entry_args = node.next_entry_args(&client.author(), document_id.as_ref(), None)?;
+    let entry_args = node.get_next_entry_args(&client.author(), document_id.as_ref(), None)?;
 
     // The entry is constructed, signed and encoded.
     let entry_encoded = client.signed_encoded_entry(operation.to_owned(), entry_args);
@@ -138,12 +142,12 @@ pub fn send_to_node(node: &mut Node, client: &Client, operation: &Operation) -> 
     let operation_encoded = OperationEncoded::try_from(operation).unwrap();
 
     // Both are published to the node.
-    node.publish_entry(&entry_encoded, &operation_encoded)?;
+    let next_entry_args = node.publish_entry(&entry_encoded, &operation_encoded)?;
 
     // Return entry hash so we can use it to perform UPDATE and DELETE operations later.
     // @TODO: We really want to return the next entry args here which would include
     // the document graph tips. This requires integrating Document into the test utils.
-    Ok(entry_encoded.hash())
+    Ok((entry_encoded.hash(), next_entry_args))
 }
 
 /// Calculate the skiplink and backlink at a certain point in a log of entries.
@@ -232,20 +236,22 @@ impl Node {
         all_entries
     }
 
+    /// Public wrapper with logging for private next_entry_args method.
+    ///
     /// Returns the log id, sequence number, skiplink and backlink hash for a given author and
     /// document. All of this information is needed to create and sign a new entry.
     ///
     /// If a value for the optional seq_num parameter is passed then next entry args *at that
     /// point* in this log are returned. This is helpful when generating test data and wanting to
     /// test the flow from requesting entry args through to publishing an entry.
-    pub fn next_entry_args(
+    pub fn get_next_entry_args(
         &self,
         author: &Author,
         document_id: Option<&Hash>,
         seq_num: Option<&SeqNum>,
     ) -> Result<NextEntryArgs> {
         info!(
-            "REQUEST: next entry args for author {} document {} {}",
+            "[next_entry_args] REQUEST: next entry args for author {} document {} {}",
             author.as_str(),
             document_id.map(|id| id.as_str()).unwrap_or("not provided"),
             seq_num
@@ -255,6 +261,41 @@ impl Node {
 
         debug!("\n{:?}\n{:?}\n{:?}", author, document_id, seq_num);
 
+        let next_entry_args = self.next_entry_args(author, document_id, seq_num)?;
+
+        info!(
+            "[next_entry_args] RESPONSE: log id: {} seq num: {} backlink: {} skiplink: {}",
+            next_entry_args.log_id.as_i64(),
+            next_entry_args.seq_num.as_i64(),
+            next_entry_args
+                .backlink
+                .as_ref()
+                .map(|hash| hash.as_str())
+                .unwrap_or("none"),
+            next_entry_args
+                .skiplink
+                .as_ref()
+                .map(|hash| hash.as_str())
+                .unwrap_or("none"),
+        );
+
+        debug!("\n{:?}", next_entry_args);
+
+        Ok(next_entry_args)
+    }
+
+    /// Returns the log id, sequence number, skiplink and backlink hash for a given author and
+    /// document. All of this information is needed to create and sign a new entry.
+    ///
+    /// If a value for the optional seq_num parameter is passed then next entry args *at that
+    /// point* in this log are returned. This is helpful when generating test data and wanting to
+    /// test the flow from requesting entry args through to publishing an entry.
+    fn next_entry_args(
+        &self,
+        author: &Author,
+        document_id: Option<&Hash>,
+        seq_num: Option<&SeqNum>,
+    ) -> Result<NextEntryArgs> {
         // Get or instantiate a collection of logs for this author.
         let author_logs = match self.get_author_logs(author) {
             Some(logs) => logs.clone(),
@@ -312,24 +353,6 @@ impl Node {
             },
         };
 
-        info!(
-            "RESPONSE: log id: {} seq num: {} backlink: {} skiplink: {}",
-            entry_args.log_id.as_i64(),
-            entry_args.seq_num.as_i64(),
-            entry_args
-                .backlink
-                .as_ref()
-                .map(|hash| hash.as_str())
-                .unwrap_or("none"),
-            entry_args
-                .skiplink
-                .as_ref()
-                .map(|hash| hash.as_str())
-                .unwrap_or("none"),
-        );
-
-        debug!("\n{:?}", entry_args);
-
         Ok(entry_args)
     }
 
@@ -338,14 +361,14 @@ impl Node {
         &mut self,
         entry_encoded: &EntrySigned,
         operation_encoded: &OperationEncoded,
-    ) -> Result<()> {
+    ) -> Result<NextEntryArgs> {
         let entry = decode_entry(entry_encoded, Some(operation_encoded))?;
         let log_id = entry.log_id();
         let author = entry_encoded.author();
         let operation = entry.operation().unwrap();
 
         info!(
-            "REQUEST: publish entry: {} from author: {}",
+            "[publish_entry] REQUEST: publish entry: {} from author: {}",
             entry_encoded.hash().as_str(),
             author.as_str()
         );
@@ -416,17 +439,21 @@ impl Node {
 
                 // If it matches then we now create and insert the new log with it's
                 // first entry included.
-                author_logs.create_new_log(document_id, entry_encoded, operation_encoded);
+                author_logs.create_new_log(document_id.clone(), entry_encoded, operation_encoded);
             }
         };
 
+        let next_entry_args = self.next_entry_args(&author, Some(&document_id), None)?;
+
         info!(
-            "RESPONSE: succesfully published entry: {} to log: {}",
+            "[publish_entry] RESPONSE: succesfully published entry: {} to log: {} and returning next entry args",
             entry_encoded.hash().as_str(),
             log_id.as_i64()
         );
 
-        Ok(())
+        debug!("\n{:?}", next_entry_args);
+
+        Ok(next_entry_args)
     }
 }
 
@@ -449,7 +476,9 @@ mod tests {
         let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
         let mut node = Node::new();
 
-        let mut next_entry_args = node.next_entry_args(&panda.author(), None, None).unwrap();
+        let next_entry_args = node
+            .get_next_entry_args(&panda.author(), None, None)
+            .unwrap();
 
         let mut expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
@@ -464,7 +493,7 @@ mod tests {
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
         // Publish a CREATE operation
-        let panda_entry_1_hash = send_to_node(
+        let (panda_entry_1_hash, next_entry_args) = send_to_node(
             &mut node,
             &panda,
             &create_operation(
@@ -476,10 +505,6 @@ mod tests {
             ),
         )
         .unwrap();
-
-        next_entry_args = node
-            .next_entry_args(&panda.author(), Some(&panda_entry_1_hash), None)
-            .expect("No entry args returned!");
 
         expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
@@ -494,7 +519,7 @@ mod tests {
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
         // Publish an UPDATE operation
-        let panda_entry_2_hash = send_to_node(
+        let (panda_entry_2_hash, next_entry_args) = send_to_node(
             &mut node,
             &panda,
             &update_operation(
@@ -507,10 +532,6 @@ mod tests {
             ),
         )
         .unwrap();
-
-        next_entry_args = node
-            .next_entry_args(&panda.author(), Some(&panda_entry_1_hash), None)
-            .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
@@ -526,7 +547,7 @@ mod tests {
 
         let penguin = Client::new("penguin".to_string(), KeyPair::new());
 
-        next_entry_args = node
+        let next_entry_args = node
             .next_entry_args(&penguin.author(), Some(&panda_entry_1_hash), None)
             .unwrap();
 
@@ -543,7 +564,7 @@ mod tests {
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
         // Publish an UPDATE operation
-        let penguin_entry_1_hash = send_to_node(
+        let (penguin_entry_1_hash, next_entry_args) = send_to_node(
             &mut node,
             &penguin,
             &update_operation(
@@ -556,10 +577,6 @@ mod tests {
             ),
         )
         .unwrap();
-
-        next_entry_args = node
-            .next_entry_args(&penguin.author(), Some(&panda_entry_1_hash), None)
-            .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
@@ -574,7 +591,7 @@ mod tests {
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
         // Publish an UPDATE operation
-        let penguin_entry_2_hash = send_to_node(
+        let (penguin_entry_2_hash, next_entry_args) = send_to_node(
             &mut node,
             &penguin,
             &update_operation(
@@ -587,10 +604,6 @@ mod tests {
             ),
         )
         .unwrap();
-
-        next_entry_args = node
-            .next_entry_args(&penguin.author(), Some(&panda_entry_1_hash), None)
-            .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
@@ -611,7 +624,7 @@ mod tests {
         let mut node = Node::new();
 
         // Publish a CREATE operation
-        let entry1_hash = send_to_node(
+        let (entry1_hash, _) = send_to_node(
             &mut node,
             &panda,
             &create_operation(

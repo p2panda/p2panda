@@ -63,7 +63,7 @@ mod tests {
         let penguin = Client::new("penguin".to_string(), key_pair_2);
         let mut node = Node::new();
 
-        let panda_entry_1_hash = send_to_node(
+        let (panda_entry_1_hash, _) = send_to_node(
             &mut node,
             &panda,
             &create_operation(
@@ -76,7 +76,7 @@ mod tests {
         )
         .unwrap();
 
-        let panda_entry_2_hash = send_to_node(
+        let (panda_entry_2_hash, _) = send_to_node(
             &mut node,
             &panda,
             &update_operation(
