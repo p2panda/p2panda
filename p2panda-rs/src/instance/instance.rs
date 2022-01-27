@@ -44,6 +44,11 @@ impl Instance {
     pub fn iter(&self) -> BTreeMapIter<String, OperationValue> {
         self.0.iter()
     }
+
+    /// Returns the number of fields on this instance.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 impl TryFrom<Operation> for Instance {
@@ -104,11 +109,38 @@ mod tests {
     use rstest::rstest;
 
     use crate::hash::Hash;
-    use crate::operation::{AsOperation, Operation};
+    use crate::operation::{AsOperation, Operation, OperationValue};
     use crate::schema::Schema;
-    use crate::test_utils::fixtures::{create_operation, delete_operation, hash, update_operation};
+    use crate::test_utils::fixtures::{
+        create_operation, delete_operation, fields, hash, schema, update_operation,
+    };
 
     use super::Instance;
+
+    #[rstest]
+    fn encode_and_decode(schema: Hash) {
+        let operation = create_operation(
+            schema,
+            fields(vec![
+                ("username", OperationValue::Text("bubu".to_owned())),
+                ("height", OperationValue::Float(3.5)),
+                ("age", OperationValue::Integer(28)),
+                ("is_admin", OperationValue::Boolean(false)),
+                (
+                    "profile_picture",
+                    OperationValue::Relation(Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
+                ),
+            ]),
+        );
+
+        // Convert a CREATE `Operation` into an `Instance`
+        let instance: Instance = operation.try_into().unwrap();
+
+        assert_eq!(
+            instance.keys(),
+            vec!["age", "height", "is_admin", "profile_picture", "username"]
+        )
+    }
 
     #[rstest]
     fn try_from_operation(
