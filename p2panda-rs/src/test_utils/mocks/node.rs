@@ -416,10 +416,7 @@ impl Node {
         match author_logs.get_log_mut(log_id) {
             Some(log) => {
                 // If there is one, insert this new entry.
-                log.add_entry(LogEntry::new(
-                    entry_encoded.to_owned(),
-                    operation_encoded.to_owned(),
-                ));
+                log.add_entry(LogEntry::new(entry_encoded, operation_encoded));
             }
             None => {
                 // If there isn't one, then create and insert it.

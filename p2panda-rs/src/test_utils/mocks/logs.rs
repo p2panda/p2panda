@@ -25,10 +25,10 @@ pub struct LogEntry {
 
 impl LogEntry {
     /// Create a new log.
-    pub fn new(entry_encoded: EntrySigned, operation_encoded: OperationEncoded) -> Self {
+    pub fn new(entry_encoded: &EntrySigned, operation_encoded: &OperationEncoded) -> Self {
         Self {
-            entry_encoded,
-            operation_encoded,
+            entry_encoded: entry_encoded.to_owned(),
+            operation_encoded: operation_encoded.to_owned(),
         }
     }
 
@@ -102,10 +102,7 @@ impl Log {
             schema: entry.operation().unwrap().schema(),
             entries: Vec::new(),
         };
-        log.add_entry(LogEntry::new(
-            entry_signed.to_owned(),
-            operation_encoded.to_owned(),
-        ));
+        log.add_entry(LogEntry::new(entry_signed, operation_encoded));
         log
     }
 
@@ -208,5 +205,80 @@ impl AuthorLogs {
 impl Default for AuthorLogs {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use crate::entry::{decode_entry, EntrySigned, LogId};
+    use crate::operation::{AsOperation, OperationEncoded};
+    use crate::test_utils::fixtures::{entry_signed_encoded, operation_encoded};
+
+    use super::{AuthorLogs, Log, LogEntry};
+
+    #[rstest]
+    fn log_entry(entry_signed_encoded: EntrySigned, operation_encoded: OperationEncoded) {
+        let entry = decode_entry(&entry_signed_encoded, Some(&operation_encoded)).unwrap();
+        let log_entry = LogEntry::new(&entry_signed_encoded, &operation_encoded);
+
+        assert_eq!(log_entry.entry_encoded(), entry_signed_encoded);
+        assert_eq!(
+            log_entry.operation_encoded().hash(),
+            operation_encoded.hash()
+        );
+        assert_eq!(log_entry.author(), entry_signed_encoded.author().as_str());
+        assert_eq!(log_entry.hash(), entry_signed_encoded.hash());
+        assert_eq!(
+            log_entry.operation().schema(),
+            entry.operation().unwrap().schema()
+        );
+    }
+
+    #[rstest]
+    fn log(entry_signed_encoded: EntrySigned, operation_encoded: OperationEncoded) {
+        let entry = decode_entry(&entry_signed_encoded, Some(&operation_encoded)).unwrap();
+        let log = Log::new(
+            entry_signed_encoded.hash(),
+            &entry_signed_encoded,
+            &operation_encoded,
+        );
+
+        assert_eq!(log.entries().len(), 1);
+        assert_eq!(log.next_seq_num().as_u64(), 2);
+        assert_eq!(log.author(), entry_signed_encoded.author());
+        assert_eq!(log.document(), entry_signed_encoded.hash());
+        assert_eq!(log.schema(), entry.operation().unwrap().schema());
+    }
+
+    #[rstest]
+    fn author_logs(entry_signed_encoded: EntrySigned, operation_encoded: OperationEncoded) {
+        let mut author_logs = AuthorLogs::new();
+        author_logs.create_new_log(
+            entry_signed_encoded.hash(),
+            &entry_signed_encoded,
+            &operation_encoded,
+        );
+
+        assert_eq!(
+            author_logs
+                .get_log_by_document_id(&entry_signed_encoded.hash())
+                .unwrap()
+                .id(),
+            LogId::new(1)
+        );
+        assert_eq!(author_logs.next_log_id(), LogId::new(2));
+        assert_eq!(
+            author_logs.get_document_log_id(&entry_signed_encoded.hash()),
+            LogId::new(1)
+        );
+        assert_eq!(
+            author_logs
+                .find_document_log_by_entry(&entry_signed_encoded.hash())
+                .unwrap()
+                .id(),
+            LogId::new(1)
+        );
     }
 }
