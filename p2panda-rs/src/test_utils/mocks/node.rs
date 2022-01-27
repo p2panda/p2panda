@@ -84,6 +84,7 @@
 //! entries.len(); // => 4
 //! ```
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
+use log::{debug, info};
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -243,6 +244,17 @@ impl Node {
         document_id: Option<&Hash>,
         seq_num: Option<&SeqNum>,
     ) -> Result<NextEntryArgs> {
+        info!(
+            "REQUEST: next entry args for author {} document {} {}",
+            author.as_str(),
+            document_id.map(|id| id.as_str()).unwrap_or("not provided"),
+            seq_num
+                .map(|seq_num| format!("at sequence number {}", seq_num.as_i64()))
+                .unwrap_or_else(|| "".into())
+        );
+
+        debug!("\n{:?}\n{:?}\n{:?}", author, document_id, seq_num);
+
         // Get or instantiate a collection of logs for this author.
         let author_logs = match self.get_author_logs(author) {
             Some(logs) => logs.clone(),
@@ -300,6 +312,24 @@ impl Node {
             },
         };
 
+        info!(
+            "RESPONSE: log id: {} seq num: {} backlink: {} skiplink: {}",
+            entry_args.log_id.as_i64(),
+            entry_args.seq_num.as_i64(),
+            entry_args
+                .backlink
+                .as_ref()
+                .map(|hash| hash.as_str())
+                .unwrap_or("none"),
+            entry_args
+                .skiplink
+                .as_ref()
+                .map(|hash| hash.as_str())
+                .unwrap_or("none"),
+        );
+
+        debug!("\n{:?}", entry_args);
+
         Ok(entry_args)
     }
 
@@ -314,6 +344,14 @@ impl Node {
         let author = entry_encoded.author();
         let operation = entry.operation().unwrap();
 
+        info!(
+            "REQUEST: publish entry: {} from author: {}",
+            entry_encoded.hash().as_str(),
+            author.as_str()
+        );
+
+        debug!("\n{:?}\n{:?}", entry_encoded, operation_encoded);
+
         let document_id = if !operation.is_create() {
             let previous_operations = operation.previous_operations().unwrap_or_else(|| {
                 panic!(
@@ -321,14 +359,22 @@ impl Node {
                     entry_encoded.hash().as_str()
                 )
             });
-            self.get_document_by_entry(&previous_operations[0])
+            let document_id = self
+                .get_document_by_entry(&previous_operations[0])
                 .unwrap_or_else(|| {
                     panic!(
                         "Document log for entry {} not found on node",
                         entry_encoded.hash().as_str()
                     )
-                })
+                });
+            info!("Document found with id {}", document_id.as_str());
+            document_id
         } else {
+            info!(
+                "Creating new document with id {}",
+                entry_encoded.hash().as_str()
+            );
+
             entry_encoded.hash()
         };
 
@@ -373,6 +419,12 @@ impl Node {
                 author_logs.create_new_log(document_id, entry_encoded, operation_encoded);
             }
         };
+
+        info!(
+            "RESPONSE: succesfully published entry: {} to log: {}",
+            entry_encoded.hash().as_str(),
+            log_id.as_i64()
+        );
 
         Ok(())
     }
