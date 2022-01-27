@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Types and methods for deriving and maintaining materialised documents.
-use std::collections::btree_map::Iter;
+use std::collections::btree_map::Iter as BTreeMapIter;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
@@ -35,14 +35,19 @@ impl Instance {
         Ok(())
     }
 
-    /// Get the raw hashmap representation of the instance.
-    pub fn raw(&self) -> BTreeMap<String, OperationValue> {
-        self.0.clone()
+    /// Returns a vector containing the keys of this instance.
+    pub fn keys(&self) -> Vec<String> {
+        self.0.clone().into_keys().collect::<Vec<String>>()
     }
 
     /// Returns an iterator of existing instance fields.
-    pub fn iter(&self) -> Iter<String, OperationValue> {
+    pub fn iter(&self) -> BTreeMapIter<String, OperationValue> {
         self.0.iter()
+    }
+
+    /// Get the raw hashmap representation of the instance.
+    pub fn raw(&self) -> BTreeMap<String, OperationValue> {
+        self.0.clone()
     }
 }
 
