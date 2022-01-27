@@ -189,7 +189,6 @@ mod tests {
                     OperationValue::Text("Panda Cafe".to_string()),
                 )]),
             ),
-            None,
         )
         .unwrap();
 
@@ -206,7 +205,6 @@ mod tests {
                     OperationValue::Text("Panda Cafe!".to_string()),
                 )]),
             ),
-            Some(&panda_entry_1_hash.clone()),
         )
         .unwrap();
 
@@ -217,13 +215,12 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone()],
+                vec![panda_entry_1_hash],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Penguin Cafe".to_string()),
                 )]),
             ),
-            Some(&panda_entry_1_hash.clone()),
         )
         .unwrap();
 
@@ -240,7 +237,6 @@ mod tests {
                     OperationValue::Text("Polar Bear Cafe".to_string()),
                 )]),
             ),
-            Some(&panda_entry_1_hash),
         )
         .unwrap();
 
@@ -256,7 +252,6 @@ mod tests {
                     OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
                 )]),
             ),
-            Some(&panda_entry_1_hash.clone()),
         )
         .unwrap();
 
@@ -340,7 +335,6 @@ mod tests {
                     OperationValue::Text("Panda Cafe".to_string()),
                 )]),
             ),
-            None,
         )
         .unwrap();
 
@@ -351,13 +345,12 @@ mod tests {
             &panda,
             &update_operation(
                 schema,
-                vec![panda_entry_1_hash.clone()],
+                vec![panda_entry_1_hash],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Panda Cafe!".to_string()),
                 )]),
             ),
-            Some(&panda_entry_1_hash),
         )
         .unwrap();
 
