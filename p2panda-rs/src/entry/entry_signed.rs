@@ -19,11 +19,6 @@ pub const SIGNATURE_SIZE: usize = ED25519_SIGNATURE_SIZE;
 
 /// Bamboo entry bytes represented in hex encoding format.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "db-sqlx",
-    derive(sqlx::Type, sqlx::FromRow),
-    sqlx(transparent)
-)]
 pub struct EntrySigned(String);
 
 impl EntrySigned {
@@ -70,8 +65,8 @@ impl EntrySigned {
     }
 
     /// Returns payload size (number of bytes) of total encoded entry.
-    pub fn size(&self) -> i64 {
-        self.0.len() as i64 / 2
+    pub fn size(&self) -> u64 {
+        self.0.len() as u64 / 2
     }
 
     /// Takes an [`OperationEncoded`] and validates it against the operation hash encoded in this

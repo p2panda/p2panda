@@ -84,8 +84,8 @@ pub fn keypair_from_private(private_key: String) -> KeyPair {
     KeyPair::from_private_key_str(&private_key).unwrap()
 }
 
-/// Generate a sequence number based on i64 value.
-pub fn seq_num(n: i64) -> SeqNum {
+/// Generate a sequence number based on u64 value.
+pub fn seq_num(n: u64) -> SeqNum {
     SeqNum::new(n).unwrap()
 }
 

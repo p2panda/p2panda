@@ -77,10 +77,10 @@ use crate::Validate;
 /// // Create an operation containing the above fields
 /// let operation = Operation::new_create(schema_hash, fields)?;
 ///
-/// // Create log ID from i64
+/// // Create log ID from u64
 /// let log_id = LogId::new(1);
 ///
-/// // Create sequence number from i64
+/// // Create sequence number from u64
 /// let seq_no = SeqNum::new(2)?;
 ///
 /// // Create backlink hash from string
@@ -179,7 +179,7 @@ impl Entry {
 
     /// Returns true if skiplink has to be given.
     pub fn is_skiplink_required(&self) -> bool {
-        is_lipmaa_required(self.seq_num.as_i64() as u64)
+        is_lipmaa_required(self.seq_num.as_u64())
     }
 }
 

@@ -10,6 +10,7 @@ use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, 
 use crate::hash::Hash;
 use crate::operation::{Operation, OperationEncoded};
 use crate::wasm::error::jserr;
+use crate::wasm::serde::serialize_to_js;
 use crate::wasm::KeyPair;
 
 /// Return value of [`sign_encode_entry`] that holds the encoded entry and its hash.
@@ -30,17 +31,14 @@ pub struct SignEncodeEntryResult {
 ///
 /// `entry_backlink_hash`, `entry_skiplink_hash`, `seq_num` and `log_id` are obtained by querying
 /// the `getEntryArguments` method of a p2panda node.
-///
-/// `seq_num` and `log_id` are `i32` parameters even though they have 64 bits in the Bamboo spec.
-/// Webkit doesn't support `BigInt` so it can't handle those large values.
 #[wasm_bindgen(js_name = signEncodeEntry)]
 pub fn sign_encode_entry(
     key_pair: &KeyPair,
     encoded_operation: String,
     entry_skiplink_hash: Option<String>,
     entry_backlink_hash: Option<String>,
-    seq_num: i32,
-    log_id: i32,
+    seq_num: u64,
+    log_id: u64,
 ) -> Result<JsValue, JsValue> {
     // If skiplink_hash exists construct Hash
     let skiplink_hash = match entry_skiplink_hash {
@@ -55,7 +53,7 @@ pub fn sign_encode_entry(
     };
 
     // Create SeqNum instance
-    let seq_num = jserr!(SeqNum::new(seq_num.into()));
+    let seq_num = jserr!(SeqNum::new(seq_num));
 
     // Convert to Operation
     let operation_encoded = jserr!(OperationEncoded::new(&encoded_operation));
@@ -63,7 +61,7 @@ pub fn sign_encode_entry(
 
     // Create Entry instance
     let entry = jserr!(Entry::new(
-        &LogId::new(log_id.into()),
+        &LogId::new(log_id),
         Some(&operation),
         skiplink_hash.as_ref(),
         backlink_hash.as_ref(),
@@ -73,12 +71,13 @@ pub fn sign_encode_entry(
     // Finally sign and encode entry
     let entry_signed = jserr!(sign_and_encode(&entry, key_pair.as_inner()));
 
-    // Serialise result to JSON
-    let result = jserr!(wasm_bindgen::JsValue::from_serde(&SignEncodeEntryResult {
+    // Serialise result to JavaScript object
+    let entry_operation_bundle = SignEncodeEntryResult {
         entry_encoded: entry_signed.as_str().into(),
         entry_hash: entry_signed.hash().as_str().into(),
         operation_hash: operation_encoded.hash().as_str().into(),
-    }));
+    };
+    let result = jserr!(serialize_to_js(&entry_operation_bundle));
     Ok(result)
 }
 
@@ -101,7 +100,7 @@ pub fn decode_entry(
     let entry_signed = jserr!(EntrySigned::new(&entry_encoded));
     let entry: Entry = jserr!(decode(&entry_signed, operation_encoded.as_ref()));
 
-    // Serialise struct to JSON
-    let result = jserr!(wasm_bindgen::JsValue::from_serde(&entry));
+    // Serialize struct to JavaScript object.
+    let result = jserr!(serialize_to_js(&entry));
     Ok(result)
 }

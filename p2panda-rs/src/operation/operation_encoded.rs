@@ -12,11 +12,6 @@ use crate::Validate;
 
 /// Operation represented in hex encoded CBOR format.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "db-sqlx",
-    derive(sqlx::Type, sqlx::FromRow),
-    sqlx(transparent)
-)]
 pub struct OperationEncoded(String);
 
 impl OperationEncoded {
@@ -45,9 +40,9 @@ impl OperationEncoded {
     }
 
     /// Returns payload size (number of bytes) of encoded operation.
-    pub fn size(&self) -> i64 {
-        // Divide by 2 as every byte is represented by 2 hex chars.
-        self.0.len() as i64 / 2
+    pub fn size(&self) -> u64 {
+        // Divide by 2 as every byte is represented by 2 hex chars
+        self.0.len() as u64 / 2
     }
 }
 
