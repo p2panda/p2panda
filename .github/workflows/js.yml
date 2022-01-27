@@ -47,9 +47,8 @@ jobs:
         run: npm run test --coverage
         working-directory: ${{ env.working_directory }}
 
-      - uses: codecov/codecov-action@v2
-        with:
-          dry_run: true
+      - if: matrix.node == 16
+        uses: codecov/codecov-action@v2
 
   js-build:
     runs-on: ubuntu-latest
