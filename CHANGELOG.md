@@ -45,6 +45,7 @@ Highlights are marked with a pancake 🥞
 - Clean up documentation and update new terminology [#170](https://github.com/p2panda/p2panda/pull/170) `rs` `js`
 - Improve CI, make it faster, add code coverage report [#173](https://github.com/p2panda/p2panda/pull/173) `rs` `js`
 - Update Codecov GH action [#176](https://github.com/p2panda/p2panda/pull/176) `rs`
+- Add JavaScript coverage reporting [#194](https://github.com/p2panda/p2panda/pull/194) `js`
 
 ## [0.2.1]
 
