@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
+use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -8,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::entry::error::LogIdError;
 
 /// Authors can write entries to multiple logs identified by log ids.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, StdHash)]
 pub struct LogId(u64);
 
 impl LogId {
@@ -36,12 +37,6 @@ impl Iterator for LogId {
 
     fn next(&mut self) -> Option<Self::Item> {
         Some(Self(self.0 + 1))
-    }
-}
-
-impl PartialEq for LogId {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
     }
 }
 
