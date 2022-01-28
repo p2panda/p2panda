@@ -86,7 +86,7 @@
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use log::{debug, info};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 
 use crate::document::DocumentBuilder;
@@ -483,6 +483,19 @@ impl Node {
         let document = DocumentBuilder::new(operations).build().unwrap();
         document.resolve().unwrap()
     }
+
+    pub fn get_documents(&self) -> Vec<Instance> {
+        let mut documents = HashSet::new();
+        for (_author, author_logs) in self.db() {
+            author_logs.iter().for_each(|log| {
+                documents.insert(log.document().as_str().to_string());
+            });
+        }
+        documents
+            .iter()
+            .map(|x| self.get_document(&Hash::new(x).unwrap()))
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -685,6 +698,8 @@ mod tests {
             *instance.get("message").unwrap(),
             OperationValue::Text("And again. [Penguin]".to_string())
         );
+        // There should only be one document in the database.
+        assert_eq!(node.get_documents().len(), 1);
 
         // Panda publishes another create operation.
         // This again instantiates a new document.
@@ -718,6 +733,8 @@ mod tests {
         assert_eq!(node.get_authors().len(), 2);
         // Now panda has 2 document logs.
         assert_eq!(node.get_author_logs(&panda.author()).unwrap().len(), 2);
+        // There should be 2 document in the database.
+        assert_eq!(node.get_documents().len(), 2);
     }
 
     #[rstest]
