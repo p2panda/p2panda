@@ -201,6 +201,11 @@ impl Node {
         self.db.clone()
     }
 
+    /// Return an array of authors who publish to this node.
+    pub fn get_authors(&self) -> Vec<&String> {
+        self.db.keys().into_iter().collect()
+    }
+
     /// Get a mutable map of all logs published by a certain author.
     fn get_author_logs_mut(&mut self, author: &Author) -> Option<&mut AuthorLogs> {
         self.db.get_mut(author.as_str())
