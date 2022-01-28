@@ -96,11 +96,34 @@ impl From<&EntrySigned> for BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8;
     }
 }
 
+/// Converts byte sequence into `EntrySigned`.
 impl TryFrom<&[u8]> for EntrySigned {
     type Error = EntrySignedError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         Self::new(&hex::encode(bytes))
+    }
+}
+
+/// Validate the integrity of signed Bamboo entries.
+impl Validate for EntrySigned {
+    type Error = EntrySignedError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        hex::decode(&self.0).map_err(|_| EntrySignedError::InvalidHexEncoding)?;
+        Ok(())
+    }
+}
+
+/// Implement `Hash` trait for `EntrySigned` to make it a hashable type.
+///
+/// Bamboo entry hashes are computed on a concrete byte encoding, defined in the [Bamboo
+/// specification].
+///
+/// [Bamboo specification]: https://github.com/AljoschaMeyer/bamboo#encoding
+impl StdHash for EntrySigned {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.to_bytes().hash(state);
     }
 }
 
@@ -111,22 +134,6 @@ impl PartialEq for EntrySigned {
 }
 
 impl Eq for EntrySigned {}
-
-impl StdHash for EntrySigned {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
-
-impl Validate for EntrySigned {
-    type Error = EntrySignedError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        hex::decode(&self.0).map_err(|_| EntrySignedError::InvalidHexEncoding)?;
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
