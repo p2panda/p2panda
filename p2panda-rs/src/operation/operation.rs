@@ -16,7 +16,7 @@ use crate::Validate;
 /// Operations contain the actual data of applications in the p2panda network and will be stored
 /// for an indefinite time on different machines. To allow an upgrade path in the future and
 /// support backwards compatibility for old data we can use this version number.
-#[derive(Clone, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[serde(untagged)]
 #[repr(u8)]
 pub enum OperationVersion {
@@ -30,7 +30,7 @@ impl Copy for OperationVersion {}
 ///
 /// An action defines the operation format and if this operation creates, updates or deletes a data
 /// document.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum OperationAction {
     /// Operation creates a new document.
     Create,
@@ -445,6 +445,9 @@ impl PartialEq for Operation {
 impl Eq for Operation {}
 
 impl StdHash for Operation {
+    /// Returns hashable fields for `Operation`.
+    ///
+    /// Bamboo payloads like operations are computed on the raw data bytes.
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.to_cbor().hash(state);
     }
