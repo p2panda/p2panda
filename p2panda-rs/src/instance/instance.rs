@@ -18,6 +18,10 @@ impl Instance {
         Self(BTreeMap::new())
     }
 
+    pub fn get(&self, key: &str) -> Option<&OperationValue> {
+        self.0.get(key)
+    }
+
     /// Update this `Instance` from an UPDATE `Operation`.
     pub fn apply_update<T: AsOperation>(&mut self, operation: T) -> Result<(), InstanceError> {
         if !operation.is_update() {
