@@ -4,7 +4,6 @@ use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
-use crate::hash::Hash;
 use crate::operation::{Operation, OperationEncodedError};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::schema::{validate_schema, OPERATION_SCHEMA};
@@ -20,12 +19,6 @@ impl OperationEncoded {
         let inner = Self(value.to_owned());
         inner.validate()?;
         Ok(inner)
-    }
-
-    /// Returns the hash of this operation.
-    pub fn hash(&self) -> Hash {
-        // Unwrap as we already know that the inner value is valid
-        Hash::new_from_bytes(self.to_bytes()).unwrap()
     }
 
     /// Returns encoded operation as string.

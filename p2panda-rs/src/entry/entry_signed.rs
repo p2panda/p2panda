@@ -10,7 +10,7 @@ use ed25519_dalek::ed25519::Signature;
 use serde::{Deserialize, Serialize};
 
 use crate::entry::EntrySignedError;
-use crate::hash::{Blake3ArrayVec, Hash, HASH_SIZE};
+use crate::hash::{Blake3ArrayVec, HASH_SIZE};
 use crate::identity::Author;
 use crate::operation::OperationEncoded;
 use crate::Validate;
@@ -28,11 +28,6 @@ impl EntrySigned {
         let inner = Self(value.to_owned());
         inner.validate()?;
         Ok(inner)
-    }
-
-    /// Generates and returns YASMF BLAKE3 hash of encoded entry.
-    pub fn hash(&self) -> Hash {
-        Hash::new_from_bytes(self.to_bytes()).unwrap()
     }
 
     /// Returns `Author` who signed this entry.
