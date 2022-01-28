@@ -472,7 +472,7 @@ impl Node {
             .collect()
     }
 
-    pub fn query_document(&self, id: &Hash) -> Instance {
+    pub fn get_document(&self, id: &Hash) -> Instance {
         let entries = self.get_document_entries(id);
         let operations = entries
             .iter()
@@ -504,10 +504,12 @@ mod tests {
         let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
         let mut node = Node::new();
 
+        // This is an empty node which has no author logs.
         let next_entry_args = node
             .get_next_entry_args(&panda.author(), None, None)
             .unwrap();
 
+        // These are the next_entry_args we would expect to get when making a request to this node.
         let mut expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
             seq_num: SeqNum::new(1).unwrap(),
@@ -520,7 +522,10 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        // Publish a CREATE operation
+        // Panda publishes a create operation.
+        // This instantiates a new document.
+        //
+        // PANDA  : [1]
         let (panda_entry_1_hash, next_entry_args) = send_to_node(
             &mut node,
             &panda,
@@ -534,6 +539,7 @@ mod tests {
         )
         .unwrap();
 
+        // The seq_num has incremented to 2 because panda already published one entry.
         expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
             seq_num: SeqNum::new(2).unwrap(),
@@ -546,10 +552,15 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        assert_eq!(node.db().len(), 1);
+        // The database contains one author now.
+        assert_eq!(node.get_authors().len(), 1);
+        // Who has one log.
         assert_eq!(node.get_author_logs(&panda.author()).unwrap().len(), 1);
 
-        // Publish an UPDATE operation
+        // Panda publishes an update operation.
+        // It contains the hash of the current graph tip in it's `previous_operations`.
+        //
+        // PANDA  : [1] <-- [2]
         let (panda_entry_2_hash, next_entry_args) = send_to_node(
             &mut node,
             &panda,
@@ -576,7 +587,7 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        assert_eq!(node.db().len(), 1);
+        assert_eq!(node.get_authors().len(), 1);
         assert_eq!(node.get_author_logs(&panda.author()).unwrap().len(), 1);
 
         let penguin = Client::new("penguin".to_string(), KeyPair::new());
@@ -597,7 +608,11 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        // Publish an UPDATE operation
+        // Penguin publishes an update operation which refers to panda's last operation
+        // as the graph tip.
+        //
+        // PANDA  : [1] <--[2]
+        // PENGUIN:           \--[1]
         let (penguin_entry_1_hash, next_entry_args) = send_to_node(
             &mut node,
             &penguin,
@@ -624,10 +639,14 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        assert_eq!(node.db().len(), 2);
+        assert_eq!(node.get_authors().len(), 2);
         assert_eq!(node.get_author_logs(&penguin.author()).unwrap().len(), 1);
 
-        // Publish an UPDATE operation
+        // Penguin publishes another update operation refering to their own previous operation
+        // as the graph tip.
+        //
+        // PANDA  : [1] <--[2]
+        // PENGUIN:           \--[1] <--[2]
         let (penguin_entry_2_hash, next_entry_args) = send_to_node(
             &mut node,
             &penguin,
@@ -654,17 +673,23 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        assert_eq!(node.db().len(), 2);
+        // Now there are 2 authors publishing ot the node.
+        assert_eq!(node.get_authors().len(), 2);
         assert_eq!(node.get_author_logs(&penguin.author()).unwrap().len(), 1);
 
-        let instance = node.query_document(&panda_entry_1_hash);
+        // We can query the node for the current document state.
+        let instance = node.get_document(&panda_entry_1_hash);
 
+        // It was last updated by Penguin, this writes over previous values.
         assert_eq!(
             *instance.get("message").unwrap(),
             OperationValue::Text("And again. [Penguin]".to_string())
         );
 
-        // Panda publishes a new CREATE operation, this instantiates a new document.
+        // Panda publishes another create operation.
+        // This again instantiates a new document.
+        //
+        // PANDA  : [1]
         let (panda_entry_1_hash, next_entry_args) = send_to_node(
             &mut node,
             &panda,
@@ -690,7 +715,8 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        assert_eq!(node.db().len(), 2);
+        assert_eq!(node.get_authors().len(), 2);
+        // Now panda has 2 document logs.
         assert_eq!(node.get_author_logs(&panda.author()).unwrap().len(), 2);
     }
 
@@ -728,10 +754,12 @@ mod tests {
         )
         .unwrap();
 
+        // For testig, we can request entry args for a specific entry in an authors log.
         let next_entry_args = node
             .next_entry_args(
                 &panda.author(),
                 Some(&entry1_hash),
+                // Here we request the entry args required for publishing the second entry of the log.
                 Some(&SeqNum::new(2).unwrap()),
             )
             .unwrap();
@@ -782,7 +810,7 @@ mod tests {
         )
         .unwrap();
 
-        let instance = node.query_document(&panda_entry_1_hash);
+        let instance = node.get_document(&panda_entry_1_hash);
         assert_eq!(
             *instance.get("cafe_name").unwrap(),
             OperationValue::Text("Polar Pear Cafe".to_string())
@@ -805,7 +833,7 @@ mod tests {
         )
         .unwrap();
 
-        let instance = node.query_document(&panda_entry_1_hash);
+        let instance = node.get_document(&panda_entry_1_hash);
         assert_eq!(
             *instance.get("cafe_name").unwrap(),
             OperationValue::Text("Polar Bear Cafe".to_string())
@@ -831,7 +859,7 @@ mod tests {
         )
         .unwrap();
 
-        let instance = node.query_document(&panda_entry_1_hash);
+        let instance = node.get_document(&panda_entry_1_hash);
         assert_eq!(
             *instance.get("address").unwrap(),
             OperationValue::Text("1, Polar Bear rd, Panda Town".to_string())
@@ -857,7 +885,7 @@ mod tests {
         )
         .unwrap();
 
-        let instance = node.query_document(&panda_entry_1_hash);
+        let instance = node.get_document(&panda_entry_1_hash);
         assert_eq!(
             *instance.get("cafe_name").unwrap(),
             OperationValue::Text("Polar Bear Café".to_string())
