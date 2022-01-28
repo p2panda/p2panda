@@ -89,10 +89,12 @@ use log::{debug, info};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
+use crate::document::DocumentBuilder;
 use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{AsOperation, Operation, OperationEncoded};
+use crate::instance::Instance;
+use crate::operation::{AsOperation, Operation, OperationEncoded, OperationWithMeta};
 use crate::test_utils::mocks::logs::{AuthorLogs, LogEntry};
 use crate::test_utils::mocks::utils::Result;
 use crate::test_utils::mocks::Client;
@@ -464,6 +466,18 @@ impl Node {
             .flat_map(|log| log.entries())
             .collect()
     }
+
+    pub fn query_document(&self, id: &Hash) -> Instance {
+        let entries = self.get_document_entries(id);
+        let operations = entries
+            .iter()
+            .map(|entry| {
+                OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap()
+            })
+            .collect();
+        let document = DocumentBuilder::new(operations).build().unwrap();
+        document.resolve().unwrap()
+    }
 }
 
 #[cfg(test)]
@@ -509,7 +523,7 @@ mod tests {
                 hash(DEFAULT_SCHEMA_HASH),
                 operation_fields(vec![(
                     "message",
-                    OperationValue::Text("Ohh, my first message!".to_string()),
+                    OperationValue::Text("Ohh, my first message! [Panda]".to_string()),
                 )]),
             ),
         )
@@ -539,7 +553,7 @@ mod tests {
                 vec![panda_entry_1_hash.clone()],
                 operation_fields(vec![(
                     "message",
-                    OperationValue::Text("Which I now update.".to_string()),
+                    OperationValue::Text("Which I now update. [Panda]".to_string()),
                 )]),
             ),
         )
@@ -587,7 +601,7 @@ mod tests {
                 vec![panda_entry_2_hash],
                 operation_fields(vec![(
                     "message",
-                    OperationValue::Text("Which I now update.".to_string()),
+                    OperationValue::Text("My turn to update. [Penguin]".to_string()),
                 )]),
             ),
         )
@@ -617,7 +631,7 @@ mod tests {
                 vec![penguin_entry_1_hash],
                 operation_fields(vec![(
                     "message",
-                    OperationValue::Text("Which I now update again.".to_string()),
+                    OperationValue::Text("And again. [Penguin]".to_string()),
                 )]),
             ),
         )
@@ -637,6 +651,13 @@ mod tests {
 
         assert_eq!(node.db().len(), 2);
         assert_eq!(node.get_author_logs(&penguin.author()).unwrap().len(), 1);
+
+        let instance = node.query_document(&panda_entry_1_hash);
+
+        assert_eq!(
+            *instance.get("message").unwrap(),
+            OperationValue::Text("And again. [Penguin]".to_string())
+        );
 
         // Panda publishes a new CREATE operation, this instantiates a new document.
         let (panda_entry_1_hash, next_entry_args) = send_to_node(
