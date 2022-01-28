@@ -11,7 +11,7 @@ use crate::schema::{validate_schema, OPERATION_SCHEMA};
 use crate::Validate;
 
 /// Operation represented in hex encoded CBOR format.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OperationEncoded(String);
 
 impl OperationEncoded {
@@ -80,10 +80,10 @@ impl Validate for OperationEncoded {
     }
 }
 
-/// Implement `Hash` trait for `OperationEncoded` to make it a hashable type.
-///
-/// Bamboo payloads like operations are computed on the raw data bytes.
 impl StdHash for OperationEncoded {
+    /// Returns hashable fields for `OperationEncoded`.
+    ///
+    /// Bamboo payloads like operations are computed on the raw data bytes.
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.to_bytes().hash(state);
     }

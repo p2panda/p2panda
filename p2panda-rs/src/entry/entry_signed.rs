@@ -23,7 +23,7 @@ type BambooEntry =
     bamboo_rs_core_ed25519_yasmf::Entry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>>;
 
 /// Bamboo entry bytes represented in hex encoding format.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EntrySigned(String);
 
 impl EntrySigned {
@@ -44,7 +44,8 @@ impl EntrySigned {
     pub fn signature(&self) -> Signature {
         let entry: BambooEntry = self.into();
 
-        // Convert into Ed25519 Signature instance
+        // Convert into Ed25519 Signature instance and unwrap here since we already checked the
+        // signature
         let array_vec = entry.sig.unwrap().0;
         Signature::from_bytes(&array_vec.into_inner().unwrap()).unwrap()
     }
@@ -107,35 +108,28 @@ impl TryFrom<&[u8]> for EntrySigned {
     }
 }
 
-/// Validate the integrity of signed Bamboo entries.
 impl Validate for EntrySigned {
     type Error = EntrySignedError;
 
+    /// Validate the integrity of signed Bamboo entries.
     fn validate(&self) -> Result<(), Self::Error> {
         hex::decode(&self.0).map_err(|_| EntrySignedError::InvalidHexEncoding)?;
         Ok(())
     }
 }
 
-/// Implement `Hash` trait for `EntrySigned` to make it a hashable type.
-///
-/// Bamboo entry hashes are computed on a concrete byte encoding, defined in the [Bamboo
-/// specification].
-///
-/// [Bamboo specification]: https://github.com/AljoschaMeyer/bamboo#encoding
 impl StdHash for EntrySigned {
+    /// Returns hashable fields for `EntrySigned`.
+    ///
+    /// Bamboo entry hashes are computed on a concrete byte encoding, defined in the [Bamboo
+    /// specification].
+    ///
+    /// [Bamboo specification]: https://github.com/AljoschaMeyer/bamboo#encoding
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.to_bytes().hash(state);
     }
 }
 
-impl PartialEq for EntrySigned {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl Eq for EntrySigned {}
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
