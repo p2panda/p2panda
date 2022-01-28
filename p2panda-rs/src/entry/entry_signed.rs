@@ -5,7 +5,7 @@ use std::hash::{Hash as StdHash, Hasher};
 
 use arrayvec::ArrayVec;
 use bamboo_rs_core_ed25519_yasmf::signature::ED25519_SIGNATURE_SIZE;
-use bamboo_rs_core_ed25519_yasmf::{Entry as BambooEntry, YasmfHash};
+use bamboo_rs_core_ed25519_yasmf::YasmfHash;
 use ed25519_dalek::ed25519::Signature;
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +17,10 @@ use crate::Validate;
 
 /// Size of p2panda entries' signatures.
 pub const SIGNATURE_SIZE: usize = ED25519_SIGNATURE_SIZE;
+
+/// Bamboo Entry type with regarding byte sizes for hashes and signatures.
+type BambooEntry =
+    bamboo_rs_core_ed25519_yasmf::Entry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>>;
 
 /// Bamboo entry bytes represented in hex encoding format.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -32,17 +36,13 @@ impl EntrySigned {
 
     /// Returns `Author` who signed this entry.
     pub fn author(&self) -> Author {
-        // Unwrap as we already validated entry
-        let entry: BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> =
-            self.try_into().unwrap();
+        let entry: BambooEntry = self.into();
         Author::try_from(entry.author).unwrap()
     }
 
     /// Returns Ed25519 signature of this entry.
     pub fn signature(&self) -> Signature {
-        // Unwrap as we already validated entry and know it contains a signature
-        let entry: BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> =
-            self.try_into().unwrap();
+        let entry: BambooEntry = self.into();
 
         // Convert into Ed25519 Signature instance
         let array_vec = entry.sig.unwrap().0;
@@ -66,15 +66,16 @@ impl EntrySigned {
     }
 
     /// Takes an [`OperationEncoded`] and validates it against the operation hash encoded in this
-    /// `EntrySigned`, returns a result containing the [`OperationEncoded`] or an
-    /// [`EntrySignedError`] if the operation hashes didn't match.
+    /// `EntrySigned`.
+    ///
+    /// Returns a result containing the [`OperationEncoded`] or an [`EntrySignedError`] if the
+    /// operation hashes didn't match.
     pub fn validate_operation(
         &self,
         operation_encoded: &OperationEncoded,
     ) -> Result<(), EntrySignedError> {
         // Convert to Entry from bamboo_rs_core_ed25519_yasmf first
-        let entry: BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> =
-            self.into();
+        let entry: BambooEntry = self.into();
 
         // Operation hash must match if it doesn't return an error
         let yasmf_hash: YasmfHash<Blake3ArrayVec> = (&operation_encoded.hash()).to_owned().into();
@@ -88,10 +89,11 @@ impl EntrySigned {
 
 /// Converts an `EntrySigned` into a Bamboo Entry to interact with the
 /// `bamboo_rs_core_ed25519_yasmf` crate.
-impl From<&EntrySigned> for BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> {
+impl From<&EntrySigned> for BambooEntry {
     fn from(signed_entry: &EntrySigned) -> Self {
-        let entry_bytes = signed_entry.clone().to_bytes();
-        let entry_ref: BambooEntry<&[u8], &[u8]> = entry_bytes.as_slice().try_into().unwrap();
+        let entry_bytes = signed_entry.to_bytes();
+        // Unwrap as we already validated entry
+        let entry_ref = entry_bytes.as_slice().try_into().unwrap();
         bamboo_rs_core_ed25519_yasmf::entry::into_owned(&entry_ref)
     }
 }
