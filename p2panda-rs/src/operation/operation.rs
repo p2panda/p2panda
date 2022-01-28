@@ -445,9 +445,6 @@ impl PartialEq for Operation {
 impl Eq for Operation {}
 
 impl StdHash for Operation {
-    /// Returns hashable fields for `Operation`.
-    ///
-    /// Bamboo payloads like operations are computed on the raw data bytes.
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.to_cbor().hash(state);
     }
