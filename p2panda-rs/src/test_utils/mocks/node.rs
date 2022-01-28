@@ -343,10 +343,10 @@ impl Node {
                     backlink,
                 }
             }
-            // This is the first entry in the log so we construct next entry args
-            // from default values.
+            // This document log doesn't exist yet, so we construct next entry args
+            // based on the next log id for the author.
             None => NextEntryArgs {
-                log_id: LogId::default(),
+                log_id: author_logs.next_log_id(),
                 seq_num: SeqNum::default(),
                 skiplink: None,
                 backlink: None,
