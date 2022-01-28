@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
-use std::hash::{Hash as StdHash, Hasher};
+use std::hash::Hash as StdHash;
 
 use serde::{Deserialize, Serialize};
 
+use crate::hash::Hash;
 use crate::operation::{Operation, OperationEncodedError};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::schema::{validate_schema, OPERATION_SCHEMA};
 use crate::Validate;
 
 /// Operation represented in hex encoded CBOR format.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, StdHash)]
 pub struct OperationEncoded(String);
 
 impl OperationEncoded {
@@ -20,6 +21,12 @@ impl OperationEncoded {
         let inner = Self(value.to_owned());
         inner.validate()?;
         Ok(inner)
+    }
+
+    /// Returns the hash of this operation.
+    pub fn hash(&self) -> Hash {
+        // Unwrap as we already know that the inner value is valid
+        Hash::new_from_bytes(self.to_bytes()).unwrap()
     }
 
     /// Returns encoded operation as string.
@@ -77,15 +84,6 @@ impl Validate for OperationEncoded {
     fn validate(&self) -> Result<(), Self::Error> {
         hex::decode(&self.0).map_err(|_| OperationEncodedError::InvalidHexEncoding)?;
         Ok(())
-    }
-}
-
-impl StdHash for OperationEncoded {
-    /// Returns hashable fields for `OperationEncoded`.
-    ///
-    /// Bamboo payloads like operations are computed on the raw data bytes.
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.to_bytes().hash(state);
     }
 }
 

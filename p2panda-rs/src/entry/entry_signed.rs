@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::{TryFrom, TryInto};
-use std::hash::{Hash as StdHash, Hasher};
+use std::hash::Hash as StdHash;
 
 use arrayvec::ArrayVec;
 use bamboo_rs_core_ed25519_yasmf::signature::ED25519_SIGNATURE_SIZE;
@@ -10,7 +10,7 @@ use ed25519_dalek::ed25519::Signature;
 use serde::{Deserialize, Serialize};
 
 use crate::entry::EntrySignedError;
-use crate::hash::{Blake3ArrayVec, HASH_SIZE};
+use crate::hash::{Blake3ArrayVec, Hash, HASH_SIZE};
 use crate::identity::Author;
 use crate::operation::OperationEncoded;
 use crate::Validate;
@@ -23,7 +23,7 @@ type BambooEntry =
     bamboo_rs_core_ed25519_yasmf::Entry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>>;
 
 /// Bamboo entry bytes represented in hex encoding format.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, StdHash)]
 pub struct EntrySigned(String);
 
 impl EntrySigned {
@@ -32,6 +32,11 @@ impl EntrySigned {
         let inner = Self(value.to_owned());
         inner.validate()?;
         Ok(inner)
+    }
+
+    /// Generates and returns YASMF BLAKE3 hash of encoded entry.
+    pub fn hash(&self) -> Hash {
+        Hash::new_from_bytes(self.to_bytes()).unwrap()
     }
 
     /// Returns `Author` who signed this entry.
@@ -115,18 +120,6 @@ impl Validate for EntrySigned {
     fn validate(&self) -> Result<(), Self::Error> {
         hex::decode(&self.0).map_err(|_| EntrySignedError::InvalidHexEncoding)?;
         Ok(())
-    }
-}
-
-impl StdHash for EntrySigned {
-    /// Returns hashable fields for `EntrySigned`.
-    ///
-    /// Bamboo entry hashes are computed on a concrete byte encoding, defined in the [Bamboo
-    /// specification].
-    ///
-    /// [Bamboo specification]: https://github.com/AljoschaMeyer/bamboo#encoding
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.to_bytes().hash(state);
     }
 }
 
