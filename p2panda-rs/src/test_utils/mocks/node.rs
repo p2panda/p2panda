@@ -414,6 +414,10 @@ impl Node {
 
         // Get the log for this document from the author logs.
         match author_logs.get_log_mut(log_id) {
+            Some(_) if operation.is_create() => {
+                // If this is a create message the assigned log id should be free.
+                return Err(format!("Log with id: {} already exists.", log_id.as_u64()).into());
+            }
             Some(log) => {
                 // If there is one, insert this new entry.
                 log.add_entry(LogEntry::new(entry_encoded, operation_encoded));
@@ -452,6 +456,14 @@ impl Node {
 
         Ok(next_entry_args)
     }
+
+    pub fn get_document_entries(&self, id: &Hash) -> Vec<LogEntry> {
+        self.db()
+            .iter()
+            .flat_map(|(_, author_logs)| author_logs.iter().filter(|log| log.document() == *id))
+            .flat_map(|log| log.entries())
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -469,7 +481,7 @@ mod tests {
     use super::{send_to_node, Node};
 
     #[rstest]
-    fn next_entry_args(private_key: String) {
+    fn publishing_entries(private_key: String) {
         let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
         let mut node = Node::new();
 
@@ -515,6 +527,9 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
+        assert_eq!(node.db().len(), 1);
+        assert_eq!(node.get_author_logs(&panda.author()).unwrap().len(), 1);
+
         // Publish an UPDATE operation
         let (panda_entry_2_hash, next_entry_args) = send_to_node(
             &mut node,
@@ -541,6 +556,9 @@ mod tests {
         assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
+
+        assert_eq!(node.db().len(), 1);
+        assert_eq!(node.get_author_logs(&panda.author()).unwrap().len(), 1);
 
         let penguin = Client::new("penguin".to_string(), KeyPair::new());
 
@@ -587,6 +605,9 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
+        assert_eq!(node.db().len(), 2);
+        assert_eq!(node.get_author_logs(&penguin.author()).unwrap().len(), 1);
+
         // Publish an UPDATE operation
         let (penguin_entry_2_hash, next_entry_args) = send_to_node(
             &mut node,
@@ -613,6 +634,38 @@ mod tests {
         assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
+
+        assert_eq!(node.db().len(), 2);
+        assert_eq!(node.get_author_logs(&penguin.author()).unwrap().len(), 1);
+
+        // Panda publishes a new CREATE operation, this instantiates a new document.
+        let (panda_entry_1_hash, next_entry_args) = send_to_node(
+            &mut node,
+            &panda,
+            &create_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Ohh, my first message in a new document!".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        expected_next_entry_args = NextEntryArgs {
+            log_id: LogId::new(2),
+            seq_num: SeqNum::new(2).unwrap(),
+            backlink: Some(panda_entry_1_hash),
+            skiplink: None,
+        };
+
+        assert_eq!(next_entry_args.log_id, expected_next_entry_args.log_id);
+        assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
+        assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
+        assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
+
+        assert_eq!(node.db().len(), 2);
+        assert_eq!(node.get_author_logs(&panda.author()).unwrap().len(), 2);
     }
 
     #[rstest]
