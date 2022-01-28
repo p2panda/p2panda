@@ -10,8 +10,10 @@
 //! ```
 //! # extern crate p2panda_rs;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! use std::convert::TryFrom;
+//!
 //! use p2panda_rs::operation::AsOperation;
-//! use p2panda_rs::operation::OperationValue;
+//! use p2panda_rs::operation::{OperationEncoded, OperationValue};
 //! use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 //! use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 //! use p2panda_rs::test_utils::utils::{
@@ -36,11 +38,13 @@
 //! );
 //!
 //! // Retrieve the next entry args from the node
-//! let entry_args = node.next_entry_args(&panda.author(), None, None)?;
+//! let entry_args = node.get_next_entry_args(&panda.author(), None, None)?;
 //!
 //! // Sign and encode an entry
 //! let entry_encoded = panda.signed_encoded_entry(operation.to_owned(), entry_args);
-//! node.publish_entry(&entry_encoded, &operation)?;
+//! let operation_encoded = OperationEncoded::try_from(&operation)?;
+//!
+//! node.publish_entry(&entry_encoded, &operation_encoded)?;
 //!
 //! # Ok(())
 //! # }

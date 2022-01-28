@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::TryFrom;
+use std::str::FromStr;
+use std::hash::{Hash as StdHash, Hasher};
+
 use arrayvec::ArrayVec;
 use bamboo_rs_core_ed25519_yasmf::yasmf_hash::new_blake3;
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
-use std::hash::{Hash as StdHash, Hasher};
 use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
 use crate::hash::HashError;
@@ -23,11 +25,6 @@ pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
 ///
 /// [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "db-sqlx",
-    derive(sqlx::Type, sqlx::FromRow),
-    sqlx(transparent)
-)]
 pub struct Hash(String);
 
 impl Hash {
@@ -87,6 +84,33 @@ impl From<Hash> for YasmfHash<Blake3ArrayVec> {
     }
 }
 
+/// Convert any hex-encoded string representation of a hash into a `Hash` instance.
+impl TryFrom<&str> for Hash {
+    type Error = HashError;
+
+    fn try_from(str: &str) -> Result<Self, Self::Error> {
+        Self::new(str)
+    }
+}
+
+/// Convert any borrowed string representation into a `Hash` instance.
+impl FromStr for Hash {
+    type Err = HashError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::new(s)
+    }
+}
+
+/// Convert any owned string representation into a `Hash` instance.
+impl TryFrom<String> for Hash {
+    type Error = HashError;
+
+    fn try_from(str: String) -> Result<Self, Self::Error> {
+        Self::new(&str)
+    }
+}
+
 impl Validate for Hash {
     type Error = HashError;
 
@@ -129,7 +153,7 @@ impl StdHash for Hash {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::convert::TryInto;
+    use std::convert::{TryFrom, TryInto};
 
     use yasmf_hash::YasmfHash;
 
@@ -173,5 +197,22 @@ mod tests {
         hash_map.insert(&hash, key_value.clone());
         let key_value_retrieved = hash_map.get(&hash).unwrap().to_owned();
         assert_eq!(key_value, key_value_retrieved)
+    }
+
+    #[test]
+    fn convert_string() {
+        let hash_str = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
+
+        // Using TryFrom<&str>
+        let hash_from_str: Hash = hash_str.try_into().unwrap();
+        assert_eq!(hash_str, hash_from_str.as_str());
+
+        // Using FromStr
+        let hash_from_parse: Hash = hash_str.parse().unwrap();
+        assert_eq!(hash_str, hash_from_parse.as_str());
+
+        // Using TryFrom<String>
+        let hash_from_string = Hash::try_from(String::from(hash_str)).unwrap();
+        assert_eq!(hash_str, hash_from_string.as_str());
     }
 }

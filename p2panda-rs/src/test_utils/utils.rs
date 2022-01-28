@@ -43,29 +43,24 @@ pub struct NextEntryArgs {
 /// provided, this is a DELETE operation.
 pub fn any_operation(
     fields: Option<OperationFields>,
-    document_id: Option<Hash>,
     previous_operations: Option<Vec<Hash>>,
 ) -> Operation {
     match fields {
         // It's a CREATE operation
-        Some(fields) if document_id.is_none() => {
+        Some(fields) if previous_operations.is_none() => {
             Operation::new_create(hash(DEFAULT_SCHEMA_HASH), fields).unwrap()
         }
         // It's an UPDATE operation
         Some(fields) => Operation::new_update(
             hash(DEFAULT_SCHEMA_HASH),
-            document_id.unwrap(),
             previous_operations.unwrap(),
             fields,
         )
         .unwrap(),
         // It's a DELETE operation
-        None => Operation::new_delete(
-            hash(DEFAULT_SCHEMA_HASH),
-            document_id.unwrap(),
-            previous_operations.unwrap(),
-        )
-        .unwrap(),
+        None => {
+            Operation::new_delete(hash(DEFAULT_SCHEMA_HASH), previous_operations.unwrap()).unwrap()
+        }
     }
 }
 
@@ -89,8 +84,8 @@ pub fn keypair_from_private(private_key: String) -> KeyPair {
     KeyPair::from_private_key_str(&private_key).unwrap()
 }
 
-/// Generate a sequence number based on i64 value.
-pub fn seq_num(n: i64) -> SeqNum {
+/// Generate a sequence number based on u64 value.
+pub fn seq_num(n: u64) -> SeqNum {
     SeqNum::new(n).unwrap()
 }
 
@@ -124,20 +119,15 @@ pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
 /// Generate an UPDATE operation based on passed schema hash, document id and operation fields.
 pub fn update_operation(
     schema: Hash,
-    document_id: Hash,
     previous_operations: Vec<Hash>,
     fields: OperationFields,
 ) -> Operation {
-    Operation::new_update(schema, document_id, previous_operations, fields).unwrap()
+    Operation::new_update(schema, previous_operations, fields).unwrap()
 }
 
 /// Generate a DELETE operation based on passed schema hash and document id.
-pub fn delete_operation(
-    schema: Hash,
-    document_id: Hash,
-    previous_operations: Vec<Hash>,
-) -> Operation {
-    Operation::new_delete(schema, document_id, previous_operations).unwrap()
+pub fn delete_operation(schema: Hash, previous_operations: Vec<Hash>) -> Operation {
+    Operation::new_delete(schema, previous_operations).unwrap()
 }
 
 /// Generate a CREATE meta-operation based on passed encoded entry and operation.

@@ -37,7 +37,7 @@ pub fn private_key() -> String {
 /// Fixture which injects the default KeyPair into a test method. Default value can be overridden
 /// at testing time by passing in a custom private key string.
 #[fixture]
-pub fn key_pair(private_key: String) -> KeyPair {
+pub fn key_pair(#[default(DEFAULT_PRIVATE_KEY.into())] private_key: String) -> KeyPair {
     utils::keypair_from_private(private_key)
 }
 
@@ -48,9 +48,9 @@ pub fn random_key_pair() -> KeyPair {
 }
 
 /// Fixture which injects the default SeqNum into a test method. Default value can be overridden at
-/// testing time by passing in a custom seq num as i64.
+/// testing time by passing in a custom seq num as u64.
 #[fixture]
-pub fn seq_num(#[default(1)] n: i64) -> SeqNum {
+pub fn seq_num(#[default(1)] n: u64) -> SeqNum {
     utils::seq_num(n)
 }
 
@@ -124,10 +124,9 @@ pub fn entry(
 #[fixture]
 pub fn operation(
     #[from(some_fields)] fields: Option<OperationFields>,
-    #[default(None)] document_id: Option<Hash>,
     #[default(None)] previous_operations: Option<Vec<Hash>>,
 ) -> Operation {
-    utils::any_operation(fields, document_id, previous_operations)
+    utils::any_operation(fields, previous_operations)
 }
 
 /// Fixture which injects the default Hash into a test method as an Option.
@@ -165,12 +164,11 @@ pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
 #[fixture]
 pub fn update_operation(
     schema: Hash,
-    #[from(hash)] document_id: Hash,
     #[default(vec![hash(DEFAULT_HASH)])] previous_operations: Vec<Hash>,
     #[default(fields(vec![("message", OperationValue::Text("Updated, hello!".to_string()))]))]
     fields: OperationFields,
 ) -> Operation {
-    utils::update_operation(schema, document_id, previous_operations, fields)
+    utils::update_operation(schema, previous_operations, fields)
 }
 
 /// Fixture which injects the default DELETE Operation into a test method.
@@ -180,10 +178,9 @@ pub fn update_operation(
 #[fixture]
 pub fn delete_operation(
     schema: Hash,
-    #[from(hash)] document_id: Hash,
     #[default(vec![hash(DEFAULT_HASH)])] previous_operations: Vec<Hash>,
 ) -> Operation {
-    utils::delete_operation(schema, document_id, previous_operations)
+    utils::delete_operation(schema, previous_operations)
 }
 
 /// Fixture which injects the default CREATE Operation into a test method.
@@ -196,6 +193,14 @@ pub fn meta_operation(
     operation_encoded: OperationEncoded,
 ) -> OperationWithMeta {
     utils::meta_operation(entry_signed_encoded, operation_encoded)
+}
+
+#[fixture]
+pub fn encoded_create_string(create_operation: Operation) -> String {
+    OperationEncoded::try_from(&create_operation)
+        .unwrap()
+        .as_str()
+        .to_owned()
 }
 
 /// Fixture which injects p2panda testing data from p2panda version `0.3.0`.

@@ -237,14 +237,17 @@ export class Session {
     const result = await this.queryEntriesEncoded(schema);
 
     log(`decoding ${result.length} entries`);
+
     return Promise.all(
       result.map(async (entry) => {
         const decoded = await decodeEntry(entry.entryBytes, entry.payloadBytes);
+
         if (decoded.operation.action !== 'delete') {
           decoded.operation.fields = marshallResponseFields(
             decoded.operation.fields,
           );
         }
+
         return {
           ...decoded,
           encoded: entry,

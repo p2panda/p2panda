@@ -210,7 +210,7 @@ describe('Session', () => {
     const fields = entryFixture(2).operation?.fields as Fields;
 
     // This is the document id
-    const documentId = entryFixture(2).operation?.id as string;
+    const documentId = documentIdFixture();
 
     // These are the previous operations
     const previousOperations = entryFixture(2).operation
@@ -257,7 +257,7 @@ describe('Session', () => {
     let session: Session;
 
     // This is the document id that can be deleted
-    const documentId = entryFixture(3).operation?.id as string;
+    const documentId = documentIdFixture();
 
     // These are the previous operations
     const previousOperations = entryFixture(2).operation

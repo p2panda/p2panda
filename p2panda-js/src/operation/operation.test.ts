@@ -8,14 +8,16 @@ describe('message', () => {
     it('creates a WebAssembly OperationField', async () => {
       const fields = marshallRequestFields({
         channel: 5,
+        temperature: 12.921,
         message: 'chin chin',
         serious: false,
       });
-      const outputRepresentation =
-        'OperationFields(OperationFields({"channel": Integer(5), "message": ' +
-        'Text("chin chin"), "serious": Boolean(false)}))';
 
       const operationFields = await getOperationFields(fields);
+
+      const outputRepresentation =
+        'OperationFields(OperationFields({"channel": Integer(5), "message": ' +
+        'Text("chin chin"), "serious": Boolean(false), "temperature": Float(12.921)}))';
       expect(operationFields.toString()).toEqual(outputRepresentation);
     });
   });

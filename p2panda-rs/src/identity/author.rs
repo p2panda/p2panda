@@ -10,11 +10,6 @@ use crate::Validate;
 
 /// Authors are hex encoded Ed25519 public key strings.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[cfg_attr(
-    feature = "db-sqlx",
-    derive(sqlx::Type, sqlx::FromRow),
-    sqlx(transparent)
-)]
 pub struct Author(String);
 
 impl Author {
@@ -60,6 +55,16 @@ impl TryFrom<PublicKey> for Author {
     }
 }
 
+/// Convert any hex-encoded string representation of an Ed25519 public key into an `Author`
+/// instance.
+impl TryFrom<&str> for Author {
+    type Error = AuthorError;
+
+    fn try_from(str: &str) -> Result<Self, Self::Error> {
+        Self::new(str)
+    }
+}
+
 impl Validate for Author {
     type Error = AuthorError;
 
@@ -83,6 +88,8 @@ impl Validate for Author {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
+
     use super::Author;
 
     #[test]
@@ -92,5 +99,12 @@ mod tests {
         assert!(
             Author::new("7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982").is_ok()
         );
+    }
+
+    #[test]
+    fn string_conversion() {
+        let author_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
+        let author = Author::try_from(author_str).unwrap();
+        assert_eq!(author_str, author.as_str());
     }
 }

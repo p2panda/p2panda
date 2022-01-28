@@ -51,7 +51,6 @@ export const updateDocument = async (
   const operationFields = await getOperationFields(fieldsTagged);
 
   const encodedOperation = encodeUpdateOperation(
-    documentId,
     schema,
     previousOperations,
     operationFields,
@@ -82,11 +81,7 @@ export const deleteDocument = async (
 ): Promise<string> => {
   const { encodeDeleteOperation } = await wasm;
 
-  const encodedOperation = encodeDeleteOperation(
-    documentId,
-    schema,
-    previousOperations,
-  );
+  const encodedOperation = encodeDeleteOperation(schema, previousOperations);
 
   const encodedEntry = await signPublishEntry(
     encodedOperation,

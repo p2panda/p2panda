@@ -33,7 +33,11 @@ Highlights are marked with a pancake 🥞
 - Update Rust dependencies [#171](https://github.com/p2panda/p2panda/pull/171) `rs`
 - Convert JavaScript configuration files to TypeScript or JSON [#172](https://github.com/p2panda/p2panda/pull/172) `js`
 - Implement `Hash`, `Eq` and `PartialEq` traits for several core data types [#178](https://github.com/p2panda/p2panda/pull/178) `rs`
-- Use `ciborium` for cbor de/serialization [180](https://github.com/p2panda/p2panda/pull/180) `rs`
+- Use `ciborium` for cbor de/serialization [#180](https://github.com/p2panda/p2panda/pull/180) `rs`
+- Break `wasm` module down into sub-files, add wasm target tests [#184](https://github.com/p2panda/p2panda/pull/184) `rs`
+- Changes to `mocks` module in `test_utils` [#181](https://github.com/p2panda/p2panda/pull/181) `rs`
+- Implement logging for mock node in `test_utils` [#192](https://github.com/p2panda/p2panda/pull/192) `rs`
+- Support `u64` and `i64` integers, remove `sqlx` [#177](https://github.com/p2panda/p2panda/pull/177) `rs` `js`
 
 ### Campfires and boiling pots to sit around
 
