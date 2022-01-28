@@ -4,7 +4,6 @@ use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 use std::hash::{Hash as StdHash, Hasher};
 
-use ciborium;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
