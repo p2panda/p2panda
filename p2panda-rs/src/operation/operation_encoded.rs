@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
+use std::hash::{Hash as StdHash, Hasher};
 
 use serde::{Deserialize, Serialize};
 
@@ -76,6 +77,15 @@ impl Validate for OperationEncoded {
     fn validate(&self) -> Result<(), Self::Error> {
         hex::decode(&self.0).map_err(|_| OperationEncodedError::InvalidHexEncoding)?;
         Ok(())
+    }
+}
+
+/// Implement `Hash` trait for `OperationEncoded` to make it a hashable type.
+///
+/// Bamboo payloads like operations are computed on the raw data bytes.
+impl StdHash for OperationEncoded {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.to_bytes().hash(state);
     }
 }
 
