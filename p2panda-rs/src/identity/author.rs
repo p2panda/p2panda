@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
+use std::hash::Hash as StdHash;
 
 use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
 use serde::{Deserialize, Serialize};
@@ -9,7 +10,7 @@ use crate::identity::AuthorError;
 use crate::Validate;
 
 /// Authors are hex encoded Ed25519 public key strings.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Eq, StdHash, Deserialize, PartialEq)]
 pub struct Author(String);
 
 impl Author {
