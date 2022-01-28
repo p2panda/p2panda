@@ -743,4 +743,125 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
     }
+
+    #[rstest]
+    fn concurrent_updates(private_key: String) {
+        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
+        let penguin = Client::new(
+            "penguin".to_string(),
+            keypair_from_private(
+                "eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e3".to_string(),
+            ),
+        );
+        let mut node = Node::new();
+
+        // Publish a CREATE operation
+        //
+        // PANDA  : [1]
+        let (panda_entry_1_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &create_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                operation_fields(vec![
+                    (
+                        "cafe_name",
+                        OperationValue::Text("Polar Pear Cafe".to_string()),
+                    ),
+                    (
+                        "address",
+                        OperationValue::Text("1, Polar Bear Rise, Panda Town".to_string()),
+                    ),
+                ]),
+            ),
+        )
+        .unwrap();
+
+        let instance = node.query_document(&panda_entry_1_hash);
+        assert_eq!(
+            *instance.get("cafe_name").unwrap(),
+            OperationValue::Text("Polar Pear Cafe".to_string())
+        );
+
+        // Publish an UPDATE operation
+        //
+        // PANDA  : [1] <--[2]
+        let (panda_entry_2_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &update_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                vec![panda_entry_1_hash.clone()],
+                operation_fields(vec![(
+                    "cafe_name",
+                    OperationValue::Text("Polar Bear Cafe".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let instance = node.query_document(&panda_entry_1_hash);
+        assert_eq!(
+            *instance.get("cafe_name").unwrap(),
+            OperationValue::Text("Polar Bear Cafe".to_string())
+        );
+
+        // Penguin publishes an UPDATE operation, but they haven't seen Panda's most recent entry [2]
+        // making this a concurrent update which forks the document graph.
+        //
+        // PANDA  : [1] <--[2]
+        //            \
+        // PENGUIN:    [1]
+        let (penguin_entry_1_hash, _) = send_to_node(
+            &mut node,
+            &penguin,
+            &update_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                vec![panda_entry_1_hash.clone()],
+                operation_fields(vec![(
+                    "address",
+                    OperationValue::Text("1, Polar Bear rd, Panda Town".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let instance = node.query_document(&panda_entry_1_hash);
+        assert_eq!(
+            *instance.get("address").unwrap(),
+            OperationValue::Text("1, Polar Bear rd, Panda Town".to_string())
+        );
+
+        // Penguin publishes another UPDATE operation, this time they have replicated all entries
+        // and refer to the two existing document graph tips in the previous_operation fields.
+        //
+        // PANDA  : [1] <-- [2]
+        //            \        \
+        // PENGUIN:    [1] <-- [2]
+        let (_penguin_entry_2_hash, _) = send_to_node(
+            &mut node,
+            &penguin,
+            &update_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                vec![penguin_entry_1_hash, panda_entry_2_hash],
+                operation_fields(vec![(
+                    "cafe_name",
+                    OperationValue::Text("Polar Bear Café".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let instance = node.query_document(&panda_entry_1_hash);
+        assert_eq!(
+            *instance.get("cafe_name").unwrap(),
+            OperationValue::Text("Polar Bear Café".to_string())
+        );
+
+        // As more operations are published, the graph could look like this:
+        //
+        // PANDA  : [1] <--[2]          [3] <--[4] <--[5]
+        //            \       \         /
+        // PENGUIN:    [1] <--[2] <--[3]
+    }
 }
