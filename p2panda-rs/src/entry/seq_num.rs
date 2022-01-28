@@ -14,7 +14,7 @@ use crate::Validate;
 pub const FIRST_SEQ_NUM: u64 = 1;
 
 /// Sequence number describing the position of an entry in its append-only log.
-#[derive(Clone, Debug, Serialize, Eq, PartialEq, StdHash, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Eq, PartialEq, StdHash, Deserialize)]
 pub struct SeqNum(u64);
 
 impl SeqNum {
@@ -85,8 +85,6 @@ impl Default for SeqNum {
         Self::new(FIRST_SEQ_NUM).unwrap()
     }
 }
-
-impl Copy for SeqNum {}
 
 impl Validate for SeqNum {
     type Error = SeqNumError;
