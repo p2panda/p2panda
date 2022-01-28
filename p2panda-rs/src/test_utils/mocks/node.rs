@@ -90,7 +90,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 
 use crate::document::DocumentBuilder;
-use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
+use crate::entry::{decode_entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::instance::Instance;
@@ -464,6 +464,7 @@ impl Node {
         Ok(next_entry_args)
     }
 
+    /// Returns all of a documents entries from this node. Includes entries from all authors.
     pub fn get_document_entries(&self, id: &Hash) -> Vec<LogEntry> {
         self.db()
             .iter()
@@ -472,6 +473,7 @@ impl Node {
             .collect()
     }
 
+    /// Get a single resolved document from the node.
     pub fn get_document(&self, id: &Hash) -> Instance {
         let entries = self.get_document_entries(id);
         let operations = entries
@@ -484,6 +486,7 @@ impl Node {
         document.resolve().unwrap()
     }
 
+    /// Get all documents in their resolved state from the node.
     pub fn get_documents(&self) -> Vec<Instance> {
         let mut documents = HashSet::new();
         for (_author, author_logs) in self.db() {

@@ -18,6 +18,7 @@ impl Instance {
         Self(BTreeMap::new())
     }
 
+    /// Get a single value from this instance by it's key.
     pub fn get(&self, key: &str) -> Option<&OperationValue> {
         self.0.get(key)
     }
