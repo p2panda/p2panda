@@ -176,7 +176,7 @@ mod tests {
     }
 
     #[test]
-    fn the_hash_hashes() {
+    fn it_hashes() {
         let hash = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
         let mut hash_map = HashMap::new();
         let key_value = "Value identified by a hash".to_string();

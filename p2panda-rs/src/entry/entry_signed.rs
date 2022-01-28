@@ -144,7 +144,7 @@ mod tests {
     }
 
     #[apply(many_valid_entries)]
-    fn sign_and_encode_roundtrip(#[case] entry: Entry, key_pair: KeyPair) {
+    fn it_hashes(#[case] entry: Entry, key_pair: KeyPair) {
         let entry_first_encoded = sign_and_encode(&entry, &key_pair).unwrap();
         let mut hash_map = HashMap::new();
         let key_value = "Value identified by a hash".to_string();
