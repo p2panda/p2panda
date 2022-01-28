@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
-use std::hash::{Hash as StdHash, Hasher};
+use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
 use arrayvec::ArrayVec;
@@ -24,7 +24,7 @@ pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
 /// to the Bamboo specification.
 ///
 /// [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, StdHash)]
 pub struct Hash(String);
 
 impl Hash {
@@ -133,20 +133,6 @@ impl Validate for Hash {
         }
 
         Ok(())
-    }
-}
-
-impl PartialEq for Hash {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl Eq for Hash {}
-
-impl StdHash for Hash {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
     }
 }
 
