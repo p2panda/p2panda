@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::hash::{Hash as StdHash, Hasher};
+use std::hash::Hash as StdHash;
 
 use crate::entry::{decode_entry, EntrySigned};
 use crate::hash::Hash;
@@ -13,7 +13,7 @@ use crate::Validate;
 
 /// Wrapper struct containing an operation, the hash of its entry, and the public key of its
 /// author.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, StdHash)]
 pub struct OperationWithMeta {
     /// The hash of this operations entry.
     operation_id: Hash,
@@ -99,20 +99,6 @@ impl Validate for OperationWithMeta {
         self.operation_id.validate()?;
 
         Ok(())
-    }
-}
-
-impl PartialEq for OperationWithMeta {
-    fn eq(&self, other: &Self) -> bool {
-        self.operation_id == other.operation_id
-    }
-}
-
-impl Eq for OperationWithMeta {}
-
-impl StdHash for OperationWithMeta {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.operation_id.hash(state);
     }
 }
 
