@@ -118,7 +118,7 @@ mod tests {
     use crate::{
         hash::Hash,
         operation::{Operation, OperationEncoded, OperationFields, OperationValue},
-        schema::{ValidateOperation, Schema},
+        schema::{Schema, ValidateOperation},
     };
 
     #[test]
@@ -147,7 +147,9 @@ mod tests {
         let system_cddl = Schema::new(&schema_hash, &cddl).unwrap();
 
         let operation_encoded = OperationEncoded::try_from(&operation).unwrap();
-        assert!(system_cddl.validate_operation(operation_encoded.to_bytes()).is_ok());
+        assert!(system_cddl
+            .validate_operation(operation_encoded.to_bytes())
+            .is_ok());
     }
 
     #[test]
@@ -171,6 +173,8 @@ mod tests {
         let operation_encoded = OperationEncoded::try_from(&operation).unwrap();
 
         let system_cddl = Schema::new(&schema_hash, &cddl).unwrap();
-        assert!(system_cddl.validate_operation(operation_encoded.to_bytes()).is_err());
+        assert!(system_cddl
+            .validate_operation(operation_encoded.to_bytes())
+            .is_err());
     }
 }

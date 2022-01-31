@@ -5,13 +5,13 @@ use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt;
 
+use super::fields::{Field, Group, Type};
 use cddl::lexer::Lexer;
 use cddl::parser::Parser;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validate_cbor_from_slice;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
-use super::fields::{Field, Group, Type};
 
 use crate::hash::Hash;
 #[cfg(not(target_arch = "wasm32"))]
