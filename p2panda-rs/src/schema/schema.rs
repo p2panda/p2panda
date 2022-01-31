@@ -202,7 +202,7 @@ impl fmt::Display for Schema {
 
 impl ValidateOperation for Schema {}
 
-trait ValidateOperation
+pub trait ValidateOperation
 where
     Self: fmt::Display,
 {
