@@ -112,6 +112,7 @@ pub fn get_system_cddl() -> String {
 }
 
 #[cfg(test)]
+#[cfg(not(target_arch = "wasm32"))]
 mod tests {
     use super::get_system_cddl;
     use crate::{
