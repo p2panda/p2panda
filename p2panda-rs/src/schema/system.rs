@@ -6,6 +6,32 @@ use crate::schema::SchemaBuilder;
 
 use super::Schema;
 
+// type SchemaStore = BTreeMap<String, Schemas>;
+
+// enum Schemas {
+//     Application(Schema),
+//     System(SystemSchema)
+// }
+
+// enum SystemSchema {
+//     KeyGroup(Schema),
+//     ApplicationSchema(Schema)
+// }
+
+
+// // Loaded from database + hard coded system schemas
+
+// if (schema_store.valid_operation(operation)) {
+//     materialise()
+// }
+
+// if (schema_store.valid_query(query: AbstractQuery)) {
+//     fetch(query.to_sql())
+// }
+
+// schema_store.schemas().map(|schema| todo!() )
+
+
 /// Make CDDL definition for operations from a given schema
 fn make_schema_cddl(
     schema_name: &str,
@@ -142,6 +168,7 @@ mod tests {
         let operation = Operation::new_update(schema_hash.clone(), prev_ops, fields).unwrap();
 
         let cddl = get_system_cddl();
+        println!("{}", cddl);
         // This instance of `Schema` is not representing a specific schema but the entirety of
         // registered schemas.
         let system_cddl = Schema::new(&schema_hash, &cddl).unwrap();
@@ -173,6 +200,7 @@ mod tests {
         let operation_encoded = OperationEncoded::try_from(&operation).unwrap();
 
         let system_cddl = Schema::new(&schema_hash, &cddl).unwrap();
+        println!("{}", system_cddl.validate_operation(operation_encoded.to_bytes()).unwrap_err());
         assert!(system_cddl
             .validate_operation(operation_encoded.to_bytes())
             .is_err());
