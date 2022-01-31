@@ -90,7 +90,7 @@ impl AsOperation for OperationWithMeta {
 
 impl PartialEq for OperationWithMeta {
     fn eq(&self, other: &Self) -> bool {
-        self.operation_id == other.operation_id
+        self.operation().to_cbor() == other.operation().to_cbor()
     }
 }
 
