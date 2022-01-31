@@ -10,13 +10,16 @@
 use cddl::validator::cbor;
 
 mod error;
+mod fields;
 mod operation;
 #[allow(clippy::module_inception)]
 mod schema;
+mod system;
 
 pub use error::SchemaError;
 pub use operation::OPERATION_SCHEMA;
-pub use schema::{Schema, SchemaBuilder, Type};
+pub use schema::{Schema, SchemaBuilder};
+pub use system::get_system_cddl;
 
 /// Checks CBOR bytes against CDDL schemas.
 ///
