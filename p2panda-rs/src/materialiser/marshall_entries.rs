@@ -2,7 +2,7 @@
 
 use crate::entry::EntrySigned;
 use crate::materialiser::{Edge, MaterialisationError};
-use crate::operation::{AsOperation, OperationEncoded, OperationWithMeta};
+use crate::operation::{AsOperation, OperationEncoded, OperationSigned};
 
 /// Method for marshalling an array of entries and operations into an array of graph edges which
 /// can then be turned into a DAG.
@@ -15,9 +15,9 @@ pub fn marshall_entries(
 ) -> Result<Vec<Edge>, MaterialisationError> {
     let mut edges = Vec::new();
     for (entry_signed, operation_encoded) in entries {
-        let operation_with_meta = match OperationWithMeta::new(&entry_signed, &operation_encoded) {
+        let operation_with_meta = match OperationSigned::new(&entry_signed, &operation_encoded) {
             Ok(operation_with_meta) => Ok(operation_with_meta),
-            Err(err) => Err(MaterialisationError::OperationWithMetaError(err)),
+            Err(err) => Err(MaterialisationError::OperationSignedError(err)),
         }?;
 
         let (link, id) = match operation_with_meta.previous_operations() {

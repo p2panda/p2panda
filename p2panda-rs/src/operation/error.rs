@@ -50,7 +50,7 @@ pub enum OperationEncodedError {
 
 /// Error types for methods of `OperationWithMeta` struct.
 #[derive(Error, Debug)]
-pub enum OperationWithMetaError {
+pub enum OperationSignedError {
     /// Invalid encoded entry found.
     #[error(transparent)]
     EntrySignedError(#[from] crate::entry::EntrySignedError),

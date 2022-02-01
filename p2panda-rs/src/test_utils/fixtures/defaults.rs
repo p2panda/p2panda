@@ -4,7 +4,7 @@
 //! when composing test templates where default fixtures can't be injected in the usual way.
 use crate::entry::Entry;
 use crate::hash::Hash;
-use crate::operation::{Operation, OperationFields, OperationValue, OperationWithMeta};
+use crate::operation::{Operation, OperationFields, OperationValue, OperationSigned};
 use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
 use crate::test_utils::fixtures;
 
@@ -51,7 +51,7 @@ pub fn delete_operation() -> Operation {
 }
 
 /// The default CREATE meta-operation.
-pub fn create_meta_operation() -> OperationWithMeta {
+pub fn create_meta_operation() -> OperationSigned {
     let operation = create_operation();
     fixtures::meta_operation(
         fixtures::entry_signed_encoded(
@@ -63,7 +63,7 @@ pub fn create_meta_operation() -> OperationWithMeta {
 }
 
 /// The default UPDATE meta-operation.
-pub fn update_meta_operation() -> OperationWithMeta {
+pub fn update_meta_operation() -> OperationSigned {
     let operation = update_operation();
     fixtures::meta_operation(
         fixtures::entry_signed_encoded(
@@ -75,7 +75,7 @@ pub fn update_meta_operation() -> OperationWithMeta {
 }
 
 /// The default DELETE meta-operation.
-pub fn delete_meta_operation() -> OperationWithMeta {
+pub fn delete_meta_operation() -> OperationSigned {
     let operation = delete_operation();
     fixtures::meta_operation(
         fixtures::entry_signed_encoded(

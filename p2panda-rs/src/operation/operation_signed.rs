@@ -14,7 +14,7 @@ use crate::Validate;
 /// Wrapper struct containing an operation, the hash of its entry, and the public key of its
 /// author.
 #[derive(Debug, Clone, Eq, PartialEq, StdHash)]
-pub struct OperationWithMeta {
+pub struct OperationSigned {
     /// The hash of this operations entry.
     operation_id: Hash,
 
@@ -25,7 +25,7 @@ pub struct OperationWithMeta {
     operation: Operation,
 }
 
-impl OperationWithMeta {
+impl OperationSigned {
     /// Returns a new `OperationWithMeta` instance.
     pub fn new(
         entry_encoded: &EntrySigned,
@@ -63,7 +63,7 @@ impl OperationWithMeta {
     }
 }
 
-impl AsOperation for OperationWithMeta {
+impl AsOperation for OperationSigned {
     /// Returns action type of operation.
     fn action(&self) -> OperationAction {
         self.operation.action().to_owned()
@@ -90,7 +90,7 @@ impl AsOperation for OperationWithMeta {
     }
 }
 
-impl Validate for OperationWithMeta {
+impl Validate for OperationSigned {
     type Error = OperationWithMetaError;
 
     fn validate(&self) -> Result<(), Self::Error> {
@@ -120,7 +120,7 @@ mod tests {
     };
     use crate::Validate;
 
-    use super::OperationWithMeta;
+    use super::OperationSigned;
 
     #[rstest]
     #[should_panic]
@@ -130,12 +130,12 @@ mod tests {
         entry_signed_encoded: EntrySigned,
         #[case] operation_encoded: OperationEncoded,
     ) {
-        let operation_with_meta = OperationWithMeta::new(&entry_signed_encoded, &operation_encoded);
+        let operation_with_meta = OperationSigned::new(&entry_signed_encoded, &operation_encoded);
         assert!(operation_with_meta.is_ok())
     }
 
     #[apply(all_meta_operation_types)]
-    fn only_some_operations_should_contain_fields(#[case] operation_with_meta: OperationWithMeta) {
+    fn only_some_operations_should_contain_fields(#[case] operation_with_meta: OperationSigned) {
         if operation_with_meta.is_create() {
             assert!(operation_with_meta.operation().fields().is_some());
         }
@@ -150,13 +150,13 @@ mod tests {
     }
 
     #[apply(all_meta_operation_types)]
-    fn operations_should_validate(#[case] operation_with_meta: OperationWithMeta) {
+    fn operations_should_validate(#[case] operation_with_meta: OperationSigned) {
         assert!(operation_with_meta.operation().validate().is_ok());
         assert!(operation_with_meta.validate().is_ok())
     }
 
     #[apply(all_meta_operation_types)]
-    fn trait_methods_should_match(#[case] operation_with_meta: OperationWithMeta) {
+    fn trait_methods_should_match(#[case] operation_with_meta: OperationSigned) {
         let operation = operation_with_meta.operation();
         assert_eq!(operation_with_meta.fields(), operation.fields());
         assert_eq!(operation_with_meta.action(), operation.action());
@@ -182,7 +182,7 @@ mod tests {
     }
 
     #[apply(all_meta_operation_types)]
-    fn it_hashes(#[case] operation_with_meta: OperationWithMeta) {
+    fn it_hashes(#[case] operation_with_meta: OperationSigned) {
         let mut hash_map = HashMap::new();
         let key_value = "Value identified by a hash".to_string();
         hash_map.insert(&operation_with_meta, key_value.clone());

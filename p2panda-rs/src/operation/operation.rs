@@ -199,10 +199,10 @@ impl OperationFields {
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// Operations describe data mutations of "documents" in the p2panda network. Authors send
+/// Operations describe data mutations of "documents" in the p2panda network. Authors publish
 /// operations to CREATE, UPDATE or DELETE documents.
 ///
-/// The data itself lives in the "fields" object and is formed after an operation schema.
+/// The data itself lives in the "fields" object and is formed according to the operation's schema.
 ///
 /// Starting from an initial CREATE operation, the following collection of UPDATE operations build
 /// up a causal graph of mutations which can be resolved into a single object during a

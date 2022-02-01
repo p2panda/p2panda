@@ -13,7 +13,7 @@ use crate::entry::{sign_and_encode, Entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::{
-    Operation, OperationEncoded, OperationFields, OperationValue, OperationWithMeta,
+    Operation, OperationEncoded, OperationFields, OperationValue, OperationSigned,
 };
 use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
 use crate::test_utils::fixtures::defaults;
@@ -191,7 +191,7 @@ pub fn delete_operation(
 pub fn meta_operation(
     entry_signed_encoded: EntrySigned,
     operation_encoded: OperationEncoded,
-) -> OperationWithMeta {
+) -> OperationSigned {
     utils::meta_operation(entry_signed_encoded, operation_encoded)
 }
 

@@ -13,7 +13,7 @@ use crate::entry::{Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::{
-    Operation, OperationEncoded, OperationFields, OperationValue, OperationWithMeta,
+    Operation, OperationEncoded, OperationFields, OperationValue, OperationSigned,
 };
 use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
 
@@ -134,8 +134,8 @@ pub fn delete_operation(schema: Hash, previous_operations: Vec<Hash>) -> Operati
 pub fn meta_operation(
     entry_signed_encoded: EntrySigned,
     operation_encoded: OperationEncoded,
-) -> OperationWithMeta {
-    OperationWithMeta::new(&entry_signed_encoded, &operation_encoded).unwrap()
+) -> OperationSigned {
+    OperationSigned::new(&entry_signed_encoded, &operation_encoded).unwrap()
 }
 
 #[cfg(test)]
