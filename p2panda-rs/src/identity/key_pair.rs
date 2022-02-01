@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
-
-use arrayvec::ArrayVec;
 use ed25519_dalek::{Keypair as Ed25519Keypair, PublicKey, SecretKey, Signature, Signer, Verifier};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 
-use crate::{entry::SIGNATURE_SIZE, hash::HASH_SIZE, identity::KeyPairError};
+use crate::identity::KeyPairError;
 
 /// Ed25519 key pair for authors to sign Bamboo entries with.
 #[derive(Debug, Serialize, Deserialize)]
