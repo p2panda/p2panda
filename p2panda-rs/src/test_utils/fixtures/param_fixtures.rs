@@ -188,11 +188,11 @@ pub fn delete_operation(
 /// Default value can be overridden at testing time by passing in custom schema hash and operation
 /// fields.
 #[fixture]
-pub fn meta_operation(
+pub fn operation_signed(
     entry_signed_encoded: EntrySigned,
     operation_encoded: OperationEncoded,
 ) -> OperationSigned {
-    utils::meta_operation(entry_signed_encoded, operation_encoded)
+    utils::operation_signed(entry_signed_encoded, operation_encoded)
 }
 
 #[fixture]

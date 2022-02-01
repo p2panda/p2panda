@@ -116,7 +116,7 @@ mod tests {
     use crate::operation::{AsOperation, OperationEncoded, OperationValue};
     use crate::test_utils::fixtures::defaults::hash;
     use crate::test_utils::fixtures::templates::{
-        all_meta_operation_types, implements_as_operation,
+        all_signed_operation_types, implements_as_operation,
     };
     use crate::test_utils::fixtures::{
         create_operation, defaults, entry_signed_encoded, fields, operation_encoded,
@@ -129,44 +129,44 @@ mod tests {
     #[should_panic]
     #[case(operation_encoded(create_operation(hash(), fields(vec![("message", OperationValue::Text("Not the right message".to_string()))]))))]
     #[case(operation_encoded(defaults::create_operation()))]
-    fn create_operation_with_meta(
+    fn create_operation_signed(
         entry_signed_encoded: EntrySigned,
         #[case] operation_encoded: OperationEncoded,
     ) {
-        let operation_with_meta = OperationSigned::new(&entry_signed_encoded, &operation_encoded);
-        assert!(operation_with_meta.is_ok())
+        let operation_signed = OperationSigned::new(&entry_signed_encoded, &operation_encoded);
+        assert!(operation_signed.is_ok())
     }
 
-    #[apply(all_meta_operation_types)]
-    fn only_some_operations_should_contain_fields(#[case] operation_with_meta: OperationSigned) {
-        if operation_with_meta.is_create() {
-            assert!(operation_with_meta.operation().fields().is_some());
+    #[apply(all_signed_operation_types)]
+    fn only_some_operations_should_contain_fields(#[case] operation_signed: OperationSigned) {
+        if operation_signed.is_create() {
+            assert!(operation_signed.operation().fields().is_some());
         }
 
-        if operation_with_meta.is_update() {
-            assert!(operation_with_meta.operation().fields().is_some());
+        if operation_signed.is_update() {
+            assert!(operation_signed.operation().fields().is_some());
         }
 
-        if operation_with_meta.is_delete() {
-            assert!(operation_with_meta.operation().fields().is_none());
+        if operation_signed.is_delete() {
+            assert!(operation_signed.operation().fields().is_none());
         }
     }
 
-    #[apply(all_meta_operation_types)]
-    fn operations_should_validate(#[case] operation_with_meta: OperationSigned) {
-        assert!(operation_with_meta.operation().validate().is_ok());
-        assert!(operation_with_meta.validate().is_ok())
+    #[apply(all_signed_operation_types)]
+    fn operations_should_validate(#[case] operation_signed: OperationSigned) {
+        assert!(operation_signed.operation().validate().is_ok());
+        assert!(operation_signed.validate().is_ok())
     }
 
-    #[apply(all_meta_operation_types)]
-    fn trait_methods_should_match(#[case] operation_with_meta: OperationSigned) {
-        let operation = operation_with_meta.operation();
-        assert_eq!(operation_with_meta.fields(), operation.fields());
-        assert_eq!(operation_with_meta.action(), operation.action());
-        assert_eq!(operation_with_meta.version(), operation.version());
-        assert_eq!(operation_with_meta.schema(), operation.schema());
+    #[apply(all_signed_operation_types)]
+    fn trait_methods_should_match(#[case] operation_signed: OperationSigned) {
+        let operation = operation_signed.operation();
+        assert_eq!(operation_signed.fields(), operation.fields());
+        assert_eq!(operation_signed.action(), operation.action());
+        assert_eq!(operation_signed.version(), operation.version());
+        assert_eq!(operation_signed.schema(), operation.schema());
         assert_eq!(
-            operation_with_meta.previous_operations(),
+            operation_signed.previous_operations(),
             operation.previous_operations()
         );
     }
@@ -184,12 +184,12 @@ mod tests {
         operation.has_previous_operations();
     }
 
-    #[apply(all_meta_operation_types)]
-    fn it_hashes(#[case] operation_with_meta: OperationSigned) {
+    #[apply(all_signed_operation_types)]
+    fn it_hashes(#[case] operation_signed: OperationSigned) {
         let mut hash_map = HashMap::new();
         let key_value = "Value identified by a hash".to_string();
-        hash_map.insert(&operation_with_meta, key_value.clone());
-        let key_value_retrieved = hash_map.get(&operation_with_meta).unwrap().to_owned();
+        hash_map.insert(&operation_signed, key_value.clone());
+        let key_value_retrieved = hash_map.get(&operation_signed).unwrap().to_owned();
         assert_eq!(key_value, key_value_retrieved)
     }
 }

@@ -48,7 +48,7 @@ pub enum OperationEncodedError {
     SchemaError(#[from] crate::schema::SchemaError),
 }
 
-/// Error types for methods of `OperationWithMeta` struct.
+/// Error types for methods of `OperationSigned` struct.
 #[derive(Error, Debug)]
 pub enum OperationSignedError {
     /// Invalid encoded entry found.

@@ -50,10 +50,10 @@ pub fn delete_operation() -> Operation {
     )
 }
 
-/// The default CREATE meta-operation.
-pub fn create_meta_operation() -> OperationSigned {
+/// The default signed create operation.
+pub fn create_operation_signed() -> OperationSigned {
     let operation = create_operation();
-    fixtures::meta_operation(
+    fixtures::operation_signed(
         fixtures::entry_signed_encoded(
             fixtures::entry(operation.clone(), fixtures::seq_num(1), None, None),
             fixtures::key_pair(fixtures::private_key()),
@@ -62,10 +62,10 @@ pub fn create_meta_operation() -> OperationSigned {
     )
 }
 
-/// The default UPDATE meta-operation.
-pub fn update_meta_operation() -> OperationSigned {
+/// The default signed update operation.
+pub fn update_operation_signed() -> OperationSigned {
     let operation = update_operation();
-    fixtures::meta_operation(
+    fixtures::operation_signed(
         fixtures::entry_signed_encoded(
             fixtures::entry(operation.clone(), fixtures::seq_num(2), some_hash(), None),
             fixtures::key_pair(fixtures::private_key()),
@@ -74,10 +74,10 @@ pub fn update_meta_operation() -> OperationSigned {
     )
 }
 
-/// The default DELETE meta-operation.
-pub fn delete_meta_operation() -> OperationSigned {
+/// The default signde delete operation.
+pub fn delete_operation_signed() -> OperationSigned {
     let operation = delete_operation();
-    fixtures::meta_operation(
+    fixtures::operation_signed(
         fixtures::entry_signed_encoded(
             fixtures::entry(operation.clone(), fixtures::seq_num(2), some_hash(), None),
             fixtures::key_pair(fixtures::private_key()),

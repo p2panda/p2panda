@@ -15,21 +15,21 @@ pub fn marshall_entries(
 ) -> Result<Vec<Edge>, MaterialisationError> {
     let mut edges = Vec::new();
     for (entry_signed, operation_encoded) in entries {
-        let operation_with_meta = match OperationSigned::new(&entry_signed, &operation_encoded) {
-            Ok(operation_with_meta) => Ok(operation_with_meta),
+        let operation_signed = match OperationSigned::new(&entry_signed, &operation_encoded) {
+            Ok(operation_signed) => Ok(operation_signed),
             Err(err) => Err(MaterialisationError::OperationSignedError(err)),
         }?;
 
-        let (link, id) = match operation_with_meta.previous_operations() {
+        let (link, id) = match operation_signed.previous_operations() {
             Some(previous) => (
                 // Just take the first previous operation as we don't
                 // have a concept of multiple previous_operations
                 // in this DAG implementation (it will be replaced by
                 // `Document` in the near future).
                 Some(previous[0].as_str().to_owned()),
-                operation_with_meta.operation_id().as_str().to_owned(),
+                operation_signed.operation_id().as_str().to_owned(),
             ),
-            None => (None, operation_with_meta.operation_id().as_str().to_owned()),
+            None => (None, operation_signed.operation_id().as_str().to_owned()),
         };
         edges.push((link, id));
     }

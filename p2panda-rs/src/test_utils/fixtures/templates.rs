@@ -86,22 +86,22 @@ fn many_valid_operations(#[case] operation: Operation) {}
 #[template]
 #[rstest]
 #[allow(unused_qualifications)]
-#[case::create_meta_operation(crate::test_utils::fixtures::defaults::create_meta_operation())]
+#[case::create_operation_signed(crate::test_utils::fixtures::defaults::create_operation_signed())]
 #[allow(unused_qualifications)]
-#[case::update_meta_operation(crate::test_utils::fixtures::defaults::update_meta_operation())]
+#[case::update_operation_signed(crate::test_utils::fixtures::defaults::update_operation_signed())]
 #[allow(unused_qualifications)]
-#[case::delete_meta_operation(crate::test_utils::fixtures::defaults::delete_meta_operation())]
-fn all_meta_operation_types(#[case] operation_with_meta: impl OperationWithMeta) {}
+#[case::delete_operation_signed(crate::test_utils::fixtures::defaults::delete_operation_signed())]
+fn all_signed_operation_types(#[case] operation_signed: impl OperationSigned) {}
 
 /// This template contains examples of all structs which implement the `AsOperation` trait.
 #[template]
 #[rstest]
 #[allow(unused_qualifications)]
-#[case::create_meta_operation(crate::test_utils::fixtures::defaults::create_meta_operation())]
+#[case::create_operation_signed(crate::test_utils::fixtures::defaults::create_operation_signed())]
 #[allow(unused_qualifications)]
-#[case::update_meta_operation(crate::test_utils::fixtures::defaults::update_meta_operation())]
+#[case::update_operation_signed(crate::test_utils::fixtures::defaults::update_operation_signed())]
 #[allow(unused_qualifications)]
-#[case::delete_meta_operation(crate::test_utils::fixtures::defaults::delete_meta_operation())]
+#[case::delete_operation_signed(crate::test_utils::fixtures::defaults::delete_operation_signed())]
 #[allow(unused_qualifications)]
 #[case::create_operation(crate::test_utils::fixtures::defaults::create_operation())]
 #[allow(unused_qualifications)]
@@ -118,7 +118,7 @@ fn version_fixtures(#[case] fixture: Fixture) {}
 
 // Here we export the macros for use in the rest of the crate.
 #[allow(unused_imports)]
-pub(crate) use all_meta_operation_types;
+pub(crate) use all_signed_operation_types;
 #[allow(unused_imports)]
 pub(crate) use implements_as_operation;
 #[allow(unused_imports)]

@@ -130,8 +130,8 @@ pub fn delete_operation(schema: Hash, previous_operations: Vec<Hash>) -> Operati
     Operation::new_delete(schema, previous_operations).unwrap()
 }
 
-/// Generate a CREATE meta-operation based on passed encoded entry and operation.
-pub fn meta_operation(
+/// Generate a signed CREATE operation based on passed encoded entry and operation.
+pub fn operation_signed(
     entry_signed_encoded: EntrySigned,
     operation_encoded: OperationEncoded,
 ) -> OperationSigned {
