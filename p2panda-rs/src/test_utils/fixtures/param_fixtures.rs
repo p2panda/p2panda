@@ -13,7 +13,7 @@ use crate::entry::{sign_and_encode, Entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::{
-    Operation, OperationEncoded, OperationFields, OperationValue, OperationSigned,
+    Operation, OperationEncoded, OperationFields, OperationSigned, OperationValue,
 };
 use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
 use crate::test_utils::fixtures::defaults;

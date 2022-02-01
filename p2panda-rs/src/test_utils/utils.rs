@@ -13,7 +13,7 @@ use crate::entry::{Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::{
-    Operation, OperationEncoded, OperationFields, OperationValue, OperationSigned,
+    Operation, OperationEncoded, OperationFields, OperationSigned, OperationValue,
 };
 use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
 

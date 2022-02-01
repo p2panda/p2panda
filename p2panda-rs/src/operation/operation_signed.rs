@@ -6,8 +6,8 @@ use crate::entry::{decode_entry, EntrySigned};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{
-    AsOperation, Operation, OperationAction, OperationEncoded, OperationFields, OperationVersion,
-    OperationSignedError,
+    AsOperation, Operation, OperationAction, OperationEncoded, OperationFields,
+    OperationSignedError, OperationVersion,
 };
 use crate::Validate;
 

@@ -4,7 +4,7 @@
 //! when composing test templates where default fixtures can't be injected in the usual way.
 use crate::entry::Entry;
 use crate::hash::Hash;
-use crate::operation::{Operation, OperationFields, OperationValue, OperationSigned};
+use crate::operation::{Operation, OperationFields, OperationSigned, OperationValue};
 use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
 use crate::test_utils::fixtures;
 
