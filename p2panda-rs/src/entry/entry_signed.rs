@@ -64,6 +64,16 @@ impl EntrySigned {
         hex::decode(&self.0).unwrap()
     }
 
+    /// Returns only those bytes of a signed entry that don't contain the signature.
+    ///
+    /// EntrySigned contains both a signature as well as the bytes that were signed. In order to
+    /// verify the signature you need access to only the bytes that were signed.
+    pub fn unsigned_bytes(&self) -> Vec<u8> {
+        let bytes = self.to_bytes();
+        let signature_offset = bytes.len() - SIGNATURE_SIZE;
+        bytes[..signature_offset].into()
+    }
+
     /// Returns payload size (number of bytes) of total encoded entry.
     pub fn size(&self) -> u64 {
         self.0.len() as u64 / 2
@@ -128,19 +138,18 @@ mod tests {
     use rstest::rstest;
     use std::convert::TryInto;
 
-    use crate::entry::EntrySigned;
     use crate::{
+        entry::EntrySigned,
         identity::KeyPair,
         test_utils::fixtures::{entry_signed_encoded, key_pair},
     };
 
     #[rstest]
     fn test_entry_signed(entry_signed_encoded: EntrySigned, key_pair: KeyPair) {
-        let signature = entry_signed_encoded.signature();
         let verification = KeyPair::verify(
             key_pair.public_key(),
-            &entry_signed_encoded.to_bytes(),
-            &signature
+            &entry_signed_encoded.unsigned_bytes(),
+            &entry_signed_encoded.signature(),
         );
         assert!(verification.is_ok(), "{:?}", verification.unwrap_err())
     }
