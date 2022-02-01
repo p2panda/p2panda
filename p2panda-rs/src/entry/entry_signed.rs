@@ -125,7 +125,31 @@ impl Validate for EntrySigned {
 
 #[cfg(test)]
 mod tests {
-    use super::EntrySigned;
+    use rstest::rstest;
+    use std::convert::TryInto;
+
+    use crate::entry::EntrySigned;
+    use crate::{
+        identity::KeyPair,
+        test_utils::fixtures::{entry_signed_encoded, key_pair},
+    };
+
+    #[rstest]
+    fn test_entry_signed(entry_signed_encoded: EntrySigned, key_pair: KeyPair) {
+        let signature = entry_signed_encoded.signature();
+        let verification = KeyPair::verify(
+            key_pair.public_key(),
+            &entry_signed_encoded.to_bytes(),
+            &signature
+        );
+        assert!(verification.is_ok(), "{:?}", verification.unwrap_err())
+    }
+
+    #[rstest]
+    fn test_size(entry_signed_encoded: EntrySigned) {
+        let size: usize = entry_signed_encoded.size().try_into().unwrap();
+        assert_eq!(size, entry_signed_encoded.to_bytes().len())
+    }
 
     #[test]
     fn validate() {
