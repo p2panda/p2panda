@@ -7,47 +7,50 @@ use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{
     AsOperation, Operation, OperationAction, OperationEncoded, OperationFields, OperationVersion,
-    OperationWithMetaError,
+    OperationSignedError,
 };
 use crate::Validate;
 
-/// Wrapper struct containing an operation, the hash of its entry, and the public key of its
-/// author.
+/// `OperationSigned` represents an operation, a data change, that has been published as part of
+/// an [crate::entry::Entry]. That entry's hash identifies this operation and therefore
+/// is called the *operation id*. This struct also contains the operation itself as a
+/// plain [`Operation`] instance.
 #[derive(Debug, Clone, Eq, PartialEq, StdHash)]
 pub struct OperationSigned {
-    /// The hash of this operations entry.
+    /// The hash of this operation's entry.
     operation_id: Hash,
 
-    /// The public key of the author who published this operation.
+    /// The public key of the [`Author`] who published this operation.
     public_key: Author,
 
-    /// The actual operation this struct wraps.
+    /// The actual [`Operation`] this struct wraps.
     operation: Operation,
 }
 
 impl OperationSigned {
-    /// Returns a new `OperationWithMeta` instance.
+    /// Returns a new `OperationSigned` instance.
     pub fn new(
         entry_encoded: &EntrySigned,
         operation_encoded: &OperationEncoded,
-    ) -> Result<Self, OperationWithMetaError> {
+    ) -> Result<Self, OperationSignedError> {
         let operation = Operation::from(operation_encoded);
 
         // This validates that the entry and operation are correctly matching
         decode_entry(entry_encoded, Some(operation_encoded))?;
 
-        let operation_with_meta = Self {
+        let operation_signed = Self {
             operation_id: entry_encoded.hash(),
             public_key: entry_encoded.author(),
             operation,
         };
 
-        operation_with_meta.validate()?;
+        operation_signed.validate()?;
 
-        Ok(operation_with_meta)
+        Ok(operation_signed)
     }
 
-    /// Returns the identifier for this operation.
+    /// Returns the identifier for this operation, which is equal to the hash of the entry it
+    /// was published with.
     pub fn operation_id(&self) -> &Hash {
         &self.operation_id
     }
@@ -57,7 +60,7 @@ impl OperationSigned {
         &self.public_key
     }
 
-    /// Returns the wrapped operation.
+    /// Returns the wrapped [`Operation`].
     pub fn operation(&self) -> &Operation {
         &self.operation
     }
@@ -91,7 +94,7 @@ impl AsOperation for OperationSigned {
 }
 
 impl Validate for OperationSigned {
-    type Error = OperationWithMetaError;
+    type Error = OperationSignedError;
 
     fn validate(&self) -> Result<(), Self::Error> {
         self.operation.validate()?;
