@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
+use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
 use arrayvec::ArrayVec;
@@ -23,7 +24,7 @@ pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
 /// to the Bamboo specification.
 ///
 /// [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, StdHash)]
 pub struct Hash(String);
 
 impl Hash {
@@ -135,14 +136,9 @@ impl Validate for Hash {
     }
 }
 
-impl PartialEq for Hash {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::convert::{TryFrom, TryInto};
 
     use yasmf_hash::YasmfHash;
@@ -177,6 +173,16 @@ mod tests {
         let yasmf_hash = Into::<YasmfHash<Blake3ArrayVec>>::into(hash.to_owned());
         let hash_restored = TryInto::<Hash>::try_into(yasmf_hash).unwrap();
         assert_eq!(hash, hash_restored);
+    }
+
+    #[test]
+    fn it_hashes() {
+        let hash = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let mut hash_map = HashMap::new();
+        let key_value = "Value identified by a hash".to_string();
+        hash_map.insert(&hash, key_value.clone());
+        let key_value_retrieved = hash_map.get(&hash).unwrap().to_owned();
+        assert_eq!(key_value, key_value_retrieved)
     }
 
     #[test]

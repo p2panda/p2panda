@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
+use std::hash::Hash as StdHash;
 
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +12,7 @@ use crate::schema::{validate_schema, OPERATION_SCHEMA};
 use crate::Validate;
 
 /// Operation represented in hex encoded CBOR format.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, StdHash)]
 pub struct OperationEncoded(String);
 
 impl OperationEncoded {
