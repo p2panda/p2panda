@@ -90,14 +90,6 @@ impl AsOperation for OperationWithMeta {
     }
 }
 
-impl PartialEq for OperationWithMeta {
-    fn eq(&self, other: &Self) -> bool {
-        self.operation().to_cbor() == other.operation().to_cbor()
-    }
-}
-
-impl Eq for OperationWithMeta {}
-
 impl Validate for OperationWithMeta {
     type Error = OperationWithMetaError;
 
