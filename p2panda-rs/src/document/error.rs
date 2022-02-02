@@ -19,12 +19,24 @@ pub enum DocumentBuilderError {
     SchemaError(#[from] crate::schema::SchemaError),
 
     /// All operation in a document must follow the same schema.
-    #[error("Operation {0} contains a schema not mathing this document.")]
-    OperationSchemaNotMatching(String),
+    #[error("All operations in a document must follow the same schema")]
+    OperationSchemaNotMatching,
+
+    /// To resolve a document the schema must be set.
+    #[error("Schema must be set")]
+    SchemaMustBeSet,
 
     /// An operation with invalid id or previous operations was added to the document.
     #[error("Operation {0} cannot be connected to the document graph")]
     InvalidOperationLink(String),
+
+    /// Handle errors when sorting the graph.
+    #[error(transparent)]
+    GraphSortingError(#[from] crate::materialiser::GraphError),
+
+    /// Handle errors from validating CBOR schemas.
+    #[error(transparent)]
+    InstanceError(#[from] crate::instance::InstanceError),
 }
 
 /// Error types for methods of `Document` struct.

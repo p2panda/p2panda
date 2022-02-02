@@ -2,133 +2,33 @@
 
 use std::convert::TryFrom;
 
-// // Now we use our own graph for topo sorting :-)
-// use incremental_topo::IncrementalTopo;
-
-use crate::document::{DocumentBuilderError, DocumentError};
-use crate::hash::Hash;
-use crate::identity::Author;
+use crate::document::DocumentBuilderError;
 use crate::instance::Instance;
 use crate::materialiser::Graph;
 use crate::operation::{AsOperation, OperationWithMeta};
 
-/// An iterator struct for Document.
-#[derive(Debug)]
-pub struct DocumentIter(Vec<OperationWithMeta>);
-
 /// A resolvable data type made up of a collection of causally linked operations.
+///
+/// Implements the `Resolve` trait for every different schema we support.
 #[derive(Debug, Clone)]
 pub struct Document {
-    /// The create operation which is the root of this document.
-    create_operation: OperationWithMeta,
-    /// A causal graph of this documents operations which can be topologically sorted.
-    graph: Graph<OperationWithMeta>,
-}
-
-impl Document {
-    /// The hash id of this document.
-    pub fn id(&self) -> Hash {
-        self.create_operation.operation_id().to_owned()
-    }
-
-    /// The hash id of this documents schema.
-    pub fn schema(&self) -> Hash {
-        self.create_operation.schema()
-    }
-
-    /// The author of this document.
-    pub fn author(&self) -> Author {
-        self.create_operation.public_key().to_owned()
-    }
-
-    /// Returns an iterator over all operations in this document ordered topologically.
-    pub fn iter(&self) -> Result<DocumentIter, DocumentError> {
-        let sorted = match self.graph.sort() {
-            Ok(operations) => Ok(operations.into_iter().rev().collect()),
-            Err(e) => Err(DocumentError::GraphSortingError(e)),
-        }?;
-
-        Ok(DocumentIter(sorted))
-    }
-
-    /// Sort the graph topologically, then reduce the linearised operations into a single
-    /// `Instance`.
-    pub fn resolve(&self) -> Result<Instance, DocumentError> {
-        let mut document_iter = self.iter()?;
-
-        let create_message = document_iter.next().unwrap();
-        let mut instance = Instance::try_from(create_message)?;
-
-        document_iter.try_for_each(|op| instance.apply_update(op))?;
-
-        Ok(instance)
-    }
-}
-
-impl Iterator for DocumentIter {
-    type Item = OperationWithMeta;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.pop()
-    }
-}
-
-/// A struct for building documents.
-#[derive(Debug)]
-pub struct DocumentBuilder {
-    /// An unsorted collection of operations which are associated with a particular document id.
+    view: Instance,
     operations: Vec<OperationWithMeta>,
 }
 
-impl DocumentBuilder {
-    /// Instantiate a new DocumentBuilder with a collection of operations.
-    pub fn new(operations: Vec<OperationWithMeta>) -> Self {
-        Self { operations }
-    }
-
-    /// Get all operations for this document.
-    pub fn operations(&self) -> Vec<OperationWithMeta> {
-        self.operations.clone()
-    }
-
-    /// Get an iterator over all operations in this document.
-    pub fn operations_iter(&self) -> std::vec::IntoIter<OperationWithMeta> {
-        self.operations.clone().into_iter()
-    }
-
-    /// Build the document.
-    pub fn build(self) -> Result<Document, DocumentBuilderError> {
-        // find create message.
-        let collect_create_operation: Vec<OperationWithMeta> =
-            self.operations_iter().filter(|op| op.is_create()).collect();
-
-        // Check we have only one create operation in the document.
-        if collect_create_operation.len() > 1 {
-            return Err(DocumentBuilderError::MoreThanOneCreateOperation);
-        } else if collect_create_operation.is_empty() {
-            return Err(DocumentBuilderError::NoCreateOperation);
-        }
-
-        let create_operation = &collect_create_operation[0];
-
-        let document_schema = create_operation.schema();
-
+impl Document {
+    /// Static method for resolving this document into a single view.
+    fn resolve_view(operations: &[OperationWithMeta]) -> Result<Instance, DocumentBuilderError> {
         // Instantiate graph and operations map.
         let mut graph = Graph::new();
 
         // Add all operations to the graph.
-        for operation in self.operations() {
-            // Validate all operations refer to the same document schema.
-            if operation.schema() != document_schema {
-                return Err(DocumentBuilderError::OperationSchemaNotMatching(
-                    operation.operation_id().as_str().into(),
-                ));
-            }
+        for operation in operations {
             graph.add_node(operation.operation_id().as_str(), operation.clone());
         }
 
         // Add links between operations in the graph.
-        for operation in self.operations() {
+        for operation in operations {
             if let Some(previous_operations) = operation.previous_operations() {
                 for previous in previous_operations {
                     let success =
@@ -142,10 +42,102 @@ impl DocumentBuilder {
             }
         }
 
+        // Traverse the graph topologically and return an ordered list of operations.
+        let mut sorted_operations = graph.sort()?.into_iter();
+
+        // Instantiate an initial docuent view from the documents create operation.
+        //
+        // We can unwrap here because we already verified the operations during the document building
+        // which means we know there is at least one CREATE operation.
+        let mut document_view = Instance::try_from(sorted_operations.next().unwrap())?;
+
+        // Apply every update in order to arrive at the current view.
+        sorted_operations.try_for_each(|op| document_view.apply_update(op))?;
+
+        Ok(document_view)
+    }
+}
+
+impl Document {
+    /// Get the view of this document.
+    pub fn view(&self) -> &Instance {
+        &self.view
+    }
+
+    /// Get the operations contained in this document.
+    fn operations(&self) -> &Vec<OperationWithMeta> {
+        &self.operations
+    }
+
+    /// Sort the document graph topologically, then reduce the linearised operations into a single
+    /// `Instance`.
+    fn resolve(&self) -> Result<Instance, DocumentBuilderError> {
+        Self::resolve_view(self.operations())
+    }
+}
+
+/// A struct for building documents.
+#[derive(Debug, Clone)]
+pub struct DocumentBuilder {
+    /// An unsorted collection of operations which are associated with a particular document id.
+    operations: Vec<OperationWithMeta>,
+}
+
+impl DocumentBuilder {
+    /// Instantiate a new DocumentBuilder with a collection of operations.
+    pub fn new(operations: Vec<OperationWithMeta>) -> DocumentBuilder {
+        Self { operations }
+    }
+
+    /// Get all operations for this document.
+    pub fn operations(&self) -> Vec<OperationWithMeta> {
+        self.operations.clone()
+    }
+
+    /// Build document. This already resolves the current document view.
+    pub fn build(&self) -> Result<Document, DocumentBuilderError> {
+        // Validate the operation collection contained in this document.
+        self.validate()?;
+
+        let view = Document::resolve_view(&self.operations)?;
+
         Ok(Document {
-            create_operation: create_operation.to_owned(),
-            graph,
+            view,
+            operations: self.operations(),
         })
+    }
+
+    /// Validate the collection of operations which are contained in this document.
+    /// - there should be exactly one CREATE operation.
+    /// - all operations should follow the same schema.
+    pub fn validate(&self) -> Result<(), DocumentBuilderError> {
+        // find create message.
+        let mut collect_create_operation: Vec<OperationWithMeta> = self
+            .operations()
+            .into_iter()
+            .filter(|op| op.is_create())
+            .collect();
+
+        // Check we have only one create operation in the document.
+        let create_operation = match collect_create_operation.len() {
+            0 => Err(DocumentBuilderError::NoCreateOperation),
+            1 => Ok(collect_create_operation.pop().unwrap()),
+            _ => Err(DocumentBuilderError::MoreThanOneCreateOperation),
+        }?;
+
+        // Get the she document schema
+        let document_schema = create_operation.schema();
+
+        // Check all operations match the document schema
+        let schema_error = self
+            .operations()
+            .iter()
+            .any(|operation| operation.schema() != document_schema);
+
+        if schema_error {
+            return Err(DocumentBuilderError::OperationSchemaNotMatching);
+        }
+        Ok(())
     }
 }
 
@@ -263,9 +255,9 @@ mod tests {
             })
             .collect();
 
-        let document = DocumentBuilder::new(operations.clone()).build().unwrap();
+        let document = DocumentBuilder::new(operations.clone()).build();
 
-        let instance = document.resolve().unwrap();
+        assert!(document.is_ok());
 
         let mut exp_result = BTreeMap::new();
         exp_result.insert(
@@ -273,8 +265,11 @@ mod tests {
             OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
         );
 
-        // Document should resolve to expected value
-        assert_eq!(instance, exp_result.into());
+        // // Document should resolve to expected value
+        assert_eq!(
+            document.unwrap().resolve().unwrap().get("name"),
+            exp_result.get("name")
+        );
 
         // Multiple replicas receiving operations in different orders should resolve to same value.
 
@@ -314,8 +309,8 @@ mod tests {
         .build()
         .unwrap();
 
-        assert_eq!(replica_1.resolve().unwrap(), replica_2.resolve().unwrap());
-        assert_eq!(replica_1.resolve().unwrap(), replica_3.resolve().unwrap());
+        assert_eq!(replica_1.view().get("name"), replica_2.view().get("name"));
+        assert_eq!(replica_1.view().get("name"), replica_3.view().get("name"));
     }
 
     #[rstest]
@@ -363,7 +358,6 @@ mod tests {
         )
         .unwrap()];
 
-        // Building a Document without a create operation should fail.
         assert!(DocumentBuilder::new(operations).build().is_err());
     }
 }

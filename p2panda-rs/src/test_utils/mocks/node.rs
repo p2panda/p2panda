@@ -483,7 +483,7 @@ impl Node {
             })
             .collect();
         let document = DocumentBuilder::new(operations).build().unwrap();
-        document.resolve().unwrap()
+        document.view().to_owned()
     }
 
     /// Get all documents in their resolved state from the node.

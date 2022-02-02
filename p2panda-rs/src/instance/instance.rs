@@ -9,7 +9,7 @@ use crate::instance::error::InstanceError;
 use crate::operation::{AsOperation, Operation, OperationValue, OperationWithMeta};
 
 /// The materialised view of a reduced collection of `Operations` describing a document.
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct Instance(BTreeMap<String, OperationValue>);
 
 impl Instance {
