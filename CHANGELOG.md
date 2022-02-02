@@ -9,6 +9,12 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+## [0.3.0]
+
+Released on 2022-02-02: :package: `p2panda-js`
+
+Not released yet, due to unpublished dependencies: :package: `p2panda-rs`
+
 ### Added
 
 - `SecureGroup` for key negotiation in groups and message protection [#130](https://github.com/p2panda/p2panda/pull/130) `rs` 🥞
@@ -115,7 +121,8 @@ Released on 2021-01-18: :package: `p2panda-js` and 2021-01-28: :package: `p2pand
 - JavaScript library export with WebAssembly running in browsers and NodeJS. [#21](https://github.com/p2panda/p2panda/pull/21) `js`
 - Ed25519 key pair generation. [#4](https://github.com/p2panda/p2panda/pull/4) `rs`
 
-[unreleased]: https://github.com/p2panda/p2panda/compare/v0.2.1...HEAD
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/p2panda/p2panda/releases/tag/v0.3.0
 [0.2.1]: https://github.com/p2panda/p2panda/releases/tag/v0.2.1
 [0.2.0]: https://github.com/p2panda/p2panda/releases/tag/v0.2.0
 [0.1.0]: https://github.com/p2panda/p2panda/releases/tag/v0.1.0
