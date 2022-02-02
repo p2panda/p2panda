@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+## Changed
+
+- Derive `Ord` and `PartialOrd` for `LogId` [#201](https://github.com/p2panda/p2panda/pull/201)
+
 ## [0.3.0]
 
 Released on 2022-02-02: :package: `p2panda-js`
