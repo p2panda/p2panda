@@ -4,6 +4,7 @@ use std::convert::TryFrom;
 
 use crate::document::DocumentBuilderError;
 use crate::hash::Hash;
+use crate::identity::Author;
 use crate::instance::Instance;
 use crate::materialiser::Graph;
 use crate::operation::{AsOperation, OperationWithMeta};
@@ -14,20 +15,39 @@ use crate::operation::{AsOperation, OperationWithMeta};
 #[derive(Debug, Clone)]
 pub struct Document {
     id: Hash,
+    author: Author,
     schema: Hash,
     view: Instance,
+    meta: DocumentMeta,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct DocumentMeta {
+    deleted: bool,
+    edited: bool,
     operations: Vec<OperationWithMeta>,
+    graph_tips: Vec<Hash>,
 }
 
 impl Document {
     /// Static method for resolving this document into a single view.
-    fn resolve_view(operations: &[OperationWithMeta]) -> Result<Instance, DocumentBuilderError> {
+    fn resolve_view(
+        operations: &[OperationWithMeta],
+        meta: &mut DocumentMeta,
+    ) -> Result<Instance, DocumentBuilderError> {
         // Instantiate graph and operations map.
         let mut graph = Graph::new();
+
+        if operations.len() > 1 {
+            meta.edited = true
+        }
 
         // Add all operations to the graph.
         for operation in operations {
             graph.add_node(operation.operation_id().as_str(), operation.clone());
+            if operation.is_delete() {
+                meta.deleted = true
+            }
         }
 
         // Add links between operations in the graph.
@@ -62,19 +82,14 @@ impl Document {
 }
 
 impl Document {
-    /// Get the view of this document.
-    pub fn view(&self) -> &Instance {
-        &self.view
-    }
-
-    /// Get the operations contianed in this document.
-    pub fn operations(&self) -> &Vec<OperationWithMeta> {
-        &self.operations
-    }
-
     /// Get the document id.
     pub fn id(&self) -> &Hash {
         &self.id
+    }
+
+    /// Get the document author.
+    pub fn author(&self) -> &Author {
+        &self.author
     }
 
     /// Get the document schema.
@@ -82,7 +97,30 @@ impl Document {
         &self.schema
     }
 
-    // More nice methods....
+    /// Get the view of this document.
+    pub fn view(&self) -> &Instance {
+        &self.view
+    }
+
+    /// Get the operations contianed in this document.
+    pub fn operations(&self) -> &Vec<OperationWithMeta> {
+        &self.meta.operations
+    }
+
+    /// Get the documents graph tips.
+    pub fn graph_tips(&self) -> &Vec<Hash> {
+        &self.meta.graph_tips
+    }
+
+    /// Returns true if this document has applied an UPDATE operation.
+    pub fn is_edited(&self) -> bool {
+        self.meta.edited
+    }
+
+    /// Returns true if this document has processed a DELETE operation.
+    pub fn is_deleted(&self) -> bool {
+        self.meta.deleted
+    }
 }
 
 /// A struct for building documents.
@@ -103,24 +141,11 @@ impl DocumentBuilder {
     }
 
     /// Build document. This already resolves the current document view.
-    pub fn build(&self) -> Result<Document, DocumentBuilderError> {
-        // Validate the operation collection contained in this document.
-        let (id, schema) = self.validate()?;
-
-        let view = Document::resolve_view(&self.operations)?;
-
-        Ok(Document {
-            id,
-            schema,
-            view,
-            operations: self.operations(),
-        })
-    }
-
     /// Validate the collection of operations which are contained in this document.
     /// - there should be exactly one CREATE operation.
     /// - all operations should follow the same schema.
-    pub fn validate(&self) -> Result<(Hash, Hash), DocumentBuilderError> {
+
+    pub fn build(&self) -> Result<Document, DocumentBuilderError> {
         // find create message.
         let mut collect_create_operation: Vec<OperationWithMeta> = self
             .operations()
@@ -135,22 +160,38 @@ impl DocumentBuilder {
             _ => Err(DocumentBuilderError::MoreThanOneCreateOperation),
         }?;
 
-        // Get the she document schema
-        let document_schema = create_operation.schema();
+        // Get the document schema
+        let schema = create_operation.schema();
+
+        // Get the document author (or rather, the public key of the author who created this document)
+        let author = create_operation.public_key().to_owned();
 
         // Check all operations match the document schema
         let schema_error = self
             .operations()
             .iter()
-            .any(|operation| operation.schema() != document_schema);
+            .any(|operation| operation.schema() != schema);
 
         if schema_error {
             return Err(DocumentBuilderError::OperationSchemaNotMatching);
         }
 
-        let document_id = create_operation.operation_id().to_owned();
+        let id = create_operation.operation_id().to_owned();
 
-        Ok((document_id, document_schema))
+        let mut meta = DocumentMeta {
+            operations: self.operations(),
+            ..Default::default()
+        };
+
+        let view = Document::resolve_view(&self.operations, &mut meta)?;
+
+        Ok(Document {
+            id,
+            schema,
+            author,
+            view,
+            meta,
+        })
     }
 }
 
