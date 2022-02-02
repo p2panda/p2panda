@@ -64,16 +64,7 @@ impl Document {
         &self.view
     }
 
-    /// Get the operations contained in this document.
-    fn operations(&self) -> &Vec<OperationWithMeta> {
-        &self.operations
-    }
-
-    /// Sort the document graph topologically, then reduce the linearised operations into a single
-    /// `Instance`.
-    fn resolve(&self) -> Result<Instance, DocumentBuilderError> {
-        Self::resolve_view(self.operations())
-    }
+    // More nice methods....
 }
 
 /// A struct for building documents.
@@ -266,10 +257,7 @@ mod tests {
         );
 
         // // Document should resolve to expected value
-        assert_eq!(
-            document.unwrap().resolve().unwrap().get("name"),
-            exp_result.get("name")
-        );
+        assert_eq!(document.unwrap().view().get("name"), exp_result.get("name"));
 
         // Multiple replicas receiving operations in different orders should resolve to same value.
 
