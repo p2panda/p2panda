@@ -3,6 +3,7 @@
 use std::convert::TryFrom;
 
 use crate::document::DocumentBuilderError;
+use crate::hash::Hash;
 use crate::instance::Instance;
 use crate::materialiser::Graph;
 use crate::operation::{AsOperation, OperationWithMeta};
@@ -12,6 +13,8 @@ use crate::operation::{AsOperation, OperationWithMeta};
 /// Implements the `Resolve` trait for every different schema we support.
 #[derive(Debug, Clone)]
 pub struct Document {
+    id: Hash,
+    schema: Hash,
     view: Instance,
     operations: Vec<OperationWithMeta>,
 }
@@ -64,13 +67,27 @@ impl Document {
         &self.view
     }
 
+    /// Get the operations contianed in this document.
+    pub fn operations(&self) -> &Vec<OperationWithMeta> {
+        &self.operations
+    }
+
+    /// Get the document id.
+    pub fn id(&self) -> &Hash {
+        &self.id
+    }
+
+    /// Get the document schema.
+    pub fn schema(&self) -> &Hash {
+        &self.schema
+    }
+
     // More nice methods....
 }
 
 /// A struct for building documents.
 #[derive(Debug, Clone)]
 pub struct DocumentBuilder {
-    /// An unsorted collection of operations which are associated with a particular document id.
     operations: Vec<OperationWithMeta>,
 }
 
@@ -88,11 +105,13 @@ impl DocumentBuilder {
     /// Build document. This already resolves the current document view.
     pub fn build(&self) -> Result<Document, DocumentBuilderError> {
         // Validate the operation collection contained in this document.
-        self.validate()?;
+        let (id, schema) = self.validate()?;
 
         let view = Document::resolve_view(&self.operations)?;
 
         Ok(Document {
+            id,
+            schema,
             view,
             operations: self.operations(),
         })
@@ -101,7 +120,7 @@ impl DocumentBuilder {
     /// Validate the collection of operations which are contained in this document.
     /// - there should be exactly one CREATE operation.
     /// - all operations should follow the same schema.
-    pub fn validate(&self) -> Result<(), DocumentBuilderError> {
+    pub fn validate(&self) -> Result<(Hash, Hash), DocumentBuilderError> {
         // find create message.
         let mut collect_create_operation: Vec<OperationWithMeta> = self
             .operations()
@@ -128,7 +147,10 @@ impl DocumentBuilder {
         if schema_error {
             return Err(DocumentBuilderError::OperationSchemaNotMatching);
         }
-        Ok(())
+
+        let document_id = create_operation.operation_id().to_owned();
+
+        Ok((document_id, document_schema))
     }
 }
 
