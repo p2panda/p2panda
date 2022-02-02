@@ -13,6 +13,10 @@ Highlights are marked with a pancake 🥞
 
 - Derive `Ord` and `PartialOrd` for `LogId` [#201](https://github.com/p2panda/p2panda/pull/201)
 
+## Fixed
+
+- Fix determination of field types in p2panda-js [#202](https://github.com/p2panda/p2panda/pull/202)
+
 ## [0.3.0]
 
 Released on 2022-02-02: :package: `p2panda-js`
