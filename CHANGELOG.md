@@ -9,7 +9,7 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
-## Changed
+## Added
 
 - Derive `Ord` and `PartialOrd` for `LogId` [#201](https://github.com/p2panda/p2panda/pull/201)
 
