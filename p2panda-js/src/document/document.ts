@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import debug from 'debug';
+
 import wasm from '~/wasm';
 import { getOperationFields } from '~/operation';
 import { marshallRequestFields } from '~/utils';
 import { signPublishEntry } from '~/entry';
-import debug from 'debug';
 
 import type { Context } from '~/session';
 import type { Fields } from '~/types';
