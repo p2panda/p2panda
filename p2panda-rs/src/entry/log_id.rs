@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::entry::error::LogIdError;
 
 /// Authors can write entries to multiple logs identified by log ids.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, PartialOrd, Serialize, StdHash)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, StdHash)]
 pub struct LogId(u64);
 
 impl LogId {
