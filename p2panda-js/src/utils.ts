@@ -15,18 +15,25 @@ const FIELD_TYPE_MAPPING = {
  * While we don't have proper schema support in the node this function just
  * guesses the schema's field type from a supplied fields record.
  *
+ * Returns null when a key has no value.
+ *
  * @param fields assumed to be correct operation fields for an instance
- * @param field name of the field for which to look up the type
+ * @param key name of the field for which to look up the type
  * @returns field type
  */
 const getFieldType = (
   fields: Fields,
-  field: string,
-): 'string' | 'bool' | 'int' => {
-  const type = typeof fields[field];
+  key: string,
+): 'string' | 'bool' | 'int' | null => {
+  const type = typeof fields[key];
+
+  if (type === 'undefined') {
+    // Return null if a key has no value
+    return null;
+  }
 
   if (!Object.keys(FIELD_TYPE_MAPPING).includes(type)) {
-    throw new Error(`Unsupported field type: ${typeof field}`);
+    throw new Error(`Unsupported field type: ${type}`);
   }
 
   // @ts-expect-error we have made sure that `type` is a key of `mapping`
@@ -66,6 +73,9 @@ export const marshallRequestFields = (fields: Fields): FieldsTagged => {
         break;
       case 'bool':
         map.set(key, { value: value as boolean, type: 'bool' });
+        break;
+      case null:
+        // Skip fields that have no value
         break;
       default:
         map.set(key, { value: value as string, type: 'str' });
