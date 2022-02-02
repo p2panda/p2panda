@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import debug from 'debug';
+
 import wasm from '~/wasm';
 import { getOperationFields } from '~/operation';
 import { marshallRequestFields } from '~/utils';
@@ -7,6 +9,8 @@ import { signPublishEntry } from '~/entry';
 
 import type { Context } from '~/session';
 import type { Fields } from '~/types';
+
+const log = debug('p2panda-js:document');
 
 /**
  * Signs and publishes a CREATE operation for the given application data and
@@ -19,6 +23,8 @@ export const createDocument = async (
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
   const { encodeCreateOperation } = await wasm;
+
+  log(`Creating document`, fields);
 
   const fieldsTagged = marshallRequestFields(fields);
   const operationFields = await getOperationFields(fieldsTagged);
@@ -46,6 +52,12 @@ export const updateDocument = async (
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
   const { encodeUpdateOperation } = await wasm;
+
+  log(`Updating document`, {
+    document: documentId,
+    previousOperations,
+    fields,
+  });
 
   const fieldsTagged = marshallRequestFields(fields);
   const operationFields = await getOperationFields(fieldsTagged);
@@ -80,6 +92,8 @@ export const deleteDocument = async (
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
   const { encodeDeleteOperation } = await wasm;
+
+  log('Deleting document', { document: documentId, previousOperations });
 
   const encodedOperation = encodeDeleteOperation(schema, previousOperations);
 
