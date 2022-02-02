@@ -33,6 +33,7 @@ Highlights are marked with a pancake 🥞
 - Change to new `rustdoc::missing_doc_code_examples` linter name [#168](https://github.com/p2panda/p2panda/pull/168) `rs`
 - Update Rust dependencies [#171](https://github.com/p2panda/p2panda/pull/171) `rs`
 - Convert JavaScript configuration files to TypeScript or JSON [#172](https://github.com/p2panda/p2panda/pull/172) `js`
+- Implement `Hash`, `Eq` and `PartialEq` traits for several core data types [#178](https://github.com/p2panda/p2panda/pull/178) `rs`
 - Use `ciborium` for cbor de/serialization [#180](https://github.com/p2panda/p2panda/pull/180) `rs`
 - Break `wasm` module down into sub-files, add wasm target tests [#184](https://github.com/p2panda/p2panda/pull/184) `rs`
 - Changes to `mocks` module in `test_utils` [#181](https://github.com/p2panda/p2panda/pull/181) `rs`
@@ -46,6 +47,7 @@ Highlights are marked with a pancake 🥞
 - Clean up documentation and update new terminology [#170](https://github.com/p2panda/p2panda/pull/170) `rs` `js`
 - Improve CI, make it faster, add code coverage report [#173](https://github.com/p2panda/p2panda/pull/173) `rs` `js`
 - Update Codecov GH action [#176](https://github.com/p2panda/p2panda/pull/176) `rs`
+- Add JavaScript coverage reporting [#194](https://github.com/p2panda/p2panda/pull/194) `js`
 
 ## [0.2.1]
 

@@ -2,8 +2,8 @@
 
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
+use std::hash::{Hash as StdHash, Hasher};
 
-use ciborium;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -16,7 +16,7 @@ use crate::Validate;
 /// Operations contain the actual data of applications in the p2panda network and will be stored
 /// for an indefinite time on different machines. To allow an upgrade path in the future and
 /// support backwards compatibility for old data we can use this version number.
-#[derive(Clone, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[serde(untagged)]
 #[repr(u8)]
 pub enum OperationVersion {
@@ -30,7 +30,7 @@ impl Copy for OperationVersion {}
 ///
 /// An action defines the operation format and if this operation creates, updates or deletes a data
 /// document.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum OperationAction {
     /// Operation creates a new document.
     Create,
@@ -248,7 +248,7 @@ impl OperationFields {
 /// flowchart LR
 ///     A --- B --- C --- D --- E;
 /// ```
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Operation {
     /// Describes if this operation creates, updates or deletes data.
@@ -436,6 +436,20 @@ impl From<&OperationEncoded> for Operation {
     }
 }
 
+impl PartialEq for Operation {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_cbor() == other.to_cbor()
+    }
+}
+
+impl Eq for Operation {}
+
+impl StdHash for Operation {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.to_cbor().hash(state);
+    }
+}
+
 impl Validate for Operation {
     type Error = OperationError;
 
@@ -466,6 +480,7 @@ impl Validate for Operation {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::convert::TryFrom;
 
     use rstest::rstest;
@@ -664,5 +679,14 @@ mod tests {
     #[apply(many_valid_operations)]
     fn many_valid_operations_should_encode(#[case] operation: Operation) {
         assert!(OperationEncoded::try_from(&operation).is_ok())
+    }
+
+    #[apply(many_valid_operations)]
+    fn it_hashes(#[case] operation: Operation) {
+        let mut hash_map = HashMap::new();
+        let key_value = "Value identified by a hash".to_string();
+        hash_map.insert(&operation, key_value.clone());
+        let key_value_retrieved = hash_map.get(&operation).unwrap().to_owned();
+        assert_eq!(key_value, key_value_retrieved)
     }
 }

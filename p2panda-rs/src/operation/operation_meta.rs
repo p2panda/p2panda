@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::hash::Hash as StdHash;
+
 use crate::entry::{decode_entry, EntrySigned};
 use crate::hash::Hash;
 use crate::identity::Author;
@@ -11,7 +13,7 @@ use crate::Validate;
 
 /// Wrapper struct containing an operation, the hash of its entry, and the public key of its
 /// author.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, StdHash)]
 pub struct OperationWithMeta {
     /// The hash of this operations entry.
     operation_id: Hash,
@@ -110,6 +112,8 @@ impl Validate for OperationWithMeta {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use rstest::rstest;
     use rstest_reuse::apply;
 
@@ -183,5 +187,14 @@ mod tests {
         operation.previous_operations();
         operation.has_fields();
         operation.has_previous_operations();
+    }
+
+    #[apply(all_meta_operation_types)]
+    fn it_hashes(#[case] operation_with_meta: OperationWithMeta) {
+        let mut hash_map = HashMap::new();
+        let key_value = "Value identified by a hash".to_string();
+        hash_map.insert(&operation_with_meta, key_value.clone());
+        let key_value_retrieved = hash_map.get(&operation_with_meta).unwrap().to_owned();
+        assert_eq!(key_value, key_value_retrieved)
     }
 }

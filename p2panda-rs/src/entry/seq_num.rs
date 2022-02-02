@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
+use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
 use bamboo_rs_core_ed25519_yasmf::lipmaa;
@@ -13,7 +14,7 @@ use crate::Validate;
 pub const FIRST_SEQ_NUM: u64 = 1;
 
 /// Sequence number describing the position of an entry in its append-only log.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Eq, PartialEq, StdHash, Deserialize)]
 pub struct SeqNum(u64);
 
 impl SeqNum {
@@ -85,8 +86,6 @@ impl Default for SeqNum {
     }
 }
 
-impl Copy for SeqNum {}
-
 impl Validate for SeqNum {
     type Error = SeqNumError;
 
@@ -105,12 +104,6 @@ impl Iterator for SeqNum {
 
     fn next(&mut self) -> Option<Self::Item> {
         Some(Self(self.0 + 1))
-    }
-}
-
-impl PartialEq for SeqNum {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
     }
 }
 
