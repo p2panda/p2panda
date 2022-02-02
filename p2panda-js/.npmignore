@@ -1,11 +1,11 @@
 *.tgz
 .eslintignore
-.eslintrc.js
+.eslintrc.json
 .nvmrc
 .prettierignore
-.prettierrc.js
+.prettierrc.json
 /wasm
-jest.config.js
+jest.config.ts
 openrpc.json
 src
 test
