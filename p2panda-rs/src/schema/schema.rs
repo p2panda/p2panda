@@ -12,9 +12,9 @@ use cddl::validate_cbor_from_slice;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
 
-use crate::hash::Hash;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::instance::{Instance, InstanceError};
+use crate::document::{DocumentView, DocumentViewError};
+use crate::hash::Hash;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::operation::{AsOperation, Operation, OperationFields, OperationValue};
 use crate::schema::SchemaError;
@@ -254,16 +254,19 @@ impl Schema {
         }
     }
 
-    /// Returns a new `Instance` converted from CREATE `Operation` and validated against it's
+    /// Returns a new `DocumentView` converted from CREATE `Operation` and validated against it's
     /// schema definition.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn instance_from_create(&self, operation: Operation) -> Result<Instance, InstanceError> {
+    pub fn instance_from_create(
+        &self,
+        operation: Operation,
+    ) -> Result<DocumentView, DocumentViewError> {
         match self.validate_operation_fields(&operation.fields().unwrap()) {
             Ok(_) => Ok(()),
-            Err(err) => Err(InstanceError::ValidationError(err)),
+            Err(err) => Err(DocumentViewError::ValidationError(err)),
         }?;
 
-        Instance::try_from(operation)
+        DocumentView::try_from(operation)
     }
 }
 

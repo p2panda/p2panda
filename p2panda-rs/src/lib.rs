@@ -62,10 +62,9 @@ use rstest_reuse;
 
 pub mod document;
 pub mod entry;
+pub mod graph;
 pub mod hash;
 pub mod identity;
-pub mod instance;
-pub mod materialiser;
 pub mod operation;
 pub mod schema;
 pub mod secret_group;

@@ -2,11 +2,10 @@
 
 use std::convert::TryFrom;
 
-use crate::document::DocumentBuilderError;
+use crate::document::{DocumentBuilderError, DocumentView};
+use crate::graph::Graph;
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::instance::Instance;
-use crate::materialiser::Graph;
 use crate::operation::{AsOperation, OperationWithMeta};
 
 /// A resolvable data type made up of a collection of causally linked operations.
@@ -17,7 +16,7 @@ pub struct Document {
     id: Hash,
     author: Author,
     schema: Hash,
-    view: Instance,
+    view: DocumentView,
     meta: DocumentMeta,
 }
 
@@ -35,7 +34,7 @@ impl Document {
     fn resolve_view(
         operations: &[OperationWithMeta],
         meta: &mut DocumentMeta,
-    ) -> Result<Instance, DocumentBuilderError> {
+    ) -> Result<DocumentView, DocumentBuilderError> {
         // Instantiate graph and operations map.
         let mut graph = Graph::new();
 
@@ -74,7 +73,7 @@ impl Document {
         // We can unwrap here because we already verified the operations during the document building
         // which means we know there is at least one CREATE operation.
         let mut operations_iter = sorted_graph_data.sorted().into_iter();
-        let mut document_view = Instance::try_from(operations_iter.next().unwrap())?;
+        let mut document_view = DocumentView::try_from(operations_iter.next().unwrap())?;
 
         // Apply every update in order to arrive at the current view.
         operations_iter.try_for_each(|op| document_view.apply_update(op))?;
@@ -114,7 +113,7 @@ impl Document {
     }
 
     /// Get the view of this document.
-    pub fn view(&self) -> &Instance {
+    pub fn view(&self) -> &DocumentView {
         &self.view
     }
 

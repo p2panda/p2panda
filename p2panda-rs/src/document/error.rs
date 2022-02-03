@@ -32,11 +32,11 @@ pub enum DocumentBuilderError {
 
     /// Handle errors when sorting the graph.
     #[error(transparent)]
-    GraphSortingError(#[from] crate::materialiser::GraphError),
+    GraphSortingError(#[from] crate::graph::GraphError),
 
     /// Handle errors from validating CBOR schemas.
     #[error(transparent)]
-    InstanceError(#[from] crate::instance::InstanceError),
+    DocumentViewError(#[from] DocumentViewError),
 }
 
 /// Error types for methods of `Document` struct.
@@ -45,9 +45,25 @@ pub enum DocumentBuilderError {
 pub enum DocumentError {
     /// Handle errors when sorting the graph.
     #[error(transparent)]
-    GraphSortingError(#[from] crate::materialiser::GraphError),
+    GraphSortingError(#[from] crate::graph::GraphError),
 
     /// Handle errors from validating CBOR schemas.
     #[error(transparent)]
-    InstanceError(#[from] crate::instance::InstanceError),
+    DocumentViewError(#[from] DocumentViewError),
+}
+
+/// Custom error types for `DocumentView`.
+#[derive(Error, Debug)]
+pub enum DocumentViewError {
+    /// TryFrom operation must be CREATE.
+    #[error("operation must be CREATE")]
+    NotCreateOperation,
+
+    /// Operation passed to `update()` must be UPDATE.
+    #[error("operation must be UPDATE")]
+    NotUpdateOperation,
+
+    /// Validation error.
+    #[error("error while creating instance")]
+    ValidationError(#[from] crate::schema::SchemaError),
 }

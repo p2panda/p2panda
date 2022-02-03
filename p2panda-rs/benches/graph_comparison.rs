@@ -7,7 +7,7 @@ extern crate rand;
 use criterion::{BenchmarkId, Criterion};
 use incremental_topo::IncrementalTopo;
 
-use p2panda_rs::materialiser::Graph;
+use p2panda_rs::graph::Graph;
 
 const DEFAULT_DENSITY: f32 = 0.1;
 const DEFAULT_SIZE: u64 = 100;

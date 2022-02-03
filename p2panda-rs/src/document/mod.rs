@@ -7,13 +7,15 @@
 //! The graph MUST contain only one root operation and there MUST be a path from the root to every other Operation contained in this
 //! Document. All Operations MUST contain the hash id of both the Document it is operating on as well the previous known operation.
 //! Documents MUST implement a method for topologically sorting the graph, iterating over the ordered list of operations, and applying
-//! all updates onto an Instance following the document schema. This process MUST be deterministic, any Document replicas which
+//! all updates onto an DocumentView following the document schema. This process MUST be deterministic, any Document replicas which
 //! contain the same Operations MUST resolve to the same value.
 //!
 //! All operations in a document MUST follow the documents Schema definition. This is defined by the root CREATE operation.
 #[allow(clippy::module_inception)]
 mod document;
+mod document_view;
 mod error;
 
 pub use document::{Document, DocumentBuilder};
-pub use error::{DocumentBuilderError, DocumentError};
+pub use document_view::DocumentView;
+pub use error::{DocumentBuilderError, DocumentError, DocumentViewError};

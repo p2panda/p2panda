@@ -320,7 +320,7 @@ impl<'a, T: PartialEq + Clone + Debug> Default for Graph<T> {
 
 #[cfg(test)]
 mod test {
-    use crate::materialiser::graph::GraphData;
+    use crate::graph::graph::GraphData;
 
     use super::Graph;
 

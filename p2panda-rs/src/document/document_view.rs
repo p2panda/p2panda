@@ -5,15 +5,15 @@ use std::collections::btree_map::Iter as BTreeMapIter;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
-use crate::instance::error::InstanceError;
+use crate::document::error::DocumentViewError;
 use crate::operation::{AsOperation, Operation, OperationValue, OperationWithMeta};
 
 /// The materialised view of a reduced collection of `Operations` describing a document.
 #[derive(Debug, PartialEq, Default, Clone)]
-pub struct Instance(BTreeMap<String, OperationValue>);
+pub struct DocumentView(BTreeMap<String, OperationValue>);
 
-impl Instance {
-    /// Returns a new `Instance`.
+impl DocumentView {
+    /// Returns a new `DocumentView`.
     fn new() -> Self {
         Self(BTreeMap::new())
     }
@@ -23,10 +23,10 @@ impl Instance {
         self.0.get(key)
     }
 
-    /// Update this `Instance` from an UPDATE `Operation`.
-    pub fn apply_update<T: AsOperation>(&mut self, operation: T) -> Result<(), InstanceError> {
+    /// Update this `DocumentView` from an UPDATE `Operation`.
+    pub fn apply_update<T: AsOperation>(&mut self, operation: T) -> Result<(), DocumentViewError> {
         if !operation.is_update() {
-            return Err(InstanceError::NotUpdateOperation);
+            return Err(DocumentViewError::NotUpdateOperation);
         };
 
         let fields = operation.fields();
@@ -61,15 +61,15 @@ impl Instance {
     }
 }
 
-impl TryFrom<Operation> for Instance {
-    type Error = InstanceError;
+impl TryFrom<Operation> for DocumentView {
+    type Error = DocumentViewError;
 
-    fn try_from(operation: Operation) -> Result<Instance, InstanceError> {
+    fn try_from(operation: Operation) -> Result<DocumentView, DocumentViewError> {
         if !operation.is_create() {
-            return Err(InstanceError::NotCreateOperation);
+            return Err(DocumentViewError::NotCreateOperation);
         };
 
-        let mut instance: Instance = Instance::new();
+        let mut instance: DocumentView = DocumentView::new();
         let fields = operation.fields();
 
         if let Some(fields) = fields {
@@ -82,15 +82,15 @@ impl TryFrom<Operation> for Instance {
     }
 }
 
-impl TryFrom<OperationWithMeta> for Instance {
-    type Error = InstanceError;
+impl TryFrom<OperationWithMeta> for DocumentView {
+    type Error = DocumentViewError;
 
-    fn try_from(operation: OperationWithMeta) -> Result<Instance, InstanceError> {
+    fn try_from(operation: OperationWithMeta) -> Result<DocumentView, DocumentViewError> {
         if !operation.is_create() {
-            return Err(InstanceError::NotCreateOperation);
+            return Err(DocumentViewError::NotCreateOperation);
         };
 
-        let mut instance: Instance = Instance::new();
+        let mut instance: DocumentView = DocumentView::new();
         let fields = operation.fields();
 
         if let Some(fields) = fields {
@@ -103,7 +103,7 @@ impl TryFrom<OperationWithMeta> for Instance {
     }
 }
 
-impl From<BTreeMap<String, OperationValue>> for Instance {
+impl From<BTreeMap<String, OperationValue>> for DocumentView {
     fn from(map: BTreeMap<String, OperationValue>) -> Self {
         Self(map)
     }
@@ -125,7 +125,7 @@ mod tests {
         create_operation, delete_operation, fields, hash, schema, update_operation,
     };
 
-    use super::Instance;
+    use super::DocumentView;
 
     #[rstest]
     fn basic_methods(schema: Hash) {
@@ -143,8 +143,8 @@ mod tests {
             ]),
         );
 
-        // Convert a CREATE `Operation` into an `Instance`
-        let instance: Instance = operation.try_into().unwrap();
+        // Convert a CREATE `Operation` into an `DocumentView`
+        let instance: DocumentView = operation.try_into().unwrap();
 
         assert_eq!(
             instance.keys(),
@@ -153,7 +153,7 @@ mod tests {
 
         assert!(!instance.is_empty());
 
-        let empty_instance = Instance::new();
+        let empty_instance = DocumentView::new();
         assert!(empty_instance.is_empty());
 
         assert_eq!(instance.len(), 5)
@@ -165,10 +165,10 @@ mod tests {
         update_operation: Operation,
         delete_operation: Operation,
     ) {
-        // Convert a CREATE `Operation` into an `Instance`
-        let instance: Instance = create_operation.clone().try_into().unwrap();
+        // Convert a CREATE `Operation` into an `DocumentView`
+        let instance: DocumentView = create_operation.clone().try_into().unwrap();
 
-        let mut expected_instance = Instance::new();
+        let mut expected_instance = DocumentView::new();
         expected_instance.0.insert(
             "message".to_string(),
             create_operation
@@ -180,9 +180,9 @@ mod tests {
         );
         assert_eq!(instance, expected_instance);
 
-        // Convert an UPDATE or DELETE `Operation` into an `Instance`
-        let instance_1 = Instance::try_from(update_operation);
-        let instance_2 = Instance::try_from(delete_operation);
+        // Convert an UPDATE or DELETE `Operation` into an `DocumentView`
+        let instance_1 = DocumentView::try_from(update_operation);
+        let instance_2 = DocumentView::try_from(delete_operation);
 
         assert!(instance_1.is_err());
         assert!(instance_2.is_err());
@@ -190,12 +190,12 @@ mod tests {
 
     #[rstest]
     pub fn update(create_operation: Operation, update_operation: Operation) {
-        let mut chat_instance = Instance::try_from(create_operation.clone()).unwrap();
+        let mut chat_instance = DocumentView::try_from(create_operation.clone()).unwrap();
         chat_instance
             .apply_update(update_operation.clone())
             .unwrap();
 
-        let mut exp_chat_instance = Instance::new();
+        let mut exp_chat_instance = DocumentView::new();
 
         exp_chat_instance.0.insert(
             "message".to_string(),
@@ -232,7 +232,7 @@ mod tests {
         let chat = Schema::new(&schema_hash, &chat_schema_definition.to_string()).unwrap();
         let chat_instance = chat.instance_from_create(create_operation.clone()).unwrap();
 
-        let mut exp_chat_instance = Instance::new();
+        let mut exp_chat_instance = DocumentView::new();
         exp_chat_instance.0.insert(
             "message".to_string(),
             create_operation

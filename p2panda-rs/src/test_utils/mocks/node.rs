@@ -89,11 +89,10 @@ use log::{debug, info};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 
-use crate::document::DocumentBuilder;
+use crate::document::{DocumentBuilder, DocumentView};
 use crate::entry::{decode_entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::instance::Instance;
 use crate::operation::{AsOperation, Operation, OperationEncoded, OperationWithMeta};
 use crate::test_utils::mocks::logs::{AuthorLogs, LogEntry};
 use crate::test_utils::mocks::utils::Result;
@@ -474,7 +473,7 @@ impl Node {
     }
 
     /// Get a single resolved document from the node.
-    pub fn get_document(&self, id: &Hash) -> Instance {
+    pub fn get_document(&self, id: &Hash) -> DocumentView {
         let entries = self.get_document_entries(id);
         let operations = entries
             .iter()
@@ -487,7 +486,7 @@ impl Node {
     }
 
     /// Get all documents in their resolved state from the node.
-    pub fn get_documents(&self) -> Vec<Instance> {
+    pub fn get_documents(&self) -> Vec<DocumentView> {
         let mut documents = HashSet::new();
         for (_author, author_logs) in self.db() {
             author_logs.iter().for_each(|log| {
