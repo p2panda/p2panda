@@ -276,7 +276,7 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
                         break;
                     } else if queue.is_empty() {
                         // The queue is empty, but this node has dependencies missing then there
-                        // is either a cycle or missing links.
+                        // is either a cycle or missing nodes.
                         return Err(GraphError::BadlyFormedGraph);
                     }
 
@@ -424,6 +424,23 @@ mod test {
         graph.add_link("b", "c");
         graph.add_link("c", "d");
         graph.add_link("d", "b");
+
+        assert!(graph.walk_from("a").is_err())
+    }
+
+    #[test]
+    fn missing_dependencies() {
+        let mut graph = Graph::new();
+        graph.add_node("a", 1);
+        graph.add_node("b", 2);
+        graph.add_node("c", 3);
+        graph.add_node("d", 4);
+
+        graph.add_link("a", "b");
+        graph.add_link("b", "c");
+        graph.add_link("c", "d");
+        graph.add_link("d", "b");
+        graph.add_link("e", "b"); // "e" doesn't exist in the graph.
 
         assert!(graph.walk_from("a").is_err())
     }
