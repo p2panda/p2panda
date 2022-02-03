@@ -10,7 +10,19 @@ pub enum GraphError {
     #[error("Cycle detected")]
     CycleDetected,
 
-    /// Cycle detected in graph.
+    /// Cycle detected or graph missing dependencies.
     #[error("Badly formed graph")]
     BadlyFormedGraph,
+
+    /// No root node found in graph.
+    #[error("No root node found")]
+    NoRootNode,
+
+    /// There can't be more than one root node in a graph.
+    #[error("Multiple root nodes found")]
+    MultipleRootNodes,
+
+    /// Requested node not found in graph.
+    #[error("Node not found in graph")]
+    NodeNotFound,
 }

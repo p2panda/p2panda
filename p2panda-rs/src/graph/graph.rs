@@ -173,13 +173,21 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
     // pub fn invalidate_keys(&self, keys: Vec<String>) {}
 
     /// Returns a reference to the root node of this graph.
-    pub fn root_node(&self) -> &Node<T> {
-        self.0.values().find(|node| node.is_root()).unwrap()
+    pub fn root_node(&self) -> Result<&Node<T>, GraphError> {
+        let root: Vec<&Node<T>> = self.0.values().filter(|node| node.is_root()).collect();
+        match root.len() {
+            0 => Err(GraphError::NoRootNode),
+            1 => Ok(root[0]),
+            _ => Err(GraphError::MultipleRootNodes),
+        }
     }
 
     /// Returns the root node key.
-    pub fn root_node_key(&self) -> &String {
-        self.0.values().find(|node| node.is_root()).unwrap().key()
+    pub fn root_node_key(&self) -> Result<&String, GraphError> {
+        match self.root_node() {
+            Ok(root) => Ok(root.key()),
+            Err(e) => Err(e),
+        }
     }
 
     /// Check if all a nodes dependencies have been visited.
@@ -188,7 +196,7 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
         let previous_nodes = node.previous();
 
         for node_key in previous_nodes {
-            let node = self.get_node(node_key).unwrap();
+            let node = self.get_node(node_key).expect("Node not in graph");
             if !sorted.contains(&node) {
                 has_dependencies = false
             }
@@ -202,7 +210,8 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
         let mut next_nodes: Vec<&'a Node<T>> = Vec::new();
 
         for node_key in node.next() {
-            let node = self.get_node(node_key).unwrap();
+            // Unwrap here as we are sure the node is in the graph.
+            let node = self.get_node(node_key).expect("Node not in graph");
             if !sorted.contains(&node) {
                 next_nodes.push(node)
             }
@@ -218,7 +227,10 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
 
     /// Sorts the graph topologically and returns the sorted
     pub fn walk_from(&'a self, key: &str) -> Result<GraphData<T>, GraphError> {
-        let root_node = self.get_node(key).unwrap();
+        let root_node = match self.get_node(key) {
+            Some(node) => Ok(node),
+            None => Err(GraphError::NodeNotFound),
+        }?;
         let mut queue = vec![root_node];
         let mut sorted_nodes = vec![];
         let mut graph_data = GraphData {
@@ -247,7 +259,7 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
             // ...and then walk the graph starting from this node.
             while let Some(mut next_nodes) = self.next(&sorted_nodes, current_node) {
                 // Pop off the next node we will visit.
-                let next_node = next_nodes.pop().unwrap();
+                let next_node = next_nodes.pop().expect("Node not in graph");
                 // println!("visiting: {}", next_node.key());
 
                 // Push all other nodes connected to this one to the queue, we will visit these later.
@@ -296,8 +308,8 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
 
     /// Sort the entire graph, starting from the root node.
     pub fn sort(&'a self) -> Result<GraphData<T>, GraphError> {
-        let root_node = self.root_node();
-        self.walk_from(root_node.key())
+        let root_node = self.root_node_key()?;
+        self.walk_from(root_node)
     }
 }
 
