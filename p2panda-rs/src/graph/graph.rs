@@ -1,3 +1,4 @@
+use log::debug;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
@@ -217,9 +218,6 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
         }
     }
 
-    // NOT IMPLEMENTED //
-    // pub fn invalidate_keys(&self, keys: Vec<String>) {}
-
     /// Returns a reference to the root node of this graph.
     pub fn root_node(&self) -> Result<&Node<T>, GraphError> {
         let root: Vec<&Node<T>> = self.0.values().filter(|node| node.is_root()).collect();
@@ -298,32 +296,32 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
             if current_node.is_tip() {
                 graph_data.graph_tips.push(current_node.data())
             }
-            // println!(
-            //     "{}: sorted to position {}",
-            //     current_node.key(),
-            //     sorted_nodes.len()
-            // );
+            debug!(
+                "{}: sorted to position {}",
+                current_node.key(),
+                sorted_nodes.len()
+            );
 
             // ...and then walk the graph starting from this node.
             while let Some(mut next_nodes) = self.next(&sorted_nodes, current_node) {
                 // Pop off the next node we will visit.
                 let next_node = next_nodes.pop().expect("Node not in graph");
-                // println!("visiting: {}", next_node.key());
+                debug!("visiting: {}", next_node.key());
 
                 // Push all other nodes connected to this one to the queue, we will visit these later.
                 while let Some(node_to_be_queued) = next_nodes.pop() {
                     queue.push(node_to_be_queued);
-                    // println!("{}: pushed to queue", node_to_be_queued.key());
+                    debug!("{}: pushed to queue", node_to_be_queued.key());
                 }
 
                 // If it's a merge node, check it's dependencies have all been visited.
                 if next_node.is_merge() {
                     if self.dependencies_visited(&sorted_nodes, next_node) {
                         // If they have been, push this node to the queue and exit this loop.
-                        // println!("{}: is merge and has all dependencies met", next_node.key());
+                        debug!("{}: is merge and has all dependencies met", next_node.key());
                         queue.push(next_node);
 
-                        // println!("{}: pushed to queue", next_node.key(),);
+                        debug!("{}: pushed to queue", next_node.key(),);
 
                         break;
                     } else if queue.is_empty() {
@@ -332,10 +330,10 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
                         return Err(GraphError::BadlyFormedGraph);
                     }
 
-                    // println!(
-                    //     "{}: is merge and does not have dependencies met",
-                    //     next_node.key()
-                    // );
+                    debug!(
+                        "{}: is merge and does not have dependencies met",
+                        next_node.key()
+                    );
                     break;
                 }
                 // If it wasn't a merge node, push it to the sorted stack and keep walking.
@@ -347,7 +345,11 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
                     graph_data.graph_tips.push(next_node.data());
                 }
 
-                // println!("{}: sorted to position {}", next_node.key(), sorted_nodes.len());
+                debug!(
+                    "{}: sorted to position {}",
+                    next_node.key(),
+                    sorted_nodes.len()
+                );
                 current_node = next_node;
             }
         }
