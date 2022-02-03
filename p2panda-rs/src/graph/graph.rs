@@ -20,7 +20,6 @@ pub struct Node<T: PartialEq + Clone + Debug> {
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct GraphData<T: PartialEq + Clone + Debug> {
     sorted: Vec<T>,
-    merged_branch_tips: Vec<T>,
     graph_tips: Vec<T>,
 }
 
@@ -32,12 +31,6 @@ impl<T: PartialEq + Clone + Debug> GraphData<T> {
     // Returns the current tips of this graph.
     pub fn current_graph_tips(&self) -> Vec<T> {
         self.graph_tips.clone()
-    }
-    // Returns a list containing all branch tips and the current graph tips.
-    pub fn all_graph_tips(&self) -> Vec<T> {
-        let mut all_graph_tips = self.graph_tips.clone();
-        all_graph_tips.extend(self.merged_branch_tips.clone());
-        all_graph_tips
     }
 }
 
@@ -230,7 +223,6 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
         let mut sorted_nodes = vec![];
         let mut graph_data = GraphData {
             sorted: vec![],
-            merged_branch_tips: vec![],
             graph_tips: vec![],
         };
 
@@ -279,9 +271,6 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
                         // is either a cycle or missing nodes.
                         return Err(GraphError::BadlyFormedGraph);
                     }
-
-                    // push _last node we visited_ to merged_branch_tips.
-                    graph_data.merged_branch_tips.push(current_node.data());
 
                     // println!(
                     //     "{}: is merge and does not have dependencies met",
@@ -351,7 +340,6 @@ mod test {
 
         let expected = GraphData {
             sorted: vec!["A", "B", "C", "D", "E", "F"],
-            merged_branch_tips: vec![],
             graph_tips: vec!["F"],
         };
 
@@ -362,7 +350,6 @@ mod test {
             graph_data.current_graph_tips(),
             expected.current_graph_tips()
         );
-        assert_eq!(graph_data.all_graph_tips(), expected.all_graph_tips());
 
         graph.add_link("a", "g");
         graph.add_link("g", "h");
@@ -373,7 +360,6 @@ mod test {
 
         let expected = GraphData {
             sorted: vec!["A", "B", "C", "G", "H", "D", "E", "F"],
-            merged_branch_tips: vec!["C"],
             graph_tips: vec!["F"],
         };
 
@@ -384,7 +370,6 @@ mod test {
             graph_data.current_graph_tips(),
             expected.current_graph_tips()
         );
-        assert_eq!(graph_data.all_graph_tips(), expected.all_graph_tips());
 
         graph.add_link("c", "i");
         graph.add_link("i", "j");
@@ -398,7 +383,6 @@ mod test {
 
         let expected = GraphData {
             sorted: vec!["A", "B", "C", "I", "J", "K", "G", "H", "D", "E", "F"],
-            merged_branch_tips: vec!["C", "K"],
             graph_tips: vec!["F"],
         };
 
@@ -409,7 +393,6 @@ mod test {
             graph_data.current_graph_tips(),
             expected.current_graph_tips()
         );
-        assert_eq!(graph_data.all_graph_tips(), expected.all_graph_tips());
     }
 
     #[test]

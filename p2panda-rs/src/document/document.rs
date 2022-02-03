@@ -26,7 +26,6 @@ pub struct DocumentMeta {
     edited: bool,
     operations: Vec<OperationWithMeta>,
     current_graph_tips: Vec<Hash>,
-    vector_clock: Vec<Hash>,
 }
 
 impl Document {
@@ -86,12 +85,6 @@ impl Document {
             .map(|operation| operation.operation_id().to_owned())
             .collect();
 
-        meta.vector_clock = sorted_graph_data
-            .all_graph_tips()
-            .iter()
-            .map(|operation| operation.operation_id().to_owned())
-            .collect();
-
         Ok(document_view)
     }
 }
@@ -125,11 +118,6 @@ impl Document {
     /// Get the documents graph tips.
     pub fn current_graph_tips(&self) -> &Vec<Hash> {
         &self.meta.current_graph_tips
-    }
-
-    /// Get the documents graph tips.
-    pub fn vector_clock(&self) -> &Vec<Hash> {
-        &self.meta.vector_clock
     }
 
     /// Returns true if this document has applied an UPDATE operation.
@@ -383,14 +371,6 @@ mod tests {
             .find(|op| op.operation_id() == &penguin_entry_3_hash)
             .unwrap();
 
-        // DOCUMENT: [panda_1]<---[penguin_1]<---[penguin_2]<---[penguin_3]
-        //                    \----[panda_2]<---/                    |
-        //                             |                             |
-        //                             |                             |
-        //                             |                             |
-        //                             |                        <graph tip>
-        //                        <branch tip>
-
         let expected_graph_tip = vec![penguin_entry_3_hash.clone()];
         let expected_op_order = vec![
             panda_1.to_owned(),
@@ -399,7 +379,6 @@ mod tests {
             penguin_2.to_owned(),
             penguin_3.to_owned(),
         ];
-        let expected_vector_clock = vec![penguin_entry_3_hash.clone(), panda_entry_2_hash];
 
         // // Document should resolve to expected value
 
@@ -409,7 +388,6 @@ mod tests {
         assert!(!document.is_deleted());
         assert_eq!(document.operations(), &expected_op_order);
         assert_eq!(document.current_graph_tips(), &expected_graph_tip);
-        assert_eq!(document.vector_clock(), &expected_vector_clock);
 
         // Multiple replicas receiving operations in different orders should resolve to same value.
 
@@ -445,10 +423,6 @@ mod tests {
 
         assert_eq!(replica_1.view().get("name"), replica_2.view().get("name"));
         assert_eq!(replica_1.view().get("name"), replica_3.view().get("name"));
-
-        assert_eq!(replica_1.vector_clock(), &expected_vector_clock);
-        assert_eq!(replica_2.vector_clock(), &expected_vector_clock);
-        assert_eq!(replica_3.vector_clock(), &expected_vector_clock);
     }
 
     #[rstest]
