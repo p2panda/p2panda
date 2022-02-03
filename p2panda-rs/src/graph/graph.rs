@@ -56,18 +56,18 @@ impl<'a, T: PartialEq + Clone + Debug> Node<T> {
     }
 
     /// Returns the key for this node.
-    fn key(&self) -> String {
-        self.key.to_owned()
+    fn key(&self) -> &String {
+        &self.key
     }
 
     /// Returns a vector of keys for the nodes preceding this node in the graph.
-    fn previous(&self) -> Vec<String> {
-        self.previous.clone()
+    fn previous(&self) -> &Vec<String> {
+        &self.previous
     }
 
     /// Returns a vector of keys for the nodes following this node in the graph.
-    fn next(&self) -> Vec<String> {
-        self.next.clone()
+    fn next(&self) -> &Vec<String> {
+        &self.next
     }
 
     fn data(&self) -> T {
@@ -136,12 +136,12 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
     }
 
     /// Returns the keys for nodes which follows this node key.
-    pub fn get_next(&'a self, key: &str) -> Option<Vec<String>> {
+    pub fn get_next(&'a self, key: &str) -> Option<&Vec<String>> {
         self.get_node(key).map(|node| node.next())
     }
 
     /// Returns the keys for nodes which precede this node key.
-    pub fn get_previous(&'a self, key: &str) -> Option<Vec<String>> {
+    pub fn get_previous(&'a self, key: &str) -> Option<&Vec<String>> {
         self.get_node(key).map(|node| node.previous())
     }
 
@@ -178,7 +178,7 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
     }
 
     /// Returns the root node key.
-    pub fn root_node_key(&self) -> String {
+    pub fn root_node_key(&self) -> &String {
         self.0.values().find(|node| node.is_root()).unwrap().key()
     }
 
@@ -188,7 +188,7 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
         let previous_nodes = node.previous();
 
         for node_key in previous_nodes {
-            let node = self.get_node(&node_key).unwrap();
+            let node = self.get_node(node_key).unwrap();
             if !sorted.contains(&node) {
                 has_dependencies = false
             }
@@ -202,7 +202,7 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
         let mut next_nodes: Vec<&'a Node<T>> = Vec::new();
 
         for node_key in node.next() {
-            let node = self.get_node(&node_key).unwrap();
+            let node = self.get_node(node_key).unwrap();
             if !sorted.contains(&node) {
                 next_nodes.push(node)
             }
@@ -297,7 +297,7 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
     /// Sort the entire graph, starting from the root node.
     pub fn sort(&'a self) -> Result<GraphData<T>, GraphError> {
         let root_node = self.root_node();
-        self.walk_from(&root_node.key())
+        self.walk_from(root_node.key())
     }
 }
 
