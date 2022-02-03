@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Debug;
 
 use super::GraphError;
 
@@ -6,17 +7,30 @@ use super::GraphError;
 ///
 /// Graph API based on [tangle-graph](https://gitlab.com/tangle-js/tangle-graph).
 #[derive(Debug, PartialEq, Clone)]
-pub struct Graph<T: PartialEq + Clone + std::fmt::Debug>(HashMap<String, Node<T>>);
+pub struct Graph<T: PartialEq + Clone + Debug>(HashMap<String, Node<T>>);
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Node<T: PartialEq + Clone + std::fmt::Debug> {
+pub struct Node<T: PartialEq + Clone + Debug> {
     key: String,
     data: T,
     previous: Vec<String>,
     next: Vec<String>,
 }
 
-impl<'a, T: PartialEq + Clone + std::fmt::Debug> Node<T> {
+#[derive(Debug, PartialEq, Clone, Default)]
+pub struct GraphData<T: PartialEq + Clone + Debug> {
+    sorted: Vec<T>,
+    merged_branch_tips: Vec<T>,
+    graph_tips: Vec<T>,
+}
+
+impl<T: PartialEq + Clone + Debug> GraphData<T> {
+    pub fn nodes(&self) -> Vec<T> {
+        self.sorted.clone()
+    }
+}
+
+impl<'a, T: PartialEq + Clone + Debug> Node<T> {
     /// Returns true if this node is the root of this graph.
     fn is_root(&self) -> bool {
         self.previous.is_empty()
@@ -57,7 +71,7 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Node<T> {
     }
 }
 
-impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
+impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
     /// Instantiate a new empty graph.
     pub fn new() -> Self {
         Self(HashMap::new())
@@ -199,27 +213,36 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
     }
 
     /// Sorts the graph topologically and returns the sorted
-    pub fn walk_from(&'a self, key: &str) -> Result<Vec<T>, GraphError> {
+    pub fn walk_from(&'a self, key: &str) -> Result<GraphData<T>, GraphError> {
         let root_node = self.get_node(key).unwrap();
         let mut queue = vec![root_node];
-        let mut sorted = vec![];
+        let mut sorted_nodes = vec![];
+        let mut graph_data = GraphData {
+            sorted: vec![],
+            merged_branch_tips: vec![],
+            graph_tips: vec![],
+        };
 
         // Pop from the queue while it has items.
         while let Some(mut current_node) = queue.pop() {
             // If the sorted stack is bigger than the number of existing nodes we have a cycle.
-            if sorted.len() > self.0.len() {
+            if sorted_nodes.len() > self.0.len() {
                 return Err(GraphError::CycleDetected);
             }
             // Push this node to the sorted stack...
-            sorted.push(current_node);
+            sorted_nodes.push(current_node);
+            graph_data.sorted.push(current_node.data());
+            if current_node.is_tip() {
+                graph_data.graph_tips.push(current_node.data())
+            }
             // println!(
             //     "{}: sorted to position {}",
             //     current_node.key(),
-            //     sorted.len()
+            //     sorted_nodes.len()
             // );
 
             // ...and then walk the graph starting from this node.
-            while let Some(mut next_nodes) = self.next(&sorted, current_node) {
+            while let Some(mut next_nodes) = self.next(&sorted_nodes, current_node) {
                 // Pop off the next node we will visit.
                 let next_node = next_nodes.pop().unwrap();
                 // println!("visiting: {}", next_node.key());
@@ -232,10 +255,11 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
 
                 // If it's a merge node, check it's dependencies have all been visited.
                 if next_node.is_merge() {
-                    if self.dependencies_visited(&sorted, next_node) {
+                    if self.dependencies_visited(&sorted_nodes, next_node) {
                         // If they have been, push this node to the queue and exit this loop.
                         // println!("{}: is merge and has all dependencies met", next_node.key());
                         queue.push(next_node);
+
                         // println!("{}: pushed to queue", next_node.key(),);
 
                         break;
@@ -244,7 +268,10 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
                         // is either a cycle or missing links.
                         return Err(GraphError::BadlyFormedGraph);
                     }
-                    // Else don't do anything and break out of this loop.
+
+                    // push _last node we visited_ to merged_branch_tips.
+                    graph_data.merged_branch_tips.push(current_node.data());
+
                     // println!(
                     //     "{}: is merge and does not have dependencies met",
                     //     next_node.key()
@@ -252,22 +279,29 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Graph<T> {
                     break;
                 }
                 // If it wasn't a merge node, push it to the sorted stack and keep walking.
-                sorted.push(next_node);
-                // println!("{}: sorted to position {}", next_node.key(), sorted.len());
+                sorted_nodes.push(next_node);
+                graph_data.sorted.push(next_node.data());
+
+                // If it is a tip, push it to the graph tips list.
+                if next_node.is_tip() {
+                    graph_data.graph_tips.push(next_node.data());
+                }
+
+                // println!("{}: sorted to position {}", next_node.key(), sorted_nodes.len());
                 current_node = next_node;
             }
         }
-        Ok(sorted.iter().map(|node| node.data()).collect())
+        Ok(graph_data)
     }
 
     /// Sort the entire graph, starting from the root node.
-    pub fn sort(&'a self) -> Result<Vec<T>, GraphError> {
+    pub fn sort(&'a self) -> Result<GraphData<T>, GraphError> {
         let root_node = self.root_node();
         self.walk_from(&root_node.key())
     }
 }
 
-impl<'a, T: PartialEq + Clone + std::fmt::Debug> Default for Graph<T> {
+impl<'a, T: PartialEq + Clone + Debug> Default for Graph<T> {
     fn default() -> Self {
         Self::new()
     }
@@ -275,22 +309,26 @@ impl<'a, T: PartialEq + Clone + std::fmt::Debug> Default for Graph<T> {
 
 #[cfg(test)]
 mod test {
+    use crate::materialiser::graph::GraphData;
+
     use super::Graph;
 
     #[test]
     fn basics() {
         let mut graph = Graph::new();
-        graph.add_node("a", "Wake Up");
-        graph.add_node("b", "Make Coffee");
-        graph.add_node("c", "Drink Coffee");
-        graph.add_node("d", "Stroke Cat");
-        graph.add_node("e", "Look Out The Window");
-        graph.add_node("f", "Start The Day");
-        graph.add_node("g", "Cat Jumps Off Bed");
-        graph.add_node("h", "Cat Meows");
-        graph.add_node("i", "Brain Receives Caffeine");
-        graph.add_node("j", "Brain Starts Engine");
-        graph.add_node("k", "Brain Starts Thinking");
+        graph.add_node("a", "A");
+        graph.add_node("b", "B");
+        graph.add_node("c", "C");
+        graph.add_node("d", "D");
+        graph.add_node("e", "E");
+        graph.add_node("f", "F");
+        graph.add_node("g", "G");
+        graph.add_node("h", "H");
+        graph.add_node("i", "I");
+        graph.add_node("j", "J");
+        graph.add_node("k", "K");
+
+        // NB: unlinked nodes are simply not visited and do not exist in the sorted result.
 
         graph.add_link("a", "b");
         graph.add_link("b", "c");
@@ -298,32 +336,45 @@ mod test {
         graph.add_link("d", "e");
         graph.add_link("e", "f");
 
+        // [A]<--[B]<--[C]<--[D]<--[E]<--[F]
+
+        let expected = GraphData {
+            sorted: vec!["A", "B", "C", "D", "E", "F"],
+            merged_branch_tips: vec![],
+            graph_tips: vec!["F"],
+        };
+        assert_eq!(graph.walk_from("a").unwrap(), expected);
+
         graph.add_link("a", "g");
         graph.add_link("g", "h");
         graph.add_link("h", "d");
+
+        //  /--[B]<--[C]--\
+        // [A]<--[G]<-----[H]<--[D]<--[E]<---[F]
+
+        let expected = GraphData {
+            sorted: vec!["A", "B", "C", "G", "H", "D", "E", "F"],
+            merged_branch_tips: vec!["C"],
+            graph_tips: vec!["F"],
+        };
+        assert_eq!(graph.walk_from("a").unwrap(), expected);
 
         graph.add_link("c", "i");
         graph.add_link("i", "j");
         graph.add_link("j", "k");
         graph.add_link("k", "f");
 
-        println!("{:#?}", graph);
-        assert_eq!(
-            graph.walk_from("a").unwrap(),
-            [
-                "Wake Up",
-                "Make Coffee",
-                "Drink Coffee",
-                "Brain Receives Caffeine",
-                "Brain Starts Engine",
-                "Brain Starts Thinking",
-                "Cat Jumps Off Bed",
-                "Cat Meows",
-                "Stroke Cat",
-                "Look Out The Window",
-                "Start The Day"
-            ]
-        )
+        //             /--[I]<--[J]<--[K]<--\
+        //  /--[B]<--[C]--\                  \
+        // [A]<--[G]<-----[H]<--[D]<--[E]<---[F]
+        //
+
+        let expected = GraphData {
+            sorted: vec!["A", "B", "C", "I", "J", "K", "G", "H", "D", "E", "F"],
+            merged_branch_tips: vec!["C", "K"],
+            graph_tips: vec!["F"],
+        };
+        assert_eq!(graph.walk_from("a").unwrap(), expected);
     }
 
     #[test]

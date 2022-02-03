@@ -66,7 +66,7 @@ impl Document {
         }
 
         // Traverse the graph topologically and return an ordered list of operations.
-        let mut sorted_operations = graph.sort()?.into_iter();
+        let mut sorted_operations = graph.sort()?.nodes().into_iter();
 
         // Instantiate an initial docuent view from the documents create operation.
         //
