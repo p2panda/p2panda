@@ -36,7 +36,7 @@ impl<T: PartialEq + Clone + Debug> GraphData<T> {
     // Returns a list containing all branch tips and the current graph tips.
     pub fn all_graph_tips(&self) -> Vec<T> {
         let mut all_graph_tips = self.graph_tips.clone();
-        all_graph_tips.extend(self.graph_tips.clone());
+        all_graph_tips.extend(self.merged_branch_tips.clone());
         all_graph_tips
     }
 }

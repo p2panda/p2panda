@@ -234,17 +234,28 @@ mod tests {
     use super::DocumentBuilder;
 
     #[rstest]
-    fn sort_and_resolve_graph(
-        schema: Hash,
-        #[from(random_key_pair)] key_pair_1: KeyPair,
-        #[from(random_key_pair)] key_pair_2: KeyPair,
-    ) {
-        let panda = Client::new("panda".to_string(), key_pair_1);
-        let penguin = Client::new("penguin".to_string(), key_pair_2);
+    fn resolve_documents(schema: Hash) {
+        let panda = Client::new(
+            "panda".to_string(),
+            KeyPair::from_private_key_str(
+                "ddcafe34db2625af34c8ba3cf35d46e23283d908c9848c8b43d1f5d0fde779ea",
+            )
+            .unwrap(),
+        );
+        let penguin = Client::new(
+            "penguin".to_string(),
+            KeyPair::from_private_key_str(
+                "1c86b2524b48f0ba86103cddc6bdfd87774ab77ab4c0ea989ed0eeab3d28827a",
+            )
+            .unwrap(),
+        );
         let mut node = Node::new();
 
         // Panda publishes a create operation.
         // This instantiates a new document.
+        //
+        // DOCUMENT: [panda_1]
+        //
         let (panda_entry_1_hash, _) = send_to_node(
             &mut node,
             &panda,
@@ -260,6 +271,9 @@ mod tests {
 
         // Panda publishes an update operation.
         // It contains the hash of the previous operation in it's `previous_operations` array
+        //
+        // DOCUMENT: [panda_1]<--[panda_2]
+        //
         let (panda_entry_2_hash, _) = send_to_node(
             &mut node,
             &panda,
@@ -276,12 +290,15 @@ mod tests {
 
         // Penguin publishes an update operation which creates a new branch in the graph.
         // This is because they didn't know about Panda's second operation.
+        //
+        // DOCUMENT: [panda_1]<--[penguin_1]
+        //                    \----[panda_2]
         let (penguin_entry_1_hash, _) = send_to_node(
             &mut node,
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash],
+                vec![panda_entry_1_hash.clone()],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Penguin Cafe".to_string()),
@@ -292,12 +309,15 @@ mod tests {
 
         // Penguin publishes a new operation while now being aware of the previous branching situation.
         // Their `previous_operations` field now contains 2 operation hash id's.
+        //
+        // DOCUMENT: [panda_1]<--[penguin_1]<---[penguin_2]
+        //                    \----[panda_2]<--/
         let (penguin_entry_2_hash, _) = send_to_node(
             &mut node,
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![penguin_entry_1_hash, panda_entry_2_hash],
+                vec![penguin_entry_1_hash.clone(), panda_entry_2_hash.clone()],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Polar Bear Cafe".to_string()),
@@ -307,12 +327,15 @@ mod tests {
         .unwrap();
 
         // Penguin publishes a new update operation which points at the current graph tip.
-        send_to_node(
+        //
+        // DOCUMENT: [panda_1]<--[penguin_1]<---[penguin_2]<--[penguin_3]
+        //                    \----[panda_2]<--/
+        let (penguin_entry_3_hash, _) = send_to_node(
             &mut node,
             &penguin,
             &update_operation(
                 schema,
-                vec![penguin_entry_2_hash],
+                vec![penguin_entry_2_hash.clone()],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
@@ -339,49 +362,93 @@ mod tests {
             OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
         );
 
+        let panda_1 = operations
+            .iter()
+            .find(|op| op.operation_id() == &panda_entry_1_hash)
+            .unwrap();
+        let panda_2 = operations
+            .iter()
+            .find(|op| op.operation_id() == &panda_entry_2_hash)
+            .unwrap();
+        let penguin_1 = operations
+            .iter()
+            .find(|op| op.operation_id() == &penguin_entry_1_hash)
+            .unwrap();
+        let penguin_2 = operations
+            .iter()
+            .find(|op| op.operation_id() == &penguin_entry_2_hash)
+            .unwrap();
+        let penguin_3 = operations
+            .iter()
+            .find(|op| op.operation_id() == &penguin_entry_3_hash)
+            .unwrap();
+
+        // DOCUMENT: [panda_1]<---[penguin_1]<---[penguin_2]<---[penguin_3]
+        //                    \----[panda_2]<---/                    |
+        //                             |                             |
+        //                             |                             |
+        //                             |                             |
+        //                             |                        <graph tip>
+        //                        <branch tip>
+
+        let expected_graph_tip = vec![penguin_entry_3_hash.clone()];
+        let expected_op_order = vec![
+            panda_1.to_owned(),
+            panda_2.to_owned(),
+            penguin_1.to_owned(),
+            penguin_2.to_owned(),
+            penguin_3.to_owned(),
+        ];
+        let expected_vector_clock = vec![penguin_entry_3_hash.clone(), panda_entry_2_hash];
+
         // // Document should resolve to expected value
-        assert_eq!(document.unwrap().view().get("name"), exp_result.get("name"));
+
+        let document = document.unwrap();
+        assert_eq!(document.view().get("name"), exp_result.get("name"));
+        assert!(document.is_edited());
+        assert!(!document.is_deleted());
+        assert_eq!(document.operations(), &expected_op_order);
+        assert_eq!(document.current_graph_tips(), &expected_graph_tip);
+        assert_eq!(document.vector_clock(), &expected_vector_clock);
 
         // Multiple replicas receiving operations in different orders should resolve to same value.
 
-        let op_1 = operations.get(0).unwrap();
-        let op_2 = operations.get(1).unwrap();
-        let op_3 = operations.get(2).unwrap();
-        let op_4 = operations.get(3).unwrap();
-        let op_5 = operations.get(4).unwrap();
-
         let replica_1 = DocumentBuilder::new(vec![
-            op_5.clone(),
-            op_4.clone(),
-            op_3.clone(),
-            op_2.clone(),
-            op_1.clone(),
+            penguin_2.clone(),
+            penguin_1.clone(),
+            penguin_3.clone(),
+            panda_2.clone(),
+            panda_1.clone(),
         ])
         .build()
         .unwrap();
 
         let replica_2 = DocumentBuilder::new(vec![
-            op_3.clone(),
-            op_2.clone(),
-            op_1.clone(),
-            op_5.clone(),
-            op_4.clone(),
+            penguin_3.clone(),
+            panda_2.clone(),
+            panda_1.clone(),
+            penguin_2.clone(),
+            penguin_1.clone(),
         ])
         .build()
         .unwrap();
 
         let replica_3 = DocumentBuilder::new(vec![
-            op_2.clone(),
-            op_1.clone(),
-            op_4.clone(),
-            op_3.clone(),
-            op_5.clone(),
+            panda_2.clone(),
+            panda_1.clone(),
+            penguin_1.clone(),
+            penguin_3.clone(),
+            penguin_2.clone(),
         ])
         .build()
         .unwrap();
 
         assert_eq!(replica_1.view().get("name"), replica_2.view().get("name"));
         assert_eq!(replica_1.view().get("name"), replica_3.view().get("name"));
+
+        assert_eq!(replica_1.vector_clock(), &expected_vector_clock);
+        assert_eq!(replica_2.vector_clock(), &expected_vector_clock);
+        assert_eq!(replica_3.vector_clock(), &expected_vector_clock);
     }
 
     #[rstest]
