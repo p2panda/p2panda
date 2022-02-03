@@ -444,4 +444,52 @@ mod test {
 
         assert!(graph.walk_from("a").is_err())
     }
+
+    #[test]
+    fn poetic_graph() {
+        let mut graph = Graph::new();
+        graph.add_node("a", "Wake Up");
+        graph.add_node("b", "Make Coffee");
+        graph.add_node("c", "Drink Coffee");
+        graph.add_node("d", "Stroke Cat");
+        graph.add_node("e", "Look Out The Window");
+        graph.add_node("f", "Start The Day");
+        graph.add_node("g", "Cat Jumps Off Bed");
+        graph.add_node("h", "Cat Meows");
+        graph.add_node("i", "Brain Receives Caffeine");
+        graph.add_node("j", "Brain Starts Engine");
+        graph.add_node("k", "Brain Starts Thinking");
+
+        graph.add_link("a", "b");
+        graph.add_link("b", "c");
+        graph.add_link("c", "d");
+        graph.add_link("d", "e");
+        graph.add_link("e", "f");
+
+        graph.add_link("a", "g");
+        graph.add_link("g", "h");
+        graph.add_link("h", "d");
+
+        graph.add_link("c", "i");
+        graph.add_link("i", "j");
+        graph.add_link("j", "k");
+        graph.add_link("k", "f");
+
+        assert_eq!(
+            graph.walk_from("a").unwrap().sorted(),
+            [
+                "Wake Up",
+                "Make Coffee",
+                "Drink Coffee",
+                "Brain Receives Caffeine",
+                "Brain Starts Engine",
+                "Brain Starts Thinking",
+                "Cat Jumps Off Bed",
+                "Cat Meows",
+                "Stroke Cat",
+                "Look Out The Window",
+                "Start The Day"
+            ]
+        )
+    }
 }
