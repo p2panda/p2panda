@@ -26,7 +26,8 @@ pub struct DocumentMeta {
     deleted: bool,
     edited: bool,
     operations: Vec<OperationWithMeta>,
-    graph_tips: Vec<Hash>,
+    current_graph_tips: Vec<Hash>,
+    vector_clock: Vec<Hash>,
 }
 
 impl Document {
@@ -66,16 +67,31 @@ impl Document {
         }
 
         // Traverse the graph topologically and return an ordered list of operations.
-        let mut sorted_operations = graph.sort()?.sorted().into_iter();
+        let sorted_graph_data = graph.sort()?;
 
         // Instantiate an initial docuent view from the documents create operation.
         //
         // We can unwrap here because we already verified the operations during the document building
         // which means we know there is at least one CREATE operation.
-        let mut document_view = Instance::try_from(sorted_operations.next().unwrap())?;
+        let mut operations_iter = sorted_graph_data.sorted().into_iter();
+        let mut document_view = Instance::try_from(operations_iter.next().unwrap())?;
 
         // Apply every update in order to arrive at the current view.
-        sorted_operations.try_for_each(|op| document_view.apply_update(op))?;
+        operations_iter.try_for_each(|op| document_view.apply_update(op))?;
+
+        // Populate document meta data fields.
+        meta.operations = sorted_graph_data.sorted();
+        meta.current_graph_tips = sorted_graph_data
+            .current_graph_tips()
+            .iter()
+            .map(|operation| operation.operation_id().to_owned())
+            .collect();
+
+        meta.vector_clock = sorted_graph_data
+            .all_graph_tips()
+            .iter()
+            .map(|operation| operation.operation_id().to_owned())
+            .collect();
 
         Ok(document_view)
     }
@@ -108,8 +124,13 @@ impl Document {
     }
 
     /// Get the documents graph tips.
-    pub fn graph_tips(&self) -> &Vec<Hash> {
-        &self.meta.graph_tips
+    pub fn current_graph_tips(&self) -> &Vec<Hash> {
+        &self.meta.current_graph_tips
+    }
+
+    /// Get the documents graph tips.
+    pub fn vector_clock(&self) -> &Vec<Hash> {
+        &self.meta.vector_clock
     }
 
     /// Returns true if this document has applied an UPDATE operation.
