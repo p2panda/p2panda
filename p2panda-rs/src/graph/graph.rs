@@ -3,12 +3,60 @@ use std::fmt::Debug;
 
 use super::GraphError;
 
-/// Directed acyclic casaul graph which can be sorted topologically.
+/// This struct contains all functionality implemented in this module. It is can be used for building and sorting a graph of
+/// causally connected nodes.
 ///
-/// Graph API based on [tangle-graph](https://gitlab.com/tangle-js/tangle-graph).
+/// Sorting is deterministic with > comparison of contained node data being the deciding factor on which paths to walk first.
+///
+/// ## Example
+///
+/// ```
+/// # extern crate p2panda_rs;
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// use p2panda_rs::graph::Graph;
+///
+/// // Instantiate the graph.
+///
+/// let mut graph = Graph::new();
+///
+/// // Add some nodes to the graph.
+///
+/// graph.add_node("a", "A");
+/// graph.add_node("b", "B");
+/// graph.add_node("c", "C");
+///
+/// assert!(graph.get_node("a").is_some());
+/// assert!(graph.get_node("x").is_none());
+///
+/// // Add some links between the nodes.
+///
+/// graph.add_link("a", "b");
+/// graph.add_link("a", "c");
+///
+/// // The graph looks like this:
+/// //
+/// //  /--[B]
+/// // [A]<--[C]
+///
+/// // We can sort it topologically.
+///
+/// let nodes = graph.sort()?;
+///
+/// assert_eq!(nodes.sorted(), vec!["A", "B", "C"]);
+///
+/// // Add another link which creates a cycle (oh dear!).
+///
+/// graph.add_link("b", "a");
+///
+/// assert!(graph.sort().is_err());
+///
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug, PartialEq, Clone)]
 pub struct Graph<T: PartialEq + Clone + Debug>(HashMap<String, Node<T>>);
 
+/// An internal struct which represents a node in the graph and contains generic data.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Node<T: PartialEq + Clone + Debug> {
     key: String,
@@ -24,11 +72,11 @@ pub struct GraphData<T: PartialEq + Clone + Debug> {
 }
 
 impl<T: PartialEq + Clone + Debug> GraphData<T> {
-    // Returns the data from sorted graph nodes.
+    /// Returns the data from sorted graph nodes.
     pub fn sorted(&self) -> Vec<T> {
         self.sorted.clone()
     }
-    // Returns the current tips of this graph.
+    /// Returns the current tips of this graph.
     pub fn current_graph_tips(&self) -> Vec<T> {
         self.graph_tips.clone()
     }
