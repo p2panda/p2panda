@@ -222,7 +222,7 @@ mod tests {
 
     #[rstest]
     pub fn create_from_schema(#[from(hash)] schema_hash: Hash, create_operation: Operation) {
-        // Instantiate "person" schema from CDDL string
+        // Instantiate "chat" schema from CDDL string
         let chat_schema_definition = "
             chat = { (
                 message: { type: \"str\", value: tstr }

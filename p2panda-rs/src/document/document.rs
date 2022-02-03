@@ -110,7 +110,7 @@ impl Document {
         &self.view
     }
 
-    /// Get the operations contianed in this document.
+    /// Get the operations contained in this document.
     pub fn operations(&self) -> &Vec<OperationWithMeta> {
         &self.meta.operations
     }
@@ -152,7 +152,6 @@ impl DocumentBuilder {
     /// Validate the collection of operations which are contained in this document.
     /// - there should be exactly one CREATE operation.
     /// - all operations should follow the same schema.
-
     pub fn build(&self) -> Result<Document, DocumentBuilderError> {
         // find create message.
         let mut collect_create_operation: Vec<OperationWithMeta> = self
@@ -208,8 +207,9 @@ impl DocumentBuilder {
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
-    use rstest::rstest;
     use std::collections::BTreeMap;
+
+    use rstest::rstest;
 
     use crate::hash::Hash;
     use crate::identity::KeyPair;
@@ -380,7 +380,7 @@ mod tests {
             penguin_3.to_owned(),
         ];
 
-        // // Document should resolve to expected value
+        // Document should resolve to expected value
 
         let document = document.unwrap();
         assert_eq!(document.view().get("name"), exp_result.get("name"));
