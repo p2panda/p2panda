@@ -25,8 +25,19 @@ pub struct GraphData<T: PartialEq + Clone + Debug> {
 }
 
 impl<T: PartialEq + Clone + Debug> GraphData<T> {
-    pub fn nodes(&self) -> Vec<T> {
+    // Returns the data from sorted graph nodes.
+    pub fn sorted(&self) -> Vec<T> {
         self.sorted.clone()
+    }
+    // Returns the current tips of this graph.
+    pub fn current_graph_tips(&self) -> Vec<T> {
+        self.graph_tips.clone()
+    }
+    // Returns a list containing all branch tips and the current graph tips.
+    pub fn all_graph_tips(&self) -> Vec<T> {
+        let mut all_graph_tips = self.graph_tips.clone();
+        all_graph_tips.extend(self.graph_tips.clone());
+        all_graph_tips
     }
 }
 
@@ -343,7 +354,15 @@ mod test {
             merged_branch_tips: vec![],
             graph_tips: vec!["F"],
         };
-        assert_eq!(graph.walk_from("a").unwrap(), expected);
+
+        let graph_data = graph.walk_from("a").unwrap();
+
+        assert_eq!(graph_data.sorted(), expected.sorted());
+        assert_eq!(
+            graph_data.current_graph_tips(),
+            expected.current_graph_tips()
+        );
+        assert_eq!(graph_data.all_graph_tips(), expected.all_graph_tips());
 
         graph.add_link("a", "g");
         graph.add_link("g", "h");
@@ -357,7 +376,15 @@ mod test {
             merged_branch_tips: vec!["C"],
             graph_tips: vec!["F"],
         };
-        assert_eq!(graph.walk_from("a").unwrap(), expected);
+
+        let graph_data = graph.walk_from("a").unwrap();
+
+        assert_eq!(graph_data.sorted(), expected.sorted());
+        assert_eq!(
+            graph_data.current_graph_tips(),
+            expected.current_graph_tips()
+        );
+        assert_eq!(graph_data.all_graph_tips(), expected.all_graph_tips());
 
         graph.add_link("c", "i");
         graph.add_link("i", "j");
@@ -374,7 +401,15 @@ mod test {
             merged_branch_tips: vec!["C", "K"],
             graph_tips: vec!["F"],
         };
-        assert_eq!(graph.walk_from("a").unwrap(), expected);
+
+        let graph_data = graph.walk_from("a").unwrap();
+
+        assert_eq!(graph_data.sorted(), expected.sorted());
+        assert_eq!(
+            graph_data.current_graph_tips(),
+            expected.current_graph_tips()
+        );
+        assert_eq!(graph_data.all_graph_tips(), expected.all_graph_tips());
     }
 
     #[test]
