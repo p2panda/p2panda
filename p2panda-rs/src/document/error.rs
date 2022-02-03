@@ -56,14 +56,14 @@ pub enum DocumentError {
 #[derive(Error, Debug)]
 pub enum DocumentViewError {
     /// TryFrom operation must be CREATE.
-    #[error("operation must be CREATE")]
+    #[error("Operation must be instantiated from a CREATE operation")]
     NotCreateOperation,
 
-    /// Operation passed to `update()` must be UPDATE.
-    #[error("operation must be UPDATE")]
-    NotUpdateOperation,
+    /// Operation passed to `update()` must be UPDATE or DELETE.
+    #[error("Operation passed to update() must be UPDATE or DELETE")]
+    NotUpdateOrDeleteOperation,
 
     /// Validation error.
-    #[error("error while creating instance")]
+    #[error("Error while creating instance")]
     ValidationError(#[from] crate::schema::SchemaError),
 }

@@ -25,8 +25,8 @@ impl DocumentView {
 
     /// Update this `DocumentView` from an UPDATE `Operation`.
     pub fn apply_update<T: AsOperation>(&mut self, operation: T) -> Result<(), DocumentViewError> {
-        if !operation.is_update() {
-            return Err(DocumentViewError::NotUpdateOperation);
+        if operation.is_create() {
+            return Err(DocumentViewError::NotUpdateOrDeleteOperation);
         };
 
         let fields = operation.fields();

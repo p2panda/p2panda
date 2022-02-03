@@ -215,7 +215,7 @@ mod tests {
     use crate::identity::KeyPair;
     use crate::operation::{OperationValue, OperationWithMeta};
     use crate::test_utils::fixtures::{
-        create_operation, fields, random_key_pair, schema, update_operation,
+        create_operation, delete_operation, fields, random_key_pair, schema, update_operation,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
 
@@ -471,5 +471,48 @@ mod tests {
         .unwrap()];
 
         assert!(DocumentBuilder::new(operations).build().is_err());
+    }
+
+    #[rstest]
+    fn is_deleted(schema: Hash, #[from(random_key_pair)] key_pair_1: KeyPair) {
+        let panda = Client::new("panda".to_string(), key_pair_1);
+        let mut node = Node::new();
+
+        // Panda publishes a create operation.
+        // This instantiates a new document.
+        let (panda_entry_1_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &create_operation(
+                schema.clone(),
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Panda Cafe".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        // Panda publishes an delete operation.
+        // It contains the hash of the previous operation in it's `previous_operations` array.
+        send_to_node(
+            &mut node,
+            &panda,
+            &delete_operation(schema, vec![panda_entry_1_hash]),
+        )
+        .unwrap();
+
+        let operations: Vec<OperationWithMeta> = node
+            .all_entries()
+            .into_iter()
+            .map(|entry| {
+                OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap()
+            })
+            .collect();
+
+        assert!(DocumentBuilder::new(operations)
+            .build()
+            .unwrap()
+            .is_deleted());
     }
 }
