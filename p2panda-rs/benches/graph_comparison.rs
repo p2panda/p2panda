@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Benchmarking tests adapted from [https://github.com/declanvk/incremental-topo/tree/main/benches](https://github.com/declanvk/incremental-topo/tree/main/benches).
 
 #[macro_use]

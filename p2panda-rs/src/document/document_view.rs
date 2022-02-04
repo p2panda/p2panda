@@ -8,7 +8,10 @@ use std::convert::TryFrom;
 use crate::document::error::DocumentViewError;
 use crate::operation::{AsOperation, Operation, OperationValue, OperationWithMeta};
 
-/// The materialised view of a reduced collection of `Operations` describing a document.
+/// The materialised view of a `Document`. It's fields match the documents schema definition.
+///
+/// `DocumentViews` can be instantiated from a CREATE operation and then mutated with UPDATE
+/// or DELETE operations.
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct DocumentView(BTreeMap<String, OperationValue>);
 
@@ -25,8 +28,8 @@ impl DocumentView {
 
     /// Update this `DocumentView` from an UPDATE `Operation`.
     pub fn apply_update<T: AsOperation>(&mut self, operation: T) -> Result<(), DocumentViewError> {
-        if !operation.is_update() {
-            return Err(DocumentViewError::NotUpdateOperation);
+        if operation.is_create() {
+            return Err(DocumentViewError::NotUpdateOrDeleteOperation);
         };
 
         let fields = operation.fields();
@@ -222,7 +225,7 @@ mod tests {
 
     #[rstest]
     pub fn create_from_schema(#[from(hash)] schema_hash: Hash, create_operation: Operation) {
-        // Instantiate "person" schema from CDDL string
+        // Instantiate "chat" schema from CDDL string
         let chat_schema_definition = "
             chat = { (
                 message: { type: \"str\", value: tstr }

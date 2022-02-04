@@ -77,6 +77,7 @@ impl<T: PartialEq + Clone + Debug> GraphData<T> {
     pub fn sorted(&self) -> Vec<T> {
         self.sorted.clone()
     }
+
     /// Returns the current tips of this graph.
     pub fn current_graph_tips(&self) -> Vec<T> {
         self.graph_tips.clone()
