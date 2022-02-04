@@ -67,7 +67,7 @@ impl Document {
         // Traverse the graph topologically and return an ordered list of operations.
         let sorted_graph_data = graph.sort()?;
 
-        // Instantiate an initial docuent view from the documents create operation.
+        // Instantiate an initial document view from the documents create operation.
         //
         // We can unwrap here because we already verified the operations during the document building
         // which means we know there is at least one CREATE operation.
