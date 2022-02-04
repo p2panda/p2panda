@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Types and methods for deriving and maintaining materialised documents.
+use std::borrow::BorrowMut;
 use std::collections::btree_map::Iter as BTreeMapIter;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
@@ -9,59 +10,104 @@ use crate::document::error::DocumentViewError;
 use crate::operation::{AsOperation, Operation, OperationValue, OperationWithMeta};
 
 /// The materialised view of a reduced collection of `Operations` describing a document.
-#[derive(Debug, PartialEq, Default, Clone)]
-pub struct DocumentView(BTreeMap<String, Option<OperationValue>>);
+#[derive(Debug, PartialEq, Clone)]
+pub enum DocumentView {
+    /// The available document view contains fields and values for the document
+    Available(BTreeMap<String, OperationValue>),
+
+    /// A deleted document's view contains only the field names of the document and can not be
+    /// updated further
+    Deleted(Vec<String>),
+}
 
 impl DocumentView {
     /// Returns a new `DocumentView`.
     fn new() -> Self {
-        Self(BTreeMap::new())
+        Self::Available(BTreeMap::new())
     }
 
     /// Get a single value from this instance by it's key. Returns `None` when the document
     /// has been deleted.
     pub fn get(&self, key: &str) -> Option<&OperationValue> {
-        match self.0.get(key) {
-            Some(Some(value)) => Some(value),
-            _ => None,
+        match self {
+            DocumentView::Available(view) => Some(view.get(key).unwrap()),
+            DocumentView::Deleted(_) => None,
         }
     }
 
     /// Update this `DocumentView` from an UPDATE `Operation`.
     pub fn apply_update<T: AsOperation>(&mut self, operation: T) -> Result<(), DocumentViewError> {
-        let fields = operation.fields();
-
-        if let Some(fields) = fields {
-            for (key, value) in fields.iter() {
-                if operation.is_update() {
-                    self.0.insert(key.to_string(), Some(value.to_owned()));
-                } else {
-                    self.0.insert(key.to_string(), None);
+        if operation.is_delete() {
+            let new_self = self.as_deleted();
+            return match new_self {
+                Err(error) => Err(error),
+                Ok(value) => {
+                    *self = value;
+                    Ok(())
                 }
             }
         }
 
-        Ok(())
+        let fields = operation.fields();
+        match self {
+            DocumentView::Available(view) => {
+                for (key, value) in fields.unwrap().iter() {
+                    view.insert(key.to_string(), value.to_owned());
+                }
+                Ok(())
+            }
+            DocumentView::Deleted(_) => Err(DocumentViewError::DocumentDeleted),
+        }
+    }
+
+    /// Mark this document view deleted
+    pub fn as_deleted(&self) -> Result<DocumentView, DocumentViewError> {
+        match self {
+            DocumentView::Available(_) => {
+                Ok(DocumentView::Deleted(self.keys()))
+            },
+            DocumentView::Deleted(_) => {
+                Err(DocumentViewError::DocumentDeleted)
+            }
+        }
     }
 
     /// Returns a vector containing the keys of this instance.
     pub fn keys(&self) -> Vec<String> {
-        self.0.clone().into_keys().collect::<Vec<String>>()
+        match self {
+            DocumentView::Available(fields) => fields.clone().into_keys().collect::<Vec<String>>(),
+            DocumentView::Deleted(fields) => fields.clone(),
+        }
     }
 
     /// Returns an iterator of existing instance fields.
-    pub fn iter(&self) -> BTreeMapIter<String, Option<OperationValue>> {
-        self.0.iter()
+    pub fn iter(&self) -> Result<BTreeMapIter<String, OperationValue>, DocumentViewError> {
+        match self {
+            DocumentView::Available(fields) => Ok(fields.iter()),
+            DocumentView::Deleted(_) => Err(DocumentViewError::DocumentDeleted),
+        }
     }
 
     /// Returns the number of fields on this instance.
     pub fn len(&self) -> usize {
-        self.0.len()
+        match self {
+            DocumentView::Available(fields) => fields.len(),
+            DocumentView::Deleted(fields) => fields.len(),
+        }
     }
 
     /// Returns true if the instance is empty, otherwise false.
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        match self {
+            DocumentView::Available(fields) => fields.is_empty(),
+            DocumentView::Deleted(fields) => fields.len() == 0,
+        }
+    }
+}
+
+impl Default for DocumentView {
+    fn default() -> Self {
+        DocumentView::new()
     }
 }
 
@@ -73,16 +119,18 @@ impl TryFrom<Operation> for DocumentView {
             return Err(DocumentViewError::NotCreateOperation);
         };
 
-        let mut instance: DocumentView = DocumentView::new();
+        let mut document_view: DocumentView = DocumentView::new();
         let fields = operation.fields();
 
-        if let Some(fields) = fields {
-            for (key, value) in fields.iter() {
-                instance.0.insert(key.to_string(), Some(value.to_owned()));
+        if let DocumentView::Available(ref mut view_inner) = document_view {
+            if let Some(fields) = fields {
+                for (key, value) in fields.iter() {
+                    view_inner.insert(key.to_string(), value.to_owned());
+                }
             }
         }
 
-        Ok(instance)
+        Ok(document_view)
     }
 }
 
@@ -94,22 +142,24 @@ impl TryFrom<OperationWithMeta> for DocumentView {
             return Err(DocumentViewError::NotCreateOperation);
         };
 
-        let mut instance: DocumentView = DocumentView::new();
+        let mut document_view: DocumentView = DocumentView::new();
         let fields = operation.fields();
 
-        if let Some(fields) = fields {
-            for (key, value) in fields.iter() {
-                instance.0.insert(key.to_string(), Some(value.to_owned()));
+        if let DocumentView::Available(ref mut view_inner) = document_view {
+            if let Some(fields) = fields {
+                for (key, value) in fields.iter() {
+                    view_inner.insert(key.to_string(), value.to_owned());
+                }
             }
         }
 
-        Ok(instance)
+        Ok(document_view)
     }
 }
 
-impl From<BTreeMap<String, Option<OperationValue>>> for DocumentView {
-    fn from(map: BTreeMap<String, Option<OperationValue>>) -> Self {
-        Self(map)
+impl From<BTreeMap<String, OperationValue>> for DocumentView {
+    fn from(map: BTreeMap<String, OperationValue>) -> Self {
+        Self::Available(map)
     }
 }
 
@@ -148,19 +198,19 @@ mod tests {
         );
 
         // Convert a CREATE `Operation` into an `DocumentView`
-        let instance: DocumentView = operation.try_into().unwrap();
+        let doc_view: DocumentView = operation.try_into().unwrap();
 
         assert_eq!(
-            instance.keys(),
+            doc_view.keys(),
             vec!["age", "height", "is_admin", "profile_picture", "username"]
         );
 
-        assert!(!instance.is_empty());
+        assert!(!doc_view.is_empty());
 
         let empty_instance = DocumentView::new();
         assert!(empty_instance.is_empty());
 
-        assert_eq!(instance.len(), 5)
+        assert_eq!(doc_view.len(), 5)
     }
 
     #[rstest]
@@ -170,21 +220,21 @@ mod tests {
         delete_operation: Operation,
     ) {
         // Convert a CREATE `Operation` into an `DocumentView`
-        let instance: DocumentView = create_operation.clone().try_into().unwrap();
+        let doc_view: DocumentView = create_operation.clone().try_into().unwrap();
 
-        let mut expected_instance = DocumentView::new();
-        expected_instance.0.insert(
-            "message".to_string(),
-            Some(
+        let mut expected_view = DocumentView::new();
+        if let DocumentView::Available(ref mut view) = expected_view {
+            view.insert(
+                "message".to_string(),
                 create_operation
                     .fields()
                     .unwrap()
                     .get("message")
                     .unwrap()
                     .to_owned(),
-            ),
-        );
-        assert_eq!(instance, expected_instance);
+            );
+        }
+        assert_eq!(doc_view, expected_view);
 
         // Convert an UPDATE or DELETE `Operation` into an `DocumentView`
         let instance_1 = DocumentView::try_from(update_operation);
@@ -196,38 +246,33 @@ mod tests {
 
     #[rstest]
     pub fn update(create_operation: Operation, update_operation: Operation) {
-        let mut chat_instance = DocumentView::try_from(create_operation.clone()).unwrap();
-        chat_instance
-            .apply_update(update_operation.clone())
-            .unwrap();
+        let mut chat_view = DocumentView::try_from(create_operation.clone()).unwrap();
+        chat_view.apply_update(update_operation.clone()).unwrap();
 
-        let mut exp_chat_instance = DocumentView::new();
-
-        exp_chat_instance.0.insert(
-            "message".to_string(),
-            Some(
+        let mut expected_chat_view = DocumentView::new();
+        if let DocumentView::Available(ref mut view) = expected_chat_view {
+            view.insert(
+                "message".to_string(),
                 create_operation
                     .fields()
                     .unwrap()
                     .get("message")
                     .unwrap()
                     .to_owned(),
-            ),
-        );
+            );
 
-        exp_chat_instance.0.insert(
-            "message".to_string(),
-            Some(
+            view.insert(
+                "message".to_string(),
                 update_operation
                     .fields()
                     .unwrap()
                     .get("message")
                     .unwrap()
                     .to_owned(),
-            ),
-        );
+            );
+        }
 
-        assert_eq!(chat_instance, exp_chat_instance)
+        assert_eq!(chat_view, expected_chat_view)
     }
 
     #[rstest]
@@ -240,21 +285,21 @@ mod tests {
         ";
 
         let chat = Schema::new(&schema_hash, &chat_schema_definition.to_string()).unwrap();
-        let chat_instance = chat.instance_from_create(create_operation.clone()).unwrap();
+        let chat_view = chat.instance_from_create(create_operation.clone()).unwrap();
 
-        let mut exp_chat_instance = DocumentView::new();
-        exp_chat_instance.0.insert(
-            "message".to_string(),
-            Some(
+        let mut expected_chat_view = DocumentView::new();
+        if let DocumentView::Available(ref mut view) = expected_chat_view {
+            view.insert(
+                "message".to_string(),
                 create_operation
                     .fields()
                     .unwrap()
                     .get("message")
                     .unwrap()
                     .to_owned(),
-            ),
-        );
+            );
+        }
 
-        assert_eq!(chat_instance, exp_chat_instance)
+        assert_eq!(chat_view, expected_chat_view)
     }
 }

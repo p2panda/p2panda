@@ -75,7 +75,10 @@ impl Document {
         let mut document_view = DocumentView::try_from(operations_iter.next().unwrap())?;
 
         // Apply every update in order to arrive at the current view.
-        operations_iter.try_for_each(|op| document_view.apply_update(op))?;
+        match operations_iter.try_for_each(|op| document_view.apply_update(op)) {
+            Ok(_) => log::debug!("Applied all operations"),
+            Err(error) => log::warn!("Stopped applying operations: {}", error)
+        };
 
         // Populate document meta data fields.
         meta.operations = sorted_graph_data.sorted();

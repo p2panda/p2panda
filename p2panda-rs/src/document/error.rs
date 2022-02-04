@@ -55,6 +55,10 @@ pub enum DocumentError {
 /// Custom error types for `DocumentView`.
 #[derive(Error, Debug)]
 pub enum DocumentViewError {
+    /// Deleted documents can't be updated anymore
+    #[error("can't apply updates to deleted document")]
+    DocumentDeleted,
+
     /// TryFrom operation must be CREATE.
     #[error("operation must be CREATE")]
     NotCreateOperation,
