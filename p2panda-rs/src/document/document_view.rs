@@ -8,7 +8,10 @@ use std::convert::TryFrom;
 use crate::document::error::DocumentViewError;
 use crate::operation::{AsOperation, Operation, OperationValue, OperationWithMeta};
 
-/// The materialised view of a reduced collection of `Operations` describing a document.
+/// The materialised view of a `Document`. It's fields match the documents schema definition.
+///
+/// `DocumentViews` can be instantiated from a CREATE operation and then mutated with UPDATE
+/// or DELETE operations.
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct DocumentView(BTreeMap<String, OperationValue>);
 

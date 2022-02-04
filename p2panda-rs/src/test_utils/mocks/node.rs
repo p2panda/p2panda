@@ -215,6 +215,15 @@ impl Node {
         self.db.get(author.as_str())
     }
 
+    /// Get entry by id
+    pub fn get_entry(&self, id: &Hash) -> LogEntry {
+        self.all_entries()
+            .iter()
+            .find(|entry| &entry.hash() == id)
+            .unwrap()
+            .to_owned()
+    }
+
     /// Get the document id associated with the passed entry hash.
     fn get_document_by_entry(&self, entry: &Hash) -> Option<Hash> {
         let mut document_id = None;
