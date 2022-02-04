@@ -10,7 +10,7 @@ use crate::operation::{AsOperation, Operation, OperationValue, OperationWithMeta
 
 /// The materialised view of a reduced collection of `Operations` describing a document.
 #[derive(Debug, PartialEq, Default, Clone)]
-pub struct DocumentView(BTreeMap<String, OperationValue>);
+pub struct DocumentView(BTreeMap<String, Option<OperationValue>>);
 
 impl DocumentView {
     /// Returns a new `DocumentView`.
@@ -18,22 +18,26 @@ impl DocumentView {
         Self(BTreeMap::new())
     }
 
-    /// Get a single value from this instance by it's key.
+    /// Get a single value from this instance by it's key. Returns `None` when the document
+    /// has been deleted.
     pub fn get(&self, key: &str) -> Option<&OperationValue> {
-        self.0.get(key)
+        match self.0.get(key) {
+            Some(Some(value)) => Some(value),
+            _ => None,
+        }
     }
 
     /// Update this `DocumentView` from an UPDATE `Operation`.
     pub fn apply_update<T: AsOperation>(&mut self, operation: T) -> Result<(), DocumentViewError> {
-        if !operation.is_update() {
-            return Err(DocumentViewError::NotUpdateOperation);
-        };
-
         let fields = operation.fields();
 
         if let Some(fields) = fields {
             for (key, value) in fields.iter() {
-                self.0.insert(key.to_string(), value.to_owned());
+                if operation.is_update() {
+                    self.0.insert(key.to_string(), Some(value.to_owned()));
+                } else {
+                    self.0.insert(key.to_string(), None);
+                }
             }
         }
 
@@ -46,7 +50,7 @@ impl DocumentView {
     }
 
     /// Returns an iterator of existing instance fields.
-    pub fn iter(&self) -> BTreeMapIter<String, OperationValue> {
+    pub fn iter(&self) -> BTreeMapIter<String, Option<OperationValue>> {
         self.0.iter()
     }
 
@@ -74,7 +78,7 @@ impl TryFrom<Operation> for DocumentView {
 
         if let Some(fields) = fields {
             for (key, value) in fields.iter() {
-                instance.0.insert(key.to_string(), value.to_owned());
+                instance.0.insert(key.to_string(), Some(value.to_owned()));
             }
         }
 
@@ -95,7 +99,7 @@ impl TryFrom<OperationWithMeta> for DocumentView {
 
         if let Some(fields) = fields {
             for (key, value) in fields.iter() {
-                instance.0.insert(key.to_string(), value.to_owned());
+                instance.0.insert(key.to_string(), Some(value.to_owned()));
             }
         }
 
@@ -103,8 +107,8 @@ impl TryFrom<OperationWithMeta> for DocumentView {
     }
 }
 
-impl From<BTreeMap<String, OperationValue>> for DocumentView {
-    fn from(map: BTreeMap<String, OperationValue>) -> Self {
+impl From<BTreeMap<String, Option<OperationValue>>> for DocumentView {
+    fn from(map: BTreeMap<String, Option<OperationValue>>) -> Self {
         Self(map)
     }
 }
@@ -171,12 +175,14 @@ mod tests {
         let mut expected_instance = DocumentView::new();
         expected_instance.0.insert(
             "message".to_string(),
-            create_operation
-                .fields()
-                .unwrap()
-                .get("message")
-                .unwrap()
-                .to_owned(),
+            Some(
+                create_operation
+                    .fields()
+                    .unwrap()
+                    .get("message")
+                    .unwrap()
+                    .to_owned(),
+            ),
         );
         assert_eq!(instance, expected_instance);
 
@@ -199,22 +205,26 @@ mod tests {
 
         exp_chat_instance.0.insert(
             "message".to_string(),
-            create_operation
-                .fields()
-                .unwrap()
-                .get("message")
-                .unwrap()
-                .to_owned(),
+            Some(
+                create_operation
+                    .fields()
+                    .unwrap()
+                    .get("message")
+                    .unwrap()
+                    .to_owned(),
+            ),
         );
 
         exp_chat_instance.0.insert(
             "message".to_string(),
-            update_operation
-                .fields()
-                .unwrap()
-                .get("message")
-                .unwrap()
-                .to_owned(),
+            Some(
+                update_operation
+                    .fields()
+                    .unwrap()
+                    .get("message")
+                    .unwrap()
+                    .to_owned(),
+            ),
         );
 
         assert_eq!(chat_instance, exp_chat_instance)
@@ -235,12 +245,14 @@ mod tests {
         let mut exp_chat_instance = DocumentView::new();
         exp_chat_instance.0.insert(
             "message".to_string(),
-            create_operation
-                .fields()
-                .unwrap()
-                .get("message")
-                .unwrap()
-                .to_owned(),
+            Some(
+                create_operation
+                    .fields()
+                    .unwrap()
+                    .get("message")
+                    .unwrap()
+                    .to_owned(),
+            ),
         );
 
         assert_eq!(chat_instance, exp_chat_instance)
