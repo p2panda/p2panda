@@ -78,8 +78,15 @@ rand = { version = "0.7.3", features = ["wasm-bindgen"] }
 wasm-bindgen = "0.2.78"
 
 [dev-dependencies]
+criterion = "0.3.4"
 ctor = "0.1.2"
+incremental-topo = "0.1.2"
 wasm-bindgen-test = "0.3.28"
 pretty_env_logger = "0.4"
 rstest = "0.12.0"
 rstest_reuse = "0.1.3"
+
+[[bench]]
+name = "graph"
+harness = false
+html_reports = true

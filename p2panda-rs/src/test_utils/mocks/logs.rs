@@ -163,6 +163,20 @@ impl AuthorLogs {
             .push(Log::new(document_id, entry_signed, operation_encoded))
     }
 
+    /// Returns the number of logs this author owns.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    /// Returns the number of logs this author owns.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Returns an iterator over all logs by this author.
+    pub fn iter(&self) -> Iter<Log> {
+        self.0.iter()
+    }
+
     /// Get a full log by it's document id.
     pub fn get_log_by_document_id(&self, document_id: &Hash) -> Option<&Log> {
         self.0.iter().find(|log| log.document() == *document_id)
@@ -171,11 +185,6 @@ impl AuthorLogs {
     /// Get the next available log id for this author.
     pub fn next_log_id(&self) -> LogId {
         LogId::new((self.0.len() + 1) as u64)
-    }
-
-    /// Returns an iterator over all logs by this author.
-    pub fn iter(&self) -> Iter<Log> {
-        self.0.iter()
     }
 
     /// Find the log id for the given document.
@@ -261,6 +270,7 @@ mod tests {
             &operation_encoded,
         );
 
+        assert_eq!(author_logs.len(), 1);
         assert_eq!(
             author_logs
                 .get_log_by_document_id(&entry_signed_encoded.hash())

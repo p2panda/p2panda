@@ -459,6 +459,11 @@ impl Validate for Operation {
             return Err(OperationError::EmptyFields);
         }
 
+        // DELETE must have empty fields
+        if self.is_delete() && self.has_fields() {
+            return Err(OperationError::DeleteWithFields);
+        }
+
         // UPDATE and DELETE operations must contain previous_operations.
         if !self.is_create() && (!self.has_previous_operations()) {
             return Err(OperationError::EmptyPreviousOperations);
@@ -553,7 +558,7 @@ mod tests {
             action: OperationAction::Update,
             version: OperationVersion::Default,
             schema: schema.clone(),
-            previous_operations: Some(vec![prev_op_id]),
+            previous_operations: Some(vec![prev_op_id.clone()]),
             // UPDATE operations must contain fields
             fields: None, // Error
         };
@@ -575,7 +580,7 @@ mod tests {
             action: OperationAction::Delete,
             version: OperationVersion::Default,
             schema,
-            previous_operations: None,
+            previous_operations: Some(vec![prev_op_id]),
             // DELETE operations must not contain fields
             fields: Some(fields), // Error
         };

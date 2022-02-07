@@ -86,13 +86,14 @@
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use log::{debug, info};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 
-use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
+use crate::document::{DocumentBuilder, DocumentView};
+use crate::entry::{decode_entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{AsOperation, Operation, OperationEncoded};
+use crate::operation::{AsOperation, Operation, OperationEncoded, OperationWithMeta};
 use crate::test_utils::mocks::logs::{AuthorLogs, LogEntry};
 use crate::test_utils::mocks::utils::Result;
 use crate::test_utils::mocks::Client;
@@ -199,6 +200,11 @@ impl Node {
         self.db.clone()
     }
 
+    /// Return an array of authors who publish to this node.
+    pub fn get_authors(&self) -> Vec<&String> {
+        self.db.keys().into_iter().collect()
+    }
+
     /// Get a mutable map of all logs published by a certain author.
     fn get_author_logs_mut(&mut self, author: &Author) -> Option<&mut AuthorLogs> {
         self.db.get_mut(author.as_str())
@@ -207,6 +213,15 @@ impl Node {
     /// Get a map of all logs published by a certain author.
     fn get_author_logs(&self, author: &Author) -> Option<&AuthorLogs> {
         self.db.get(author.as_str())
+    }
+
+    /// Get entry by id
+    pub fn get_entry(&self, id: &Hash) -> LogEntry {
+        self.all_entries()
+            .iter()
+            .find(|entry| &entry.hash() == id)
+            .unwrap()
+            .to_owned()
     }
 
     /// Get the document id associated with the passed entry hash.
@@ -343,10 +358,10 @@ impl Node {
                     backlink,
                 }
             }
-            // This is the first entry in the log so we construct next entry args
-            // from default values.
+            // This document log doesn't exist yet, so we construct next entry args
+            // based on the next log id for the author.
             None => NextEntryArgs {
-                log_id: LogId::default(),
+                log_id: author_logs.next_log_id(),
                 seq_num: SeqNum::default(),
                 skiplink: None,
                 backlink: None,
@@ -414,6 +429,10 @@ impl Node {
 
         // Get the log for this document from the author logs.
         match author_logs.get_log_mut(log_id) {
+            Some(_) if operation.is_create() => {
+                // If this is a create message the assigned log id should be free.
+                return Err(format!("Log with id: {} already exists.", log_id.as_u64()).into());
+            }
             Some(log) => {
                 // If there is one, insert this new entry.
                 log.add_entry(LogEntry::new(entry_encoded, operation_encoded));
@@ -452,6 +471,42 @@ impl Node {
 
         Ok(next_entry_args)
     }
+
+    /// Returns all of a documents entries from this node. Includes entries from all authors.
+    pub fn get_document_entries(&self, id: &Hash) -> Vec<LogEntry> {
+        self.db()
+            .iter()
+            .flat_map(|(_, author_logs)| author_logs.iter().filter(|log| log.document() == *id))
+            .flat_map(|log| log.entries())
+            .collect()
+    }
+
+    /// Get a single resolved document from the node.
+    pub fn get_document(&self, id: &Hash) -> DocumentView {
+        let entries = self.get_document_entries(id);
+        let operations = entries
+            .iter()
+            .map(|entry| {
+                OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap()
+            })
+            .collect();
+        let document = DocumentBuilder::new(operations).build().unwrap();
+        document.view().to_owned()
+    }
+
+    /// Get all documents in their resolved state from the node.
+    pub fn get_documents(&self) -> Vec<DocumentView> {
+        let mut documents = HashSet::new();
+        for (_author, author_logs) in self.db() {
+            author_logs.iter().for_each(|log| {
+                documents.insert(log.document().as_str().to_string());
+            });
+        }
+        documents
+            .iter()
+            .map(|x| self.get_document(&Hash::new(x).unwrap()))
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -469,14 +524,16 @@ mod tests {
     use super::{send_to_node, Node};
 
     #[rstest]
-    fn next_entry_args(private_key: String) {
+    fn publishing_entries(private_key: String) {
         let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
         let mut node = Node::new();
 
+        // This is an empty node which has no author logs.
         let next_entry_args = node
             .get_next_entry_args(&panda.author(), None, None)
             .unwrap();
 
+        // These are the next_entry_args we would expect to get when making a request to this node.
         let mut expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
             seq_num: SeqNum::new(1).unwrap(),
@@ -489,7 +546,10 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        // Publish a CREATE operation
+        // Panda publishes a create operation.
+        // This instantiates a new document.
+        //
+        // PANDA  : [1]
         let (panda_entry_1_hash, next_entry_args) = send_to_node(
             &mut node,
             &panda,
@@ -497,12 +557,13 @@ mod tests {
                 hash(DEFAULT_SCHEMA_HASH),
                 operation_fields(vec![(
                     "message",
-                    OperationValue::Text("Ohh, my first message!".to_string()),
+                    OperationValue::Text("Ohh, my first message! [Panda]".to_string()),
                 )]),
             ),
         )
         .unwrap();
 
+        // The seq_num has incremented to 2 because panda already published one entry.
         expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
             seq_num: SeqNum::new(2).unwrap(),
@@ -515,7 +576,15 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        // Publish an UPDATE operation
+        // The database contains one author now.
+        assert_eq!(node.get_authors().len(), 1);
+        // Who has one log.
+        assert_eq!(node.get_author_logs(&panda.author()).unwrap().len(), 1);
+
+        // Panda publishes an update operation.
+        // It contains the hash of the current graph tip in it's `previous_operations`.
+        //
+        // PANDA  : [1] <-- [2]
         let (panda_entry_2_hash, next_entry_args) = send_to_node(
             &mut node,
             &panda,
@@ -524,7 +593,7 @@ mod tests {
                 vec![panda_entry_1_hash.clone()],
                 operation_fields(vec![(
                     "message",
-                    OperationValue::Text("Which I now update.".to_string()),
+                    OperationValue::Text("Which I now update. [Panda]".to_string()),
                 )]),
             ),
         )
@@ -541,6 +610,9 @@ mod tests {
         assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
+
+        assert_eq!(node.get_authors().len(), 1);
+        assert_eq!(node.get_author_logs(&panda.author()).unwrap().len(), 1);
 
         let penguin = Client::new("penguin".to_string(), KeyPair::new());
 
@@ -560,7 +632,11 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        // Publish an UPDATE operation
+        // Penguin publishes an update operation which refers to panda's last operation
+        // as the graph tip.
+        //
+        // PANDA  : [1] <--[2]
+        // PENGUIN:           \--[1]
         let (penguin_entry_1_hash, next_entry_args) = send_to_node(
             &mut node,
             &penguin,
@@ -569,7 +645,7 @@ mod tests {
                 vec![panda_entry_2_hash],
                 operation_fields(vec![(
                     "message",
-                    OperationValue::Text("Which I now update.".to_string()),
+                    OperationValue::Text("My turn to update. [Penguin]".to_string()),
                 )]),
             ),
         )
@@ -587,7 +663,14 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        // Publish an UPDATE operation
+        assert_eq!(node.get_authors().len(), 2);
+        assert_eq!(node.get_author_logs(&penguin.author()).unwrap().len(), 1);
+
+        // Penguin publishes another update operation refering to their own previous operation
+        // as the graph tip.
+        //
+        // PANDA  : [1] <--[2]
+        // PENGUIN:           \--[1] <--[2]
         let (penguin_entry_2_hash, next_entry_args) = send_to_node(
             &mut node,
             &penguin,
@@ -596,7 +679,7 @@ mod tests {
                 vec![penguin_entry_1_hash],
                 operation_fields(vec![(
                     "message",
-                    OperationValue::Text("Which I now update again.".to_string()),
+                    OperationValue::Text("And again. [Penguin]".to_string()),
                 )]),
             ),
         )
@@ -613,6 +696,56 @@ mod tests {
         assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
+
+        // Now there are 2 authors publishing ot the node.
+        assert_eq!(node.get_authors().len(), 2);
+        assert_eq!(node.get_author_logs(&penguin.author()).unwrap().len(), 1);
+
+        // We can query the node for the current document state.
+        let instance = node.get_document(&panda_entry_1_hash);
+
+        // It was last updated by Penguin, this writes over previous values.
+        assert_eq!(
+            *instance.get("message").unwrap(),
+            OperationValue::Text("And again. [Penguin]".to_string())
+        );
+        // There should only be one document in the database.
+        assert_eq!(node.get_documents().len(), 1);
+
+        // Panda publishes another create operation.
+        // This again instantiates a new document.
+        //
+        // PANDA  : [1]
+        let (panda_entry_1_hash, next_entry_args) = send_to_node(
+            &mut node,
+            &panda,
+            &create_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Ohh, my first message in a new document!".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        expected_next_entry_args = NextEntryArgs {
+            log_id: LogId::new(2),
+            seq_num: SeqNum::new(2).unwrap(),
+            backlink: Some(panda_entry_1_hash),
+            skiplink: None,
+        };
+
+        assert_eq!(next_entry_args.log_id, expected_next_entry_args.log_id);
+        assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
+        assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
+        assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
+
+        assert_eq!(node.get_authors().len(), 2);
+        // Now panda has 2 document logs.
+        assert_eq!(node.get_author_logs(&panda.author()).unwrap().len(), 2);
+        // There should be 2 document in the database.
+        assert_eq!(node.get_documents().len(), 2);
     }
 
     #[rstest]
@@ -649,10 +782,12 @@ mod tests {
         )
         .unwrap();
 
+        // For testig, we can request entry args for a specific entry in an authors log.
         let next_entry_args = node
             .next_entry_args(
                 &panda.author(),
                 Some(&entry1_hash),
+                // Here we request the entry args required for publishing the second entry of the log.
                 Some(&SeqNum::new(2).unwrap()),
             )
             .unwrap();
@@ -668,5 +803,126 @@ mod tests {
         assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
+    }
+
+    #[rstest]
+    fn concurrent_updates(private_key: String) {
+        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
+        let penguin = Client::new(
+            "penguin".to_string(),
+            keypair_from_private(
+                "eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e3".to_string(),
+            ),
+        );
+        let mut node = Node::new();
+
+        // Publish a CREATE operation
+        //
+        // PANDA  : [1]
+        let (panda_entry_1_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &create_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                operation_fields(vec![
+                    (
+                        "cafe_name",
+                        OperationValue::Text("Polar Pear Cafe".to_string()),
+                    ),
+                    (
+                        "address",
+                        OperationValue::Text("1, Polar Bear Rise, Panda Town".to_string()),
+                    ),
+                ]),
+            ),
+        )
+        .unwrap();
+
+        let instance = node.get_document(&panda_entry_1_hash);
+        assert_eq!(
+            *instance.get("cafe_name").unwrap(),
+            OperationValue::Text("Polar Pear Cafe".to_string())
+        );
+
+        // Publish an UPDATE operation
+        //
+        // PANDA  : [1] <--[2]
+        let (panda_entry_2_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &update_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                vec![panda_entry_1_hash.clone()],
+                operation_fields(vec![(
+                    "cafe_name",
+                    OperationValue::Text("Polar Bear Cafe".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let instance = node.get_document(&panda_entry_1_hash);
+        assert_eq!(
+            *instance.get("cafe_name").unwrap(),
+            OperationValue::Text("Polar Bear Cafe".to_string())
+        );
+
+        // Penguin publishes an UPDATE operation, but they haven't seen Panda's most recent entry [2]
+        // making this a concurrent update which forks the document graph.
+        //
+        // PANDA  : [1] <--[2]
+        //            \
+        // PENGUIN:    [1]
+        let (penguin_entry_1_hash, _) = send_to_node(
+            &mut node,
+            &penguin,
+            &update_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                vec![panda_entry_1_hash.clone()],
+                operation_fields(vec![(
+                    "address",
+                    OperationValue::Text("1, Polar Bear rd, Panda Town".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let instance = node.get_document(&panda_entry_1_hash);
+        assert_eq!(
+            *instance.get("address").unwrap(),
+            OperationValue::Text("1, Polar Bear rd, Panda Town".to_string())
+        );
+
+        // Penguin publishes another UPDATE operation, this time they have replicated all entries
+        // and refer to the two existing document graph tips in the previous_operation fields.
+        //
+        // PANDA  : [1] <-- [2]
+        //            \        \
+        // PENGUIN:    [1] <-- [2]
+        let (_penguin_entry_2_hash, _) = send_to_node(
+            &mut node,
+            &penguin,
+            &update_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                vec![penguin_entry_1_hash, panda_entry_2_hash],
+                operation_fields(vec![(
+                    "cafe_name",
+                    OperationValue::Text("Polar Bear Café".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let instance = node.get_document(&panda_entry_1_hash);
+        assert_eq!(
+            *instance.get("cafe_name").unwrap(),
+            OperationValue::Text("Polar Bear Café".to_string())
+        );
+
+        // As more operations are published, the graph could look like this:
+        //
+        // PANDA  : [1] <--[2]          [3] <--[4] <--[5]
+        //            \       \         /
+        // PENGUIN:    [1] <--[2] <--[3]
     }
 }

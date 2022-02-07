@@ -30,6 +30,7 @@ Not released yet, due to unpublished dependencies: :package: `p2panda-rs`
 - `test_utils` module containing `rstest` fixtures, mock `Node` and `Client` structs, test data helper for `p2panda-js` [#116](https://github.com/p2panda/p2panda/pull/116) `rs`
 - Reconciliation logic /w DAG for materialisation module [#129](https://github.com/p2panda/p2panda/pull/129) `rs`
 - `Instance` which encapsulates the materialised view of a reduced collection of `Operations` [#161](https://github.com/p2panda/p2panda/pull/161) `rs`
+- `Document` for sorting and reducing a graph of `Operations` [#169](https://github.com/p2panda/p2panda/pull/169) `rs` 🥞
 - Retrieve unsigned bytes to verify `Entry` signatures manually [#197](https://github.com/p2panda/p2panda/pull/197/files) `rs`
 
 ### Changed
@@ -53,6 +54,7 @@ Not released yet, due to unpublished dependencies: :package: `p2panda-rs`
 - Changes to `mocks` module in `test_utils` [#181](https://github.com/p2panda/p2panda/pull/181) `rs`
 - Implement logging for mock node in `test_utils` [#192](https://github.com/p2panda/p2panda/pull/192) `rs`
 - Support `u64` and `i64` integers, remove `sqlx` [#177](https://github.com/p2panda/p2panda/pull/177) `rs` `js`
+- `Instance` renamed to `DocumentView` [#169](https://github.com/p2panda/p2panda/pull/169) `rs`
 
 ### Campfires and boiling pots to sit around
 

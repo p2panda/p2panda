@@ -183,7 +183,7 @@ pub fn delete_operation(
     utils::delete_operation(schema, previous_operations)
 }
 
-/// Fixture which injects the default CREATE Operation into a test method.
+/// Fixture which injects the default CREATE OperationWithMeta into a test method.
 ///
 /// Default value can be overridden at testing time by passing in custom schema hash and operation
 /// fields.
