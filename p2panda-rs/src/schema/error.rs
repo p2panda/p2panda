@@ -3,11 +3,12 @@
 use thiserror::Error;
 
 /// Custom error types for schema validation.
-#[derive(Error, Debug)]
+#[derive(Error)]
 pub enum SchemaError {
     /// Operation contains invalid fields.
-    #[error("invalid operation schema: {0}")]
-    InvalidSchema(String),
+    // Note: We pretty-print the vector of error strings to get line breaks
+    #[error("invalid operation schema: {0:#?}")]
+    InvalidSchema(Vec<String>),
 
     /// Operation can't be deserialised from invalid CBOR encoding.
     #[error("invalid CBOR format")]
@@ -32,4 +33,12 @@ pub enum SchemaError {
     /// `Operation` error.
     #[error("error while creating operation")]
     OperationError(#[from] crate::operation::OperationError),
+}
+
+impl std::fmt::Debug for SchemaError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // We want to format based on `Display` ("{}") instead of `Debug` ("{:?}") to respect line
+        // breaks from the displayed error messages.
+        f.write_str(format!("{}", self).as_ref())
+    }
 }

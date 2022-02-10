@@ -28,9 +28,8 @@ pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaEr
         Err(cbor::Error::Validation(err)) => {
             let err_str = err
                 .iter()
-                .map(|fe| format!("{}: \"{}\"", fe.cbor_location, fe.reason))
-                .collect::<Vec<String>>()
-                .join(", ");
+                .map(|fe| format!("{}", fe).replace("\"", "'"))
+                .collect::<Vec<String>>();
 
             Err(error::SchemaError::InvalidSchema(err_str))
         }
