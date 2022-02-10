@@ -680,8 +680,6 @@ mod tests {
         // Encode operation ...
         let encoded = OperationEncoded::try_from(&operation).unwrap();
 
-        println!("{:?}", encoded);
-
         // ... and decode it again
         let operation_restored = Operation::try_from(&encoded).unwrap();
 

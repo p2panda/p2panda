@@ -63,16 +63,11 @@ impl Validate for OperationEncoded {
 
     /// Checks encoded operation value against hex format and CDDL schema.
     fn validate(&self) -> Result<(), Self::Error> {
-        println!("{:?}", self.0);
-
         // Validate hex encoding
         let bytes = hex::decode(&self.0).map_err(|_| OperationEncodedError::InvalidHexEncoding)?;
 
         // Validate CDDL schema
-        validate_schema(OPERATION_SCHEMA, bytes).map_err(|err| {
-            println!("{}", err);
-            err
-        })?;
+        validate_schema(OPERATION_SCHEMA, bytes)?;
 
         Ok(())
     }
