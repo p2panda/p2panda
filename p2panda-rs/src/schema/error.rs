@@ -37,8 +37,18 @@ pub enum SchemaError {
 
 impl std::fmt::Debug for SchemaError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            SchemaError::InvalidSchema(_) => write!(f, "InvalidSchema"),
+            SchemaError::InvalidCBOR => write!(f, "InvalidCBOR"),
+            SchemaError::NoSchema => write!(f, "NoSchema"),
+            SchemaError::ParsingError(_) => write!(f, "ParsingError"),
+            SchemaError::ValidationError(_) => write!(f, "ValidationError"),
+            SchemaError::OperationFieldsError(_) => write!(f, "OperationFieldsError"),
+            SchemaError::OperationError(_) => write!(f, "OperationError"),
+        }?;
+
         // We want to format based on `Display` ("{}") instead of `Debug` ("{:?}") to respect line
         // breaks from the displayed error messages.
-        f.write_str(format!("{}", self).as_ref())
+        f.write_str(format!("({})", self).as_ref())
     }
 }
