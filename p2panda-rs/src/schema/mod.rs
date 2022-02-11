@@ -28,9 +28,15 @@ pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaEr
         Err(cbor::Error::Validation(err)) => {
             let err_str = err
                 .iter()
-                .map(|fe| format!("{}: \"{}\"", fe.cbor_location, fe.reason))
-                .collect::<Vec<String>>()
-                .join(", ");
+                .map(|fe| {
+                    format!("{}", fe)
+                        // Quotes escaped in error messages from `cddl` crate are actually not unescaped by
+                        // format macro.
+                        //
+                        // See: https://github.com/anweiss/cddl/blob/main/src/validator/cbor.rs#L100
+                        .replace("\"", "'")
+                })
+                .collect::<Vec<String>>();
 
             Err(error::SchemaError::InvalidSchema(err_str))
         }

@@ -22,6 +22,10 @@ Highlights are marked with a pancake 🥞
 
 - Fix determination of field types in p2panda-js [#202](https://github.com/p2panda/p2panda/pull/202)
 
+## Everything burrito
+
+- Easier to read CDDL schema error strings [#207](https://github.com/p2panda/p2panda/pull/207)
+
 ## [0.3.0]
 
 Released on 2022-02-02: :package: `p2panda-js`

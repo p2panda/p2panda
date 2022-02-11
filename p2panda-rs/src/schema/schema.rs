@@ -187,7 +187,7 @@ impl Schema {
 
         let schema_hash = match Hash::new(schema_hash.as_str()) {
             Ok(hash) => Ok(hash),
-            Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
+            Err(err) => Err(SchemaError::InvalidSchema(vec![err.to_string()])),
         }?;
 
         Ok(Self {
@@ -239,7 +239,7 @@ impl Schema {
         for (key, value) in key_values {
             match fields.add(key, value) {
                 Ok(_) => Ok(()),
-                Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
+                Err(err) => Err(SchemaError::InvalidSchema(vec![err.to_string()])),
             }?;
         }
 
@@ -250,7 +250,7 @@ impl Schema {
 
         match Operation::new_update(self.schema_hash(), previous_operations, fields) {
             Ok(hash) => Ok(hash),
-            Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
+            Err(err) => Err(SchemaError::InvalidSchema(vec![err.to_string()])),
         }
     }
 
@@ -298,7 +298,7 @@ where
                     .collect::<Vec<String>>()
                     .join(", ");
 
-                Err(SchemaError::InvalidSchema(err))
+                Err(SchemaError::InvalidSchema(vec![err]))
             }
             Err(cbor::Error::CBORParsing(_err)) => Err(SchemaError::InvalidCBOR),
             Err(cbor::Error::CDDLParsing(err)) => {
