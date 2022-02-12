@@ -261,7 +261,7 @@ impl Node {
     }
 
     /// Get a single document from the node.
-    pub fn get_document(&self, id: &Hash) -> Document {
+    pub fn get_document(&self, id: &Hash) -> Result<Document> {
         let entries = self.get_document_entries(id);
         let operations = entries
             .iter()
@@ -269,7 +269,8 @@ impl Node {
                 OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap()
             })
             .collect();
-        DocumentBuilder::new(operations).build().unwrap()
+        let document = DocumentBuilder::new(operations).build()?;
+        Ok(document)
     }
 
     /// Get all documents from the node.
@@ -282,7 +283,7 @@ impl Node {
         }
         documents
             .iter()
-            .map(|x| self.get_document(&Hash::new(x).unwrap()))
+            .map(|document_id| self.get_document(&Hash::new(document_id).unwrap()).unwrap())
             .collect()
     }
 
@@ -701,7 +702,7 @@ mod tests {
         assert_eq!(node.get_author_logs(&penguin.author()).unwrap().len(), 1);
 
         // We can query the node for the current document state.
-        let document = node.get_document(&panda_entry_1_hash);
+        let document = node.get_document(&panda_entry_1_hash).unwrap();
 
         // It was last updated by Penguin, this writes over previous values.
         assert_eq!(
@@ -837,7 +838,7 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.get_document(&panda_entry_1_hash);
+        let document = node.get_document(&panda_entry_1_hash).unwrap();
         assert_eq!(
             *document.view().get("cafe_name").unwrap(),
             OperationValue::Text("Polar Pear Cafe".to_string())
@@ -860,7 +861,7 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.get_document(&panda_entry_1_hash);
+        let document = node.get_document(&panda_entry_1_hash).unwrap();
         assert_eq!(
             *document.view().get("cafe_name").unwrap(),
             OperationValue::Text("Polar Bear Cafe".to_string())
@@ -886,7 +887,7 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.get_document(&panda_entry_1_hash);
+        let document = node.get_document(&panda_entry_1_hash).unwrap();
         assert_eq!(
             *document.view().get("address").unwrap(),
             OperationValue::Text("1, Polar Bear rd, Panda Town".to_string())
@@ -912,7 +913,7 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.get_document(&panda_entry_1_hash);
+        let document = node.get_document(&panda_entry_1_hash).unwrap();
         assert_eq!(
             *document.view().get("cafe_name").unwrap(),
             OperationValue::Text("Polar Bear Café".to_string())
