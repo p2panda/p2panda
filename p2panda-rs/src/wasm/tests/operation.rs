@@ -25,6 +25,9 @@ fn add_remove_operation_fields() {
     )
     .unwrap();
 
+    let list = Array::new();
+    list.push(&relation);
+
     // Add a couple of valid fields
     fields
         .add("name", "str", JsValue::from_str("Panda"))
@@ -42,8 +45,11 @@ fn add_remove_operation_fields() {
         .add("favorite_cafe", "relation", relation.clone())
         .unwrap();
 
+    fields
+        .add("locations", "relation_list", list.clone().into())
+        .unwrap();
+
     // Make sure they have been added successfully
-    assert_eq!(fields.len(), 4);
     assert_eq!(fields.get("name").unwrap(), "Panda");
     assert_eq!(fields.get("is_panda").unwrap(), true);
     assert_eq!(fields.get("height_cm").unwrap(), 167.8);
@@ -54,12 +60,20 @@ fn add_remove_operation_fields() {
         fields.get("favorite_cafe").unwrap().as_string(),
         relation.as_string()
     );
+    assert_eq!(
+        fields.get("locations").unwrap().as_string(),
+        list.as_string()
+    );
+
+    // Check if number of fields is correct
+    assert_eq!(fields.len(), 5);
 
     // .. and remove them again successfully
     fields.remove("name").unwrap();
     fields.remove("is_panda").unwrap();
     fields.remove("height_cm").unwrap();
     fields.remove("favorite_cafe").unwrap();
+    fields.remove("locations").unwrap();
     assert_eq!(fields.len(), 0);
 }
 
@@ -74,7 +88,14 @@ fn invalid_relation_values() {
             \"this_field\": \"is_not_known!\"
         }"
     ).unwrap();
-    assert!(fields.add("test", "relation", unknown_field).is_err());
+
+    assert!(fields
+        .add("test", "relation", unknown_field.clone())
+        .is_err());
+
+    let list = Array::new();
+    list.push(&unknown_field);
+    assert!(fields.add("test", "relation_list", list.into()).is_err());
 
     // Fail when using invalid hash
     let invalid_hash_1 = JSON::parse(
@@ -83,7 +104,13 @@ fn invalid_relation_values() {
         }",
     )
     .unwrap();
-    assert!(fields.add("test", "relation", invalid_hash_1).is_err());
+    assert!(fields
+        .add("test", "relation", invalid_hash_1.clone())
+        .is_err());
+
+    let list = Array::new();
+    list.push(&invalid_hash_1);
+    assert!(fields.add("test", "relation_list", list.into()).is_err());
 
     let invalid_hash_2 = JSON::parse(
         "{
@@ -92,7 +119,14 @@ fn invalid_relation_values() {
         }",
     )
     .unwrap();
-    assert!(fields.add("test", "relation", invalid_hash_2).is_err());
+
+    assert!(fields
+        .add("test", "relation", invalid_hash_2.clone())
+        .is_err());
+
+    let list = Array::new();
+    list.push(&invalid_hash_2);
+    assert!(fields.add("test", "relation_list", list.into()).is_err());
 }
 
 #[wasm_bindgen_test]
