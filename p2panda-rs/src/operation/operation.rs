@@ -41,6 +41,25 @@ impl Relation {
     }
 }
 
+impl Validate for Relation {
+    type Error = OperationError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        self.document.validate()?;
+
+        match &self.document_view {
+            Some(view) => {
+                for operation_id in view {
+                    operation_id.validate()?;
+                }
+
+                Ok(())
+            }
+            None => Ok(()),
+        }
+    }
+}
+
 /// Operation format versions to introduce API changes in the future.
 ///
 /// Operations contain the actual data of applications in the p2panda network and will be stored

@@ -94,7 +94,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::hash::Hash;
-    use crate::operation::{AsOperation, Operation, OperationFields, OperationValue, Relation};
+    use crate::operation::{AsOperation, Operation, OperationValue, Relation};
     use crate::test_utils::fixtures::{
         encoded_create_string, fields, random_hash, schema, update_operation,
     };

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use js_sys::Array;
+use js_sys::{Array, JSON};
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 
@@ -16,61 +16,89 @@ wasm_bindgen_test_configure!(run_in_browser);
 fn add_remove_operation_fields() {
     let mut fields = OperationFields::new();
 
+    // Prepare test value by parsing JSON into JavaScript `object` instance
+    let relation = JSON::parse(
+        "{
+            \"document\": \"00205d23607adf6490033cc319cd2b193b2674243f7dd56912432978684ed4fbf12e\",
+            \"document_view\": []
+        }",
+    )
+    .unwrap();
+
     // Add a couple of valid fields
     fields
-        .add(
-            "name".to_string(),
-            "str".to_string(),
-            JsValue::from_str("Panda"),
-        )
+        .add("name", "str", JsValue::from_str("Panda"))
         .unwrap();
 
     fields
-        .add(
-            "is_panda".to_string(),
-            "bool".to_string(),
-            JsValue::from_bool(true),
-        )
+        .add("is_panda", "bool", JsValue::from_bool(true))
         .unwrap();
 
     fields
-        .add(
-            "height_cm".to_string(),
-            "float".to_string(),
-            JsValue::from_f64(167.8),
-        )
+        .add("height_cm", "float", JsValue::from_f64(167.8))
         .unwrap();
 
     fields
-        .add(
-            "favorite_cafe".to_string(),
-            "relation".to_string(),
-            JsValue::from_str(Hash::new_from_bytes(vec![1, 2, 3]).unwrap().as_str()),
-        )
+        .add("favorite_cafe", "relation", relation.clone())
         .unwrap();
 
     // Make sure they have been added successfully
-    assert_eq!(fields.get("name".to_string()).unwrap(), "Panda");
-    assert_eq!(fields.get("is_panda".to_string()).unwrap(), true);
-    assert_eq!(fields.get("height_cm".to_string()).unwrap(), 167.8);
-    assert_eq!(
-        fields.get("favorite_cafe".to_string()).unwrap(),
-        Hash::new_from_bytes(vec![1, 2, 3]).unwrap().as_str()
-    );
     assert_eq!(fields.len(), 4);
+    assert_eq!(fields.get("name").unwrap(), "Panda");
+    assert_eq!(fields.get("is_panda").unwrap(), true);
+    assert_eq!(fields.get("height_cm").unwrap(), 167.8);
+
+    // Note: A `==` comparison of two "equal" objects will still result in `false` in JavaScript,
+    // this is why we compare the string representations instead.
+    assert_eq!(
+        fields.get("favorite_cafe").unwrap().as_string(),
+        relation.as_string()
+    );
 
     // .. and remove them again successfully
-    fields.remove("name".to_string()).unwrap();
-    fields.remove("is_panda".to_string()).unwrap();
-    fields.remove("height_cm".to_string()).unwrap();
-    fields.remove("favorite_cafe".to_string()).unwrap();
+    fields.remove("name").unwrap();
+    fields.remove("is_panda").unwrap();
+    fields.remove("height_cm").unwrap();
+    fields.remove("favorite_cafe").unwrap();
     assert_eq!(fields.len(), 0);
+}
+
+#[wasm_bindgen_test]
+fn invalid_relation_values() {
+    let mut fields = OperationFields::new();
+
+    // Fail when unknown fields are inside of relation object
+    let unknown_field = JSON::parse(
+        "{
+            \"unknown_field\": \"00205d23607adf6490033cc319cd2b193b2674243f7dd56912432978684ed4fbf12e\",
+            \"this_field\": \"is_not_known!\"
+        }"
+    ).unwrap();
+    assert!(fields.add("test", "relation", unknown_field).is_err());
+
+    // Fail when using invalid hash
+    let invalid_hash_1 = JSON::parse(
+        "{
+            \"document\": \"this is not a hash\"
+        }",
+    )
+    .unwrap();
+    assert!(fields.add("test", "relation", invalid_hash_1).is_err());
+
+    let invalid_hash_2 = JSON::parse(
+        "{
+            \"document\": \"00205d23607adf6490033cc319cd2b193b2674243f7dd56912432978684ed4fbf12e\",
+            \"document_view\": [\"This is not a hash\"]
+        }",
+    )
+    .unwrap();
+    assert!(fields.add("test", "relation", invalid_hash_2).is_err());
 }
 
 #[wasm_bindgen_test]
 fn inexistent_fields() {
     let mut fields = OperationFields::new();
-    let result = fields.remove("non_existant_key".to_string());
+    let result = fields.remove("non_existant_key");
     assert!(result.is_err());
 }
 
@@ -79,15 +107,10 @@ fn integer_fields() {
     let mut fields = OperationFields::new();
 
     // "int" fields get added as strings to allow large integers
-    fields
-        .add("age".to_string(), "int".to_string(), JsValue::from_str("5"))
-        .unwrap();
+    fields.add("age", "int", JsValue::from_str("5")).unwrap();
 
     // "int" fields always get returned as BigInt instances
-    assert_eq!(
-        fields.get("age".to_string()).unwrap(),
-        JsValue::bigint_from_str("5")
-    );
+    assert_eq!(fields.get("age").unwrap(), JsValue::bigint_from_str("5"));
 }
 
 #[wasm_bindgen_test]
@@ -96,21 +119,21 @@ fn large_integers() {
 
     fields
         .add(
-            "really_big_number".to_string(),
-            "int".to_string(),
+            "really_big_number",
+            "int",
             JsValue::from_str("3147483647345534523"),
         )
         .unwrap();
 
     assert_eq!(
-        fields.get("really_big_number".to_string()).unwrap(),
+        fields.get("really_big_number").unwrap(),
         JsValue::bigint_from_str("3147483647345534523")
     );
 
     // This integer is too large and can't be represented as i64
     let result = fields.add(
-        "really_big_number".to_string(),
-        "int".to_string(),
+        "really_big_number",
+        "int",
         JsValue::from_str("932187321673219932187732188"),
     );
     assert!(result.is_err());
@@ -120,42 +143,30 @@ fn large_integers() {
 fn encodes_operations() {
     let mut fields = OperationFields::new();
 
+    let relation = JSON::parse(
+        "{
+            \"document\": \"00205d23607adf6490033cc319cd2b193b2674243f7dd56912432978684ed4fbf12e\",
+            \"document_view\": []
+        }",
+    )
+    .unwrap();
+
     // Create a couple of operation fields
     fields
-        .add(
-            "name".to_string(),
-            "str".to_string(),
-            JsValue::from_str("Panda"),
-        )
+        .add("name", "str", JsValue::from_str("Panda"))
         .unwrap();
 
     fields
-        .add(
-            "is_panda".to_string(),
-            "bool".to_string(),
-            JsValue::from_bool(true),
-        )
+        .add("is_panda", "bool", JsValue::from_bool(true))
         .unwrap();
 
-    fields
-        .add("age".to_string(), "int".to_string(), JsValue::from_str("5"))
-        .unwrap();
+    fields.add("age", "int", JsValue::from_str("5")).unwrap();
 
     fields
-        .add(
-            "height_cm".to_string(),
-            "float".to_string(),
-            JsValue::from_f64(167.8),
-        )
+        .add("height_cm", "float", JsValue::from_f64(167.8))
         .unwrap();
 
-    fields
-        .add(
-            "favorite_cafe".to_string(),
-            "relation".to_string(),
-            JsValue::from_str(Hash::new_from_bytes(vec![1, 2, 3]).unwrap().as_str()),
-        )
-        .unwrap();
+    fields.add("favorite_cafe", "relation", relation).unwrap();
 
     // ~~~~~~
     // CREATE
