@@ -200,6 +200,55 @@ impl Node {
         self.db.clone()
     }
 
+    /// Add an entry to the db, has no effect if entry already exists.
+    fn insert_entry(&mut self, entry: &LogEntry, document_id: &Hash) {
+        let author = entry.author();
+
+        if let Some(author_logs) = self.db.get_mut(&author) {
+            if let Some(document_log) = author_logs.get_log_mut_by_document_id(document_id) {
+                let existing_entry = document_log
+                    .entries()
+                    .into_iter()
+                    .find(|ex_entry| ex_entry.hash() == entry.hash());
+
+                if existing_entry.is_none() {
+                    document_log.add_entry(entry.to_owned());
+                }
+            } else {
+                author_logs.create_new_log(
+                    document_id.to_owned(),
+                    &entry.entry_encoded(),
+                    &entry.operation_encoded(),
+                );
+            }
+        } else {
+            let mut author_logs = AuthorLogs::new();
+            author_logs.create_new_log(
+                document_id.to_owned(),
+                &entry.entry_encoded(),
+                &entry.operation_encoded(),
+            );
+            self.db.insert(author.as_str().into(), author_logs);
+        }
+    }
+
+    /// Replicate entries between this node and another.
+    pub fn replicate_with(&mut self, other_node: &mut Node) {
+        for entry in self.all_entries() {
+            let document_id = self
+                .get_document_by_entry(&entry.hash())
+                .expect("Could not determine document_id");
+            other_node.insert_entry(&entry, &document_id);
+        }
+
+        for entry in other_node.all_entries() {
+            let document_id = other_node
+                .get_document_by_entry(&entry.hash())
+                .expect("Could not determine document_id");
+            self.insert_entry(&entry, &document_id);
+        }
+    }
+
     /// Return an array of authors who publish to this node.
     pub fn get_authors(&self) -> Vec<&String> {
         self.db.keys().into_iter().collect()
@@ -924,5 +973,117 @@ mod tests {
         // PANDA  : [1] <--[2]          [3] <--[4] <--[5]
         //            \       \         /
         // PENGUIN:    [1] <--[2] <--[3]
+    }
+
+    #[rstest]
+    fn replication() {
+        let panda = Client::new("panda".to_string(), KeyPair::new());
+        let penguin = Client::new("penguin".to_string(), KeyPair::new());
+        let mut panda_node = Node::new();
+        let mut penguin_node = Node::new();
+
+        // Panda publishes a create operation to their node.
+        // This instantiates a new document.
+        //
+        // PANDA_NODE_DOC_1  : [1]
+        let (panda_entry_1_hash, _) = send_to_node(
+            &mut panda_node,
+            &panda,
+            &create_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Ohh, my first message! [Panda]".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        // Panda publishes an update operation.
+        // It contains the hash of the current graph tip in it's `previous_operations`.
+        //
+        // PANDA_NODE_DOC_1  : [1] <-- [2]
+        let (panda_entry_2_hash, _) = send_to_node(
+            &mut panda_node,
+            &panda,
+            &update_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                vec![panda_entry_1_hash.clone()],
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("Which I now update. [Panda]".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let panda_node_entries = panda_node.all_entries();
+        assert_eq!(panda_node_entries.len(), 2);
+
+        penguin_node.replicate_with(&mut panda_node);
+
+        let penguin_node_entries = penguin_node.all_entries();
+        assert_eq!(penguin_node_entries.len(), 2);
+
+        // Penguin publishes an update operation to panda's document but to their own node. Unfortunately, there is a network
+        // partition so this update never gets to panda.
+        //
+        // PANDA_NODE_DOC_1  : [1] <--[2]
+        // ===================!!NETWORK PARTITION!!=====================
+        // PENGUIN_NODE_DOC_1:           \--[1]
+        let (penguin_entry_1_hash, _) = send_to_node(
+            &mut penguin_node,
+            &penguin,
+            &update_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                vec![panda_entry_2_hash],
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("My turn to update. [Penguin]".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        assert_eq!(penguin_node.all_entries().len(), 3);
+        assert_eq!(penguin_node.get_authors().len(), 2);
+
+        // Penguin publishes another update operation refering to their own previous operation
+        // as the graph tip.
+        //
+        // PANDA_NODE_DOC_1  : [1] <--[2]
+        // ===================!!NETWORK PARTITION!!=====================
+        // PENGUIN_NODE_DOC_1:           \--[1] <--[2]
+        let (_, _) = send_to_node(
+            &mut penguin_node,
+            &penguin,
+            &update_operation(
+                hash(DEFAULT_SCHEMA_HASH),
+                vec![penguin_entry_1_hash],
+                operation_fields(vec![(
+                    "message",
+                    OperationValue::Text("And again. [Penguin]".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        panda_node.replicate_with(&mut penguin_node);
+        panda_node.replicate_with(&mut penguin_node);
+
+        assert_eq!(penguin_node.all_entries().len(), 4);
+        assert_eq!(panda_node.all_entries().len(), 4);
+        assert_eq!(penguin_node.get_authors().len(), 2);
+        assert_eq!(panda_node.get_authors().len(), 2);
+        assert_eq!(penguin_node.get_documents().len(), 1);
+        assert_eq!(panda_node.get_documents().len(), 1);
+
+        assert_eq!(
+            panda_node.get_document(&panda_entry_1_hash).unwrap().view(),
+            penguin_node
+                .get_document(&panda_entry_1_hash)
+                .unwrap()
+                .view()
+        );
     }
 }

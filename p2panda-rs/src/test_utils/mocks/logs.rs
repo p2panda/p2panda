@@ -8,7 +8,7 @@
 use std::convert::TryFrom;
 use std::slice::Iter;
 
-use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
+use crate::entry::{decode_entry, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{AsOperation, Operation, OperationEncoded};
@@ -50,6 +50,11 @@ impl LogEntry {
     /// Get the operation from this entry.
     pub fn operation(&self) -> Operation {
         Operation::try_from(&self.operation_encoded).unwrap()
+    }
+
+    /// Get the decoded entry from this entry.
+    pub fn entry_decoded(&self) -> Entry {
+        decode_entry(&self.entry_encoded, None).unwrap()
     }
 
     /// Get the encoded entry from this entry.
@@ -108,7 +113,7 @@ impl Log {
 
     /// Get the entries from this log.
     pub fn entries(&self) -> Vec<LogEntry> {
-        self.entries.to_owned()
+        self.entries.clone()
     }
 
     /// Get the author of this log.
@@ -180,6 +185,11 @@ impl AuthorLogs {
     /// Get a full log by it's document id.
     pub fn get_log_by_document_id(&self, document_id: &Hash) -> Option<&Log> {
         self.0.iter().find(|log| log.document() == *document_id)
+    }
+
+    /// Get a full log by it's document id.
+    pub fn get_log_mut_by_document_id(&mut self, document_id: &Hash) -> Option<&mut Log> {
+        self.0.iter_mut().find(|log| log.document() == *document_id)
     }
 
     /// Get the next available log id for this author.
