@@ -201,7 +201,7 @@ impl Node {
     }
 
     /// Add an entry to the db, has no effect if entry already exists.
-    fn insert_entry(&mut self, entry: &LogEntry, document_id: &Hash) {
+    fn insert_entry(&mut self, entry: &LogEntry, document_id: &Hash) -> bool {
         let author = entry.author();
 
         if let Some(author_logs) = self.db.get_mut(&author) {
@@ -213,13 +213,16 @@ impl Node {
 
                 if existing_entry.is_none() {
                     document_log.add_entry(entry.to_owned());
+                    return true;
                 }
+                false
             } else {
                 author_logs.create_new_log(
                     document_id.to_owned(),
                     &entry.entry_encoded(),
                     &entry.operation_encoded(),
                 );
+                true
             }
         } else {
             let mut author_logs = AuthorLogs::new();
@@ -229,24 +232,23 @@ impl Node {
                 &entry.operation_encoded(),
             );
             self.db.insert(author.as_str().into(), author_logs);
+            true
         }
     }
 
-    /// Replicate entries between this node and another.
-    pub fn replicate_with(&mut self, other_node: &mut Node) {
-        for entry in self.all_entries() {
-            let document_id = self
-                .get_document_by_entry(&entry.hash())
-                .expect("Could not determine document_id");
-            other_node.insert_entry(&entry, &document_id);
-        }
+    /// Replicate entries from other_node to this node.
+    pub fn replicate_with(&mut self, other_node: &mut Node) -> Vec<Hash> {
+        let mut replicated_entries = Vec::new();
 
         for entry in other_node.all_entries() {
             let document_id = other_node
                 .get_document_by_entry(&entry.hash())
                 .expect("Could not determine document_id");
-            self.insert_entry(&entry, &document_id);
+            if self.insert_entry(&entry, &document_id) {
+                replicated_entries.push(entry.hash().to_owned())
+            }
         }
+        replicated_entries
     }
 
     /// Return an array of authors who publish to this node.
@@ -1069,7 +1071,7 @@ mod tests {
         .unwrap();
 
         panda_node.replicate_with(&mut penguin_node);
-        panda_node.replicate_with(&mut penguin_node);
+        penguin_node.replicate_with(&mut panda_node);
 
         assert_eq!(penguin_node.all_entries().len(), 4);
         assert_eq!(panda_node.all_entries().len(), 4);
