@@ -146,7 +146,7 @@ pub enum OperationValue {
     #[serde(rename = "relation")]
     Relation(Relation),
 
-    /// Reference to a document.
+    /// Reference to a list of documents.
     #[serde(rename = "relation_list")]
     RelationList(Vec<Relation>),
 }
