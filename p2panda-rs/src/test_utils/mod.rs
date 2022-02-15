@@ -6,7 +6,7 @@
 //! implementations, methods for generating test data (used in `p2panda-js`).
 pub mod constants;
 pub mod fixtures;
-pub mod graph;
+pub mod mermaid;
 pub mod mocks;
 pub mod test_data;
 pub mod utils;
