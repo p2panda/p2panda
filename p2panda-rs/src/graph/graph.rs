@@ -86,41 +86,42 @@ impl<T: PartialEq + Clone + Debug> GraphData<T> {
 
 impl<'a, T: PartialEq + Clone + Debug> Node<T> {
     /// Returns true if this node is the root of this graph.
-    fn is_root(&self) -> bool {
+    pub fn is_root(&self) -> bool {
         self.previous.is_empty()
     }
 
     /// Returns true if this is a merge node.
-    fn is_merge(&self) -> bool {
+    pub fn is_merge(&self) -> bool {
         self.previous.len() > 1
     }
 
     /// Returns true if this is a branch node.
-    fn is_branch(&self) -> bool {
+    pub fn is_branch(&self) -> bool {
         self.next.len() > 1
     }
 
     /// Returns true if this is a graph tip.
-    fn is_tip(&self) -> bool {
+    pub fn is_tip(&self) -> bool {
         self.next.is_empty()
     }
 
     /// Returns the key for this node.
-    fn key(&self) -> &String {
+    pub fn key(&self) -> &String {
         &self.key
     }
 
     /// Returns a vector of keys for the nodes preceding this node in the graph.
-    fn previous(&self) -> &Vec<String> {
+    pub fn previous(&self) -> &Vec<String> {
         &self.previous
     }
 
     /// Returns a vector of keys for the nodes following this node in the graph.
-    fn next(&self) -> &Vec<String> {
+    pub fn next(&self) -> &Vec<String> {
         &self.next
     }
 
-    fn data(&self) -> T {
+    /// Returns the data of type T which is contained in this node.
+    pub fn data(&self) -> T {
         self.data.clone()
     }
 }
@@ -238,7 +239,7 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
     }
 
     /// Check if all a nodes dependencies have been visited.
-    fn dependencies_visited(&self, sorted: &[&Node<T>], node: &Node<T>) -> bool {
+    pub fn dependencies_visited(&self, sorted: &[&Node<T>], node: &Node<T>) -> bool {
         let mut has_dependencies = true;
         let previous_nodes = node.previous();
 
@@ -253,7 +254,7 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
     }
 
     /// Returns the next un-visited node following the passed node.
-    fn next(&'a self, sorted: &[&Node<T>], node: &Node<T>) -> Option<Vec<&'a Node<T>>> {
+    pub fn next(&'a self, sorted: &[&Node<T>], node: &Node<T>) -> Option<Vec<&'a Node<T>>> {
         let mut next_nodes: Vec<&'a Node<T>> = Vec::new();
 
         for node_key in node.next() {
@@ -361,6 +362,16 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
     pub fn sort(&'a self) -> Result<GraphData<T>, GraphError> {
         let root_node = self.root_node_key()?;
         self.walk_from(root_node)
+    }
+
+    /// The number of nodes present in this graph.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns true if this graph contains no nodes.
+    pub fn is_empty(&self) -> bool {
+        self.0.len() == 0
     }
 }
 

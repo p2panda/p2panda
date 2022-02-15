@@ -228,6 +228,7 @@ mod tests {
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, fields, random_key_pair, schema, update_operation,
     };
+    use crate::test_utils::graph::{build_graph, into_mermaid};
     use crate::test_utils::mocks::{send_to_node, Client, Node};
     use crate::test_utils::utils::operation_fields;
 
@@ -435,6 +436,10 @@ mod tests {
 
         assert_eq!(replica_1.view().get("name"), replica_2.view().get("name"));
         assert_eq!(replica_1.view().get("name"), replica_3.view().get("name"));
+
+        let graph = build_graph(replica_3.operations());
+        let mermaid_str = into_mermaid(graph).unwrap();
+        println!("{}", mermaid_str);
     }
 
     #[rstest]

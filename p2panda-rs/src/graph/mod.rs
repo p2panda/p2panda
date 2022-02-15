@@ -123,4 +123,4 @@ mod error;
 mod graph;
 
 pub use error::GraphError;
-pub use graph::Graph;
+pub use graph::{Graph, Node};
