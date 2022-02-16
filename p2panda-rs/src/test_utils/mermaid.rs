@@ -4,9 +4,7 @@
 
 use std::collections::HashMap;
 
-use crate::{
-    operation::{AsOperation, OperationWithMeta},
-};
+use crate::operation::{AsOperation, OperationWithMeta};
 
 /// Trait for parsing a struct mermaid-js strings.
 pub trait ToMermaid {
@@ -75,14 +73,19 @@ pub fn into_mermaid(
         }
     }
     if let Some(author_colors) = author_colors {
-
-        // HashMaps aren't ordered, so we sort the authors alphabetically so the resultant mermaid string 
+        // HashMaps aren't ordered, so we sort the authors alphabetically so the resultant mermaid string
         // is deterministic. Mainly to help with testing.
-        let mut authors: Vec<String> = author_colors.iter().map(|(author, _)|author.to_owned()).collect();
+        let mut authors: Vec<String> = author_colors
+            .iter()
+            .map(|(author, _)| author.to_owned())
+            .collect();
         authors.sort();
-    
+
         for author in authors {
-            mermaid_str += &format!("classDef {author} fill:{};\n", author_colors.get(&author).unwrap());
+            mermaid_str += &format!(
+                "classDef {author} fill:{};\n",
+                author_colors.get(&author).unwrap()
+            );
         }
         for op in operations {
             mermaid_str += &format!(
@@ -217,8 +220,7 @@ mod test {
         author_colors.insert(format!("A{}", &panda.public_key()), "#fc7e58".to_string());
         author_colors.insert(format!("A{}", &penguin.public_key()), "#baf477".to_string());
 
-        let expected_mermaid_str = 
-            "\ngraph TD;\n".to_string() +
+        let expected_mermaid_str = "\ngraph TD;\n".to_string() +
                 "0020b22e51716fdc436ab5f6ab7822f7440d7cf27bd0281e80dcb53f5ffe5b19079c[<table><tr><th>0020b22e51716fdc436ab5f6ab7822f744<br>0d7cf27bd0281e80dcb53f5ffe5b19079c</th></tr><tr><td>CREATE</td></tr><tr><td><table><tr><td>name</td><td>Panda Cafe</td></tr></table><td><tr></table>];\n" + 
                 "002018f7ba553e196c59d15a569df57d283f4e1551b8f8fb946b942574ca0b9441b7[<table><tr><th>002018f7ba553e196c59d15a569df57d28<br>3f4e1551b8f8fb946b942574ca0b9441b7</th></tr><tr><td>UPDATE</td></tr><tr><td><table><tr><td>name</td><td>Panda Cafe!</td></tr></table><td><tr></table>];\n" + 
                 "0020ba32164f5cdcee9bc74cb1aa87ae88cd8582755bed1a6f29be84bf034119b049[<table><tr><th>0020ba32164f5cdcee9bc74cb1aa87ae88<br>cd8582755bed1a6f29be84bf034119b049</th></tr><tr><td>UPDATE</td></tr><tr><td><table><tr><td>name</td><td>Penguin Cafe</td></tr></table><td><tr></table>];\n" + 
