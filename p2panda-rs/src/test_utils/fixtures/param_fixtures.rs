@@ -15,6 +15,7 @@ use crate::identity::KeyPair;
 use crate::operation::{
     Operation, OperationEncoded, OperationFields, OperationValue, OperationWithMeta,
 };
+use crate::schema::SchemaType;
 use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
 use crate::test_utils::fixtures::defaults;
 use crate::test_utils::utils;
@@ -57,8 +58,8 @@ pub fn seq_num(#[default(1)] n: u64) -> SeqNum {
 /// Fixture which injects the default schema Hash into a test method. Default value can be
 /// overridden at testing time by passing in a custom schema hash string.
 #[fixture]
-pub fn schema(#[default(DEFAULT_SCHEMA_HASH)] schema_str: &str) -> Hash {
-    utils::hash(schema_str)
+pub fn schema(#[default(DEFAULT_SCHEMA_HASH)] schema_str: &str) -> SchemaType {
+    SchemaType::Application(utils::hash(schema_str))
 }
 
 /// Fixture which injects the default Hash into a test method. Default value can be overridden at
@@ -153,7 +154,7 @@ pub fn operation_encoded(operation: Operation) -> OperationEncoded {
 /// Default value can be overridden at testing time by passing in custom schema hash and operation
 /// fields.
 #[fixture]
-pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
+pub fn create_operation(schema: SchemaType, fields: OperationFields) -> Operation {
     utils::create_operation(schema, fields)
 }
 
@@ -163,7 +164,7 @@ pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
 /// hash and operation fields.
 #[fixture]
 pub fn update_operation(
-    schema: Hash,
+    schema: SchemaType,
     #[default(vec![hash(DEFAULT_HASH)])] previous_operations: Vec<Hash>,
     #[default(fields(vec![("message", OperationValue::Text("Updated, hello!".to_string()))]))]
     fields: OperationFields,
@@ -177,7 +178,7 @@ pub fn update_operation(
 /// id hash.
 #[fixture]
 pub fn delete_operation(
-    schema: Hash,
+    schema: SchemaType,
     #[default(vec![hash(DEFAULT_HASH)])] previous_operations: Vec<Hash>,
 ) -> Operation {
     utils::delete_operation(schema, previous_operations)
@@ -213,7 +214,10 @@ pub fn v0_3_0_fixture() -> Fixture {
             OperationValue::Text("for playing chess".to_string()),
         ),
     ]);
-    let operation = create_operation(Hash::new(DEFAULT_SCHEMA_HASH).unwrap(), operation_fields);
+    let operation = create_operation(
+        SchemaType::Application(Hash::new(DEFAULT_SCHEMA_HASH).unwrap()),
+        operation_fields,
+    );
     let key_pair = utils::keypair_from_private(
         "4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176".into(),
     );

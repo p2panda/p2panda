@@ -23,13 +23,14 @@ use crate::operation::OperationEncoded;
 /// use p2panda_rs::hash::Hash;
 /// use p2panda_rs::identity::KeyPair;
 /// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
+/// use p2panda_rs::schema::SchemaType;
 ///
 /// // Generate Ed25519 key pair to sign entry with
 /// let key_pair = KeyPair::new();
 ///
 /// // Create operation
 /// let schema_hash =
-///     Hash::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
+///     SchemaType::Application(Hash::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?);
 /// let mut fields = OperationFields::new();
 /// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
 /// let operation = Operation::new_create(schema_hash, fields)?;

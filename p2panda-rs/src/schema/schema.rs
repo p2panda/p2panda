@@ -19,6 +19,8 @@ use crate::hash::Hash;
 use crate::operation::{AsOperation, Operation, OperationFields, OperationValue};
 use crate::schema::SchemaError;
 
+use super::SchemaType;
+
 /// CDDL types.
 #[derive(Clone, Debug, Copy)]
 #[allow(missing_docs)]
@@ -113,7 +115,7 @@ pub struct SchemaBuilder {
 /// following the defined schema.
 #[derive(Clone, Debug)]
 pub struct Schema {
-    schema_hash: Hash,
+    schema: SchemaType,
     schema_string: String,
 }
 
@@ -173,7 +175,7 @@ impl fmt::Display for SchemaBuilder {
 
 impl Schema {
     /// Create a new Schema from a schema hash and schema CDDL string.
-    pub fn new(schema_hash: &Hash, schema_str: &str) -> Result<Self, SchemaError> {
+    pub fn new(schema: &SchemaType, schema_str: &str) -> Result<Self, SchemaError> {
         let mut lexer = Lexer::new(schema_str);
         let parser = Parser::new(lexer.iter(), schema_str);
 
@@ -185,20 +187,15 @@ impl Schema {
             Err(err) => Err(SchemaError::ParsingError(err.to_string())),
         }?;
 
-        let schema_hash = match Hash::new(schema_hash.as_str()) {
-            Ok(hash) => Ok(hash),
-            Err(err) => Err(SchemaError::InvalidSchema(vec![err.to_string()])),
-        }?;
-
         Ok(Self {
-            schema_hash,
+            schema: schema.to_owned(),
             schema_string,
         })
     }
 
     /// Return the hash id of this schema.
-    pub fn schema_hash(&self) -> Hash {
-        self.schema_hash.clone()
+    pub fn schema(&self) -> SchemaType {
+        self.schema.clone()
     }
 
     /// Create a new CREATE operation validated against this schema.
@@ -221,7 +218,7 @@ impl Schema {
             Err(err) => Err(SchemaError::ValidationError(err.to_string())),
         }?;
 
-        match Operation::new_create(self.schema_hash(), fields) {
+        match Operation::new_create(self.schema(), fields) {
             Ok(hash) => Ok(hash),
             Err(err) => Err(SchemaError::OperationError(err)),
         }
@@ -248,7 +245,7 @@ impl Schema {
             Err(err) => Err(SchemaError::ValidationError(err.to_string())),
         }?;
 
-        match Operation::new_update(self.schema_hash(), previous_operations, fields) {
+        match Operation::new_update(self.schema(), previous_operations, fields) {
             Ok(hash) => Ok(hash),
             Err(err) => Err(SchemaError::InvalidSchema(vec![err.to_string()])),
         }
@@ -320,7 +317,8 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::operation::{Operation, OperationFields, OperationValue};
-    use crate::test_utils::fixtures::{create_operation, hash};
+    use crate::schema::SchemaType;
+    use crate::test_utils::fixtures::{create_operation, schema};
 
     use super::{Schema, SchemaBuilder, Type, ValidateOperation};
 
@@ -375,7 +373,7 @@ mod tests {
     }
 
     #[rstest]
-    pub fn schema_from_string(#[from(hash)] schema_hash: Hash) {
+    pub fn schema_from_string(schema: SchemaType) {
         // Create a new "person" operation
         let mut me = OperationFields::new();
         me.add("name", OperationValue::Text("Sam".to_owned()))
@@ -388,17 +386,16 @@ mod tests {
             name: { type: \"str\", value: tstr }
         ) }";
 
-        let person_from_string = Schema::new(&schema_hash, &cddl_str.to_string()).unwrap();
+        let person_from_string = Schema::new(&schema, &cddl_str.to_string()).unwrap();
 
         // Validate operation fields against person schema
         assert!(person_from_string.validate_operation_fields(&me).is_ok());
     }
 
     #[rstest]
-    pub fn validate_against_megaschema(#[from(hash)] schema_hash: Hash) {
+    pub fn validate_against_megaschema(schema: SchemaType) {
         // Instantiate global application schema from mega schema string and it's hash
-        let application_schema =
-            Schema::new(&schema_hash, &APPLICATION_SCHEMA.to_string()).unwrap();
+        let application_schema = Schema::new(&schema, &APPLICATION_SCHEMA.to_string()).unwrap();
 
         let mut me = OperationFields::new();
         me.add("name", OperationValue::Text("Sam".to_owned()))
@@ -437,8 +434,8 @@ mod tests {
     }
 
     #[rstest]
-    pub fn test_create_operation(#[from(hash)] schema_hash: Hash) {
-        let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
+    pub fn test_create_operation(schema: SchemaType) {
+        let person_schema = Schema::new(&schema, &PERSON_SCHEMA.to_string()).unwrap();
 
         // Create an operation the long way without validation
         let mut operation_fields = OperationFields::new();
@@ -449,7 +446,7 @@ mod tests {
             .add("age", OperationValue::Integer(12))
             .unwrap();
 
-        let operation = Operation::new_create(schema_hash, operation_fields).unwrap();
+        let operation = Operation::new_create(schema, operation_fields).unwrap();
 
         // Create an operation the quick way *with* validation
         let operation_again = person_schema
@@ -463,8 +460,8 @@ mod tests {
     }
 
     #[rstest]
-    pub fn test_update_operation(#[from(hash)] schema_hash: Hash) {
-        let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
+    pub fn test_update_operation(schema: SchemaType) {
+        let person_schema = Schema::new(&schema, &PERSON_SCHEMA.to_string()).unwrap();
 
         // Create a operation the long way without validation
         let mut operation_fields = OperationFields::new();
@@ -476,7 +473,7 @@ mod tests {
             .unwrap();
 
         let operation = Operation::new_update(
-            schema_hash,
+            schema,
             vec![Hash::new_from_bytes(vec![12, 128]).unwrap()],
             operation_fields,
         )
@@ -497,13 +494,13 @@ mod tests {
     }
 
     #[rstest]
-    pub fn create_validate_instance(#[from(hash)] schema_hash: Hash, create_operation: Operation) {
+    pub fn create_validate_instance(schema: SchemaType, create_operation: Operation) {
         // Instantiate "person" schema from cddl string
         let chat_schema_defnition = "chat = { (
                     message: { type: \"str\", value: tstr }
                 ) }";
 
-        let chat = Schema::new(&schema_hash, &chat_schema_defnition.to_string()).unwrap();
+        let chat = Schema::new(&schema, &chat_schema_defnition.to_string()).unwrap();
 
         let chat_instance = chat.instance_from_create(create_operation.clone());
 
@@ -513,7 +510,7 @@ mod tests {
             number: { type: \"int\", value: int }
         ) }";
 
-        let number = Schema::new(&schema_hash, &not_chat_schema_defnition.to_string()).unwrap();
+        let number = Schema::new(&schema, &not_chat_schema_defnition.to_string()).unwrap();
 
         let not_chat_instance = number.instance_from_create(create_operation);
 

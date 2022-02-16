@@ -30,12 +30,13 @@ use crate::Validate;
 /// use p2panda_rs::entry::{Entry, LogId, SeqNum};
 /// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
 /// use p2panda_rs::hash::Hash;
+/// use p2panda_rs::schema::SchemaType;
 /// # let schema_hash_str = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 ///
 /// // == FIRST ENTRY IN NEW LOG ==
 ///
 /// // Create schema hash
-/// let schema_hash = Hash::new(schema_hash_str)?;
+/// let schema_hash = SchemaType::Application(Hash::new(schema_hash_str)?);
 ///
 /// // Create a OperationFields instance and add a text field string with the key "title"
 /// let mut fields = OperationFields::new();
@@ -62,6 +63,7 @@ use crate::Validate;
 /// use p2panda_rs::entry::{Entry, LogId, SeqNum};
 /// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
 /// use p2panda_rs::hash::Hash;
+/// use p2panda_rs::schema::SchemaType;
 ///
 /// // == ENTRY IN EXISTING LOG ==
 /// # let backlink_hash_string = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
@@ -75,7 +77,7 @@ use crate::Validate;
 /// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
 ///
 /// // Create an operation containing the above fields
-/// let operation = Operation::new_create(schema_hash, fields)?;
+/// let operation = Operation::new_create(SchemaType::Application(schema_hash), fields)?;
 ///
 /// // Create log ID from u64
 /// let log_id = LogId::new(1);
@@ -209,6 +211,7 @@ mod tests {
     use crate::entry::{LogId, SeqNum};
     use crate::hash::Hash;
     use crate::operation::{Operation, OperationFields, OperationValue};
+    use crate::schema::SchemaType;
 
     use super::Entry;
 
@@ -219,8 +222,11 @@ mod tests {
         fields
             .add("test", OperationValue::Text("Hello".to_owned()))
             .unwrap();
-        let operation =
-            Operation::new_create(Hash::new_from_bytes(vec![1, 2, 3]).unwrap(), fields).unwrap();
+        let operation = Operation::new_create(
+            SchemaType::Application(Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
+            fields,
+        )
+        .unwrap();
         let backlink = Hash::new_from_bytes(vec![7, 8, 9]).unwrap();
 
         // The first entry in a log doesn't need and cannot have references to previous entries

@@ -15,6 +15,7 @@ use crate::identity::KeyPair;
 use crate::operation::{
     Operation, OperationEncoded, OperationFields, OperationValue, OperationWithMeta,
 };
+use crate::schema::SchemaType;
 use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
 
 /// A custom `Result` type to be able to dynamically propagate `Error` types.
@@ -48,19 +49,22 @@ pub fn any_operation(
     match fields {
         // It's a CREATE operation
         Some(fields) if previous_operations.is_none() => {
-            Operation::new_create(hash(DEFAULT_SCHEMA_HASH), fields).unwrap()
+            Operation::new_create(SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)), fields)
+                .unwrap()
         }
         // It's an UPDATE operation
         Some(fields) => Operation::new_update(
-            hash(DEFAULT_SCHEMA_HASH),
+            SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)),
             previous_operations.unwrap(),
             fields,
         )
         .unwrap(),
         // It's a DELETE operation
-        None => {
-            Operation::new_delete(hash(DEFAULT_SCHEMA_HASH), previous_operations.unwrap()).unwrap()
-        }
+        None => Operation::new_delete(
+            SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)),
+            previous_operations.unwrap(),
+        )
+        .unwrap(),
     }
 }
 
@@ -94,6 +98,11 @@ pub fn hash(hash_str: &str) -> Hash {
     Hash::new(hash_str).unwrap()
 }
 
+/// Generate an application schema based on a hash string.
+pub fn schema(hash_str: &str) -> SchemaType {
+    SchemaType::Application(Hash::new(hash_str).unwrap())
+}
+
 /// Generate an entry based on passed values.
 pub fn entry(
     operation: Operation,
@@ -112,13 +121,13 @@ pub fn entry(
 }
 
 /// Generate a CREATE operation based on passed schema hash and operation fields.
-pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
+pub fn create_operation(schema: SchemaType, fields: OperationFields) -> Operation {
     Operation::new_create(schema, fields).unwrap()
 }
 
 /// Generate an UPDATE operation based on passed schema hash, document id and operation fields.
 pub fn update_operation(
-    schema: Hash,
+    schema: SchemaType,
     previous_operations: Vec<Hash>,
     fields: OperationFields,
 ) -> Operation {
@@ -126,7 +135,7 @@ pub fn update_operation(
 }
 
 /// Generate a DELETE operation based on passed schema hash and document id.
-pub fn delete_operation(schema: Hash, previous_operations: Vec<Hash>) -> Operation {
+pub fn delete_operation(schema: SchemaType, previous_operations: Vec<Hash>) -> Operation {
     Operation::new_delete(schema, previous_operations).unwrap()
 }
 

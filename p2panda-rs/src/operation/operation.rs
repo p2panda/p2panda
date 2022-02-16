@@ -9,6 +9,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::hash::Hash;
 use crate::operation::{OperationEncoded, OperationError, OperationFieldsError};
+use crate::schema::SchemaType;
 use crate::Validate;
 
 /// Operation format versions to introduce API changes in the future.
@@ -255,7 +256,7 @@ pub struct Operation {
     action: OperationAction,
 
     /// Hash of schema describing format of operation fields.
-    schema: Hash,
+    schema: SchemaType,
 
     /// Version schema of this operation.
     version: OperationVersion,
@@ -280,9 +281,9 @@ impl Operation {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use p2panda_rs::hash::Hash;
     /// use p2panda_rs::operation::{AsOperation, Operation, OperationFields, OperationValue};
+    /// use p2panda_rs::schema::SchemaType;
     ///
-    /// let schema_hash_string = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
-    /// let schema_msg_hash = Hash::new(schema_hash_string)?;
+    /// let msg_schema_hash = Hash::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
     /// let mut msg_fields = OperationFields::new();
     ///
     /// msg_fields
@@ -292,14 +293,14 @@ impl Operation {
     ///     )
     ///     .unwrap();
     ///
-    /// let create_operation = Operation::new_create(schema_msg_hash, msg_fields)?;
+    /// let create_operation = Operation::new_create(SchemaType::Application(msg_schema_hash), msg_fields)?;
     ///
     /// assert_eq!(AsOperation::is_create(&create_operation), true);
     ///
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new_create(schema: Hash, fields: OperationFields) -> Result<Self, OperationError> {
+    pub fn new_create(schema: SchemaType, fields: OperationFields) -> Result<Self, OperationError> {
         let operation = Self {
             action: OperationAction::Create,
             version: OperationVersion::Default,
@@ -315,7 +316,7 @@ impl Operation {
 
     /// Returns new UPDATE operation.
     pub fn new_update(
-        schema: Hash,
+        schema: SchemaType,
         previous_operations: Vec<Hash>,
         fields: OperationFields,
     ) -> Result<Self, OperationError> {
@@ -334,7 +335,7 @@ impl Operation {
 
     /// Returns new DELETE operation.
     pub fn new_delete(
-        schema: Hash,
+        schema: SchemaType,
         previous_operations: Vec<Hash>,
     ) -> Result<Self, OperationError> {
         let operation = Self {
@@ -365,7 +366,7 @@ pub trait AsOperation {
     fn action(&self) -> OperationAction;
 
     /// Returns schema of operation.
-    fn schema(&self) -> Hash;
+    fn schema(&self) -> SchemaType;
 
     /// Returns version of operation.
     fn version(&self) -> OperationVersion;
@@ -414,7 +415,7 @@ impl AsOperation for Operation {
     }
 
     /// Returns schema of operation.
-    fn schema(&self) -> Hash {
+    fn schema(&self) -> SchemaType {
         self.schema.to_owned()
     }
 
@@ -488,6 +489,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::operation::OperationEncoded;
+    use crate::schema::SchemaType;
     use crate::test_utils::fixtures::templates::many_valid_operations;
     use crate::test_utils::fixtures::{fields, random_hash, schema};
     use crate::Validate;
@@ -518,7 +520,7 @@ mod tests {
     #[rstest]
     fn operation_validation(
         fields: OperationFields,
-        schema: Hash,
+        schema: SchemaType,
         #[from(random_hash)] prev_op_id: Hash,
     ) {
         let invalid_create_operation_1 = Operation {
@@ -589,7 +591,7 @@ mod tests {
     }
 
     #[rstest]
-    fn encode_and_decode(schema: Hash, #[from(random_hash)] prev_op_id: Hash) {
+    fn encode_and_decode(schema: SchemaType, #[from(random_hash)] prev_op_id: Hash) {
         // Create test operation
         let mut fields = OperationFields::new();
 
@@ -627,7 +629,7 @@ mod tests {
     }
 
     #[rstest]
-    fn field_ordering(schema: Hash) {
+    fn field_ordering(schema: SchemaType) {
         // Create first test operation
         let mut fields = OperationFields::new();
         fields

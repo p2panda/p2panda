@@ -20,7 +20,8 @@
 //! # use p2panda_rs::hash::Hash;
 //! # use p2panda_rs::identity::KeyPair;
 //! # use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
-//! # let profile_schema = Hash::new_from_bytes(vec![1, 2, 3])?;
+//! # use p2panda_rs::schema::SchemaType;
+//! # let profile_schema = SchemaType::Application(Hash::new_from_bytes(vec![1, 2, 3])?);
 //! // Generate new Ed25519 key pair
 //! let key_pair = KeyPair::new();
 //!

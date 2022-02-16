@@ -4,6 +4,7 @@
 /// command. The output data can be used for testing a p2panda implementation. It is currently used
 /// in `p2panda-js`.
 use p2panda_rs::operation::OperationValue;
+use p2panda_rs::schema::SchemaType;
 use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 use p2panda_rs::test_utils::mocks::Client;
 use p2panda_rs::test_utils::mocks::{send_to_node, Node};
@@ -24,7 +25,7 @@ fn main() {
         &mut node,
         &panda,
         &create_operation(
-            hash(DEFAULT_SCHEMA_HASH),
+            SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)),
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("Ohh, my first message!".to_string()),
@@ -38,7 +39,7 @@ fn main() {
         &mut node,
         &panda,
         &update_operation(
-            hash(DEFAULT_SCHEMA_HASH),
+            SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)),
             vec![entry1_hash],
             operation_fields(vec![(
                 "message",
@@ -53,7 +54,7 @@ fn main() {
         &mut node,
         &panda,
         &update_operation(
-            hash(DEFAULT_SCHEMA_HASH),
+            SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)),
             vec![entry2_hash],
             operation_fields(vec![(
                 "message",
@@ -67,7 +68,10 @@ fn main() {
     send_to_node(
         &mut node,
         &panda,
-        &delete_operation(hash(DEFAULT_SCHEMA_HASH), vec![entry3_hash]),
+        &delete_operation(
+            SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)),
+            vec![entry3_hash],
+        ),
     )
     .unwrap();
 
@@ -80,6 +84,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use p2panda_rs::schema::SchemaType;
     /// Generate json formatted test data
     use serde_json::Value;
 
@@ -108,7 +113,7 @@ mod tests {
             &mut node,
             &panda,
             &create_operation(
-                hash(DEFAULT_SCHEMA_HASH),
+                SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)),
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Ohh, my first message!".to_string()),

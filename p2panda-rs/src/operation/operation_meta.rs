@@ -9,6 +9,7 @@ use crate::operation::{
     AsOperation, Operation, OperationAction, OperationEncoded, OperationFields, OperationVersion,
     OperationWithMetaError,
 };
+use crate::schema::SchemaType;
 use crate::Validate;
 
 /// Wrapper struct containing an operation, the hash of its entry, and the public key of its
@@ -75,7 +76,7 @@ impl AsOperation for OperationWithMeta {
     }
 
     /// Returns schema of operation.
-    fn schema(&self) -> Hash {
+    fn schema(&self) -> SchemaType {
         self.operation.schema()
     }
 
@@ -111,7 +112,7 @@ mod tests {
 
     use crate::entry::EntrySigned;
     use crate::operation::{AsOperation, OperationEncoded, OperationValue};
-    use crate::test_utils::fixtures::defaults::hash;
+    use crate::test_utils::fixtures::defaults::schema;
     use crate::test_utils::fixtures::templates::{
         all_meta_operation_types, implements_as_operation,
     };
@@ -124,7 +125,7 @@ mod tests {
 
     #[rstest]
     #[should_panic]
-    #[case(operation_encoded(create_operation(hash(), fields(vec![("message", OperationValue::Text("Not the right message".to_string()))]))))]
+    #[case(operation_encoded(create_operation(schema(), fields(vec![("message", OperationValue::Text("Not the right message".to_string()))]))))]
     #[case(operation_encoded(defaults::create_operation()))]
     fn create_operation_with_meta(
         entry_signed_encoded: EntrySigned,
