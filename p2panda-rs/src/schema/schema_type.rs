@@ -3,10 +3,14 @@ use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::hash::Hash;
 
+/// Enum representing existing schema types
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SchemaType {
+    /// An application schema with a hash
     Application(Hash),
+    /// A schema definition
     Schema,
+    /// A schema definition field
     SchemaField,
 }
 
