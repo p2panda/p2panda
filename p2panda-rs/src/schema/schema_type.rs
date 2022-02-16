@@ -52,3 +52,57 @@ impl<'de> Deserialize<'de> for SchemaType {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::{hash::Hash, test_utils::constants::DEFAULT_SCHEMA_HASH};
+
+    use super::SchemaType;
+
+    #[test]
+    fn serialize() {
+        let app_schema = SchemaType::Application(Hash::new(DEFAULT_SCHEMA_HASH).unwrap());
+        assert_eq!(
+            serde_json::to_string(&app_schema).unwrap(),
+            "\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\""
+        );
+        let schema = SchemaType::Schema;
+        assert_eq!(
+            serde_json::to_string(&schema).unwrap(),
+            "\"00000000000000000000000000000000000000000000000000000000000000000001\""
+        );
+        let schema_field = SchemaType::SchemaField;
+        assert_eq!(
+            serde_json::to_string(&schema_field).unwrap(),
+            "\"00000000000000000000000000000000000000000000000000000000000000000002\""
+        );
+    }
+
+    #[test]
+    fn deserialize() {
+        let app_schema = SchemaType::Application(Hash::new(DEFAULT_SCHEMA_HASH).unwrap());
+        assert_eq!(
+            serde_json::from_str::<SchemaType>(
+                "\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\""
+            )
+            .unwrap(),
+            app_schema
+        );
+        let schema = SchemaType::Schema;
+        assert_eq!(
+            serde_json::from_str::<SchemaType>(
+                "\"00000000000000000000000000000000000000000000000000000000000000000001\""
+            )
+            .unwrap(),
+            schema
+        );
+        let schema_field = SchemaType::SchemaField;
+        assert_eq!(
+            serde_json::from_str::<SchemaType>(
+                "\"00000000000000000000000000000000000000000000000000000000000000000002\""
+            )
+            .unwrap(),
+            schema_field
+        );
+    }
+}
