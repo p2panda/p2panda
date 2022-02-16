@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::hash::Hash;
+use crate::hash::{Hash, HashError};
 
 /// Enum representing existing schema types
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -12,6 +12,24 @@ pub enum SchemaType {
     Schema,
     /// A schema definition field
     SchemaField,
+}
+
+impl SchemaType {
+    /// Instantiate a new SchemaType from a hash string.
+    pub fn new(hash: &str) -> Result<Self, HashError> {
+        match hash {
+            "00000000000000000000000000000000000000000000000000000000000000000001" => {
+                Ok(SchemaType::Schema)
+            }
+            "00000000000000000000000000000000000000000000000000000000000000000002" => {
+                Ok(SchemaType::SchemaField)
+            }
+            string => {
+                let hash = Hash::new(string)?;
+                Ok(SchemaType::Application(hash))
+            }
+        }
+    }
 }
 
 impl Serialize for SchemaType {
