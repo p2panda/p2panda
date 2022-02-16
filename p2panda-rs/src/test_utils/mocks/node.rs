@@ -723,7 +723,7 @@ mod tests {
             &mut node,
             &panda,
             &create_operation(
-                schema.clone(),
+                schema,
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Ohh, my first message in a new document!".to_string()),
@@ -775,7 +775,7 @@ mod tests {
             &mut node,
             &panda,
             &update_operation(
-                schema.clone(),
+                schema,
                 vec![entry1_hash.clone()],
                 operation_fields(vec![(
                     "message",
@@ -906,7 +906,7 @@ mod tests {
             &mut node,
             &penguin,
             &update_operation(
-                schema.clone(),
+                schema,
                 vec![penguin_entry_1_hash, panda_entry_2_hash],
                 operation_fields(vec![(
                     "cafe_name",
