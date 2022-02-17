@@ -70,7 +70,7 @@ use crate::Validate;
 /// # let schema_hash_string = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 ///
 /// // Create schema
-/// let schema = SchemaType::new(schema_hash_string)?:
+/// let schema = SchemaType::new(schema_hash_string)?;
 ///
 /// // Create a OperationFields instance and add a text field string with the key "title"
 /// let mut fields = OperationFields::new();
