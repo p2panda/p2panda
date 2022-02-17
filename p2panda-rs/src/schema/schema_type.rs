@@ -73,7 +73,7 @@ impl<'de> Deserialize<'de> for SchemaType {
 
 #[cfg(test)]
 mod test {
-    use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
+    use crate::{hash::Hash, test_utils::constants::DEFAULT_SCHEMA_HASH};
 
     use super::SchemaType;
 
@@ -122,5 +122,29 @@ mod test {
             .unwrap(),
             schema_field
         );
+    }
+
+    #[test]
+    fn new_schema_type() {
+        let appl_schema =
+            SchemaType::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")
+                .unwrap();
+        assert_eq!(
+            appl_schema,
+            SchemaType::Application(
+                Hash::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")
+                    .unwrap()
+            )
+        );
+
+        let schema =
+            SchemaType::new("00000000000000000000000000000000000000000000000000000000000000000001")
+                .unwrap();
+        assert_eq!(schema, SchemaType::Schema);
+
+        let schema_field =
+            SchemaType::new("00000000000000000000000000000000000000000000000000000000000000000002")
+                .unwrap();
+        assert_eq!(schema_field, SchemaType::SchemaField);
     }
 }
