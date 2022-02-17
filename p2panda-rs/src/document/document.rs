@@ -220,7 +220,6 @@ impl DocumentBuilder {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
-    use std::convert::TryInto;
 
     use rstest::rstest;
 
