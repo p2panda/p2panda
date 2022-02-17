@@ -38,7 +38,7 @@ fn encode_entry(entry: Entry, key_pair: KeyPair) {
 #[case::default_operation(defaults::create_operation())]
 // This case should panic as we are passing in a non-default operation value.
 #[should_panic] // panic macro flag
-#[case::non_default_operation(create_operation(SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)), operation_fields(vec![("message", OperationValue::Text("Boo!".to_string()))])))]
+#[case::non_default_operation(create_operation(SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap(), operation_fields(vec![("message", OperationValue::Text("Boo!".to_string()))])))]
 fn operation_validation(entry: Entry, #[case] operation: Operation, key_pair: KeyPair) {
     let encoded_operation = OperationEncoded::try_from(&operation).unwrap();
     let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();

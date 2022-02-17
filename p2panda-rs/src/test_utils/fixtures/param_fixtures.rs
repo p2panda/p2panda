@@ -59,7 +59,7 @@ pub fn seq_num(#[default(1)] n: u64) -> SeqNum {
 /// overridden at testing time by passing in a custom schema hash string.
 #[fixture]
 pub fn schema(#[default(DEFAULT_SCHEMA_HASH)] schema_str: &str) -> SchemaType {
-    SchemaType::Application(utils::hash(schema_str))
+    SchemaType::new(schema_str).unwrap()
 }
 
 /// Fixture which injects the default Hash into a test method. Default value can be overridden at
@@ -215,7 +215,7 @@ pub fn v0_3_0_fixture() -> Fixture {
         ),
     ]);
     let operation = create_operation(
-        SchemaType::Application(Hash::new(DEFAULT_SCHEMA_HASH).unwrap()),
+        SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap(),
         operation_fields,
     );
     let key_pair = utils::keypair_from_private(

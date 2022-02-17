@@ -25,7 +25,7 @@ fn main() {
         &mut node,
         &panda,
         &create_operation(
-            SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)),
+            SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap(),
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("Ohh, my first message!".to_string()),
@@ -39,7 +39,7 @@ fn main() {
         &mut node,
         &panda,
         &update_operation(
-            SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)),
+            SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap(),
             vec![entry1_hash],
             operation_fields(vec![(
                 "message",
@@ -54,7 +54,7 @@ fn main() {
         &mut node,
         &panda,
         &update_operation(
-            SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)),
+            SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap(),
             vec![entry2_hash],
             operation_fields(vec![(
                 "message",
@@ -69,7 +69,7 @@ fn main() {
         &mut node,
         &panda,
         &delete_operation(
-            SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)),
+            SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap(),
             vec![entry3_hash],
         ),
     )
@@ -113,7 +113,7 @@ mod tests {
             &mut node,
             &panda,
             &create_operation(
-                SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)),
+                SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap(),
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Ohh, my first message!".to_string()),

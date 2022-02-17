@@ -18,6 +18,7 @@
 //! # use p2panda_rs::operation::{OperationValue, OperationWithMeta};
 //! # use p2panda_rs::schema::SchemaType;
 //! # use p2panda_rs::test_utils::utils::{create_operation, delete_operation, update_operation, operation_fields};
+//! # use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 //! # use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 //! use p2panda_rs::document::DocumentBuilder;
 //! #
@@ -36,7 +37,7 @@
 //! #     .unwrap(),
 //! # );
 //! #
-//! # let schema = SchemaType::Application(Hash::new_from_bytes(vec![3, 2, 1]).unwrap());
+//! # let schema = SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap();
 //! # let mut node = Node::new();
 //! #
 //! # let (polar_entry_1_hash, _) = send_to_node(

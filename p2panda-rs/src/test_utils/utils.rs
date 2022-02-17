@@ -49,19 +49,18 @@ pub fn any_operation(
     match fields {
         // It's a CREATE operation
         Some(fields) if previous_operations.is_none() => {
-            Operation::new_create(SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)), fields)
-                .unwrap()
+            Operation::new_create(SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap(), fields).unwrap()
         }
         // It's an UPDATE operation
         Some(fields) => Operation::new_update(
-            SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)),
+            SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap(),
             previous_operations.unwrap(),
             fields,
         )
         .unwrap(),
         // It's a DELETE operation
         None => Operation::new_delete(
-            SchemaType::Application(hash(DEFAULT_SCHEMA_HASH)),
+            SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap(),
             previous_operations.unwrap(),
         )
         .unwrap(),
@@ -100,7 +99,7 @@ pub fn hash(hash_str: &str) -> Hash {
 
 /// Generate an application schema based on a hash string.
 pub fn schema(hash_str: &str) -> SchemaType {
-    SchemaType::Application(Hash::new(hash_str).unwrap())
+    SchemaType::new(hash_str).unwrap()
 }
 
 /// Generate an entry based on passed values.

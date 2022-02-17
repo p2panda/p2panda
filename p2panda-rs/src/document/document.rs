@@ -227,6 +227,7 @@ mod tests {
     use crate::identity::KeyPair;
     use crate::operation::{OperationValue, OperationWithMeta};
     use crate::schema::SchemaType;
+    use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, fields, random_key_pair, schema, update_operation,
     };
@@ -455,7 +456,7 @@ mod tests {
             )
             .unwrap(),
         );
-        let schema = SchemaType::Application(Hash::new_from_bytes(vec![3, 2, 1]).unwrap());
+        let schema = SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap();
         let mut node = Node::new();
         let (polar_entry_1_hash, _) = send_to_node(
             &mut node,

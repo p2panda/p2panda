@@ -36,7 +36,7 @@ use crate::Validate;
 /// // == FIRST ENTRY IN NEW LOG ==
 ///
 /// // Create schema hash
-/// let schema_hash = SchemaType::Application(Hash::new(schema_hash_str)?);
+/// let schema_hash = SchemaType::new(schema_hash_str)?;
 ///
 /// // Create a OperationFields instance and add a text field string with the key "title"
 /// let mut fields = OperationFields::new();
@@ -69,15 +69,15 @@ use crate::Validate;
 /// # let backlink_hash_string = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 /// # let schema_hash_string = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 ///
-/// // Create schema hash
-/// let schema_hash = Hash::new(schema_hash_string)?;
+/// // Create schema
+/// let schema = SchemaType::new(schema_hash_string)?:
 ///
 /// // Create a OperationFields instance and add a text field string with the key "title"
 /// let mut fields = OperationFields::new();
 /// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
 ///
 /// // Create an operation containing the above fields
-/// let operation = Operation::new_create(SchemaType::Application(schema_hash), fields)?;
+/// let operation = Operation::new_create(schema, fields)?;
 ///
 /// // Create log ID from u64
 /// let log_id = LogId::new(1);

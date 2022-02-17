@@ -79,7 +79,7 @@ mod test {
 
     #[test]
     fn serialize() {
-        let app_schema = SchemaType::Application(Hash::new(DEFAULT_SCHEMA_HASH).unwrap());
+        let app_schema = SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap();
         assert_eq!(
             serde_json::to_string(&app_schema).unwrap(),
             "\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\""
@@ -98,7 +98,7 @@ mod test {
 
     #[test]
     fn deserialize() {
-        let app_schema = SchemaType::Application(Hash::new(DEFAULT_SCHEMA_HASH).unwrap());
+        let app_schema = SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap();
         assert_eq!(
             serde_json::from_str::<SchemaType>(
                 "\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\""

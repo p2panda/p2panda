@@ -283,7 +283,7 @@ impl Operation {
     /// use p2panda_rs::operation::{AsOperation, Operation, OperationFields, OperationValue};
     /// use p2panda_rs::schema::SchemaType;
     ///
-    /// let msg_schema_hash = Hash::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
+    /// let msg_schema = SchemaType::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
     /// let mut msg_fields = OperationFields::new();
     ///
     /// msg_fields
@@ -293,7 +293,7 @@ impl Operation {
     ///     )
     ///     .unwrap();
     ///
-    /// let create_operation = Operation::new_create(SchemaType::Application(msg_schema_hash), msg_fields)?;
+    /// let create_operation = Operation::new_create(msg_schema, msg_fields)?;
     ///
     /// assert_eq!(AsOperation::is_create(&create_operation), true);
     ///
