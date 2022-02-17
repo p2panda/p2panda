@@ -114,7 +114,38 @@ mod tests {
     }
 
     #[rstest]
-    fn decode(
+    fn decode(schema: Hash) {
+        // @TODO: Use fixture here
+        let operation_encoded = OperationEncoded::new("A566616374696F6E6675706461746566736368656D61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696F6E017270726576696F75734F7065726174696F6E738178443030323036306138383934383565366533613632613165353665346263333464666136313063393364393136343436316332343963326661326262393662383538653631666669656C6473A563616765A2647479706563696E746576616C7565181C66686569676874A2647479706565666C6F61746576616C7565F943006869735F61646D696EA2647479706564626F6F6C6576616C7565F46F70726F66696C655F70696374757265A264747970656872656C6174696F6E6576616C7565A168646F63756D656E747844303032306231373765633162663236646662336237303130643437336536643434373133623239623736356239396336653630656362666165373432646534393635343368757365726E616D65A26474797065637374726576616C75656462756275").unwrap();
+
+        let operation = Operation::try_from(&operation_encoded).unwrap();
+
+        assert!(operation.is_update());
+        assert_eq!(operation.schema(), schema);
+
+        let fields = operation.fields().unwrap();
+
+        assert_eq!(
+            fields.get("username").unwrap(),
+            &OperationValue::Text("bubu".to_owned())
+        );
+        assert_eq!(fields.get("age").unwrap(), &OperationValue::Integer(28));
+        assert_eq!(fields.get("height").unwrap(), &OperationValue::Float(3.5));
+        assert_eq!(
+            fields.get("is_admin").unwrap(),
+            &OperationValue::Boolean(false)
+        );
+        assert_eq!(
+            fields.get("profile_picture").unwrap(),
+            &OperationValue::Relation(Relation::new(
+                Hash::new_from_bytes(vec![1, 2, 3]).unwrap(),
+                Vec::new()
+            ))
+        );
+    }
+
+    #[rstest]
+    fn encode_decode_all_field_types(
         schema: Hash,
         #[from(random_hash)] picture_document: Hash,
         #[from(random_hash)] friend_document_1: Hash,
