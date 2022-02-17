@@ -1,12 +1,28 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-
-import type { Fields, FieldsTagged } from './types';
+import type { Fields, FieldsTagged, Relation } from './types';
 
 const FIELD_TYPE_MAPPING = {
   bigint: 'int',
   boolean: 'bool',
   number: 'int',
   string: 'str',
+};
+
+/**
+ * Helper method to validate if required fields are given in relation object.
+ *
+ * @param relation object
+ * @returns boolean
+ */
+const validateRelation = (relation: object): boolean => {
+  if (!('document' in relation)) {
+    throw new Error('`document` field is missing in relation');
+  }
+
+  if (!('document_view' in relation)) {
+    throw new Error('`document_view` field is missing in relation');
+  }
+
+  return true;
 };
 
 /**
@@ -24,12 +40,29 @@ const FIELD_TYPE_MAPPING = {
 const getFieldType = (
   fields: Fields,
   key: string,
-): 'string' | 'bool' | 'int' | null => {
+): 'str' | 'bool' | 'int' | 'relation' | 'relation_list' | null => {
   const type = typeof fields[key];
 
   if (type === 'undefined') {
     // Return null if a key has no value
     return null;
+  }
+
+  if (type === 'object') {
+    validateRelation(fields[key] as object);
+    return 'relation';
+  } else if (Array.isArray(fields[key])) {
+    const list = fields[key] as Array<Relation>;
+
+    if (list.length === 0) {
+      throw new Error('Empty array found');
+    }
+
+    list.forEach((relation) => {
+      validateRelation(relation as object);
+    });
+
+    return 'relation_list';
   }
 
   if (!Object.keys(FIELD_TYPE_MAPPING).includes(type)) {
@@ -50,6 +83,9 @@ export const marshallRequestFields = (fields: Fields): FieldsTagged => {
     const value = fields[key];
 
     switch (getFieldType(fields, key)) {
+      case 'str':
+        map.set(key, { value: value as string, type: 'str' });
+        break;
       case 'int':
         // "int" can be a BigInt instance or "number" which again can be a
         // float or integer type in the JavaScript world
@@ -74,11 +110,21 @@ export const marshallRequestFields = (fields: Fields): FieldsTagged => {
       case 'bool':
         map.set(key, { value: value as boolean, type: 'bool' });
         break;
+      case 'relation':
+        map.set(key, {
+          value: value as Relation,
+          type: 'relation',
+        });
+        break;
+      case 'relation_list':
+        map.set(key, {
+          value: value as Array<Relation>,
+          type: 'relation_list',
+        });
+        break;
       case null:
         // Skip fields that have no value
         break;
-      default:
-        map.set(key, { value: value as string, type: 'str' });
     }
   });
 
@@ -95,7 +141,7 @@ export const marshallResponseFields = (fieldsTagged: FieldsTagged): Fields => {
     const { type, value } = fieldValue;
 
     // Convert smaller integers to 'number', keep large ones as strings
-    if (type === 'int' && BigInt(value) <= Number.MAX_SAFE_INTEGER) {
+    if (type === 'int' && BigInt(value as string) <= Number.MAX_SAFE_INTEGER) {
       fields[key] = parseInt(value as string, 10);
     } else {
       fields[key] = value;

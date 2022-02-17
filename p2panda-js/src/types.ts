@@ -56,7 +56,13 @@ export type Operation = {
  * Object containing operation field values.
  */
 export type Fields = {
-  [fieldname: string]: boolean | number | string | BigInt;
+  [fieldname: string]:
+    | boolean
+    | number
+    | string
+    | BigInt
+    | Relation
+    | Array<Relation>;
 };
 
 /**
@@ -80,16 +86,23 @@ export type OperationTagged = {
   fields: FieldsTagged;
 };
 
+export type Relation = {
+  document: string;
+  document_view: string[];
+};
+
 /**
  * Object containing operation fields in tagged form.
  */
 export type FieldsTagged = Map<string, OperationValue>;
 
 export type OperationValue =
-  | OperationValueText
   | OperationValueBool
+  | OperationValueFloat
   | OperationValueInt
-  | OperationValueFloat;
+  | OperationValueRelation
+  | OperationValueRelationList
+  | OperationValueText;
 
 /**
  * An operation value of `boolean` type.
@@ -122,6 +135,22 @@ export type OperationValueFloat = {
 export type OperationValueText = {
   value: string;
   type: 'str';
+};
+
+/**
+ * An operation value of `relation` type.
+ */
+export type OperationValueRelation = {
+  value: Relation;
+  type: 'relation';
+};
+
+/**
+ * An operation value of `relation_list` type.
+ */
+export type OperationValueRelationList = {
+  value: Array<Relation>;
+  type: 'relation_list';
 };
 
 /**
