@@ -1,7 +1,11 @@
+use std::str::FromStr;
+
 // SPDX-License-Identifier: AGPL-3.0-or-later
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::hash::{Hash, HashError};
+use crate::hash::Hash;
+
+use super::error::SchemaTypeError;
 
 /// Enum representing existing schema types
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -16,7 +20,7 @@ pub enum SchemaType {
 
 impl SchemaType {
     /// Instantiate a new SchemaType from a hash string.
-    pub fn new(hash: &str) -> Result<Self, HashError> {
+    pub fn new(hash: &str) -> Result<Self, SchemaTypeError> {
         match hash {
             "00000000000000000000000000000000000000000000000000000000000000000001" => {
                 Ok(SchemaType::Schema)
@@ -29,6 +33,14 @@ impl SchemaType {
                 Ok(SchemaType::Application(hash))
             }
         }
+    }
+}
+
+impl FromStr for SchemaType {
+    type Err = SchemaTypeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::new(s)
     }
 }
 
@@ -63,10 +75,10 @@ impl<'de> Deserialize<'de> for SchemaType {
             "00000000000000000000000000000000000000000000000000000000000000000002" => {
                 Ok(SchemaType::SchemaField)
             }
-            _ => {
-                let hash = Hash::new(s.as_str()).map_err(Error::custom)?;
-                Ok(SchemaType::Application(hash))
-            }
+            _ => match Hash::new(s.as_str()) {
+                Ok(hash) => Ok(SchemaType::Application(hash)),
+                Err(e) => Err(SchemaTypeError::HashError(e)).map_err(Error::custom),
+            },
         }
     }
 }
@@ -146,5 +158,14 @@ mod test {
             SchemaType::new("00000000000000000000000000000000000000000000000000000000000000000002")
                 .unwrap();
         assert_eq!(schema_field, SchemaType::SchemaField);
+    }
+
+    #[test]
+    fn parse_schema_type() {
+        let schema: SchemaType =
+            "00000000000000000000000000000000000000000000000000000000000000000001"
+                .parse()
+                .unwrap();
+        assert_eq!(schema, SchemaType::Schema);
     }
 }
