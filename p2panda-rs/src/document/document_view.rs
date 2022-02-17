@@ -112,6 +112,12 @@ impl From<BTreeMap<String, OperationValue>> for DocumentView {
     }
 }
 
+impl From<DocumentView> for BTreeMap<String, OperationValue> {
+    fn from(document_view: DocumentView) -> Self {
+        document_view.0
+    }
+}
+
 // @TODO: This currently makes sure the wasm tests work as cddl does not have any wasm support
 // (yet). Remove this with: https://github.com/p2panda/p2panda/issues/99
 #[cfg(not(target_arch = "wasm32"))]

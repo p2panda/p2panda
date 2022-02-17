@@ -2,6 +2,8 @@
 
 use thiserror::Error;
 
+use crate::operation::OperationValue;
+
 /// Custom error types for schema validation.
 #[derive(Error)]
 pub enum SchemaError {
@@ -33,6 +35,19 @@ pub enum SchemaError {
     /// `Operation` error.
     #[error("error while creating operation")]
     OperationError(#[from] crate::operation::OperationError),
+}
+
+/// Custom error types for schema validation.
+#[derive(Error, Debug)]
+pub enum SystemSchemaError {
+    #[error("invalid field type found for \"{0}\": {1:#?}")]
+    InvalidFieldType(String, OperationValue),
+
+    #[error("invalid field \"{1}\" for system schema {0}")]
+    InvalidField(String, String),
+
+    #[error("missing field \"{1}\" for system schema {0}")]
+    MissingField(String, String),
 }
 
 impl std::fmt::Debug for SchemaError {

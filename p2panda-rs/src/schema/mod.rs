@@ -13,8 +13,9 @@ mod error;
 mod operation;
 #[allow(clippy::module_inception)]
 mod schema;
+mod system_schema;
 
-pub use error::SchemaError;
+pub use error::{SchemaError, SystemSchemaError};
 pub use operation::OPERATION_SCHEMA;
 pub use schema::{Schema, SchemaBuilder, Type, ValidateOperation};
 
