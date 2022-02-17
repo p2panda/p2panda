@@ -223,7 +223,6 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::{OperationValue, OperationWithMeta};
     use crate::schema::SchemaType;

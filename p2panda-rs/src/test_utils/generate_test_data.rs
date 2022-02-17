@@ -93,9 +93,7 @@ mod tests {
     use p2panda_rs::test_utils::mocks::Client;
     use p2panda_rs::test_utils::mocks::{send_to_node, Node};
     use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
-    use p2panda_rs::test_utils::utils::{
-        create_operation, hash, keypair_from_private, operation_fields,
-    };
+    use p2panda_rs::test_utils::utils::{create_operation, keypair_from_private, operation_fields};
 
     #[test]
     fn test_data() {
