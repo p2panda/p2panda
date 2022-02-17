@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{ops::Deref, str::FromStr};
 
 // SPDX-License-Identifier: AGPL-3.0-or-later
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
@@ -36,11 +36,33 @@ impl SchemaType {
     }
 }
 
+impl SchemaType {
+    fn as_str(&self) -> &str {
+        match self {
+            SchemaType::Application(hash) => hash.as_str(),
+            SchemaType::Schema => {
+                "00000000000000000000000000000000000000000000000000000000000000000001"
+            }
+            SchemaType::SchemaField => {
+                "00000000000000000000000000000000000000000000000000000000000000000002"
+            }
+        }
+    }
+}
+
 impl FromStr for SchemaType {
     type Err = SchemaTypeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::new(s)
+    }
+}
+
+impl Deref for SchemaType {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
     }
 }
 
