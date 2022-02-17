@@ -73,7 +73,7 @@ impl<'de> Deserialize<'de> for SchemaType {
 
 #[cfg(test)]
 mod test {
-    use crate::{hash::Hash, test_utils::constants::DEFAULT_SCHEMA_HASH};
+    use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
 
     use super::SchemaType;
 

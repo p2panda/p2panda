@@ -10,7 +10,7 @@ use p2panda_rs::test_utils::mocks::Client;
 use p2panda_rs::test_utils::mocks::{send_to_node, Node};
 use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
 use p2panda_rs::test_utils::utils::{
-    create_operation, delete_operation, hash, new_key_pair, operation_fields, update_operation,
+    create_operation, delete_operation, new_key_pair, operation_fields, update_operation,
 };
 
 fn main() {
