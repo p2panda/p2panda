@@ -3,8 +3,8 @@
 use std::ops::Deref;
 use std::str::FromStr;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::hash::Hash;
 use crate::schema::error::SchemaHashError;
@@ -14,10 +14,10 @@ use crate::schema::error::SchemaHashError;
 pub enum SchemaHash {
     /// An application schema with a hash.
     Application(Hash),
-    
+
     /// A schema definition.
     Schema,
-    
+
     /// A schema definition field.
     SchemaField,
 }
