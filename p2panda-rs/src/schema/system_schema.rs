@@ -11,14 +11,37 @@ struct SchemaView(DocumentView);
 struct SchemaFieldView(DocumentView);
 
 impl SchemaView {
-    pub fn fields(&self) -> BTreeMap<String, OperationValue> {
-        self.0.clone().into()
+    fn name(&self) -> &OperationValue {
+        // Unwrap here because fields were validated on construction
+        self.0.get("name").unwrap()
+    }
+
+    fn description(&self) -> &OperationValue {
+        // Unwrap here because fields were validated on construction
+        self.0.get("description").unwrap()
+    }
+
+    fn fields(&self) -> &OperationValue {
+        // Unwrap here because fields were validated on construction
+        self.0.get("fields").unwrap()
     }
 }
 
 impl SchemaFieldView {
     pub fn fields(&self) -> BTreeMap<String, OperationValue> {
         self.0.clone().into()
+    }
+}
+
+impl SchemaFieldView {
+    fn name(&self) -> &OperationValue {
+        // Unwrap here because fields were validated on construction
+        self.0.get("name").unwrap()
+    }
+
+    fn field_type(&self) -> &OperationValue {
+        // Unwrap here because fields were validated on construction
+        self.0.get("type").unwrap()
     }
 }
 
