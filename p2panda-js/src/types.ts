@@ -86,6 +86,10 @@ export type OperationTagged = {
   fields: FieldsTagged;
 };
 
+/**
+ * Decoded form of a relation, a type used in `relation` and `relation_list`
+ * operation fields.
+ */
 export type Relation = {
   document: string;
   document_view: string[];
