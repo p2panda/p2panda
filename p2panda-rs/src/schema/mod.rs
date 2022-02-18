@@ -13,12 +13,12 @@ mod error;
 mod operation;
 #[allow(clippy::module_inception)]
 mod schema;
-mod schema_type;
+mod schema_hash;
 
 pub use error::SchemaError;
 pub use operation::OPERATION_SCHEMA;
 pub use schema::{Schema, SchemaBuilder, Type, ValidateOperation};
-pub use schema_type::SchemaType;
+pub use schema_hash::SchemaHash;
 
 /// Checks CBOR bytes against CDDL schemas.
 ///

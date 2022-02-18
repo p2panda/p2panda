@@ -30,13 +30,13 @@ use crate::Validate;
 /// use p2panda_rs::entry::{Entry, LogId, SeqNum};
 /// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
 /// use p2panda_rs::hash::Hash;
-/// use p2panda_rs::schema::SchemaType;
+/// use p2panda_rs::schema::SchemaHash;
 /// # let schema_hash_str = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 ///
 /// // == FIRST ENTRY IN NEW LOG ==
 ///
 /// // Create schema hash
-/// let schema_hash = SchemaType::new(schema_hash_str)?;
+/// let schema_hash = SchemaHash::new(schema_hash_str)?;
 ///
 /// // Create a OperationFields instance and add a text field string with the key "title"
 /// let mut fields = OperationFields::new();
@@ -63,14 +63,14 @@ use crate::Validate;
 /// use p2panda_rs::entry::{Entry, LogId, SeqNum};
 /// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
 /// use p2panda_rs::hash::Hash;
-/// use p2panda_rs::schema::SchemaType;
+/// use p2panda_rs::schema::SchemaHash;
 ///
 /// // == ENTRY IN EXISTING LOG ==
 /// # let backlink_hash_string = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 /// # let schema_hash_string = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 ///
 /// // Create schema
-/// let schema = SchemaType::new(schema_hash_string)?;
+/// let schema = SchemaHash::new(schema_hash_string)?;
 ///
 /// // Create a OperationFields instance and add a text field string with the key "title"
 /// let mut fields = OperationFields::new();
@@ -211,7 +211,7 @@ mod tests {
     use crate::entry::{LogId, SeqNum};
     use crate::hash::Hash;
     use crate::operation::{Operation, OperationFields, OperationValue};
-    use crate::schema::SchemaType;
+    use crate::schema::SchemaHash;
 
     use super::Entry;
 
@@ -223,7 +223,7 @@ mod tests {
             .add("test", OperationValue::Text("Hello".to_owned()))
             .unwrap();
         let operation = Operation::new_create(
-            SchemaType::Application(Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
+            SchemaHash::Application(Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
             fields,
         )
         .unwrap();

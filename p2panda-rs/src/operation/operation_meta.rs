@@ -9,7 +9,7 @@ use crate::operation::{
     AsOperation, Operation, OperationAction, OperationEncoded, OperationFields, OperationVersion,
     OperationWithMetaError,
 };
-use crate::schema::SchemaType;
+use crate::schema::SchemaHash;
 use crate::Validate;
 
 /// Wrapper struct containing an operation, the hash of its entry, and the public key of its
@@ -76,7 +76,7 @@ impl AsOperation for OperationWithMeta {
     }
 
     /// Returns schema of operation.
-    fn schema(&self) -> SchemaType {
+    fn schema(&self) -> SchemaHash {
         self.operation.schema()
     }
 

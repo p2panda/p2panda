@@ -7,7 +7,7 @@ use crate::graph::Graph;
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{AsOperation, OperationWithMeta};
-use crate::schema::SchemaType;
+use crate::schema::SchemaHash;
 
 /// A replicatable data type designed to handle concurrent updates in a way where all replicas
 /// eventually resolve to the same deterministic value.
@@ -19,7 +19,7 @@ use crate::schema::SchemaType;
 pub struct Document {
     id: Hash,
     author: Author,
-    schema: SchemaType,
+    schema: SchemaHash,
     view: DocumentView,
     meta: DocumentMeta,
 }
@@ -105,7 +105,7 @@ impl Document {
     }
 
     /// Get the document schema.
-    pub fn schema(&self) -> &SchemaType {
+    pub fn schema(&self) -> &SchemaHash {
         &self.schema
     }
 
@@ -225,7 +225,7 @@ mod tests {
 
     use crate::identity::KeyPair;
     use crate::operation::{OperationValue, OperationWithMeta};
-    use crate::schema::SchemaType;
+    use crate::schema::SchemaHash;
     use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, fields, random_key_pair, schema, update_operation,
@@ -236,7 +236,7 @@ mod tests {
     use super::DocumentBuilder;
 
     #[rstest]
-    fn resolve_documents(schema: SchemaType) {
+    fn resolve_documents(schema: SchemaHash) {
         let panda = Client::new(
             "panda".to_string(),
             KeyPair::from_private_key_str(
@@ -455,7 +455,7 @@ mod tests {
             )
             .unwrap(),
         );
-        let schema = SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap();
+        let schema = SchemaHash::new(DEFAULT_SCHEMA_HASH).unwrap();
         let mut node = Node::new();
         let (polar_entry_1_hash, _) = send_to_node(
             &mut node,
@@ -661,7 +661,7 @@ mod tests {
 
     #[rstest]
     fn must_have_create_operation(
-        schema: SchemaType,
+        schema: SchemaHash,
         #[from(random_key_pair)] key_pair_1: KeyPair,
     ) {
         let panda = Client::new("panda".to_string(), key_pair_1);
@@ -711,7 +711,7 @@ mod tests {
     }
 
     #[rstest]
-    fn is_deleted(schema: SchemaType, #[from(random_key_pair)] key_pair_1: KeyPair) {
+    fn is_deleted(schema: SchemaHash, #[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
         let mut node = Node::new();
 

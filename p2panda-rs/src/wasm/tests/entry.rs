@@ -6,7 +6,7 @@ use wasm_bindgen_test::*;
 
 use crate::hash::Hash;
 use crate::operation::{OperationEncoded, OperationFields, OperationValue};
-use crate::schema::SchemaType;
+use crate::schema::SchemaHash;
 use crate::test_utils::utils::create_operation;
 use crate::wasm::{decode_entry, sign_encode_entry, KeyPair, SignEncodeEntryResult};
 
@@ -15,7 +15,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 #[wasm_bindgen_test]
 fn encodes_decodes_entries() {
     let key_pair = KeyPair::new();
-    let schema = SchemaType::Application(Hash::new_from_bytes(vec![0, 1, 2]).unwrap());
+    let schema = SchemaHash::Application(Hash::new_from_bytes(vec![0, 1, 2]).unwrap());
 
     let mut fields = OperationFields::new();
     fields

@@ -4,7 +4,7 @@
 /// command. The output data can be used for testing a p2panda implementation. It is currently used
 /// in `p2panda-js`.
 use p2panda_rs::operation::OperationValue;
-use p2panda_rs::schema::SchemaType;
+use p2panda_rs::schema::SchemaHash;
 use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 use p2panda_rs::test_utils::mocks::Client;
 use p2panda_rs::test_utils::mocks::{send_to_node, Node};
@@ -25,7 +25,7 @@ fn main() {
         &mut node,
         &panda,
         &create_operation(
-            SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            SchemaHash::new(DEFAULT_SCHEMA_HASH).unwrap(),
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("Ohh, my first message!".to_string()),
@@ -39,7 +39,7 @@ fn main() {
         &mut node,
         &panda,
         &update_operation(
-            SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            SchemaHash::new(DEFAULT_SCHEMA_HASH).unwrap(),
             vec![entry1_hash],
             operation_fields(vec![(
                 "message",
@@ -54,7 +54,7 @@ fn main() {
         &mut node,
         &panda,
         &update_operation(
-            SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            SchemaHash::new(DEFAULT_SCHEMA_HASH).unwrap(),
             vec![entry2_hash],
             operation_fields(vec![(
                 "message",
@@ -69,7 +69,7 @@ fn main() {
         &mut node,
         &panda,
         &delete_operation(
-            SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            SchemaHash::new(DEFAULT_SCHEMA_HASH).unwrap(),
             vec![entry3_hash],
         ),
     )
@@ -84,7 +84,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use p2panda_rs::schema::SchemaType;
+    use p2panda_rs::schema::SchemaHash;
     /// Generate json formatted test data
     use serde_json::Value;
 
@@ -111,7 +111,7 @@ mod tests {
             &mut node,
             &panda,
             &create_operation(
-                SchemaType::new(DEFAULT_SCHEMA_HASH).unwrap(),
+                SchemaHash::new(DEFAULT_SCHEMA_HASH).unwrap(),
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Ohh, my first message!".to_string()),

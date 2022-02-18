@@ -12,7 +12,7 @@ use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{AsOperation, Operation, OperationEncoded};
-use crate::schema::SchemaType;
+use crate::schema::SchemaHash;
 
 /// Entry of an append-only which contains an encoded entry and operation.
 #[derive(Clone, Debug)]
@@ -82,7 +82,7 @@ pub struct Log {
     document: Hash,
 
     /// Schema schema for this log.
-    schema: SchemaType,
+    schema: SchemaHash,
 
     /// The entries in this log.
     entries: Vec<LogEntry>,
@@ -123,7 +123,7 @@ impl Log {
     }
 
     /// Get the schema of this log.
-    pub fn schema(&self) -> SchemaType {
+    pub fn schema(&self) -> SchemaHash {
         self.schema.to_owned()
     }
 

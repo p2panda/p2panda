@@ -123,7 +123,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::operation::{AsOperation, Operation, OperationValue};
-    use crate::schema::{Schema, SchemaType};
+    use crate::schema::{Schema, SchemaHash};
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, fields, schema, update_operation,
     };
@@ -131,7 +131,7 @@ mod tests {
     use super::DocumentView;
 
     #[rstest]
-    fn basic_methods(schema: SchemaType) {
+    fn basic_methods(schema: SchemaHash) {
         let operation = create_operation(
             schema,
             fields(vec![
@@ -224,7 +224,7 @@ mod tests {
     }
 
     #[rstest]
-    pub fn create_from_schema(schema: SchemaType, create_operation: Operation) {
+    pub fn create_from_schema(schema: SchemaHash, create_operation: Operation) {
         // Instantiate "chat" schema from CDDL string
         let chat_schema_definition = "
             chat = { (

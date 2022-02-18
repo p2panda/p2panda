@@ -10,7 +10,7 @@ use crate::hash::Hash;
 use crate::operation::{
     Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationValue,
 };
-use crate::schema::SchemaType;
+use crate::schema::SchemaHash;
 use crate::wasm::error::jserr;
 
 /// Use `OperationFields` to attach application data to a [`Operation`].
@@ -130,7 +130,7 @@ pub fn encode_create_operation(
     schema_hash: String,
     fields: OperationFields,
 ) -> Result<String, JsValue> {
-    let schema = jserr!(SchemaType::new(&schema_hash));
+    let schema = jserr!(SchemaHash::new(&schema_hash));
     let operation = jserr!(Operation::new_create(schema, fields.0));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
@@ -143,7 +143,7 @@ pub fn encode_update_operation(
     previous_operations: Array,
     fields: OperationFields,
 ) -> Result<String, JsValue> {
-    let schema = jserr!(SchemaType::new(&schema_hash));
+    let schema = jserr!(SchemaHash::new(&schema_hash));
 
     // Decode JsValue into vector of strings
     let prev_op_strings: Vec<String> = jserr!(previous_operations.into_serde());
@@ -166,7 +166,7 @@ pub fn encode_delete_operation(
     schema_hash: String,
     previous_operations: Array,
 ) -> Result<String, JsValue> {
-    let schema = jserr!(SchemaType::new(&schema_hash));
+    let schema = jserr!(SchemaHash::new(&schema_hash));
 
     // Decode JsValue into vector of strings
     let prev_op_strings: Vec<String> = jserr!(previous_operations.into_serde());
