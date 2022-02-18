@@ -7,22 +7,22 @@ use crate::operation::OperationValue;
 
 use super::SystemSchemaError;
 
-struct Schema(DocumentView);
-struct SchemaField(DocumentView);
+struct SchemaView(DocumentView);
+struct SchemaFieldView(DocumentView);
 
-impl Schema {
+impl SchemaView {
     pub fn fields(&self) -> BTreeMap<String, OperationValue> {
         self.0.clone().into()
     }
 }
 
-impl SchemaField {
+impl SchemaFieldView {
     pub fn fields(&self) -> BTreeMap<String, OperationValue> {
         self.0.clone().into()
     }
 }
 
-impl TryFrom<DocumentView> for Schema {
+impl TryFrom<DocumentView> for SchemaView {
     type Error = SystemSchemaError;
 
     fn try_from(document_view: DocumentView) -> Result<Self, Self::Error> {
@@ -55,7 +55,7 @@ impl TryFrom<DocumentView> for Schema {
     }
 }
 
-impl TryFrom<DocumentView> for SchemaField {
+impl TryFrom<DocumentView> for SchemaFieldView {
     type Error = SystemSchemaError;
 
     fn try_from(document_view: DocumentView) -> Result<Self, Self::Error> {
@@ -98,7 +98,7 @@ mod tests {
     };
     use rstest::rstest;
 
-    use super::Schema;
+    use super::SchemaView;
 
     #[rstest]
     fn from_document_view(#[from(hash)] relation_hash: Hash, schema: Hash) {
@@ -114,6 +114,6 @@ mod tests {
             ]),
         );
         let document_view: DocumentView = operation.try_into().unwrap();
-        assert!(Schema::try_from(document_view).is_ok());
+        assert!(SchemaView::try_from(document_view).is_ok());
     }
 }
