@@ -8,13 +8,13 @@ use crate::operation::OperationValue;
 
 use super::SystemSchemaError;
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, PartialEq)]
 #[allow(missing_docs)]
 pub enum FieldType {
     Bool,
     Int,
     Float,
-    Tstr,
+    String,
     Relation,
 }
 
@@ -26,7 +26,7 @@ impl FromStr for FieldType {
             "bool" => Ok(FieldType::Bool),
             "int" => Ok(FieldType::Int),
             "float" => Ok(FieldType::Float),
-            "tstr" => Ok(FieldType::Tstr),
+            "str" => Ok(FieldType::String),
             "relation" => Ok(FieldType::Relation),
             _ => Err(SystemSchemaError::InvalidFieldType),
         }
@@ -153,6 +153,7 @@ mod tests {
         document::DocumentView,
         hash::Hash,
         operation::OperationValue,
+        schema::system_schema::{FieldType, SchemaFieldView},
         test_utils::fixtures::{create_operation, fields, hash, schema},
     };
     use rstest::rstest;
@@ -174,5 +175,84 @@ mod tests {
         );
         let document_view: DocumentView = operation.try_into().unwrap();
         assert!(SchemaView::try_from(document_view).is_ok());
+    }
+
+    #[rstest]
+    fn field_type_from_document_view(schema: Hash) {
+        let bool_field = create_operation(
+            schema.clone(),
+            fields(vec![
+                ("name", OperationValue::Text("is_accessible".to_string())),
+                ("type", OperationValue::Text("bool".to_string())),
+            ]),
+        );
+        let document_view: DocumentView = bool_field.try_into().unwrap();
+        let field_view = SchemaFieldView::try_from(document_view);
+        assert!(field_view.is_ok());
+        let field_view = field_view.unwrap();
+        assert_eq!(field_view.field_type(), FieldType::Bool);
+        assert_eq!(
+            field_view.name(),
+            &OperationValue::Text("is_accessible".to_string())
+        );
+
+        let int_field = create_operation(
+            schema.clone(),
+            fields(vec![
+                ("name", OperationValue::Text("capacity".to_string())),
+                ("type", OperationValue::Text("int".to_string())),
+            ]),
+        );
+        let document_view: DocumentView = int_field.try_into().unwrap();
+        let field_view = SchemaFieldView::try_from(document_view);
+        assert!(field_view.is_ok());
+        assert_eq!(field_view.unwrap().field_type(), FieldType::Int);
+
+        let float_field = create_operation(
+            schema.clone(),
+            fields(vec![
+                ("name", OperationValue::Text("ticket_price".to_string())),
+                ("type", OperationValue::Text("float".to_string())),
+            ]),
+        );
+        let document_view: DocumentView = float_field.try_into().unwrap();
+        let field_view = SchemaFieldView::try_from(document_view);
+        assert!(field_view.is_ok());
+        assert_eq!(field_view.unwrap().field_type(), FieldType::Float);
+
+        let str_field = create_operation(
+            schema.clone(),
+            fields(vec![
+                ("name", OperationValue::Text("venue_name".to_string())),
+                ("type", OperationValue::Text("str".to_string())),
+            ]),
+        );
+        let document_view: DocumentView = str_field.try_into().unwrap();
+        let field_view = SchemaFieldView::try_from(document_view);
+        assert!(field_view.is_ok());
+        assert_eq!(field_view.unwrap().field_type(), FieldType::String);
+
+        let relation_field = create_operation(
+            schema.clone(),
+            fields(vec![
+                ("name", OperationValue::Text("address".to_string())),
+                ("type", OperationValue::Text("relation".to_string())),
+            ]),
+        );
+        let document_view: DocumentView = relation_field.try_into().unwrap();
+        let field_view = SchemaFieldView::try_from(document_view);
+        assert!(field_view.is_ok());
+        assert_eq!(field_view.unwrap().field_type(), FieldType::Relation);
+
+        let invalid_field_type = create_operation(
+            schema.clone(),
+            fields(vec![
+                ("name", OperationValue::Text("address".to_string())),
+                ("type", OperationValue::Text("hash".to_string())),
+            ]),
+        );
+        let document_view: DocumentView = invalid_field_type.try_into().unwrap();
+        let field_view = SchemaFieldView::try_from(document_view);
+        assert!(field_view.is_err());
     }
 }
