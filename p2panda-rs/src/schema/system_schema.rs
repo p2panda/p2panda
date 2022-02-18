@@ -36,17 +36,23 @@ impl FromStr for FieldType {
 struct SchemaView(DocumentView);
 struct SchemaFieldView(DocumentView);
 
+/// View onto materialised schema which has fields "name", "description" and "fields".
+/// Is validated on being converted from a general DocumentView struct which means so it's inner
+/// values can be returned unwrapped by their getter methods.
 impl SchemaView {
+    /// The name of this schema.
     fn name(&self) -> &OperationValue {
         // Unwrap here because fields were validated on construction
         self.0.get("name").unwrap()
     }
 
+    /// The description of this schema.
     fn description(&self) -> &OperationValue {
         // Unwrap here because fields were validated on construction
         self.0.get("description").unwrap()
     }
 
+    /// A list of fields assigned to this schema identified by their document id.
     fn fields(&self) -> &OperationValue {
         // Unwrap here because fields were validated on construction
         self.0.get("fields").unwrap()
@@ -59,12 +65,17 @@ impl SchemaFieldView {
     }
 }
 
+/// View onto materialised schema field which has fields "name" and "type".
+/// Is validated on being converted from a general DocumentView struct which means so it's inner
+/// values can be returned unwrapped by their getter methods.
 impl SchemaFieldView {
+    /// The name of this schema field.
     fn name(&self) -> &OperationValue {
         // Unwrap here because fields were validated on construction
         self.0.get("name").unwrap()
     }
 
+    /// The type of this schema field represented as a FieldType enum variant.
     fn field_type(&self) -> FieldType {
         // Unwrap here because fields were validated on construction
         self.0
@@ -245,7 +256,7 @@ mod tests {
         assert_eq!(field_view.unwrap().field_type(), FieldType::Relation);
 
         let invalid_field_type = create_operation(
-            schema.clone(),
+            schema,
             fields(vec![
                 ("name", OperationValue::Text("address".to_string())),
                 ("type", OperationValue::Text("hash".to_string())),
