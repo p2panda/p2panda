@@ -98,8 +98,10 @@ mod tests {
     use crate::operation::{AsOperation, Operation, OperationValue, Relation};
     use crate::test_utils::fixtures::templates::version_fixtures;
     use crate::test_utils::fixtures::{
-        encoded_create_string, fields, random_hash, schema, update_operation, Fixture,
+        encoded_create_string, fields, operation_encoded_invalid_relation_fields, random_hash,
+        schema, update_operation, Fixture,
     };
+    use crate::Validate;
 
     use super::OperationEncoded;
 
@@ -115,9 +117,16 @@ mod tests {
         assert!(OperationEncoded::new(&encoded_create_string).is_ok());
     }
 
+    #[rstest]
+    fn decode_invalid_relation_fields(operation_encoded_invalid_relation_fields: OperationEncoded) {
+        let operation = Operation::try_from(&operation_encoded_invalid_relation_fields).unwrap();
+        assert!(operation.validate().is_err());
+    }
+
     #[apply(version_fixtures)]
     fn decode(#[case] fixture: Fixture) {
         let operation = Operation::try_from(&fixture.operation_encoded).unwrap();
+        assert!(operation.validate().is_ok());
         assert!(operation.is_create());
 
         let fields = operation.fields().unwrap();

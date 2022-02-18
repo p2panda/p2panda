@@ -151,6 +151,24 @@ pub enum OperationValue {
     RelationList(Vec<Relation>),
 }
 
+impl Validate for OperationValue {
+    type Error = OperationError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        match self {
+            Self::Relation(relation) => relation.validate(),
+            Self::RelationList(relations) => {
+                for relation in relations {
+                    relation.validate()?;
+                }
+
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
 /// Operation fields are used to store application data. They are implemented as a simple key/value
 /// store with support for a limited number of data types (see [`OperationValue`] for further
 /// documentation on this). A `OperationFields` instance can contain any number and types of
@@ -248,6 +266,18 @@ impl OperationFields {
     /// Returns an iterator of existing operation fields.
     pub fn iter(&self) -> Iter<String, OperationValue> {
         self.0.iter()
+    }
+}
+
+impl Validate for OperationFields {
+    type Error = OperationError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        for (_, value) in self.iter() {
+            value.validate()?;
+        }
+
+        Ok(())
     }
 }
 
@@ -525,6 +555,11 @@ impl Validate for Operation {
         // CREATE operations must not contain previous_operations.
         if self.is_create() && (self.has_previous_operations()) {
             return Err(OperationError::ExistingPreviousOperations);
+        }
+
+        // Validate fields
+        if self.has_fields() {
+            self.fields().unwrap().validate()?;
         }
 
         Ok(())

@@ -233,3 +233,22 @@ pub fn v0_3_0_fixture() -> Fixture {
         entry: entry(operation, seq_num(1), None, None)
     }
 }
+
+/// Invalid YASMF hash in `document` with correct length but unknown hash format identifier.
+#[fixture]
+pub fn operation_encoded_invalid_relation_fields() -> OperationEncoded {
+    // {
+    //   "action": "create",
+    //   "schema": "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
+    //   "version": 1,
+    //   "fields": {
+    //     "locations": {
+    //       "type": "relation",
+    //       "value": {
+    //         "document": "83e2043738f2b5cdcd3b6cb0fbb82fe125905d0f75e16488a38d395ff5f9d5ea82b5"
+    //       }
+    //     }
+    //   }
+    // }
+    return OperationEncoded::new("a466616374696f6e6663726561746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a1696c6f636174696f6e73a264747970656872656c6174696f6e6576616c7565a168646f63756d656e7478443833653230343337333866326235636463643362366362306662623832666531323539303564306637356531363438386133386433393566663566396435656138326235").unwrap();
+}
