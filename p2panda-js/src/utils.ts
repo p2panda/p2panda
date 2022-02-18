@@ -49,20 +49,23 @@ const getFieldType = (
   }
 
   if (type === 'object') {
-    validateRelation(fields[key] as object);
-    return 'relation';
-  } else if (Array.isArray(fields[key])) {
-    const list = fields[key] as Array<Relation>;
+    // Value is probably a relation or relation_list
+    if (Array.isArray(fields[key])) {
+      const list = fields[key] as Array<Relation>;
 
-    if (list.length === 0) {
-      throw new Error('Empty array found');
+      if (list.length === 0) {
+        throw new Error('Empty array found');
+      }
+
+      list.forEach((relation) => {
+        validateRelation(relation as object);
+      });
+
+      return 'relation_list';
+    } else {
+      validateRelation(fields[key] as object);
+      return 'relation';
     }
-
-    list.forEach((relation) => {
-      validateRelation(relation as object);
-    });
-
-    return 'relation_list';
   }
 
   if (!Object.keys(FIELD_TYPE_MAPPING).includes(type)) {
