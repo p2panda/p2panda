@@ -1,11 +1,37 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
+use std::str::FromStr;
 
 use crate::document::DocumentView;
 use crate::operation::OperationValue;
 
 use super::SystemSchemaError;
+
+#[derive(Clone, Debug, Copy)]
+#[allow(missing_docs)]
+pub enum FieldType {
+    Bool,
+    Int,
+    Float,
+    Tstr,
+    Relation,
+}
+
+impl FromStr for FieldType {
+    type Err = SystemSchemaError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "bool" => Ok(FieldType::Bool),
+            "int" => Ok(FieldType::Int),
+            "float" => Ok(FieldType::Float),
+            "tstr" => Ok(FieldType::Tstr),
+            "relation" => Ok(FieldType::Relation),
+            _ => Err(SystemSchemaError::InvalidFieldType),
+        }
+    }
+}
 
 struct SchemaView(DocumentView);
 struct SchemaFieldView(DocumentView);
@@ -39,9 +65,15 @@ impl SchemaFieldView {
         self.0.get("name").unwrap()
     }
 
-    fn field_type(&self) -> &OperationValue {
+    fn field_type(&self) -> FieldType {
         // Unwrap here because fields were validated on construction
-        self.0.get("type").unwrap()
+        self.0
+            .get("type")
+            .and_then(|value| match value {
+                OperationValue::Text(type_str) => Some(type_str.parse::<FieldType>().unwrap()),
+                _ => None,
+            })
+            .unwrap()
     }
 }
 
@@ -94,7 +126,11 @@ impl TryFrom<DocumentView> for SchemaFieldView {
         while let Some(key) = fields.pop() {
             match document_view.get(key) {
                 Some(OperationValue::Text(_)) if key == "name" => continue,
-                Some(OperationValue::Text(_)) if key == "type" => continue,
+                Some(OperationValue::Text(type_str)) if key == "type" => {
+                    // Validate the type string parses into a FieldType
+                    type_str.parse::<FieldType>()?;
+                    continue;
+                }
                 Some(op) => {
                     return Err(SystemSchemaError::InvalidField(
                         key.to_string(),

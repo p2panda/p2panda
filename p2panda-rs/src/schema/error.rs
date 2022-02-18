@@ -51,6 +51,9 @@ pub enum SystemSchemaError {
 
     #[error("too few fields")]
     TooFewFields,
+
+    #[error("invalid field type")]
+    InvalidFieldType,
 }
 
 impl std::fmt::Debug for SchemaError {
