@@ -1,20 +1,24 @@
-use std::{ops::Deref, str::FromStr};
-
 // SPDX-License-Identifier: AGPL-3.0-or-later
-use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
+
+use std::ops::Deref;
+use std::str::FromStr;
+
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::Error;
 
 use crate::hash::Hash;
+use crate::schema::error::SchemaHashError;
 
-use super::error::SchemaHashError;
-
-/// Enum representing existing schema types
+/// Enum representing existing schema types.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SchemaHash {
-    /// An application schema with a hash
+    /// An application schema with a hash.
     Application(Hash),
-    /// A schema definition
+    
+    /// A schema definition.
     Schema,
-    /// A schema definition field
+    
+    /// A schema definition field.
     SchemaField,
 }
 
