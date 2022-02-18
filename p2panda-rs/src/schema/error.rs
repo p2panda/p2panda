@@ -40,14 +40,17 @@ pub enum SchemaError {
 /// Custom error types for schema validation.
 #[derive(Error, Debug)]
 pub enum SystemSchemaError {
-    #[error("invalid field type found for \"{0}\": {1:#?}")]
-    InvalidFieldType(String, OperationValue),
+    #[error("invalid field \"{0}\" with value {1:#?}")]
+    InvalidField(String, OperationValue),
 
-    #[error("invalid field \"{1}\" for system schema {0}")]
-    InvalidField(String, String),
+    #[error("missing field \"{0}\"")]
+    MissingField(String),
 
-    #[error("missing field \"{1}\" for system schema {0}")]
-    MissingField(String, String),
+    #[error("too many fields")]
+    TooManyFields,
+
+    #[error("too few fields")]
+    TooFewFields,
 }
 
 impl std::fmt::Debug for SchemaError {
