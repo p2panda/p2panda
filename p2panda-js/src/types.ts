@@ -92,7 +92,7 @@ export type OperationTagged = {
  */
 export type Relation = {
   document: string;
-  document_view: string[];
+  document_view?: string[];
 };
 
 /**

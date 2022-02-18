@@ -50,7 +50,6 @@ describe('operation', () => {
         {
           document:
             '00200fe5b7163e5e6eddca0682186abe852987c2ca525cbe58e788ba25a14d3cf21e',
-          document_view: [],
         },
       ],
     };

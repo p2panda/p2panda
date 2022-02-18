@@ -18,8 +18,15 @@ const validateRelation = (relation: object): boolean => {
     throw new Error('`document` field is missing in relation');
   }
 
-  if (!('document_view' in relation)) {
-    throw new Error('`document_view` field is missing in relation');
+  // `document_view` is optional but if set it needs at least one item inside
+  if ('document_view' in relation) {
+    const documentView = (relation as Relation)['document_view'];
+
+    if (!Array.isArray(documentView)) {
+      throw new Error('`document_view` is not an array');
+    } else if (documentView.length === 0) {
+      throw new Error('`document_view` array can not be empty ');
+    }
   }
 
   return true;

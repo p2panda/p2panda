@@ -88,22 +88,36 @@ describe('Utils', () => {
         }),
       ).toThrow();
 
-      // Missing `document_view` field
+      // Empty array in `document_view` field
       expect(() =>
         marshallRequestFields({
           // @ts-ignore: We deliberately use the API wrong here
           invalid: {
             document:
               '0020577aa145b275f54d61c56a0b9dc9efae0730656aee5a3cdb0b981a44927af141',
+            document_view: [],
           },
         }),
       ).toThrow();
 
-      // Empty array
+      // Empty array field
       expect(() =>
         marshallRequestFields({
           // @ts-ignore: We deliberately use the API wrong here
           invalid: [],
+        }),
+      ).toThrow();
+
+      // `document_view` is not an array
+      expect(() =>
+        marshallRequestFields({
+          // @ts-ignore: We deliberately use the API wrong here
+          invalid: {
+            document:
+              '0020577aa145b275f54d61c56a0b9dc9efae0730656aee5a3cdb0b981a44927af141',
+            document_view:
+              '00207887216e0adb13635d90c75678c6ad371a45171828e26e3069efebe5225e89f1',
+          },
         }),
       ).toThrow();
     });
