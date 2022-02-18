@@ -3,7 +3,7 @@
 import { getOperationFields } from '~/operation';
 import { marshallRequestFields } from '~/utils';
 
-describe('message', () => {
+describe('operation', () => {
   describe('getOperationFields', () => {
     it('creates a WebAssembly OperationField', async () => {
       const fields = marshallRequestFields({
