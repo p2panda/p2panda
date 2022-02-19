@@ -239,7 +239,7 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
     }
 
     /// Check if all a nodes dependencies have been visited.
-    pub fn dependencies_visited(&self, sorted: &[&Node<T>], node: &Node<T>) -> bool {
+    fn dependencies_visited(&self, sorted: &[&Node<T>], node: &Node<T>) -> bool {
         let mut has_dependencies = true;
         let previous_nodes = node.previous();
 
@@ -254,7 +254,7 @@ impl<'a, T: PartialEq + Clone + Debug> Graph<T> {
     }
 
     /// Returns the next un-visited node following the passed node.
-    pub fn next(&'a self, sorted: &[&Node<T>], node: &Node<T>) -> Option<Vec<&'a Node<T>>> {
+    fn next(&'a self, sorted: &[&Node<T>], node: &Node<T>) -> Option<Vec<&'a Node<T>>> {
         let mut next_nodes: Vec<&'a Node<T>> = Vec::new();
 
         for node_key in node.next() {
