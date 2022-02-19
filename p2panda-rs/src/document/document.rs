@@ -1,12 +1,66 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
+use std::collections::BTreeMap;
 
-use crate::document::{DocumentBuilderError, DocumentView};
+use crate::document::DocumentBuilderError;
 use crate::graph::Graph;
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{AsOperation, OperationWithMeta};
+
+use super::DocumentView;
+
+pub fn build_graph(
+    operations: &[OperationWithMeta],
+) -> Result<Graph<OperationWithMeta>, DocumentBuilderError> {
+    let mut graph = Graph::new();
+
+    // Add all operations to the graph.
+    for operation in operations {
+        graph.add_node(operation.operation_id().as_str(), operation.clone());
+    }
+
+    // Add links between operations in the graph.
+    for operation in operations {
+        if let Some(previous_operations) = operation.previous_operations() {
+            for previous in previous_operations {
+                let success = graph.add_link(previous.as_str(), operation.operation_id().as_str());
+                if !success {
+                    return Err(DocumentBuilderError::InvalidOperationLink(
+                        operation.operation_id().as_str().into(),
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok(graph)
+}
+
+pub fn reduce<T: AsOperation>(ordered_operations: &[T]) -> DocumentView {
+    let is_edited = ordered_operations.len() > 1;
+    let mut is_deleted = false;
+
+    let mut view = BTreeMap::new();
+
+    for operation in ordered_operations {
+        if operation.is_delete() {
+            is_deleted = true
+        }
+
+        if let Some(fields) = operation.fields() {
+            for (key, value) in fields.iter() {
+                view.insert(key.to_string(), value.to_owned());
+            }
+        }
+    }
+
+    DocumentView {
+        view,
+        is_edited,
+        is_deleted,
+    }
+}
 
 /// A replicatable data type designed to handle concurrent updates in a way where all replicas
 /// eventually resolve to the same deterministic value.
@@ -17,79 +71,11 @@ use crate::operation::{AsOperation, OperationWithMeta};
 #[derive(Debug, Clone)]
 pub struct Document {
     id: Hash,
+    view_id: Vec<Hash>,
     author: Author,
     schema: Hash,
     view: DocumentView,
-    meta: DocumentMeta,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct DocumentMeta {
-    deleted: bool,
-    edited: bool,
     operations: Vec<OperationWithMeta>,
-    current_graph_tips: Vec<Hash>,
-}
-
-impl Document {
-    /// Static method for resolving this document into a single view.
-    fn resolve_view(
-        operations: &[OperationWithMeta],
-        meta: &mut DocumentMeta,
-    ) -> Result<DocumentView, DocumentBuilderError> {
-        // Instantiate graph and operations map.
-        let mut graph = Graph::new();
-
-        if operations.len() > 1 {
-            meta.edited = true
-        }
-
-        // Add all operations to the graph.
-        for operation in operations {
-            graph.add_node(operation.operation_id().as_str(), operation.clone());
-            if operation.is_delete() {
-                meta.deleted = true
-            }
-        }
-
-        // Add links between operations in the graph.
-        for operation in operations {
-            if let Some(previous_operations) = operation.previous_operations() {
-                for previous in previous_operations {
-                    let success =
-                        graph.add_link(previous.as_str(), operation.operation_id().as_str());
-                    if !success {
-                        return Err(DocumentBuilderError::InvalidOperationLink(
-                            operation.operation_id().as_str().into(),
-                        ));
-                    }
-                }
-            }
-        }
-
-        // Traverse the graph topologically and return an ordered list of operations.
-        let sorted_graph_data = graph.sort()?;
-
-        // Instantiate an initial document view from the documents create operation.
-        //
-        // We can unwrap here because we already verified the operations during the document building
-        // which means we know there is at least one CREATE operation.
-        let mut operations_iter = sorted_graph_data.sorted().into_iter();
-        let mut document_view = DocumentView::try_from(operations_iter.next().unwrap())?;
-
-        // Apply every update in order to arrive at the current view.
-        operations_iter.try_for_each(|op| document_view.apply_update(op))?;
-
-        // Populate document meta data fields.
-        meta.operations = sorted_graph_data.sorted();
-        meta.current_graph_tips = sorted_graph_data
-            .current_graph_tips()
-            .iter()
-            .map(|operation| operation.operation_id().to_owned())
-            .collect();
-
-        Ok(document_view)
-    }
 }
 
 impl Document {
@@ -115,22 +101,22 @@ impl Document {
 
     /// Get the operations contained in this document.
     pub fn operations(&self) -> &Vec<OperationWithMeta> {
-        &self.meta.operations
+        &self.operations
     }
 
     /// Get the documents graph tips.
     pub fn current_graph_tips(&self) -> &Vec<Hash> {
-        &self.meta.current_graph_tips
+        &self.view_id
     }
 
     /// Returns true if this document has applied an UPDATE operation.
     pub fn is_edited(&self) -> bool {
-        self.meta.edited
+        self.view.is_edited()
     }
 
     /// Returns true if this document has processed a DELETE operation.
     pub fn is_deleted(&self) -> bool {
-        self.meta.deleted
+        self.view.is_deleted()
     }
 }
 
@@ -196,19 +182,25 @@ impl DocumentBuilder {
 
         let id = create_operation.operation_id().to_owned();
 
-        let mut meta = DocumentMeta {
-            operations: self.operations(),
-            ..Default::default()
-        };
+        let graph = build_graph(&self.operations)?;
 
-        let view = Document::resolve_view(&self.operations, &mut meta)?;
+        let sorted_graph_data = graph.sort()?;
+
+        let graph_tips: Vec<Hash> = sorted_graph_data
+            .current_graph_tips()
+            .iter()
+            .map(|operation| operation.operation_id().to_owned())
+            .collect();
+
+        let view = reduce(&sorted_graph_data.sorted()[..]);
 
         Ok(Document {
             id,
+            view_id: graph_tips,
             schema,
             author,
             view,
-            meta,
+            operations: sorted_graph_data.sorted(),
         })
     }
 }

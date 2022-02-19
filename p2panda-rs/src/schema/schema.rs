@@ -2,7 +2,6 @@
 
 use std::collections::BTreeMap;
 #[cfg(not(target_arch = "wasm32"))]
-use std::convert::TryFrom;
 use std::fmt;
 
 use cddl::lexer::Lexer;
@@ -12,11 +11,9 @@ use cddl::validate_cbor_from_slice;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
 
-#[cfg(not(target_arch = "wasm32"))]
-use crate::document::{DocumentView, DocumentViewError};
 use crate::hash::Hash;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::operation::{AsOperation, Operation, OperationFields, OperationValue};
+use crate::operation::{Operation, OperationFields, OperationValue};
 use crate::schema::SchemaError;
 
 /// CDDL types.
@@ -253,21 +250,6 @@ impl Schema {
             Err(err) => Err(SchemaError::InvalidSchema(vec![err.to_string()])),
         }
     }
-
-    /// Returns a new `DocumentView` converted from CREATE `Operation` and validated against it's
-    /// schema definition.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn instance_from_create(
-        &self,
-        operation: Operation,
-    ) -> Result<DocumentView, DocumentViewError> {
-        match self.validate_operation_fields(&operation.fields().unwrap()) {
-            Ok(_) => Ok(()),
-            Err(err) => Err(DocumentViewError::ValidationError(err)),
-        }?;
-
-        DocumentView::try_from(operation)
-    }
 }
 
 impl fmt::Display for Schema {
@@ -494,29 +476,5 @@ mod tests {
             .unwrap();
 
         assert_eq!(operation, operation_again);
-    }
-
-    #[rstest]
-    pub fn create_validate_instance(#[from(hash)] schema_hash: Hash, create_operation: Operation) {
-        // Instantiate "person" schema from cddl string
-        let chat_schema_defnition = "chat = { (
-                    message: { type: \"str\", value: tstr }
-                ) }";
-
-        let chat = Schema::new(&schema_hash, &chat_schema_defnition.to_string()).unwrap();
-
-        let chat_instance = chat.instance_from_create(create_operation.clone());
-
-        assert!(chat_instance.is_ok());
-
-        let not_chat_schema_defnition = "chat = { (
-            number: { type: \"int\", value: int }
-        ) }";
-
-        let number = Schema::new(&schema_hash, &not_chat_schema_defnition.to_string()).unwrap();
-
-        let not_chat_instance = number.instance_from_create(create_operation);
-
-        assert!(not_chat_instance.is_err())
     }
 }

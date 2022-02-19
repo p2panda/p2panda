@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::str::FromStr;
 
@@ -172,10 +171,10 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::{TryFrom, TryInto};
+    use std::convert::TryFrom;
 
     use crate::{
-        document::DocumentView,
+        document::reduce,
         hash::Hash,
         operation::OperationValue,
         schema::system_schema::{FieldType, SchemaFieldView},
@@ -198,7 +197,7 @@ mod tests {
                 ("fields", OperationValue::Relation(relation_hash)),
             ]),
         );
-        let document_view: DocumentView = operation.try_into().unwrap();
+        let document_view = reduce(&[operation]);
         assert!(SchemaView::try_from(document_view).is_ok());
     }
 
@@ -211,7 +210,7 @@ mod tests {
                 ("type", OperationValue::Text("bool".to_string())),
             ]),
         );
-        let document_view: DocumentView = bool_field.try_into().unwrap();
+        let document_view = reduce(&[bool_field]);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         let field_view = field_view.unwrap();
@@ -225,7 +224,7 @@ mod tests {
                 ("type", OperationValue::Text("int".to_string())),
             ]),
         );
-        let document_view: DocumentView = int_field.try_into().unwrap();
+        let document_view = reduce(&[int_field]);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::Int);
@@ -237,7 +236,7 @@ mod tests {
                 ("type", OperationValue::Text("float".to_string())),
             ]),
         );
-        let document_view: DocumentView = float_field.try_into().unwrap();
+        let document_view = reduce(&[float_field]);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::Float);
@@ -249,7 +248,7 @@ mod tests {
                 ("type", OperationValue::Text("str".to_string())),
             ]),
         );
-        let document_view: DocumentView = str_field.try_into().unwrap();
+        let document_view = reduce(&[str_field]);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::String);
@@ -261,7 +260,7 @@ mod tests {
                 ("type", OperationValue::Text("relation".to_string())),
             ]),
         );
-        let document_view: DocumentView = relation_field.try_into().unwrap();
+        let document_view = reduce(&[relation_field]);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::Relation);
@@ -273,7 +272,7 @@ mod tests {
                 ("type", OperationValue::Text("hash".to_string())),
             ]),
         );
-        let document_view: DocumentView = invalid_field_type.try_into().unwrap();
+        let document_view = reduce(&[invalid_field_type]);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_err());
     }

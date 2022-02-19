@@ -257,6 +257,6 @@ mod document;
 mod document_view;
 mod error;
 
-pub use document::{Document, DocumentBuilder};
+pub use document::{reduce, Document, DocumentBuilder};
 pub use document_view::DocumentView;
 pub use error::{DocumentBuilderError, DocumentError, DocumentViewError};
