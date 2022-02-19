@@ -46,11 +46,11 @@ pub fn decode_entry(
     };
 
     Ok(Entry::new(
-        &LogId::new(entry.log_id as i64),
+        &LogId::new(entry.log_id),
         operation.as_ref(),
         entry_hash_skiplink.as_ref(),
         entry_hash_backlink.as_ref(),
-        &SeqNum::new(entry.seq_num as i64).unwrap(),
+        &SeqNum::new(entry.seq_num).unwrap(),
     )
     .unwrap())
 }

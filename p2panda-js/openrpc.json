@@ -56,12 +56,10 @@
                             ]
                         },
                         "seqNum": {
-                            "type": "number",
-                            "minimum": 1
+                            "type": "string"
                         },
                         "logId": {
-                            "type": "number",
-                            "minimum": 1
+                            "type": "string"
                         }
                     }
                 }
@@ -126,8 +124,7 @@
                                 "pattern": "[0-9a-f]{68}"
                             },
                             "logId": {
-                                "type": "number",
-                                "minimum": 1
+                                "type": "string"
                             },
                             "payloadBytes": {
                                 "type": "string"
@@ -139,8 +136,7 @@
                                 "pattern": "[0-9a-f]{68}"
                             },
                             "seqNum": {
-                                "type": "number",
-                                "minimum": 1
+                                "type": "string"
                             }
                         }
                     }
@@ -190,12 +186,10 @@
                         ]
                     },
                     "seqNum": {
-                        "type": "number",
-                        "minimum": 1
+                        "type": "string"
                     },
                     "logId": {
-                        "type": "number",
-                        "minimum": 1
+                        "type": "string"
                     }
                 }
             },
@@ -218,8 +212,7 @@
                         "pattern": "[0-9a-f]{68}"
                     },
                     "logId": {
-                        "type": "number",
-                        "minimum": 1
+                        "type": "string"
                     },
                     "payloadBytes": {
                         "type": "string"
@@ -231,8 +224,7 @@
                         "pattern": "[0-9a-f]{68}"
                     },
                     "seqNum": {
-                        "type": "number",
-                        "minimum": 1
+                        "type": "string"
                     }
                 }
             },
@@ -263,8 +255,7 @@
                             "pattern": "[0-9a-f]{68}"
                         },
                         "logId": {
-                            "type": "number",
-                            "minimum": 1
+                            "type": "string"
                         },
                         "payloadBytes": {
                             "type": "string"
@@ -276,8 +267,7 @@
                             "pattern": "[0-9a-f]{68}"
                         },
                         "seqNum": {
-                            "type": "number",
-                            "minimum": 1
+                            "type": "string"
                         }
                     }
                 }
@@ -287,22 +277,22 @@
             "Entry1": {
                 "name": "entryEncoded",
                 "summary": "Encoded bytes of the first entry in a p2panda `Bamboo` log.",
-                "value": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d01019c0020bbf34ae370b167c4950df17089ca322965c4e5c92e1b13a1f0fc4d62ce82e4943b3e054cc91b9ce9b79546cbca86b9be5e77cff9a04495bbeb9cfa76d7f1f71a7e6498ff45bb758392baf5d7a5ea3b240fb996109ab609b87af9ee2b320fff05"
+                "value": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501019c0020bbf34ae370b167c4950df17089ca322965c4e5c92e1b13a1f0fc4d62ce82e494822669c20d32384f1cec1ca2a4ddbe2eb7ed184f2a60f01957436c32228351616db5be9772b137927990e977b10904e2730e1d7a63253eefd72b4f329acc0d06"
             },
             "Entry2": {
                 "name": "entryEncoded",
                 "summary": "Encoded bytes of the second entry in a p2panda `Bamboo` log.",
-                "value": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d0102002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e37704f30020d352b150c97126f7676ca2cb336f4b33f56894b01897338949e7b447b31a6769a78400ee1ba3b299b34c21a73f5b858104fb0e45e336b1ae8e491d7a0b0ceff204310982d60e23ba6d3f8fa6ceb35a8504a71bb19142c3e77c03740695c46000"
+                "value": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501020020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd25f30020e4c7dd99c03091dee8a64dfc6b8fd4152badce6b9ad04857ef5b213cf4e0fc7f63a9b9c03b9bf925678091cbbedcc7090f75978b5df70e06d9cd399db8d1bd95bd1582bacdb767bb277cf0b84c143123015e1873f5c87af44e80f75385ba0f0c"
             },
             "Entry3": {
                 "name": "entryEncoded",
                 "summary": "Encoded bytes of the third entry in a p2panda `Bamboo` log.",
-                "value": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d010300204da4869b3f289113bd72d21eb0e02bc09f0752283b545f52d87005ca5985c3ebf6002023c087e8169ee17b2a7d37ff20e3d745eacc14ea1191a5160727c3abd4fa1ba7a625b270c18739924e0634e099c61ce69081782f5a7567ad99b6e81377927d8adcb1c9df6e0475fa1a69599ac6b96f1ff96ec32bdb8bff9fbee2080d1384f001"
+                "value": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501030020ed83aed0fcfa264e5de764ffc2ddf1e03c5e3d58d97838abdeb5afeac40cc3cff60020d952a6f6fb6abfe17602c2b8176a20f2f69f3b11e8ec3dccaa03131dd6216cf0115934e771779957ada862a08b41b68bd3800472b16cb3f5b9d3ba601ec722939292ffd23247736bbecfdc370c76be401b457f5e2bdfb845bac6960062d50908"
             },
             "Entry4": {
                 "name": "entryEncoded",
                 "summary": "Encoded bytes of the forth entry in a p2panda `Bamboo` log.",
-                "value": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d0104002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e377040020b7bda7f197defac40c0c242ce78fc1c578397a8350668fb6b3fc2634b1eb65fbbf0020415cefd17046a676bebfa254d2972004b79ca31ee3ad974f3092ce6ffe1c9a0c896fe48ec35888d3ae0c0761061b7f8b6d318e7296686c167432d469b916155f3910e5f7a64bb5b34a50e340569518c8e42f1b780513f98011189432ec6d3905"
+                "value": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501040020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd2500206b4e22562f07a4b92567c1aa369f275edd532d2f9e0ed2c7e29fd6a7ccd5ae01bf00206c1e91c5b20f1d6e55df80753085d580ca293d5e1e11344afcd18aefab19d0716a5e67c48d0e0e47e7cef5000da29bdf5b337c652ca961f0069fe560e98e71a8f38b343eb15f48dc23c2c306bd245a5640ef2e8a025ffc2f53c2764b1f0a2108"
             },
             "Operation1": {
                 "name": "operationEncoded",
@@ -312,17 +302,17 @@
             "Operation2": {
                 "name": "operationEncoded",
                 "summary": "Encoded bytes of the payload of the second entry in a p2panda `Bamboo` log.",
-                "value": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323034326638353065383737313331626334653332313932333034653830636333626536656532306666653132653762353761373066316239366138653337373034666669656c6473a1676d657373616765a26474797065637374726576616c75657357686963682049206e6f77207570646174652e"
+                "value": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323063376365663963336632346337373438636238313466376435366635366435613534613536386330636439373235623336343735323464313430623163643235666669656c6473a1676d657373616765a26474797065637374726576616c75657357686963682049206e6f77207570646174652e"
             },
             "Operation3": {
                 "name": "operationEncoded",
                 "summary": "Encoded bytes of the payload of the third entry in a p2panda `Bamboo` log.",
-                "value": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323034646134383639623366323839313133626437326432316562306530326263303966303735323238336235343566353264383730303563613539383563336562666669656c6473a1676d657373616765a26474797065637374726576616c756576416e64207468656e2075706461746520616761696e2e"
+                "value": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323065643833616564306663666132363465356465373634666663326464663165303363356533643538643937383338616264656235616665616334306363336366666669656c6473a1676d657373616765a26474797065637374726576616c756576416e64207468656e2075706461746520616761696e2e"
             },
             "Operation4": {
                 "name": "operationEncoded",
                 "summary": "Encoded bytes of the payload of the first entry in a p2panda `Bamboo` log.",
-                "value": "a466616374696f6e6664656c65746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323062376264613766313937646566616334306330633234326365373866633163353738333937613833353036363866623662336663323633346231656236356662"
+                "value": "a466616374696f6e6664656c65746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323036623465323235363266303761346239323536376331616133363966323735656464353332643266396530656432633765323966643661376363643561653031"
             },
             "EntryArgs1": {
                 "name": "nextEntryArgs",
@@ -330,54 +320,54 @@
                 "value": {
                     "entryHashBacklink": null,
                     "entryHashSkiplink": null,
-                    "seqNum": 1,
-                    "logId": 1
+                    "seqNum": "1",
+                    "logId": "1"
                 }
             },
             "EntryArgs2": {
                 "name": "nextEntryArgs",
                 "summary": "The arguments required for publishing the second `Entry` to the test log.",
                 "value": {
-                    "entryHashBacklink": "002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e37704",
+                    "entryHashBacklink": "0020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd25",
                     "entryHashSkiplink": null,
-                    "seqNum": 2,
-                    "logId": 1
+                    "seqNum": "2",
+                    "logId": "1"
                 }
             },
             "EntryArgs3": {
                 "name": "nextEntryArgs",
                 "summary": "The arguments required for publishing the third `Entry` to the test log.",
                 "value": {
-                    "entryHashBacklink": "00204da4869b3f289113bd72d21eb0e02bc09f0752283b545f52d87005ca5985c3eb",
+                    "entryHashBacklink": "0020ed83aed0fcfa264e5de764ffc2ddf1e03c5e3d58d97838abdeb5afeac40cc3cf",
                     "entryHashSkiplink": null,
-                    "seqNum": 3,
-                    "logId": 1
+                    "seqNum": "3",
+                    "logId": "1"
                 }
             },
             "EntryArgs4": {
                 "name": "nextEntryArgs",
                 "summary": "The arguments required for publishing the forth `Entry` to the test log.",
                 "value": {
-                    "entryHashBacklink": "0020b7bda7f197defac40c0c242ce78fc1c578397a8350668fb6b3fc2634b1eb65fb",
-                    "entryHashSkiplink": "002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e37704",
-                    "seqNum": 4,
-                    "logId": 1
+                    "entryHashBacklink": "00206b4e22562f07a4b92567c1aa369f275edd532d2f9e0ed2c7e29fd6a7ccd5ae01",
+                    "entryHashSkiplink": "0020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd25",
+                    "seqNum": "4",
+                    "logId": "1"
                 }
             },
             "EntryArgs5": {
                 "name": "nextEntryArgs",
                 "summary": "The arguments required for publishing a new fifth `Entry` to the test log.",
                 "value": {
-                    "entryHashBacklink": "0020fdbc64cb052c735a87da2ab25823a518ac8c9db2b2dd746407210281ea351e65",
+                    "entryHashBacklink": "0020bc7a9f06938a6b565e719d19d680e6f53f26faae8057788088476f4be8f7cdf9",
                     "entryHashSkiplink": null,
-                    "seqNum": 5,
-                    "logId": 1
+                    "seqNum": "5",
+                    "logId": "1"
                 }
             },
             "Author": {
                 "name": "author",
                 "summary": "The `Author` of the test log.",
-                "value": "4352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d"
+                "value": "9029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf525"
             },
             "Schema": {
                 "name": "schema",
@@ -387,7 +377,7 @@
             "DocumentId": {
                 "name": "document",
                 "summary": "The `DocumentId` which this log is assigned",
-                "value": "002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e37704"
+                "value": "0020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd25"
             },
             "Entries": {
                 "name": "entries",
@@ -395,40 +385,40 @@
                 "value": {
                     "entries": [
                         {
-                            "author": "4352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d",
-                            "entryBytes": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d01019c0020bbf34ae370b167c4950df17089ca322965c4e5c92e1b13a1f0fc4d62ce82e4943b3e054cc91b9ce9b79546cbca86b9be5e77cff9a04495bbeb9cfa76d7f1f71a7e6498ff45bb758392baf5d7a5ea3b240fb996109ab609b87af9ee2b320fff05",
-                            "entryHash": "002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e37704",
+                            "author": "9029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf525",
+                            "entryBytes": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501019c0020bbf34ae370b167c4950df17089ca322965c4e5c92e1b13a1f0fc4d62ce82e494822669c20d32384f1cec1ca2a4ddbe2eb7ed184f2a60f01957436c32228351616db5be9772b137927990e977b10904e2730e1d7a63253eefd72b4f329acc0d06",
+                            "entryHash": "0020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd25",
                             "payloadBytes": "a466616374696f6e6663726561746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a1676d657373616765a26474797065637374726576616c7565764f68682c206d79206669727374206d65737361676521",
                             "payloadHash": "0020bbf34ae370b167c4950df17089ca322965c4e5c92e1b13a1f0fc4d62ce82e494",
-                            "logId": 1,
-                            "seqNum": 1
+                            "logId": "1",
+                            "seqNum": "1"
                         },
                         {
-                            "author": "4352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d",
-                            "entryBytes": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d0102002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e37704f30020d352b150c97126f7676ca2cb336f4b33f56894b01897338949e7b447b31a6769a78400ee1ba3b299b34c21a73f5b858104fb0e45e336b1ae8e491d7a0b0ceff204310982d60e23ba6d3f8fa6ceb35a8504a71bb19142c3e77c03740695c46000",
-                            "entryHash": "00204da4869b3f289113bd72d21eb0e02bc09f0752283b545f52d87005ca5985c3eb",
-                            "payloadBytes": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323034326638353065383737313331626334653332313932333034653830636333626536656532306666653132653762353761373066316239366138653337373034666669656c6473a1676d657373616765a26474797065637374726576616c75657357686963682049206e6f77207570646174652e",
-                            "payloadHash": "0020d352b150c97126f7676ca2cb336f4b33f56894b01897338949e7b447b31a6769",
-                            "logId": 1,
-                            "seqNum": 2
+                            "author": "9029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf525",
+                            "entryBytes": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501020020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd25f30020e4c7dd99c03091dee8a64dfc6b8fd4152badce6b9ad04857ef5b213cf4e0fc7f63a9b9c03b9bf925678091cbbedcc7090f75978b5df70e06d9cd399db8d1bd95bd1582bacdb767bb277cf0b84c143123015e1873f5c87af44e80f75385ba0f0c",
+                            "entryHash": "0020ed83aed0fcfa264e5de764ffc2ddf1e03c5e3d58d97838abdeb5afeac40cc3cf",
+                            "payloadBytes": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323063376365663963336632346337373438636238313466376435366635366435613534613536386330636439373235623336343735323464313430623163643235666669656c6473a1676d657373616765a26474797065637374726576616c75657357686963682049206e6f77207570646174652e",
+                            "payloadHash": "0020e4c7dd99c03091dee8a64dfc6b8fd4152badce6b9ad04857ef5b213cf4e0fc7f",
+                            "logId": "1",
+                            "seqNum": "2"
                         },
                         {
-                            "author": "4352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d",
-                            "entryBytes": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d010300204da4869b3f289113bd72d21eb0e02bc09f0752283b545f52d87005ca5985c3ebf6002023c087e8169ee17b2a7d37ff20e3d745eacc14ea1191a5160727c3abd4fa1ba7a625b270c18739924e0634e099c61ce69081782f5a7567ad99b6e81377927d8adcb1c9df6e0475fa1a69599ac6b96f1ff96ec32bdb8bff9fbee2080d1384f001",
-                            "entryHash": "0020b7bda7f197defac40c0c242ce78fc1c578397a8350668fb6b3fc2634b1eb65fb",
-                            "payloadBytes": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323034646134383639623366323839313133626437326432316562306530326263303966303735323238336235343566353264383730303563613539383563336562666669656c6473a1676d657373616765a26474797065637374726576616c756576416e64207468656e2075706461746520616761696e2e",
-                            "payloadHash": "002023c087e8169ee17b2a7d37ff20e3d745eacc14ea1191a5160727c3abd4fa1ba7",
-                            "logId": 1,
-                            "seqNum": 3
+                            "author": "9029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf525",
+                            "entryBytes": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501030020ed83aed0fcfa264e5de764ffc2ddf1e03c5e3d58d97838abdeb5afeac40cc3cff60020d952a6f6fb6abfe17602c2b8176a20f2f69f3b11e8ec3dccaa03131dd6216cf0115934e771779957ada862a08b41b68bd3800472b16cb3f5b9d3ba601ec722939292ffd23247736bbecfdc370c76be401b457f5e2bdfb845bac6960062d50908",
+                            "entryHash": "00206b4e22562f07a4b92567c1aa369f275edd532d2f9e0ed2c7e29fd6a7ccd5ae01",
+                            "payloadBytes": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323065643833616564306663666132363465356465373634666663326464663165303363356533643538643937383338616264656235616665616334306363336366666669656c6473a1676d657373616765a26474797065637374726576616c756576416e64207468656e2075706461746520616761696e2e",
+                            "payloadHash": "0020d952a6f6fb6abfe17602c2b8176a20f2f69f3b11e8ec3dccaa03131dd6216cf0",
+                            "logId": "1",
+                            "seqNum": "3"
                         },
                         {
-                            "author": "4352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d",
-                            "entryBytes": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d0104002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e377040020b7bda7f197defac40c0c242ce78fc1c578397a8350668fb6b3fc2634b1eb65fbbf0020415cefd17046a676bebfa254d2972004b79ca31ee3ad974f3092ce6ffe1c9a0c896fe48ec35888d3ae0c0761061b7f8b6d318e7296686c167432d469b916155f3910e5f7a64bb5b34a50e340569518c8e42f1b780513f98011189432ec6d3905",
-                            "entryHash": "0020fdbc64cb052c735a87da2ab25823a518ac8c9db2b2dd746407210281ea351e65",
-                            "payloadBytes": "a466616374696f6e6664656c65746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323062376264613766313937646566616334306330633234326365373866633163353738333937613833353036363866623662336663323633346231656236356662",
-                            "payloadHash": "0020415cefd17046a676bebfa254d2972004b79ca31ee3ad974f3092ce6ffe1c9a0c",
-                            "logId": 1,
-                            "seqNum": 4
+                            "author": "9029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf525",
+                            "entryBytes": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501040020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd2500206b4e22562f07a4b92567c1aa369f275edd532d2f9e0ed2c7e29fd6a7ccd5ae01bf00206c1e91c5b20f1d6e55df80753085d580ca293d5e1e11344afcd18aefab19d0716a5e67c48d0e0e47e7cef5000da29bdf5b337c652ca961f0069fe560e98e71a8f38b343eb15f48dc23c2c306bd245a5640ef2e8a025ffc2f53c2764b1f0a2108",
+                            "entryHash": "0020bc7a9f06938a6b565e719d19d680e6f53f26faae8057788088476f4be8f7cdf9",
+                            "payloadBytes": "a466616374696f6e6664656c65746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323036623465323235363266303761346239323536376331616133363966323735656464353332643266396530656432633765323966643661376363643561653031",
+                            "payloadHash": "00206c1e91c5b20f1d6e55df80753085d580ca293d5e1e11344afcd18aefab19d071",
+                            "logId": "1",
+                            "seqNum": "4"
                         }
                     ]
                 }
@@ -501,12 +491,10 @@
                             ]
                         },
                         "seqNum": {
-                            "type": "number",
-                            "minimum": 1
+                            "type": "string"
                         },
                         "logId": {
-                            "type": "number",
-                            "minimum": 1
+                            "type": "string"
                         }
                     }
                 }
@@ -519,22 +507,22 @@
                         {
                             "name": "author",
                             "summary": "The `Author` of the test log.",
-                            "value": "4352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d"
+                            "value": "9029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf525"
                         },
                         {
                             "name": "document",
                             "summary": "The `DocumentId` which this log is assigned",
-                            "value": "002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e37704"
+                            "value": "0020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd25"
                         }
                     ],
                     "result": {
                         "name": "nextEntryArgs",
                         "summary": "The arguments required for publishing a new fifth `Entry` to the test log.",
                         "value": {
-                            "entryHashBacklink": "0020fdbc64cb052c735a87da2ab25823a518ac8c9db2b2dd746407210281ea351e65",
+                            "entryHashBacklink": "0020bc7a9f06938a6b565e719d19d680e6f53f26faae8057788088476f4be8f7cdf9",
                             "entryHashSkiplink": null,
-                            "seqNum": 5,
-                            "logId": 1
+                            "seqNum": "5",
+                            "logId": "1"
                         }
                     }
                 }
@@ -584,8 +572,7 @@
                                 "pattern": "[0-9a-f]{68}"
                             },
                             "logId": {
-                                "type": "number",
-                                "minimum": 1
+                                "type": "string"
                             },
                             "payloadBytes": {
                                 "type": "string"
@@ -597,8 +584,7 @@
                                 "pattern": "[0-9a-f]{68}"
                             },
                             "seqNum": {
-                                "type": "number",
-                                "minimum": 1
+                                "type": "string"
                             }
                         }
                     }
@@ -621,40 +607,40 @@
                         "value": {
                             "entries": [
                                 {
-                                    "author": "4352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d",
-                                    "entryBytes": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d01019c0020bbf34ae370b167c4950df17089ca322965c4e5c92e1b13a1f0fc4d62ce82e4943b3e054cc91b9ce9b79546cbca86b9be5e77cff9a04495bbeb9cfa76d7f1f71a7e6498ff45bb758392baf5d7a5ea3b240fb996109ab609b87af9ee2b320fff05",
-                                    "entryHash": "002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e37704",
+                                    "author": "9029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf525",
+                                    "entryBytes": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501019c0020bbf34ae370b167c4950df17089ca322965c4e5c92e1b13a1f0fc4d62ce82e494822669c20d32384f1cec1ca2a4ddbe2eb7ed184f2a60f01957436c32228351616db5be9772b137927990e977b10904e2730e1d7a63253eefd72b4f329acc0d06",
+                                    "entryHash": "0020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd25",
                                     "payloadBytes": "a466616374696f6e6663726561746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a1676d657373616765a26474797065637374726576616c7565764f68682c206d79206669727374206d65737361676521",
                                     "payloadHash": "0020bbf34ae370b167c4950df17089ca322965c4e5c92e1b13a1f0fc4d62ce82e494",
-                                    "logId": 1,
-                                    "seqNum": 1
+                                    "logId": "1",
+                                    "seqNum": "1"
                                 },
                                 {
-                                    "author": "4352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d",
-                                    "entryBytes": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d0102002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e37704f30020d352b150c97126f7676ca2cb336f4b33f56894b01897338949e7b447b31a6769a78400ee1ba3b299b34c21a73f5b858104fb0e45e336b1ae8e491d7a0b0ceff204310982d60e23ba6d3f8fa6ceb35a8504a71bb19142c3e77c03740695c46000",
-                                    "entryHash": "00204da4869b3f289113bd72d21eb0e02bc09f0752283b545f52d87005ca5985c3eb",
-                                    "payloadBytes": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323034326638353065383737313331626334653332313932333034653830636333626536656532306666653132653762353761373066316239366138653337373034666669656c6473a1676d657373616765a26474797065637374726576616c75657357686963682049206e6f77207570646174652e",
-                                    "payloadHash": "0020d352b150c97126f7676ca2cb336f4b33f56894b01897338949e7b447b31a6769",
-                                    "logId": 1,
-                                    "seqNum": 2
+                                    "author": "9029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf525",
+                                    "entryBytes": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501020020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd25f30020e4c7dd99c03091dee8a64dfc6b8fd4152badce6b9ad04857ef5b213cf4e0fc7f63a9b9c03b9bf925678091cbbedcc7090f75978b5df70e06d9cd399db8d1bd95bd1582bacdb767bb277cf0b84c143123015e1873f5c87af44e80f75385ba0f0c",
+                                    "entryHash": "0020ed83aed0fcfa264e5de764ffc2ddf1e03c5e3d58d97838abdeb5afeac40cc3cf",
+                                    "payloadBytes": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323063376365663963336632346337373438636238313466376435366635366435613534613536386330636439373235623336343735323464313430623163643235666669656c6473a1676d657373616765a26474797065637374726576616c75657357686963682049206e6f77207570646174652e",
+                                    "payloadHash": "0020e4c7dd99c03091dee8a64dfc6b8fd4152badce6b9ad04857ef5b213cf4e0fc7f",
+                                    "logId": "1",
+                                    "seqNum": "2"
                                 },
                                 {
-                                    "author": "4352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d",
-                                    "entryBytes": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d010300204da4869b3f289113bd72d21eb0e02bc09f0752283b545f52d87005ca5985c3ebf6002023c087e8169ee17b2a7d37ff20e3d745eacc14ea1191a5160727c3abd4fa1ba7a625b270c18739924e0634e099c61ce69081782f5a7567ad99b6e81377927d8adcb1c9df6e0475fa1a69599ac6b96f1ff96ec32bdb8bff9fbee2080d1384f001",
-                                    "entryHash": "0020b7bda7f197defac40c0c242ce78fc1c578397a8350668fb6b3fc2634b1eb65fb",
-                                    "payloadBytes": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323034646134383639623366323839313133626437326432316562306530326263303966303735323238336235343566353264383730303563613539383563336562666669656c6473a1676d657373616765a26474797065637374726576616c756576416e64207468656e2075706461746520616761696e2e",
-                                    "payloadHash": "002023c087e8169ee17b2a7d37ff20e3d745eacc14ea1191a5160727c3abd4fa1ba7",
-                                    "logId": 1,
-                                    "seqNum": 3
+                                    "author": "9029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf525",
+                                    "entryBytes": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501030020ed83aed0fcfa264e5de764ffc2ddf1e03c5e3d58d97838abdeb5afeac40cc3cff60020d952a6f6fb6abfe17602c2b8176a20f2f69f3b11e8ec3dccaa03131dd6216cf0115934e771779957ada862a08b41b68bd3800472b16cb3f5b9d3ba601ec722939292ffd23247736bbecfdc370c76be401b457f5e2bdfb845bac6960062d50908",
+                                    "entryHash": "00206b4e22562f07a4b92567c1aa369f275edd532d2f9e0ed2c7e29fd6a7ccd5ae01",
+                                    "payloadBytes": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323065643833616564306663666132363465356465373634666663326464663165303363356533643538643937383338616264656235616665616334306363336366666669656c6473a1676d657373616765a26474797065637374726576616c756576416e64207468656e2075706461746520616761696e2e",
+                                    "payloadHash": "0020d952a6f6fb6abfe17602c2b8176a20f2f69f3b11e8ec3dccaa03131dd6216cf0",
+                                    "logId": "1",
+                                    "seqNum": "3"
                                 },
                                 {
-                                    "author": "4352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d",
-                                    "entryBytes": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d0104002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e377040020b7bda7f197defac40c0c242ce78fc1c578397a8350668fb6b3fc2634b1eb65fbbf0020415cefd17046a676bebfa254d2972004b79ca31ee3ad974f3092ce6ffe1c9a0c896fe48ec35888d3ae0c0761061b7f8b6d318e7296686c167432d469b916155f3910e5f7a64bb5b34a50e340569518c8e42f1b780513f98011189432ec6d3905",
-                                    "entryHash": "0020fdbc64cb052c735a87da2ab25823a518ac8c9db2b2dd746407210281ea351e65",
-                                    "payloadBytes": "a466616374696f6e6664656c65746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323062376264613766313937646566616334306330633234326365373866633163353738333937613833353036363866623662336663323633346231656236356662",
-                                    "payloadHash": "0020415cefd17046a676bebfa254d2972004b79ca31ee3ad974f3092ce6ffe1c9a0c",
-                                    "logId": 1,
-                                    "seqNum": 4
+                                    "author": "9029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf525",
+                                    "entryBytes": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501040020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd2500206b4e22562f07a4b92567c1aa369f275edd532d2f9e0ed2c7e29fd6a7ccd5ae01bf00206c1e91c5b20f1d6e55df80753085d580ca293d5e1e11344afcd18aefab19d0716a5e67c48d0e0e47e7cef5000da29bdf5b337c652ca961f0069fe560e98e71a8f38b343eb15f48dc23c2c306bd245a5640ef2e8a025ffc2f53c2764b1f0a2108",
+                                    "entryHash": "0020bc7a9f06938a6b565e719d19d680e6f53f26faae8057788088476f4be8f7cdf9",
+                                    "payloadBytes": "a466616374696f6e6664656c65746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323036623465323235363266303761346239323536376331616133363966323735656464353332643266396530656432633765323966643661376363643561653031",
+                                    "payloadHash": "00206c1e91c5b20f1d6e55df80753085d580ca293d5e1e11344afcd18aefab19d071",
+                                    "logId": "1",
+                                    "seqNum": "4"
                                 }
                             ]
                         }
@@ -716,12 +702,10 @@
                             ]
                         },
                         "seqNum": {
-                            "type": "number",
-                            "minimum": 1
+                            "type": "string"
                         },
                         "logId": {
-                            "type": "number",
-                            "minimum": 1
+                            "type": "string"
                         }
                     }
                 }
@@ -734,7 +718,7 @@
                         {
                             "name": "entryEncoded",
                             "summary": "Encoded bytes of the first entry in a p2panda `Bamboo` log.",
-                            "value": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d01019c0020bbf34ae370b167c4950df17089ca322965c4e5c92e1b13a1f0fc4d62ce82e4943b3e054cc91b9ce9b79546cbca86b9be5e77cff9a04495bbeb9cfa76d7f1f71a7e6498ff45bb758392baf5d7a5ea3b240fb996109ab609b87af9ee2b320fff05"
+                            "value": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501019c0020bbf34ae370b167c4950df17089ca322965c4e5c92e1b13a1f0fc4d62ce82e494822669c20d32384f1cec1ca2a4ddbe2eb7ed184f2a60f01957436c32228351616db5be9772b137927990e977b10904e2730e1d7a63253eefd72b4f329acc0d06"
                         },
                         {
                             "name": "operationEncoded",
@@ -746,10 +730,10 @@
                         "name": "nextEntryArgs",
                         "summary": "The arguments required for publishing the second `Entry` to the test log.",
                         "value": {
-                            "entryHashBacklink": "002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e37704",
+                            "entryHashBacklink": "0020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd25",
                             "entryHashSkiplink": null,
-                            "seqNum": 2,
-                            "logId": 1
+                            "seqNum": "2",
+                            "logId": "1"
                         }
                     }
                 },
@@ -760,22 +744,22 @@
                         {
                             "name": "entryEncoded",
                             "summary": "Encoded bytes of the second entry in a p2panda `Bamboo` log.",
-                            "value": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d0102002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e37704f30020d352b150c97126f7676ca2cb336f4b33f56894b01897338949e7b447b31a6769a78400ee1ba3b299b34c21a73f5b858104fb0e45e336b1ae8e491d7a0b0ceff204310982d60e23ba6d3f8fa6ceb35a8504a71bb19142c3e77c03740695c46000"
+                            "value": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501020020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd25f30020e4c7dd99c03091dee8a64dfc6b8fd4152badce6b9ad04857ef5b213cf4e0fc7f63a9b9c03b9bf925678091cbbedcc7090f75978b5df70e06d9cd399db8d1bd95bd1582bacdb767bb277cf0b84c143123015e1873f5c87af44e80f75385ba0f0c"
                         },
                         {
                             "name": "operationEncoded",
                             "summary": "Encoded bytes of the payload of the second entry in a p2panda `Bamboo` log.",
-                            "value": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323034326638353065383737313331626334653332313932333034653830636333626536656532306666653132653762353761373066316239366138653337373034666669656c6473a1676d657373616765a26474797065637374726576616c75657357686963682049206e6f77207570646174652e"
+                            "value": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323063376365663963336632346337373438636238313466376435366635366435613534613536386330636439373235623336343735323464313430623163643235666669656c6473a1676d657373616765a26474797065637374726576616c75657357686963682049206e6f77207570646174652e"
                         }
                     ],
                     "result": {
                         "name": "nextEntryArgs",
                         "summary": "The arguments required for publishing the third `Entry` to the test log.",
                         "value": {
-                            "entryHashBacklink": "00204da4869b3f289113bd72d21eb0e02bc09f0752283b545f52d87005ca5985c3eb",
+                            "entryHashBacklink": "0020ed83aed0fcfa264e5de764ffc2ddf1e03c5e3d58d97838abdeb5afeac40cc3cf",
                             "entryHashSkiplink": null,
-                            "seqNum": 3,
-                            "logId": 1
+                            "seqNum": "3",
+                            "logId": "1"
                         }
                     }
                 },
@@ -786,22 +770,22 @@
                         {
                             "name": "entryEncoded",
                             "summary": "Encoded bytes of the third entry in a p2panda `Bamboo` log.",
-                            "value": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d010300204da4869b3f289113bd72d21eb0e02bc09f0752283b545f52d87005ca5985c3ebf6002023c087e8169ee17b2a7d37ff20e3d745eacc14ea1191a5160727c3abd4fa1ba7a625b270c18739924e0634e099c61ce69081782f5a7567ad99b6e81377927d8adcb1c9df6e0475fa1a69599ac6b96f1ff96ec32bdb8bff9fbee2080d1384f001"
+                            "value": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501030020ed83aed0fcfa264e5de764ffc2ddf1e03c5e3d58d97838abdeb5afeac40cc3cff60020d952a6f6fb6abfe17602c2b8176a20f2f69f3b11e8ec3dccaa03131dd6216cf0115934e771779957ada862a08b41b68bd3800472b16cb3f5b9d3ba601ec722939292ffd23247736bbecfdc370c76be401b457f5e2bdfb845bac6960062d50908"
                         },
                         {
                             "name": "operationEncoded",
                             "summary": "Encoded bytes of the payload of the third entry in a p2panda `Bamboo` log.",
-                            "value": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323034646134383639623366323839313133626437326432316562306530326263303966303735323238336235343566353264383730303563613539383563336562666669656c6473a1676d657373616765a26474797065637374726576616c756576416e64207468656e2075706461746520616761696e2e"
+                            "value": "a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323065643833616564306663666132363465356465373634666663326464663165303363356533643538643937383338616264656235616665616334306363336366666669656c6473a1676d657373616765a26474797065637374726576616c756576416e64207468656e2075706461746520616761696e2e"
                         }
                     ],
                     "result": {
                         "name": "nextEntryArgs",
                         "summary": "The arguments required for publishing the forth `Entry` to the test log.",
                         "value": {
-                            "entryHashBacklink": "0020b7bda7f197defac40c0c242ce78fc1c578397a8350668fb6b3fc2634b1eb65fb",
-                            "entryHashSkiplink": "002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e37704",
-                            "seqNum": 4,
-                            "logId": 1
+                            "entryHashBacklink": "00206b4e22562f07a4b92567c1aa369f275edd532d2f9e0ed2c7e29fd6a7ccd5ae01",
+                            "entryHashSkiplink": "0020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd25",
+                            "seqNum": "4",
+                            "logId": "1"
                         }
                     }
                 },
@@ -812,22 +796,22 @@
                         {
                             "name": "entryEncoded",
                             "summary": "Encoded bytes of the forth entry in a p2panda `Bamboo` log.",
-                            "value": "004352ba044a53ef209cca7bded8206c0fb2bc8db14315d2a0e741de19995bdf1d0104002042f850e877131bc4e32192304e80cc3be6ee20ffe12e7b57a70f1b96a8e377040020b7bda7f197defac40c0c242ce78fc1c578397a8350668fb6b3fc2634b1eb65fbbf0020415cefd17046a676bebfa254d2972004b79ca31ee3ad974f3092ce6ffe1c9a0c896fe48ec35888d3ae0c0761061b7f8b6d318e7296686c167432d469b916155f3910e5f7a64bb5b34a50e340569518c8e42f1b780513f98011189432ec6d3905"
+                            "value": "009029ae410735f8da7650a1727dcffd34e8dd85f5267cadaf96f482730addf52501040020c7cef9c3f24c7748cb814f7d56f56d5a54a568c0cd9725b3647524d140b1cd2500206b4e22562f07a4b92567c1aa369f275edd532d2f9e0ed2c7e29fd6a7ccd5ae01bf00206c1e91c5b20f1d6e55df80753085d580ca293d5e1e11344afcd18aefab19d0716a5e67c48d0e0e47e7cef5000da29bdf5b337c652ca961f0069fe560e98e71a8f38b343eb15f48dc23c2c306bd245a5640ef2e8a025ffc2f53c2764b1f0a2108"
                         },
                         {
                             "name": "operationEncoded",
                             "summary": "Encoded bytes of the payload of the first entry in a p2panda `Bamboo` log.",
-                            "value": "a466616374696f6e6664656c65746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323062376264613766313937646566616334306330633234326365373866633163353738333937613833353036363866623662336663323633346231656236356662"
+                            "value": "a466616374696f6e6664656c65746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323036623465323235363266303761346239323536376331616133363966323735656464353332643266396530656432633765323966643661376363643561653031"
                         }
                     ],
                     "result": {
                         "name": "nextEntryArgs",
                         "summary": "The arguments required for publishing a new fifth `Entry` to the test log.",
                         "value": {
-                            "entryHashBacklink": "0020fdbc64cb052c735a87da2ab25823a518ac8c9db2b2dd746407210281ea351e65",
+                            "entryHashBacklink": "0020bc7a9f06938a6b565e719d19d680e6f53f26faae8057788088476f4be8f7cdf9",
                             "entryHashSkiplink": null,
-                            "seqNum": 5,
-                            "logId": 1
+                            "seqNum": "5",
+                            "logId": "1"
                         }
                     }
                 }

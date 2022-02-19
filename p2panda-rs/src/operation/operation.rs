@@ -2,8 +2,8 @@
 
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
+use std::hash::{Hash as StdHash, Hasher};
 
-use ciborium;
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -18,7 +18,7 @@ use crate::Validate;
 /// Operations contain the actual data of applications in the p2panda network and will be stored
 /// for an indefinite time on different machines. To allow an upgrade path in the future and
 /// support backwards compatibility for old data we can use this version number.
-#[derive(Clone, Debug, PartialEq, Serialize_repr, Deserialize_repr)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[serde(untagged)]
 #[repr(u8)]
 pub enum OperationVersion {
@@ -81,19 +81,19 @@ impl Copy for OperationAction {}
 #[serde(tag = "type", content = "value")]
 #[cfg_attr(test, derive(Arbitrary))]
 pub enum OperationValue {
-    /// Basic `boolean` value.
+    /// Boolean value.
     #[serde(rename = "bool")]
     Boolean(bool),
 
-    /// Basic signed `integer` value.
+    /// Signed integer value.
     #[serde(rename = "int")]
     Integer(i64),
 
-    /// Basic signed `float` value.
+    /// Floating point value.
     #[serde(rename = "float")]
     Float(f64),
 
-    /// Basic `string` value.
+    /// String value.
     #[serde(rename = "str")]
     Text(String),
 
@@ -236,8 +236,8 @@ impl OperationFields {
 /// 2)
 /// ```mermaid
 /// flowchart LR
-///     B --- C --- D --- E;
-///     A --- B --- E;
+///     B --- C --- D --- F;
+///     A --- B --- E --- F;
 /// ```
 ///
 /// 3)
@@ -253,7 +253,7 @@ impl OperationFields {
 /// flowchart LR
 ///     A --- B --- C --- D --- E;
 /// ```
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Operation {
     /// Describes if this operation creates, updates or deletes data.
@@ -441,6 +441,20 @@ impl From<&OperationEncoded> for Operation {
     }
 }
 
+impl PartialEq for Operation {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_cbor() == other.to_cbor()
+    }
+}
+
+impl Eq for Operation {}
+
+impl StdHash for Operation {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.to_cbor().hash(state);
+    }
+}
+
 impl Validate for Operation {
     type Error = OperationError;
 
@@ -448,6 +462,11 @@ impl Validate for Operation {
         // CREATE and UPDATE operations can not have empty fields.
         if !self.is_delete() && (!self.has_fields() || self.fields().unwrap().is_empty()) {
             return Err(OperationError::EmptyFields);
+        }
+
+        // DELETE must have empty fields
+        if self.is_delete() && self.has_fields() {
+            return Err(OperationError::DeleteWithFields);
         }
 
         // UPDATE and DELETE operations must contain previous_operations.
@@ -466,6 +485,7 @@ impl Validate for Operation {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::convert::TryFrom;
 
     use rstest::rstest;
@@ -543,7 +563,7 @@ mod tests {
             action: OperationAction::Update,
             version: OperationVersion::Default,
             schema: schema.clone(),
-            previous_operations: Some(vec![prev_op_id]),
+            previous_operations: Some(vec![prev_op_id.clone()]),
             // UPDATE operations must contain fields
             fields: None, // Error
         };
@@ -565,7 +585,7 @@ mod tests {
             action: OperationAction::Delete,
             version: OperationVersion::Default,
             schema,
-            previous_operations: None,
+            previous_operations: Some(vec![prev_op_id]),
             // DELETE operations must not contain fields
             fields: Some(fields), // Error
         };
@@ -664,5 +684,14 @@ mod tests {
     #[apply(many_valid_operations)]
     fn many_valid_operations_should_encode(#[case] operation: Operation) {
         assert!(OperationEncoded::try_from(&operation).is_ok())
+    }
+
+    #[apply(many_valid_operations)]
+    fn it_hashes(#[case] operation: Operation) {
+        let mut hash_map = HashMap::new();
+        let key_value = "Value identified by a hash".to_string();
+        hash_map.insert(&operation, key_value.clone());
+        let key_value_retrieved = hash_map.get(&operation).unwrap().to_owned();
+        assert_eq!(key_value, key_value_retrieved)
     }
 }

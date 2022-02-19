@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::TryFrom;
+use std::hash::Hash as StdHash;
+use std::str::FromStr;
+
 use bamboo_rs_core_ed25519_yasmf::lipmaa;
 use serde::{Deserialize, Serialize};
 
@@ -7,12 +11,11 @@ use crate::entry::SeqNumError;
 use crate::Validate;
 
 /// Start counting entries from here.
-pub const FIRST_SEQ_NUM: i64 = 1;
+pub const FIRST_SEQ_NUM: u64 = 1;
 
 /// Sequence number describing the position of an entry in its append-only log.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "db-sqlx", derive(sqlx::Type), sqlx(transparent))]
-pub struct SeqNum(i64);
+#[derive(Clone, Copy, Debug, Serialize, Eq, PartialEq, StdHash, Deserialize)]
+pub struct SeqNum(u64);
 
 impl SeqNum {
     /// Validates and wraps value into a new `SeqNum` instance.
@@ -30,7 +33,7 @@ impl SeqNum {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(value: i64) -> Result<Self, SeqNumError> {
+    pub fn new(value: u64) -> Result<Self, SeqNumError> {
         let seq_num = Self(value);
         seq_num.validate()?;
         Ok(seq_num)
@@ -63,7 +66,7 @@ impl SeqNum {
     ///
     /// [Bamboo]: https://github.com/AljoschaMeyer/bamboo#links-and-entry-verification
     pub fn skiplink_seq_num(&self) -> Option<Self> {
-        Some(Self(lipmaa(self.0 as u64) as i64))
+        Some(Self(lipmaa(self.0)))
     }
 
     /// Returns true when sequence number marks first entry in log.
@@ -71,8 +74,8 @@ impl SeqNum {
         self.0 == FIRST_SEQ_NUM
     }
 
-    /// Returns `SeqNum` as i64 integer.
-    pub fn as_i64(&self) -> i64 {
+    /// Returns `SeqNum` as u64 integer.
+    pub fn as_u64(&self) -> u64 {
         self.0
     }
 }
@@ -82,8 +85,6 @@ impl Default for SeqNum {
         Self::new(FIRST_SEQ_NUM).unwrap()
     }
 }
-
-impl Copy for SeqNum {}
 
 impl Validate for SeqNum {
     type Error = SeqNumError;
@@ -106,14 +107,28 @@ impl Iterator for SeqNum {
     }
 }
 
-impl PartialEq for SeqNum {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+/// Convert any borrowed string representation of an u64 integer into an `SeqNum` instance.
+impl FromStr for SeqNum {
+    type Err = SeqNumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::new(u64::from_str(s).map_err(|_| SeqNumError::InvalidU64String)?)
+    }
+}
+
+/// Convert any owned string representation of an u64 integer into an `SeqNum` instance.
+impl TryFrom<String> for SeqNum {
+    type Error = SeqNumError;
+
+    fn try_from(str: String) -> Result<Self, Self::Error> {
+        Self::new(u64::from_str(&str).map_err(|_| SeqNumError::InvalidU64String)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
+
     use super::SeqNum;
 
     #[test]
@@ -138,5 +153,14 @@ mod tests {
         );
 
         assert!(SeqNum::new(1).unwrap().backlink_seq_num().is_none());
+    }
+
+    #[test]
+    fn string_conversions() {
+        let large_number = "91772991776239";
+        let seq_num_from_str: SeqNum = large_number.parse().unwrap();
+        let seq_num_try_from = SeqNum::try_from(String::from(large_number)).unwrap();
+        assert_eq!(91772991776239, seq_num_from_str.as_u64());
+        assert_eq!(seq_num_from_str, seq_num_try_from);
     }
 }

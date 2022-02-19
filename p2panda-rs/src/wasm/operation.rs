@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 
 use js_sys::Array;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -50,11 +50,13 @@ impl OperationFields {
                 Ok(())
             }
             "int" => {
-                // Bear in mind JavaScript does not represent numbers as integers, all numbers are
-                // represented as floats therefore if a float is passed incorrectly it will simply
-                // be cast to an int.
-                // See: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number
-                let value_int = jserr!(value.as_f64().ok_or("Invalid integer value")) as i64;
+                // We expect a string here instead of a number, to assure we can pass large numbers
+                // coming from the JavaScript world.
+                //
+                // The largest JavaScript integer is 53 bits but we support 64 bits in the
+                // protocol.
+                let value_str = jserr!(value.as_string().ok_or("Must be passed as a string"));
+                let value_int: i64 = jserr!(value_str.parse(), "Invalid integer value");
                 jserr!(self.0.add(&name, OperationValue::Integer(value_int)));
                 Ok(())
             }
@@ -69,7 +71,7 @@ impl OperationFields {
                 jserr!(self.0.add(&name, OperationValue::Relation(hash)));
                 Ok(())
             }
-            _ => Err(js_sys::Error::new("Unknown type value").into()),
+            _ => Err(js_sys::Error::new("Unknown value type").into()),
         }
     }
 
@@ -83,11 +85,6 @@ impl OperationFields {
     }
 
     /// Returns field of this `OperationFields` instance when existing.
-    ///
-    /// When trying to access an integer field the method might throw an error when the internal
-    /// value is larger than an i32 number. The wasm API will use i32 numbers in JavaScript
-    /// contexts instead of i64 / BigInt as long as BigInt support is not given in Safari on MacOS
-    /// and iOS.
     #[wasm_bindgen]
     pub fn get(&mut self, name: String) -> Result<JsValue, JsValue> {
         match self.0.get(&name) {
@@ -95,11 +92,7 @@ impl OperationFields {
             Some(OperationValue::Text(value)) => Ok(JsValue::from_str(value)),
             Some(OperationValue::Relation(value)) => Ok(JsValue::from_str(value.as_str())),
             Some(OperationValue::Float(value)) => Ok(JsValue::from_f64(value.to_owned())),
-            Some(OperationValue::Integer(value)) => {
-                // Downcast i64 to i32 and throw error when value too large
-                let converted: i32 = jserr!(value.to_owned().try_into());
-                Ok(converted.into())
-            }
+            Some(OperationValue::Integer(value)) => Ok(JsValue::from(value.to_owned())),
             None => Ok(JsValue::NULL),
         }
     }
@@ -110,8 +103,15 @@ impl OperationFields {
         self.0.len()
     }
 
+    /// Returns true when no field exists.
+    #[wasm_bindgen(js_name = isEmpty)]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     /// Returns this instance formatted for debugging.
     #[wasm_bindgen(js_name = toString)]
+    #[allow(clippy::inherent_to_string)]
     pub fn to_string(&self) -> String {
         format!("{:?}", self)
     }

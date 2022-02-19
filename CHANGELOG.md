@@ -9,6 +9,29 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+## Added
+
+- `Document` for sorting and reducing a graph of `Operations` [#169](https://github.com/p2panda/p2panda/pull/169) `rs` 🥞
+- Derive `Ord` and `PartialOrd` for `LogId` [#201](https://github.com/p2panda/p2panda/pull/201)
+
+## Changed
+
+- `Instance` renamed to `DocumentView` [#169](https://github.com/p2panda/p2panda/pull/169) `rs`
+
+## Fixed
+
+- Fix determination of field types in p2panda-js [#202](https://github.com/p2panda/p2panda/pull/202)
+
+## Everything burrito
+
+- Easier to read CDDL schema error strings [#207](https://github.com/p2panda/p2panda/pull/207)
+
+## [0.3.0]
+
+Released on 2022-02-02: :package: `p2panda-js`
+
+Not released yet, due to unpublished dependencies: :package: `p2panda-rs`
+
 ### Added
 
 - `SecureGroup` for key negotiation in groups and message protection [#130](https://github.com/p2panda/p2panda/pull/130) `rs` 🥞
@@ -16,6 +39,7 @@ Highlights are marked with a pancake 🥞
 - `test_utils` module containing `rstest` fixtures, mock `Node` and `Client` structs, test data helper for `p2panda-js` [#116](https://github.com/p2panda/p2panda/pull/116) `rs`
 - Reconciliation logic /w DAG for materialisation module [#129](https://github.com/p2panda/p2panda/pull/129) `rs`
 - `Instance` which encapsulates the materialised view of a reduced collection of `Operations` [#161](https://github.com/p2panda/p2panda/pull/161) `rs`
+- Retrieve unsigned bytes to verify `Entry` signatures manually [#197](https://github.com/p2panda/p2panda/pull/197/files) `rs`
 
 ### Changed
 
@@ -32,9 +56,12 @@ Highlights are marked with a pancake 🥞
 - Change to new `rustdoc::missing_doc_code_examples` linter name [#168](https://github.com/p2panda/p2panda/pull/168) `rs`
 - Update Rust dependencies [#171](https://github.com/p2panda/p2panda/pull/171) `rs`
 - Convert JavaScript configuration files to TypeScript or JSON [#172](https://github.com/p2panda/p2panda/pull/172) `js`
+- Implement `Hash`, `Eq` and `PartialEq` traits for several core data types [#178](https://github.com/p2panda/p2panda/pull/178) `rs`
 - Use `ciborium` for cbor de/serialization [#180](https://github.com/p2panda/p2panda/pull/180) `rs`
 - Break `wasm` module down into sub-files, add wasm target tests [#184](https://github.com/p2panda/p2panda/pull/184) `rs`
 - Changes to `mocks` module in `test_utils` [#181](https://github.com/p2panda/p2panda/pull/181) `rs`
+- Implement logging for mock node in `test_utils` [#192](https://github.com/p2panda/p2panda/pull/192) `rs`
+- Support `u64` and `i64` integers, remove `sqlx` [#177](https://github.com/p2panda/p2panda/pull/177) `rs` `js`
 
 ### Campfires and boiling pots to sit around
 
@@ -43,6 +70,7 @@ Highlights are marked with a pancake 🥞
 - Clean up documentation and update new terminology [#170](https://github.com/p2panda/p2panda/pull/170) `rs` `js`
 - Improve CI, make it faster, add code coverage report [#173](https://github.com/p2panda/p2panda/pull/173) `rs` `js`
 - Update Codecov GH action [#176](https://github.com/p2panda/p2panda/pull/176) `rs`
+- Add JavaScript coverage reporting [#194](https://github.com/p2panda/p2panda/pull/194) `js`
 
 ## [0.2.1]
 
@@ -110,7 +138,8 @@ Released on 2021-01-18: :package: `p2panda-js` and 2021-01-28: :package: `p2pand
 - JavaScript library export with WebAssembly running in browsers and NodeJS. [#21](https://github.com/p2panda/p2panda/pull/21) `js`
 - Ed25519 key pair generation. [#4](https://github.com/p2panda/p2panda/pull/4) `rs`
 
-[unreleased]: https://github.com/p2panda/p2panda/compare/v0.2.1...HEAD
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/p2panda/p2panda/releases/tag/v0.3.0
 [0.2.1]: https://github.com/p2panda/p2panda/releases/tag/v0.2.1
 [0.2.0]: https://github.com/p2panda/p2panda/releases/tag/v0.2.0
 [0.1.0]: https://github.com/p2panda/p2panda/releases/tag/v0.1.0

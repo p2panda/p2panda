@@ -44,8 +44,11 @@ jobs:
         working-directory: ${{ env.working_directory }}
 
       - name: Run tests
-        run: npm run test
+        run: npm run test --coverage
         working-directory: ${{ env.working_directory }}
+
+      - if: matrix.node == 16
+        uses: codecov/codecov-action@v2
 
   js-build:
     runs-on: ubuntu-latest

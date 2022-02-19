@@ -12,9 +12,9 @@ use cddl::validate_cbor_from_slice;
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
 
-use crate::hash::Hash;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::instance::{Instance, InstanceError};
+use crate::document::{DocumentView, DocumentViewError};
+use crate::hash::Hash;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::operation::{AsOperation, Operation, OperationFields, OperationValue};
 use crate::schema::SchemaError;
@@ -187,7 +187,7 @@ impl Schema {
 
         let schema_hash = match Hash::new(schema_hash.as_str()) {
             Ok(hash) => Ok(hash),
-            Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
+            Err(err) => Err(SchemaError::InvalidSchema(vec![err.to_string()])),
         }?;
 
         Ok(Self {
@@ -216,10 +216,7 @@ impl Schema {
             }?;
         }
 
-        let mut cbor_bytes = Vec::new();
-        ciborium::ser::into_writer(&fields.clone(), &mut cbor_bytes).unwrap();
-
-        match self.validate_operation(cbor_bytes) {
+        match self.validate_operation_fields(&fields.clone()) {
             Ok(_) => Ok(()),
             Err(err) => Err(SchemaError::ValidationError(err.to_string())),
         }?;
@@ -242,37 +239,34 @@ impl Schema {
         for (key, value) in key_values {
             match fields.add(key, value) {
                 Ok(_) => Ok(()),
-                Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
+                Err(err) => Err(SchemaError::InvalidSchema(vec![err.to_string()])),
             }?;
         }
 
-        let mut cbor_bytes = Vec::new();
-        ciborium::ser::into_writer(&fields.clone(), &mut cbor_bytes).unwrap();
-
-        match self.validate_operation(cbor_bytes) {
+        match self.validate_operation_fields(&fields.clone()) {
             Ok(_) => Ok(()),
             Err(err) => Err(SchemaError::ValidationError(err.to_string())),
         }?;
 
         match Operation::new_update(self.schema_hash(), previous_operations, fields) {
             Ok(hash) => Ok(hash),
-            Err(err) => Err(SchemaError::InvalidSchema(err.to_string())),
+            Err(err) => Err(SchemaError::InvalidSchema(vec![err.to_string()])),
         }
     }
 
-    /// Returns a new `Instance` converted from CREATE `Operation` and validated against it's
+    /// Returns a new `DocumentView` converted from CREATE `Operation` and validated against it's
     /// schema definition.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn instance_from_create(&self, operation: Operation) -> Result<Instance, InstanceError> {
-        let mut cbor_bytes = Vec::new();
-        ciborium::ser::into_writer(&operation.fields(), &mut cbor_bytes).unwrap();
-
-        match self.validate_operation(cbor_bytes) {
+    pub fn instance_from_create(
+        &self,
+        operation: Operation,
+    ) -> Result<DocumentView, DocumentViewError> {
+        match self.validate_operation_fields(&operation.fields().unwrap()) {
             Ok(_) => Ok(()),
-            Err(err) => Err(InstanceError::ValidationError(err)),
+            Err(err) => Err(DocumentViewError::ValidationError(err)),
         }?;
 
-        Instance::try_from(operation)
+        DocumentView::try_from(operation)
     }
 }
 
@@ -282,16 +276,21 @@ impl fmt::Display for Schema {
     }
 }
 
-impl ValidateOperation for Schema {}
-
-trait ValidateOperation
+/// Validate an operations fields against this schema
+pub trait ValidateOperation
 where
     Self: fmt::Display,
 {
     /// Validate an operation against this application schema.
     #[cfg(not(target_arch = "wasm32"))]
-    fn validate_operation(&self, bytes: Vec<u8>) -> Result<(), SchemaError> {
-        match validate_cbor_from_slice(&format!("{}", self), &bytes) {
+    fn validate_operation_fields(
+        &self,
+        operation_fields: &OperationFields,
+    ) -> Result<(), SchemaError> {
+        let mut cbor_bytes = Vec::new();
+        ciborium::ser::into_writer(&operation_fields.clone(), &mut cbor_bytes).unwrap();
+
+        match validate_cbor_from_slice(&format!("{}", self), &cbor_bytes) {
             Err(cbor::Error::Validation(err)) => {
                 let err = err
                     .iter()
@@ -299,7 +298,7 @@ where
                     .collect::<Vec<String>>()
                     .join(", ");
 
-                Err(SchemaError::InvalidSchema(err))
+                Err(SchemaError::InvalidSchema(vec![err]))
             }
             Err(cbor::Error::CBORParsing(_err)) => Err(SchemaError::InvalidCBOR),
             Err(cbor::Error::CDDLParsing(err)) => {
@@ -309,6 +308,8 @@ where
         }
     }
 }
+
+impl ValidateOperation for Schema {}
 
 // @TODO: This currently makes sure the wasm tests work as cddl does not have any wasm support
 // (yet). Remove this with: https://github.com/p2panda/p2panda/issues/99
@@ -370,10 +371,7 @@ mod tests {
         me.add("age", OperationValue::Integer(35)).unwrap();
 
         // Validate operation fields against person schema
-        let mut me_bytes = Vec::new();
-        ciborium::ser::into_writer(&me, &mut me_bytes).unwrap();
-
-        assert!(person.validate_operation(me_bytes).is_ok());
+        assert!(person.validate_operation_fields(&me).is_ok());
     }
 
     #[rstest]
@@ -393,10 +391,7 @@ mod tests {
         let person_from_string = Schema::new(&schema_hash, &cddl_str.to_string()).unwrap();
 
         // Validate operation fields against person schema
-        let mut me_bytes = Vec::new();
-        ciborium::ser::into_writer(&me, &mut me_bytes).unwrap();
-
-        assert!(person_from_string.validate_operation(me_bytes).is_ok());
+        assert!(person_from_string.validate_operation_fields(&me).is_ok());
     }
 
     #[rstest]
@@ -422,15 +417,9 @@ mod tests {
             .unwrap();
 
         // Validate operation fields against application schema
-        let mut me_bytes = Vec::new();
-        ciborium::ser::into_writer(&me, &mut me_bytes).unwrap();
-
-        let mut my_address_bytes = Vec::new();
-        ciborium::ser::into_writer(&my_address, &mut my_address_bytes).unwrap();
-
-        assert!(application_schema.validate_operation(me_bytes).is_ok());
+        assert!(application_schema.validate_operation_fields(&me).is_ok());
         assert!(application_schema
-            .validate_operation(my_address_bytes)
+            .validate_operation_fields(&my_address)
             .is_ok());
 
         // Operations not matching one of the application schema should fail
@@ -442,11 +431,8 @@ mod tests {
             .add("colour", OperationValue::Text("pink & orange".to_owned()))
             .unwrap();
 
-        let mut naughty_panda_bytes = Vec::new();
-        ciborium::ser::into_writer(&naughty_panda, &mut naughty_panda_bytes).unwrap();
-
         assert!(application_schema
-            .validate_operation(naughty_panda_bytes)
+            .validate_operation_fields(&naughty_panda)
             .is_err());
     }
 

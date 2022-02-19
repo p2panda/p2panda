@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
+use std::hash::Hash as StdHash;
 
 use serde::{Deserialize, Serialize};
 
@@ -11,12 +12,7 @@ use crate::schema::{validate_schema, OPERATION_SCHEMA};
 use crate::Validate;
 
 /// Operation represented in hex encoded CBOR format.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "db-sqlx",
-    derive(sqlx::Type, sqlx::FromRow),
-    sqlx(transparent)
-)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, StdHash)]
 pub struct OperationEncoded(String);
 
 impl OperationEncoded {
@@ -45,9 +41,9 @@ impl OperationEncoded {
     }
 
     /// Returns payload size (number of bytes) of encoded operation.
-    pub fn size(&self) -> i64 {
-        // Divide by 2 as every byte is represented by 2 hex chars.
-        self.0.len() as i64 / 2
+    pub fn size(&self) -> u64 {
+        // Divide by 2 as every byte is represented by 2 hex chars
+        self.0.len() as u64 / 2
     }
 }
 

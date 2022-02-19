@@ -71,4 +71,17 @@ pub enum SeqNumError {
     /// Sequence numbers are always positive.
     #[error("sequence number can not be zero or negative")]
     NotZeroOrNegative,
+
+    /// Conversion to u64 from string failed.
+    #[error("string contains invalid u64 value")]
+    InvalidU64String,
+}
+
+/// Custom error types for `LogId`.
+#[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
+pub enum LogIdError {
+    /// Conversion to u64 from string failed.
+    #[error("string contains invalid u64 value")]
+    InvalidU64String,
 }

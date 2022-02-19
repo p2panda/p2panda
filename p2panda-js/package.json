@@ -1,6 +1,6 @@
 {
   "name": "p2panda-js",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "All the things a panda needs",
   "main": "lib/index.js",
   "browser": "lib/index.min.js",
@@ -8,8 +8,8 @@
     "build": "run-s clear webpack",
     "clear": "rimraf ./lib ./wasm",
     "lint": "eslint --ext .ts .",
-    "test": "cross-env NODE_ENV=development run-p --race test:mock-node test:run",
-    "test:jest": "jest",
+    "test": "cross-env NODE_ENV=development run-p --race test:mock-node 'test:run'",
+    "test:jest": "jest --coverage=$npm_config_coverage",
     "test:mock-node": "open-rpc-mock-server --port 2020",
     "test:run": "run-s clear webpack:node test:jest",
     "test:template-openrpc": "npx ts-node ./test/generate-openrpc-spec.ts",

@@ -10,6 +10,7 @@ mod entry;
 mod error;
 mod key_pair;
 mod operation;
+mod serde;
 #[cfg(test)]
 mod tests;
 

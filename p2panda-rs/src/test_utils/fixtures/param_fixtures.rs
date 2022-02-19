@@ -48,9 +48,9 @@ pub fn random_key_pair() -> KeyPair {
 }
 
 /// Fixture which injects the default SeqNum into a test method. Default value can be overridden at
-/// testing time by passing in a custom seq num as i64.
+/// testing time by passing in a custom seq num as u64.
 #[fixture]
-pub fn seq_num(#[default(1)] n: i64) -> SeqNum {
+pub fn seq_num(#[default(1)] n: u64) -> SeqNum {
     utils::seq_num(n)
 }
 
@@ -183,7 +183,7 @@ pub fn delete_operation(
     utils::delete_operation(schema, previous_operations)
 }
 
-/// Fixture which injects the default CREATE Operation into a test method.
+/// Fixture which injects the default CREATE OperationWithMeta into a test method.
 ///
 /// Default value can be overridden at testing time by passing in custom schema hash and operation
 /// fields.
