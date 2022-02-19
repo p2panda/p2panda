@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::str::FromStr;
 
 use crate::document::DocumentView;
+use crate::hash::Hash;
 use crate::operation::OperationValue;
 
 use super::SystemSchemaError;
@@ -33,35 +35,40 @@ impl FromStr for FieldType {
     }
 }
 
-struct SchemaView(DocumentView);
-struct SchemaFieldView(DocumentView);
+pub struct SchemaView {
+    /// Name of this schema.
+    name: String,
+    /// Description of this schema.
+    description: String,
+    /// The fields in this schema.
+    fields: Vec<Hash>,
+}
+
+pub struct SchemaFieldView {
+    /// Name of this schema field.
+    name: String,
+    /// Type of this schema field.
+    field_type: FieldType,
+}
 
 /// View onto materialised schema which has fields "name", "description" and "fields".
 /// Is validated on being converted from a general DocumentView struct which means so it's inner
 /// values can be returned unwrapped by their getter methods.
 impl SchemaView {
     /// The name of this schema.
-    fn name(&self) -> &OperationValue {
-        // Unwrap here because fields were validated on construction
-        self.0.get("name").unwrap()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     /// The description of this schema.
-    fn description(&self) -> &OperationValue {
-        // Unwrap here because fields were validated on construction
-        self.0.get("description").unwrap()
+    fn description(&self) -> &str {
+        &self.description
     }
 
     /// A list of fields assigned to this schema identified by their document id.
-    fn fields(&self) -> &OperationValue {
+    fn fields(&self) -> &[Hash] {
         // Unwrap here because fields were validated on construction
-        self.0.get("fields").unwrap()
-    }
-}
-
-impl SchemaFieldView {
-    pub fn fields(&self) -> BTreeMap<String, OperationValue> {
-        self.0.clone().into()
+        self.fields.as_slice()
     }
 }
 
@@ -70,21 +77,13 @@ impl SchemaFieldView {
 /// values can be returned unwrapped by their getter methods.
 impl SchemaFieldView {
     /// The name of this schema field.
-    fn name(&self) -> &OperationValue {
-        // Unwrap here because fields were validated on construction
-        self.0.get("name").unwrap()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     /// The type of this schema field represented as a FieldType enum variant.
-    fn field_type(&self) -> FieldType {
-        // Unwrap here because fields were validated on construction
-        self.0
-            .get("type")
-            .and_then(|value| match value {
-                OperationValue::Text(type_str) => Some(type_str.parse::<FieldType>().unwrap()),
-                _ => None,
-            })
-            .unwrap()
+    fn field_type(&self) -> &FieldType {
+        &self.field_type
     }
 }
 
@@ -92,32 +91,44 @@ impl TryFrom<DocumentView> for SchemaView {
     type Error = SystemSchemaError;
 
     fn try_from(document_view: DocumentView) -> Result<Self, Self::Error> {
-        let mut fields = vec!["name", "description", "fields"];
-        let fields_len = fields.len();
-
         match document_view.len() {
-            len if len < fields_len => Err(SystemSchemaError::TooFewFields),
-            len if len == fields_len => Ok(()),
+            len if len < 3 => Err(SystemSchemaError::TooFewFields),
+            len if len == 3 => Ok(()),
             _ => Err(SystemSchemaError::TooManyFields),
         }?;
 
-        while let Some(key) = fields.pop() {
-            match document_view.get(key) {
-                Some(OperationValue::Text(_)) if key == "name" => continue,
-                Some(OperationValue::Text(_)) if key == "description" => continue,
-                // This will be replaced with new relation-list type
-                Some(OperationValue::Relation(_)) if key == "fields" => continue,
-                Some(op) => {
-                    return Err(SystemSchemaError::InvalidField(
-                        key.to_string(),
-                        op.to_owned(),
-                    ))
-                }
-                None => return Err(SystemSchemaError::MissingField(key.to_string())),
-            }
-        }
+        let name = match document_view.get("name") {
+            Some(OperationValue::Text(value)) => Ok(value),
+            Some(op) => Err(SystemSchemaError::InvalidField(
+                "name".to_string(),
+                op.to_owned(),
+            )),
+            None => Err(SystemSchemaError::MissingField("name".to_string())),
+        }?;
 
-        Ok(Self(document_view))
+        let description = match document_view.get("description") {
+            Some(OperationValue::Text(value)) => Ok(value),
+            Some(op) => Err(SystemSchemaError::InvalidField(
+                "description".to_string(),
+                op.to_owned(),
+            )),
+            None => Err(SystemSchemaError::MissingField("description".to_string())),
+        }?;
+
+        let fields = match document_view.get("fields") {
+            Some(OperationValue::Relation(value)) => Ok(value),
+            Some(op) => Err(SystemSchemaError::InvalidField(
+                "fields".to_string(),
+                op.to_owned(),
+            )),
+            None => Err(SystemSchemaError::MissingField("fields".to_string())),
+        }?;
+
+        Ok(Self {
+            name: name.to_string(),
+            description: description.to_string(),
+            fields: vec![fields.to_owned()],
+        })
     }
 }
 
@@ -125,34 +136,37 @@ impl TryFrom<DocumentView> for SchemaFieldView {
     type Error = SystemSchemaError;
 
     fn try_from(document_view: DocumentView) -> Result<Self, Self::Error> {
-        let mut fields = vec!["name", "type"];
-        let fields_len = fields.len();
-
         match document_view.len() {
-            len if len < fields_len => Err(SystemSchemaError::TooFewFields),
-            len if len == fields_len => Ok(()),
+            len if len < 2 => Err(SystemSchemaError::TooFewFields),
+            len if len == 2 => Ok(()),
             _ => Err(SystemSchemaError::TooManyFields),
         }?;
 
-        while let Some(key) = fields.pop() {
-            match document_view.get(key) {
-                Some(OperationValue::Text(_)) if key == "name" => continue,
-                Some(OperationValue::Text(type_str)) if key == "type" => {
-                    // Validate the type string parses into a FieldType
-                    type_str.parse::<FieldType>()?;
-                    continue;
-                }
-                Some(op) => {
-                    return Err(SystemSchemaError::InvalidField(
-                        key.to_string(),
-                        op.to_owned(),
-                    ))
-                }
-                None => return Err(SystemSchemaError::MissingField(key.to_string())),
-            }
-        }
+        let name = match document_view.get("name") {
+            Some(OperationValue::Text(value)) => Ok(value),
+            Some(op) => Err(SystemSchemaError::InvalidField(
+                "name".to_string(),
+                op.to_owned(),
+            )),
+            None => Err(SystemSchemaError::MissingField("name".to_string())),
+        }?;
 
-        Ok(Self(document_view))
+        let field_type = match document_view.get("type") {
+            Some(OperationValue::Text(type_str)) => {
+                // Validate the type string parses into a FieldType
+                type_str.parse::<FieldType>()
+            }
+            Some(op) => Err(SystemSchemaError::InvalidField(
+                "type".to_string(),
+                op.to_owned(),
+            )),
+            None => Err(SystemSchemaError::MissingField("type".to_string())),
+        }?;
+
+        Ok(Self {
+            name: name.to_string(),
+            field_type: field_type.to_owned(),
+        })
     }
 }
 
@@ -201,11 +215,8 @@ mod tests {
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         let field_view = field_view.unwrap();
-        assert_eq!(field_view.field_type(), FieldType::Bool);
-        assert_eq!(
-            field_view.name(),
-            &OperationValue::Text("is_accessible".to_string())
-        );
+        assert_eq!(field_view.field_type(), &FieldType::Bool);
+        assert_eq!(field_view.name(), "is_accessible");
 
         let int_field = create_operation(
             schema.clone(),
@@ -217,7 +228,7 @@ mod tests {
         let document_view: DocumentView = int_field.try_into().unwrap();
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
-        assert_eq!(field_view.unwrap().field_type(), FieldType::Int);
+        assert_eq!(field_view.unwrap().field_type(), &FieldType::Int);
 
         let float_field = create_operation(
             schema.clone(),
@@ -229,7 +240,7 @@ mod tests {
         let document_view: DocumentView = float_field.try_into().unwrap();
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
-        assert_eq!(field_view.unwrap().field_type(), FieldType::Float);
+        assert_eq!(field_view.unwrap().field_type(), &FieldType::Float);
 
         let str_field = create_operation(
             schema.clone(),
@@ -241,7 +252,7 @@ mod tests {
         let document_view: DocumentView = str_field.try_into().unwrap();
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
-        assert_eq!(field_view.unwrap().field_type(), FieldType::String);
+        assert_eq!(field_view.unwrap().field_type(), &FieldType::String);
 
         let relation_field = create_operation(
             schema.clone(),
@@ -253,7 +264,7 @@ mod tests {
         let document_view: DocumentView = relation_field.try_into().unwrap();
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
-        assert_eq!(field_view.unwrap().field_type(), FieldType::Relation);
+        assert_eq!(field_view.unwrap().field_type(), &FieldType::Relation);
 
         let invalid_field_type = create_operation(
             schema,
