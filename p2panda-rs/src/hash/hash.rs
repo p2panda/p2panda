@@ -27,11 +27,6 @@ pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
 ///
 /// [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, StdHash)]
-#[cfg_attr(
-    feature = "db-sqlx",
-    derive(sqlx::Type, sqlx::FromRow),
-    sqlx(transparent)
-)]
 #[cfg_attr(test, derive(Arbitrary))]
 pub struct Hash(#[cfg_attr(test, proptest(regex = "[0-9a-f]{68}"))] String);
 
