@@ -13,6 +13,7 @@ Highlights are marked with a pancake 🥞
 
 - `Document` for sorting and reducing a graph of `Operations` [#169](https://github.com/p2panda/p2panda/pull/169) `rs` 🥞
 - Derive `Ord` and `PartialOrd` for `LogId` [#201](https://github.com/p2panda/p2panda/pull/201)
+- Add `proptests` for creating and encoding operations [#188](https://github.com/p2panda/p2panda/pull/188) `rs`
 
 ## Changed
 
