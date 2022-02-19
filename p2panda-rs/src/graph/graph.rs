@@ -86,42 +86,42 @@ impl<T: PartialEq + Clone + Debug> GraphData<T> {
 
 impl<'a, T: PartialEq + Clone + Debug> Node<T> {
     /// Returns true if this node is the root of this graph.
-    pub fn is_root(&self) -> bool {
+    fn is_root(&self) -> bool {
         self.previous.is_empty()
     }
 
     /// Returns true if this is a merge node.
-    pub fn is_merge(&self) -> bool {
+    fn is_merge(&self) -> bool {
         self.previous.len() > 1
     }
 
     /// Returns true if this is a branch node.
-    pub fn is_branch(&self) -> bool {
+    fn is_branch(&self) -> bool {
         self.next.len() > 1
     }
 
     /// Returns true if this is a graph tip.
-    pub fn is_tip(&self) -> bool {
+    fn is_tip(&self) -> bool {
         self.next.is_empty()
     }
 
     /// Returns the key for this node.
-    pub fn key(&self) -> &String {
+    fn key(&self) -> &String {
         &self.key
     }
 
     /// Returns a vector of keys for the nodes preceding this node in the graph.
-    pub fn previous(&self) -> &Vec<String> {
+    fn previous(&self) -> &Vec<String> {
         &self.previous
     }
 
     /// Returns a vector of keys for the nodes following this node in the graph.
-    pub fn next(&self) -> &Vec<String> {
+    fn next(&self) -> &Vec<String> {
         &self.next
     }
 
     /// Returns the data of type T which is contained in this node.
-    pub fn data(&self) -> T {
+    fn data(&self) -> T {
         self.data.clone()
     }
 }
