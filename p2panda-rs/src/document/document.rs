@@ -351,13 +351,29 @@ mod tests {
         )
         .unwrap();
 
-        let operations: Vec<OperationWithMeta> = node
-            .all_entries()
-            .into_iter()
-            .map(|entry| {
-                OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap()
-            })
-            .collect();
+        let entry_1 = node.get_entry(&panda_entry_1_hash);
+        let panda_1 =
+            OperationWithMeta::new(&entry_1.entry_encoded(), &entry_1.operation_encoded()).unwrap();
+        let entry_2 = node.get_entry(&panda_entry_2_hash);
+        let panda_2 =
+            OperationWithMeta::new(&entry_2.entry_encoded(), &entry_2.operation_encoded()).unwrap();
+        let entry_3 = node.get_entry(&penguin_entry_1_hash);
+        let penguin_1 =
+            OperationWithMeta::new(&entry_3.entry_encoded(), &entry_3.operation_encoded()).unwrap();
+        let entry_4 = node.get_entry(&penguin_entry_2_hash);
+        let penguin_2 =
+            OperationWithMeta::new(&entry_4.entry_encoded(), &entry_4.operation_encoded()).unwrap();
+        let entry_5 = node.get_entry(&penguin_entry_3_hash);
+        let penguin_3 =
+            OperationWithMeta::new(&entry_5.entry_encoded(), &entry_5.operation_encoded()).unwrap();
+
+        let operations = vec![
+            panda_1.clone(),
+            panda_2.clone(),
+            penguin_1.clone(),
+            penguin_2.clone(),
+            penguin_3.clone(),
+        ];
 
         let document = DocumentBuilder::new(operations.clone()).build();
 
@@ -368,35 +384,13 @@ mod tests {
             "name".to_string(),
             OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
         );
-
-        let panda_1 = operations
-            .iter()
-            .find(|op| op.operation_id() == &panda_entry_1_hash)
-            .unwrap();
-        let panda_2 = operations
-            .iter()
-            .find(|op| op.operation_id() == &panda_entry_2_hash)
-            .unwrap();
-        let penguin_1 = operations
-            .iter()
-            .find(|op| op.operation_id() == &penguin_entry_1_hash)
-            .unwrap();
-        let penguin_2 = operations
-            .iter()
-            .find(|op| op.operation_id() == &penguin_entry_2_hash)
-            .unwrap();
-        let penguin_3 = operations
-            .iter()
-            .find(|op| op.operation_id() == &penguin_entry_3_hash)
-            .unwrap();
-
         let expected_graph_tip = vec![penguin_entry_3_hash.clone()];
         let expected_op_order = vec![
-            panda_1.to_owned(),
-            panda_2.to_owned(),
-            penguin_1.to_owned(),
-            penguin_2.to_owned(),
-            penguin_3.to_owned(),
+            panda_1.clone(),
+            panda_2.clone(),
+            penguin_1.clone(),
+            penguin_2.clone(),
+            penguin_3.clone(),
         ];
 
         // Document should resolve to expected value
@@ -435,15 +429,10 @@ mod tests {
         .build()
         .unwrap();
 
-        let replica_3 = DocumentBuilder::new(vec![
-            panda_2.clone(),
-            panda_1.clone(),
-            penguin_1.clone(),
-            penguin_3.clone(),
-            penguin_2.clone(),
-        ])
-        .build()
-        .unwrap();
+        let replica_3 =
+            DocumentBuilder::new(vec![panda_2, panda_1, penguin_1, penguin_3, penguin_2])
+                .build()
+                .unwrap();
 
         assert_eq!(replica_1.view().get("name"), replica_2.view().get("name"));
         assert_eq!(replica_1.view().get("name"), replica_3.view().get("name"));
