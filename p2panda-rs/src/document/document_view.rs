@@ -4,44 +4,76 @@
 use std::collections::btree_map::Iter as BTreeMapIter;
 use std::collections::BTreeMap;
 
+use crate::hash::Hash;
 use crate::operation::OperationValue;
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct DocumentViewId {
+    document_id: Hash,
+    view_id: Vec<Hash>,
+}
+
+impl DocumentViewId {
+    pub fn new(document_id: Hash, view_id: Vec<Hash>) -> Self {
+        Self {
+            document_id,
+            view_id,
+        }
+    }
+
+    pub fn document_id(&self) -> &Hash {
+        &self.document_id
+    }
+
+    pub fn view_id(&self) -> &[Hash] {
+        self.view_id.as_slice()
+    }
+}
 
 /// The materialised view of a `Document`. It's fields match the documents schema definition.
 ///
 /// `DocumentViews` can be instantiated from a CREATE operation and then mutated with UPDATE
 /// or DELETE operations.
 #[derive(Debug, PartialEq, Clone)]
-pub struct DocumentView(pub(crate) BTreeMap<String, OperationValue>);
+pub struct DocumentView {
+    pub(crate) id: DocumentViewId,
+    pub(crate) view: BTreeMap<String, OperationValue>,
+}
 
 impl DocumentView {
+    pub fn new(id: DocumentViewId, view: BTreeMap<String, OperationValue>) -> Self {
+        Self { id, view }
+    }
+
+    pub fn id(&self) -> &DocumentViewId {
+        &self.id
+    }
+
     /// Get a single value from this instance by it's key.
     pub fn get(&self, key: &str) -> Option<&OperationValue> {
-        self.0.get(key)
+        self.view.get(key)
     }
 
     /// Returns a vector containing the keys of this instance.
     pub fn keys(&self) -> Vec<String> {
-        self.0.clone().into_keys().collect::<Vec<String>>()
+        self.view.clone().into_keys().collect::<Vec<String>>()
     }
 
     /// Returns an iterator of existing instance fields.
     pub fn iter(&self) -> BTreeMapIter<String, OperationValue> {
-        self.0.iter()
+        self.view.iter()
     }
 
     /// Returns the number of fields on this instance.
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.view.len()
     }
 
     /// Returns true if the instance is empty, otherwise false.
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.view.is_empty()
     }
 }
-// @TODO: This currently makes sure the wasm tests work as cddl does not have any wasm support
-// (yet). Remove this with: https://github.com/p2panda/p2panda/issues/99
-#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -53,12 +85,21 @@ mod tests {
         create_operation, delete_operation, fields, hash, schema, update_operation,
     };
 
+    use super::{DocumentView, DocumentViewId};
+
     #[rstest]
     fn gets_the_right_values(
         schema: Hash,
         #[from(hash)] prev_op_hash: Hash,
         #[from(hash)] relation: Hash,
+        #[from(hash)] document_id: Hash,
+        #[from(hash)] view_id: Hash,
     ) {
+        let document_view_id = DocumentViewId {
+            document_id,
+            view_id: vec![view_id],
+        };
+
         let create_operation = create_operation(
             schema.clone(),
             fields(vec![
@@ -73,8 +114,10 @@ mod tests {
             ]),
         );
 
-        // Reduce a single CREATE `Operation` into an `DocumentView`
-        let (document_view, is_edited, is_deleted) = reduce(&[create_operation.clone()]);
+        // Reduce a single CREATE `Operation`
+        let (view, is_edited, is_deleted) = reduce(&[create_operation.clone()]);
+
+        let document_view = DocumentView::new(document_view_id.clone(), view);
 
         assert_eq!(
             document_view.keys(),
@@ -115,8 +158,10 @@ mod tests {
         );
 
         // Reduce again now with an UPDATE operation as well
-        let (document_view, is_edited, is_deleted) =
+        let (view, is_edited, is_deleted) =
             reduce(&[create_operation.clone(), update_operation.clone()]);
+
+        let document_view = DocumentView::new(document_view_id, view);
 
         assert_eq!(
             document_view.get("age").unwrap(),

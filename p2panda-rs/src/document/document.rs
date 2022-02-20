@@ -6,8 +6,9 @@ use crate::document::DocumentBuilderError;
 use crate::graph::Graph;
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{AsOperation, OperationWithMeta};
+use crate::operation::{AsOperation, OperationValue, OperationWithMeta};
 
+use super::document_view::DocumentViewId;
 use super::DocumentView;
 
 /// Construct a graph from a list of operations.
@@ -39,7 +40,9 @@ pub fn build_graph(
 }
 
 /// Reduce a list of operations into a single view.
-pub fn reduce<T: AsOperation>(ordered_operations: &[T]) -> (DocumentView, bool, bool) {
+pub fn reduce<T: AsOperation>(
+    ordered_operations: &[T],
+) -> (BTreeMap<String, OperationValue>, bool, bool) {
     let is_edited = ordered_operations.len() > 1;
     let mut is_deleted = false;
 
@@ -57,7 +60,7 @@ pub fn reduce<T: AsOperation>(ordered_operations: &[T]) -> (DocumentView, bool, 
         }
     }
 
-    (DocumentView(view), is_edited, is_deleted)
+    (view, is_edited, is_deleted)
 }
 
 /// A replicatable data type designed to handle concurrent updates in a way where all replicas
@@ -203,22 +206,23 @@ impl DocumentBuilder {
             edited: is_edited,
             deleted: is_deleted,
             operations: sorted_graph_data.sorted(),
-            current_graph_tips: graph_tips,
+            current_graph_tips: graph_tips.clone(),
         };
+
+        let document_view_id = DocumentViewId::new(document_id.clone(), graph_tips);
+
+        let document_view = DocumentView::new(document_view_id, view);
 
         Ok(Document {
             id: document_id,
             schema,
             author,
-            view,
+            view: document_view,
             meta,
         })
     }
 }
 
-// @TODO: This currently makes sure the wasm tests work as cddl does not have any wasm support
-// (yet). Remove this with: https://github.com/p2panda/p2panda/issues/99
-#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -403,6 +407,11 @@ mod tests {
         assert!(!document.is_deleted());
         assert_eq!(document.operations(), &expected_op_order);
         assert_eq!(document.current_graph_tips(), &expected_graph_tip);
+        assert_eq!(document.view().id().document_id(), &panda_entry_1_hash);
+        assert_eq!(
+            document.view().id().view_id(),
+            &[penguin_entry_3_hash.clone()]
+        );
 
         // Multiple replicas receiving operations in different orders should resolve to same value.
 
@@ -438,6 +447,18 @@ mod tests {
 
         assert_eq!(replica_1.view().get("name"), replica_2.view().get("name"));
         assert_eq!(replica_1.view().get("name"), replica_3.view().get("name"));
+        assert_eq!(replica_1.view().id().document_id(), &panda_entry_1_hash);
+        assert_eq!(
+            replica_1.view().id().view_id(),
+            &[penguin_entry_3_hash.clone()]
+        );
+        assert_eq!(replica_2.view().id().document_id(), &panda_entry_1_hash);
+        assert_eq!(
+            replica_2.view().id().view_id(),
+            &[penguin_entry_3_hash.clone()]
+        );
+        assert_eq!(replica_3.view().id().document_id(), &panda_entry_1_hash);
+        assert_eq!(replica_3.view().id().view_id(), &[penguin_entry_3_hash]);
     }
 
     #[rstest]

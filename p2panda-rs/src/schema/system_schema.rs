@@ -171,108 +171,137 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryFrom;
+    use std::{collections::BTreeMap, convert::TryFrom};
 
     use crate::{
-        document::reduce,
+        document::{reduce, DocumentView, DocumentViewId},
         hash::Hash,
         operation::OperationValue,
         schema::system_schema::{FieldType, SchemaFieldView},
-        test_utils::fixtures::{create_operation, fields, hash, schema},
+        test_utils::fixtures::{create_operation, fields, random_hash, schema},
     };
     use rstest::rstest;
 
     use super::SchemaView;
 
     #[rstest]
-    fn from_document_view(#[from(hash)] relation_hash: Hash, schema: Hash) {
-        let operation = create_operation(
-            schema,
-            fields(vec![
-                ("name", OperationValue::Text("venue_name".to_string())),
-                (
-                    "description",
-                    OperationValue::Text("Describes a venue".to_string()),
-                ),
-                ("fields", OperationValue::Relation(relation_hash)),
-            ]),
+    fn from_document_view(
+        #[from(random_hash)] relation_hash: Hash,
+        schema: Hash,
+        #[from(random_hash)] document_id: Hash,
+        #[from(random_hash)] view_id: Hash,
+    ) {
+        let document_view_id = DocumentViewId::new(document_id, vec![view_id]);
+
+        let mut bool_field = BTreeMap::new();
+        bool_field.insert(
+            "name".to_string(),
+            OperationValue::Text("venue_name".to_string()),
         );
-        let (document_view, _, _) = reduce(&[operation]);
+        bool_field.insert(
+            "description".to_string(),
+            OperationValue::Text("Describes a venue".to_string()),
+        );
+        bool_field.insert(
+            "fields".to_string(),
+            OperationValue::Relation(relation_hash),
+        );
+
+        let document_view = DocumentView::new(document_view_id, bool_field);
+
         assert!(SchemaView::try_from(document_view).is_ok());
     }
 
     #[rstest]
-    fn field_type_from_document_view(schema: Hash) {
-        let bool_field = create_operation(
-            schema.clone(),
-            fields(vec![
-                ("name", OperationValue::Text("is_accessible".to_string())),
-                ("type", OperationValue::Text("bool".to_string())),
-            ]),
+    fn field_type_from_document_view(
+        schema: Hash,
+        #[from(random_hash)] document_id: Hash,
+        #[from(random_hash)] view_id: Hash,
+    ) {
+        let document_view_id = DocumentViewId::new(document_id, vec![view_id]);
+
+        let mut bool_field = BTreeMap::new();
+        bool_field.insert(
+            "name".to_string(),
+            OperationValue::Text("is_accessible".to_string()),
         );
-        let (document_view, _, _) = reduce(&[bool_field]);
+        bool_field.insert("type".to_string(), OperationValue::Text("bool".to_string()));
+
+        let document_view = DocumentView::new(document_view_id.clone(), bool_field);
+
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         let field_view = field_view.unwrap();
         assert_eq!(field_view.field_type(), &FieldType::Bool);
         assert_eq!(field_view.name(), "is_accessible");
 
-        let int_field = create_operation(
-            schema.clone(),
-            fields(vec![
-                ("name", OperationValue::Text("capacity".to_string())),
-                ("type", OperationValue::Text("int".to_string())),
-            ]),
+        let mut capacity_field = BTreeMap::new();
+        capacity_field.insert(
+            "name".to_string(),
+            OperationValue::Text("capacity".to_string()),
         );
-        let (document_view, _, _) = reduce(&[int_field]);
+        capacity_field.insert("type".to_string(), OperationValue::Text("int".to_string()));
+
+        let document_view = DocumentView::new(document_view_id.clone(), capacity_field);
+
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::Int);
 
-        let float_field = create_operation(
-            schema.clone(),
-            fields(vec![
-                ("name", OperationValue::Text("ticket_price".to_string())),
-                ("type", OperationValue::Text("float".to_string())),
-            ]),
+        let mut float_field = BTreeMap::new();
+        float_field.insert(
+            "name".to_string(),
+            OperationValue::Text("ticket_price".to_string()),
         );
-        let (document_view, _, _) = reduce(&[float_field]);
+        float_field.insert(
+            "type".to_string(),
+            OperationValue::Text("float".to_string()),
+        );
+
+        let document_view = DocumentView::new(document_view_id.clone(), float_field);
+
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::Float);
 
-        let str_field = create_operation(
-            schema.clone(),
-            fields(vec![
-                ("name", OperationValue::Text("venue_name".to_string())),
-                ("type", OperationValue::Text("str".to_string())),
-            ]),
+        let mut str_field = BTreeMap::new();
+        str_field.insert(
+            "name".to_string(),
+            OperationValue::Text("venue_name".to_string()),
         );
-        let (document_view, _, _) = reduce(&[str_field]);
+        str_field.insert("type".to_string(), OperationValue::Text("str".to_string()));
+
+        let document_view = DocumentView::new(document_view_id.clone(), str_field);
+
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::String);
 
-        let relation_field = create_operation(
-            schema.clone(),
-            fields(vec![
-                ("name", OperationValue::Text("address".to_string())),
-                ("type", OperationValue::Text("relation".to_string())),
-            ]),
+        let mut relation_field = BTreeMap::new();
+        relation_field.insert(
+            "name".to_string(),
+            OperationValue::Text("address".to_string()),
         );
-        let (document_view, _, _) = reduce(&[relation_field]);
+        relation_field.insert(
+            "type".to_string(),
+            OperationValue::Text("relation".to_string()),
+        );
+
+        let document_view = DocumentView::new(document_view_id.clone(), relation_field);
+
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::Relation);
 
-        let invalid_field_type = create_operation(
-            schema,
-            fields(vec![
-                ("name", OperationValue::Text("address".to_string())),
-                ("type", OperationValue::Text("hash".to_string())),
-            ]),
+        let mut invalid_field = BTreeMap::new();
+        invalid_field.insert(
+            "name".to_string(),
+            OperationValue::Text("address".to_string()),
         );
-        let (document_view, _, _) = reduce(&[invalid_field_type]);
+        invalid_field.insert("type".to_string(), OperationValue::Text("hash".to_string()));
+
+        let document_view = DocumentView::new(document_view_id, invalid_field);
+
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_err());
     }
