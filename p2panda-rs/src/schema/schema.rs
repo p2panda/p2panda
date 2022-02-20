@@ -17,16 +17,16 @@ pub enum Type {
 }
 
 /// CDDL schema type string formats.
-impl fmt::Display for Type {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let cddl_type = match self {
+impl ToString for Type {
+    fn to_string(&self) -> String {
+        match self {
             Type::Bool => "bool",
             Type::Int => "int",
             Type::Float => "float",
             Type::Tstr => "tstr",
             Type::Relation => "tstr .regexp \"[0-9a-f]{68}\"",
-        };
-        write!(f, "{}", cddl_type)
+        }
+        .to_string()
     }
 }
 
@@ -39,12 +39,12 @@ pub enum Field {
 }
 
 /// Format each different data type into a schema string.
-impl fmt::Display for Field {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl ToString for Field {
+    fn to_string(&self) -> String {
         match self {
-            Field::String(s) => write!(f, "\"{}\"", s),
-            Field::Type(cddl_type) => write!(f, "{}", cddl_type),
-            Field::Struct(group) => write!(f, "{{ {} }}", group),
+            Field::String(str) => str.to_string(),
+            Field::Type(cddl_type) => cddl_type.to_string(),
+            Field::Struct(group) => group.to_string(),
         }
     }
 }
@@ -73,18 +73,19 @@ impl Group {
     }
 }
 
-impl fmt::Display for Group {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl ToString for Group {
+    fn to_string(&self) -> String {
         let map = &self.fields;
-        write!(f, "( ")?;
+        let mut cddl_str = "( ".to_string();
         for (count, value) in map.iter().enumerate() {
             // For every element except the first, add a comma
             if count != 0 {
-                write!(f, ", ")?;
+                cddl_str += ", ";
             }
-            write!(f, "{}: {}", value.0, value.1)?;
+            cddl_str += &format!("{}: {}", value.0, value.1.to_string());
         }
-        write!(f, " )")
+        cddl_str += " )";
+        cddl_str
     }
 }
 
@@ -112,11 +113,11 @@ impl SchemaBuilder {
     ) -> Result<(), SchemaError> {
         // Match passed type and map it to our OperationFields type and CDDL types
         let type_string = match field_type {
-            Type::Tstr => "str",
-            Type::Int => "int",
-            Type::Float => "float",
-            Type::Bool => "bool",
-            Type::Relation => "relation",
+            Type::Tstr => "\"str\"",
+            Type::Int => "\"int\"",
+            Type::Float => "\"float\"",
+            Type::Bool => "\"bool\"",
+            Type::Relation => "\"relation\"",
         };
 
         // Create an operation field group and add fields
@@ -142,7 +143,7 @@ impl ToString for SchemaBuilder {
             if count != 0 {
                 cddl_str += ", ";
             }
-            cddl_str += &format!("{}: {}", value.0, value.1);
+            cddl_str += &format!("{}: {{ {} }}", value.0, value.1.to_string());
         }
         cddl_str += " }";
         cddl_str
