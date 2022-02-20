@@ -17,7 +17,7 @@ mod system_schema;
 
 pub use error::{SchemaError, SystemSchemaError};
 pub use operation::OPERATION_SCHEMA;
-pub use schema::{Schema, SchemaBuilder, Type, ValidateOperation};
+pub use schema::SchemaBuilder;
 
 /// Checks CBOR bytes against CDDL schemas.
 ///

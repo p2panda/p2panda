@@ -3,16 +3,6 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use cddl::lexer::Lexer;
-use cddl::parser::Parser;
-#[cfg(not(target_arch = "wasm32"))]
-use cddl::validate_cbor_from_slice;
-#[cfg(not(target_arch = "wasm32"))]
-use cddl::validator::cbor;
-
-use crate::hash::Hash;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::operation::{Operation, OperationFields, OperationValue};
 use crate::schema::SchemaError;
 
 /// CDDL types.
@@ -105,14 +95,6 @@ pub struct SchemaBuilder {
     fields: BTreeMap<String, Field>,
 }
 
-/// Schema struct for creating CDDL schemas, validating OperationFields and creating operations
-/// following the defined schema.
-#[derive(Clone, Debug)]
-pub struct Schema {
-    schema_hash: Hash,
-    schema_string: String,
-}
-
 impl SchemaBuilder {
     /// Create a new blank `Schema`.
     pub fn new(name: String) -> Self {
@@ -152,186 +134,29 @@ impl SchemaBuilder {
     }
 }
 
-impl ValidateOperation for SchemaBuilder {}
-
-impl fmt::Display for SchemaBuilder {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} = {{ ", self.name)?;
+impl ToString for SchemaBuilder {
+    fn to_string(&self) -> String {
+        let mut cddl_str = "".to_string();
+        cddl_str += &format!("{} = {{ ", self.name);
         for (count, value) in self.fields.iter().enumerate() {
             if count != 0 {
-                write!(f, ", ")?;
+                cddl_str += ", ";
             }
-            write!(f, "{}: {}", value.0, value.1)?;
+            cddl_str += &format!("{}: {}", value.0, value.1);
         }
-        writeln!(f, " }}")
+        cddl_str += " }";
+        cddl_str
     }
 }
 
-impl Schema {
-    /// Create a new Schema from a schema hash and schema CDDL string.
-    pub fn new(schema_hash: &Hash, schema_str: &str) -> Result<Self, SchemaError> {
-        let mut lexer = Lexer::new(schema_str);
-        let parser = Parser::new(lexer.iter(), schema_str);
-
-        let schema_string = match parser {
-            Ok(mut parser) => match parser.parse_cddl() {
-                Ok(cddl) => Ok(cddl.to_string()),
-                Err(err) => Err(SchemaError::ParsingError(err.to_string())),
-            },
-            Err(err) => Err(SchemaError::ParsingError(err.to_string())),
-        }?;
-
-        let schema_hash = match Hash::new(schema_hash.as_str()) {
-            Ok(hash) => Ok(hash),
-            Err(err) => Err(SchemaError::InvalidSchema(vec![err.to_string()])),
-        }?;
-
-        Ok(Self {
-            schema_hash,
-            schema_string,
-        })
-    }
-
-    /// Return the hash id of this schema.
-    pub fn schema_hash(&self) -> Hash {
-        self.schema_hash.clone()
-    }
-
-    /// Create a new CREATE operation validated against this schema.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn create(
-        &self,
-        key_values: Vec<(&str, OperationValue)>,
-    ) -> Result<Operation, SchemaError> {
-        let mut fields = OperationFields::new();
-
-        for (key, value) in key_values {
-            match fields.add(key, value) {
-                Ok(_) => Ok(()),
-                Err(err) => Err(SchemaError::OperationFieldsError(err)),
-            }?;
-        }
-
-        match self.validate_operation_fields(&fields.clone()) {
-            Ok(_) => Ok(()),
-            Err(err) => Err(SchemaError::ValidationError(err.to_string())),
-        }?;
-
-        match Operation::new_create(self.schema_hash(), fields) {
-            Ok(hash) => Ok(hash),
-            Err(err) => Err(SchemaError::OperationError(err)),
-        }
-    }
-
-    /// Create a new UPDATE operation validated against this schema.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn update(
-        &self,
-        previous_operations: Vec<Hash>,
-        key_values: Vec<(&str, OperationValue)>,
-    ) -> Result<Operation, SchemaError> {
-        let mut fields = OperationFields::new();
-
-        for (key, value) in key_values {
-            match fields.add(key, value) {
-                Ok(_) => Ok(()),
-                Err(err) => Err(SchemaError::InvalidSchema(vec![err.to_string()])),
-            }?;
-        }
-
-        match self.validate_operation_fields(&fields.clone()) {
-            Ok(_) => Ok(()),
-            Err(err) => Err(SchemaError::ValidationError(err.to_string())),
-        }?;
-
-        match Operation::new_update(self.schema_hash(), previous_operations, fields) {
-            Ok(hash) => Ok(hash),
-            Err(err) => Err(SchemaError::InvalidSchema(vec![err.to_string()])),
-        }
-    }
-}
-
-impl fmt::Display for Schema {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.schema_string)
-    }
-}
-
-/// Validate an operations fields against this schema
-pub trait ValidateOperation
-where
-    Self: fmt::Display,
-{
-    /// Validate an operation against this application schema.
-    #[cfg(not(target_arch = "wasm32"))]
-    fn validate_operation_fields(
-        &self,
-        operation_fields: &OperationFields,
-    ) -> Result<(), SchemaError> {
-        let mut cbor_bytes = Vec::new();
-        ciborium::ser::into_writer(&operation_fields.clone(), &mut cbor_bytes).unwrap();
-
-        match validate_cbor_from_slice(&format!("{}", self), &cbor_bytes) {
-            Err(cbor::Error::Validation(err)) => {
-                let err = err
-                    .iter()
-                    .map(|fe| format!("{}: \"{}\"", fe.cbor_location, fe.reason))
-                    .collect::<Vec<String>>()
-                    .join(", ");
-
-                Err(SchemaError::InvalidSchema(vec![err]))
-            }
-            Err(cbor::Error::CBORParsing(_err)) => Err(SchemaError::InvalidCBOR),
-            Err(cbor::Error::CDDLParsing(err)) => {
-                panic!("Parsing CDDL error: {}", err);
-            }
-            _ => Ok(()),
-        }
-    }
-}
-
-impl ValidateOperation for Schema {}
-
-// @TODO: This currently makes sure the wasm tests work as cddl does not have any wasm support
-// (yet). Remove this with: https://github.com/p2panda/p2panda/issues/99
-#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
-    use rstest::rstest;
+    use crate::operation::{OperationFields, OperationValue};
 
-    use crate::hash::Hash;
-    use crate::operation::{Operation, OperationFields, OperationValue};
-    use crate::test_utils::fixtures::hash;
-
-    use super::{Schema, SchemaBuilder, Type, ValidateOperation};
-
-    // Complete application schema.
-    pub const APPLICATION_SCHEMA: &str = r#"
-        applicationSchema = {
-            address //
-            person
-        }
-
-        address = (
-            city: { type: "str", value: tstr },
-            street: { type: "str", value: tstr },
-            house-number: { type: "int", value: int },
-        )
-
-        person = (
-            name: { type: "str", value: tstr },
-            age: { type: "int", value: int },
-        )
-    "#;
+    use super::{SchemaBuilder, Type};
 
     // Only `person` schema.
-    pub const PERSON_SCHEMA: &str = r#"
-        person = (
-            name: { type: "str", value: tstr },
-            age: { type: "int", value: int },
-        )
-    "#;
-
+    pub const PERSON_SCHEMA: &str = r#"person = { age: { ( type: "int", value: int ) }, name: { ( type: "str", value: tstr ) } }"#;
     #[test]
     pub fn schema_builder() {
         // Instantiate new empty schema named "person"
@@ -352,128 +177,6 @@ mod tests {
         me.add("age", OperationValue::Integer(35)).unwrap();
 
         // Validate operation fields against person schema
-        assert!(person.validate_operation_fields(&me).is_ok());
-    }
-
-    #[rstest]
-    pub fn schema_from_string(#[from(hash)] schema_hash: Hash) {
-        // Create a new "person" operation
-        let mut me = OperationFields::new();
-        me.add("name", OperationValue::Text("Sam".to_owned()))
-            .unwrap();
-        me.add("age", OperationValue::Integer(35)).unwrap();
-
-        // Instantiate "person" schema from cddl string
-        let cddl_str = "person = { (
-            age: { type: \"int\", value: int },
-            name: { type: \"str\", value: tstr }
-        ) }";
-
-        let person_from_string = Schema::new(&schema_hash, &cddl_str.to_string()).unwrap();
-
-        // Validate operation fields against person schema
-        assert!(person_from_string.validate_operation_fields(&me).is_ok());
-    }
-
-    #[rstest]
-    pub fn validate_against_megaschema(#[from(hash)] schema_hash: Hash) {
-        // Instantiate global application schema from mega schema string and it's hash
-        let application_schema =
-            Schema::new(&schema_hash, &APPLICATION_SCHEMA.to_string()).unwrap();
-
-        let mut me = OperationFields::new();
-        me.add("name", OperationValue::Text("Sam".to_owned()))
-            .unwrap();
-        me.add("age", OperationValue::Integer(35)).unwrap();
-
-        let mut my_address = OperationFields::new();
-        my_address
-            .add("house-number", OperationValue::Integer(8))
-            .unwrap();
-        my_address
-            .add("street", OperationValue::Text("Panda Lane".to_owned()))
-            .unwrap();
-        my_address
-            .add("city", OperationValue::Text("Bamboo Town".to_owned()))
-            .unwrap();
-
-        // Validate operation fields against application schema
-        assert!(application_schema.validate_operation_fields(&me).is_ok());
-        assert!(application_schema
-            .validate_operation_fields(&my_address)
-            .is_ok());
-
-        // Operations not matching one of the application schema should fail
-        let mut naughty_panda = OperationFields::new();
-        naughty_panda
-            .add("name", OperationValue::Text("Naughty Panda".to_owned()))
-            .unwrap();
-        naughty_panda
-            .add("colour", OperationValue::Text("pink & orange".to_owned()))
-            .unwrap();
-
-        assert!(application_schema
-            .validate_operation_fields(&naughty_panda)
-            .is_err());
-    }
-
-    #[rstest]
-    pub fn test_create_operation(#[from(hash)] schema_hash: Hash) {
-        let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
-
-        // Create an operation the long way without validation
-        let mut operation_fields = OperationFields::new();
-        operation_fields
-            .add("name", OperationValue::Text("Panda".to_owned()))
-            .unwrap();
-        operation_fields
-            .add("age", OperationValue::Integer(12))
-            .unwrap();
-
-        let operation = Operation::new_create(schema_hash, operation_fields).unwrap();
-
-        // Create an operation the quick way *with* validation
-        let operation_again = person_schema
-            .create(vec![
-                ("name", OperationValue::Text("Panda".to_string())),
-                ("age", OperationValue::Integer(12)),
-            ])
-            .unwrap();
-
-        assert_eq!(operation, operation_again);
-    }
-
-    #[rstest]
-    pub fn test_update_operation(#[from(hash)] schema_hash: Hash) {
-        let person_schema = Schema::new(&schema_hash, &PERSON_SCHEMA.to_string()).unwrap();
-
-        // Create a operation the long way without validation
-        let mut operation_fields = OperationFields::new();
-        operation_fields
-            .add("name", OperationValue::Text("Panda".to_owned()))
-            .unwrap();
-        operation_fields
-            .add("age", OperationValue::Integer(12))
-            .unwrap();
-
-        let operation = Operation::new_update(
-            schema_hash,
-            vec![Hash::new_from_bytes(vec![12, 128]).unwrap()],
-            operation_fields,
-        )
-        .unwrap();
-
-        // Create an operation the quick way *with* validation
-        let operation_again = person_schema
-            .update(
-                vec![Hash::new_from_bytes(vec![12, 128]).unwrap()],
-                vec![
-                    ("name", OperationValue::Text("Panda".to_string())),
-                    ("age", OperationValue::Integer(12)),
-                ],
-            )
-            .unwrap();
-
-        assert_eq!(operation, operation_again);
+        assert_eq!(person.to_string(), PERSON_SCHEMA);
     }
 }
