@@ -49,6 +49,7 @@ pub enum DocumentError {
 }
 
 /// Custom error types for `DocumentView`.
+#[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
 pub enum DocumentViewError {
     /// TryFrom operation must be CREATE.
