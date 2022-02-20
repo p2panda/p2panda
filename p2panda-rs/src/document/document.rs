@@ -67,8 +67,8 @@ pub fn reduce<T: AsOperation>(ordered_operations: &[T]) -> (DocumentView, bool, 
 #[derive(Debug, Clone)]
 pub struct Document {
     id: Hash,
-    schema: Hash,
     author: Author,
+    schema: Hash,
     view: DocumentView,
     meta: DocumentMeta,
 }
@@ -77,8 +77,8 @@ pub struct Document {
 pub struct DocumentMeta {
     deleted: bool,
     edited: bool,
-    current_graph_tips: Vec<Hash>,
     operations: Vec<OperationWithMeta>,
+    current_graph_tips: Vec<Hash>,
 }
 
 impl Document {
