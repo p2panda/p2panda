@@ -59,20 +59,23 @@ pub struct SchemaFieldView {
 /// View onto materialised schema which has fields "name", "description" and "fields".
 /// Is validated on being converted from a general DocumentView struct which means so it's inner
 /// values can be returned unwrapped by their getter methods.
-#[allow(dead_code)] // These methods aren't used yet...
 impl SchemaView {
+    /// The id of this schema view.
+    pub fn id(&self) -> &DocumentViewId {
+        &self.id
+    }
     /// The name of this schema.
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
     /// The description of this schema.
-    fn description(&self) -> &str {
+    pub fn description(&self) -> &str {
         &self.description
     }
 
     /// A list of fields assigned to this schema identified by their document id.
-    fn fields(&self) -> &[Hash] {
+    pub fn fields(&self) -> &[Hash] {
         // Unwrap here because fields were validated on construction
         self.fields.as_slice()
     }
@@ -83,13 +86,18 @@ impl SchemaView {
 /// values can be returned unwrapped by their getter methods.
 #[allow(dead_code)] // These methods aren't used yet...
 impl SchemaFieldView {
+    /// The id of this schema view.
+    pub fn id(&self) -> &DocumentViewId {
+        &self.id
+    }
+
     /// The name of this schema field.
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
     /// The type of this schema field represented as a FieldType enum variant.
-    fn field_type(&self) -> &FieldType {
+    pub fn field_type(&self) -> &FieldType {
         &self.field_type
     }
 }
