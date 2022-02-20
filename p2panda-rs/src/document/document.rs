@@ -189,26 +189,31 @@ impl DocumentBuilder {
 
         let document_id = create_operation.operation_id().to_owned();
 
+        // Build the graph  and then sort the operations into a linear order
         let graph = build_graph(&self.operations)?;
-
         let sorted_graph_data = graph.sort()?;
 
+        // These are the current graph tips, to be added to the document view id
         let graph_tips: Vec<Hash> = sorted_graph_data
             .current_graph_tips()
             .iter()
             .map(|operation| operation.operation_id().to_owned())
             .collect();
 
+        // Reduce the sorted operations into a single key value map
         let (view, is_edited, is_deleted) = reduce(&sorted_graph_data.sorted()[..]);
 
+        // Construct document meta data
         let meta = DocumentMeta {
             edited: is_edited,
             deleted: is_deleted,
             operations: sorted_graph_data.sorted(),
         };
 
+        // Construct the document view id
         let document_view_id = DocumentViewId::new(document_id.clone(), graph_tips);
 
+        // Construct the document view, from the reduced values and the document view id
         let document_view = DocumentView::new(document_view_id, view);
 
         Ok(Document {
