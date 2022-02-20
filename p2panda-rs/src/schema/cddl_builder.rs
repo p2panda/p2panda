@@ -2,8 +2,6 @@
 
 use std::collections::BTreeMap;
 
-use crate::schema::SchemaError;
-
 /// CDDL types.
 #[derive(Clone, Debug, Copy)]
 #[allow(missing_docs)]
@@ -105,11 +103,7 @@ impl CDDLBuilder {
     }
 
     /// Add a field definition to this schema.
-    pub fn add_operation_field(
-        &mut self,
-        key: String,
-        field_type: Type,
-    ) -> Result<(), SchemaError> {
+    pub fn add_operation_field(&mut self, key: String, field_type: Type) {
         // Match passed type and map it to our OperationFields type and CDDL types
         let type_string = match field_type {
             Type::Tstr => "\"str\"",
@@ -130,7 +124,6 @@ impl CDDLBuilder {
         // Insert new operation field into Schema fields. If this Schema was created from a cddl
         // string `fields` will be None
         self.fields.insert(key, operation_fields);
-        Ok(())
     }
 }
 
@@ -163,12 +156,8 @@ mod tests {
         let mut person = CDDLBuilder::new("person".to_owned());
 
         // Add two operation fields to the schema
-        person
-            .add_operation_field("name".to_owned(), Type::Tstr)
-            .unwrap();
-        person
-            .add_operation_field("age".to_owned(), Type::Int)
-            .unwrap();
+        person.add_operation_field("name".to_owned(), Type::Tstr);
+        person.add_operation_field("age".to_owned(), Type::Int);
 
         // Create a new "person" operation
         let mut me = OperationFields::new();

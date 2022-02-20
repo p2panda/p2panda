@@ -49,7 +49,7 @@ pub enum OperationEncodedError {
 
     /// Handle errors from validating CBOR schemas.
     #[error(transparent)]
-    SchemaError(#[from] crate::schema::SchemaError),
+    SchemaError(#[from] crate::schema::SchemaValidationError),
 }
 
 /// Error types for methods of `OperationWithMeta` struct.
