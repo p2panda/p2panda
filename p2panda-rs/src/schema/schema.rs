@@ -7,6 +7,7 @@ use crate::document::DocumentViewId;
 use super::system_schema::{SchemaFieldView, SchemaView};
 
 /// Construct a `Schema` from a schema view and it's associated schema fields.
+#[allow(dead_code)] // These methods aren't used yet...
 pub fn build_schema(schema: SchemaView, fields: Vec<SchemaFieldView>) -> Schema {
     let mut fields_map = BTreeMap::new();
 

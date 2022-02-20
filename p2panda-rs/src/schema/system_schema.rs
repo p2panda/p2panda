@@ -59,6 +59,7 @@ pub struct SchemaFieldView {
 /// View onto materialised schema which has fields "name", "description" and "fields".
 /// Is validated on being converted from a general DocumentView struct which means so it's inner
 /// values can be returned unwrapped by their getter methods.
+#[allow(dead_code)] // These methods aren't used yet...
 impl SchemaView {
     /// The id of this schema view.
     pub fn id(&self) -> &DocumentViewId {
