@@ -10,6 +10,7 @@ use crate::operation::{AsOperation, OperationWithMeta};
 
 use super::DocumentView;
 
+/// Construct a graph from a list of operations.
 pub fn build_graph(
     operations: &[OperationWithMeta],
 ) -> Result<Graph<OperationWithMeta>, DocumentBuilderError> {
@@ -37,6 +38,7 @@ pub fn build_graph(
     Ok(graph)
 }
 
+/// Reduce a list of operations into a single view.
 pub fn reduce<T: AsOperation>(ordered_operations: &[T]) -> (DocumentView, bool, bool) {
     let is_edited = ordered_operations.len() > 1;
     let mut is_deleted = false;
