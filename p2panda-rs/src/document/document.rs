@@ -83,7 +83,6 @@ pub struct DocumentMeta {
     deleted: bool,
     edited: bool,
     operations: Vec<OperationWithMeta>,
-    current_graph_tips: Vec<Hash>,
 }
 
 impl Document {
@@ -112,9 +111,9 @@ impl Document {
         &self.meta.operations
     }
 
-    /// Get the documents graph tips.
-    pub fn current_graph_tips(&self) -> &Vec<Hash> {
-        &self.meta.current_graph_tips
+    /// Get the documents graph tips (aka view id).
+    pub fn current_graph_tips(&self) -> &[Hash] {
+        self.view().id().view_id()
     }
 
     /// Returns true if this document has applied an UPDATE operation.
@@ -206,7 +205,6 @@ impl DocumentBuilder {
             edited: is_edited,
             deleted: is_deleted,
             operations: sorted_graph_data.sorted(),
-            current_graph_tips: graph_tips.clone(),
         };
 
         let document_view_id = DocumentViewId::new(document_id.clone(), graph_tips);
