@@ -231,14 +231,48 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::identity::KeyPair;
-    use crate::operation::{OperationValue, OperationWithMeta};
+    use crate::operation::{Operation, OperationValue, OperationWithMeta};
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, fields, random_key_pair, schema, update_operation,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
     use crate::test_utils::utils::operation_fields;
 
-    use super::DocumentBuilder;
+    use super::{reduce, DocumentBuilder};
+
+    #[rstest]
+    fn reduces_operations(
+        create_operation: Operation,
+        update_operation: Operation,
+        delete_operation: Operation,
+    ) {
+        let (reduced_create, is_edited, is_deleted) = reduce(&[create_operation.clone()]);
+        assert_eq!(
+            reduced_create.get("message").unwrap(),
+            &OperationValue::Text("Hello!".to_string())
+        );
+        assert!(!is_edited);
+        assert!(!is_deleted);
+
+        let (reduced_update, is_edited, is_deleted) =
+            reduce(&[create_operation.clone(), update_operation.clone()]);
+        assert_eq!(
+            reduced_update.get("message").unwrap(),
+            &OperationValue::Text("Updated, hello!".to_string())
+        );
+        assert!(is_edited);
+        assert!(!is_deleted);
+
+        let (reduced_delete, is_edited, is_deleted) =
+            reduce(&[create_operation, update_operation, delete_operation]);
+        // The value remains the same, but the deleted flag is true now.
+        assert_eq!(
+            reduced_delete.get("message").unwrap(),
+            &OperationValue::Text("Updated, hello!".to_string())
+        );
+        assert!(is_edited);
+        assert!(is_deleted);
+    }
 
     #[rstest]
     fn resolve_documents(schema: Hash) {
