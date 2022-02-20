@@ -7,6 +7,8 @@ use std::collections::BTreeMap;
 use crate::hash::Hash;
 use crate::operation::OperationValue;
 
+/// The ID of a document view. Contains the hash id of the document, and the hash ids of the
+/// current document graph tips.
 #[derive(Debug, PartialEq, Clone)]
 pub struct DocumentViewId {
     document_id: Hash,
@@ -14,6 +16,7 @@ pub struct DocumentViewId {
 }
 
 impl DocumentViewId {
+    /// Create a new document view id.
     pub fn new(document_id: Hash, view_id: Vec<Hash>) -> Self {
         Self {
             document_id,
@@ -21,10 +24,12 @@ impl DocumentViewId {
         }
     }
 
+    /// Get just the document id.
     pub fn document_id(&self) -> &Hash {
         &self.document_id
     }
 
+    /// Get just the view id.
     pub fn view_id(&self) -> &[Hash] {
         self.view_id.as_slice()
     }
@@ -41,10 +46,13 @@ pub struct DocumentView {
 }
 
 impl DocumentView {
+    /// Create a new document id from. Requires the DocumentViewId and field values
+    /// to be calculated seperately and then passed in.
     pub fn new(id: DocumentViewId, view: BTreeMap<String, OperationValue>) -> Self {
         Self { id, view }
     }
 
+    /// Get the id of this document view.
     pub fn id(&self) -> &DocumentViewId {
         &self.id
     }

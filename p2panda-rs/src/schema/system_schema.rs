@@ -34,6 +34,7 @@ impl FromStr for FieldType {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct SchemaView {
     // ID of this schema view.
     id: DocumentViewId,
@@ -45,6 +46,7 @@ pub struct SchemaView {
     fields: Vec<Hash>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct SchemaFieldView {
     // ID of this schema field view.
     id: DocumentViewId,
@@ -57,6 +59,7 @@ pub struct SchemaFieldView {
 /// View onto materialised schema which has fields "name", "description" and "fields".
 /// Is validated on being converted from a general DocumentView struct which means so it's inner
 /// values can be returned unwrapped by their getter methods.
+#[allow(dead_code)] // These methods aren't used yet...
 impl SchemaView {
     /// The name of this schema.
     fn name(&self) -> &str {
@@ -78,6 +81,7 @@ impl SchemaView {
 /// View onto materialised schema field which has fields "name" and "type".
 /// Is validated on being converted from a general DocumentView struct which means so it's inner
 /// values can be returned unwrapped by their getter methods.
+#[allow(dead_code)] // These methods aren't used yet...
 impl SchemaFieldView {
     /// The name of this schema field.
     fn name(&self) -> &str {
