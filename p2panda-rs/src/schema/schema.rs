@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::BTreeMap;
-#[cfg(not(target_arch = "wasm32"))]
 use std::fmt;
 
 use cddl::lexer::Lexer;
