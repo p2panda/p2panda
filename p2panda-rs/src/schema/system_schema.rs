@@ -3,7 +3,7 @@
 use std::convert::TryFrom;
 use std::str::FromStr;
 
-use crate::document::DocumentView;
+use crate::document::{DocumentView, DocumentViewId};
 use crate::hash::Hash;
 use crate::operation::OperationValue;
 
@@ -35,6 +35,8 @@ impl FromStr for FieldType {
 }
 
 pub struct SchemaView {
+    // ID of this schema view.
+    id: DocumentViewId,
     /// Name of this schema.
     name: String,
     /// Description of this schema.
@@ -44,6 +46,8 @@ pub struct SchemaView {
 }
 
 pub struct SchemaFieldView {
+    // ID of this schema field view.
+    id: DocumentViewId,
     /// Name of this schema field.
     name: String,
     /// Type of this schema field.
@@ -124,6 +128,7 @@ impl TryFrom<DocumentView> for SchemaView {
         }?;
 
         Ok(Self {
+            id: document_view.id().to_owned(),
             name: name.to_string(),
             description: description.to_string(),
             fields: vec![fields.to_owned()],
@@ -163,6 +168,7 @@ impl TryFrom<DocumentView> for SchemaFieldView {
         }?;
 
         Ok(Self {
+            id: document_view.id().to_owned(),
             name: name.to_string(),
             field_type: field_type.to_owned(),
         })
