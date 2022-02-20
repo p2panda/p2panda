@@ -1,13 +1,9 @@
 use std::collections::BTreeMap;
 
-use crate::hash::Hash;
+use crate::document::DocumentViewId;
 
-use super::system_schema::{SchemaFieldView, SchemaView};
+use super::system_schema::SchemaFieldView;
 
-pub struct DocumentViewId {
-    document_id: Hash,
-    view_id: Vec<Hash>,
-}
 pub struct Schema {
     id: DocumentViewId,
     name: String,
