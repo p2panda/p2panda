@@ -184,11 +184,11 @@ mod tests {
     use std::{collections::BTreeMap, convert::TryFrom};
 
     use crate::{
-        document::{reduce, DocumentView, DocumentViewId},
+        document::{DocumentView, DocumentViewId},
         hash::Hash,
         operation::OperationValue,
         schema::system_schema::{FieldType, SchemaFieldView},
-        test_utils::fixtures::{create_operation, fields, random_hash, schema},
+        test_utils::fixtures::random_hash,
     };
     use rstest::rstest;
 
@@ -197,7 +197,6 @@ mod tests {
     #[rstest]
     fn from_document_view(
         #[from(random_hash)] relation_hash: Hash,
-        schema: Hash,
         #[from(random_hash)] document_id: Hash,
         #[from(random_hash)] view_id: Hash,
     ) {
@@ -224,7 +223,6 @@ mod tests {
 
     #[rstest]
     fn field_type_from_document_view(
-        schema: Hash,
         #[from(random_hash)] document_id: Hash,
         #[from(random_hash)] view_id: Hash,
     ) {

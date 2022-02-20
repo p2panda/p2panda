@@ -409,7 +409,7 @@ mod tests {
             penguin_3.clone(),
         ];
 
-        let document = DocumentBuilder::new(operations.clone()).build();
+        let document = DocumentBuilder::new(operations).build();
 
         assert!(document.is_ok());
 

@@ -90,7 +90,7 @@ mod tests {
     use crate::hash::Hash;
     use crate::operation::OperationValue;
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, fields, hash, schema, update_operation,
+        create_operation, delete_operation, fields, random_hash, schema, update_operation,
     };
 
     use super::{DocumentView, DocumentViewId};
@@ -98,10 +98,10 @@ mod tests {
     #[rstest]
     fn gets_the_right_values(
         schema: Hash,
-        #[from(hash)] prev_op_hash: Hash,
-        #[from(hash)] relation: Hash,
-        #[from(hash)] document_id: Hash,
-        #[from(hash)] view_id: Hash,
+        #[from(random_hash)] prev_op_hash: Hash,
+        #[from(random_hash)] relation: Hash,
+        #[from(random_hash)] document_id: Hash,
+        #[from(random_hash)] view_id: Hash,
     ) {
         let document_view_id = DocumentViewId {
             document_id,
