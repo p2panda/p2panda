@@ -197,7 +197,7 @@ mod tests {
                 ("fields", OperationValue::Relation(relation_hash)),
             ]),
         );
-        let document_view = reduce(&[operation]);
+        let (document_view, _, _) = reduce(&[operation]);
         assert!(SchemaView::try_from(document_view).is_ok());
     }
 
@@ -210,7 +210,7 @@ mod tests {
                 ("type", OperationValue::Text("bool".to_string())),
             ]),
         );
-        let document_view = reduce(&[bool_field]);
+        let (document_view, _, _) = reduce(&[bool_field]);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         let field_view = field_view.unwrap();
@@ -224,7 +224,7 @@ mod tests {
                 ("type", OperationValue::Text("int".to_string())),
             ]),
         );
-        let document_view = reduce(&[int_field]);
+        let (document_view, _, _) = reduce(&[int_field]);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::Int);
@@ -236,7 +236,7 @@ mod tests {
                 ("type", OperationValue::Text("float".to_string())),
             ]),
         );
-        let document_view = reduce(&[float_field]);
+        let (document_view, _, _) = reduce(&[float_field]);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::Float);
@@ -248,7 +248,7 @@ mod tests {
                 ("type", OperationValue::Text("str".to_string())),
             ]),
         );
-        let document_view = reduce(&[str_field]);
+        let (document_view, _, _) = reduce(&[str_field]);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::String);
@@ -260,7 +260,7 @@ mod tests {
                 ("type", OperationValue::Text("relation".to_string())),
             ]),
         );
-        let document_view = reduce(&[relation_field]);
+        let (document_view, _, _) = reduce(&[relation_field]);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::Relation);
@@ -272,7 +272,7 @@ mod tests {
                 ("type", OperationValue::Text("hash".to_string())),
             ]),
         );
-        let document_view = reduce(&[invalid_field_type]);
+        let (document_view, _, _) = reduce(&[invalid_field_type]);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_err());
     }

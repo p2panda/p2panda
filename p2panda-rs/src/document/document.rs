@@ -37,7 +37,7 @@ pub fn build_graph(
     Ok(graph)
 }
 
-pub fn reduce<T: AsOperation>(ordered_operations: &[T]) -> DocumentView {
+pub fn reduce<T: AsOperation>(ordered_operations: &[T]) -> (DocumentView, bool, bool) {
     let is_edited = ordered_operations.len() > 1;
     let mut is_deleted = false;
 
@@ -55,11 +55,7 @@ pub fn reduce<T: AsOperation>(ordered_operations: &[T]) -> DocumentView {
         }
     }
 
-    DocumentView {
-        view,
-        is_edited,
-        is_deleted,
-    }
+    (DocumentView(view), is_edited, is_deleted)
 }
 
 /// A replicatable data type designed to handle concurrent updates in a way where all replicas
@@ -71,10 +67,17 @@ pub fn reduce<T: AsOperation>(ordered_operations: &[T]) -> DocumentView {
 #[derive(Debug, Clone)]
 pub struct Document {
     id: Hash,
-    view_id: Vec<Hash>,
-    author: Author,
     schema: Hash,
+    author: Author,
     view: DocumentView,
+    meta: DocumentMeta,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct DocumentMeta {
+    deleted: bool,
+    edited: bool,
+    current_graph_tips: Vec<Hash>,
     operations: Vec<OperationWithMeta>,
 }
 
@@ -101,22 +104,22 @@ impl Document {
 
     /// Get the operations contained in this document.
     pub fn operations(&self) -> &Vec<OperationWithMeta> {
-        &self.operations
+        &self.meta.operations
     }
 
     /// Get the documents graph tips.
     pub fn current_graph_tips(&self) -> &Vec<Hash> {
-        &self.view_id
+        &self.meta.current_graph_tips
     }
 
     /// Returns true if this document has applied an UPDATE operation.
     pub fn is_edited(&self) -> bool {
-        self.view.is_edited()
+        self.meta.edited
     }
 
     /// Returns true if this document has processed a DELETE operation.
     pub fn is_deleted(&self) -> bool {
-        self.view.is_deleted()
+        self.meta.deleted
     }
 }
 
@@ -180,7 +183,7 @@ impl DocumentBuilder {
             return Err(DocumentBuilderError::OperationSchemaNotMatching);
         }
 
-        let id = create_operation.operation_id().to_owned();
+        let document_id = create_operation.operation_id().to_owned();
 
         let graph = build_graph(&self.operations)?;
 
@@ -192,15 +195,21 @@ impl DocumentBuilder {
             .map(|operation| operation.operation_id().to_owned())
             .collect();
 
-        let view = reduce(&sorted_graph_data.sorted()[..]);
+        let (view, is_edited, is_deleted) = reduce(&sorted_graph_data.sorted()[..]);
+
+        let meta = DocumentMeta {
+            edited: is_edited,
+            deleted: is_deleted,
+            operations: sorted_graph_data.sorted(),
+            current_graph_tips: graph_tips,
+        };
 
         Ok(Document {
-            id,
-            view_id: graph_tips,
+            id: document_id,
             schema,
             author,
             view,
-            operations: sorted_graph_data.sorted(),
+            meta,
         })
     }
 }

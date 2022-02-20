@@ -302,7 +302,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::operation::{Operation, OperationFields, OperationValue};
-    use crate::test_utils::fixtures::{create_operation, hash};
+    use crate::test_utils::fixtures::hash;
 
     use super::{Schema, SchemaBuilder, Type, ValidateOperation};
 
