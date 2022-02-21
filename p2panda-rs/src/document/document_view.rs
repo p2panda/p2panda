@@ -53,7 +53,17 @@ impl DocumentView {
     }
 
     /// Get the id of this document view.
-    pub fn id(&self) -> &DocumentViewId {
+    pub fn id(&self) -> &[Hash] {
+        self.id.view_id()
+    }
+
+    /// Get the id of this document.
+    pub fn document_id(&self) -> &Hash {
+        self.id.document_id()
+    }
+
+    /// Get the document view id.
+    pub fn document_view_id(&self) -> &DocumentViewId {
         &self.id
     }
 

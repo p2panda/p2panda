@@ -252,11 +252,14 @@
 //! # Ok(())
 //! # }
 //! ```
+
 #[allow(clippy::module_inception)]
 mod document;
 mod document_view;
 mod error;
 
-pub use document::{reduce, Document, DocumentBuilder};
+#[allow(unused_imports)]
+use document::{build_graph, reduce};
+pub use document::{Document, DocumentBuilder};
 pub use document_view::{DocumentView, DocumentViewId};
 pub use error::{DocumentBuilderError, DocumentError, DocumentViewError};

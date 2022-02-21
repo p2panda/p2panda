@@ -12,7 +12,7 @@ use super::document_view::DocumentViewId;
 use super::DocumentView;
 
 /// Construct a graph from a list of operations.
-pub fn build_graph(
+pub(super) fn build_graph(
     operations: &[OperationWithMeta],
 ) -> Result<Graph<OperationWithMeta>, DocumentBuilderError> {
     let mut graph = Graph::new();
@@ -39,10 +39,14 @@ pub fn build_graph(
     Ok(graph)
 }
 
+type ViewField = String;
+type IsEdited = bool;
+type IsDeleted = bool;
+
 /// Reduce a list of operations into a single view.
-pub fn reduce<T: AsOperation>(
+pub(super) fn reduce<T: AsOperation>(
     ordered_operations: &[T],
-) -> (BTreeMap<String, OperationValue>, bool, bool) {
+) -> (BTreeMap<ViewField, OperationValue>, IsEdited, IsDeleted) {
     let is_edited = ordered_operations.len() > 1;
     let mut is_deleted = false;
 
@@ -71,7 +75,6 @@ pub fn reduce<T: AsOperation>(
 /// documents you should use `DocumentBuilder`.
 #[derive(Debug, Clone)]
 pub struct Document {
-    id: Hash,
     author: Author,
     schema: Hash,
     view: DocumentView,
@@ -88,7 +91,12 @@ pub struct DocumentMeta {
 impl Document {
     /// Get the document id.
     pub fn id(&self) -> &Hash {
-        &self.id
+        self.view.document_id()
+    }
+
+    /// Get the document view id.
+    pub fn view_id(&self) -> &[Hash] {
+        self.view.id()
     }
 
     /// Get the document author.
@@ -113,7 +121,7 @@ impl Document {
 
     /// Get the documents graph tips (aka view id).
     pub fn current_graph_tips(&self) -> &[Hash] {
-        self.view().id().view_id()
+        self.view.id()
     }
 
     /// Returns true if this document has applied an UPDATE operation.
@@ -211,13 +219,12 @@ impl DocumentBuilder {
         };
 
         // Construct the document view id
-        let document_view_id = DocumentViewId::new(document_id.clone(), graph_tips);
+        let document_view_id = DocumentViewId::new(document_id, graph_tips);
 
         // Construct the document view, from the reduced values and the document view id
         let document_view = DocumentView::new(document_view_id, view);
 
         Ok(Document {
-            id: document_id,
             schema,
             author,
             view: document_view,
@@ -438,11 +445,8 @@ mod tests {
         assert!(!document.is_deleted());
         assert_eq!(document.operations(), &expected_op_order);
         assert_eq!(document.current_graph_tips(), &expected_graph_tip);
-        assert_eq!(document.view().id().document_id(), &panda_entry_1_hash);
-        assert_eq!(
-            document.view().id().view_id(),
-            &[penguin_entry_3_hash.clone()]
-        );
+        assert_eq!(document.id(), &panda_entry_1_hash);
+        assert_eq!(document.view_id(), &[penguin_entry_3_hash.clone()]);
 
         // Multiple replicas receiving operations in different orders should resolve to same value.
 
@@ -473,18 +477,12 @@ mod tests {
 
         assert_eq!(replica_1.view().get("name"), replica_2.view().get("name"));
         assert_eq!(replica_1.view().get("name"), replica_3.view().get("name"));
-        assert_eq!(replica_1.view().id().document_id(), &panda_entry_1_hash);
-        assert_eq!(
-            replica_1.view().id().view_id(),
-            &[penguin_entry_3_hash.clone()]
-        );
-        assert_eq!(replica_2.view().id().document_id(), &panda_entry_1_hash);
-        assert_eq!(
-            replica_2.view().id().view_id(),
-            &[penguin_entry_3_hash.clone()]
-        );
-        assert_eq!(replica_3.view().id().document_id(), &panda_entry_1_hash);
-        assert_eq!(replica_3.view().id().view_id(), &[penguin_entry_3_hash]);
+        assert_eq!(replica_1.id(), &panda_entry_1_hash);
+        assert_eq!(replica_1.view_id(), &[penguin_entry_3_hash.clone()]);
+        assert_eq!(replica_2.id(), &panda_entry_1_hash);
+        assert_eq!(replica_2.view_id(), &[penguin_entry_3_hash.clone()]);
+        assert_eq!(replica_3.id(), &panda_entry_1_hash);
+        assert_eq!(replica_3.view_id(), &[penguin_entry_3_hash]);
     }
 
     #[rstest]
