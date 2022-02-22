@@ -98,7 +98,7 @@ mod tests {
 
     use crate::document::reduce;
     use crate::hash::Hash;
-    use crate::operation::OperationValue;
+    use crate::operation::{OperationValue, Relation};
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, fields, random_hash, schema, update_operation,
     };
@@ -109,14 +109,16 @@ mod tests {
     fn gets_the_right_values(
         schema: Hash,
         #[from(random_hash)] prev_op_hash: Hash,
-        #[from(random_hash)] relation: Hash,
         #[from(random_hash)] document_id: Hash,
+        #[from(random_hash)] relation: Hash,
         #[from(random_hash)] view_id: Hash,
     ) {
         let document_view_id = DocumentViewId {
             document_id,
             view_id: vec![view_id],
         };
+
+        let relation = Relation::new(relation, Vec::new());
 
         let create_operation = create_operation(
             schema.clone(),
