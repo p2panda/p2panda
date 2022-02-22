@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+
 import { marshallRequestFields, marshallResponseFields } from '~/utils';
 import { Fields, FieldsTagged } from '~/types';
 
@@ -8,6 +10,14 @@ const REQUEST: Fields = {
   operation: 'chin chin',
   serious: false,
   temperature: 19.5,
+  address: {
+    document:
+      '0020221e18642f8f9d2ba451e2c4423e370d53e8cc5c6316a6edb4a5821c0c5fc738',
+    document_view: [
+      '0020632d5603b8f2657a00dd315a16b5ce5208e00afa18a0d22dd0381254e8d6c0e1',
+      '0020577aa145b275f54d61c56a0b9dc9efae0730656aee5a3cdb0b981a44927af141',
+    ],
+  },
 };
 
 const RESPONSE: FieldsTagged = new Map();
@@ -32,6 +42,18 @@ RESPONSE.set('temperature', {
   type: 'float',
 });
 
+RESPONSE.set('address', {
+  value: {
+    document:
+      '0020221e18642f8f9d2ba451e2c4423e370d53e8cc5c6316a6edb4a5821c0c5fc738',
+    document_view: [
+      '0020632d5603b8f2657a00dd315a16b5ce5208e00afa18a0d22dd0381254e8d6c0e1',
+      '0020577aa145b275f54d61c56a0b9dc9efae0730656aee5a3cdb0b981a44927af141',
+    ],
+  },
+  type: 'relation',
+});
+
 const LARGE_NUMBER_REQUEST: Fields = {
   largeNumber: BigInt('894328732428428423810'),
 };
@@ -52,6 +74,52 @@ describe('Utils', () => {
       expect(marshallRequestFields(LARGE_NUMBER_REQUEST)).toEqual(
         LARGE_NUMBER_RESPONSE,
       );
+    });
+
+    it('fails when using wrong relation fields', () => {
+      // Missing fields
+      expect(() =>
+        marshallRequestFields({
+          invalid: {
+            // @ts-ignore: We deliberately use the API wrong here
+            wrong_field:
+              '0020577aa145b275f54d61c56a0b9dc9efae0730656aee5a3cdb0b981a44927af141',
+          },
+        }),
+      ).toThrow();
+
+      // Empty array in `document_view` field
+      expect(() =>
+        marshallRequestFields({
+          // @ts-ignore: We deliberately use the API wrong here
+          invalid: {
+            document:
+              '0020577aa145b275f54d61c56a0b9dc9efae0730656aee5a3cdb0b981a44927af141',
+            document_view: [],
+          },
+        }),
+      ).toThrow();
+
+      // Empty array field
+      expect(() =>
+        marshallRequestFields({
+          // @ts-ignore: We deliberately use the API wrong here
+          invalid: [],
+        }),
+      ).toThrow();
+
+      // `document_view` is not an array
+      expect(() =>
+        marshallRequestFields({
+          // @ts-ignore: We deliberately use the API wrong here
+          invalid: {
+            document:
+              '0020577aa145b275f54d61c56a0b9dc9efae0730656aee5a3cdb0b981a44927af141',
+            document_view:
+              '00207887216e0adb13635d90c75678c6ad371a45171828e26e3069efebe5225e89f1',
+          },
+        }),
+      ).toThrow();
     });
   });
 

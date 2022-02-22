@@ -98,11 +98,15 @@
 #[cfg(test)]
 pub mod defaults;
 #[cfg(test)]
-mod param_fixtures;
+mod fixtures;
+#[cfg(test)]
+mod params;
 #[cfg(test)]
 pub mod templates;
 #[cfg(test)]
 mod tests;
 
 #[cfg(test)]
-pub use param_fixtures::*;
+pub use fixtures::*;
+#[cfg(test)]
+pub use params::*;

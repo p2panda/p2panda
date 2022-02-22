@@ -20,7 +20,6 @@ pub fn serialize_to_js<T: Serialize + ?Sized>(value: &T) -> Result<JsValue, Erro
 }
 
 /// Converts JavaScript value (`JsValue`) into Rust type.
-#[allow(dead_code)]
 pub fn deserialize_from_js<T: DeserializeOwned>(value: JsValue) -> Result<T, JsValue> {
     let value = T::deserialize(Deserializer::from(value))?;
     Ok(value)
