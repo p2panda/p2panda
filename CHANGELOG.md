@@ -14,6 +14,7 @@ Highlights are marked with a pancake 🥞
 - `Document` for sorting and reducing a graph of `Operations` [#169](https://github.com/p2panda/p2panda/pull/169) `rs` 🥞
 - Derive `Ord` and `PartialOrd` for `LogId` [#201](https://github.com/p2panda/p2panda/pull/201)
 - Add `proptests` for creating and encoding operations [#188](https://github.com/p2panda/p2panda/pull/188) `rs`
+- `relation` & `relation_list` field type [#205](https://github.com/p2panda/p2panda/pull/205) `rs` `js`
 
 ## Changed
 
@@ -21,11 +22,11 @@ Highlights are marked with a pancake 🥞
 
 ## Fixed
 
-- Fix determination of field types in p2panda-js [#202](https://github.com/p2panda/p2panda/pull/202)
+- Fix determination of field types in p2panda-js [#202](https://github.com/p2panda/p2panda/pull/202) `js`
 
 ## Everything burrito
 
-- Easier to read CDDL schema error strings [#207](https://github.com/p2panda/p2panda/pull/207)
+- Easier to read CDDL schema error strings [#207](https://github.com/p2panda/p2panda/pull/207) `rs`
 
 ## [0.3.0]
 

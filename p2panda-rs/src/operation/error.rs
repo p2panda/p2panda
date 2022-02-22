@@ -21,6 +21,10 @@ pub enum OperationError {
     /// Invalid attempt to create an operation with previous operations data.
     #[error("previous_operations field should be empty")]
     ExistingPreviousOperations,
+
+    /// Invalid hash found.
+    #[error(transparent)]
+    HashError(#[from] crate::hash::HashError),
 }
 
 /// Error types for methods of `OperationFields` struct.

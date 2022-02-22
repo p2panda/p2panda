@@ -13,6 +13,55 @@ use crate::hash::Hash;
 use crate::operation::{OperationEncoded, OperationError, OperationFieldsError};
 use crate::Validate;
 
+/// Field type representing references to other documents.
+///
+/// The "relation" field type references a document id and the historical state which it had at the
+/// point this relation was created.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Relation {
+    /// Document id this relation is referring to.
+    document: Hash,
+
+    /// Reference to the exact version of the document.
+    ///
+    /// This field is `None` when there is no more than one operation (when the document only
+    /// consists of one CREATE operation).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    document_view: Option<Vec<Hash>>,
+}
+
+impl Relation {
+    /// Returns a new relation field type.
+    pub fn new(document: Hash, document_view: Vec<Hash>) -> Self {
+        Self {
+            document,
+            document_view: match document_view.is_empty() {
+                true => None,
+                false => Some(document_view),
+            },
+        }
+    }
+}
+
+impl Validate for Relation {
+    type Error = OperationError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        self.document.validate()?;
+
+        match &self.document_view {
+            Some(view) => {
+                for operation_id in view {
+                    operation_id.validate()?;
+                }
+
+                Ok(())
+            }
+            None => Ok(()),
+        }
+    }
+}
+
 /// Operation format versions to introduce API changes in the future.
 ///
 /// Operations contain the actual data of applications in the p2panda network and will be stored
@@ -99,7 +148,29 @@ pub enum OperationValue {
 
     /// Reference to a document.
     #[serde(rename = "relation")]
-    Relation(Hash),
+    Relation(Relation),
+
+    /// Reference to a list of documents.
+    #[serde(rename = "relation_list")]
+    RelationList(Vec<Relation>),
+}
+
+impl Validate for OperationValue {
+    type Error = OperationError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        match self {
+            Self::Relation(relation) => relation.validate(),
+            Self::RelationList(relations) => {
+                for relation in relations {
+                    relation.validate()?;
+                }
+
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
 }
 
 /// Operation fields are used to store application data. They are implemented as a simple key/value
@@ -200,6 +271,18 @@ impl OperationFields {
     /// Returns an iterator of existing operation fields.
     pub fn iter(&self) -> Iter<String, OperationValue> {
         self.0.iter()
+    }
+}
+
+impl Validate for OperationFields {
+    type Error = OperationError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        for (_, value) in self.iter() {
+            value.validate()?;
+        }
+
+        Ok(())
     }
 }
 
@@ -479,6 +562,11 @@ impl Validate for Operation {
             return Err(OperationError::ExistingPreviousOperations);
         }
 
+        // Validate fields
+        if self.has_fields() {
+            self.fields().unwrap().validate()?;
+        }
+
         Ok(())
     }
 }
@@ -499,6 +587,7 @@ mod tests {
 
     use super::{
         AsOperation, Operation, OperationAction, OperationFields, OperationValue, OperationVersion,
+        Relation,
     };
 
     #[test]
@@ -518,6 +607,27 @@ mod tests {
         assert!(fields
             .update("imagine", OperationValue::Text("Pandaparty".to_owned()))
             .is_err());
+    }
+
+    #[rstest]
+    fn relation_lists(
+        #[from(random_hash)] document_1: Hash,
+        #[from(random_hash)] document_2: Hash,
+        #[from(random_hash)] operation_id_1: Hash,
+        #[from(random_hash)] operation_id_2: Hash,
+        #[from(random_hash)] operation_id_3: Hash,
+    ) {
+        let document_view_1 = vec![operation_id_1, operation_id_2];
+        let document_view_2 = vec![operation_id_3];
+
+        let mut relations: Vec<Relation> = Vec::new();
+        relations.push(Relation::new(document_1, document_view_1));
+        relations.push(Relation::new(document_2, document_view_2));
+
+        let mut fields = OperationFields::new();
+        fields
+            .add("locations", OperationValue::RelationList(relations))
+            .unwrap();
     }
 
     #[rstest]
@@ -594,7 +704,11 @@ mod tests {
     }
 
     #[rstest]
-    fn encode_and_decode(schema: Hash, #[from(random_hash)] prev_op_id: Hash) {
+    fn encode_and_decode(
+        schema: Hash,
+        #[from(random_hash)] prev_op_id: Hash,
+        #[from(random_hash)] document: Hash,
+    ) {
         // Create test operation
         let mut fields = OperationFields::new();
 
@@ -614,7 +728,7 @@ mod tests {
         fields
             .add(
                 "profile_picture",
-                OperationValue::Relation(Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
+                OperationValue::Relation(Relation::new(document, Vec::new())),
             )
             .unwrap();
 
