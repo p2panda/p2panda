@@ -4,8 +4,7 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 
 use crate::document::{DocumentView, DocumentViewId};
-use crate::hash::Hash;
-use crate::operation::OperationValue;
+use crate::operation::{OperationValue, Relation};
 
 use super::SystemSchemaError;
 
@@ -44,8 +43,10 @@ pub struct SchemaView {
     description: String,
     /// The fields in this schema.
     /// TODO: This will be a `relation` when we merge that PR
-    fields: Vec<Hash>,
+    fields: RelationList,
 }
+
+type RelationList = Vec<Relation>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SchemaFieldView {
@@ -77,9 +78,8 @@ impl SchemaView {
     }
 
     /// A list of fields assigned to this schema identified by their document id.
-    pub fn fields(&self) -> &[Hash] {
-        // Unwrap here because fields were validated on construction
-        self.fields.as_slice()
+    pub fn fields(&self) -> &RelationList {
+        &self.fields
     }
 }
 
@@ -133,7 +133,7 @@ impl TryFrom<DocumentView> for SchemaView {
         }?;
 
         let fields = match document_view.get("fields") {
-            Some(OperationValue::Relation(value)) => Ok(value),
+            Some(OperationValue::RelationList(value)) => Ok(value),
             Some(op) => Err(SystemSchemaError::InvalidField(
                 "fields".to_string(),
                 op.to_owned(),
@@ -145,7 +145,7 @@ impl TryFrom<DocumentView> for SchemaView {
             id: document_view.document_view_id().to_owned(),
             name: name.to_string(),
             description: description.to_string(),
-            fields: vec![fields.to_owned()],
+            fields: fields.to_owned(),
         })
     }
 }
@@ -196,7 +196,7 @@ mod tests {
     use crate::{
         document::{DocumentView, DocumentViewId},
         hash::Hash,
-        operation::OperationValue,
+        operation::{OperationValue, Relation},
         schema::system_schema::{FieldType, SchemaFieldView},
         test_utils::fixtures::random_hash,
     };
@@ -211,6 +211,7 @@ mod tests {
         #[from(random_hash)] view_id: Hash,
     ) {
         let document_view_id = DocumentViewId::new(document_id, vec![view_id]);
+        let relation = Relation::new(relation_hash, Vec::new());
 
         let mut bool_field = BTreeMap::new();
         bool_field.insert(
@@ -223,7 +224,7 @@ mod tests {
         );
         bool_field.insert(
             "fields".to_string(),
-            OperationValue::Relation(relation_hash),
+            OperationValue::RelationList(vec![relation]),
         );
 
         let document_view = DocumentView::new(document_view_id, bool_field);
