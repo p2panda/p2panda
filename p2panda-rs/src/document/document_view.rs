@@ -122,16 +122,16 @@ mod tests {
     use rstest::rstest;
 
     use crate::hash::Hash;
-    use crate::operation::{AsOperation, Operation, OperationValue};
+    use crate::operation::{AsOperation, Operation, OperationValue, Relation};
     use crate::schema::{Schema, SchemaHash};
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, fields, schema, update_operation,
+        create_operation, delete_operation, fields, hash, random_hash, schema, update_operation,
     };
 
     use super::DocumentView;
 
     #[rstest]
-    fn basic_methods(schema: SchemaHash) {
+    fn basic_methods(schema: SchemaHash, #[from(random_hash)] document: Hash) {
         let operation = create_operation(
             schema,
             fields(vec![
@@ -141,7 +141,7 @@ mod tests {
                 ("is_admin", OperationValue::Boolean(false)),
                 (
                     "profile_picture",
-                    OperationValue::Relation(Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
+                    OperationValue::Relation(Relation::new(document, Vec::new())),
                 ),
             ]),
         );

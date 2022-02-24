@@ -44,14 +44,30 @@ describe('WebAssembly interface', () => {
       fields.add('temperature', 'int', '32');
       fields.add('isCute', 'bool', true);
       fields.add('degree', 'float', 12.322);
-      fields.add('username', 'relation', TEST_SCHEMA);
+      fields.add('username', 'relation', {
+        document: TEST_SCHEMA,
+      });
+      fields.add('locations', 'relation_list', [
+        {
+          document: TEST_SCHEMA,
+          document_view: [TEST_SCHEMA],
+        },
+      ]);
 
       // Returns the correct fields
       expect(fields.get('description')).toBe('Hello, Panda');
       expect(fields.get('temperature')).toEqual(BigInt(32));
       expect(fields.get('isCute')).toBe(true);
       expect(fields.get('degree')).toBe(12.322);
-      expect(fields.get('username')).toBe(TEST_SCHEMA);
+      expect(fields.get('username')).toEqual({
+        document: TEST_SCHEMA,
+      });
+      expect(fields.get('locations')).toEqual([
+        {
+          document: TEST_SCHEMA,
+          document_view: [TEST_SCHEMA],
+        },
+      ]);
 
       // Return nothing when field does not exist
       expect(fields.get('message')).toBe(null);
@@ -89,9 +105,20 @@ describe('WebAssembly interface', () => {
       );
 
       // Throw when relation is an invalid hash
-      expect(() => fields.add('contact', 'relation', 'test')).toThrow(
-        'invalid hex encoding in hash string',
-      );
+      expect(() =>
+        fields.add('contact', 'relation', {
+          document: 'This is not a hash',
+        }),
+      ).toThrow('invalid hex encoding in hash string');
+
+      expect(() =>
+        fields.add('contact', 'relation_list', [
+          {
+            document: TEST_SCHEMA,
+            document_view: ['This is not a hash'],
+          },
+        ]),
+      ).toThrow('invalid hex encoding in hash string');
     });
 
     it('throws when removing an inexistent field', async () => {

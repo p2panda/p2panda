@@ -15,6 +15,7 @@ pub use error::{
 };
 pub use operation::{
     AsOperation, Operation, OperationAction, OperationFields, OperationValue, OperationVersion,
+    Relation,
 };
 pub use operation_encoded::OperationEncoded;
 pub use operation_meta::OperationWithMeta;

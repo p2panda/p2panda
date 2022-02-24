@@ -13,6 +13,11 @@ pub const OPERATION_SCHEMA: &str = r#"
 
     hash = tstr .regexp "[0-9a-f]{68}"
 
+    relation = {
+        document: hash,
+        ? document_view: [+ hash],
+    }
+
     ; Create operation
     operation-body = (
         action: "create", fields: operation-fields //
@@ -27,7 +32,8 @@ pub const OPERATION_SCHEMA: &str = r#"
             operation-value-integer //
             operation-value-float //
             operation-value-boolean //
-            operation-value-relation
+            operation-value-relation //
+            operation-value-relation-list
         }
     }
 
@@ -54,6 +60,11 @@ pub const OPERATION_SCHEMA: &str = r#"
 
     operation-value-relation = (
         type: "relation",
-        value: hash,
+        value: relation,
+    )
+
+    operation-value-relation-list = (
+        type: "relation_list",
+        value: [* relation],
     )
 "#;

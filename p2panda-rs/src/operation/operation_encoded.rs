@@ -92,11 +92,17 @@ mod tests {
     use std::convert::TryFrom;
 
     use rstest::rstest;
+    use rstest_reuse::apply;
 
     use crate::hash::Hash;
-    use crate::operation::{AsOperation, Operation, OperationValue};
+    use crate::operation::{AsOperation, Operation, OperationValue, Relation};
     use crate::schema::SchemaHash;
-    use crate::test_utils::fixtures::{encoded_create_string, schema};
+    use crate::test_utils::fixtures::templates::version_fixtures;
+    use crate::test_utils::fixtures::{
+        encoded_create_string, fields, operation_encoded_invalid_relation_fields, random_hash,
+        schema, update_operation, Fixture,
+    };
+    use crate::Validate;
 
     use super::OperationEncoded;
 
@@ -113,10 +119,56 @@ mod tests {
     }
 
     #[rstest]
-    fn decode(schema: SchemaHash) {
-        // This is the operation from `operation.rs` encode and decode test
-        let operation_encoded = OperationEncoded::new("a566616374696f6e6675706461746566736368656d61784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e017270726576696f75734f7065726174696f6e738178443030323036306138383934383565366533613632613165353665346263333464666136313063393364393136343436316332343963326661326262393662383538653631666669656c6473a563616765a2647479706563696e746576616c7565181c66686569676874a2647479706565666c6f61746576616c7565f943006869735f61646d696ea2647479706564626f6f6c6576616c7565f46f70726f66696c655f70696374757265a264747970656872656c6174696f6e6576616c75657844303032306231373765633162663236646662336237303130643437336536643434373133623239623736356239396336653630656362666165373432646534393635343368757365726e616d65a26474797065637374726576616c75656462756275").unwrap();
+    fn decode_invalid_relation_fields(operation_encoded_invalid_relation_fields: OperationEncoded) {
+        let operation = Operation::try_from(&operation_encoded_invalid_relation_fields).unwrap();
+        assert!(operation.validate().is_err());
+    }
 
+    #[apply(version_fixtures)]
+    fn decode(#[case] fixture: Fixture) {
+        let operation = Operation::try_from(&fixture.operation_encoded).unwrap();
+        assert!(operation.validate().is_ok());
+        assert!(operation.is_create());
+
+        let fields = operation.fields().unwrap();
+        assert_eq!(
+            fields.get("name").unwrap(),
+            &OperationValue::Text("chess".to_owned())
+        );
+        assert_eq!(
+            fields.get("description").unwrap(),
+            &OperationValue::Text("for playing chess".to_owned())
+        );
+    }
+
+    #[rstest]
+    fn encode_decode_all_field_types(
+        schema: SchemaHash,
+        #[from(random_hash)] picture_document: Hash,
+        #[from(random_hash)] friend_document_1: Hash,
+        #[from(random_hash)] friend_document_2: Hash,
+        #[from(random_hash)] friend_operation_id: Hash,
+        #[with(
+            // Schema hash
+            schema.clone(),
+            // Previous operations
+            vec![random_hash()],
+            // Operation fields
+            fields(vec![
+              ("username", OperationValue::Text("bubu".to_owned())),
+              ("age", OperationValue::Integer(28)),
+              ("height", OperationValue::Float(3.5)),
+              ("is_admin", OperationValue::Boolean(false)),
+              ("profile_picture", OperationValue::Relation(Relation::new(picture_document.clone(), Vec::new()))),
+              ("my_friends", OperationValue::RelationList(vec![
+                  Relation::new(friend_document_1.clone(), vec![friend_operation_id.clone()]),
+                  Relation::new(friend_document_2.clone(), Vec::new()),
+              ])),
+            ])
+        )]
+        update_operation: Operation,
+    ) {
+        let operation_encoded = OperationEncoded::try_from(&update_operation).unwrap();
         let operation = Operation::try_from(&operation_encoded).unwrap();
 
         assert!(operation.is_update());
@@ -136,7 +188,14 @@ mod tests {
         );
         assert_eq!(
             fields.get("profile_picture").unwrap(),
-            &OperationValue::Relation(Hash::new_from_bytes(vec![1, 2, 3]).unwrap())
+            &OperationValue::Relation(Relation::new(picture_document, Vec::new()))
+        );
+        assert_eq!(
+            fields.get("my_friends").unwrap(),
+            &OperationValue::RelationList(vec![
+                Relation::new(friend_document_1, vec![friend_operation_id]),
+                Relation::new(friend_document_2, vec![])
+            ])
         );
     }
 }
