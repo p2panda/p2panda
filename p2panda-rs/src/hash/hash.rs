@@ -116,7 +116,7 @@ impl Validate for Hash {
 
     fn validate(&self) -> Result<(), Self::Error> {
         // Check if hash is a hex string
-        match hex::decode(self.0.to_owned()) {
+        match hex::decode(&self.0) {
             Ok(bytes) => {
                 // Check if length is correct
                 if bytes.len() != HASH_SIZE + 2 {

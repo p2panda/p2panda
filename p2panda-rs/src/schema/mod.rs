@@ -34,7 +34,7 @@ pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaEr
                         // format macro.
                         //
                         // See: https://github.com/anweiss/cddl/blob/main/src/validator/cbor.rs#L100
-                        .replace("\"", "'")
+                        .replace('"', "'")
                 })
                 .collect::<Vec<String>>();
 
