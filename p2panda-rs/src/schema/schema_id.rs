@@ -26,12 +26,8 @@ impl SchemaId {
     /// Instantiate a new SchemaId from a hash string.
     pub fn new(hash: &str) -> Result<Self, SchemaIdError> {
         match hash {
-            "00000000000000000000000000000000000000000000000000000000000000000001" => {
-                Ok(SchemaId::Schema)
-            }
-            "00000000000000000000000000000000000000000000000000000000000000000002" => {
-                Ok(SchemaId::SchemaField)
-            }
+            "SCHEMA_V1" => Ok(SchemaId::Schema),
+            "SCHEMA_FIELD_V1" => Ok(SchemaId::SchemaField),
             string => {
                 let hash = Hash::new(string)?;
                 Ok(SchemaId::Application(hash))
@@ -44,12 +40,8 @@ impl SchemaId {
     fn as_str(&self) -> &str {
         match self {
             SchemaId::Application(hash) => hash.as_str(),
-            SchemaId::Schema => {
-                "00000000000000000000000000000000000000000000000000000000000000000001"
-            }
-            SchemaId::SchemaField => {
-                "00000000000000000000000000000000000000000000000000000000000000000002"
-            }
+            SchemaId::Schema => "SCHEMA_V1",
+            SchemaId::SchemaField => "SCHEMA_FIELD_V1",
         }
     }
 }
@@ -77,12 +69,8 @@ impl Serialize for SchemaId {
     {
         serializer.serialize_str(match &*self {
             SchemaId::Application(hash) => hash.as_str(),
-            SchemaId::Schema => {
-                "00000000000000000000000000000000000000000000000000000000000000000001"
-            }
-            SchemaId::SchemaField => {
-                "00000000000000000000000000000000000000000000000000000000000000000002"
-            }
+            SchemaId::Schema => "SCHEMA_V1",
+            SchemaId::SchemaField => "SCHEMA_FIELD_V1",
         })
     }
 }
@@ -95,12 +83,8 @@ impl<'de> Deserialize<'de> for SchemaId {
         let s = String::deserialize(deserializer)?;
 
         match s.as_str() {
-            "00000000000000000000000000000000000000000000000000000000000000000001" => {
-                Ok(SchemaId::Schema)
-            }
-            "00000000000000000000000000000000000000000000000000000000000000000002" => {
-                Ok(SchemaId::SchemaField)
-            }
+            "SCHEMA_V1" => Ok(SchemaId::Schema),
+            "SCHEMA_FIELD_V1" => Ok(SchemaId::SchemaField),
             _ => match Hash::new(s.as_str()) {
                 Ok(hash) => Ok(SchemaId::Application(hash)),
                 Err(e) => Err(SchemaIdError::HashError(e)).map_err(Error::custom),
@@ -123,14 +107,11 @@ mod test {
             "\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\""
         );
         let schema = SchemaId::Schema;
-        assert_eq!(
-            serde_json::to_string(&schema).unwrap(),
-            "\"00000000000000000000000000000000000000000000000000000000000000000001\""
-        );
+        assert_eq!(serde_json::to_string(&schema).unwrap(), "\"SCHEMA_V1\"");
         let schema_field = SchemaId::SchemaField;
         assert_eq!(
             serde_json::to_string(&schema_field).unwrap(),
-            "\"00000000000000000000000000000000000000000000000000000000000000000002\""
+            "\"SCHEMA_FIELD_V1\""
         );
     }
 
@@ -146,18 +127,12 @@ mod test {
         );
         let schema = SchemaId::Schema;
         assert_eq!(
-            serde_json::from_str::<SchemaId>(
-                "\"00000000000000000000000000000000000000000000000000000000000000000001\""
-            )
-            .unwrap(),
+            serde_json::from_str::<SchemaId>("\"SCHEMA_V1\"").unwrap(),
             schema
         );
         let schema_field = SchemaId::SchemaField;
         assert_eq!(
-            serde_json::from_str::<SchemaId>(
-                "\"00000000000000000000000000000000000000000000000000000000000000000002\""
-            )
-            .unwrap(),
+            serde_json::from_str::<SchemaId>("\"SCHEMA_FIELD_V1\"").unwrap(),
             schema_field
         );
     }
@@ -175,23 +150,16 @@ mod test {
             )
         );
 
-        let schema =
-            SchemaId::new("00000000000000000000000000000000000000000000000000000000000000000001")
-                .unwrap();
+        let schema = SchemaId::new("SCHEMA_V1").unwrap();
         assert_eq!(schema, SchemaId::Schema);
 
-        let schema_field =
-            SchemaId::new("00000000000000000000000000000000000000000000000000000000000000000002")
-                .unwrap();
+        let schema_field = SchemaId::new("SCHEMA_FIELD_V1").unwrap();
         assert_eq!(schema_field, SchemaId::SchemaField);
     }
 
     #[test]
     fn parse_schema_type() {
-        let schema: SchemaId =
-            "00000000000000000000000000000000000000000000000000000000000000000001"
-                .parse()
-                .unwrap();
+        let schema: SchemaId = "SCHEMA_V1".parse().unwrap();
         assert_eq!(schema, SchemaId::Schema);
     }
 }
