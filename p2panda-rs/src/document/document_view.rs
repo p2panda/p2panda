@@ -35,6 +35,8 @@ impl DocumentViewId {
     }
 }
 
+type FieldKey = String;
+
 /// The materialised view of a `Document`. It's fields match the documents schema definition.
 ///
 /// `DocumentViews` can be instantiated from a CREATE operation and then mutated with UPDATE
@@ -42,10 +44,8 @@ impl DocumentViewId {
 #[derive(Debug, PartialEq, Clone)]
 pub struct DocumentView {
     pub(crate) id: DocumentViewId,
-    pub(crate) view: BTreeMap<String, OperationValue>,
+    pub(crate) view: BTreeMap<FieldKey, OperationValue>,
 }
-
-type FieldKey = String;
 
 impl DocumentView {
     /// Construct a document view.
@@ -78,7 +78,7 @@ impl DocumentView {
 
     /// Returns a vector containing the keys of this instance.
     pub fn keys(&self) -> Vec<String> {
-        self.view.clone().into_keys().collect::<Vec<String>>()
+        self.view.clone().into_keys().collect::<Vec<FieldKey>>()
     }
 
     /// Returns an iterator of existing instance fields.
