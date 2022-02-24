@@ -2,14 +2,11 @@
 
 use std::collections::BTreeMap;
 
-use crate::document::DocumentBuilderError;
+use crate::document::{document_view::DocumentViewId, DocumentBuilderError, DocumentView};
 use crate::graph::Graph;
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{AsOperation, OperationValue, OperationWithMeta};
-
-use super::document_view::DocumentViewId;
-use super::DocumentView;
 
 /// Construct a graph from a list of operations.
 pub(super) fn build_graph(
@@ -39,14 +36,14 @@ pub(super) fn build_graph(
     Ok(graph)
 }
 
-type ViewField = String;
+type FieldKey = String;
 type IsEdited = bool;
 type IsDeleted = bool;
 
 /// Reduce a list of operations into a single view.
 pub(super) fn reduce<T: AsOperation>(
     ordered_operations: &[T],
-) -> (BTreeMap<ViewField, OperationValue>, IsEdited, IsDeleted) {
+) -> (BTreeMap<FieldKey, OperationValue>, IsEdited, IsDeleted) {
     let is_edited = ordered_operations.len() > 1;
     let mut is_deleted = false;
 

@@ -35,14 +35,16 @@ impl FromStr for FieldType {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SchemaView {
-    // ID of this schema view.
+    /// ID of this schema view.
     id: DocumentViewId,
+
     /// Name of this schema.
     name: String,
+
     /// Description of this schema.
     description: String,
+
     /// The fields in this schema.
-    /// TODO: This will be a `relation` when we merge that PR
     fields: RelationList,
 }
 
@@ -52,21 +54,24 @@ type RelationList = Vec<Relation>;
 pub struct SchemaFieldView {
     // ID of this schema field view.
     id: DocumentViewId,
+
     /// Name of this schema field.
     name: String,
+
     /// Type of this schema field.
     field_type: FieldType,
 }
 
 /// View onto materialised schema which has fields "name", "description" and "fields".
-/// Is validated on being converted from a general DocumentView struct which means so it's inner
-/// values can be returned unwrapped by their getter methods.
+///
+/// The fields are validated when converting a DocumentView struct into this type.
 #[allow(dead_code)] // These methods aren't used yet...
 impl SchemaView {
     /// The id of this schema view.
     pub fn id(&self) -> &DocumentViewId {
         &self.id
     }
+
     /// The name of this schema.
     pub fn name(&self) -> &str {
         &self.name
@@ -84,8 +89,8 @@ impl SchemaView {
 }
 
 /// View onto materialised schema field which has fields "name" and "type".
-/// Is validated on being converted from a general DocumentView struct which means so it's inner
-/// values can be returned unwrapped by their getter methods.
+///
+/// The fields are validated when converting a DocumentView struct into this type.
 #[allow(dead_code)] // These methods aren't used yet...
 impl SchemaFieldView {
     /// The id of this schema view.
@@ -193,6 +198,8 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 mod tests {
     use std::{collections::BTreeMap, convert::TryFrom};
 
+    use rstest::rstest;
+
     use crate::{
         document::{DocumentView, DocumentViewId},
         hash::Hash,
@@ -200,7 +207,6 @@ mod tests {
         schema::system_schema::{FieldType, SchemaFieldView},
         test_utils::fixtures::random_hash,
     };
-    use rstest::rstest;
 
     use super::SchemaView;
 

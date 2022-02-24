@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.view-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Types and methods for deriving and maintaining materialised documents.
 use std::collections::btree_map::Iter as BTreeMapIter;
@@ -45,10 +45,14 @@ pub struct DocumentView {
     pub(crate) view: BTreeMap<String, OperationValue>,
 }
 
+type FieldKey = String;
+
 impl DocumentView {
-    /// Create a new document id from. Requires the DocumentViewId and field values
-    /// to be calculated seperately and then passed in.
-    pub fn new(id: DocumentViewId, view: BTreeMap<String, OperationValue>) -> Self {
+    /// Construct a document view.
+    ///
+    /// Requires the DocumentViewId and field values to be calculated seperately and then passed in
+    /// during construction.
+    pub fn new(id: DocumentViewId, view: BTreeMap<FieldKey, OperationValue>) -> Self {
         Self { id, view }
     }
 
@@ -78,7 +82,7 @@ impl DocumentView {
     }
 
     /// Returns an iterator of existing instance fields.
-    pub fn iter(&self) -> BTreeMapIter<String, OperationValue> {
+    pub fn iter(&self) -> BTreeMapIter<FieldKey, OperationValue> {
         self.view.iter()
     }
 
