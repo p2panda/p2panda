@@ -332,7 +332,6 @@ impl Validate for OperationFields {
 ///     A --- B --- C --- D --- E;
 /// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Operation {
     /// Describes if this operation creates, updates or deletes data.
     action: OperationAction,

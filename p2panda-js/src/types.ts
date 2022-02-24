@@ -47,7 +47,7 @@ export type Entry = {
 export type Operation = {
   action: 'create' | 'update' | 'delete';
   schema: string;
-  previousOperations?: string[];
+  previous_operations?: string[];
   fields?: Fields;
   id?: string;
 };
@@ -81,7 +81,7 @@ export type EntryTagged = {
  */
 export type OperationTagged = {
   action: 'create' | 'update' | 'delete';
-  previousOperations?: string[];
+  previous_operations?: string[];
   schema: string;
   fields: FieldsTagged;
 };

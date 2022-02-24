@@ -66,7 +66,7 @@ describe('document', () => {
       const id = documentIdFixture();
 
       const previousOperations = entryFixture(2).operation
-        ?.previousOperations as string[];
+        ?.previous_operations as string[];
 
       const entryEncoded = await updateDocument(
         id,
@@ -100,7 +100,7 @@ describe('document', () => {
       const id = documentIdFixture();
 
       const previousOperations = entryFixture(4).operation
-        ?.previousOperations as string[];
+        ?.previous_operations as string[];
 
       const entryEncoded = await deleteDocument(id, previousOperations, {
         keyPair,
