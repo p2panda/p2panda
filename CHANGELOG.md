@@ -12,7 +12,7 @@ Highlights are marked with a pancake 🥞
 ## Added
 
 - `Document` for sorting and reducing a graph of `Operations` [#169](https://github.com/p2panda/p2panda/pull/169) `rs` 🥞
-- `SchemaHash` enum for identifying different schema types [#221](https://github.com/p2panda/p2panda/pull/221) `rs`
+- `SchemaId` enum for identifying different schema types [#221](https://github.com/p2panda/p2panda/pull/221) `rs`
 - Derive `Ord` and `PartialOrd` for `LogId` [#201](https://github.com/p2panda/p2panda/pull/201) `rs`
 - `relation` & `relation_list` field type [#205](https://github.com/p2panda/p2panda/pull/205) `rs` `js`
 
