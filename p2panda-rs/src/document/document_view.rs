@@ -125,7 +125,7 @@ mod tests {
     use crate::operation::{AsOperation, Operation, OperationValue, Relation};
     use crate::schema::{Schema, SchemaHash};
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, fields, hash, random_hash, schema, update_operation,
+        create_operation, delete_operation, fields, random_hash, schema, update_operation,
     };
 
     use super::DocumentView;
