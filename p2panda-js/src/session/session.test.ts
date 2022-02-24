@@ -214,7 +214,7 @@ describe('Session', () => {
 
     // These are the previous operations
     const previousOperations = entryFixture(2).operation
-      ?.previousOperations as string[];
+      ?.previous_operations as string[];
 
     beforeEach(async () => {
       session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
@@ -261,7 +261,7 @@ describe('Session', () => {
 
     // These are the previous operations
     const previousOperations = entryFixture(2).operation
-      ?.previousOperations as string[];
+      ?.previous_operations as string[];
 
     beforeEach(async () => {
       session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);

@@ -18,6 +18,7 @@ Highlights are marked with a pancake 🥞
 ## Changed
 
 - `Instance` renamed to `DocumentView` [#169](https://github.com/p2panda/p2panda/pull/169) `rs`
+- Fix letter casing in operations [#230](https://github.com/p2panda/p2panda/pull/230) `rs` `js`
 
 ## Fixed
 

@@ -44,8 +44,8 @@ export const materializeEntries = (
     while (true) {
       // Find the next entry by matching previousEntries against the instance's last_operation.
       const nextEntry = entries.find((entry) => {
-        if (entry.operation && entry.operation.previousOperations) {
-          return entry.operation.previousOperations.includes(
+        if (entry.operation && entry.operation.previous_operations) {
+          return entry.operation.previous_operations.includes(
             instances[instanceId]._meta.last_operation,
           );
         }
