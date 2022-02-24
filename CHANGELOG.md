@@ -27,6 +27,7 @@ Highlights are marked with a pancake 🥞
 ## Everything burrito
 
 - Easier to read CDDL schema error strings [#207](https://github.com/p2panda/p2panda/pull/207) `rs`
+- Force cache cleanup to fix code coverage report [#231](https://github.com/p2panda/p2panda/pull/231)
 
 ## [0.3.0]
 
