@@ -9,7 +9,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::hash::Hash;
 use crate::operation::{OperationEncoded, OperationError, OperationFieldsError};
-use crate::schema::SchemaHash;
+use crate::schema::SchemaId;
 use crate::Validate;
 
 /// Field type representing references to other documents.
@@ -339,7 +339,7 @@ pub struct Operation {
     action: OperationAction,
 
     /// Hash of schema describing format of operation fields.
-    schema: SchemaHash,
+    schema: SchemaId,
 
     /// Version schema of this operation.
     version: OperationVersion,
@@ -364,9 +364,9 @@ impl Operation {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use p2panda_rs::hash::Hash;
     /// use p2panda_rs::operation::{AsOperation, Operation, OperationFields, OperationValue};
-    /// use p2panda_rs::schema::SchemaHash;
+    /// use p2panda_rs::schema::SchemaId;
     ///
-    /// let msg_schema = SchemaHash::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
+    /// let msg_schema = SchemaId::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
     /// let mut msg_fields = OperationFields::new();
     ///
     /// msg_fields
@@ -383,7 +383,7 @@ impl Operation {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new_create(schema: SchemaHash, fields: OperationFields) -> Result<Self, OperationError> {
+    pub fn new_create(schema: SchemaId, fields: OperationFields) -> Result<Self, OperationError> {
         let operation = Self {
             action: OperationAction::Create,
             version: OperationVersion::Default,
@@ -399,7 +399,7 @@ impl Operation {
 
     /// Returns new UPDATE operation.
     pub fn new_update(
-        schema: SchemaHash,
+        schema: SchemaId,
         previous_operations: Vec<Hash>,
         fields: OperationFields,
     ) -> Result<Self, OperationError> {
@@ -418,7 +418,7 @@ impl Operation {
 
     /// Returns new DELETE operation.
     pub fn new_delete(
-        schema: SchemaHash,
+        schema: SchemaId,
         previous_operations: Vec<Hash>,
     ) -> Result<Self, OperationError> {
         let operation = Self {
@@ -449,7 +449,7 @@ pub trait AsOperation {
     fn action(&self) -> OperationAction;
 
     /// Returns schema of operation.
-    fn schema(&self) -> SchemaHash;
+    fn schema(&self) -> SchemaId;
 
     /// Returns version of operation.
     fn version(&self) -> OperationVersion;
@@ -498,7 +498,7 @@ impl AsOperation for Operation {
     }
 
     /// Returns schema of operation.
-    fn schema(&self) -> SchemaHash {
+    fn schema(&self) -> SchemaId {
         self.schema.to_owned()
     }
 
@@ -577,7 +577,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::operation::OperationEncoded;
-    use crate::schema::SchemaHash;
+    use crate::schema::SchemaId;
     use crate::test_utils::fixtures::templates::many_valid_operations;
     use crate::test_utils::fixtures::{fields, random_hash, schema};
     use crate::Validate;
@@ -631,7 +631,7 @@ mod tests {
     #[rstest]
     fn operation_validation(
         fields: OperationFields,
-        schema: SchemaHash,
+        schema: SchemaId,
         #[from(random_hash)] prev_op_id: Hash,
     ) {
         let invalid_create_operation_1 = Operation {
@@ -703,7 +703,7 @@ mod tests {
 
     #[rstest]
     fn encode_and_decode(
-        schema: SchemaHash,
+        schema: SchemaId,
         #[from(random_hash)] prev_op_id: Hash,
         #[from(random_hash)] document: Hash,
     ) {
@@ -744,7 +744,7 @@ mod tests {
     }
 
     #[rstest]
-    fn field_ordering(schema: SchemaHash) {
+    fn field_ordering(schema: SchemaId) {
         // Create first test operation
         let mut fields = OperationFields::new();
         fields

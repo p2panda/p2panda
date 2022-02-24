@@ -9,7 +9,7 @@
 //!
 //! ```
 //! use p2panda_rs::operation::OperationValue;
-//! use p2panda_rs::schema::SchemaHash;
+//! use p2panda_rs::schema::SchemaId;
 //! use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 //! use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 //! use p2panda_rs::test_utils::utils::{
@@ -517,7 +517,7 @@ mod tests {
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::operation::OperationValue;
-    use crate::schema::SchemaHash;
+    use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{private_key, schema};
     use crate::test_utils::mocks::client::Client;
     use crate::test_utils::utils::{
@@ -527,7 +527,7 @@ mod tests {
     use super::{send_to_node, Node};
 
     #[rstest]
-    fn publishing_entries(schema: SchemaHash, private_key: String) {
+    fn publishing_entries(schema: SchemaId, private_key: String) {
         let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
         let mut node = Node::new();
 
@@ -752,7 +752,7 @@ mod tests {
     }
 
     #[rstest]
-    fn next_entry_args_at_specific_seq_num(schema: SchemaHash, private_key: String) {
+    fn next_entry_args_at_specific_seq_num(schema: SchemaId, private_key: String) {
         let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
         let mut node = Node::new();
 
@@ -809,7 +809,7 @@ mod tests {
     }
 
     #[rstest]
-    fn concurrent_updates(schema: SchemaHash, private_key: String) {
+    fn concurrent_updates(schema: SchemaId, private_key: String) {
         let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
         let penguin = Client::new(
             "penguin".to_string(),

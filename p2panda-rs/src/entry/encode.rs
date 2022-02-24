@@ -20,17 +20,16 @@ use crate::operation::OperationEncoded;
 /// # extern crate p2panda_rs;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use p2panda_rs::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
-/// use p2panda_rs::hash::Hash;
 /// use p2panda_rs::identity::KeyPair;
 /// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
-/// use p2panda_rs::schema::SchemaHash;
+/// use p2panda_rs::schema::SchemaId;
 ///
 /// // Generate Ed25519 key pair to sign entry with
 /// let key_pair = KeyPair::new();
 ///
 /// // Create operation
 /// let schema_hash =
-///     SchemaHash::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
+///     SchemaId::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
 /// let mut fields = OperationFields::new();
 /// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
 /// let operation = Operation::new_create(schema_hash, fields)?;

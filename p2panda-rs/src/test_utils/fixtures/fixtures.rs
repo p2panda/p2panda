@@ -6,7 +6,7 @@ use rstest::fixture;
 use crate::entry::{Entry, EntrySigned};
 use crate::identity::KeyPair;
 use crate::operation::{OperationEncoded, OperationValue};
-use crate::schema::SchemaHash;
+use crate::schema::SchemaId;
 use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
 use crate::test_utils::fixtures::{create_operation, entry, seq_num};
 use crate::test_utils::utils;
@@ -31,7 +31,7 @@ pub fn v0_3_0_fixture() -> Fixture {
         ),
     ]);
     let operation = create_operation(
-        SchemaHash::new(DEFAULT_SCHEMA_HASH).unwrap(),
+        SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
         operation_fields,
     );
     let key_pair = utils::keypair_from_private(

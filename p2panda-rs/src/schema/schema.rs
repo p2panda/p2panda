@@ -19,7 +19,7 @@ use crate::hash::Hash;
 use crate::operation::{AsOperation, Operation, OperationFields, OperationValue};
 use crate::schema::SchemaError;
 
-use super::SchemaHash;
+use super::SchemaId;
 
 /// CDDL types.
 #[derive(Clone, Debug, Copy)]
@@ -115,7 +115,7 @@ pub struct SchemaBuilder {
 /// following the defined schema.
 #[derive(Clone, Debug)]
 pub struct Schema {
-    schema: SchemaHash,
+    schema: SchemaId,
     schema_string: String,
 }
 
@@ -175,7 +175,7 @@ impl fmt::Display for SchemaBuilder {
 
 impl Schema {
     /// Create a new Schema from a schema hash and schema CDDL string.
-    pub fn new(schema: &SchemaHash, schema_str: &str) -> Result<Self, SchemaError> {
+    pub fn new(schema: &SchemaId, schema_str: &str) -> Result<Self, SchemaError> {
         let mut lexer = Lexer::new(schema_str);
         let parser = Parser::new(lexer.iter(), schema_str);
 
@@ -194,7 +194,7 @@ impl Schema {
     }
 
     /// Return the hash id of this schema.
-    pub fn schema(&self) -> SchemaHash {
+    pub fn schema(&self) -> SchemaId {
         self.schema.clone()
     }
 
@@ -317,7 +317,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::operation::{Operation, OperationFields, OperationValue};
-    use crate::schema::SchemaHash;
+    use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{create_operation, schema};
 
     use super::{Schema, SchemaBuilder, Type, ValidateOperation};
@@ -373,7 +373,7 @@ mod tests {
     }
 
     #[rstest]
-    pub fn schema_from_string(schema: SchemaHash) {
+    pub fn schema_from_string(schema: SchemaId) {
         // Create a new "person" operation
         let mut me = OperationFields::new();
         me.add("name", OperationValue::Text("Sam".to_owned()))
@@ -393,7 +393,7 @@ mod tests {
     }
 
     #[rstest]
-    pub fn validate_against_megaschema(schema: SchemaHash) {
+    pub fn validate_against_megaschema(schema: SchemaId) {
         // Instantiate global application schema from mega schema string and it's hash
         let application_schema = Schema::new(&schema, &APPLICATION_SCHEMA.to_string()).unwrap();
 
@@ -434,7 +434,7 @@ mod tests {
     }
 
     #[rstest]
-    pub fn test_create_operation(schema: SchemaHash) {
+    pub fn test_create_operation(schema: SchemaId) {
         let person_schema = Schema::new(&schema, &PERSON_SCHEMA.to_string()).unwrap();
 
         // Create an operation the long way without validation
@@ -460,7 +460,7 @@ mod tests {
     }
 
     #[rstest]
-    pub fn test_update_operation(schema: SchemaHash) {
+    pub fn test_update_operation(schema: SchemaId) {
         let person_schema = Schema::new(&schema, &PERSON_SCHEMA.to_string()).unwrap();
 
         // Create a operation the long way without validation
@@ -494,7 +494,7 @@ mod tests {
     }
 
     #[rstest]
-    pub fn create_validate_instance(schema: SchemaHash, create_operation: Operation) {
+    pub fn create_validate_instance(schema: SchemaId, create_operation: Operation) {
         // Instantiate "person" schema from cddl string
         let chat_schema_defnition = "chat = { (
                     message: { type: \"str\", value: tstr }
