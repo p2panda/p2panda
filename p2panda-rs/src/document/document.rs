@@ -1,12 +1,68 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
+use std::collections::BTreeMap;
 
-use crate::document::{DocumentBuilderError, DocumentView};
+use crate::document::{document_view::DocumentViewId, DocumentBuilderError, DocumentView};
 use crate::graph::Graph;
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{AsOperation, OperationWithMeta};
+use crate::operation::{AsOperation, OperationValue, OperationWithMeta};
+
+/// Construct a graph from a list of operations.
+pub(super) fn build_graph(
+    operations: &[OperationWithMeta],
+) -> Result<Graph<OperationWithMeta>, DocumentBuilderError> {
+    let mut graph = Graph::new();
+
+    // Add all operations to the graph.
+    for operation in operations {
+        graph.add_node(operation.operation_id().as_str(), operation.clone());
+    }
+
+    // Add links between operations in the graph.
+    for operation in operations {
+        if let Some(previous_operations) = operation.previous_operations() {
+            for previous in previous_operations {
+                let success = graph.add_link(previous.as_str(), operation.operation_id().as_str());
+                if !success {
+                    return Err(DocumentBuilderError::InvalidOperationLink(
+                        operation.operation_id().as_str().into(),
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok(graph)
+}
+
+type FieldKey = String;
+type IsEdited = bool;
+type IsDeleted = bool;
+
+/// Reduce a list of operations into a single view.
+pub(super) fn reduce<T: AsOperation>(
+    ordered_operations: &[T],
+) -> (BTreeMap<FieldKey, OperationValue>, IsEdited, IsDeleted) {
+    let is_edited = ordered_operations.len() > 1;
+    let mut is_deleted = false;
+
+    let mut view = BTreeMap::new();
+
+    for operation in ordered_operations {
+        if operation.is_delete() {
+            is_deleted = true
+        }
+
+        if let Some(fields) = operation.fields() {
+            for (key, value) in fields.iter() {
+                view.insert(key.to_string(), value.to_owned());
+            }
+        }
+    }
+
+    (view, is_edited, is_deleted)
+}
 
 /// A replicatable data type designed to handle concurrent updates in a way where all replicas
 /// eventually resolve to the same deterministic value.
@@ -16,7 +72,6 @@ use crate::operation::{AsOperation, OperationWithMeta};
 /// documents you should use `DocumentBuilder`.
 #[derive(Debug, Clone)]
 pub struct Document {
-    id: Hash,
     author: Author,
     schema: Hash,
     view: DocumentView,
@@ -28,74 +83,17 @@ pub struct DocumentMeta {
     deleted: bool,
     edited: bool,
     operations: Vec<OperationWithMeta>,
-    current_graph_tips: Vec<Hash>,
-}
-
-impl Document {
-    /// Static method for resolving this document into a single view.
-    fn resolve_view(
-        operations: &[OperationWithMeta],
-        meta: &mut DocumentMeta,
-    ) -> Result<DocumentView, DocumentBuilderError> {
-        // Instantiate graph and operations map.
-        let mut graph = Graph::new();
-
-        if operations.len() > 1 {
-            meta.edited = true
-        }
-
-        // Add all operations to the graph.
-        for operation in operations {
-            graph.add_node(operation.operation_id().as_str(), operation.clone());
-            if operation.is_delete() {
-                meta.deleted = true
-            }
-        }
-
-        // Add links between operations in the graph.
-        for operation in operations {
-            if let Some(previous_operations) = operation.previous_operations() {
-                for previous in previous_operations {
-                    let success =
-                        graph.add_link(previous.as_str(), operation.operation_id().as_str());
-                    if !success {
-                        return Err(DocumentBuilderError::InvalidOperationLink(
-                            operation.operation_id().as_str().into(),
-                        ));
-                    }
-                }
-            }
-        }
-
-        // Traverse the graph topologically and return an ordered list of operations.
-        let sorted_graph_data = graph.sort()?;
-
-        // Instantiate an initial document view from the documents create operation.
-        //
-        // We can unwrap here because we already verified the operations during the document building
-        // which means we know there is at least one CREATE operation.
-        let mut operations_iter = sorted_graph_data.sorted().into_iter();
-        let mut document_view = DocumentView::try_from(operations_iter.next().unwrap())?;
-
-        // Apply every update in order to arrive at the current view.
-        operations_iter.try_for_each(|op| document_view.apply_update(op))?;
-
-        // Populate document meta data fields.
-        meta.operations = sorted_graph_data.sorted();
-        meta.current_graph_tips = sorted_graph_data
-            .current_graph_tips()
-            .iter()
-            .map(|operation| operation.operation_id().to_owned())
-            .collect();
-
-        Ok(document_view)
-    }
 }
 
 impl Document {
     /// Get the document id.
     pub fn id(&self) -> &Hash {
-        &self.id
+        self.view.document_id()
+    }
+
+    /// Get the document view id.
+    pub fn view_id(&self) -> &[Hash] {
+        self.view.id()
     }
 
     /// Get the document author.
@@ -118,9 +116,9 @@ impl Document {
         &self.meta.operations
     }
 
-    /// Get the documents graph tips.
-    pub fn current_graph_tips(&self) -> &Vec<Hash> {
-        &self.meta.current_graph_tips
+    /// Get the documents graph tips (aka view id).
+    pub fn current_graph_tips(&self) -> &[Hash] {
+        self.view.id()
     }
 
     /// Returns true if this document has applied an UPDATE operation.
@@ -194,28 +192,44 @@ impl DocumentBuilder {
             return Err(DocumentBuilderError::OperationSchemaNotMatching);
         }
 
-        let id = create_operation.operation_id().to_owned();
+        let document_id = create_operation.operation_id().to_owned();
 
-        let mut meta = DocumentMeta {
-            operations: self.operations(),
-            ..Default::default()
+        // Build the graph  and then sort the operations into a linear order
+        let graph = build_graph(&self.operations)?;
+        let sorted_graph_data = graph.sort()?;
+
+        // These are the current graph tips, to be added to the document view id
+        let graph_tips: Vec<Hash> = sorted_graph_data
+            .current_graph_tips()
+            .iter()
+            .map(|operation| operation.operation_id().to_owned())
+            .collect();
+
+        // Reduce the sorted operations into a single key value map
+        let (view, is_edited, is_deleted) = reduce(&sorted_graph_data.sorted()[..]);
+
+        // Construct document meta data
+        let meta = DocumentMeta {
+            edited: is_edited,
+            deleted: is_deleted,
+            operations: sorted_graph_data.sorted(),
         };
 
-        let view = Document::resolve_view(&self.operations, &mut meta)?;
+        // Construct the document view id
+        let document_view_id = DocumentViewId::new(document_id, graph_tips);
+
+        // Construct the document view, from the reduced values and the document view id
+        let document_view = DocumentView::new(document_view_id, view);
 
         Ok(Document {
-            id,
             schema,
             author,
-            view,
+            view: document_view,
             meta,
         })
     }
 }
 
-// @TODO: This currently makes sure the wasm tests work as cddl does not have any wasm support
-// (yet). Remove this with: https://github.com/p2panda/p2panda/issues/99
-#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -224,14 +238,48 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::identity::KeyPair;
-    use crate::operation::{OperationValue, OperationWithMeta};
+    use crate::operation::{Operation, OperationValue, OperationWithMeta};
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, fields, random_key_pair, schema, update_operation,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
     use crate::test_utils::utils::operation_fields;
 
-    use super::DocumentBuilder;
+    use super::{reduce, DocumentBuilder};
+
+    #[rstest]
+    fn reduces_operations(
+        create_operation: Operation,
+        update_operation: Operation,
+        delete_operation: Operation,
+    ) {
+        let (reduced_create, is_edited, is_deleted) = reduce(&[create_operation.clone()]);
+        assert_eq!(
+            reduced_create.get("message").unwrap(),
+            &OperationValue::Text("Hello!".to_string())
+        );
+        assert!(!is_edited);
+        assert!(!is_deleted);
+
+        let (reduced_update, is_edited, is_deleted) =
+            reduce(&[create_operation.clone(), update_operation.clone()]);
+        assert_eq!(
+            reduced_update.get("message").unwrap(),
+            &OperationValue::Text("Updated, hello!".to_string())
+        );
+        assert!(is_edited);
+        assert!(!is_deleted);
+
+        let (reduced_delete, is_edited, is_deleted) =
+            reduce(&[create_operation, update_operation, delete_operation]);
+        // The value remains the same, but the deleted flag is true now.
+        assert_eq!(
+            reduced_delete.get("message").unwrap(),
+            &OperationValue::Text("Updated, hello!".to_string())
+        );
+        assert!(is_edited);
+        assert!(is_deleted);
+    }
 
     #[rstest]
     fn resolve_documents(schema: Hash) {
@@ -344,15 +392,31 @@ mod tests {
         )
         .unwrap();
 
-        let operations: Vec<OperationWithMeta> = node
-            .all_entries()
-            .into_iter()
-            .map(|entry| {
-                OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap()
-            })
-            .collect();
+        let entry_1 = node.get_entry(&panda_entry_1_hash);
+        let panda_1 =
+            OperationWithMeta::new(&entry_1.entry_encoded(), &entry_1.operation_encoded()).unwrap();
+        let entry_2 = node.get_entry(&panda_entry_2_hash);
+        let panda_2 =
+            OperationWithMeta::new(&entry_2.entry_encoded(), &entry_2.operation_encoded()).unwrap();
+        let entry_3 = node.get_entry(&penguin_entry_1_hash);
+        let penguin_1 =
+            OperationWithMeta::new(&entry_3.entry_encoded(), &entry_3.operation_encoded()).unwrap();
+        let entry_4 = node.get_entry(&penguin_entry_2_hash);
+        let penguin_2 =
+            OperationWithMeta::new(&entry_4.entry_encoded(), &entry_4.operation_encoded()).unwrap();
+        let entry_5 = node.get_entry(&penguin_entry_3_hash);
+        let penguin_3 =
+            OperationWithMeta::new(&entry_5.entry_encoded(), &entry_5.operation_encoded()).unwrap();
 
-        let document = DocumentBuilder::new(operations.clone()).build();
+        let operations = vec![
+            panda_1.clone(),
+            panda_2.clone(),
+            penguin_1.clone(),
+            penguin_2.clone(),
+            penguin_3.clone(),
+        ];
+
+        let document = DocumentBuilder::new(operations).build();
 
         assert!(document.is_ok());
 
@@ -361,35 +425,13 @@ mod tests {
             "name".to_string(),
             OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
         );
-
-        let panda_1 = operations
-            .iter()
-            .find(|op| op.operation_id() == &panda_entry_1_hash)
-            .unwrap();
-        let panda_2 = operations
-            .iter()
-            .find(|op| op.operation_id() == &panda_entry_2_hash)
-            .unwrap();
-        let penguin_1 = operations
-            .iter()
-            .find(|op| op.operation_id() == &penguin_entry_1_hash)
-            .unwrap();
-        let penguin_2 = operations
-            .iter()
-            .find(|op| op.operation_id() == &penguin_entry_2_hash)
-            .unwrap();
-        let penguin_3 = operations
-            .iter()
-            .find(|op| op.operation_id() == &penguin_entry_3_hash)
-            .unwrap();
-
         let expected_graph_tip = vec![penguin_entry_3_hash.clone()];
         let expected_op_order = vec![
-            panda_1.to_owned(),
-            panda_2.to_owned(),
-            penguin_1.to_owned(),
-            penguin_2.to_owned(),
-            penguin_3.to_owned(),
+            panda_1.clone(),
+            panda_2.clone(),
+            penguin_1.clone(),
+            penguin_2.clone(),
+            penguin_3.clone(),
         ];
 
         // Document should resolve to expected value
@@ -400,6 +442,8 @@ mod tests {
         assert!(!document.is_deleted());
         assert_eq!(document.operations(), &expected_op_order);
         assert_eq!(document.current_graph_tips(), &expected_graph_tip);
+        assert_eq!(document.id(), &panda_entry_1_hash);
+        assert_eq!(document.view_id(), &[penguin_entry_3_hash.clone()]);
 
         // Multiple replicas receiving operations in different orders should resolve to same value.
 
@@ -423,18 +467,19 @@ mod tests {
         .build()
         .unwrap();
 
-        let replica_3 = DocumentBuilder::new(vec![
-            panda_2.clone(),
-            panda_1.clone(),
-            penguin_1.clone(),
-            penguin_3.clone(),
-            penguin_2.clone(),
-        ])
-        .build()
-        .unwrap();
+        let replica_3 =
+            DocumentBuilder::new(vec![panda_2, panda_1, penguin_1, penguin_3, penguin_2])
+                .build()
+                .unwrap();
 
         assert_eq!(replica_1.view().get("name"), replica_2.view().get("name"));
         assert_eq!(replica_1.view().get("name"), replica_3.view().get("name"));
+        assert_eq!(replica_1.id(), &panda_entry_1_hash);
+        assert_eq!(replica_1.view_id(), &[penguin_entry_3_hash.clone()]);
+        assert_eq!(replica_2.id(), &panda_entry_1_hash);
+        assert_eq!(replica_2.view_id(), &[penguin_entry_3_hash.clone()]);
+        assert_eq!(replica_3.id(), &panda_entry_1_hash);
+        assert_eq!(replica_3.view_id(), &[penguin_entry_3_hash]);
     }
 
     #[rstest]

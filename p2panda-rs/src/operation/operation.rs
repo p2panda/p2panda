@@ -614,9 +614,10 @@ mod tests {
         let document_view_1 = vec![operation_id_1, operation_id_2];
         let document_view_2 = vec![operation_id_3];
 
-        let mut relations: Vec<Relation> = Vec::new();
-        relations.push(Relation::new(document_1, document_view_1));
-        relations.push(Relation::new(document_2, document_view_2));
+        let relations = vec![
+            Relation::new(document_1, document_view_1),
+            Relation::new(document_2, document_view_2),
+        ];
 
         let mut fields = OperationFields::new();
         fields

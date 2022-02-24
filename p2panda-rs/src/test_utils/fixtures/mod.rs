@@ -98,6 +98,7 @@
 #[cfg(test)]
 pub mod defaults;
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod fixtures;
 #[cfg(test)]
 mod params;

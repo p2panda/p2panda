@@ -2,9 +2,11 @@
 
 use thiserror::Error;
 
+use crate::operation::OperationValue;
+
 /// Custom error types for schema validation.
 #[derive(Error)]
-pub enum SchemaError {
+pub enum SchemaValidationError {
     /// Operation contains invalid fields.
     // Note: We pretty-print the vector of error strings to get line breaks
     #[error("invalid operation schema: {0:#?}")]
@@ -35,16 +37,40 @@ pub enum SchemaError {
     OperationError(#[from] crate::operation::OperationError),
 }
 
-impl std::fmt::Debug for SchemaError {
+/// Custom error types for system schema views.
+#[derive(Error, Debug)]
+pub enum SystemSchemaError {
+    /// Passed field type does not match the expected type.
+    #[error("invalid field \"{0}\" with value {1:#?}")]
+    InvalidField(String, OperationValue),
+
+    /// Missing expected field.
+    #[error("missing field \"{0}\"")]
+    MissingField(String),
+
+    /// Too many fields passed.
+    #[error("too many fields")]
+    TooManyFields,
+
+    /// Too few fields passed.
+    #[error("too few fields")]
+    TooFewFields,
+
+    /// Invalid field type found.
+    #[error("invalid field type")]
+    InvalidFieldType,
+}
+
+impl std::fmt::Debug for SchemaValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
-            SchemaError::InvalidSchema(_) => write!(f, "InvalidSchema"),
-            SchemaError::InvalidCBOR => write!(f, "InvalidCBOR"),
-            SchemaError::NoSchema => write!(f, "NoSchema"),
-            SchemaError::ParsingError(_) => write!(f, "ParsingError"),
-            SchemaError::ValidationError(_) => write!(f, "ValidationError"),
-            SchemaError::OperationFieldsError(_) => write!(f, "OperationFieldsError"),
-            SchemaError::OperationError(_) => write!(f, "OperationError"),
+            SchemaValidationError::InvalidSchema(_) => write!(f, "InvalidSchema"),
+            SchemaValidationError::InvalidCBOR => write!(f, "InvalidCBOR"),
+            SchemaValidationError::NoSchema => write!(f, "NoSchema"),
+            SchemaValidationError::ParsingError(_) => write!(f, "ParsingError"),
+            SchemaValidationError::ValidationError(_) => write!(f, "ValidationError"),
+            SchemaValidationError::OperationFieldsError(_) => write!(f, "OperationFieldsError"),
+            SchemaValidationError::OperationError(_) => write!(f, "OperationError"),
         }?;
 
         // We want to format based on `Display` ("{}") instead of `Debug` ("{:?}") to respect line

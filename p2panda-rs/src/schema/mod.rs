@@ -9,21 +9,22 @@
 #[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
 
+#[allow(clippy::module_inception)]
+mod cddl_builder;
 mod error;
 mod operation;
-#[allow(clippy::module_inception)]
-mod schema;
+mod system_schema;
 
-pub use error::SchemaError;
+pub use cddl_builder::CDDLBuilder;
+pub use error::{SchemaValidationError, SystemSchemaError};
 pub use operation::OPERATION_SCHEMA;
-pub use schema::{Schema, SchemaBuilder, Type, ValidateOperation};
 
 /// Checks CBOR bytes against CDDL schemas.
 ///
 /// This helper method also converts validation errors coming from the `cddl` crate into an
 /// concatenated error operation and returns it.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaError> {
+pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaValidationError> {
     match cddl::validate_cbor_from_slice(cddl_schema, &bytes) {
         Err(cbor::Error::Validation(err)) => {
             let err_str = err
@@ -38,9 +39,9 @@ pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaEr
                 })
                 .collect::<Vec<String>>();
 
-            Err(error::SchemaError::InvalidSchema(err_str))
+            Err(SchemaValidationError::InvalidSchema(err_str))
         }
-        Err(cbor::Error::CBORParsing(_err)) => Err(error::SchemaError::InvalidCBOR),
+        Err(cbor::Error::CBORParsing(_err)) => Err(SchemaValidationError::InvalidCBOR),
         Err(cbor::Error::CDDLParsing(err)) => {
             panic!("Parsing CDDL error: {}", err);
         }

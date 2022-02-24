@@ -12,7 +12,9 @@ Highlights are marked with a pancake 🥞
 ## Added
 
 - `Document` for sorting and reducing a graph of `Operations` [#169](https://github.com/p2panda/p2panda/pull/169) `rs` 🥞
-- Derive `Ord` and `PartialOrd` for `LogId` [#201](https://github.com/p2panda/p2panda/pull/201) `rs`
+- Derive `Ord` and `PartialOrd` for `LogId` [#201](https://github.com/p2panda/p2panda/pull/201)
+- Rename `SchemaBuilder` to `CDDLBuilder` [#226](https://github.com/p2panda/p2panda/pull/226) `rs`
+- `SchemaView` and `SchemaFieldView` for representing materialised system documents [#226](https://github.com/p2panda/p2panda/pull/226) `rs`
 - `relation` & `relation_list` field type [#205](https://github.com/p2panda/p2panda/pull/205) `rs` `js`
 
 ## Changed
