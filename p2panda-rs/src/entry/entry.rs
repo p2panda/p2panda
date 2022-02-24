@@ -210,7 +210,7 @@ impl Validate for Entry {
 mod tests {
     use crate::entry::{LogId, SeqNum};
     use crate::hash::Hash;
-    use crate::operation::{Operation, OperationFields, OperationValue};
+    use crate::operation::{Operation, OperationFields, OperationValue, Relation};
     use crate::schema::SchemaId;
 
     use super::Entry;
@@ -223,7 +223,10 @@ mod tests {
             .add("test", OperationValue::Text("Hello".to_owned()))
             .unwrap();
         let operation = Operation::new_create(
-            SchemaId::Application(Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
+            SchemaId::Application(Relation::new(
+                Hash::new_from_bytes(vec![1, 2, 3]).unwrap(),
+                vec![],
+            )),
             fields,
         )
         .unwrap();

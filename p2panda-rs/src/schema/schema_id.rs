@@ -7,13 +7,14 @@ use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::hash::Hash;
+use crate::operation::Relation;
 use crate::schema::error::SchemaIdError;
 
 /// Enum representing existing schema types.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum SchemaId {
-    /// An application schema with a hash.
-    Application(Hash),
+    /// An application schema.
+    Application(Relation),
 
     /// A schema definition.
     Schema,
@@ -29,8 +30,9 @@ impl SchemaId {
             "SCHEMA_V1" => Ok(SchemaId::Schema),
             "SCHEMA_FIELD_V1" => Ok(SchemaId::SchemaField),
             string => {
+                // We only use document_id in a relation at the moment.
                 let hash = Hash::new(string)?;
-                Ok(SchemaId::Application(hash))
+                Ok(SchemaId::Application(Relation::new(hash, vec![])))
             }
         }
     }
@@ -39,7 +41,7 @@ impl SchemaId {
 impl SchemaId {
     fn as_str(&self) -> &str {
         match self {
-            SchemaId::Application(hash) => hash.as_str(),
+            SchemaId::Application(relation) => relation.document_id().as_str(),
             SchemaId::Schema => "SCHEMA_V1",
             SchemaId::SchemaField => "SCHEMA_FIELD_V1",
         }
@@ -68,7 +70,7 @@ impl Serialize for SchemaId {
         S: Serializer,
     {
         serializer.serialize_str(match &*self {
-            SchemaId::Application(hash) => hash.as_str(),
+            SchemaId::Application(relation) => relation.document_id().as_str(),
             SchemaId::Schema => "SCHEMA_V1",
             SchemaId::SchemaField => "SCHEMA_FIELD_V1",
         })
@@ -86,7 +88,7 @@ impl<'de> Deserialize<'de> for SchemaId {
             "SCHEMA_V1" => Ok(SchemaId::Schema),
             "SCHEMA_FIELD_V1" => Ok(SchemaId::SchemaField),
             _ => match Hash::new(s.as_str()) {
-                Ok(hash) => Ok(SchemaId::Application(hash)),
+                Ok(hash) => Ok(SchemaId::Application(Relation::new(hash, vec![]))),
                 Err(e) => Err(SchemaIdError::HashError(e)).map_err(Error::custom),
             },
         }
@@ -95,7 +97,7 @@ impl<'de> Deserialize<'de> for SchemaId {
 
 #[cfg(test)]
 mod test {
-    use crate::{hash::Hash, test_utils::constants::DEFAULT_SCHEMA_HASH};
+    use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
 
     use super::SchemaId;
 
@@ -144,10 +146,8 @@ mod test {
                 .unwrap();
         assert_eq!(
             appl_schema,
-            SchemaId::Application(
-                Hash::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")
-                    .unwrap()
-            )
+            SchemaId::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")
+                .unwrap()
         );
 
         let schema = SchemaId::new("SCHEMA_V1").unwrap();

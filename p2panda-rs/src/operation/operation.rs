@@ -40,6 +40,11 @@ impl Relation {
             },
         }
     }
+
+    /// Returns the relations document id
+    pub fn document_id(&self) -> &Hash {
+        &self.document
+    }
 }
 
 impl Validate for Relation {
