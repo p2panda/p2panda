@@ -21,8 +21,8 @@ pub const OPERATION_SCHEMA: &str = r#"
     ; Create operation
     operation-body = (
         action: "create", fields: operation-fields //
-        action: "update", fields: operation-fields, previousOperations: [1* hash] //
-        action: "delete", previousOperations: [1* hash]
+        action: "update", fields: operation-fields, previous_operations: [1* hash] //
+        action: "delete", previous_operations: [1* hash]
     )
 
     ; Operation fields with key and value

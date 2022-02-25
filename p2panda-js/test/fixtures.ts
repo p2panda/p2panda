@@ -77,8 +77,9 @@ export const entryFixture = (seqNum: number): Entry => {
     fields: fields,
   };
 
-  if (decodedOperations[index].previousOperations) {
-    operation.previousOperations = decodedOperations[index].previousOperations;
+  if (decodedOperations[index].previous_operations) {
+    operation.previous_operations =
+      decodedOperations[index].previous_operations;
   }
 
   const entry: Entry = {

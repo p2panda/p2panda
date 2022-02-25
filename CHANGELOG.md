@@ -12,13 +12,16 @@ Highlights are marked with a pancake 🥞
 ## Added
 
 - `Document` for sorting and reducing a graph of `Operations` [#169](https://github.com/p2panda/p2panda/pull/169) `rs` 🥞
-- `SchemaId` enum for identifying different schema types [#221](https://github.com/p2panda/p2panda/pull/221) `rs`
 - Derive `Ord` and `PartialOrd` for `LogId` [#201](https://github.com/p2panda/p2panda/pull/201) `rs`
+- Rename `SchemaBuilder` to `CDDLBuilder` [#226](https://github.com/p2panda/p2panda/pull/226) `rs`
+- `SchemaView` and `SchemaFieldView` for representing materialised system documents [#226](https://github.com/p2panda/p2panda/pull/226) `rs`
 - `relation` & `relation_list` field type [#205](https://github.com/p2panda/p2panda/pull/205) `rs` `js`
+- `SchemaId` enum for identifying different schema types [#221](https://github.com/p2panda/p2panda/pull/221) `rs`
 
 ## Changed
 
 - `Instance` renamed to `DocumentView` [#169](https://github.com/p2panda/p2panda/pull/169) `rs`
+- Fix letter casing in operations [#230](https://github.com/p2panda/p2panda/pull/230) `rs` `js`
 
 ## Fixed
 
@@ -27,6 +30,7 @@ Highlights are marked with a pancake 🥞
 ## Everything burrito
 
 - Easier to read CDDL schema error strings [#207](https://github.com/p2panda/p2panda/pull/207) `rs`
+- Force cache cleanup to fix code coverage report [#231](https://github.com/p2panda/p2panda/pull/231)
 
 ## [0.3.0]
 

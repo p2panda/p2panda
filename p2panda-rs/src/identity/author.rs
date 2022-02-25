@@ -71,7 +71,7 @@ impl Validate for Author {
 
     fn validate(&self) -> Result<(), Self::Error> {
         // Check if author is hex encoded
-        match hex::decode(self.0.to_owned()) {
+        match hex::decode(&self.0) {
             Ok(bytes) => {
                 // Check if length is correct
                 if bytes.len() != PUBLIC_KEY_LENGTH {
