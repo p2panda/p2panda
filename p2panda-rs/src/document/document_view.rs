@@ -4,34 +4,29 @@
 use std::collections::btree_map::Iter as BTreeMapIter;
 use std::collections::BTreeMap;
 
+use crate::document::DocumentId;
 use crate::hash::Hash;
 use crate::operation::OperationValue;
 
 /// The ID of a document view. Contains the hash id of the document, and the hash ids of the
 /// current document graph tips.
 #[derive(Debug, PartialEq, Clone)]
-pub struct DocumentViewId {
-    document_id: Hash,
-    view_id: Vec<Hash>,
-}
+pub struct DocumentViewId(Vec<Hash>);
 
 impl DocumentViewId {
     /// Create a new document view id.
-    pub fn new(document_id: Hash, view_id: Vec<Hash>) -> Self {
-        Self {
-            document_id,
-            view_id,
-        }
+    pub fn new(view_id: Vec<Hash>) -> Self {
+        Self(view_id)
     }
 
-    /// Get just the document id.
-    pub fn document_id(&self) -> &Hash {
-        &self.document_id
+    /// Generate a document view hash from operation ids.
+    pub fn hash(&self) -> Hash {
+        unimplemented!()
     }
 
-    /// Get just the view id.
-    pub fn view_id(&self) -> &[Hash] {
-        self.view_id.as_slice()
+    /// Get the operation ids.
+    pub fn operation_ids(&self) -> &[Hash] {
+        self.0.as_slice()
     }
 }
 
@@ -43,7 +38,8 @@ type FieldKey = String;
 /// or DELETE operations.
 #[derive(Debug, PartialEq, Clone)]
 pub struct DocumentView {
-    pub(crate) id: DocumentViewId,
+    pub(crate) id: DocumentId,
+    pub(crate) view_id: DocumentViewId,
     pub(crate) view: BTreeMap<FieldKey, OperationValue>,
 }
 
@@ -52,23 +48,22 @@ impl DocumentView {
     ///
     /// Requires the DocumentViewId and field values to be calculated seperately and then passed in
     /// during construction.
-    pub fn new(id: DocumentViewId, view: BTreeMap<FieldKey, OperationValue>) -> Self {
-        Self { id, view }
-    }
-
-    /// Get the id of this document view.
-    pub fn id(&self) -> &[Hash] {
-        self.id.view_id()
+    pub fn new(
+        id: DocumentId,
+        view_id: DocumentViewId,
+        view: BTreeMap<FieldKey, OperationValue>,
+    ) -> Self {
+        Self { id, view_id, view }
     }
 
     /// Get the id of this document.
-    pub fn document_id(&self) -> &Hash {
-        self.id.document_id()
+    pub fn document_id(&self) -> &DocumentId {
+        &self.id
     }
 
     /// Get the document view id.
     pub fn document_view_id(&self) -> &DocumentViewId {
-        &self.id
+        &self.view_id
     }
 
     /// Get a single value from this instance by it's key.

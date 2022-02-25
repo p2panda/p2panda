@@ -17,52 +17,64 @@ use crate::Validate;
 /// The "relation" field type references a document id and the historical state which it had at the
 /// point this relation was created.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Relation {
+#[serde(untagged)]
+pub enum Relation {
     /// Document id this relation is referring to.
-    document: Hash,
+    Unpinned(Hash),
 
     /// Reference to the exact version of the document.
     ///
     /// This field is `None` when there is no more than one operation (when the document only
     /// consists of one CREATE operation).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    document_view: Option<Vec<Hash>>,
-}
-
-impl Relation {
-    /// Returns a new relation field type.
-    pub fn new(document: Hash, document_view: Vec<Hash>) -> Self {
-        Self {
-            document,
-            document_view: match document_view.is_empty() {
-                true => None,
-                false => Some(document_view),
-            },
-        }
-    }
-
-    /// Returns the relations document id
-    pub fn document_id(&self) -> &Hash {
-        &self.document
-    }
+    Pinned(Vec<Hash>),
 }
 
 impl Validate for Relation {
     type Error = OperationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        self.document.validate()?;
-
-        match &self.document_view {
-            Some(view) => {
-                for operation_id in view {
+        match &self {
+            Relation::Unpinned(hash) => {
+                hash.validate()?;
+            }
+            Relation::Pinned(document_view) => {
+                for operation_id in document_view {
                     operation_id.validate()?;
                 }
-
-                Ok(())
             }
-            None => Ok(()),
         }
+
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RelationList {
+    Unpinned(Vec<Hash>),
+    Pinned(Vec<Vec<Hash>>),
+}
+
+impl Validate for RelationList {
+    type Error = OperationError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        match &self {
+            RelationList::Unpinned(documents) => {
+                for document in documents {
+                    document.validate()?;
+                }
+            }
+            RelationList::Pinned(document_view) => {
+                for view in document_view {
+                    for operation_id in view {
+                        operation_id.validate()?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -154,7 +166,7 @@ pub enum OperationValue {
 
     /// Reference to a list of documents.
     #[serde(rename = "relation_list")]
-    RelationList(Vec<Relation>),
+    RelationList(RelationList),
 }
 
 impl Validate for OperationValue {
@@ -163,13 +175,7 @@ impl Validate for OperationValue {
     fn validate(&self) -> Result<(), Self::Error> {
         match self {
             Self::Relation(relation) => relation.validate(),
-            Self::RelationList(relations) => {
-                for relation in relations {
-                    relation.validate()?;
-                }
-
-                Ok(())
-            }
+            Self::RelationList(list) => list.validate(),
             _ => Ok(()),
         }
     }
@@ -588,7 +594,7 @@ mod tests {
 
     use super::{
         AsOperation, Operation, OperationAction, OperationFields, OperationValue, OperationVersion,
-        Relation,
+        Relation, RelationList,
     };
 
     #[test]
@@ -612,23 +618,18 @@ mod tests {
 
     #[rstest]
     fn relation_lists(
-        #[from(random_hash)] document_1: Hash,
-        #[from(random_hash)] document_2: Hash,
         #[from(random_hash)] operation_id_1: Hash,
         #[from(random_hash)] operation_id_2: Hash,
         #[from(random_hash)] operation_id_3: Hash,
     ) {
-        let document_view_1 = vec![operation_id_1, operation_id_2];
-        let document_view_2 = vec![operation_id_3];
-
-        let relations = vec![
-            Relation::new(document_1, document_view_1),
-            Relation::new(document_2, document_view_2),
-        ];
+        let relations = vec![vec![operation_id_1, operation_id_2], vec![operation_id_3]];
 
         let mut fields = OperationFields::new();
         fields
-            .add("locations", OperationValue::RelationList(relations))
+            .add(
+                "locations",
+                OperationValue::RelationList(RelationList::Pinned(relations)),
+            )
             .unwrap();
     }
 
@@ -730,7 +731,7 @@ mod tests {
         fields
             .add(
                 "profile_picture",
-                OperationValue::Relation(Relation::new(document, Vec::new())),
+                OperationValue::Relation(Relation::Unpinned(document)),
             )
             .unwrap();
 
