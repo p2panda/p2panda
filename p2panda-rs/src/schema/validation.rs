@@ -42,7 +42,7 @@ mod tests {
 
     use crate::{
         operation::OperationEncoded,
-        schema::{validation::validate_schema, OPERATION_SCHEMA, SchemaValidationError},
+        schema::{validation::validate_schema, SchemaValidationError, OPERATION_SCHEMA},
         test_utils::fixtures::operation_encoded,
     };
 
@@ -63,7 +63,8 @@ mod tests {
         let value = cbor!({
             "name" => "Latte",
             "age" => 4
-        }).unwrap();
+        })
+        .unwrap();
 
         let mut cbor_bytes = Vec::new();
         ciborium::ser::into_writer(&value, &mut cbor_bytes).unwrap();
@@ -81,7 +82,8 @@ mod tests {
 
         let value = cbor!({
             "name" => "Latte",
-        }).unwrap();
+        })
+        .unwrap();
 
         let mut cbor_bytes = Vec::new();
         ciborium::ser::into_writer(&value, &mut cbor_bytes).unwrap();
@@ -100,5 +102,4 @@ mod tests {
         let cbor_bytes = Vec::from("}");
         assert!(validate_schema(cddl, cbor_bytes).is_err());
     }
-
 }
