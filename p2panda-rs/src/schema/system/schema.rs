@@ -204,7 +204,7 @@ mod tests {
         document::{DocumentView, DocumentViewId},
         hash::Hash,
         operation::{OperationValue, Relation},
-        schema::system_schema::{FieldType, SchemaFieldView},
+        schema::system::{SchemaFieldView, FieldType},
         test_utils::fixtures::random_hash,
     };
 
