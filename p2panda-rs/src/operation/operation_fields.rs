@@ -231,7 +231,6 @@ mod tests {
 
     use super::*;
 
-
     #[test]
     fn operation_fields() {
         let mut fields = OperationFields::new();

@@ -369,9 +369,7 @@ mod tests {
     use crate::test_utils::fixtures::{fields, random_hash, schema};
     use crate::Validate;
 
-    use super::{
-        AsOperation, Operation, OperationAction, OperationFields, OperationVersion,
-    };
+    use super::{AsOperation, Operation, OperationAction, OperationFields, OperationVersion};
 
     #[rstest]
     fn operation_validation(
