@@ -102,8 +102,8 @@ mod tests {
 
     use crate::document::reduce;
     use crate::hash::Hash;
-    use crate::operation::{AsOperation, Operation, OperationValue, Relation};
-    use crate::schema::{Schema, SchemaId};
+    use crate::operation::{OperationValue, Relation};
+    use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, fields, random_hash, schema, update_operation,
     };
@@ -112,7 +112,7 @@ mod tests {
 
     #[rstest]
     fn gets_the_right_values(
-        schema: Hash,
+        schema: SchemaId,
         #[from(random_hash)] prev_op_hash: Hash,
         #[from(random_hash)] document_id: Hash,
         #[from(random_hash)] relation: Hash,
@@ -207,29 +207,5 @@ mod tests {
 
         assert!(is_edited);
         assert!(is_deleted);
-    }
-
-    #[rstest]
-    pub fn create_from_schema(schema: SchemaId, create_operation: Operation) {
-        // Instantiate "chat" schema from CDDL string
-        let chat_schema_definition = "
-            chat = { (
-                message: { type: \"str\", value: tstr }
-            ) }
-        ";
-
-        let chat = Schema::new(&schema, &chat_schema_definition.to_string()).unwrap();
-        let chat_instance = chat.instance_from_create(create_operation.clone()).unwrap();
-
-        let mut exp_chat_instance = DocumentView::new();
-        exp_chat_instance.0.insert(
-            "message".to_string(),
-            create_operation
-                .fields()
-                .unwrap()
-                .get("message")
-                .unwrap()
-                .to_owned(),
-        );
     }
 }
