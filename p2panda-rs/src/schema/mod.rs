@@ -10,9 +10,9 @@
 #[allow(clippy::module_inception)]
 mod cddl_builder;
 mod error;
+mod meta_schema;
 mod operation;
 mod schema_id;
-mod meta_schema;
 mod validation;
 
 pub use cddl_builder::CDDLBuilder;
