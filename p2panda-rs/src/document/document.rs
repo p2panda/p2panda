@@ -7,6 +7,7 @@ use crate::graph::Graph;
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{AsOperation, OperationValue, OperationWithMeta};
+use crate::schema::SchemaId;
 
 /// Construct a graph from a list of operations.
 pub(super) fn build_graph(
@@ -73,7 +74,7 @@ pub(super) fn reduce<T: AsOperation>(
 #[derive(Debug, Clone)]
 pub struct Document {
     author: Author,
-    schema: Hash,
+    schema: SchemaId,
     view: DocumentView,
     meta: DocumentMeta,
 }
@@ -102,7 +103,7 @@ impl Document {
     }
 
     /// Get the document schema.
-    pub fn schema(&self) -> &Hash {
+    pub fn schema(&self) -> &SchemaId {
         &self.schema
     }
 
@@ -236,9 +237,10 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::{Operation, OperationValue, OperationWithMeta};
+    use crate::schema::SchemaId;
+    use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, fields, random_key_pair, schema, update_operation,
     };
@@ -282,7 +284,7 @@ mod tests {
     }
 
     #[rstest]
-    fn resolve_documents(schema: Hash) {
+    fn resolve_documents(schema: SchemaId) {
         let panda = Client::new(
             "panda".to_string(),
             KeyPair::from_private_key_str(
@@ -498,7 +500,7 @@ mod tests {
             )
             .unwrap(),
         );
-        let schema = Hash::new_from_bytes(vec![3, 2, 1]).unwrap();
+        let schema = SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap();
         let mut node = Node::new();
         let (polar_entry_1_hash, _) = send_to_node(
             &mut node,
@@ -703,7 +705,7 @@ mod tests {
     }
 
     #[rstest]
-    fn must_have_create_operation(schema: Hash, #[from(random_key_pair)] key_pair_1: KeyPair) {
+    fn must_have_create_operation(schema: SchemaId, #[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
         let mut node = Node::new();
 
@@ -751,7 +753,7 @@ mod tests {
     }
 
     #[rstest]
-    fn is_deleted(schema: Hash, #[from(random_key_pair)] key_pair_1: KeyPair) {
+    fn is_deleted(schema: SchemaId, #[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
         let mut node = Node::new();
 

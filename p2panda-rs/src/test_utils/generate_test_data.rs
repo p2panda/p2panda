@@ -4,12 +4,13 @@
 /// command. The output data can be used for testing a p2panda implementation. It is currently used
 /// in `p2panda-js`.
 use p2panda_rs::operation::OperationValue;
+use p2panda_rs::schema::SchemaId;
 use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 use p2panda_rs::test_utils::mocks::Client;
 use p2panda_rs::test_utils::mocks::{send_to_node, Node};
 use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
 use p2panda_rs::test_utils::utils::{
-    create_operation, delete_operation, hash, new_key_pair, operation_fields, update_operation,
+    create_operation, delete_operation, new_key_pair, operation_fields, update_operation,
 };
 
 fn main() {
@@ -24,7 +25,7 @@ fn main() {
         &mut node,
         &panda,
         &create_operation(
-            hash(DEFAULT_SCHEMA_HASH),
+            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("Ohh, my first message!".to_string()),
@@ -38,7 +39,7 @@ fn main() {
         &mut node,
         &panda,
         &update_operation(
-            hash(DEFAULT_SCHEMA_HASH),
+            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
             vec![entry1_hash],
             operation_fields(vec![(
                 "message",
@@ -53,7 +54,7 @@ fn main() {
         &mut node,
         &panda,
         &update_operation(
-            hash(DEFAULT_SCHEMA_HASH),
+            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
             vec![entry2_hash],
             operation_fields(vec![(
                 "message",
@@ -67,7 +68,10 @@ fn main() {
     send_to_node(
         &mut node,
         &panda,
-        &delete_operation(hash(DEFAULT_SCHEMA_HASH), vec![entry3_hash]),
+        &delete_operation(
+            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            vec![entry3_hash],
+        ),
     )
     .unwrap();
 
@@ -80,7 +84,8 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    /// Generate json formatted test data
+    use p2panda_rs::schema::SchemaId;
+    // Generate json formatted test data
     use serde_json::Value;
 
     use p2panda_rs::operation::OperationValue;
@@ -88,9 +93,7 @@ mod tests {
     use p2panda_rs::test_utils::mocks::Client;
     use p2panda_rs::test_utils::mocks::{send_to_node, Node};
     use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
-    use p2panda_rs::test_utils::utils::{
-        create_operation, hash, keypair_from_private, operation_fields,
-    };
+    use p2panda_rs::test_utils::utils::{create_operation, keypair_from_private, operation_fields};
 
     #[test]
     fn test_data() {
@@ -108,7 +111,7 @@ mod tests {
             &mut node,
             &panda,
             &create_operation(
-                hash(DEFAULT_SCHEMA_HASH),
+                SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Ohh, my first message!".to_string()),

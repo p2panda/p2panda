@@ -19,8 +19,9 @@
 //! # use p2panda_rs::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 //! # use p2panda_rs::hash::Hash;
 //! # use p2panda_rs::identity::KeyPair;
-//! # use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
-//! # let profile_schema = Hash::new_from_bytes(vec![1, 2, 3])?;
+//! # use p2panda_rs::operation::{Operation, OperationFields, OperationValue, Relation};
+//! # use p2panda_rs::schema::SchemaId;
+//! # let profile_schema = SchemaId::Application(Relation::new(Hash::new_from_bytes(vec![1, 2, 3])?, vec![]));
 //! // Generate new Ed25519 key pair
 //! let key_pair = KeyPair::new();
 //!

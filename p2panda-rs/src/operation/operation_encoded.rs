@@ -96,6 +96,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::operation::{AsOperation, Operation, OperationValue, Relation};
+    use crate::schema::SchemaId;
     use crate::test_utils::fixtures::templates::version_fixtures;
     use crate::test_utils::fixtures::{
         encoded_create_string, fields, operation_encoded_invalid_relation_fields, random_hash,
@@ -142,7 +143,7 @@ mod tests {
 
     #[rstest]
     fn encode_decode_all_field_types(
-        schema: Hash,
+        schema: SchemaId,
         #[from(random_hash)] picture_document: Hash,
         #[from(random_hash)] friend_document_1: Hash,
         #[from(random_hash)] friend_document_2: Hash,

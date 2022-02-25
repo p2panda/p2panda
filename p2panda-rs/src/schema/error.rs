@@ -37,6 +37,14 @@ pub enum SchemaValidationError {
     OperationError(#[from] crate::operation::OperationError),
 }
 
+/// Custom error types for schema validation.
+#[derive(Error, Debug)]
+pub enum SchemaIdError {
+    /// `OperationFields` error.
+    #[error("invalid hash string")]
+    HashError(#[from] crate::hash::HashError),
+}
+
 /// Custom error types for system schema views.
 #[derive(Error, Debug)]
 pub enum SystemSchemaError {

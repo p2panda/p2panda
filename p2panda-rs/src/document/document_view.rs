@@ -103,6 +103,7 @@ mod tests {
     use crate::document::reduce;
     use crate::hash::Hash;
     use crate::operation::{OperationValue, Relation};
+    use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, fields, random_hash, schema, update_operation,
     };
@@ -111,7 +112,7 @@ mod tests {
 
     #[rstest]
     fn gets_the_right_values(
-        schema: Hash,
+        schema: SchemaId,
         #[from(random_hash)] prev_op_hash: Hash,
         #[from(random_hash)] document_id: Hash,
         #[from(random_hash)] relation: Hash,

@@ -9,10 +9,11 @@
 //!
 //! ```
 //! use p2panda_rs::operation::OperationValue;
+//! use p2panda_rs::schema::SchemaId;
 //! use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 //! use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 //! use p2panda_rs::test_utils::utils::{
-//!     create_operation, delete_operation, hash, new_key_pair, operation_fields, update_operation,
+//!     create_operation, delete_operation, schema, new_key_pair, operation_fields, update_operation,
 //! };
 //!
 //! # const CHAT_SCHEMA_HASH: &str = DEFAULT_SCHEMA_HASH;
@@ -28,7 +29,7 @@
 //!     &mut node,
 //!     &panda,
 //!     &create_operation(
-//!         hash(CHAT_SCHEMA_HASH),
+//!         schema(DEFAULT_SCHEMA_HASH),
 //!         operation_fields(vec![(
 //!             "message",
 //!             OperationValue::Text("Ohh, my first message!".to_string()),
@@ -42,7 +43,7 @@
 //!     &mut node,
 //!     &panda,
 //!     &update_operation(
-//!         hash(CHAT_SCHEMA_HASH),
+//!         schema(DEFAULT_SCHEMA_HASH),
 //!         vec![document1_hash_id.clone()],
 //!         operation_fields(vec![(
 //!             "message",
@@ -57,7 +58,7 @@
 //!     &mut node,
 //!     &panda,
 //!     &delete_operation(
-//!         hash(CHAT_SCHEMA_HASH),
+//!         schema(DEFAULT_SCHEMA_HASH),
 //!         vec![entry2_hash]
 //!     )
 //! )
@@ -68,7 +69,7 @@
 //!     &mut node,
 //!     &panda,
 //!     &create_operation(
-//!         hash(CHAT_SCHEMA_HASH),
+//!         schema(DEFAULT_SCHEMA_HASH),
 //!         operation_fields(vec![(
 //!             "message",
 //!             OperationValue::Text("Let's try that again.".to_string()),
@@ -516,15 +517,17 @@ mod tests {
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::operation::OperationValue;
-    use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
-    use crate::test_utils::fixtures::{create_operation, hash, private_key, update_operation};
+    use crate::schema::SchemaId;
+    use crate::test_utils::fixtures::{private_key, schema};
     use crate::test_utils::mocks::client::Client;
-    use crate::test_utils::utils::{keypair_from_private, operation_fields, NextEntryArgs};
+    use crate::test_utils::utils::{
+        create_operation, keypair_from_private, operation_fields, update_operation, NextEntryArgs,
+    };
 
     use super::{send_to_node, Node};
 
     #[rstest]
-    fn publishing_entries(private_key: String) {
+    fn publishing_entries(schema: SchemaId, private_key: String) {
         let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
         let mut node = Node::new();
 
@@ -554,7 +557,7 @@ mod tests {
             &mut node,
             &panda,
             &create_operation(
-                hash(DEFAULT_SCHEMA_HASH),
+                schema.clone(),
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Ohh, my first message! [Panda]".to_string()),
@@ -589,7 +592,7 @@ mod tests {
             &mut node,
             &panda,
             &update_operation(
-                hash(DEFAULT_SCHEMA_HASH),
+                schema.clone(),
                 vec![panda_entry_1_hash.clone()],
                 operation_fields(vec![(
                     "message",
@@ -641,7 +644,7 @@ mod tests {
             &mut node,
             &penguin,
             &update_operation(
-                hash(DEFAULT_SCHEMA_HASH),
+                schema.clone(),
                 vec![panda_entry_2_hash],
                 operation_fields(vec![(
                     "message",
@@ -675,7 +678,7 @@ mod tests {
             &mut node,
             &penguin,
             &update_operation(
-                hash(DEFAULT_SCHEMA_HASH),
+                schema.clone(),
                 vec![penguin_entry_1_hash],
                 operation_fields(vec![(
                     "message",
@@ -720,7 +723,7 @@ mod tests {
             &mut node,
             &panda,
             &create_operation(
-                hash(DEFAULT_SCHEMA_HASH),
+                schema,
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Ohh, my first message in a new document!".to_string()),
@@ -749,7 +752,7 @@ mod tests {
     }
 
     #[rstest]
-    fn next_entry_args_at_specific_seq_num(private_key: String) {
+    fn next_entry_args_at_specific_seq_num(schema: SchemaId, private_key: String) {
         let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
         let mut node = Node::new();
 
@@ -758,7 +761,7 @@ mod tests {
             &mut node,
             &panda,
             &create_operation(
-                hash(DEFAULT_SCHEMA_HASH),
+                schema.clone(),
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Ohh, my first message!".to_string()),
@@ -772,7 +775,7 @@ mod tests {
             &mut node,
             &panda,
             &update_operation(
-                hash(DEFAULT_SCHEMA_HASH),
+                schema,
                 vec![entry1_hash.clone()],
                 operation_fields(vec![(
                     "message",
@@ -806,7 +809,7 @@ mod tests {
     }
 
     #[rstest]
-    fn concurrent_updates(private_key: String) {
+    fn concurrent_updates(schema: SchemaId, private_key: String) {
         let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
         let penguin = Client::new(
             "penguin".to_string(),
@@ -823,7 +826,7 @@ mod tests {
             &mut node,
             &panda,
             &create_operation(
-                hash(DEFAULT_SCHEMA_HASH),
+                schema.clone(),
                 operation_fields(vec![
                     (
                         "cafe_name",
@@ -851,7 +854,7 @@ mod tests {
             &mut node,
             &panda,
             &update_operation(
-                hash(DEFAULT_SCHEMA_HASH),
+                schema.clone(),
                 vec![panda_entry_1_hash.clone()],
                 operation_fields(vec![(
                     "cafe_name",
@@ -877,7 +880,7 @@ mod tests {
             &mut node,
             &penguin,
             &update_operation(
-                hash(DEFAULT_SCHEMA_HASH),
+                schema.clone(),
                 vec![panda_entry_1_hash.clone()],
                 operation_fields(vec![(
                     "address",
@@ -903,7 +906,7 @@ mod tests {
             &mut node,
             &penguin,
             &update_operation(
-                hash(DEFAULT_SCHEMA_HASH),
+                schema,
                 vec![penguin_entry_1_hash, panda_entry_2_hash],
                 operation_fields(vec![(
                     "cafe_name",
