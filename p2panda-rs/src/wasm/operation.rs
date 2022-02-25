@@ -9,7 +9,7 @@ use wasm_bindgen::JsValue;
 use crate::hash::Hash;
 use crate::operation::{
     Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationValue,
-    Relation,
+    Relation, RelationList,
 };
 use crate::schema::SchemaId;
 use crate::wasm::error::jserr;
