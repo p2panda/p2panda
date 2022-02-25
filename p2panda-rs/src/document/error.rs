@@ -14,7 +14,7 @@ pub enum DocumentBuilderError {
     #[error("Multiple create operations found")]
     MoreThanOneCreateOperation,
 
-    /// All operation in a document must follow the same schema.
+    /// All operations in a document must follow the same schema.
     #[error("All operations in a document must follow the same schema")]
     OperationSchemaNotMatching,
 
