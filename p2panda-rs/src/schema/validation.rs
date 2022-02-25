@@ -102,4 +102,17 @@ mod tests {
         let cbor_bytes = Vec::from("}");
         assert!(validate_schema(cddl, cbor_bytes).is_err());
     }
+
+    #[test]
+    #[should_panic]
+    fn invalid_cddl() {
+        let cddl = r#"
+        panda = {
+            name: {
+        }
+        "#;
+
+        // This will panic
+        assert!(validate_schema(cddl, vec![1u8]).is_ok());
+    }
 }
