@@ -37,7 +37,7 @@ impl FromStr for FieldType {
             "float" => Ok(FieldType::Float),
             "str" => Ok(FieldType::String),
             "relation" => Ok(FieldType::Relation),
-            _ => Err(SystemSchemaError::InvalidFieldType),
+            type_str => Err(SystemSchemaError::InvalidFieldType(type_str.into())),
         }
     }
 }
@@ -122,12 +122,6 @@ impl TryFrom<DocumentView> for SchemaView {
     type Error = SystemSchemaError;
 
     fn try_from(document_view: DocumentView) -> Result<Self, Self::Error> {
-        match document_view.len() {
-            len if len < 3 => Err(SystemSchemaError::TooFewFields),
-            len if len == 3 => Ok(()),
-            _ => Err(SystemSchemaError::TooManyFields),
-        }?;
-
         let name = match document_view.get("name") {
             Some(OperationValue::Text(value)) => Ok(value),
             Some(op) => Err(SystemSchemaError::InvalidField(
@@ -168,12 +162,6 @@ impl TryFrom<DocumentView> for SchemaFieldView {
     type Error = SystemSchemaError;
 
     fn try_from(document_view: DocumentView) -> Result<Self, Self::Error> {
-        match document_view.len() {
-            len if len < 2 => Err(SystemSchemaError::TooFewFields),
-            len if len == 2 => Ok(()),
-            _ => Err(SystemSchemaError::TooManyFields),
-        }?;
-
         let name = match document_view.get("name") {
             Some(OperationValue::Text(value)) => Ok(value),
             Some(op) => Err(SystemSchemaError::InvalidField(

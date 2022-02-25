@@ -15,15 +15,7 @@ pub enum SystemSchemaError {
     #[error("missing field \"{0}\"")]
     MissingField(String),
 
-    /// Too many fields passed.
-    #[error("too many fields")]
-    TooManyFields,
-
-    /// Too few fields passed.
-    #[error("too few fields")]
-    TooFewFields,
-
     /// Invalid field type found.
-    #[error("invalid field type")]
-    InvalidFieldType,
+    #[error("invalid field type '{0}'")]
+    InvalidFieldType(String),
 }
