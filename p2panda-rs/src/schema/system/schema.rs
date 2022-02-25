@@ -8,13 +8,22 @@ use crate::operation::{OperationValue, Relation};
 
 use super::SystemSchemaError;
 
+/// Field types that can be defined when publishing an application schema
 #[derive(Clone, Debug, Copy, PartialEq)]
-#[allow(missing_docs)]
 pub enum FieldType {
+    /// Defines a boolean field
     Bool,
+
+    /// Defines an integer number field
     Int,
+
+    /// Defines a floating point number field
     Float,
+
+    /// Defines a text string field
     String,
+
+    /// Defines a [`Relation`] field
     Relation,
 }
 
