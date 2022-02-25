@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::ops::Deref;
 use std::str::FromStr;
 
 use serde::de::Error;
