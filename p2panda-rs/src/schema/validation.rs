@@ -28,9 +28,7 @@ pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaVa
             Err(SchemaValidationError::InvalidSchema(err_str))
         }
         Err(cbor::Error::CBORParsing(_err)) => Err(SchemaValidationError::InvalidCBOR),
-        Err(cbor::Error::CDDLParsing(err)) => {
-            panic!("Parsing CDDL error: {}", err);
-        }
+        Err(cbor::Error::CDDLParsing(err)) => Err(SchemaValidationError::InvalidCDDL(err)),
         _ => Ok(()),
     }
 }
@@ -42,7 +40,7 @@ mod tests {
 
     use crate::{
         operation::OperationEncoded,
-        schema::{validation::validate_schema, SchemaValidationError, OPERATION_SCHEMA},
+        schema::{validation::validate_schema, OPERATION_SCHEMA},
         test_utils::fixtures::operation_encoded,
     };
 
@@ -104,7 +102,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn invalid_cddl() {
         let cddl = r#"
         panda = {
@@ -112,7 +109,6 @@ mod tests {
         }
         "#;
 
-        // This will panic
-        assert!(validate_schema(cddl, vec![1u8]).is_ok());
+        assert!(validate_schema(cddl, vec![1u8]).is_err());
     }
 }

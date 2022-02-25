@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::operation::OperationValue;
 
-/// Custom error types for schema validation.
+/// Error types for schema validation.
 #[derive(Error)]
 pub enum SchemaValidationError {
     /// Operation contains invalid fields.
@@ -15,6 +15,10 @@ pub enum SchemaValidationError {
     /// Operation can't be deserialised from invalid CBOR encoding.
     #[error("invalid CBOR format")]
     InvalidCBOR,
+
+    /// Attempted to validate an operation using an invalid CDDL definition
+    #[error("invalid CDDL definition: {0}")]
+    InvalidCDDL(String),
 
     /// There is no schema set.
     #[error("no CDDL schema present")]
@@ -37,7 +41,7 @@ pub enum SchemaValidationError {
     OperationError(#[from] crate::operation::OperationError),
 }
 
-/// Custom error types for schema validation.
+/// Error types for schema validation.
 #[derive(Error, Debug)]
 pub enum SchemaIdError {
     /// `OperationFields` error.
@@ -74,6 +78,7 @@ impl std::fmt::Debug for SchemaValidationError {
         match *self {
             SchemaValidationError::InvalidSchema(_) => write!(f, "InvalidSchema"),
             SchemaValidationError::InvalidCBOR => write!(f, "InvalidCBOR"),
+            SchemaValidationError::InvalidCDDL(_) => write!(f, "InvalidCDDL"),
             SchemaValidationError::NoSchema => write!(f, "NoSchema"),
             SchemaValidationError::ParsingError(_) => write!(f, "ParsingError"),
             SchemaValidationError::ValidationError(_) => write!(f, "ValidationError"),
