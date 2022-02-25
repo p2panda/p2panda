@@ -6,8 +6,6 @@
 //! operations.
 //!
 //! [`Concise Data Definition Language`]: https://tools.ietf.org/html/rfc8610
-#[cfg(not(target_arch = "wasm32"))]
-use cddl::validator::cbor;
 
 #[allow(clippy::module_inception)]
 mod cddl_builder;
@@ -15,38 +13,10 @@ mod error;
 mod operation;
 mod schema_id;
 mod system_schema;
+mod validation;
 
 pub use cddl_builder::CDDLBuilder;
 pub use error::{SchemaValidationError, SystemSchemaError};
 pub use operation::OPERATION_SCHEMA;
 pub use schema_id::SchemaId;
-
-/// Checks CBOR bytes against CDDL schemas.
-///
-/// This helper method also converts validation errors coming from the `cddl` crate into an
-/// concatenated error operation and returns it.
-#[cfg(not(target_arch = "wasm32"))]
-pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaValidationError> {
-    match cddl::validate_cbor_from_slice(cddl_schema, &bytes) {
-        Err(cbor::Error::Validation(err)) => {
-            let err_str = err
-                .iter()
-                .map(|fe| {
-                    format!("{}", fe)
-                        // Quotes escaped in error messages from `cddl` crate are actually not unescaped by
-                        // format macro.
-                        //
-                        // See: https://github.com/anweiss/cddl/blob/main/src/validator/cbor.rs#L100
-                        .replace('"', "'")
-                })
-                .collect::<Vec<String>>();
-
-            Err(SchemaValidationError::InvalidSchema(err_str))
-        }
-        Err(cbor::Error::CBORParsing(_err)) => Err(SchemaValidationError::InvalidCBOR),
-        Err(cbor::Error::CDDLParsing(err)) => {
-            panic!("Parsing CDDL error: {}", err);
-        }
-        _ => Ok(()),
-    }
-}
+pub use validation::validate_schema;
