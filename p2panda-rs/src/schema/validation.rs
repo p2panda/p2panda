@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-#[cfg(not(target_arch = "wasm32"))]
 use cddl::validator::cbor;
 
 use super::SchemaValidationError;
@@ -9,7 +8,6 @@ use super::SchemaValidationError;
 ///
 /// This method also converts validation errors coming from the `cddl` crate into an
 /// concatenated error operation and returns it.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaValidationError> {
     match cddl::validate_cbor_from_slice(cddl_schema, &bytes) {
         Err(cbor::Error::Validation(err)) => {
@@ -34,7 +32,6 @@ pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaVa
 }
 
 #[cfg(test)]
-#[cfg(not(target_arch = "wasm32"))]
 mod tests {
     use ciborium::cbor;
     use rstest::rstest;

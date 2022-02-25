@@ -13,10 +13,12 @@ mod error;
 mod operation;
 mod schema_id;
 mod system_schema;
+#[cfg(not(target_arch = "wasm32"))]
 mod validation;
 
 pub use cddl_builder::CDDLBuilder;
 pub use error::{SchemaValidationError, SystemSchemaError};
 pub use operation::OPERATION_SCHEMA;
 pub use schema_id::SchemaId;
+#[cfg(not(target_arch = "wasm32"))]
 pub use validation::validate_schema;
