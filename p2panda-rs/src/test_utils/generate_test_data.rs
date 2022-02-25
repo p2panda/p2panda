@@ -85,7 +85,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use p2panda_rs::schema::SchemaId;
-    /// Generate json formatted test data
+    // Generate json formatted test data
     use serde_json::Value;
 
     use p2panda_rs::operation::OperationValue;
