@@ -47,6 +47,9 @@ impl Relation {
     }
 }
 
+/// A `RelationList` can be used to reference multiple foreign documents from a document field
+pub type RelationList = Vec<Relation>;
+
 impl Validate for Relation {
     type Error = OperationError;
 
@@ -154,7 +157,7 @@ pub enum OperationValue {
 
     /// Reference to a list of documents.
     #[serde(rename = "relation_list")]
-    RelationList(Vec<Relation>),
+    RelationList(RelationList),
 }
 
 impl Validate for OperationValue {

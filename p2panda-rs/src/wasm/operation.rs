@@ -76,7 +76,7 @@ impl OperationFields {
                 Ok(())
             }
             "relation_list" => {
-                let relations: Vec<Relation> = jserr!(deserialize_from_js(value), "Invalid array");
+                let relations: RelationList = jserr!(deserialize_from_js(value), "Invalid array");
                 for relation in &relations {
                     jserr!(relation.validate());
                 }

@@ -4,7 +4,7 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 
 use crate::document::{DocumentView, DocumentViewId};
-use crate::operation::{OperationValue, Relation};
+use crate::operation::{OperationValue, RelationList};
 
 use super::SystemSchemaError;
 
@@ -42,6 +42,10 @@ impl FromStr for FieldType {
     }
 }
 
+
+/// View onto materialised schema which has fields "name", "description" and "fields".
+///
+/// The fields are validated when converting a DocumentView struct into this type.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SchemaView {
     /// ID of this schema view.
@@ -57,8 +61,10 @@ pub struct SchemaView {
     fields: RelationList,
 }
 
-type RelationList = Vec<Relation>;
 
+/// View onto materialised schema field which has fields "name" and "type".
+///
+/// The fields are validated when converting a DocumentView struct into this type.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SchemaFieldView {
     // ID of this schema field view.
@@ -71,9 +77,6 @@ pub struct SchemaFieldView {
     field_type: FieldType,
 }
 
-/// View onto materialised schema which has fields "name", "description" and "fields".
-///
-/// The fields are validated when converting a DocumentView struct into this type.
 #[allow(dead_code)] // These methods aren't used yet...
 impl SchemaView {
     /// The id of this schema view.
@@ -96,10 +99,6 @@ impl SchemaView {
         &self.fields
     }
 }
-
-/// View onto materialised schema field which has fields "name" and "type".
-///
-/// The fields are validated when converting a DocumentView struct into this type.
 #[allow(dead_code)] // These methods aren't used yet...
 impl SchemaFieldView {
     /// The id of this schema view.
