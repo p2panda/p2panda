@@ -8,7 +8,7 @@ use crate::operation::{OperationValue, Relation};
 
 use super::SystemSchemaError;
 
-/// Field types that can be defined when publishing an application schema
+/// Valid field types for publishing an application schema
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum FieldType {
     /// Defines a boolean field

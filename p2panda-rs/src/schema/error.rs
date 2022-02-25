@@ -2,8 +2,6 @@
 
 use thiserror::Error;
 
-use crate::operation::OperationValue;
-
 /// Error types for schema validation.
 #[derive(Error)]
 pub enum SchemaValidationError {

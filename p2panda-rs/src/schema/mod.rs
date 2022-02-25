@@ -12,7 +12,7 @@ mod cddl_builder;
 mod error;
 mod operation;
 mod schema_id;
-mod system;
+pub mod system;
 #[cfg(not(target_arch = "wasm32"))]
 mod validation;
 
