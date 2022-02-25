@@ -2,13 +2,11 @@
 
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
-use std::hash::{Hash as StdHash, Hasher};
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_repr::{Deserialize_repr, Serialize_repr};
+use serde::{Deserialize, Serialize};
 
 use crate::hash::Hash;
-use crate::operation::{OperationEncoded, OperationError, OperationFieldsError};
+use crate::operation::{OperationError, OperationFieldsError};
 
 use crate::Validate;
 
