@@ -42,7 +42,6 @@ impl FromStr for FieldType {
     }
 }
 
-
 /// View onto materialised schema which has fields "name", "description" and "fields".
 ///
 /// The fields are validated when converting a DocumentView struct into this type.
@@ -60,7 +59,6 @@ pub struct SchemaView {
     /// The fields in this schema.
     fields: RelationList,
 }
-
 
 /// View onto materialised schema field which has fields "name" and "type".
 ///
