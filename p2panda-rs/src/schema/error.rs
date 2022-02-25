@@ -47,6 +47,10 @@ pub enum SchemaIdError {
     HashError(#[from] crate::hash::HashError),
 }
 
+// This `Debug` implementation improves the display of error values from the `cddl` crate. Without
+// this, all of its errors are concatenated into a long string that quickly becomes hard to read.
+// By displaying cddl errors using `Display` instead of `Debug` below, we get line breaks in error
+// messages. C.f. https://github.com/p2panda/p2panda/pull/207
 impl std::fmt::Debug for SchemaValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
