@@ -8,22 +8,22 @@ use crate::operation::{OperationValue, RelationList};
 
 use super::SystemSchemaError;
 
-/// Valid field types for publishing an application schema
+/// Valid field types for publishing an application schema.
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum FieldType {
-    /// Defines a boolean field
+    /// Defines a boolean field.
     Bool,
 
-    /// Defines an integer number field
+    /// Defines an integer number field.
     Int,
 
-    /// Defines a floating point number field
+    /// Defines a floating point number field.
     Float,
 
-    /// Defines a text string field
+    /// Defines a text string field.
     String,
 
-    /// Defines a [`Relation`] field
+    /// Defines a [`Relation`] field.
     Relation,
 }
 
@@ -97,6 +97,7 @@ impl SchemaView {
         &self.fields
     }
 }
+
 #[allow(dead_code)] // These methods aren't used yet...
 impl SchemaFieldView {
     /// The id of this schema view.

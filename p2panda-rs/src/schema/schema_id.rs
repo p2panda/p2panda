@@ -9,9 +9,7 @@ use crate::hash::Hash;
 use crate::operation::Relation;
 use crate::schema::error::SchemaIdError;
 
-/// Identifies the schema of an [`crate::operation::Operation`]
-///
-/// For system schemas this identifier
+/// Identifies the schema of an [`crate::operation::Operation`].
 #[derive(Clone, Debug, PartialEq)]
 pub enum SchemaId {
     /// An application schema.

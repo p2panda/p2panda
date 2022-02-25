@@ -47,7 +47,7 @@ impl Relation {
     }
 }
 
-/// A `RelationList` can be used to reference multiple foreign documents from a document field
+/// A `RelationList` can be used to reference multiple foreign documents from a document field.
 pub type RelationList = Vec<Relation>;
 
 impl Validate for Relation {

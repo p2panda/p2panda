@@ -2,9 +2,8 @@
 
 //! System schemas are p2panda's built-in schema type.
 //!
-//! They are defined as part of the p2panda specification and may differ from application
-//! schemas in how they are materialised.
-
+//! They are defined as part of the p2panda specification and may differ from application schemas
+//! in how they are materialised.
 mod error;
 mod schema;
 
