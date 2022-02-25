@@ -79,6 +79,7 @@ mod tests {
         }
         "#;
 
+        // value missing `age`
         let value = cbor!({
             "name" => "Latte",
         })
@@ -98,12 +99,14 @@ mod tests {
         }
         "#;
 
+        // cbor not matching cddl in the slightest
         let cbor_bytes = Vec::from("}");
         assert!(validate_schema(cddl, cbor_bytes).is_err());
     }
 
     #[test]
     fn invalid_cddl() {
+        // cddl definition with an unmatched `{` character
         let cddl = r#"
         panda = {
             name: {
