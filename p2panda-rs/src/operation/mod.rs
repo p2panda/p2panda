@@ -8,14 +8,13 @@ mod error;
 #[allow(clippy::module_inception)]
 mod operation;
 mod operation_encoded;
+mod operation_fields;
 mod operation_meta;
 
 pub use error::{
     OperationEncodedError, OperationError, OperationFieldsError, OperationWithMetaError,
 };
-pub use operation::{
-    AsOperation, Operation, OperationAction, OperationFields, OperationValue, OperationVersion,
-    Relation, RelationList,
-};
+pub use operation::{AsOperation, Operation, OperationAction, OperationVersion};
 pub use operation_encoded::OperationEncoded;
+pub use operation_fields::{OperationFields, OperationValue, Relation, RelationList};
 pub use operation_meta::OperationWithMeta;
