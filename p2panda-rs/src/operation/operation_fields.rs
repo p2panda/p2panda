@@ -267,10 +267,8 @@ mod tests {
         ];
 
         let mut fields = OperationFields::new();
-        fields
+        assert!(fields
             .add("locations", OperationValue::RelationList(relations))
-            .unwrap();
-
-        println!("{:?}", fields);
+            .is_ok());
     }
 }
