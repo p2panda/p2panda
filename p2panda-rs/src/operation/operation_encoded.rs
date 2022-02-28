@@ -94,13 +94,13 @@ mod tests {
     use rstest::rstest;
     use rstest_reuse::apply;
 
-    use crate::hash::Hash;
+    use crate::document::DocumentId;
     use crate::operation::{AsOperation, Operation, OperationValue, Relation, RelationList};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::templates::version_fixtures;
     use crate::test_utils::fixtures::{
-        encoded_create_string, fields, operation_encoded_invalid_relation_fields, random_hash,
-        schema, update_operation, Fixture,
+        encoded_create_string, fields, operation_encoded_invalid_relation_fields,
+        random_document_id, random_hash, schema, update_operation, Fixture,
     };
     use crate::Validate;
 
@@ -144,9 +144,9 @@ mod tests {
     #[rstest]
     fn encode_decode_all_field_types(
         schema: SchemaId,
-        #[from(random_hash)] picture_document: Hash,
-        #[from(random_hash)] friend_document_1: Hash,
-        #[from(random_hash)] friend_document_2: Hash,
+        #[from(random_document_id)] picture_document: DocumentId,
+        #[from(random_document_id)] friend_document_1: DocumentId,
+        #[from(random_document_id)] friend_document_2: DocumentId,
         #[with(
             // Schema hash
             schema.clone(),

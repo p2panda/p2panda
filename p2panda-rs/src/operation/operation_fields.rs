@@ -165,9 +165,9 @@ impl Validate for OperationFields {
 mod tests {
     use rstest::rstest;
 
-    use crate::hash::Hash;
+    use crate::document::DocumentId;
     use crate::operation::{Relation, RelationList};
-    use crate::test_utils::fixtures::random_hash;
+    use crate::test_utils::fixtures::random_document_id;
 
     use super::{OperationFields, OperationValue};
 
@@ -203,8 +203,8 @@ mod tests {
 
     #[rstest]
     fn relation_lists(
-        #[from(random_hash)] document_1: Hash,
-        #[from(random_hash)] document_2: Hash,
+        #[from(random_document_id)] document_1: DocumentId,
+        #[from(random_document_id)] document_2: DocumentId,
     ) {
         let relations =
             RelationList::new(vec![Relation::new(document_1), Relation::new(document_2)]);

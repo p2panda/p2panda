@@ -100,12 +100,13 @@ impl DocumentView {
 mod tests {
     use rstest::rstest;
 
-    use crate::document::reduce;
+    use crate::document::{reduce, DocumentId};
     use crate::hash::Hash;
     use crate::operation::{OperationValue, Relation};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, fields, random_hash, schema, update_operation,
+        create_operation, delete_operation, fields, random_document_id, random_hash, schema,
+        update_operation,
     };
 
     use super::{DocumentView, DocumentViewId};
@@ -115,7 +116,7 @@ mod tests {
         schema: SchemaId,
         #[from(random_hash)] prev_op_hash: Hash,
         #[from(random_hash)] document_id: Hash,
-        #[from(random_hash)] relation: Hash,
+        #[from(random_document_id)] relation: DocumentId,
         #[from(random_hash)] view_id: Hash,
     ) {
         let document_view_id = DocumentViewId {

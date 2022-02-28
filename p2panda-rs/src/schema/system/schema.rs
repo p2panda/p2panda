@@ -196,17 +196,17 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::document::{DocumentView, DocumentViewId};
+    use crate::document::{DocumentId, DocumentView, DocumentViewId};
     use crate::hash::Hash;
     use crate::operation::{OperationValue, Relation, RelationList};
     use crate::schema::system::{FieldType, SchemaFieldView};
-    use crate::test_utils::fixtures::random_hash;
+    use crate::test_utils::fixtures::{random_document_id, random_hash};
 
     use super::SchemaView;
 
     #[rstest]
     fn from_document_view(
-        #[from(random_hash)] relation_hash: Hash,
+        #[from(random_document_id)] relation_hash: DocumentId,
         #[from(random_hash)] document_id: Hash,
         #[from(random_hash)] view_id: Hash,
     ) {

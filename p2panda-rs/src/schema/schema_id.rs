@@ -5,6 +5,7 @@ use std::str::FromStr;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use crate::document::DocumentId;
 use crate::hash::Hash;
 use crate::operation::Relation;
 use crate::schema::error::SchemaIdError;
@@ -30,8 +31,9 @@ impl SchemaId {
             "schema_field_v1" => Ok(SchemaId::SchemaField),
             string => {
                 // We only use document_id in a relation at the moment.
-                let hash = Hash::new(string)?;
-                Ok(SchemaId::Application(Relation::new(hash)))
+                Ok(SchemaId::Application(Relation::new(DocumentId::new(
+                    Hash::new(string)?,
+                ))))
             }
         }
     }
@@ -69,7 +71,7 @@ impl<'de> Deserialize<'de> for SchemaId {
             "schema_v1" => Ok(SchemaId::Schema),
             "schema_field_v1" => Ok(SchemaId::SchemaField),
             _ => match Hash::new(s.as_str()) {
-                Ok(hash) => Ok(SchemaId::Application(Relation::new(hash))),
+                Ok(hash) => Ok(SchemaId::Application(Relation::new(DocumentId::new(hash)))),
                 Err(e) => Err(SchemaIdError::HashError(e)).map_err(Error::custom),
             },
         }

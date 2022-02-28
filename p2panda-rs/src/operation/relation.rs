@@ -2,22 +2,23 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::document::DocumentId;
 use crate::hash::Hash;
 use crate::operation::OperationError;
 use crate::Validate;
 
 /// Field type representing references to other documents.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct Relation(Hash);
+pub struct Relation(DocumentId);
 
 impl Relation {
     /// Returns a new relation field type.
-    pub fn new(document: Hash) -> Self {
+    pub fn new(document: DocumentId) -> Self {
         Self(document)
     }
 
     /// Returns the relations document id.
-    pub fn document_id(&self) -> &Hash {
+    pub fn document_id(&self) -> &DocumentId {
         &self.0
     }
 }

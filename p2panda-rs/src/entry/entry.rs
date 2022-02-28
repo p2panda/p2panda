@@ -208,25 +208,27 @@ impl Validate for Entry {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
+    use crate::document::DocumentId;
     use crate::entry::{LogId, SeqNum};
     use crate::hash::Hash;
     use crate::operation::{Operation, OperationFields, OperationValue, Relation};
     use crate::schema::SchemaId;
+    use crate::test_utils::fixtures::random_document_id;
 
     use super::Entry;
 
-    #[test]
-    fn validation() {
+    #[rstest]
+    fn validation(#[from(random_document_id)] document_id: DocumentId) {
         // Prepare sample values
         let mut fields = OperationFields::new();
         fields
             .add("test", OperationValue::Text("Hello".to_owned()))
             .unwrap();
-        let operation = Operation::new_create(
-            SchemaId::Application(Relation::new(Hash::new_from_bytes(vec![1, 2, 3]).unwrap())),
-            fields,
-        )
-        .unwrap();
+        let operation =
+            Operation::new_create(SchemaId::Application(Relation::new(document_id)), fields)
+                .unwrap();
         let backlink = Hash::new_from_bytes(vec![7, 8, 9]).unwrap();
 
         // The first entry in a log doesn't need and cannot have references to previous entries
