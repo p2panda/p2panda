@@ -167,7 +167,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::DocumentId;
-    use crate::operation::{Relation, RelationList};
+    use crate::operation::RelationList;
     use crate::test_utils::fixtures::random_document_id;
 
     use super::{OperationFields, OperationValue};
@@ -207,8 +207,7 @@ mod tests {
         #[from(random_document_id)] document_1: DocumentId,
         #[from(random_document_id)] document_2: DocumentId,
     ) {
-        let relations =
-            RelationList::new(vec![Relation::new(document_1), Relation::new(document_2)]);
+        let relations = RelationList::new(vec![document_1, document_2]);
 
         let mut fields = OperationFields::new();
         assert!(fields

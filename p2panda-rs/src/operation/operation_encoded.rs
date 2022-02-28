@@ -160,8 +160,8 @@ mod tests {
               ("is_admin", OperationValue::Boolean(false)),
               ("profile_picture", OperationValue::Relation(Relation::new(picture_document.clone()))),
               ("my_friends", OperationValue::RelationList(RelationList::new(vec![
-                  Relation::new(friend_document_1.clone()),
-                  Relation::new(friend_document_2.clone()),
+                  friend_document_1.clone(),
+                  friend_document_2.clone(),
               ]))),
             ])
         )]
@@ -192,8 +192,8 @@ mod tests {
         assert_eq!(
             fields.get("my_friends").unwrap(),
             &OperationValue::RelationList(RelationList::new(vec![
-                Relation::new(friend_document_1),
-                Relation::new(friend_document_2),
+                friend_document_1,
+                friend_document_2,
             ]))
         );
     }

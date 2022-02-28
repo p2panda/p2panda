@@ -211,7 +211,7 @@ mod tests {
 
     use crate::document::{DocumentId, DocumentView, DocumentViewId};
     use crate::hash::Hash;
-    use crate::operation::{OperationValue, Relation, RelationList};
+    use crate::operation::{OperationValue, RelationList};
     use crate::schema::system::{FieldType, SchemaFieldView};
     use crate::test_utils::fixtures::{random_document_id, random_hash};
 
@@ -223,8 +223,6 @@ mod tests {
         #[from(random_document_id)] document_id: DocumentId,
         #[from(random_hash)] view_id: Hash,
     ) {
-        let relation = Relation::new(relation_document_id);
-
         let mut bool_field = BTreeMap::new();
         bool_field.insert(
             "name".to_string(),
@@ -236,7 +234,7 @@ mod tests {
         );
         bool_field.insert(
             "fields".to_string(),
-            OperationValue::RelationList(RelationList::new(vec![relation])),
+            OperationValue::RelationList(RelationList::new(vec![relation_document_id])),
         );
 
         let document_view_id = DocumentViewId::new(vec![view_id]);
