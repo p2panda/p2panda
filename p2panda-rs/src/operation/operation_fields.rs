@@ -237,17 +237,28 @@ mod tests {
 
         // Detect duplicate
         fields
-            .add("test", OperationValue::Text("Hello, Panda!".to_owned()))
+            .add("message", OperationValue::Text("Hello, Panda!".to_owned()))
             .unwrap();
 
+        // Have to use `update` to change fields
         assert!(fields
-            .add("test", OperationValue::Text("Huhu".to_owned()))
+            .add("message", OperationValue::Text("Huhu".to_owned()))
             .is_err());
+
+        assert!(fields
+            .update("message", OperationValue::Text("Huhu".to_owned()))
+            .is_ok());
 
         // Bail when key does not exist
         assert!(fields
             .update("imagine", OperationValue::Text("Pandaparty".to_owned()))
             .is_err());
+
+        assert_eq!(fields.keys(), vec!["message"]);
+
+        assert!(fields.remove("message").is_ok());
+
+        assert_eq!(fields.len(), 0);
     }
 
     #[rstest]
