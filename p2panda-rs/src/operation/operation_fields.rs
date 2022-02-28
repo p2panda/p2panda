@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::hash::HashError;
 use crate::operation::{OperationError, OperationFieldsError, Relation, RelationList};
 use crate::Validate;
 
@@ -38,7 +39,7 @@ pub enum OperationValue {
 }
 
 impl Validate for OperationValue {
-    type Error = OperationError;
+    type Error = HashError;
 
     fn validate(&self) -> Result<(), Self::Error> {
         match self {

@@ -4,34 +4,41 @@
 use std::collections::btree_map::Iter as BTreeMapIter;
 use std::collections::BTreeMap;
 
-use crate::hash::Hash;
-use crate::operation::OperationValue;
+use serde::{Deserialize, Serialize};
 
-/// The ID of a document view. Contains the hash id of the document, and the hash ids of the
-/// current document graph tips.
-#[derive(Debug, PartialEq, Clone)]
-pub struct DocumentViewId {
-    document_id: Hash,
-    view_id: Vec<Hash>,
-}
+use crate::document::DocumentId;
+use crate::hash::{Hash, HashError};
+use crate::operation::OperationValue;
+use crate::Validate;
+
+/// The identifier of a document view.
+///
+/// Contains the hashes of the document graph tips which is all the information we need to reliably
+/// recreate the document at this certain point in time.
+#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
+pub struct DocumentViewId(Vec<Hash>);
 
 impl DocumentViewId {
     /// Create a new document view id.
-    pub fn new(document_id: Hash, view_id: Vec<Hash>) -> Self {
-        Self {
-            document_id,
-            view_id,
+    pub fn new(graph_tips: Vec<Hash>) -> Self {
+        Self(graph_tips)
+    }
+
+    /// Get the graph tip hashes of this view id.
+    pub fn graph_tips(&self) -> &[Hash] {
+        self.0.as_slice()
+    }
+}
+
+impl Validate for DocumentViewId {
+    type Error = HashError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        for hash in &self.0 {
+            hash.validate()?;
         }
-    }
 
-    /// Get just the document id.
-    pub fn document_id(&self) -> &Hash {
-        &self.document_id
-    }
-
-    /// Get just the view id.
-    pub fn view_id(&self) -> &[Hash] {
-        self.view_id.as_slice()
+        Ok(())
     }
 }
 
@@ -39,36 +46,45 @@ type FieldKey = String;
 
 /// The materialised view of a `Document`. It's fields match the documents schema definition.
 ///
-/// `DocumentViews` can be instantiated from a CREATE operation and then mutated with UPDATE
-/// or DELETE operations.
+/// `DocumentViews` are immutable versions of a `Document`. They represent a document at a certain
+/// point in time.
 #[derive(Debug, PartialEq, Clone)]
 pub struct DocumentView {
+    /// Identifier of this document view.
     pub(crate) id: DocumentViewId,
+
+    /// Identifier of the document this view is derived from.
+    pub(crate) document_id: DocumentId,
+
+    /// Materialized data held by this document view.
     pub(crate) view: BTreeMap<FieldKey, OperationValue>,
 }
 
 impl DocumentView {
     /// Construct a document view.
     ///
-    /// Requires the DocumentViewId and field values to be calculated seperately and then passed in
-    /// during construction.
-    pub fn new(id: DocumentViewId, view: BTreeMap<FieldKey, OperationValue>) -> Self {
-        Self { id, view }
+    /// Requires the DocumentId, DocumentViewId and field values to be calculated seperately and
+    /// then passed in during construction.
+    pub fn new(
+        id: DocumentViewId,
+        document_id: DocumentId,
+        view: BTreeMap<FieldKey, OperationValue>,
+    ) -> Self {
+        Self {
+            id,
+            document_id,
+            view,
+        }
     }
 
     /// Get the id of this document view.
-    pub fn id(&self) -> &[Hash] {
-        self.id.view_id()
+    pub fn id(&self) -> &DocumentViewId {
+        &self.id
     }
 
     /// Get the id of this document.
-    pub fn document_id(&self) -> &Hash {
-        self.id.document_id()
-    }
-
-    /// Get the document view id.
-    pub fn document_view_id(&self) -> &DocumentViewId {
-        &self.id
+    pub fn document_id(&self) -> &DocumentId {
+        &self.document_id
     }
 
     /// Get a single value from this instance by it's key.
@@ -115,16 +131,13 @@ mod tests {
     fn gets_the_right_values(
         schema: SchemaId,
         #[from(random_hash)] prev_op_hash: Hash,
-        #[from(random_hash)] document_id: Hash,
-        #[from(random_document_id)] relation: DocumentId,
+        #[from(random_document_id)] document_id: DocumentId,
+        #[from(random_document_id)] profile_picture_id: DocumentId,
         #[from(random_hash)] view_id: Hash,
     ) {
-        let document_view_id = DocumentViewId {
-            document_id,
-            view_id: vec![view_id],
-        };
+        let document_view_id = DocumentViewId::new(vec![view_id]);
 
-        let relation = Relation::new(relation);
+        let relation = Relation::new(profile_picture_id);
 
         let create_operation = create_operation(
             schema.clone(),
@@ -143,7 +156,7 @@ mod tests {
         // Reduce a single CREATE `Operation`
         let (view, is_edited, is_deleted) = reduce(&[create_operation.clone()]);
 
-        let document_view = DocumentView::new(document_view_id.clone(), view);
+        let document_view = DocumentView::new(document_view_id.clone(), document_id.clone(), view);
 
         assert_eq!(
             document_view.keys(),
@@ -187,7 +200,7 @@ mod tests {
         let (view, is_edited, is_deleted) =
             reduce(&[create_operation.clone(), update_operation.clone()]);
 
-        let document_view = DocumentView::new(document_view_id, view);
+        let document_view = DocumentView::new(document_view_id, document_id, view);
 
         assert_eq!(
             document_view.get("age").unwrap(),

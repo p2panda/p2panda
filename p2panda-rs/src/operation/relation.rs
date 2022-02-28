@@ -2,8 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::document::DocumentId;
-use crate::hash::Hash;
+use crate::document::{DocumentId, DocumentViewId};
+use crate::hash::HashError;
 use crate::operation::OperationError;
 use crate::Validate;
 
@@ -24,34 +24,29 @@ impl Relation {
 }
 
 impl Validate for Relation {
-    type Error = OperationError;
+    type Error = HashError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        self.0.validate()?;
-        Ok(())
+        self.0.validate()
     }
 }
 
 /// Reference to the exact version of the document.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-struct PinnedRelation(Vec<Hash>);
+struct PinnedRelation(DocumentViewId);
 
 impl PinnedRelation {
     /// Returns a new relation field type.
-    pub fn new(document_view: Vec<Hash>) -> Self {
-        Self(document_view)
+    pub fn new(document_view_id: DocumentViewId) -> Self {
+        Self(document_view_id)
     }
 }
 
 impl Validate for PinnedRelation {
-    type Error = OperationError;
+    type Error = HashError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        for operation_id in &self.0 {
-            operation_id.validate()?;
-        }
-
-        Ok(())
+        self.0.validate()
     }
 }
 
@@ -66,7 +61,7 @@ impl RelationList {
 }
 
 impl Validate for RelationList {
-    type Error = OperationError;
+    type Error = HashError;
 
     fn validate(&self) -> Result<(), Self::Error> {
         for operation_id in &self.0 {
