@@ -3,18 +3,16 @@
 use std::ops::Deref;
 use std::str::FromStr;
 
-use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::hash::Hash;
-use crate::operation::Relation;
+use crate::operation::PinnedRelation;
 use crate::schema::error::SchemaIdError;
 
 /// Enum representing existing schema types.
 #[derive(Clone, Debug, PartialEq)]
 pub enum SchemaId {
     /// An application schema.
-    Application(Relation),
+    Application(PinnedRelation),
 
     /// A schema definition.
     Schema,
@@ -24,26 +22,29 @@ pub enum SchemaId {
 }
 
 impl SchemaId {
-    /// Instantiate a new SchemaId from a hash string.
-    pub fn new(hash: &str) -> Result<Self, SchemaIdError> {
-        match hash {
+    /// Instantiate a new SchemaId for a system schema.
+    pub fn new_system_schema(name: &str) -> Result<Self, SchemaIdError> {
+        match name {
             "schema_v1" => Ok(SchemaId::Schema),
             "schema_field_v1" => Ok(SchemaId::SchemaField),
-            string => {
-                // We only use document_id in a relation at the moment.
-                let hash = Hash::new(string)?;
-                Ok(SchemaId::Application(Relation::new(hash, vec![])))
-            }
+            _ => Err(SchemaIdError::UnknownSystemSchema(name.into())),
         }
+    }
+
+    /// Instantiate a new SchemaId for an application schema.
+    pub fn new_application_schema(relation: PinnedRelation) -> Result<Self, SchemaIdError> {
+        Ok(SchemaId::Application(relation))
     }
 }
 
 impl SchemaId {
     fn as_str(&self) -> &str {
         match self {
-            SchemaId::Application(relation) => relation.document_id().as_str(),
+            // @TODO
+            // SchemaId::Application(relation) => relation.document_id().as_str(),
             SchemaId::Schema => "schema_v1",
             SchemaId::SchemaField => "schema_field_v1",
+            _ => unimplemented!(),
         }
     }
 }
@@ -52,7 +53,8 @@ impl FromStr for SchemaId {
     type Err = SchemaIdError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::new(s)
+        // @TODO
+        Self::new_system_schema(s)
     }
 }
 
@@ -70,9 +72,11 @@ impl Serialize for SchemaId {
         S: Serializer,
     {
         serializer.serialize_str(match &*self {
-            SchemaId::Application(relation) => relation.document_id().as_str(),
+            // @TODO
+            // SchemaId::Application(relation) => relation.document_id().as_str(),
             SchemaId::Schema => "schema_v1",
             SchemaId::SchemaField => "schema_field_v1",
+            _ => unimplemented!(),
         })
     }
 }
@@ -84,24 +88,22 @@ impl<'de> Deserialize<'de> for SchemaId {
     {
         let s = String::deserialize(deserializer)?;
 
+        // @TODO: Handle application schema case
         match s.as_str() {
             "schema_v1" => Ok(SchemaId::Schema),
             "schema_field_v1" => Ok(SchemaId::SchemaField),
-            _ => match Hash::new(s.as_str()) {
-                Ok(hash) => Ok(SchemaId::Application(Relation::new(hash, vec![]))),
-                Err(e) => Err(SchemaIdError::HashError(e)).map_err(Error::custom),
-            },
+            _ => unimplemented!(),
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
+    // use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
 
-    use super::SchemaId;
+    // use super::SchemaId;
 
-    #[test]
+    /* #[test]
     fn serialize() {
         let app_schema = SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap();
         assert_eq!(
@@ -161,5 +163,5 @@ mod test {
     fn parse_schema_type() {
         let schema: SchemaId = "schema_v1".parse().unwrap();
         assert_eq!(schema, SchemaId::Schema);
-    }
+    } */
 }

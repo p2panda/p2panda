@@ -234,7 +234,8 @@ impl DocumentBuilder {
         let document_view_id = DocumentViewId::new(graph_tips);
 
         // Construct the document view, from the reduced values and the document view id
-        let document_view = DocumentView::new(document_id, document_view_id, view);
+        // @TODO
+        let document_view = DocumentView::new(document_id.clone(), document_view_id, view);
 
         Ok(Document {
             id: document_id,
@@ -252,8 +253,9 @@ mod tests {
 
     use rstest::rstest;
 
+    use crate::hash::Hash;
     use crate::identity::KeyPair;
-    use crate::operation::{Operation, OperationValue, OperationWithMeta};
+    use crate::operation::{Operation, OperationValue, OperationWithMeta, PinnedRelation};
     use crate::schema::SchemaId;
     use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::fixtures::{
@@ -524,7 +526,9 @@ mod tests {
             )
             .unwrap(),
         );
-        let schema = SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap();
+        // @TODO
+        let pinned_relation = PinnedRelation::new(vec![Hash::new(DEFAULT_SCHEMA_HASH).unwrap()]);
+        let schema = SchemaId::new_application_schema(pinned_relation).unwrap();
         let mut node = Node::new();
         let (polar_entry_1_hash, _) = send_to_node(
             &mut node,

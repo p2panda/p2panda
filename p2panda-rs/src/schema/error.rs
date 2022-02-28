@@ -43,6 +43,9 @@ pub enum SchemaIdError {
     /// `OperationFields` error.
     #[error("invalid hash string")]
     HashError(#[from] crate::hash::HashError),
+
+    #[error("Unknown system schema name {0}")]
+    UnknownSystemSchema(String),
 }
 
 /// Custom error types for system schema views.
