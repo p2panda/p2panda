@@ -95,7 +95,10 @@ mod tests {
     use rstest_reuse::apply;
 
     use crate::document::DocumentId;
-    use crate::operation::{AsOperation, Operation, OperationValue, Relation, RelationList};
+    use crate::operation::{
+        AsOperation, Operation, OperationValue, OperationValueRelation, OperationValueRelationList,
+        Relation, RelationList,
+    };
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::templates::version_fixtures;
     use crate::test_utils::fixtures::{
@@ -158,11 +161,11 @@ mod tests {
               ("age", OperationValue::Integer(28)),
               ("height", OperationValue::Float(3.5)),
               ("is_admin", OperationValue::Boolean(false)),
-              ("profile_picture", OperationValue::Relation(Relation::new(picture_document.clone()))),
-              ("my_friends", OperationValue::RelationList(RelationList::new(vec![
+              ("profile_picture", OperationValue::Relation(OperationValueRelation::Unpinned(Relation::new(picture_document.clone())))),
+              ("my_friends", OperationValue::RelationList(OperationValueRelationList::Unpinned(RelationList::new(vec![
                   friend_document_1.clone(),
                   friend_document_2.clone(),
-              ]))),
+              ])))),
             ])
         )]
         update_operation: Operation,
@@ -187,14 +190,15 @@ mod tests {
         );
         assert_eq!(
             fields.get("profile_picture").unwrap(),
-            &OperationValue::Relation(Relation::new(picture_document))
+            &OperationValue::Relation(OperationValueRelation::Unpinned(Relation::new(
+                picture_document
+            )))
         );
         assert_eq!(
             fields.get("my_friends").unwrap(),
-            &OperationValue::RelationList(RelationList::new(vec![
-                friend_document_1,
-                friend_document_2,
-            ]))
+            &OperationValue::RelationList(OperationValueRelationList::Unpinned(RelationList::new(
+                vec![friend_document_1, friend_document_2,]
+            )))
         );
     }
 }

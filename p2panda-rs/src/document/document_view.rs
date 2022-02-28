@@ -118,7 +118,7 @@ mod tests {
 
     use crate::document::{reduce, DocumentId};
     use crate::hash::Hash;
-    use crate::operation::{OperationValue, Relation};
+    use crate::operation::{OperationValue, OperationValueRelation, Relation};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, fields, random_document_id, random_hash, schema,
@@ -148,7 +148,7 @@ mod tests {
                 ("is_admin", OperationValue::Boolean(false)),
                 (
                     "profile_picture",
-                    OperationValue::Relation(relation.clone()),
+                    OperationValue::Relation(OperationValueRelation::Unpinned(relation.clone())),
                 ),
             ]),
         );
@@ -182,7 +182,7 @@ mod tests {
         );
         assert_eq!(
             document_view.get("profile_picture").unwrap(),
-            &OperationValue::Relation(relation)
+            &OperationValue::Relation(OperationValueRelation::Unpinned(relation))
         );
         assert!(!is_edited);
         assert!(!is_deleted);

@@ -4,7 +4,7 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 
 use crate::document::{DocumentId, DocumentView, DocumentViewId};
-use crate::operation::{OperationValue, RelationList};
+use crate::operation::{OperationValue, OperationValueRelationList, PinnedRelationList};
 
 use super::SystemSchemaError;
 
@@ -60,7 +60,7 @@ pub struct SchemaView {
     description: String,
 
     /// The fields in this schema.
-    fields: RelationList,
+    fields: PinnedRelationList,
 }
 
 #[allow(dead_code)] // These methods aren't used yet...
@@ -86,7 +86,7 @@ impl SchemaView {
     }
 
     /// A list of fields assigned to this schema identified by their document id.
-    pub fn fields(&self) -> &RelationList {
+    pub fn fields(&self) -> &PinnedRelationList {
         &self.fields
     }
 }
@@ -114,7 +114,9 @@ impl TryFrom<DocumentView> for SchemaView {
         }?;
 
         let fields = match document_view.get("fields") {
-            Some(OperationValue::RelationList(value)) => Ok(value),
+            Some(OperationValue::RelationList(OperationValueRelationList::Pinned(value))) => {
+                Ok(value)
+            }
             Some(op) => Err(SystemSchemaError::InvalidField(
                 "fields".to_string(),
                 op.to_owned(),
@@ -211,7 +213,7 @@ mod tests {
 
     use crate::document::{DocumentId, DocumentView, DocumentViewId};
     use crate::hash::Hash;
-    use crate::operation::{OperationValue, RelationList};
+    use crate::operation::{OperationValue, OperationValueRelationList, PinnedRelationList};
     use crate::schema::system::{FieldType, SchemaFieldView};
     use crate::test_utils::fixtures::{random_document_id, random_hash};
 
@@ -219,9 +221,9 @@ mod tests {
 
     #[rstest]
     fn from_document_view(
-        #[from(random_document_id)] relation_document_id: DocumentId,
-        #[from(random_document_id)] document_id: DocumentId,
+        #[from(random_hash)] relation_operation_id: Hash,
         #[from(random_hash)] view_id: Hash,
+        #[from(random_document_id)] document_id: DocumentId,
     ) {
         let mut bool_field = BTreeMap::new();
         bool_field.insert(
@@ -234,7 +236,9 @@ mod tests {
         );
         bool_field.insert(
             "fields".to_string(),
-            OperationValue::RelationList(RelationList::new(vec![relation_document_id])),
+            OperationValue::RelationList(OperationValueRelationList::Pinned(
+                PinnedRelationList::new(vec![DocumentViewId::new(vec![relation_operation_id])]),
+            )),
         );
 
         let document_view_id = DocumentViewId::new(vec![view_id]);

@@ -6,8 +6,55 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::hash::HashError;
-use crate::operation::{OperationError, OperationFieldsError, Relation, RelationList};
+use crate::operation::{
+    OperationError, OperationFieldsError, PinnedRelation, PinnedRelationList, Relation,
+    RelationList,
+};
 use crate::Validate;
+
+/// Wrapper around relation types which can be both pinned and unpinned.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OperationValueRelation {
+    /// Value refers to a document.
+    Unpinned(Relation),
+
+    /// Value refers to a "pinned" document at a certain point in time.
+    Pinned(PinnedRelation),
+}
+
+impl Validate for OperationValueRelation {
+    type Error = HashError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        match self {
+            Self::Unpinned(relation) => relation.validate(),
+            Self::Pinned(relation) => relation.validate(),
+        }
+    }
+}
+
+/// Wrapper around relation list types which can be both pinned and unpinned.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OperationValueRelationList {
+    /// Value refers to a list of documents.
+    Unpinned(RelationList),
+
+    /// Value refers to a list of "pinned" documents from a certain point in time.
+    Pinned(PinnedRelationList),
+}
+
+impl Validate for OperationValueRelationList {
+    type Error = HashError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        match self {
+            Self::Unpinned(relation_list) => relation_list.validate(),
+            Self::Pinned(relation_list) => relation_list.validate(),
+        }
+    }
+}
 
 /// Enum of possible data types which can be added to the operations fields as values.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -31,11 +78,11 @@ pub enum OperationValue {
 
     /// Reference to a document.
     #[serde(rename = "relation")]
-    Relation(Relation),
+    Relation(OperationValueRelation),
 
     /// Reference to a list of documents.
     #[serde(rename = "relation_list")]
-    RelationList(RelationList),
+    RelationList(OperationValueRelationList),
 }
 
 impl Validate for OperationValue {
@@ -164,12 +211,6 @@ impl Validate for OperationFields {
 
 #[cfg(test)]
 mod tests {
-    use rstest::rstest;
-
-    use crate::document::DocumentId;
-    use crate::operation::RelationList;
-    use crate::test_utils::fixtures::random_document_id;
-
     use super::{OperationFields, OperationValue};
 
     #[test]
@@ -200,18 +241,5 @@ mod tests {
         assert!(fields.remove("message").is_ok());
 
         assert_eq!(fields.len(), 0);
-    }
-
-    #[rstest]
-    fn relation_lists(
-        #[from(random_document_id)] document_1: DocumentId,
-        #[from(random_document_id)] document_2: DocumentId,
-    ) {
-        let relations = RelationList::new(vec![document_1, document_2]);
-
-        let mut fields = OperationFields::new();
-        assert!(fields
-            .add("locations", OperationValue::RelationList(relations))
-            .is_ok());
     }
 }

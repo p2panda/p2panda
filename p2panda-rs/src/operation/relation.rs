@@ -32,11 +32,10 @@ impl Validate for Relation {
 
 /// Reference to the exact version of the document.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-struct PinnedRelation(DocumentViewId);
+pub struct PinnedRelation(DocumentViewId);
 
 impl PinnedRelation {
     /// Returns a new pinned relation field.
-    #[allow(dead_code)]
     pub fn new(document_view_id: DocumentViewId) -> Self {
         Self(document_view_id)
     }
@@ -65,10 +64,90 @@ impl Validate for RelationList {
     type Error = HashError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        for operation_id in &self.0 {
-            operation_id.validate()?;
+        for document_id in &self.0 {
+            document_id.validate()?;
         }
 
         Ok(())
+    }
+}
+
+/// A `PinnedRelationList` can be used to reference multiple documents views.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PinnedRelationList(Vec<DocumentViewId>);
+
+impl PinnedRelationList {
+    /// Returns a new list of pinned relations.
+    pub fn new(relations: Vec<DocumentViewId>) -> Self {
+        Self(relations)
+    }
+}
+
+impl Validate for PinnedRelationList {
+    type Error = HashError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        for document_view in &self.0 {
+            document_view.validate()?;
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use crate::document::{DocumentId, DocumentViewId};
+    use crate::hash::Hash;
+    use crate::operation::{OperationFields, OperationValue, OperationValueRelationList};
+    use crate::test_utils::fixtures::{random_document_id, random_hash};
+
+    use super::{PinnedRelationList, RelationList};
+
+    #[rstest]
+    fn relation_lists(
+        #[from(random_document_id)] document_1: DocumentId,
+        #[from(random_document_id)] document_2: DocumentId,
+    ) {
+        let relations = RelationList::new(vec![document_1, document_2]);
+
+        let mut fields = OperationFields::new();
+        assert!(fields
+            .add(
+                "locations",
+                OperationValue::RelationList(OperationValueRelationList::Unpinned(relations))
+            )
+            .is_ok());
+    }
+
+    #[rstest]
+    fn pinned_relation_lists(
+        #[from(random_hash)] operation_id_1: Hash,
+        #[from(random_hash)] operation_id_2: Hash,
+        #[from(random_hash)] operation_id_3: Hash,
+        #[from(random_hash)] operation_id_4: Hash,
+        #[from(random_hash)] operation_id_5: Hash,
+        #[from(random_hash)] operation_id_6: Hash,
+    ) {
+        let document_view_id_1 = DocumentViewId::new(vec![operation_id_1, operation_id_2]);
+        let document_view_id_2 = DocumentViewId::new(vec![operation_id_3]);
+        let document_view_id_3 =
+            DocumentViewId::new(vec![operation_id_4, operation_id_5, operation_id_6]);
+
+        let relations = PinnedRelationList::new(vec![
+            document_view_id_1,
+            document_view_id_2,
+            document_view_id_3,
+        ]);
+
+        let mut fields = OperationFields::new();
+        assert!(fields
+            .add(
+                "locations",
+                OperationValue::RelationList(OperationValueRelationList::Pinned(relations))
+            )
+            .is_ok());
     }
 }
