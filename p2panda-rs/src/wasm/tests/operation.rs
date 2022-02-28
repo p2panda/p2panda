@@ -16,14 +16,8 @@ wasm_bindgen_test_configure!(run_in_browser);
 fn add_remove_operation_fields() {
     let mut fields = OperationFields::new();
 
-    // Prepare test value by parsing JSON into JavaScript `object` instance
-    let relation = JSON::parse(
-        "{
-            \"document\": \"00205d23607adf6490033cc319cd2b193b2674243f7dd56912432978684ed4fbf12e\",
-            \"document_view\": []
-        }",
-    )
-    .unwrap();
+    let relation =
+        JsValue::from_str("00205d23607adf6490033cc319cd2b193b2674243f7dd56912432978684ed4fbf12e");
 
     let list = Array::new();
     list.push(&relation);
@@ -81,8 +75,8 @@ fn add_remove_operation_fields() {
 fn invalid_relation_values() {
     let mut fields = OperationFields::new();
 
-    // Fail when unknown fields are inside of relation object
-    let unknown_field = JSON::parse(
+    // Fail when passing invalid JavaScript object
+    let unknown_object = JSON::parse(
         "{
             \"unknown_field\": \"00205d23607adf6490033cc319cd2b193b2674243f7dd56912432978684ed4fbf12e\",
             \"this_field\": \"is_not_known!\"
@@ -90,42 +84,21 @@ fn invalid_relation_values() {
     ).unwrap();
 
     assert!(fields
-        .add("test", "relation", unknown_field.clone())
+        .add("test", "relation", unknown_object.clone())
         .is_err());
 
     let list = Array::new();
-    list.push(&unknown_field);
+    list.push(&unknown_object);
     assert!(fields.add("test", "relation_list", list.into()).is_err());
 
     // Fail when using invalid hash
-    let invalid_hash_1 = JSON::parse(
-        "{
-            \"document\": \"this is not a hash\"
-        }",
-    )
-    .unwrap();
+    let invalid_hash_1 = JsValue::from_str("this is not a hash");
     assert!(fields
         .add("test", "relation", invalid_hash_1.clone())
         .is_err());
 
     let list = Array::new();
     list.push(&invalid_hash_1);
-    assert!(fields.add("test", "relation_list", list.into()).is_err());
-
-    let invalid_hash_2 = JSON::parse(
-        "{
-            \"document\": \"00205d23607adf6490033cc319cd2b193b2674243f7dd56912432978684ed4fbf12e\",
-            \"document_view\": [\"This is not a hash\"]
-        }",
-    )
-    .unwrap();
-
-    assert!(fields
-        .add("test", "relation", invalid_hash_2.clone())
-        .is_err());
-
-    let list = Array::new();
-    list.push(&invalid_hash_2);
     assert!(fields.add("test", "relation_list", list.into()).is_err());
 }
 
@@ -177,13 +150,8 @@ fn large_integers() {
 fn encodes_operations() {
     let mut fields = OperationFields::new();
 
-    let relation = JSON::parse(
-        "{
-            \"document\": \"00205d23607adf6490033cc319cd2b193b2674243f7dd56912432978684ed4fbf12e\",
-            \"document_view\": []
-        }",
-    )
-    .unwrap();
+    let relation =
+        JsValue::from_str("00205d23607adf6490033cc319cd2b193b2674243f7dd56912432978684ed4fbf12e");
 
     // Create a couple of operation fields
     fields
