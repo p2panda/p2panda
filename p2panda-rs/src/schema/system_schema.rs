@@ -4,7 +4,7 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 
 use crate::document::{DocumentView, DocumentViewId};
-use crate::operation::{OperationValue, Relation};
+use crate::operation::{OperationValue, RelationList};
 
 use super::SystemSchemaError;
 
@@ -47,8 +47,6 @@ pub struct SchemaView {
     /// The fields in this schema.
     fields: RelationList,
 }
-
-type RelationList = Vec<Relation>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SchemaFieldView {

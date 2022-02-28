@@ -5,9 +5,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::hash::Hash;
-use crate::operation::{OperationError, OperationFieldsError};
-
+use crate::operation::{OperationError, OperationFieldsError, Relation, RelationList};
 use crate::Validate;
 
 /// Enum of possible data types which can be added to the operations fields as values.
@@ -36,7 +34,7 @@ pub enum OperationValue {
 
     /// Reference to a list of documents.
     #[serde(rename = "relation_list")]
-    RelationList(Vec<Relation>),
+    RelationList(RelationList),
 }
 
 impl Validate for OperationValue {
@@ -45,81 +43,9 @@ impl Validate for OperationValue {
     fn validate(&self) -> Result<(), Self::Error> {
         match self {
             Self::Relation(relation) => relation.validate(),
-            Self::RelationList(relations) => {
-                for relation in relations {
-                    relation.validate()?;
-                }
-
-                Ok(())
-            }
+            Self::RelationList(relations) => relations.validate(),
             _ => Ok(()),
         }
-    }
-}
-
-/// Field type representing references to other documents.
-///
-/// The "relation" field type references a document id and the historical state which it had at the
-/// point this relation was created.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum Relation {
-    /// Document id this relation is referring to.
-    Unpinned(Hash),
-
-    /// Reference to the exact version of the document.
-    ///
-    /// This field is `None` when there is no more than one operation (when the document only
-    /// consists of one CREATE operation).
-    Pinned(Vec<Hash>),
-}
-
-impl Validate for Relation {
-    type Error = OperationError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        match &self {
-            Relation::Unpinned(hash) => {
-                hash.validate()?;
-            }
-            Relation::Pinned(document_view) => {
-                for operation_id in document_view {
-                    operation_id.validate()?;
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum RelationList {
-    Unpinned(Vec<Hash>),
-    Pinned(Vec<Vec<Hash>>),
-}
-
-impl Validate for RelationList {
-    type Error = OperationError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        match &self {
-            RelationList::Unpinned(documents) => {
-                for document in documents {
-                    document.validate()?;
-                }
-            }
-            RelationList::Pinned(document_view) => {
-                for view in document_view {
-                    for operation_id in view {
-                        operation_id.validate()?;
-                    }
-                }
-            }
-        }
-
-        Ok(())
     }
 }
 
@@ -239,9 +165,11 @@ impl Validate for OperationFields {
 mod tests {
     use rstest::rstest;
 
+    use crate::hash::Hash;
+    use crate::operation::RelationList;
     use crate::test_utils::fixtures::random_hash;
 
-    use super::*;
+    use super::{OperationFields, OperationValue};
 
     #[test]
     fn operation_fields() {
@@ -273,10 +201,7 @@ mod tests {
         let document_view_1 = vec![operation_id_1, operation_id_2];
         let document_view_2 = vec![operation_id_3];
 
-        let relations = vec![
-            Relation::new(document_1, document_view_1),
-            Relation::new(document_2, document_view_2),
-        ];
+        let relations = RelationList::Pinned(vec![document_view_1, document_view_2]);
 
         let mut fields = OperationFields::new();
         assert!(fields
