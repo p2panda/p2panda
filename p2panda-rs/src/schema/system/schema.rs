@@ -191,17 +191,16 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, convert::TryFrom};
+    use std::collections::BTreeMap;
+    use std::convert::TryFrom;
 
     use rstest::rstest;
 
-    use crate::{
-        document::{DocumentView, DocumentViewId},
-        hash::Hash,
-        operation::{OperationValue, Relation},
-        schema::system::{FieldType, SchemaFieldView},
-        test_utils::fixtures::random_hash,
-    };
+    use crate::document::{DocumentView, DocumentViewId};
+    use crate::hash::Hash;
+    use crate::operation::{OperationValue, Relation, RelationList};
+    use crate::schema::system::{FieldType, SchemaFieldView};
+    use crate::test_utils::fixtures::random_hash;
 
     use super::SchemaView;
 
@@ -212,7 +211,7 @@ mod tests {
         #[from(random_hash)] view_id: Hash,
     ) {
         let document_view_id = DocumentViewId::new(document_id, vec![view_id]);
-        let relation = Relation::new(relation_hash, Vec::new());
+        let relation = Relation::new(relation_hash);
 
         let mut bool_field = BTreeMap::new();
         bool_field.insert(
@@ -225,7 +224,7 @@ mod tests {
         );
         bool_field.insert(
             "fields".to_string(),
-            OperationValue::RelationList(vec![relation]),
+            OperationValue::RelationList(RelationList::new(vec![relation])),
         );
 
         let document_view = DocumentView::new(document_view_id, bool_field);

@@ -43,13 +43,7 @@ impl Validate for OperationValue {
     fn validate(&self) -> Result<(), Self::Error> {
         match self {
             Self::Relation(relation) => relation.validate(),
-            Self::RelationList(relations) => {
-                for relation in relations {
-                    relation.validate()?;
-                }
-
-                Ok(())
-            }
+            Self::RelationList(relations) => relations.validate(),
             _ => Ok(()),
         }
     }
@@ -172,7 +166,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::hash::Hash;
-    use crate::operation::Relation;
+    use crate::operation::{Relation, RelationList};
     use crate::test_utils::fixtures::random_hash;
 
     use super::{OperationFields, OperationValue};
@@ -215,13 +209,8 @@ mod tests {
         #[from(random_hash)] operation_id_2: Hash,
         #[from(random_hash)] operation_id_3: Hash,
     ) {
-        let document_view_1 = vec![operation_id_1, operation_id_2];
-        let document_view_2 = vec![operation_id_3];
-
-        let relations = vec![
-            Relation::new(document_1, document_view_1),
-            Relation::new(document_2, document_view_2),
-        ];
+        let relations =
+            RelationList::new(vec![Relation::new(document_1), Relation::new(document_2)]);
 
         let mut fields = OperationFields::new();
         assert!(fields

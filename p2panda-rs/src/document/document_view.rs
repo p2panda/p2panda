@@ -123,7 +123,7 @@ mod tests {
             view_id: vec![view_id],
         };
 
-        let relation = Relation::new(relation, Vec::new());
+        let relation = Relation::new(relation);
 
         let create_operation = create_operation(
             schema.clone(),

@@ -31,7 +31,7 @@ impl SchemaId {
             string => {
                 // We only use document_id in a relation at the moment.
                 let hash = Hash::new(string)?;
-                Ok(SchemaId::Application(Relation::new(hash, vec![])))
+                Ok(SchemaId::Application(Relation::new(hash)))
             }
         }
     }
@@ -69,7 +69,7 @@ impl<'de> Deserialize<'de> for SchemaId {
             "schema_v1" => Ok(SchemaId::Schema),
             "schema_field_v1" => Ok(SchemaId::SchemaField),
             _ => match Hash::new(s.as_str()) {
-                Ok(hash) => Ok(SchemaId::Application(Relation::new(hash, vec![]))),
+                Ok(hash) => Ok(SchemaId::Application(Relation::new(hash))),
                 Err(e) => Err(SchemaIdError::HashError(e)).map_err(Error::custom),
             },
         }

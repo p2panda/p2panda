@@ -95,7 +95,7 @@ mod tests {
     use rstest_reuse::apply;
 
     use crate::hash::Hash;
-    use crate::operation::{AsOperation, Operation, OperationValue, Relation};
+    use crate::operation::{AsOperation, Operation, OperationValue, Relation, RelationList};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::templates::version_fixtures;
     use crate::test_utils::fixtures::{
@@ -147,7 +147,6 @@ mod tests {
         #[from(random_hash)] picture_document: Hash,
         #[from(random_hash)] friend_document_1: Hash,
         #[from(random_hash)] friend_document_2: Hash,
-        #[from(random_hash)] friend_operation_id: Hash,
         #[with(
             // Schema hash
             schema.clone(),
@@ -159,11 +158,11 @@ mod tests {
               ("age", OperationValue::Integer(28)),
               ("height", OperationValue::Float(3.5)),
               ("is_admin", OperationValue::Boolean(false)),
-              ("profile_picture", OperationValue::Relation(Relation::new(picture_document.clone(), Vec::new()))),
-              ("my_friends", OperationValue::RelationList(vec![
-                  Relation::new(friend_document_1.clone(), vec![friend_operation_id.clone()]),
-                  Relation::new(friend_document_2.clone(), Vec::new()),
-              ])),
+              ("profile_picture", OperationValue::Relation(Relation::new(picture_document.clone()))),
+              ("my_friends", OperationValue::RelationList(RelationList::new(vec![
+                  Relation::new(friend_document_1.clone()),
+                  Relation::new(friend_document_2.clone()),
+              ]))),
             ])
         )]
         update_operation: Operation,
@@ -188,14 +187,14 @@ mod tests {
         );
         assert_eq!(
             fields.get("profile_picture").unwrap(),
-            &OperationValue::Relation(Relation::new(picture_document, Vec::new()))
+            &OperationValue::Relation(Relation::new(picture_document))
         );
         assert_eq!(
             fields.get("my_friends").unwrap(),
-            &OperationValue::RelationList(vec![
-                Relation::new(friend_document_1, vec![friend_operation_id]),
-                Relation::new(friend_document_2, vec![])
-            ])
+            &OperationValue::RelationList(RelationList::new(vec![
+                Relation::new(friend_document_1),
+                Relation::new(friend_document_2),
+            ]))
         );
     }
 }

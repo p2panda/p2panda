@@ -469,7 +469,7 @@ mod tests {
         fields
             .add(
                 "profile_picture",
-                OperationValue::Relation(Relation::new(document, Vec::new())),
+                OperationValue::Relation(Relation::new(document)),
             )
             .unwrap();
 
