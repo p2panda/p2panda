@@ -89,3 +89,7 @@ rstest_reuse = "0.1.3"
 [[bench]]
 name = "graph"
 harness = false
+
+[[bench]]
+name = "operation_encoding"
+harness = false
