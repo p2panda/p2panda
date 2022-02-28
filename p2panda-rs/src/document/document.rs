@@ -68,14 +68,19 @@ pub(super) fn reduce<T: AsOperation>(
     (view, is_edited, is_deleted)
 }
 
+/// Identifier of a document.
+///
+/// Every document is identified by the entry hash of its first CREATE operation.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DocumentId(Hash);
 
 impl DocumentId {
+    /// Creates a new instance of `DocumentId`.
     pub fn new(id: Hash) -> Self {
         Self(id)
     }
 
+    /// Returns the string representation of the document id.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }

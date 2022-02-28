@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentId, DocumentViewId};
 use crate::hash::HashError;
-use crate::operation::OperationError;
 use crate::Validate;
 
 /// Field type representing references to other documents.
@@ -12,7 +11,7 @@ use crate::Validate;
 pub struct Relation(DocumentId);
 
 impl Relation {
-    /// Returns a new relation field type.
+    /// Returns a new relation field.
     pub fn new(document: DocumentId) -> Self {
         Self(document)
     }
@@ -36,7 +35,8 @@ impl Validate for Relation {
 struct PinnedRelation(DocumentViewId);
 
 impl PinnedRelation {
-    /// Returns a new relation field type.
+    /// Returns a new pinned relation field.
+    #[allow(dead_code)]
     pub fn new(document_view_id: DocumentViewId) -> Self {
         Self(document_view_id)
     }
@@ -55,6 +55,7 @@ impl Validate for PinnedRelation {
 pub struct RelationList(Vec<Relation>);
 
 impl RelationList {
+    /// Returns a new list of relations.
     pub fn new(relations: Vec<Relation>) -> Self {
         Self(relations)
     }
