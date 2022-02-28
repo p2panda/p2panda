@@ -205,9 +205,6 @@ mod tests {
     fn relation_lists(
         #[from(random_hash)] document_1: Hash,
         #[from(random_hash)] document_2: Hash,
-        #[from(random_hash)] operation_id_1: Hash,
-        #[from(random_hash)] operation_id_2: Hash,
-        #[from(random_hash)] operation_id_3: Hash,
     ) {
         let relations =
             RelationList::new(vec![Relation::new(document_1), Relation::new(document_2)]);
