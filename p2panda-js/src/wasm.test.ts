@@ -106,18 +106,11 @@ describe('WebAssembly interface', () => {
 
       // Throw when relation is an invalid hash
       expect(() =>
-        fields.add('contact', 'relation', {
-          document: 'This is not a hash',
-        }),
+        fields.add('contact', 'relation', 'this is not a hash'),
       ).toThrow('invalid hex encoding in hash string');
 
       expect(() =>
-        fields.add('contact', 'relation_list', [
-          {
-            document: TEST_SCHEMA,
-            document_view: ['This is not a hash'],
-          },
-        ]),
+        fields.add('contact', 'relation_list', ['this is not a hash']),
       ).toThrow('invalid hex encoding in hash string');
     });
 
