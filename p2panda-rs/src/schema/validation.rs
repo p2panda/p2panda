@@ -96,7 +96,7 @@ mod tests {
         }
         "#;
 
-        // cbor not matching cddl in the slightest
+        // invalid CBOR
         let cbor_bytes = Vec::from("}");
         assert!(validate_schema(cddl, cbor_bytes).is_err());
     }
