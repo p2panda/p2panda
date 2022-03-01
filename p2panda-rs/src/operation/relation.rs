@@ -1,5 +1,51 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Relations describe references to different documents.
+//!
+//! Similar to SQL relationships between different tables, any document can refer to another one by
+//! its "document id". This module provides types used in operations to refer to one (`Relation`)
+//! or many documents (`RelationList`).
+//!
+//! This is an example of a simple `Relation` where a "Comment" Document refers to a "Blog Post"
+//! Document:
+//!
+//! ```
+//! [Blog-Post "Monday evening"]
+//!          ^
+//!          | Relation
+//!          |
+//!       [Comment "This was great!"]
+//! ```
+//!
+//! Relations can optionally be "pinned" to a certain, immutable version of one document or many
+//! documents when necessary (`PinnedRelation` or `PinnedRelationList`). When the Blog-Post from
+//! the example above changes its contents from "Monday evening" to "Tuesday morning" the comment
+//! would automatically refer to the new version. Since the comment was probably referring to
+//! Monday when it was created, we have to "pin" it to the exact version of the blog post. This is
+//! achieved by referring to the "document view id" instead:
+//!
+//! ```
+//! [Blog-Post "Monday evening"] -- UPDATE -- > [Blog-Post "Tuesday morning"]
+//!          ^
+//!          | Pinned Relation (we will stay in the "past")
+//!          |
+//!       [Comment "This was great!"]
+//! ```
+//!
+//! Document view ids contain the hashes of the document graph tips which is all the information we
+//! need to reliably recreate the document at this certain point in time.
+//!
+//! Pinned relations give us immutability and the possibility to restore a historical state across
+//! documents. Most cases will only need unpinned relations though: For example when referring to a
+//! user-profile you probably want to always get the "latest".
+//!
+//! ```
+//! [User-Profile "icebear-2000"]
+//!          ^
+//!          | Relation
+//!          |
+//!       [Blog-Post "Monday evening"]
+//! ```
 use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentId, DocumentViewId};
