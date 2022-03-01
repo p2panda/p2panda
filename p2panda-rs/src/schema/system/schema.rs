@@ -4,17 +4,26 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 
 use crate::document::{DocumentView, DocumentViewId};
-use crate::operation::{OperationValue, Relation};
+use crate::operation::{OperationValue, RelationList};
 
 use super::SystemSchemaError;
 
+/// Valid field types for publishing an application schema.
 #[derive(Clone, Debug, Copy, PartialEq)]
-#[allow(missing_docs)]
 pub enum FieldType {
+    /// Defines a boolean field.
     Bool,
+
+    /// Defines an integer number field.
     Int,
+
+    /// Defines a floating point number field.
     Float,
+
+    /// Defines a text string field.
     String,
+
+    /// Defines a [`Relation`] field.
     Relation,
 }
 
@@ -28,11 +37,14 @@ impl FromStr for FieldType {
             "float" => Ok(FieldType::Float),
             "str" => Ok(FieldType::String),
             "relation" => Ok(FieldType::Relation),
-            _ => Err(SystemSchemaError::InvalidFieldType),
+            type_str => Err(SystemSchemaError::InvalidFieldType(type_str.into())),
         }
     }
 }
 
+/// View onto materialised schema which has fields "name", "description" and "fields".
+///
+/// The fields are validated when converting a DocumentView struct into this type.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SchemaView {
     /// ID of this schema view.
@@ -48,8 +60,9 @@ pub struct SchemaView {
     fields: RelationList,
 }
 
-type RelationList = Vec<Relation>;
-
+/// View onto materialised schema field which has fields "name" and "type".
+///
+/// The fields are validated when converting a DocumentView struct into this type.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SchemaFieldView {
     // ID of this schema field view.
@@ -62,9 +75,6 @@ pub struct SchemaFieldView {
     field_type: FieldType,
 }
 
-/// View onto materialised schema which has fields "name", "description" and "fields".
-///
-/// The fields are validated when converting a DocumentView struct into this type.
 #[allow(dead_code)] // These methods aren't used yet...
 impl SchemaView {
     /// The id of this schema view.
@@ -88,9 +98,6 @@ impl SchemaView {
     }
 }
 
-/// View onto materialised schema field which has fields "name" and "type".
-///
-/// The fields are validated when converting a DocumentView struct into this type.
 #[allow(dead_code)] // These methods aren't used yet...
 impl SchemaFieldView {
     /// The id of this schema view.
@@ -113,12 +120,6 @@ impl TryFrom<DocumentView> for SchemaView {
     type Error = SystemSchemaError;
 
     fn try_from(document_view: DocumentView) -> Result<Self, Self::Error> {
-        match document_view.len() {
-            len if len < 3 => Err(SystemSchemaError::TooFewFields),
-            len if len == 3 => Ok(()),
-            _ => Err(SystemSchemaError::TooManyFields),
-        }?;
-
         let name = match document_view.get("name") {
             Some(OperationValue::Text(value)) => Ok(value),
             Some(op) => Err(SystemSchemaError::InvalidField(
@@ -159,12 +160,6 @@ impl TryFrom<DocumentView> for SchemaFieldView {
     type Error = SystemSchemaError;
 
     fn try_from(document_view: DocumentView) -> Result<Self, Self::Error> {
-        match document_view.len() {
-            len if len < 2 => Err(SystemSchemaError::TooFewFields),
-            len if len == 2 => Ok(()),
-            _ => Err(SystemSchemaError::TooManyFields),
-        }?;
-
         let name = match document_view.get("name") {
             Some(OperationValue::Text(value)) => Ok(value),
             Some(op) => Err(SystemSchemaError::InvalidField(
@@ -204,7 +199,7 @@ mod tests {
         document::{DocumentView, DocumentViewId},
         hash::Hash,
         operation::{OperationValue, Relation},
-        schema::system_schema::{FieldType, SchemaFieldView},
+        schema::system::{FieldType, SchemaFieldView},
         test_utils::fixtures::random_hash,
     };
 

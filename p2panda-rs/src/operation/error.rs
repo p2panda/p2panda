@@ -10,7 +10,7 @@ pub enum OperationError {
     #[error("operation fields can not be empty")]
     EmptyFields,
 
-    /// Invalid attempt to create a delete operation with fields
+    /// Invalid attempt to create a delete operation with fields.
     #[error("DELETE operation must not have fields")]
     DeleteWithFields,
 

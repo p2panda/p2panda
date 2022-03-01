@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::ops::Deref;
 use std::str::FromStr;
 
 use serde::de::Error;
@@ -10,7 +9,7 @@ use crate::hash::Hash;
 use crate::operation::Relation;
 use crate::schema::error::SchemaIdError;
 
-/// Enum representing existing schema types.
+/// Identifies the schema of an [`crate::operation::Operation`].
 #[derive(Clone, Debug, PartialEq)]
 pub enum SchemaId {
     /// An application schema.
@@ -24,7 +23,7 @@ pub enum SchemaId {
 }
 
 impl SchemaId {
-    /// Instantiate a new SchemaId from a hash string.
+    /// Instantiate a new `SchemaId` from a hash string.
     pub fn new(hash: &str) -> Result<Self, SchemaIdError> {
         match hash {
             "schema_v1" => Ok(SchemaId::Schema),
@@ -38,29 +37,11 @@ impl SchemaId {
     }
 }
 
-impl SchemaId {
-    fn as_str(&self) -> &str {
-        match self {
-            SchemaId::Application(relation) => relation.document_id().as_str(),
-            SchemaId::Schema => "schema_v1",
-            SchemaId::SchemaField => "schema_field_v1",
-        }
-    }
-}
-
 impl FromStr for SchemaId {
     type Err = SchemaIdError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::new(s)
-    }
-}
-
-impl Deref for SchemaId {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        self.as_str()
     }
 }
 
