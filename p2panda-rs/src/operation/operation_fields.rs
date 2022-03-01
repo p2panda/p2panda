@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::document::{DocumentId, DocumentViewId};
 use crate::hash::HashError;
 use crate::operation::{
     OperationError, OperationFieldsError, PinnedRelation, PinnedRelationList, Relation,
@@ -34,6 +35,18 @@ impl Validate for OperationValueRelation {
     }
 }
 
+impl From<DocumentId> for OperationValueRelation {
+    fn from(document_id: DocumentId) -> Self {
+        Self::Unpinned(Relation::new(document_id))
+    }
+}
+
+impl From<DocumentViewId> for OperationValueRelation {
+    fn from(document_view_id: DocumentViewId) -> Self {
+        Self::Pinned(PinnedRelation::new(document_view_id))
+    }
+}
+
 /// Wrapper around relation list types which can be both pinned and unpinned.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -53,6 +66,30 @@ impl Validate for OperationValueRelationList {
             Self::Unpinned(relation_list) => relation_list.validate(),
             Self::Pinned(relation_list) => relation_list.validate(),
         }
+    }
+}
+
+impl From<DocumentId> for OperationValueRelationList {
+    fn from(document_id: DocumentId) -> Self {
+        Self::Unpinned(RelationList::new(vec![document_id]))
+    }
+}
+
+impl From<DocumentViewId> for OperationValueRelationList {
+    fn from(document_view_id: DocumentViewId) -> Self {
+        Self::Pinned(PinnedRelationList::new(vec![document_view_id]))
+    }
+}
+
+impl From<Vec<DocumentId>> for OperationValueRelationList {
+    fn from(document_ids: Vec<DocumentId>) -> Self {
+        Self::Unpinned(RelationList::new(document_ids))
+    }
+}
+
+impl From<Vec<DocumentViewId>> for OperationValueRelationList {
+    fn from(document_view_ids: Vec<DocumentViewId>) -> Self {
+        Self::Pinned(PinnedRelationList::new(document_view_ids))
     }
 }
 
@@ -268,6 +305,47 @@ mod tests {
         assert!(fields.remove("message").is_ok());
 
         assert_eq!(fields.len(), 0);
+    }
+
+    #[rstest]
+    fn relations_conversions(
+        #[from(random_hash)] hash_1: Hash,
+        #[from(random_hash)] hash_2: Hash,
+        #[from(random_hash)] hash_3: Hash,
+        #[from(random_hash)] hash_4: Hash,
+        #[from(random_hash)] hash_5: Hash,
+    ) {
+        let document_id = DocumentId::new(hash_1.clone());
+        let document_view_id = DocumentViewId::new(vec![hash_1]);
+
+        // 1. Unpinned relation
+        let relation: OperationValueRelation = document_id.clone().into();
+        assert!(relation.validate().is_ok());
+
+        // 2. Pinned relation
+        let pinned_relation: OperationValueRelation = document_view_id.clone().into();
+        assert!(pinned_relation.validate().is_ok());
+
+        // 3. Unpinned relation list with one entry
+        let relation_list: OperationValueRelationList = document_id.clone().into();
+        assert!(relation_list.validate().is_ok());
+
+        // 4. Pinned relation list with one entry
+        let pinned_relation_list: OperationValueRelationList = document_view_id.clone().into();
+        assert!(pinned_relation_list.validate().is_ok());
+
+        // 5. Unpinned relation list with many entries
+        let relation_list_2: OperationValueRelationList =
+            vec![DocumentId::new(hash_2), DocumentId::new(hash_3)].into();
+        assert!(relation_list_2.validate().is_ok());
+
+        // 6. Pinned relation list with many entries
+        let relation_list_2: OperationValueRelationList = vec![
+            DocumentViewId::new(vec![hash_4]),
+            DocumentViewId::new(vec![hash_5]),
+        ]
+        .into();
+        assert!(relation_list_2.validate().is_ok());
     }
 
     #[rstest]
