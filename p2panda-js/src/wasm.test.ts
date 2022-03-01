@@ -44,30 +44,16 @@ describe('WebAssembly interface', () => {
       fields.add('temperature', 'int', '32');
       fields.add('isCute', 'bool', true);
       fields.add('degree', 'float', 12.322);
-      fields.add('username', 'relation', {
-        document: TEST_SCHEMA,
-      });
-      fields.add('locations', 'relation_list', [
-        {
-          document: TEST_SCHEMA,
-          document_view: [TEST_SCHEMA],
-        },
-      ]);
+      fields.add('username', 'relation', TEST_SCHEMA);
+      fields.add('locations', 'relation_list', [[TEST_SCHEMA]]);
 
       // Returns the correct fields
       expect(fields.get('description')).toBe('Hello, Panda');
       expect(fields.get('temperature')).toEqual(BigInt(32));
       expect(fields.get('isCute')).toBe(true);
       expect(fields.get('degree')).toBe(12.322);
-      expect(fields.get('username')).toEqual({
-        document: TEST_SCHEMA,
-      });
-      expect(fields.get('locations')).toEqual([
-        {
-          document: TEST_SCHEMA,
-          document_view: [TEST_SCHEMA],
-        },
-      ]);
+      expect(fields.get('username')).toEqual(TEST_SCHEMA);
+      expect(fields.get('locations')).toEqual([[TEST_SCHEMA]]);
 
       // Return nothing when field does not exist
       expect(fields.get('message')).toBe(null);
