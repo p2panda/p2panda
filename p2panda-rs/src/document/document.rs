@@ -2,15 +2,12 @@
 
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
-
-use crate::document::{DocumentBuilderError, DocumentView, DocumentViewId};
+use crate::document::{DocumentBuilderError, DocumentId, DocumentView, DocumentViewId};
 use crate::graph::Graph;
-use crate::hash::{Hash, HashError};
+use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{AsOperation, OperationValue, OperationWithMeta};
 use crate::schema::SchemaId;
-use crate::Validate;
 
 /// Construct a graph from a list of operations.
 pub(super) fn build_graph(
@@ -66,33 +63,6 @@ pub(super) fn reduce<T: AsOperation>(
     }
 
     (view, is_edited, is_deleted)
-}
-
-/// Identifier of a document.
-///
-/// Every document is identified by the entry hash of its first CREATE operation.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct DocumentId(Hash);
-
-impl DocumentId {
-    /// Creates a new instance of `DocumentId`.
-    pub fn new(id: Hash) -> Self {
-        Self(id)
-    }
-
-    /// Returns the string representation of the document id.
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-impl Validate for DocumentId {
-    type Error = HashError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        self.0.validate()?;
-        Ok(())
-    }
 }
 
 #[derive(Debug, Clone, Default)]
