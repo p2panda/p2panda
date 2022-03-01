@@ -55,6 +55,19 @@ describe('Utils', () => {
         LARGE_NUMBER_RESPONSE,
       );
     });
+
+    it('ignores undefined fields', () => {
+      const request: Fields = {
+        channel: 5,
+        // @ts-ignore
+        username: undefined,
+        // @ts-ignore
+        another: null,
+      };
+
+      const result = marshallRequestFields(request);
+      expect(result.size).toBe(1);
+    });
   });
 
   describe('marshallResponseFields', () => {
