@@ -9,7 +9,7 @@
 //! This is an example of a simple `Relation` where a "Comment" Document refers to a "Blog Post"
 //! Document:
 //!
-//! ```
+//! ```text
 //! [Blog-Post "Monday evening"]
 //!          ^
 //!          | Relation
@@ -24,7 +24,7 @@
 //! Monday when it was created, we have to "pin" it to the exact version of the blog post. This is
 //! achieved by referring to the "document view id" instead:
 //!
-//! ```
+//! ```text
 //! [Blog-Post "Monday evening"] -- UPDATE -- > [Blog-Post "Tuesday morning"]
 //!          ^
 //!          | Pinned Relation (we will stay in the "past")
@@ -39,7 +39,7 @@
 //! documents. Most cases will only need unpinned relations though: For example when referring to a
 //! user-profile you probably want to always get the "latest".
 //!
-//! ```
+//! ```text
 //! [User-Profile "icebear-2000"]
 //!          ^
 //!          | Relation
