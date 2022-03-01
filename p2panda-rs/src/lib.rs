@@ -22,7 +22,7 @@
 //! # use p2panda_rs::operation::{Operation, OperationFields, OperationValue, Relation};
 //! # use p2panda_rs::schema::SchemaId;
 //! # use p2panda_rs::document::DocumentId;
-//! # let profile_schema = SchemaId::Application(Relation::new(DocumentId::new(Hash::new_from_bytes(vec![1, 2, 3])?)));
+//! # let profile_schema: SchemaId = Hash::new_from_bytes(vec![1, 2, 3])?.into();
 //! // Generate new Ed25519 key pair
 //! let key_pair = KeyPair::new();
 //!
