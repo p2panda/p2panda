@@ -39,6 +39,12 @@ impl SchemaId {
     }
 }
 
+impl From<Hash> for SchemaId {
+    fn from(hash: Hash) -> Self {
+        Self::Application(Relation::new(DocumentId::new(hash)))
+    }
+}
+
 impl FromStr for SchemaId {
     type Err = SchemaIdError;
 
@@ -80,6 +86,9 @@ impl<'de> Deserialize<'de> for SchemaId {
 
 #[cfg(test)]
 mod test {
+    use crate::document::DocumentId;
+    use crate::hash::Hash;
+    use crate::operation::Relation;
     use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
 
     use super::SchemaId;
@@ -144,5 +153,18 @@ mod test {
     fn parse_schema_type() {
         let schema: SchemaId = "schema_v1".parse().unwrap();
         assert_eq!(schema, SchemaId::Schema);
+    }
+
+    #[test]
+    fn conversion() {
+        let hash =
+            Hash::new("00207b3a7de3470bfe34d34ea45472082c307b995b6bd4abe2ac4ee36edef5dea1b3")
+                .unwrap();
+        let schema: SchemaId = hash.clone().into();
+
+        assert_eq!(
+            schema,
+            SchemaId::Application(Relation::new(DocumentId::new(hash)))
+        );
     }
 }
