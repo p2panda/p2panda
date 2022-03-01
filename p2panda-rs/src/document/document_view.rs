@@ -4,43 +4,8 @@
 use std::collections::btree_map::Iter as BTreeMapIter;
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
-
-use crate::document::DocumentId;
-use crate::hash::{Hash, HashError};
+use crate::document::{DocumentId, DocumentViewId};
 use crate::operation::OperationValue;
-use crate::Validate;
-
-/// The identifier of a document view.
-///
-/// Contains the hashes of the document graph tips which is all the information we need to reliably
-/// recreate the document at this certain point in time.
-#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
-pub struct DocumentViewId(Vec<Hash>);
-
-impl DocumentViewId {
-    /// Create a new document view id.
-    pub fn new(graph_tips: Vec<Hash>) -> Self {
-        Self(graph_tips)
-    }
-
-    /// Get the graph tip hashes of this view id.
-    pub fn graph_tips(&self) -> &[Hash] {
-        self.0.as_slice()
-    }
-}
-
-impl Validate for DocumentViewId {
-    type Error = HashError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        for hash in &self.0 {
-            hash.validate()?;
-        }
-
-        Ok(())
-    }
-}
 
 type FieldKey = String;
 
