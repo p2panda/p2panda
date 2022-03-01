@@ -147,53 +147,32 @@ mod tests {
 
     use crate::document::{DocumentId, DocumentViewId};
     use crate::hash::Hash;
-    use crate::operation::{OperationFields, OperationValue, OperationValueRelationList};
     use crate::test_utils::fixtures::{random_document_id, random_hash};
+    use crate::Validate;
 
-    use super::{PinnedRelationList, RelationList};
+    use super::{PinnedRelation, PinnedRelationList, Relation, RelationList};
 
     #[rstest]
-    fn relation_lists(
+    fn validation(
         #[from(random_document_id)] document_1: DocumentId,
         #[from(random_document_id)] document_2: DocumentId,
-    ) {
-        let relations = RelationList::new(vec![document_1, document_2]);
-
-        let mut fields = OperationFields::new();
-        assert!(fields
-            .add(
-                "locations",
-                OperationValue::RelationList(OperationValueRelationList::Unpinned(relations))
-            )
-            .is_ok());
-    }
-
-    #[rstest]
-    fn pinned_relation_lists(
         #[from(random_hash)] operation_id_1: Hash,
         #[from(random_hash)] operation_id_2: Hash,
-        #[from(random_hash)] operation_id_3: Hash,
-        #[from(random_hash)] operation_id_4: Hash,
-        #[from(random_hash)] operation_id_5: Hash,
-        #[from(random_hash)] operation_id_6: Hash,
     ) {
-        let document_view_id_1 = DocumentViewId::new(vec![operation_id_1, operation_id_2]);
-        let document_view_id_2 = DocumentViewId::new(vec![operation_id_3]);
-        let document_view_id_3 =
-            DocumentViewId::new(vec![operation_id_4, operation_id_5, operation_id_6]);
+        let relation = Relation::new(document_1.clone());
+        assert!(relation.validate().is_ok());
 
-        let relations = PinnedRelationList::new(vec![
-            document_view_id_1,
-            document_view_id_2,
-            document_view_id_3,
+        let pinned_relation =
+            PinnedRelation::new(DocumentViewId::new(vec![operation_id_1.clone()]));
+        assert!(pinned_relation.validate().is_ok());
+
+        let relation_list = RelationList::new(vec![document_1, document_2]);
+        assert!(relation_list.validate().is_ok());
+
+        let pinned_relation_list = PinnedRelationList::new(vec![
+            DocumentViewId::new(vec![operation_id_1]),
+            DocumentViewId::new(vec![operation_id_2]),
         ]);
-
-        let mut fields = OperationFields::new();
-        assert!(fields
-            .add(
-                "locations",
-                OperationValue::RelationList(OperationValueRelationList::Pinned(relations))
-            )
-            .is_ok());
+        assert!(pinned_relation_list.validate().is_ok());
     }
 }
