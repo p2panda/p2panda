@@ -9,7 +9,17 @@ use crate::Validate;
 
 /// Identifier of a document.
 ///
-/// Every document is identified by the entry hash of its first CREATE operation.
+/// Documents are formed by one or many operations which create, update or delete the regarding
+/// document. The hash of the entry containing the CREATE operation is automatically also the
+/// identifier of the whole document.
+///
+/// ```text
+/// The document with the following operation graph has the id "2fa..":
+///
+/// [CREATE] (Hash: "2fa..") <-- [UPDATE] (Hash: "de8..") <-- [UPDATE] (Hash: "89c..")
+///                         \
+///                          \__ [UPDATE] (Hash: "eff..")
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DocumentId(Hash);
 

@@ -11,6 +11,22 @@ use crate::Validate;
 ///
 /// Contains the hashes of the document graph tips which is all the information we need to reliably
 /// recreate the document at this certain point in time.
+///
+/// ```text
+/// The document with the following operation graph has the id "2fa.." and six different document
+/// view ids, meaning that this document can be represented in six versions:
+///
+/// 1. ["2fa"]
+/// 2. ["de8"]
+/// 3. ["89c"]
+/// 4. ["eff"]
+/// 5. ["de8", "eff"]
+/// 6. ["89c", "eff"]
+///
+/// [CREATE] (Hash: "2fa..") <-- [UPDATE] (Hash: "de8..") <-- [UPDATE] (Hash: "89c..")
+///                         \
+///                          \__ [UPDATE] (Hash: "eff..")
+/// ```
 #[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub struct DocumentViewId(Vec<Hash>);
 
