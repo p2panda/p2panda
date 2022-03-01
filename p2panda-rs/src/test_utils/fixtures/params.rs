@@ -61,12 +61,6 @@ pub fn hash(#[default(DEFAULT_HASH)] hash_str: &str) -> Hash {
     utils::hash(hash_str)
 }
 
-/// Fixture which injects the default document id.
-#[fixture]
-pub fn document_id(#[default(DEFAULT_HASH)] document_id_str: &str) -> DocumentId {
-    DocumentId::new(utils::hash(document_id_str))
-}
-
 /// Fixture which injects a random hash into a test method.
 #[fixture]
 pub fn random_hash() -> Hash {
