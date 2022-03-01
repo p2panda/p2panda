@@ -271,38 +271,6 @@ mod tests {
     }
 
     #[rstest]
-    fn validation(
-        #[from(random_document_id)] document_1: DocumentId,
-        #[from(random_document_id)] document_2: DocumentId,
-        #[from(random_hash)] operation_id_1: Hash,
-        #[from(random_hash)] operation_id_2: Hash,
-    ) {
-        let relation = Relation::new(document_1.clone());
-        let value = OperationValue::Relation(OperationValueRelation::Unpinned(relation));
-        assert!(value.validate().is_ok());
-
-        let pinned_relation = PinnedRelation::new(DocumentViewId::new(vec![
-            operation_id_1.clone(),
-            operation_id_2.clone(),
-        ]));
-        let value = OperationValue::Relation(OperationValueRelation::Pinned(pinned_relation));
-        assert!(value.validate().is_ok());
-
-        let relation_list = RelationList::new(vec![document_1, document_2]);
-        let value =
-            OperationValue::RelationList(OperationValueRelationList::Unpinned(relation_list));
-        assert!(value.validate().is_ok());
-
-        let pinned_relation_list = PinnedRelationList::new(vec![
-            DocumentViewId::new(vec![operation_id_1]),
-            DocumentViewId::new(vec![operation_id_2]),
-        ]);
-        let value =
-            OperationValue::RelationList(OperationValueRelationList::Pinned(pinned_relation_list));
-        assert!(value.validate().is_ok());
-    }
-
-    #[rstest]
     fn encode_decode_relations(
         #[from(random_hash)] hash_1: Hash,
         #[from(random_hash)] hash_2: Hash,
@@ -353,8 +321,40 @@ mod tests {
         );
     }
 
+    #[rstest]
+    fn validation_ok(
+        #[from(random_document_id)] document_1: DocumentId,
+        #[from(random_document_id)] document_2: DocumentId,
+        #[from(random_hash)] operation_id_1: Hash,
+        #[from(random_hash)] operation_id_2: Hash,
+    ) {
+        let relation = Relation::new(document_1.clone());
+        let value = OperationValue::Relation(OperationValueRelation::Unpinned(relation));
+        assert!(value.validate().is_ok());
+
+        let pinned_relation = PinnedRelation::new(DocumentViewId::new(vec![
+            operation_id_1.clone(),
+            operation_id_2.clone(),
+        ]));
+        let value = OperationValue::Relation(OperationValueRelation::Pinned(pinned_relation));
+        assert!(value.validate().is_ok());
+
+        let relation_list = RelationList::new(vec![document_1, document_2]);
+        let value =
+            OperationValue::RelationList(OperationValueRelationList::Unpinned(relation_list));
+        assert!(value.validate().is_ok());
+
+        let pinned_relation_list = PinnedRelationList::new(vec![
+            DocumentViewId::new(vec![operation_id_1]),
+            DocumentViewId::new(vec![operation_id_2]),
+        ]);
+        let value =
+            OperationValue::RelationList(OperationValueRelationList::Pinned(pinned_relation_list));
+        assert!(value.validate().is_ok());
+    }
+
     #[test]
-    fn invalid_relations() {
+    fn validation_invalid_relations() {
         // "relation_list" operation value with invalid hash:
         //
         // {
@@ -378,7 +378,7 @@ mod tests {
     }
 
     #[test]
-    fn relation_lists_can_be_empty() {
+    fn validation_relation_lists_can_be_empty() {
         let pinned_relation_list = PinnedRelationList::new(vec![]);
         let value =
             OperationValue::RelationList(OperationValueRelationList::Pinned(pinned_relation_list));
