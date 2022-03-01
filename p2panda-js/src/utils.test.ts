@@ -61,8 +61,6 @@ describe('Utils', () => {
         channel: 5,
         // @ts-ignore
         username: undefined,
-        // @ts-ignore
-        another: null,
       };
 
       const result = marshallRequestFields(request);
