@@ -6,12 +6,12 @@
 //! CDDL.
 //!
 //! Read more about CDDL: https://tools.ietf.org/html/rfc8610
-mod builder;
 mod constants;
 mod error;
+mod generator;
 mod validation;
 
-pub use builder::CddlBuilder;
 pub use constants::OPERATION_FORMAT;
 pub use error::CddlValidationError;
+pub use generator::CddlGenerator;
 pub use validation::validate_cbor;
