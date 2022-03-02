@@ -74,10 +74,9 @@ mod tests {
     use ciborium::value::Value;
     use rstest::rstest;
 
+    use crate::cddl::validate_cbor;
     use crate::operation::OperationEncoded;
     use crate::test_utils::fixtures::operation_encoded;
-
-    use crate::cddl::validate_cbor;
 
     use super::OPERATION_FORMAT;
 
