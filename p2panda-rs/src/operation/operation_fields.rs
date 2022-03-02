@@ -327,11 +327,11 @@ mod tests {
         assert!(pinned_relation.validate().is_ok());
 
         // 3. Unpinned relation list with one entry
-        let relation_list: OperationValueRelationList = document_id.clone().into();
+        let relation_list: OperationValueRelationList = document_id.into();
         assert!(relation_list.validate().is_ok());
 
         // 4. Pinned relation list with one entry
-        let pinned_relation_list: OperationValueRelationList = document_view_id.clone().into();
+        let pinned_relation_list: OperationValueRelationList = document_view_id.into();
         assert!(pinned_relation_list.validate().is_ok());
 
         // 5. Unpinned relation list with many entries
