@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! @TODO
+//! Schemas describe the format of data used in operation fields.
 mod error;
 mod schema_id;
 pub mod system;
