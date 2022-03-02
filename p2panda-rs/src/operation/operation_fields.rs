@@ -14,6 +14,57 @@ use crate::operation::{
 use crate::Validate;
 
 /// Wrapper around relation types which can be both pinned and unpinned.
+///
+/// ## Example
+///
+/// ```
+/// # extern crate p2panda_rs;
+/// # use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
+/// # use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
+/// # use p2panda_rs::test_utils::utils::{create_operation, delete_operation, update_operation, operation_fields};
+/// # use p2panda_rs::identity::KeyPair;
+/// # use p2panda_rs::operation::{OperationValue, OperationWithMeta};
+/// # use p2panda_rs::schema::SchemaId;
+/// # use p2panda_rs::document::DocumentBuilder;
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// # // Create a document
+/// #
+/// # let polar = Client::new(
+/// #     "polar".to_string(),
+/// #     KeyPair::from_private_key_str(
+/// #         "ddcafe34db2625af34c8ba3cf35d46e23283d908c9848c8b43d1f5d0fde779ea",
+/// #     )
+/// #     .unwrap(),
+/// # );
+/// #
+/// # let schema = SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap();
+/// # let mut node = Node::new();
+/// #
+/// # let (entry_hash, _) = send_to_node(
+/// #     &mut node,
+/// #     &polar,
+/// #     &create_operation(
+/// #         schema.clone(),
+/// #         operation_fields(vec![
+/// #             ("name", OperationValue::Text("Polar Bear Cafe".to_string())),
+/// #         ]),
+/// #     ),
+/// # )
+/// # .unwrap();
+/// #
+/// # let entry = node.get_entry(&entry_hash);
+/// # let operation =
+/// #     OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap();
+/// #
+/// # let document = DocumentBuilder::new(vec![operation]).build()?;
+/// // Create an unpinned relation to document
+/// let operation_value = OperationValue::Relation(document.id().to_owned().into());
+///
+/// // Create a pinned relation to document
+/// let operation_value = OperationValue::Relation(document.view_id().to_owned().into());
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum OperationValueRelation {
@@ -161,7 +212,7 @@ impl OperationValue {
 /// operation fields would not be sorted consistently we would get different hash results for the
 /// same contents.
 ///
-/// # Example
+/// ## Example
 ///
 /// ```
 /// # extern crate p2panda_rs;
