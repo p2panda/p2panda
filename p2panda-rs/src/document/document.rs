@@ -133,22 +133,36 @@ impl Document {
     }
 }
 
-/// A struct for building documents from a collection of operations. When calling `build()
-/// a document is returned wrapped in a result. The build will error if the operations passed
-/// don't follow documents validation criteria.
+/// A struct for building [documents][`Document`] from a collection of [operations with metadata][`crate::operation::OperationWithMeta`].
 ///
-/// Validation checks the following:
-/// - There should be exactly one CREATE operation.
-/// - All operations should be causally connected to the root operation.
-/// - All operations should follow the same schema.
-/// - No cycles exist in the graph.
+/// ## Example
+///
+/// ```
+/// # extern crate p2panda_rs;
+/// # #[cfg(test)]
+/// # mod tests {
+/// # use rstest::rstest;
+/// # use p2panda_rs::document::DocumentBuilder;
+/// # use p2panda_rs::operation::OperationWithMeta;
+/// # use p2panda_rs::test_utils::meta_operation;
+/// # #[rstest]
+/// # fn main(meta_operation: OperationWithMeta) -> () {
+/// // You need a `Vec<OperationWithMeta>` that includes the `CREATE` operation
+/// let operations: Vec<OperationWithMeta> = vec![meta_operation];
+///
+/// // Then you can make a `Document` from it
+/// let document = DocumentBuilder::new(operations).build();
+/// assert!(document.is_ok());
+/// # }
+/// # }
+/// ```
 #[derive(Debug, Clone)]
 pub struct DocumentBuilder {
     operations: Vec<OperationWithMeta>,
 }
 
 impl DocumentBuilder {
-    /// Instantiate a new DocumentBuilder with a collection of operations.
+    /// Instantiate a new `DocumentBuilder` from a collection of operations.
     pub fn new(operations: Vec<OperationWithMeta>) -> DocumentBuilder {
         Self { operations }
     }
@@ -158,10 +172,15 @@ impl DocumentBuilder {
         self.operations.clone()
     }
 
-    /// Build document. This already resolves the current document view.
-    /// Validate the collection of operations which are contained in this document.
-    /// - there should be exactly one CREATE operation.
-    /// - all operations should follow the same schema.
+    /// Validates the set of operations and builds the document.
+    ///
+    /// The returned document also contains the latest resolved [document view][`DocumentView`].
+    ///
+    /// Validation checks the following:
+    /// - There is exactly one `CREATE` operation.
+    /// - All operations are causally connected to the root operation.
+    /// - All operations follow the same schema.
+    /// - No cycles exist in the graph.
     pub fn build(&self) -> Result<Document, DocumentBuilderError> {
         // find create message.
         let mut collect_create_operation: Vec<OperationWithMeta> = self
