@@ -5,5 +5,5 @@ mod error;
 mod schema_id;
 pub mod system;
 
-pub use schema_id::SchemaId;
 pub use error::SchemaIdError;
+pub use schema_id::SchemaId;
