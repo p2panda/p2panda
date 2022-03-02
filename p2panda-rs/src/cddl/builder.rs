@@ -4,7 +4,6 @@ use std::collections::BTreeMap;
 
 /// CDDL types.
 #[derive(Clone, Debug, Copy)]
-#[allow(missing_docs)]
 pub enum Type {
     Bool,
     Int,
