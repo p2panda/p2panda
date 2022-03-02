@@ -2,7 +2,7 @@
 
 //! Relation types describe references to other documents.
 //!
-//! Similar to SQL relationships, documents refer to another one by its "document id". This module
+//! Similar to SQL relationships, documents refer to one another by their "document id". This module
 //! provides types used in operations to refer to one (`Relation`) or many documents
 //! (`RelationList`).
 //!
@@ -18,16 +18,16 @@
 //!
 //! ## Pinned relations
 //!
-//! Relations can optionally be "pinned" to a certain, immutable version of one document or many
+//! Relations can optionally be "pinned" to a specific, immutable version of a document or many
 //! documents when necessary (`PinnedRelation` or `PinnedRelationList`).
 //!
-//! When the Blog-Post from the example above changes its contents from "Monday evening" to
-//! "Tuesday morning" the comment would automatically refer to the new version as it refers to the
-//! document as a whole, including all future changes.
+//! When the blog post from the example above changes its contents from "Monday evening" to
+//! "Tuesday morning" the comment would automatically refer to the new version as the comment
+//! refers to the document as a whole, including all future changes.
 //!
-//! Since the comment was probably referring to Monday when it was created, we have to "pin" it to
-//! the exact version of the blog post. This is achieved by referring to the "document view id"
-//! instead:
+//! Since the comment was probably meant to be referring to Monday when it was created, we have to
+//! "pin" it to the exact version of the blog post in order to preserve this meaning. A
+//! `PinnedRelation` achieves this by referring to the blog post's "document view id":
 //!
 //! ```text
 //!                    Document-View                              Document-View
@@ -41,10 +41,10 @@
 //! Document: [Comment "This was great!"]
 //! ```
 //!
-//! Document view ids contain the hashes of the document graph tips which is all the information we
-//! need to reliably recreate the document at this certain point in time.
+//! Document view ids contain the hashes of the document graph tips, which is all the information
+//! we need to reliably recreate the document at this certain point in time.
 //!
-//! Pinned relations give us immutability and the possibility to restore a historical state across
+//! Pinned relations give us immutability and the option to restore a historical state across
 //! documents. However, most cases will probably only need unpinned relations: For example when
 //! referring to a user-profile you probably want to always get the "latest" version.
 use serde::{Deserialize, Serialize};
