@@ -145,6 +145,7 @@ impl Document {
 /// # use p2panda_rs::document::DocumentBuilder;
 /// # use p2panda_rs::operation::OperationWithMeta;
 /// # use p2panda_rs::test_utils::meta_operation;
+/// #
 /// # #[rstest]
 /// # fn main(meta_operation: OperationWithMeta) -> () {
 /// // You need a `Vec<OperationWithMeta>` that includes the `CREATE` operation
