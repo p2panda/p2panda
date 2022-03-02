@@ -10,7 +10,7 @@ use crate::Validate;
 /// The identifier of a document view.
 ///
 /// Contains the hashes of the document graph tips which is all the information we need to reliably
-/// recreate the document at this certain point in time.
+/// reconstruct a specific version of a document.
 ///
 /// ```text
 /// The document with the following operation graph has the id "2fa.." and six different document
