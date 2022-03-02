@@ -8,7 +8,7 @@ use crate::cddl::CddlValidationError;
 ///
 /// This method also converts validation errors coming from the `cddl` crate into an
 /// concatenated error operation and returns it.
-pub fn validate_cddl(cddl_schema: &str, bytes: &[u8]) -> Result<(), CddlValidationError> {
+pub fn validate_cbor(cddl_schema: &str, bytes: &[u8]) -> Result<(), CddlValidationError> {
     match cddl::validate_cbor_from_slice(cddl_schema, bytes) {
         Err(cbor::Error::Validation(err)) => {
             let err_str = err
@@ -34,21 +34,11 @@ pub fn validate_cddl(cddl_schema: &str, bytes: &[u8]) -> Result<(), CddlValidati
 #[cfg(test)]
 mod tests {
     use ciborium::cbor;
-    use rstest::rstest;
 
-    use crate::cddl::OPERATION_FORMAT;
-    use crate::operation::OperationEncoded;
-    use crate::test_utils::fixtures::operation_encoded;
-
-    use super::validate_cddl;
-
-    #[rstest]
-    fn validate_operation_cbor(operation_encoded: OperationEncoded) {
-        assert!(validate_cddl(OPERATION_FORMAT, &operation_encoded.to_bytes()).is_ok())
-    }
+    use super::validate_cbor;
 
     #[test]
-    fn validate_cbor() {
+    fn validate() {
         let cddl = r#"
         panda = {
             name: tstr,
@@ -66,7 +56,7 @@ mod tests {
 
         let mut cbor_bytes = Vec::new();
         ciborium::ser::into_writer(&value, &mut cbor_bytes).unwrap();
-        assert!(validate_cddl(cddl, &cbor_bytes).is_ok());
+        assert!(validate_cbor(cddl, &cbor_bytes).is_ok());
     }
 
     #[test]
@@ -86,7 +76,7 @@ mod tests {
 
         let mut cbor_bytes = Vec::new();
         ciborium::ser::into_writer(&value, &mut cbor_bytes).unwrap();
-        assert!(validate_cddl(cddl, &cbor_bytes).is_err());
+        assert!(validate_cbor(cddl, &cbor_bytes).is_err());
     }
 
     #[test]
@@ -100,7 +90,7 @@ mod tests {
 
         // Invalid CBOR
         let cbor_bytes = Vec::from("}");
-        assert!(validate_cddl(cddl, &cbor_bytes).is_err());
+        assert!(validate_cbor(cddl, &cbor_bytes).is_err());
     }
 
     #[test]
@@ -112,6 +102,6 @@ mod tests {
         }
         "#;
 
-        assert!(validate_cddl(cddl, &vec![1u8]).is_err());
+        assert!(validate_cbor(cddl, &vec![1u8]).is_err());
     }
 }

@@ -14,4 +14,4 @@ mod validation;
 pub use builder::CddlBuilder;
 pub use constants::OPERATION_FORMAT;
 pub use error::CddlValidationError;
-pub use validation::validate_cddl;
+pub use validation::validate_cbor;
