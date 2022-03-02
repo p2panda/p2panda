@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { createKeyPair } from '~/identity';
 import { getOperationFields } from '~/operation';
-import { marshallRequestFields, marshallResponseFields } from '~/utils';
-import wasm from '~/wasm';
+import { marshallRequestFields } from '~/utils';
 
 describe('operation', () => {
   describe('getOperationFields', () => {
