@@ -7,8 +7,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::hash::Hash;
 use crate::operation::{Operation, OperationEncodedError};
-#[cfg(not(target_arch = "wasm32"))]
-use crate::cddl::{validate_cddl, OPERATION_FORMAT};
 use crate::Validate;
 
 /// Operation represented in hex encoded CBOR format.
@@ -57,30 +55,10 @@ impl TryFrom<&Operation> for OperationEncoded {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-impl Validate for OperationEncoded {
-    type Error = OperationEncodedError;
-
-    /// Checks encoded operation value against hex format and CDDL schema.
-    fn validate(&self) -> Result<(), Self::Error> {
-        // Validate hex encoding
-        let bytes = hex::decode(&self.0).map_err(|_| OperationEncodedError::InvalidHexEncoding)?;
-
-        // Validate CDDL format
-        validate_cddl(OPERATION_FORMAT, bytes)?;
-
-        Ok(())
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
 impl Validate for OperationEncoded {
     type Error = OperationEncodedError;
 
     /// Checks encoded operation value against hex format.
-    ///
-    /// Skips CDDL schema validation as this is not supported for wasm targets. See:
-    /// https://github.com/anweiss/cddl/issues/83
     fn validate(&self) -> Result<(), Self::Error> {
         hex::decode(&self.0).map_err(|_| OperationEncodedError::InvalidHexEncoding)?;
         Ok(())
@@ -113,9 +91,6 @@ mod tests {
     fn validate(encoded_create_string: String) {
         // Invalid hex string
         assert!(OperationEncoded::new("123456789Z").is_err());
-
-        // Invalid operation
-        assert!(OperationEncoded::new("68656c6c6f2062616d626f6f21").is_err());
 
         // Valid CREATE operation
         assert!(OperationEncoded::new(&encoded_create_string).is_ok());
