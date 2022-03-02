@@ -23,10 +23,10 @@ pub fn validate_cddl(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), CDDLValida
                 })
                 .collect::<Vec<String>>();
 
-            Err(CDDLValidationError::InvalidSchema(err_str))
+            Err(CDDLValidationError::InvalidCDDL(err_str))
         }
-        Err(cbor::Error::CBORParsing(_err)) => Err(CDDLValidationError::InvalidCBOR),
-        Err(cbor::Error::CDDLParsing(err)) => Err(CDDLValidationError::InvalidCDDL(err)),
+        Err(cbor::Error::CBORParsing(_err)) => Err(CDDLValidationError::ParsingCBOR),
+        Err(cbor::Error::CDDLParsing(err)) => Err(CDDLValidationError::ParsingCDDL(err)),
         _ => Ok(()),
     }
 }
