@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::hash::Hash;
 use crate::operation::{Operation, OperationEncodedError};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::schema::{validate_schema, OPERATION_SCHEMA};
+use crate::cddl::{validate_cddl, OPERATION_FORMAT};
 use crate::Validate;
 
 /// Operation represented in hex encoded CBOR format.
@@ -66,8 +66,8 @@ impl Validate for OperationEncoded {
         // Validate hex encoding
         let bytes = hex::decode(&self.0).map_err(|_| OperationEncodedError::InvalidHexEncoding)?;
 
-        // Validate CDDL schema
-        validate_schema(OPERATION_SCHEMA, bytes)?;
+        // Validate CDDL format
+        validate_cddl(OPERATION_FORMAT, bytes)?;
 
         Ok(())
     }

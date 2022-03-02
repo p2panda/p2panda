@@ -46,8 +46,10 @@ impl ToString for Field {
     }
 }
 
-/// Struct for building and representing CDDL groups. CDDL uses groups to define reusable data
-/// structures they can be merged into schema or used in Vectors, Tables and Structs.
+/// Struct for building and representing CDDL groups.
+///
+/// CDDL uses groups to define reusable data structures they can be merged into schema or used in
+/// Vectors, Tables and Structs.
 #[derive(Clone, Debug)]
 pub struct Group {
     #[allow(dead_code)] // Remove when schema module is used.
@@ -86,7 +88,7 @@ impl ToString for Group {
     }
 }
 
-/// CDDLBuilder struct for programmatically creating CDDL schemas and validating OperationFields.
+/// CDDLBuilder struct for programmatically creating CDDL strings.
 #[derive(Clone, Debug)]
 pub struct CDDLBuilder {
     name: String,
@@ -94,7 +96,7 @@ pub struct CDDLBuilder {
 }
 
 impl CDDLBuilder {
-    /// Create a new blank `Schema`.
+    /// Create a new blank.
     pub fn new(name: String) -> Self {
         Self {
             name,
@@ -148,8 +150,8 @@ mod tests {
 
     use super::{CDDLBuilder, Type};
 
-    // Only `person` schema.
     pub const PERSON_SCHEMA: &str = r#"person = { age: { ( type: "int", value: int ) }, name: { ( type: "str", value: tstr ) } }"#;
+
     #[test]
     pub fn schema_builder() {
         // Instantiate new empty schema named "person"

@@ -62,6 +62,7 @@
 #[cfg(test)]
 use rstest_reuse;
 
+pub mod cddl;
 pub mod document;
 pub mod entry;
 pub mod graph;

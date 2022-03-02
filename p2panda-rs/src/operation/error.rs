@@ -51,9 +51,9 @@ pub enum OperationEncodedError {
     #[error("invalid CBOR format")]
     InvalidCBOR,
 
-    /// Handle errors from validating CBOR schemas.
+    /// Handle errors from validating CBOR.
     #[error(transparent)]
-    SchemaError(#[from] crate::schema::SchemaValidationError),
+    CDDLError(#[from] crate::cddl::CDDLValidationError),
 }
 
 /// Error types for methods of `OperationWithMeta` struct.
