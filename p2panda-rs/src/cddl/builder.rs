@@ -88,14 +88,14 @@ impl ToString for Group {
     }
 }
 
-/// CDDLBuilder struct for programmatically creating CDDL strings.
+/// CddlBuilder struct for programmatically creating CDDL strings.
 #[derive(Clone, Debug)]
-pub struct CDDLBuilder {
+pub struct CddlBuilder {
     name: String,
     fields: BTreeMap<String, Field>,
 }
 
-impl CDDLBuilder {
+impl CddlBuilder {
     /// Create a new blank.
     pub fn new(name: String) -> Self {
         Self {
@@ -129,7 +129,7 @@ impl CDDLBuilder {
     }
 }
 
-impl ToString for CDDLBuilder {
+impl ToString for CddlBuilder {
     fn to_string(&self) -> String {
         let mut cddl_str = "".to_string();
         cddl_str += &format!("{} = {{ ", self.name);
@@ -148,14 +148,14 @@ impl ToString for CDDLBuilder {
 mod tests {
     use crate::operation::{OperationFields, OperationValue};
 
-    use super::{CDDLBuilder, Type};
+    use super::{CddlBuilder, Type};
 
     pub const PERSON_SCHEMA: &str = r#"person = { age: { ( type: "int", value: int ) }, name: { ( type: "str", value: tstr ) } }"#;
 
     #[test]
     pub fn schema_builder() {
         // Instantiate new empty schema named "person"
-        let mut person = CDDLBuilder::new("person".to_owned());
+        let mut person = CddlBuilder::new("person".to_owned());
 
         // Add two operation fields to the schema
         person.add_operation_field("name".to_owned(), Type::Tstr);

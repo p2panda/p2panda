@@ -2,14 +2,14 @@
 
 use cddl::validator::cbor;
 
-use crate::cddl::CDDLValidationError;
+use crate::cddl::CddlValidationError;
 
 /// Checks CBOR bytes against CDDL.
 ///
 /// This method also converts validation errors coming from the `cddl` crate into an
 /// concatenated error operation and returns it.
-pub fn validate_cddl(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), CDDLValidationError> {
-    match cddl::validate_cbor_from_slice(cddl_schema, &bytes) {
+pub fn validate_cddl(cddl_schema: &str, bytes: &[u8]) -> Result<(), CddlValidationError> {
+    match cddl::validate_cbor_from_slice(cddl_schema, bytes) {
         Err(cbor::Error::Validation(err)) => {
             let err_str = err
                 .iter()
@@ -23,10 +23,10 @@ pub fn validate_cddl(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), CDDLValida
                 })
                 .collect::<Vec<String>>();
 
-            Err(CDDLValidationError::InvalidCDDL(err_str))
+            Err(CddlValidationError::InvalidCDDL(err_str))
         }
-        Err(cbor::Error::CBORParsing(_err)) => Err(CDDLValidationError::ParsingCBOR),
-        Err(cbor::Error::CDDLParsing(err)) => Err(CDDLValidationError::ParsingCDDL(err)),
+        Err(cbor::Error::CBORParsing(_err)) => Err(CddlValidationError::ParsingCBOR),
+        Err(cbor::Error::CDDLParsing(err)) => Err(CddlValidationError::ParsingCDDL(err)),
         _ => Ok(()),
     }
 }
@@ -44,7 +44,7 @@ mod tests {
 
     #[rstest]
     fn validate_operation_cbor(operation_encoded: OperationEncoded) {
-        assert!(validate_cddl(OPERATION_FORMAT, operation_encoded.to_bytes()).is_ok())
+        assert!(validate_cddl(OPERATION_FORMAT, &operation_encoded.to_bytes()).is_ok())
     }
 
     #[test]
@@ -66,7 +66,7 @@ mod tests {
 
         let mut cbor_bytes = Vec::new();
         ciborium::ser::into_writer(&value, &mut cbor_bytes).unwrap();
-        assert!(validate_cddl(cddl, cbor_bytes).is_ok());
+        assert!(validate_cddl(cddl, &cbor_bytes).is_ok());
     }
 
     #[test]
@@ -86,7 +86,7 @@ mod tests {
 
         let mut cbor_bytes = Vec::new();
         ciborium::ser::into_writer(&value, &mut cbor_bytes).unwrap();
-        assert!(validate_cddl(cddl, cbor_bytes).is_err());
+        assert!(validate_cddl(cddl, &cbor_bytes).is_err());
     }
 
     #[test]
@@ -100,7 +100,7 @@ mod tests {
 
         // Invalid CBOR
         let cbor_bytes = Vec::from("}");
-        assert!(validate_cddl(cddl, cbor_bytes).is_err());
+        assert!(validate_cddl(cddl, &cbor_bytes).is_err());
     }
 
     #[test]
@@ -112,6 +112,6 @@ mod tests {
         }
         "#;
 
-        assert!(validate_cddl(cddl, vec![1u8]).is_err());
+        assert!(validate_cddl(cddl, &vec![1u8]).is_err());
     }
 }

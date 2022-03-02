@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-/// This cddl is used to verify the data integrity of all incoming operations.
+/// This CDDL is used to verify the data integrity of all incoming operations.
 ///
 /// This does only validate the general operation format and does not check against application
 /// data fields as this is part of an additional process.

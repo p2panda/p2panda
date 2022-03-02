@@ -53,7 +53,7 @@ pub enum OperationEncodedError {
 
     /// Handle errors from validating CBOR.
     #[error(transparent)]
-    CDDLError(#[from] crate::cddl::CDDLValidationError),
+    CDDLError(#[from] crate::cddl::CddlValidationError),
 }
 
 /// Error types for methods of `OperationWithMeta` struct.

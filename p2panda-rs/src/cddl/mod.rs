@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Methods and structs to validate operations and the schemas they follow.
+//! Methods and structs to generate CDDL for CBOR validation.
 //!
-//! This uses [`Concise Data Definition Language`] (CDDL) internally to verify CBOR data of p2panda
-//! operations.
+//! All operations in p2panda are encoded via CBOR and can be checked against the right format via
+//! CDDL.
 //!
-//! [`Concise Data Definition Language`]: https://tools.ietf.org/html/rfc8610
-mod error;
+//! Read more about CDDL: https://tools.ietf.org/html/rfc8610
+mod builder;
 mod constants;
+mod error;
 mod validation;
-#[allow(clippy::module_inception)]
-mod cddl;
 
-pub use self::cddl::CDDLBuilder;
-pub use error::CDDLValidationError;
+pub use builder::CddlBuilder;
 pub use constants::OPERATION_FORMAT;
+pub use error::CddlValidationError;
 pub use validation::validate_cddl;
