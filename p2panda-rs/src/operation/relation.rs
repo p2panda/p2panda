@@ -2,11 +2,11 @@
 
 //! Relation types describe references to other documents.
 //!
-//! Similar to SQL relationships, documents refer to one another by their "document id". This module
+//! Similar to SQL relationships, documents refer to one another by their _document id_. This module
 //! provides types used in operations to refer to one (`Relation`) or many documents
 //! (`RelationList`).
 //!
-//! This is an example of a simple `Relation` where a "Comment" Document refers to a "Blog Post"
+//! This is an example of a simple `Relation` where a _Comment_ Document refers to a _Blog Post_
 //! Document:
 //!
 //! ```text
@@ -18,16 +18,16 @@
 //!
 //! ## Pinned relations
 //!
-//! Relations can optionally be "pinned" to a specific, immutable version of a document or many
+//! Relations can optionally be _pinned_ to a specific, immutable version of a document or many
 //! documents when necessary (`PinnedRelation` or `PinnedRelationList`).
 //!
-//! When the blog post from the example above changes its contents from "Monday evening" to
-//! "Tuesday morning" the comment would automatically refer to the new version as the comment
+//! When the blog post from the example above changes its contents from _Monday evening_ to
+//! _Tuesday morning_ the comment would automatically refer to the new version as the comment
 //! refers to the document as a whole, including all future changes.
 //!
 //! Since the comment was probably meant to be referring to Monday when it was created, we have to
-//! "pin" it to the exact version of the blog post in order to preserve this meaning. A
-//! `PinnedRelation` achieves this by referring to the blog post's "document view id":
+//! _pin_ it to the exact version of the blog post in order to preserve this meaning. A
+//! `PinnedRelation` achieves this by referring to the blog post's _document view id_:
 //!
 //! ```text
 //!                    Document-View                              Document-View
@@ -46,7 +46,7 @@
 //!
 //! Pinned relations give us immutability and the option to restore a historical state across
 //! documents. However, most cases will probably only need unpinned relations: For example when
-//! referring to a user-profile you probably want to always get the "latest" version.
+//! referring to a user-profile you probably want to always get the _latest_ version.
 use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentId, DocumentViewId};
