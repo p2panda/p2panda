@@ -31,7 +31,7 @@ crate-type = ["cdylib", "rlib"]
 aquamarine = "0.1.11"
 arrayvec = "0.5.2"
 bamboo-rs-core-ed25519-yasmf = "0.1.0"
-cddl = "0.8.7"
+cddl-cat = { version = "0.5.0", default-features = false, features = ["serde_cbor"] }
 ciborium = "0.2.0"
 ed25519 = "1.3.0"
 ed25519-dalek = "1.0.1"
@@ -39,7 +39,6 @@ hex = "0.4.3"
 log = "0.4"
 serde = { version = "1.0.132", features = ["derive"] }
 serde-wasm-bindgen = "0.4.1"
-serde_json = "1.0.73"
 serde_repr = "0.1.7"
 thiserror = "1.0.30"
 tls_codec = { version = "0.2.0-pre.3", features = [
@@ -81,10 +80,11 @@ wasm-bindgen = "0.2.78"
 criterion = "0.3.4"
 ctor = "0.1.2"
 incremental-topo = "0.1.2"
-wasm-bindgen-test = "0.3.28"
 pretty_env_logger = "0.4"
 rstest = "0.12.0"
 rstest_reuse = "0.1.3"
+serde_json = "1.0.73"
+wasm-bindgen-test = "0.3.28"
 
 [[bench]]
 name = "graph"

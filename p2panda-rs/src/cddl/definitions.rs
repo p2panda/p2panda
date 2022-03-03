@@ -12,21 +12,23 @@ const CDDL_HEADER: &str = r#"
 ; which need to be specified in additional cddl:
 ;
 ; - schema_id
-; - fields
+; - create_fields
+; - update_fields
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 >>>>>>> Add cddl definitions for schema_v1 and schema_field_v1:p2panda-rs/src/cddl/definitions.rs
 operation = {
     version: 1,
     schema: schema_id,
-    operation-body,
+    operation_body,
 }
 
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ; Core types
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-entry_hash = tstr .regexp "[0-9a-f]{68}"
+; @TODO `cddl_cat` crate does not support .regexp "[0-9a-f]{68}" currently
+entry_hash = tstr
 
 previous_operations = [+ entry_hash]
 
@@ -39,9 +41,9 @@ pinned_relation_list = [* pinned_relation]
 ; Operation body
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-operation-body = (
-    action: "create", fields: fields //
-    action: "update", fields: fields, previous_operations: previous_operations //
+operation_body = (
+    action: "create", fields: create_fields //
+    action: "update", fields: update_fields, previous_operations: previous_operations //
     action: "delete", previous_operations: previous_operations
 )
 
@@ -49,39 +51,34 @@ operation-body = (
 ; Operation values
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-value-text = (
+value_text = (
     type: "str",
     value: tstr,
 )
 
-value-integer = (
+value_integer = (
     type: "int",
     value: int,
 )
 
-value-float = (
+value_float = (
     type: "float",
     value: float,
 )
 
-value-boolean = (
+value_boolean = (
     type: "bool",
     value: bool,
 )
 
-value-relation = (
+value_relation = (
     type: "relation",
     value: relation / pinned_relation,
 )
 
-value-relation-list = (
+value_relation_list = (
     type: "relation_list",
     value: relation_list / pinned_relation_list,
-)
-
-value-relation-list-pinned = (
-    type: "relation_list",
-    value: pinned_relation_list,
 )
 "#;
 
@@ -92,14 +89,22 @@ const CDDL_ANY_OPERATION: &str = r#"
 
 schema_id = "schema_v1" / "schema_field_v1" / entry_hash
 
+create_fields = fields
+
+update_fields = fields
+
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; Fields
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 fields = {
     + tstr => {
-        value-text //
-        value-integer //
-        value-float //
-        value-boolean //
-        value-relation //
-        value-relation-list
+        value_text //
+        value_integer //
+        value_float //
+        value_boolean //
+        value_relation //
+        value_relation-list
     }
 }
 "#;
@@ -111,11 +116,28 @@ const CDDL_SCHEMA_V1: &str = r#"
 
 schema_id = "schema_v1"
 
-fields = {
-    name: { value-text },
-    description: { value-text },
-    fields: { value-relation-list-pinned }
-}
+create_fields = { name_lala, description_lala, fields_lala }
+
+update_fields = { + (name_lala // description_lala // fields_lala) }
+
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; Fields
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+name_lala = (
+    name: { value_text },
+)
+
+description_lala = (
+    description: { value_text },
+)
+
+fields_lala = (
+    fields: {
+        type: "relation_list",
+        value: pinned_relation_list,
+    },
+)
 "#;
 
 const CDDL_SCHEMA_FIELD_V1: &str = r#"
@@ -125,14 +147,28 @@ const CDDL_SCHEMA_FIELD_V1: &str = r#"
 
 schema_id = "schema_field_v1"
 
-fields = {
-    name: { value-text },
-    description: { value-text },
-    field-type: {
+create_fields = { name, description, field_type }
+
+update_fields = { + (name // description // field_type) }
+
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; Fields
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+name = (
+    name: { value_text },
+)
+
+description = (
+    description: { value_text },
+)
+
+field_type = (
+    field_type: {
         type: "str",
         value: "str" / "int" / "float" / "bool" / "relation" / "relation_list",
     }
-}
+)
 "#;
 
 /// This CDDL is used to verify the format of _all_ incoming operations.
@@ -163,7 +199,7 @@ mod tests {
     use crate::operation::OperationEncoded;
     use crate::test_utils::fixtures::operation_encoded;
 
-    use super::operation_format;
+    use super::{operation_format, schema_field_v1_format, schema_v1_format};
 
     fn to_cbor(value: Value) -> Vec<u8> {
         let mut cbor_bytes = Vec::new();
@@ -251,7 +287,8 @@ mod tests {
 
     #[test]
     fn invalid_operations() {
-        assert!(validate_cbor(
+        /* @TODO: Hash regex currently not supported by `cddl_cat` crate
+         * assert!(validate_cbor(
             &operation_format(),
             &to_cbor(
                 cbor!({
@@ -269,7 +306,7 @@ mod tests {
                 .unwrap()
             )
         )
-        .is_err());
+        .is_err()); */
 
         assert!(validate_cbor(
             &operation_format(),
@@ -356,5 +393,149 @@ mod tests {
             )
         )
         .is_err());
+    }
+
+    #[test]
+    fn valid_schema_v1() {
+        assert!(validate_cbor(
+            &schema_v1_format(),
+            &to_cbor(
+                cbor!({
+                    "action" => "create",
+                    "schema" => "schema_v1",
+                    "version" => 1,
+                    "fields" => {
+                        "name" => {
+                            "value" => "Locations",
+                            "type" => "str"
+                        },
+                        "description" => {
+                            "value" => "Holds information about places",
+                            "type" => "str"
+                        },
+                        "fields" => {
+                            "value" => [
+                                [
+                                    "0020c039b78e3f9a84370e23642d911d2648f9db0b9150e43c853de863936bdefe5d",
+                                    "0020981f3763e1cefab859c315157b79179188f8187da4d53eea3fb8a571a3b5c0a6",
+                                ],
+                                [
+                                    "00206a98fffb0b1424ada1ed241b32da8287852d6b4eb37a1b381892c4fbd800e9e8",
+                                ],
+                            ],
+                            "type" => "relation_list"
+                        },
+                    },
+                })
+                .unwrap()
+            )
+        ).is_ok());
+
+        assert!(validate_cbor(
+            &schema_v1_format(),
+            &to_cbor(
+                cbor!({
+                    "action" => "update",
+                    "schema" => "schema_v1",
+                    "version" => 1,
+                    "previous_operations" => [
+                        "00207134365ce71dca6bd7c31d04bfb3244b29897ab538906216fc8ff3d6189410ad",
+                    ],
+                    "fields" => {
+                        "name" => {
+                            "value" => "Telephones",
+                            "type" => "str"
+                        },
+                    },
+                })
+                .unwrap()
+            )
+        )
+        .is_ok());
+
+        assert!(validate_cbor(
+            &schema_v1_format(),
+            &to_cbor(
+                cbor!({
+                    "action" => "delete",
+                    "schema" => "schema_v1",
+                    "version" => 1,
+                    "previous_operations" => [
+                        "00203ea9940af9e5a191a81a49a118ee049283c3f62e879b33f879e154abad3e682f",
+                    ],
+                })
+                .unwrap()
+            )
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn valid_schema_field_v1() {
+        assert!(validate_cbor(
+            &schema_field_v1_format(),
+            &to_cbor(
+                cbor!({
+                    "action" => "create",
+                    "schema" => "schema_field_v1",
+                    "version" => 1,
+                    "fields" => {
+                        "name" => {
+                            "value" => "Size",
+                            "type" => "str"
+                        },
+                        "description" => {
+                            "value" => "In centimeters",
+                            "type" => "str"
+                        },
+                        "field_type" => {
+                            "value" => "float",
+                            "type" => "str"
+                        },
+                    },
+                })
+                .unwrap()
+            )
+        )
+        .is_ok());
+
+        assert!(validate_cbor(
+            &schema_field_v1_format(),
+            &to_cbor(
+                cbor!({
+                    "action" => "update",
+                    "schema" => "schema_field_v1",
+                    "version" => 1,
+                    "previous_operations" => [
+                        "00208a5cbba0facc96f22fe3c283e05706c74801282bb7ba315fb5c77caa44689846",
+                        "0020e967334f97ac477bf1f53568e475376ae28687e272de3f3d0672ec6f2aa9be53",
+                    ],
+                    "fields" => {
+                        "field_type" => {
+                            "value" => "relation_list",
+                            "type" => "str"
+                        },
+                    },
+                })
+                .unwrap()
+            )
+        )
+        .is_ok());
+
+        assert!(validate_cbor(
+            &schema_field_v1_format(),
+            &to_cbor(
+                cbor!({
+                    "action" => "delete",
+                    "schema" => "schema_field_v1",
+                    "version" => 1,
+                    "previous_operations" => [
+                        "002066f3cec300b76993da433f80c0c32104678e483fa24d59625d0e3994c09115e2",
+                    ],
+                })
+                .unwrap()
+            )
+        )
+        .is_ok());
     }
 }
