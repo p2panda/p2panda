@@ -8,7 +8,7 @@ pub enum CddlValidationError {
     /// Operation contains invalid cbor data.
     // Note: We pretty-print the vector of error strings to get line breaks
     #[error("invalid operation cbor format: {0:#?}")]
-    InvalidCDDL(Vec<String>),
+    InvalidCBOR(Vec<String>),
 
     /// Operation can't be deserialised from invalid CBOR encoding.
     #[error("invalid CBOR format")]
@@ -26,7 +26,7 @@ pub enum CddlValidationError {
 impl std::fmt::Debug for CddlValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
-            CddlValidationError::InvalidCDDL(_) => write!(f, "InvalidCDDL"),
+            CddlValidationError::InvalidCBOR(_) => write!(f, "InvalidCBOR"),
             CddlValidationError::ParsingCBOR => write!(f, "ParsingCBOR"),
             CddlValidationError::ParsingCDDL(_) => write!(f, "ParsingCDDL"),
         }?;

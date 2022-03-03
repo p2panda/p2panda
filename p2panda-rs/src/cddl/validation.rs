@@ -8,8 +8,8 @@ use crate::cddl::CddlValidationError;
 ///
 /// This method also converts validation errors coming from the `cddl` crate into an
 /// concatenated error operation and returns it.
-pub fn validate_cbor(cddl_schema: &str, bytes: &[u8]) -> Result<(), CddlValidationError> {
-    match cddl::validate_cbor_from_slice(cddl_schema, bytes) {
+pub fn validate_cbor(cddl: &str, bytes: &[u8]) -> Result<(), CddlValidationError> {
+    match cddl::validate_cbor_from_slice(cddl, bytes) {
         Err(cbor::Error::Validation(err)) => {
             let err_str = err
                 .iter()
@@ -23,7 +23,7 @@ pub fn validate_cbor(cddl_schema: &str, bytes: &[u8]) -> Result<(), CddlValidati
                 })
                 .collect::<Vec<String>>();
 
-            Err(CddlValidationError::InvalidCDDL(err_str))
+            Err(CddlValidationError::InvalidCBOR(err_str))
         }
         Err(cbor::Error::CBORParsing(_err)) => Err(CddlValidationError::ParsingCBOR),
         Err(cbor::Error::CDDLParsing(err)) => Err(CddlValidationError::ParsingCDDL(err)),
