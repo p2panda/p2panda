@@ -116,23 +116,23 @@ const CDDL_SCHEMA_V1: &str = r#"
 
 schema_id = "schema_v1"
 
-create_fields = { name_lala, description_lala, fields_lala }
+create_fields = { name, description, fields }
 
-update_fields = { + (name_lala // description_lala // fields_lala) }
+update_fields = { + (name // description // fields) }
 
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ; Fields
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-name_lala = (
+name = (
     name: { value_text },
 )
 
-description_lala = (
+description = (
     description: { value_text },
 )
 
-fields_lala = (
+fields = (
     fields: {
         type: "relation_list",
         value: pinned_relation_list,
