@@ -5,10 +5,144 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::hash::Hash;
-use crate::operation::{OperationError, OperationFieldsError};
-
+use crate::document::{DocumentId, DocumentViewId};
+use crate::hash::HashError;
+use crate::operation::{
+    OperationError, OperationFieldsError, PinnedRelation, PinnedRelationList, Relation,
+    RelationList,
+};
 use crate::Validate;
+
+/// Wrapper around relation types which can be both pinned and unpinned.
+///
+/// ## Example
+///
+/// ```
+/// # extern crate p2panda_rs;
+/// # use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
+/// # use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
+/// # use p2panda_rs::test_utils::utils::{create_operation, delete_operation, update_operation, operation_fields};
+/// # use p2panda_rs::identity::KeyPair;
+/// # use p2panda_rs::operation::{OperationValue, OperationWithMeta};
+/// # use p2panda_rs::schema::SchemaId;
+/// # use p2panda_rs::document::DocumentBuilder;
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// # // Create a document
+/// #
+/// # let polar = Client::new(
+/// #     "polar".to_string(),
+/// #     KeyPair::from_private_key_str(
+/// #         "ddcafe34db2625af34c8ba3cf35d46e23283d908c9848c8b43d1f5d0fde779ea",
+/// #     )
+/// #     .unwrap(),
+/// # );
+/// #
+/// # let schema = SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap();
+/// # let mut node = Node::new();
+/// #
+/// # let (entry_hash, _) = send_to_node(
+/// #     &mut node,
+/// #     &polar,
+/// #     &create_operation(
+/// #         schema.clone(),
+/// #         operation_fields(vec![
+/// #             ("name", OperationValue::Text("Polar Bear Cafe".to_string())),
+/// #         ]),
+/// #     ),
+/// # )
+/// # .unwrap();
+/// #
+/// # let entry = node.get_entry(&entry_hash);
+/// # let operation =
+/// #     OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap();
+/// #
+/// # let document = DocumentBuilder::new(vec![operation]).build()?;
+/// // Create an unpinned relation to document
+/// let operation_value = OperationValue::Relation(document.id().to_owned().into());
+///
+/// // Create a pinned relation to document
+/// let operation_value = OperationValue::Relation(document.view_id().to_owned().into());
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OperationValueRelation {
+    /// Value refers to a document.
+    Unpinned(Relation),
+
+    /// Value refers to a "pinned" document at a certain point in time.
+    Pinned(PinnedRelation),
+}
+
+impl Validate for OperationValueRelation {
+    type Error = HashError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        match self {
+            Self::Unpinned(relation) => relation.validate(),
+            Self::Pinned(relation) => relation.validate(),
+        }
+    }
+}
+
+impl From<DocumentId> for OperationValueRelation {
+    fn from(document_id: DocumentId) -> Self {
+        Self::Unpinned(Relation::new(document_id))
+    }
+}
+
+impl From<DocumentViewId> for OperationValueRelation {
+    fn from(document_view_id: DocumentViewId) -> Self {
+        Self::Pinned(PinnedRelation::new(document_view_id))
+    }
+}
+
+/// Wrapper around relation list types which can be both pinned and unpinned.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OperationValueRelationList {
+    /// Value refers to a list of documents.
+    Unpinned(RelationList),
+
+    /// Value refers to a list of "pinned" documents from a certain point in time.
+    Pinned(PinnedRelationList),
+}
+
+impl Validate for OperationValueRelationList {
+    type Error = HashError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        match self {
+            Self::Unpinned(relation_list) => relation_list.validate(),
+            Self::Pinned(relation_list) => relation_list.validate(),
+        }
+    }
+}
+
+impl From<DocumentId> for OperationValueRelationList {
+    fn from(document_id: DocumentId) -> Self {
+        Self::Unpinned(RelationList::new(vec![document_id]))
+    }
+}
+
+impl From<DocumentViewId> for OperationValueRelationList {
+    fn from(document_view_id: DocumentViewId) -> Self {
+        Self::Pinned(PinnedRelationList::new(vec![document_view_id]))
+    }
+}
+
+impl From<Vec<DocumentId>> for OperationValueRelationList {
+    fn from(document_ids: Vec<DocumentId>) -> Self {
+        Self::Unpinned(RelationList::new(document_ids))
+    }
+}
+
+impl From<Vec<DocumentViewId>> for OperationValueRelationList {
+    fn from(document_view_ids: Vec<DocumentViewId>) -> Self {
+        Self::Pinned(PinnedRelationList::new(document_view_ids))
+    }
+}
 
 /// Enum of possible data types which can be added to the operations fields as values.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -32,85 +166,39 @@ pub enum OperationValue {
 
     /// Reference to a document.
     #[serde(rename = "relation")]
-    Relation(Relation),
+    Relation(OperationValueRelation),
 
     /// Reference to a list of documents.
     #[serde(rename = "relation_list")]
-    RelationList(RelationList),
+    RelationList(OperationValueRelationList),
 }
 
 impl Validate for OperationValue {
-    type Error = OperationError;
+    type Error = HashError;
 
     fn validate(&self) -> Result<(), Self::Error> {
         match self {
             Self::Relation(relation) => relation.validate(),
-            Self::RelationList(relations) => {
-                for relation in relations {
-                    relation.validate()?;
-                }
-
-                Ok(())
-            }
+            Self::RelationList(relations) => relations.validate(),
             _ => Ok(()),
         }
     }
 }
 
-/// A `RelationList` can be used to reference multiple foreign documents from a document field.
-pub type RelationList = Vec<Relation>;
-
-/// Field type representing references to other documents.
-///
-/// The "relation" field type references a document id and the historical state which it had at the
-/// point this relation was created.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Relation {
-    /// Document id this relation is referring to.
-    document: Hash,
-
-    /// Reference to the exact version of the document.
-    ///
-    /// This field is `None` when there is no more than one operation (when the document only
-    /// consists of one CREATE operation).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    document_view: Option<Vec<Hash>>,
-}
-
-impl Relation {
-    /// Returns a new relation field type.
-    pub fn new(document: Hash, document_view: Vec<Hash>) -> Self {
-        Self {
-            document,
-            document_view: match document_view.is_empty() {
-                true => None,
-                false => Some(document_view),
-            },
-        }
+#[cfg(test)]
+// Methods only used for testing of (invalid) operation values.
+impl OperationValue {
+    /// Encodes an operation value encoded and returns CBOR hex string.
+    pub(super) fn serialize(&self) -> String {
+        let mut cbor_bytes = Vec::new();
+        ciborium::ser::into_writer(&self, &mut cbor_bytes).unwrap();
+        hex::encode(cbor_bytes)
     }
 
-    /// Returns the relations document id
-    pub fn document_id(&self) -> &Hash {
-        &self.document
-    }
-}
-
-impl Validate for Relation {
-    type Error = OperationError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        self.document.validate()?;
-
-        match &self.document_view {
-            Some(view) => {
-                for operation_id in view {
-                    operation_id.validate()?;
-                }
-
-                Ok(())
-            }
-            None => Ok(()),
-        }
+    /// Decodes an operation value encoded as CBOR hex string and returns it.
+    pub(super) fn deserialize_str(str: &str) -> Self {
+        let bytes = hex::decode(str).unwrap();
+        ciborium::de::from_reader(&bytes[..]).unwrap()
     }
 }
 
@@ -124,7 +212,7 @@ impl Validate for Relation {
 /// operation fields would not be sorted consistently we would get different hash results for the
 /// same contents.
 ///
-/// # Example
+/// ## Example
 ///
 /// ```
 /// # extern crate p2panda_rs;
@@ -230,9 +318,15 @@ impl Validate for OperationFields {
 mod tests {
     use rstest::rstest;
 
-    use crate::test_utils::fixtures::random_hash;
+    use crate::document::{DocumentId, DocumentViewId};
+    use crate::hash::Hash;
+    use crate::operation::{PinnedRelation, PinnedRelationList, Relation, RelationList};
+    use crate::test_utils::fixtures::{random_document_id, random_hash};
+    use crate::Validate;
 
-    use super::*;
+    use super::{
+        OperationFields, OperationValue, OperationValueRelation, OperationValueRelationList,
+    };
 
     #[test]
     fn operation_fields() {
@@ -265,24 +359,199 @@ mod tests {
     }
 
     #[rstest]
+    fn relations_conversions(
+        #[from(random_hash)] hash_1: Hash,
+        #[from(random_hash)] hash_2: Hash,
+        #[from(random_hash)] hash_3: Hash,
+        #[from(random_hash)] hash_4: Hash,
+        #[from(random_hash)] hash_5: Hash,
+    ) {
+        let document_id = DocumentId::new(hash_1.clone());
+        let document_view_id = DocumentViewId::new(vec![hash_1]);
+
+        // 1. Unpinned relation
+        let relation: OperationValueRelation = document_id.clone().into();
+        assert!(relation.validate().is_ok());
+
+        // 2. Pinned relation
+        let pinned_relation: OperationValueRelation = document_view_id.clone().into();
+        assert!(pinned_relation.validate().is_ok());
+
+        // 3. Unpinned relation list with one entry
+        let relation_list: OperationValueRelationList = document_id.into();
+        assert!(relation_list.validate().is_ok());
+
+        // 4. Pinned relation list with one entry
+        let pinned_relation_list: OperationValueRelationList = document_view_id.into();
+        assert!(pinned_relation_list.validate().is_ok());
+
+        // 5. Unpinned relation list with many entries
+        let relation_list_2: OperationValueRelationList =
+            vec![DocumentId::new(hash_2), DocumentId::new(hash_3)].into();
+        assert!(relation_list_2.validate().is_ok());
+
+        // 6. Pinned relation list with many entries
+        let relation_list_2: OperationValueRelationList = vec![
+            DocumentViewId::new(vec![hash_4]),
+            DocumentViewId::new(vec![hash_5]),
+        ]
+        .into();
+        assert!(relation_list_2.validate().is_ok());
+    }
+
+    #[rstest]
+    fn encode_decode_relations(
+        #[from(random_hash)] hash_1: Hash,
+        #[from(random_hash)] hash_2: Hash,
+        #[from(random_hash)] hash_3: Hash,
+        #[from(random_hash)] hash_4: Hash,
+        #[from(random_hash)] hash_5: Hash,
+        #[from(random_hash)] hash_6: Hash,
+        #[from(random_hash)] hash_7: Hash,
+        #[from(random_hash)] hash_8: Hash,
+    ) {
+        // 1. Unpinned relation
+        let relation = OperationValue::Relation(OperationValueRelation::Unpinned(Relation::new(
+            DocumentId::new(hash_1),
+        )));
+        assert_eq!(
+            relation,
+            OperationValue::deserialize_str(&relation.serialize())
+        );
+
+        // 2. Pinned relation
+        let pinned_relation = OperationValue::Relation(OperationValueRelation::Pinned(
+            PinnedRelation::new(DocumentViewId::new(vec![hash_2, hash_3])),
+        ));
+        assert_eq!(
+            pinned_relation,
+            OperationValue::deserialize_str(&pinned_relation.serialize())
+        );
+
+        // 3. Unpinned relation list
+        let relation_list = OperationValue::RelationList(OperationValueRelationList::Unpinned(
+            RelationList::new(vec![DocumentId::new(hash_4), DocumentId::new(hash_5)]),
+        ));
+        assert_eq!(
+            relation_list,
+            OperationValue::deserialize_str(&relation_list.serialize())
+        );
+
+        // 4. Pinned relation list
+        let pinned_relation_list = OperationValue::RelationList(
+            OperationValueRelationList::Pinned(PinnedRelationList::new(vec![
+                DocumentViewId::new(vec![hash_6, hash_7]),
+                DocumentViewId::new(vec![hash_8]),
+            ])),
+        );
+        assert_eq!(
+            pinned_relation_list,
+            OperationValue::deserialize_str(&pinned_relation_list.serialize())
+        );
+    }
+
+    #[rstest]
+    fn validation_ok(
+        #[from(random_document_id)] document_1: DocumentId,
+        #[from(random_document_id)] document_2: DocumentId,
+        #[from(random_hash)] operation_id_1: Hash,
+        #[from(random_hash)] operation_id_2: Hash,
+    ) {
+        let relation = Relation::new(document_1.clone());
+        let value = OperationValue::Relation(OperationValueRelation::Unpinned(relation));
+        assert!(value.validate().is_ok());
+
+        let pinned_relation = PinnedRelation::new(DocumentViewId::new(vec![
+            operation_id_1.clone(),
+            operation_id_2.clone(),
+        ]));
+        let value = OperationValue::Relation(OperationValueRelation::Pinned(pinned_relation));
+        assert!(value.validate().is_ok());
+
+        let relation_list = RelationList::new(vec![document_1, document_2]);
+        let value =
+            OperationValue::RelationList(OperationValueRelationList::Unpinned(relation_list));
+        assert!(value.validate().is_ok());
+
+        let pinned_relation_list = PinnedRelationList::new(vec![
+            DocumentViewId::new(vec![operation_id_1]),
+            DocumentViewId::new(vec![operation_id_2]),
+        ]);
+        let value =
+            OperationValue::RelationList(OperationValueRelationList::Pinned(pinned_relation_list));
+        assert!(value.validate().is_ok());
+    }
+
+    #[test]
+    fn validation_invalid_relations() {
+        // "relation_list" operation value with invalid hash:
+        //
+        // {
+        //  "type": "relation_list",
+        //  "value": ["This is not a hash"]
+        // }
+        let invalid_hash = "A264747970656D72656C6174696F6E5F6C6973746576616C7565817254686973206973206E6F7420612068617368";
+        let value: OperationValue = OperationValue::deserialize_str(invalid_hash);
+        assert!(value.validate().is_err());
+
+        // "relation" operation value with invalid hash:
+        //
+        // {
+        //  "type": "relation",
+        //  "value": "This is not a hash"
+        // }
+        let invalid_hash =
+            "A264747970656872656C6174696F6E6576616C75657254686973206973206E6F7420612068617368";
+        let value: OperationValue = OperationValue::deserialize_str(invalid_hash);
+        assert!(value.validate().is_err());
+    }
+
+    #[test]
+    fn validation_relation_lists_can_be_empty() {
+        let pinned_relation_list = PinnedRelationList::new(vec![]);
+        let value =
+            OperationValue::RelationList(OperationValueRelationList::Pinned(pinned_relation_list));
+        assert!(value.validate().is_ok());
+
+        let relation_list = RelationList::new(vec![]);
+        let value =
+            OperationValue::RelationList(OperationValueRelationList::Unpinned(relation_list));
+        assert!(value.validate().is_ok());
+    }
+
+    #[rstest]
     fn relation_lists(
-        #[from(random_hash)] document_1: Hash,
-        #[from(random_hash)] document_2: Hash,
+        #[from(random_document_id)] document_1: DocumentId,
+        #[from(random_document_id)] document_2: DocumentId,
+    ) {
+        let relations = RelationList::new(vec![document_1, document_2]);
+        let value = OperationValue::RelationList(OperationValueRelationList::Unpinned(relations));
+        let mut fields = OperationFields::new();
+        assert!(fields.add("locations", value).is_ok());
+    }
+
+    #[rstest]
+    fn pinned_relation_lists(
         #[from(random_hash)] operation_id_1: Hash,
         #[from(random_hash)] operation_id_2: Hash,
         #[from(random_hash)] operation_id_3: Hash,
+        #[from(random_hash)] operation_id_4: Hash,
+        #[from(random_hash)] operation_id_5: Hash,
+        #[from(random_hash)] operation_id_6: Hash,
     ) {
-        let document_view_1 = vec![operation_id_1, operation_id_2];
-        let document_view_2 = vec![operation_id_3];
+        let document_view_id_1 = DocumentViewId::new(vec![operation_id_1, operation_id_2]);
+        let document_view_id_2 = DocumentViewId::new(vec![operation_id_3]);
+        let document_view_id_3 =
+            DocumentViewId::new(vec![operation_id_4, operation_id_5, operation_id_6]);
 
-        let relations = vec![
-            Relation::new(document_1, document_view_1),
-            Relation::new(document_2, document_view_2),
-        ];
+        let relations = PinnedRelationList::new(vec![
+            document_view_id_1,
+            document_view_id_2,
+            document_view_id_3,
+        ]);
 
+        let value = OperationValue::RelationList(OperationValueRelationList::Pinned(relations));
         let mut fields = OperationFields::new();
-        assert!(fields
-            .add("locations", OperationValue::RelationList(relations))
-            .is_ok());
+        assert!(fields.add("locations", value).is_ok());
     }
 }

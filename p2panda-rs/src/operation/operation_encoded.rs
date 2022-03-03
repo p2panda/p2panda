@@ -94,13 +94,16 @@ mod tests {
     use rstest::rstest;
     use rstest_reuse::apply;
 
-    use crate::hash::Hash;
-    use crate::operation::{AsOperation, Operation, OperationValue, Relation};
+    use crate::document::DocumentId;
+    use crate::operation::{
+        AsOperation, Operation, OperationValue, OperationValueRelation, OperationValueRelationList,
+        Relation, RelationList,
+    };
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::templates::version_fixtures;
     use crate::test_utils::fixtures::{
-        encoded_create_string, fields, operation_encoded_invalid_relation_fields, random_hash,
-        schema, update_operation, Fixture,
+        encoded_create_string, fields, operation_encoded_invalid_relation_fields,
+        random_document_id, random_hash, schema, update_operation, Fixture,
     };
     use crate::Validate;
 
@@ -144,10 +147,9 @@ mod tests {
     #[rstest]
     fn encode_decode_all_field_types(
         schema: SchemaId,
-        #[from(random_hash)] picture_document: Hash,
-        #[from(random_hash)] friend_document_1: Hash,
-        #[from(random_hash)] friend_document_2: Hash,
-        #[from(random_hash)] friend_operation_id: Hash,
+        #[from(random_document_id)] picture_document: DocumentId,
+        #[from(random_document_id)] friend_document_1: DocumentId,
+        #[from(random_document_id)] friend_document_2: DocumentId,
         #[with(
             // Schema hash
             schema.clone(),
@@ -159,11 +161,11 @@ mod tests {
               ("age", OperationValue::Integer(28)),
               ("height", OperationValue::Float(3.5)),
               ("is_admin", OperationValue::Boolean(false)),
-              ("profile_picture", OperationValue::Relation(Relation::new(picture_document.clone(), Vec::new()))),
-              ("my_friends", OperationValue::RelationList(vec![
-                  Relation::new(friend_document_1.clone(), vec![friend_operation_id.clone()]),
-                  Relation::new(friend_document_2.clone(), Vec::new()),
-              ])),
+              ("profile_picture", OperationValue::Relation(OperationValueRelation::Unpinned(Relation::new(picture_document.clone())))),
+              ("my_friends", OperationValue::RelationList(OperationValueRelationList::Unpinned(RelationList::new(vec![
+                  friend_document_1.clone(),
+                  friend_document_2.clone(),
+              ])))),
             ])
         )]
         update_operation: Operation,
@@ -188,14 +190,15 @@ mod tests {
         );
         assert_eq!(
             fields.get("profile_picture").unwrap(),
-            &OperationValue::Relation(Relation::new(picture_document, Vec::new()))
+            &OperationValue::Relation(OperationValueRelation::Unpinned(Relation::new(
+                picture_document
+            )))
         );
         assert_eq!(
             fields.get("my_friends").unwrap(),
-            &OperationValue::RelationList(vec![
-                Relation::new(friend_document_1, vec![friend_operation_id]),
-                Relation::new(friend_document_2, vec![])
-            ])
+            &OperationValue::RelationList(OperationValueRelationList::Unpinned(RelationList::new(
+                vec![friend_document_1, friend_document_2,]
+            )))
         );
     }
 }

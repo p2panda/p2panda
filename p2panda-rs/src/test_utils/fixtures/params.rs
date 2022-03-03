@@ -9,6 +9,7 @@ use std::convert::TryFrom;
 use rand::Rng;
 use rstest::fixture;
 
+use crate::document::DocumentId;
 use crate::entry::{sign_and_encode, Entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
@@ -65,6 +66,12 @@ pub fn hash(#[default(DEFAULT_HASH)] hash_str: &str) -> Hash {
 pub fn random_hash() -> Hash {
     let random_data = rand::thread_rng().gen::<[u8; 32]>().to_vec();
     Hash::new_from_bytes(random_data).unwrap()
+}
+
+/// Fixture which injects a random document id.
+#[fixture]
+pub fn random_document_id() -> DocumentId {
+    DocumentId::new(random_hash())
 }
 
 /// Fixture which injects the default OperationFields value into a test method.

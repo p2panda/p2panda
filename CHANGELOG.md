@@ -22,7 +22,8 @@ Highlights are marked with a pancake 🥞
 
 - `Instance` renamed to `DocumentView` [#169](https://github.com/p2panda/p2panda/pull/169) `rs`
 - Fix letter casing in operations [#230](https://github.com/p2panda/p2panda/pull/230) `rs` `js`
-- Fixes and refactorings around schema #[233](https://github.com/p2panda/p2panda/pull/233) `rs`
+- Fixes and refactorings around schema [#233](https://github.com/p2panda/p2panda/pull/233) `rs`
+- Split `Relation` into pinned and unpinned type [#235](https://github.com/p2panda/p2panda/pull/235) `rs`
 
 ## Fixed
 
