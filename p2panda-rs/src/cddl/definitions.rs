@@ -4,69 +4,154 @@
 ///
 /// This only validates the general operation format and does not check against application
 /// data fields as this is part of an additional process.
-pub const OPERATION_FORMAT: &str = r#"
+const CDDL_HEADER: &str = r#"
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; p2panda Operation Header v1
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; Header file with the following undefined fields
+; which need to be specified in additional cddl:
+;
+; - schema_id
+; - fields
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+>>>>>>> Add cddl definitions for schema_v1 and schema_field_v1:p2panda-rs/src/cddl/definitions.rs
 operation = {
-    schema: hash,
     version: 1,
+    schema: schema_id,
     operation-body,
 }
 
-hash = tstr .regexp "[0-9a-f]{68}"
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; Core types
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-relation = hash
+entry_hash = tstr .regexp "[0-9a-f]{68}"
 
-pinned_relation = [+ hash];
+previous_operations = [+ entry_hash]
 
-; Create operation
+relation = entry_hash
+pinned_relation = [+ entry_hash]
+relation_list = [* relation]
+pinned_relation_list = [* pinned_relation]
+
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; Operation body
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 operation-body = (
-    action: "create", fields: operation-fields //
-    action: "update", fields: operation-fields, previous_operations: [1* hash] //
-    action: "delete", previous_operations: [1* hash]
+    action: "create", fields: fields //
+    action: "update", fields: fields, previous_operations: previous_operations //
+    action: "delete", previous_operations: previous_operations
 )
 
-; Operation fields with key and value
-operation-fields = {
-    + tstr => {
-        operation-value-text //
-        operation-value-integer //
-        operation-value-float //
-        operation-value-boolean //
-        operation-value-relation //
-        operation-value-relation-list
-    }
-}
-
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ; Operation values
-operation-value-text = (
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+value-text = (
     type: "str",
     value: tstr,
 )
 
-operation-value-integer = (
+value-integer = (
     type: "int",
     value: int,
 )
 
-operation-value-float = (
+value-float = (
     type: "float",
     value: float,
 )
 
-operation-value-boolean = (
+value-boolean = (
     type: "bool",
     value: bool,
 )
 
-operation-value-relation = (
+value-relation = (
     type: "relation",
     value: relation / pinned_relation,
 )
 
-operation-value-relation-list = (
+value-relation-list = (
     type: "relation_list",
-    value: [* relation] / [* pinned_relation],
+    value: relation_list / pinned_relation_list,
+)
+
+value-relation-list-pinned = (
+    type: "relation_list",
+    value: pinned_relation_list,
 )
 "#;
+
+const CDDL_ANY_OPERATION: &str = r#"
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; p2panda Operation Body v1
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+schema_id = entry_hash
+
+fields = {
+    + tstr => {
+        value-text //
+        value-integer //
+        value-float //
+        value-boolean //
+        value-relation //
+        value-relation-list
+    }
+}
+"#;
+
+const CDDL_SCHEMA_V1: &str = r#"
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; System Schema "Schema" v1
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+schema_id = "schema_v1"
+
+fields = {
+    name: { value-text },
+    description: { value-text },
+    fields: { value-relation-list-pinned }
+}
+"#;
+
+const CDDL_SCHEMA_FIELD_V1: &str = r#"
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; System Schema "Schema field" v1
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+schema_id = "schema_field_v1"
+
+fields = {
+    name: { value-text },
+    description: { value-text },
+    field-type: {
+        type: "str",
+        value: "str" / "int" / "float" / "bool" / "relation" / "relation_list",
+    }
+}
+"#;
+
+/// This CDDL is used to verify the format of _all_ incoming operations.
+///
+/// This does only validate the "general" operation schema and does not check against application
+/// data fields as this is part of an additional process called application schema validation.
+pub fn operation_format() -> String {
+    CDDL_HEADER.to_owned() + CDDL_ANY_OPERATION
+}
+
+/// CDDL definition of "schema_v1" system operations.
+pub fn schema_v1_format() -> String {
+    CDDL_HEADER.to_owned() + CDDL_SCHEMA_V1
+}
+
+/// CDDL definition of "schema_field_v1" system operations.
+pub fn schema_field_v1_format() -> String {
+    CDDL_HEADER.to_owned() + CDDL_SCHEMA_FIELD_V1
+}
 
 #[cfg(test)]
 mod tests {
@@ -78,7 +163,7 @@ mod tests {
     use crate::operation::OperationEncoded;
     use crate::test_utils::fixtures::operation_encoded;
 
-    use super::OPERATION_FORMAT;
+    use super::operation_format;
 
     fn to_cbor(value: Value) -> Vec<u8> {
         let mut cbor_bytes = Vec::new();
@@ -88,10 +173,10 @@ mod tests {
 
     #[rstest]
     fn valid_operations(operation_encoded: OperationEncoded) {
-        assert!(validate_cbor(OPERATION_FORMAT, &operation_encoded.to_bytes()).is_ok());
+        assert!(validate_cbor(&operation_format(), &operation_encoded.to_bytes()).is_ok());
 
         assert!(validate_cbor(
-            OPERATION_FORMAT,
+            &operation_format(),
             &to_cbor(
                 cbor!({
                     "action" => "create",
@@ -122,11 +207,10 @@ mod tests {
                 })
                 .unwrap()
             )
-        )
-        .is_ok());
+        ).is_ok());
 
         assert!(validate_cbor(
-            OPERATION_FORMAT,
+            &operation_format(),
             &to_cbor(
                 cbor!({
                     "action" => "update",
@@ -149,7 +233,7 @@ mod tests {
         .is_ok());
 
         assert!(validate_cbor(
-            OPERATION_FORMAT,
+            &operation_format(),
             &to_cbor(
                 cbor!({
                     "action" => "delete",
@@ -168,7 +252,7 @@ mod tests {
     #[test]
     fn invalid_operations() {
         assert!(validate_cbor(
-            OPERATION_FORMAT,
+            &operation_format(),
             &to_cbor(
                 cbor!({
                     "action" => "create",
@@ -188,7 +272,7 @@ mod tests {
         .is_err());
 
         assert!(validate_cbor(
-            OPERATION_FORMAT,
+            &operation_format(),
             &to_cbor(
                 cbor!({
                     // Fields missing in UPDATE operation
@@ -206,7 +290,7 @@ mod tests {
         .is_err());
 
         assert!(validate_cbor(
-            OPERATION_FORMAT,
+            &operation_format(),
             &to_cbor(
                 cbor!({
                     // Previous operations missing in DELETE operation
@@ -220,7 +304,7 @@ mod tests {
         .is_err());
 
         assert!(validate_cbor(
-            OPERATION_FORMAT,
+            &operation_format(),
             &to_cbor(
                 cbor!({
                     "action" => "create",
@@ -240,7 +324,7 @@ mod tests {
         .is_err());
 
         assert!(validate_cbor(
-            OPERATION_FORMAT,
+            &operation_format(),
             &to_cbor(
                 cbor!({
                     // Version missing
@@ -256,7 +340,7 @@ mod tests {
         .is_err());
 
         assert!(validate_cbor(
-            OPERATION_FORMAT,
+            &operation_format(),
             &to_cbor(
                 cbor!({
                     "action" => "delete",
