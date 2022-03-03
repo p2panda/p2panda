@@ -147,9 +147,9 @@ impl Document {
 /// # use p2panda_rs::test_utils::meta_operation;
 /// #
 /// # #[rstest]
-/// # fn main(meta_operation: OperationWithMeta) -> () {
+/// # fn main(#[from(meta_operation)] operation: OperationWithMeta) -> () {
 /// // You need a `Vec<OperationWithMeta>` that includes the `CREATE` operation
-/// let operations: Vec<OperationWithMeta> = vec![meta_operation];
+/// let operations: Vec<OperationWithMeta> = vec![operation];
 ///
 /// // Then you can make a `Document` from it
 /// let document = DocumentBuilder::new(operations).build();
