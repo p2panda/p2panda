@@ -90,7 +90,7 @@ const CDDL_ANY_OPERATION: &str = r#"
 ; p2panda Operation Body v1
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-schema_id = entry_hash
+schema_id = "schema_v1" / "schema_field_v1" / entry_hash
 
 fields = {
     + tstr => {
