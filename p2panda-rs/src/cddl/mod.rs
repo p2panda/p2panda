@@ -11,7 +11,7 @@ mod error;
 mod generator;
 mod validation;
 
-pub use definitions::{operation_format, schema_field_v1_format, schema_v1_format};
+pub use definitions::{OPERATION_FORMAT, SCHEMA_FIELD_V1_FORMAT, SCHEMA_V1_FORMAT};
 pub use error::CddlValidationError;
 pub use generator::CddlGenerator;
 pub use validation::validate_cbor;

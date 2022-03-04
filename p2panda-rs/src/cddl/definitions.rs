@@ -168,31 +168,24 @@ field_type = (
 )
 "#;
 
-/// This CDDL is used to verify the format of _all_ incoming operations.
-///
-/// This does only validate the "general" operation schema and does not check against application
-/// data fields as this is part of an additional process called application schema validation.
-pub fn operation_format() -> &'static str {
-    lazy_static! {
-        static ref OPERATION_FORMAT: String = CDDL_HEADER.to_owned() + CDDL_ANY_OPERATION;
-    }
-    &OPERATION_FORMAT
-}
+lazy_static! {
+    /// This CDDL is used to verify the format of _all_ incoming operations.
+    ///
+    /// This does only validate the "general" operation schema and does not check against application
+    /// data fields as this is part of an additional process called application schema validation.
+    pub static ref OPERATION_FORMAT: String = {
+        format!("{}{}", CDDL_HEADER, CDDL_ANY_OPERATION)
+    };
 
-/// CDDL definition of "schema_v1" system operations.
-pub fn schema_v1_format() -> &'static str {
-    lazy_static! {
-        static ref SCHEMA_V1_FORMAT: String = CDDL_HEADER.to_owned() + CDDL_SCHEMA_V1;
-    }
-    &SCHEMA_V1_FORMAT
-}
+    /// CDDL definition of "schema_v1" system operations.
+    pub static ref SCHEMA_V1_FORMAT: String = {
+        format!("{}{}", CDDL_HEADER, CDDL_SCHEMA_V1)
+    };
 
-/// CDDL definition of "schema_field_v1" system operations.
-pub fn schema_field_v1_format() -> &'static str {
-    lazy_static! {
-        static ref SCHEMA_FIELD_V1_FORMAT: String = CDDL_HEADER.to_owned() + CDDL_SCHEMA_FIELD_V1;
-    }
-    &SCHEMA_FIELD_V1_FORMAT
+    /// CDDL definition of "schema_field_v1" system operations.
+    pub static ref SCHEMA_FIELD_V1_FORMAT: String = {
+        format!("{}{}", CDDL_HEADER, CDDL_SCHEMA_FIELD_V1)
+    };
 }
 
 #[cfg(test)]
@@ -205,7 +198,7 @@ mod tests {
     use crate::operation::OperationEncoded;
     use crate::test_utils::fixtures::operation_encoded;
 
-    use super::{operation_format, schema_field_v1_format, schema_v1_format};
+    use super::{OPERATION_FORMAT, SCHEMA_FIELD_V1_FORMAT, SCHEMA_V1_FORMAT};
 
     fn to_cbor(value: Value) -> Vec<u8> {
         let mut cbor_bytes = Vec::new();
@@ -215,10 +208,10 @@ mod tests {
 
     #[rstest]
     fn valid_operations(operation_encoded: OperationEncoded) {
-        assert!(validate_cbor(operation_format(), &operation_encoded.to_bytes()).is_ok());
+        assert!(validate_cbor(&OPERATION_FORMAT, &operation_encoded.to_bytes()).is_ok());
 
         assert!(validate_cbor(
-            operation_format(),
+            &OPERATION_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "create",
@@ -252,7 +245,7 @@ mod tests {
         ).is_ok());
 
         assert!(validate_cbor(
-            operation_format(),
+            &OPERATION_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "update",
@@ -275,7 +268,7 @@ mod tests {
         .is_ok());
 
         assert!(validate_cbor(
-            operation_format(),
+            &OPERATION_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "delete",
@@ -294,7 +287,7 @@ mod tests {
     #[test]
     fn invalid_operations() {
         assert!(validate_cbor(
-            operation_format(),
+            &OPERATION_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "create",
@@ -314,7 +307,7 @@ mod tests {
         .is_err());
 
         assert!(validate_cbor(
-            operation_format(),
+            &OPERATION_FORMAT,
             &to_cbor(
                 cbor!({
                     // Fields missing in UPDATE operation
@@ -332,7 +325,7 @@ mod tests {
         .is_err());
 
         assert!(validate_cbor(
-            operation_format(),
+            &OPERATION_FORMAT,
             &to_cbor(
                 cbor!({
                     // Previous operations missing in DELETE operation
@@ -346,7 +339,7 @@ mod tests {
         .is_err());
 
         assert!(validate_cbor(
-            operation_format(),
+            &OPERATION_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "create",
@@ -366,7 +359,7 @@ mod tests {
         .is_err());
 
         assert!(validate_cbor(
-            operation_format(),
+            &OPERATION_FORMAT,
             &to_cbor(
                 cbor!({
                     // Version missing
@@ -382,7 +375,7 @@ mod tests {
         .is_err());
 
         assert!(validate_cbor(
-            operation_format(),
+            &OPERATION_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "delete",
@@ -403,7 +396,7 @@ mod tests {
     #[test]
     fn valid_schema_v1() {
         assert!(validate_cbor(
-            schema_v1_format(),
+            &SCHEMA_V1_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "create",
@@ -437,7 +430,7 @@ mod tests {
         ).is_ok());
 
         assert!(validate_cbor(
-            schema_v1_format(),
+            &SCHEMA_V1_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "update",
@@ -459,7 +452,7 @@ mod tests {
         .is_ok());
 
         assert!(validate_cbor(
-            schema_v1_format(),
+            &SCHEMA_V1_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "delete",
@@ -478,7 +471,7 @@ mod tests {
     #[test]
     fn valid_schema_field_v1() {
         assert!(validate_cbor(
-            schema_field_v1_format(),
+            &SCHEMA_FIELD_V1_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "create",
@@ -505,7 +498,7 @@ mod tests {
         .is_ok());
 
         assert!(validate_cbor(
-            schema_field_v1_format(),
+            &SCHEMA_FIELD_V1_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "update",
@@ -528,7 +521,7 @@ mod tests {
         .is_ok());
 
         assert!(validate_cbor(
-            schema_field_v1_format(),
+            &SCHEMA_FIELD_V1_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "delete",
