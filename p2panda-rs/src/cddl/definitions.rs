@@ -27,8 +27,7 @@ operation = {
 ; Core types
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-; @TODO `cddl_cat` crate does not support .regexp "[0-9a-f]{68}" currently
-entry_hash = tstr
+entry_hash = tstr .regexp "[0-9a-f]{68}"
 
 previous_operations = [+ entry_hash]
 
@@ -287,8 +286,7 @@ mod tests {
 
     #[test]
     fn invalid_operations() {
-        /* @TODO: Hash regex currently not supported by `cddl_cat` crate
-         * assert!(validate_cbor(
+        assert!(validate_cbor(
             &operation_format(),
             &to_cbor(
                 cbor!({
@@ -306,7 +304,7 @@ mod tests {
                 .unwrap()
             )
         )
-        .is_err()); */
+        .is_err());
 
         assert!(validate_cbor(
             &operation_format(),
