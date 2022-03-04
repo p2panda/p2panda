@@ -32,9 +32,11 @@ aquamarine = "0.1.11"
 arrayvec = "0.5.2"
 bamboo-rs-core-ed25519-yasmf = "0.1.0"
 ciborium = "0.2.0"
+cddl-cat = { version = "0.6.0", default-features = false, features = ["serde_cbor"] }
 ed25519 = "1.3.0"
 ed25519-dalek = "1.0.1"
 hex = "0.4.3"
+lazy_static = "1.4.0"
 log = "0.4"
 serde = { version = "1.0.132", features = ["derive"] }
 serde-wasm-bindgen = "0.4.1"
@@ -46,13 +48,6 @@ tls_codec = { version = "0.2.0-pre.3", features = [
   "serde_serialize",
 ] }
 yasmf-hash = "0.1.0"
-
-# @TODO: New `regexp` control operator feature in `cddl_cat` needs a release.
-[dependencies.cddl-cat]
-git = "https://github.com/ericseppanen/cddl-cat"
-branch = "regexp"
-default-features = false
-features = ["serde_cbor"]
 
 # @TODO: Use `openmls` crate as soon as changes got merged into `main` in
 # upstream and released as version `0.4.0`.

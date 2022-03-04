@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-/// This CDDL is used to verify the data integrity of all incoming operations.
-///
-/// This only validates the general operation format and does not check against application
-/// data fields as this is part of an additional process.
+use lazy_static::lazy_static;
+
 const CDDL_HEADER: &str = r#"
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ; p2panda Operation Header v1
@@ -174,18 +172,27 @@ field_type = (
 ///
 /// This does only validate the "general" operation schema and does not check against application
 /// data fields as this is part of an additional process called application schema validation.
-pub fn operation_format() -> String {
-    CDDL_HEADER.to_owned() + CDDL_ANY_OPERATION
+pub fn operation_format() -> &'static str {
+    lazy_static! {
+        static ref OPERATION_FORMAT: String = CDDL_HEADER.to_owned() + CDDL_ANY_OPERATION;
+    }
+    &OPERATION_FORMAT
 }
 
 /// CDDL definition of "schema_v1" system operations.
-pub fn schema_v1_format() -> String {
-    CDDL_HEADER.to_owned() + CDDL_SCHEMA_V1
+pub fn schema_v1_format() -> &'static str {
+    lazy_static! {
+        static ref SCHEMA_V1_FORMAT: String = CDDL_HEADER.to_owned() + CDDL_SCHEMA_V1;
+    }
+    &SCHEMA_V1_FORMAT
 }
 
 /// CDDL definition of "schema_field_v1" system operations.
-pub fn schema_field_v1_format() -> String {
-    CDDL_HEADER.to_owned() + CDDL_SCHEMA_FIELD_V1
+pub fn schema_field_v1_format() -> &'static str {
+    lazy_static! {
+        static ref SCHEMA_FIELD_V1_FORMAT: String = CDDL_HEADER.to_owned() + CDDL_SCHEMA_FIELD_V1;
+    }
+    &SCHEMA_FIELD_V1_FORMAT
 }
 
 #[cfg(test)]
@@ -208,10 +215,10 @@ mod tests {
 
     #[rstest]
     fn valid_operations(operation_encoded: OperationEncoded) {
-        assert!(validate_cbor(&operation_format(), &operation_encoded.to_bytes()).is_ok());
+        assert!(validate_cbor(operation_format(), &operation_encoded.to_bytes()).is_ok());
 
         assert!(validate_cbor(
-            &operation_format(),
+            operation_format(),
             &to_cbor(
                 cbor!({
                     "action" => "create",
@@ -245,7 +252,7 @@ mod tests {
         ).is_ok());
 
         assert!(validate_cbor(
-            &operation_format(),
+            operation_format(),
             &to_cbor(
                 cbor!({
                     "action" => "update",
@@ -268,7 +275,7 @@ mod tests {
         .is_ok());
 
         assert!(validate_cbor(
-            &operation_format(),
+            operation_format(),
             &to_cbor(
                 cbor!({
                     "action" => "delete",
@@ -287,7 +294,7 @@ mod tests {
     #[test]
     fn invalid_operations() {
         assert!(validate_cbor(
-            &operation_format(),
+            operation_format(),
             &to_cbor(
                 cbor!({
                     "action" => "create",
@@ -307,7 +314,7 @@ mod tests {
         .is_err());
 
         assert!(validate_cbor(
-            &operation_format(),
+            operation_format(),
             &to_cbor(
                 cbor!({
                     // Fields missing in UPDATE operation
@@ -325,7 +332,7 @@ mod tests {
         .is_err());
 
         assert!(validate_cbor(
-            &operation_format(),
+            operation_format(),
             &to_cbor(
                 cbor!({
                     // Previous operations missing in DELETE operation
@@ -339,7 +346,7 @@ mod tests {
         .is_err());
 
         assert!(validate_cbor(
-            &operation_format(),
+            operation_format(),
             &to_cbor(
                 cbor!({
                     "action" => "create",
@@ -359,7 +366,7 @@ mod tests {
         .is_err());
 
         assert!(validate_cbor(
-            &operation_format(),
+            operation_format(),
             &to_cbor(
                 cbor!({
                     // Version missing
@@ -375,7 +382,7 @@ mod tests {
         .is_err());
 
         assert!(validate_cbor(
-            &operation_format(),
+            operation_format(),
             &to_cbor(
                 cbor!({
                     "action" => "delete",
@@ -396,7 +403,7 @@ mod tests {
     #[test]
     fn valid_schema_v1() {
         assert!(validate_cbor(
-            &schema_v1_format(),
+            schema_v1_format(),
             &to_cbor(
                 cbor!({
                     "action" => "create",
@@ -430,7 +437,7 @@ mod tests {
         ).is_ok());
 
         assert!(validate_cbor(
-            &schema_v1_format(),
+            schema_v1_format(),
             &to_cbor(
                 cbor!({
                     "action" => "update",
@@ -452,7 +459,7 @@ mod tests {
         .is_ok());
 
         assert!(validate_cbor(
-            &schema_v1_format(),
+            schema_v1_format(),
             &to_cbor(
                 cbor!({
                     "action" => "delete",
@@ -471,7 +478,7 @@ mod tests {
     #[test]
     fn valid_schema_field_v1() {
         assert!(validate_cbor(
-            &schema_field_v1_format(),
+            schema_field_v1_format(),
             &to_cbor(
                 cbor!({
                     "action" => "create",
@@ -498,7 +505,7 @@ mod tests {
         .is_ok());
 
         assert!(validate_cbor(
-            &schema_field_v1_format(),
+            schema_field_v1_format(),
             &to_cbor(
                 cbor!({
                     "action" => "update",
@@ -521,7 +528,7 @@ mod tests {
         .is_ok());
 
         assert!(validate_cbor(
-            &schema_field_v1_format(),
+            schema_field_v1_format(),
             &to_cbor(
                 cbor!({
                     "action" => "delete",
