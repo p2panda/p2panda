@@ -379,6 +379,24 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "delete",
+                    "schema" => "0020458710a538d2f11b811ba6db8851e52323916e906cdd695cc2d4f4e77d35b2a2",
+                    "version" => 1,
+                    "previous_operations" => [
+                        "0020b39b995e4f9d782a51d9afbc8260e5802b3a13920beb3d09e787ccfc74176c26",
+                        // This is not a hash
+                        "Yes, Indeed, this is not a hash! https://vimeo.com/559636244",
+                    ],
+                })
+                .unwrap()
+            )
+        )
+        .is_err());
+
+        assert!(validate_cbor(
+            &OPERATION_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "delete",
                     "schema" => "0020687af9bd717de34ac24ce601116a3b5dabc396eabaf92c2da8010b5703dc4612",
                     "version" => 1,
                     // Huch!
@@ -469,6 +487,91 @@ mod tests {
     }
 
     #[test]
+    fn invalid_schema_v1() {
+        assert!(validate_cbor(
+            &SCHEMA_V1_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "create",
+                    "schema" => "schema_v1",
+                    "version" => 1,
+                    "fields" => {
+                        "name" => {
+                            "value" => "Locations",
+                            "type" => "str"
+                        },
+                        "description" => {
+                            "value" => "Holds information about places",
+                            "type" => "str"
+                        },
+                        // "fields" missing
+                    },
+                })
+                .unwrap()
+            )
+        )
+        .is_err());
+
+        assert!(validate_cbor(
+            &SCHEMA_V1_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "create",
+                    "schema" => "schema_v1",
+                    "version" => 1,
+                    "fields" => {
+                        "name" => {
+                            "value" => "Locations",
+                            "type" => "str"
+                        },
+                        "description" => {
+                            "value" => "Holds information about places",
+                            "type" => "str"
+                        },
+                        // "field_type" is an unknown field
+                        "field_type" => {
+                            "value" => "What am I doing here?",
+                            "type" => "str"
+                        },
+                        "fields" => {
+                            "value" => [
+                                [
+                                    "00206de69fe88aa24e0929bad2fc9808a0ce2aad8e6d8fb914f4a9178995a56b3435"
+                                ]
+                            ],
+                            "type" => "relation_list"
+                        },
+                    },
+                })
+                .unwrap()
+            )
+        ).is_err());
+
+        assert!(validate_cbor(
+            &SCHEMA_V1_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "update",
+                    "schema" => "schema_v1",
+                    "version" => 1,
+                    "previous_operations" => [
+                        "00207134365ce71dca6bd7c31d04bfb3244b29897ab538906216fc8ff3d6189410ad",
+                    ],
+                    "fields" => {
+                        "name" => {
+                            // "name" is not an integer
+                            "value" => 12,
+                            "type" => "int"
+                        },
+                    },
+                })
+                .unwrap()
+            )
+        )
+        .is_err());
+    }
+
+    #[test]
     fn valid_schema_field_v1() {
         assert!(validate_cbor(
             &SCHEMA_FIELD_V1_FORMAT,
@@ -535,5 +638,55 @@ mod tests {
             )
         )
         .is_ok());
+    }
+
+    #[test]
+    fn invalid_schema_field_v1() {
+        assert!(validate_cbor(
+            &SCHEMA_FIELD_V1_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "create",
+                    "schema" => "schema_field_v1",
+                    "version" => 1,
+                    "fields" => {
+                        "name" => {
+                            "value" => "Size",
+                            "type" => "str"
+                        },
+                        // "description" field missing
+                        "field_type" => {
+                            "value" => "float",
+                            "type" => "str"
+                        },
+                    },
+                })
+                .unwrap()
+            )
+        )
+        .is_err());
+
+        assert!(validate_cbor(
+            &SCHEMA_FIELD_V1_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "update",
+                    "schema" => "schema_field_v1",
+                    "version" => 1,
+                    "previous_operations" => [
+                        "00209caa5f232debd2835e35a673d5eb148ea803a272c6ca004cd86cbe4a834718d5",
+                    ],
+                    "fields" => {
+                        "field_type" => {
+                            // Unknown field type
+                            "value" => "beaver_nest",
+                            "type" => "str"
+                        },
+                    },
+                })
+                .unwrap()
+            )
+        )
+        .is_err());
     }
 }
