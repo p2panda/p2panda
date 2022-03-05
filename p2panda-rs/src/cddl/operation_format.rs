@@ -2,7 +2,7 @@
 
 /// This CDDL is used to verify the data integrity of all incoming operations.
 ///
-/// This does only validate the general operation format and does not check against application
+/// This only validates the general operation format and does not check against application
 /// data fields as this is part of an additional process.
 pub const OPERATION_FORMAT: &str = r#"
 operation = {
