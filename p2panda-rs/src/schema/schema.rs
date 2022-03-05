@@ -2,9 +2,14 @@
 
 use std::collections::BTreeMap;
 
+<<<<<<< HEAD
 use crate::cddl::generate_cddl_definition;
 use crate::document::DocumentViewId;
 use crate::schema::system::{FieldType, SchemaFieldView, SchemaView};
+=======
+use crate::document::DocumentViewId;
+use crate::schema::system::{SchemaFieldView, SchemaView};
+>>>>>>> Introduce `Schema` struct (again...)
 use crate::schema::SchemaError;
 
 /// The key of a schema field
@@ -18,12 +23,19 @@ pub struct Schema {
     id: DocumentViewId,
     name: String,
     description: String,
+<<<<<<< HEAD
     fields: BTreeMap<FieldKey, FieldType>,
+=======
+    fields: BTreeMap<FieldKey, SchemaFieldView>,
+>>>>>>> Introduce `Schema` struct (again...)
 }
 
 impl Schema {
     /// Instantiate a new `Schema` from a `SchemaView` and it's `SchemaFieldView`s
+<<<<<<< HEAD
     #[allow(unused)]
+=======
+>>>>>>> Introduce `Schema` struct (again...)
     pub fn new(schema: SchemaView, fields: Vec<SchemaFieldView>) -> Result<Schema, SchemaError> {
         // Validate that the passed `SchemaFields` are the correct ones for this `Schema`.
         for schema_field in schema.fields().iter() {
@@ -44,7 +56,11 @@ impl Schema {
         // Construct a key-value map of fields
         let mut fields_map = BTreeMap::new();
         for field in fields {
+<<<<<<< HEAD
             fields_map.insert(field.name().to_string(), field.field_type().to_owned());
+=======
+            fields_map.insert(field.name().to_string(), field);
+>>>>>>> Introduce `Schema` struct (again...)
         }
 
         Ok(Schema {
@@ -54,6 +70,7 @@ impl Schema {
             fields: fields_map,
         })
     }
+<<<<<<< HEAD
 
     /// Return a definition for this schema expressed as a CDDL string.
     #[allow(unused)]
@@ -259,4 +276,6 @@ mod tests {
         )
         .is_err());
     }
+=======
+>>>>>>> Introduce `Schema` struct (again...)
 }
