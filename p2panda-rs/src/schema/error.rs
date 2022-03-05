@@ -9,3 +9,11 @@ pub enum SchemaIdError {
     #[error("invalid hash string")]
     HashError(#[from] crate::hash::HashError),
 }
+
+/// Custom errors related to `Schema`.
+#[derive(Error, Debug, Clone, Copy)]
+pub enum SchemaError {
+    /// Invalid fields in schema.
+    #[error("invalid fields found for this schema")]
+    InvalidFields,
+}

@@ -2,8 +2,9 @@
 
 //! Schemas describe the format of data used in operation fields.
 mod error;
+mod schema;
 mod schema_id;
 pub mod system;
 
-pub use error::SchemaIdError;
+pub use error::{SchemaError, SchemaIdError};
 pub use schema_id::SchemaId;
