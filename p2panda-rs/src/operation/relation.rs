@@ -105,6 +105,11 @@ impl RelationList {
     pub fn new(relations: Vec<DocumentId>) -> Self {
         Self(relations)
     }
+
+    /// Returns an iterator over the `DocumentId`s in this `RelationList`
+    pub fn iter(&self) -> std::vec::IntoIter<DocumentId> {
+        self.0.clone().into_iter()
+    }
 }
 
 impl Validate for RelationList {
@@ -127,6 +132,11 @@ impl PinnedRelationList {
     /// Returns a new list of pinned relations.
     pub fn new(relations: Vec<DocumentViewId>) -> Self {
         Self(relations)
+    }
+
+    /// Returns an iterator over the `DocumentViewId`s in this `PinnedRelationList`
+    pub fn iter(&self) -> std::vec::IntoIter<DocumentViewId> {
+        self.0.clone().into_iter()
     }
 }
 
