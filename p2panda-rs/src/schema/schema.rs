@@ -83,16 +83,16 @@ mod tests {
         // Create schema definition for "venue"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        let mut bool_field = BTreeMap::new();
-        bool_field.insert(
+        let mut schema = BTreeMap::new();
+        schema.insert(
             "name".to_string(),
             OperationValue::Text("venue_name".to_string()),
         );
-        bool_field.insert(
+        schema.insert(
             "description".to_string(),
             OperationValue::Text("Describes a venue".to_string()),
         );
-        bool_field.insert(
+        schema.insert(
             "fields".to_string(),
             OperationValue::RelationList(OperationValueRelationList::Pinned(
                 PinnedRelationList::new(vec![
@@ -106,7 +106,7 @@ mod tests {
         );
 
         let schema_view_id = DocumentViewId::new(vec![schema_view_id]);
-        let schema_view: SchemaView = DocumentView::new(schema_view_id, schema_id, bool_field)
+        let schema_view: SchemaView = DocumentView::new(schema_view_id, schema_id, schema)
             .try_into()
             .unwrap();
 
