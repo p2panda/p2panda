@@ -68,21 +68,11 @@ mod tests {
     use crate::schema::system::{SchemaFieldView, SchemaView};
     use crate::test_utils::fixtures::{random_document_id, random_hash};
 
-    #[rstest]
-    fn construct_schema(
-        #[from(random_hash)] relation_operation_id_1: Hash,
-        #[from(random_hash)] relation_operation_id_2: Hash,
-        #[from(random_hash)] relation_operation_id_3: Hash,
-        #[from(random_hash)] relation_operation_id_4: Hash,
-        #[from(random_hash)] schema_view_id: Hash,
-        #[from(random_document_id)] schema_id: DocumentId,
-        #[from(random_document_id)] bool_field_id: DocumentId,
-        #[from(random_document_id)] capacity_field_id: DocumentId,
-        #[from(random_document_id)] toilet_size_field_id: DocumentId,
-    ) {
-        // Create schema definition for "venue"
-        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
+    fn create_schema(
+        fields: PinnedRelationList,
+        view_id: DocumentViewId,
+        document_id: DocumentId,
+    ) -> SchemaView {
         let mut schema = BTreeMap::new();
         schema.insert(
             "name".to_string(),
@@ -94,95 +84,159 @@ mod tests {
         );
         schema.insert(
             "fields".to_string(),
-            OperationValue::RelationList(OperationValueRelationList::Pinned(
-                PinnedRelationList::new(vec![
-                    DocumentViewId::new(vec![relation_operation_id_1.clone()]),
-                    DocumentViewId::new(vec![
-                        relation_operation_id_2.clone(),
-                        relation_operation_id_3.clone(),
-                    ]),
-                ]),
-            )),
+            OperationValue::RelationList(OperationValueRelationList::Pinned(fields)),
         );
-
-        let schema_view_id = DocumentViewId::new(vec![schema_view_id]);
-        let schema_view: SchemaView = DocumentView::new(schema_view_id, schema_id, schema)
+        let schema_view: SchemaView = DocumentView::new(view_id, document_id, schema)
             .try_into()
             .unwrap();
+        schema_view
+    }
+
+    fn create_field(
+        name: &str,
+        field_type: &str,
+        view_id: DocumentViewId,
+        document_id: DocumentId,
+    ) -> SchemaFieldView {
+        let mut capacity_field = BTreeMap::new();
+        capacity_field.insert("name".to_string(), OperationValue::Text(name.to_string()));
+        capacity_field.insert(
+            "type".to_string(),
+            OperationValue::Text(field_type.to_string()),
+        );
+
+        let capacity_field_view: SchemaFieldView =
+            DocumentView::new(view_id, document_id, capacity_field)
+                .try_into()
+                .unwrap();
+        capacity_field_view
+    }
+
+    #[rstest]
+    fn construct_schema(
+        #[from(random_hash)] relation_operation_id_1: Hash,
+        #[from(random_hash)] relation_operation_id_2: Hash,
+        #[from(random_hash)] relation_operation_id_3: Hash,
+        #[from(random_hash)] schema_view_id: Hash,
+        #[from(random_document_id)] schema_id: DocumentId,
+        #[from(random_document_id)] bool_field_id: DocumentId,
+        #[from(random_document_id)] capacity_field_id: DocumentId,
+    ) {
+        // Create schema definition for "venue"
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+        let schema_view_id = DocumentViewId::new(vec![schema_view_id]);
+        let fields = PinnedRelationList::new(vec![
+            DocumentViewId::new(vec![relation_operation_id_1.clone()]),
+            DocumentViewId::new(vec![
+                relation_operation_id_2.clone(),
+                relation_operation_id_3.clone(),
+            ]),
+        ]);
+
+        let schema_view = create_schema(fields, schema_view_id, schema_id);
 
         // Create first schema field "is_accessible"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        let mut bool_field = BTreeMap::new();
-        bool_field.insert(
-            "name".to_string(),
-            OperationValue::Text("is_accessible".to_string()),
+        let bool_field_view = create_field(
+            "is_accessible",
+            "bool",
+            DocumentViewId::new(vec![relation_operation_id_1]),
+            bool_field_id,
         );
-        bool_field.insert("type".to_string(), OperationValue::Text("bool".to_string()));
-
-        let bool_field_view_id = DocumentViewId::new(vec![relation_operation_id_1]);
-        let bool_field_view: SchemaFieldView =
-            DocumentView::new(bool_field_view_id, bool_field_id, bool_field)
-                .try_into()
-                .unwrap();
 
         // Create second schema field "capacity"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        let mut capacity_field = BTreeMap::new();
-        capacity_field.insert(
-            "name".to_string(),
-            OperationValue::Text("capacity".to_string()),
+        let capacity_field_view = create_field(
+            "capacity",
+            "int",
+            DocumentViewId::new(vec![relation_operation_id_2, relation_operation_id_3]),
+            capacity_field_id,
         );
-        capacity_field.insert("type".to_string(), OperationValue::Text("int".to_string()));
-
-        let capacity_field_view_id =
-            DocumentViewId::new(vec![relation_operation_id_2, relation_operation_id_3]);
-        let capacity_field_view: SchemaFieldView =
-            DocumentView::new(capacity_field_view_id, capacity_field_id, capacity_field)
-                .try_into()
-                .unwrap();
 
         // Create venue schema from schema and field views
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        assert!(Schema::new(
-            schema_view.clone(),
-            vec![bool_field_view.clone(), capacity_field_view.clone()]
-        )
-        .is_ok());
+        assert!(Schema::new(schema_view, vec![bool_field_view, capacity_field_view]).is_ok());
+    }
 
-        // Invalid fields should fail
+    #[rstest]
+    fn invalid_fields_fail(
+        #[from(random_hash)] relation_operation_id_1: Hash,
+        #[from(random_hash)] relation_operation_id_2: Hash,
+        #[from(random_hash)] invalid_relation_hash: Hash,
+        #[from(random_hash)] schema_view_id: Hash,
+        #[from(random_document_id)] schema_id: DocumentId,
+        #[from(random_document_id)] bool_field_id: DocumentId,
+        #[from(random_document_id)] capacity_field_id: DocumentId,
+    ) {
+        // Create schema definition for "venue"
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+        let schema_view_id = DocumentViewId::new(vec![schema_view_id]);
+        let fields = PinnedRelationList::new(vec![
+            DocumentViewId::new(vec![relation_operation_id_1.clone()]),
+            DocumentViewId::new(vec![relation_operation_id_2.clone()]),
+        ]);
+
+        let schema_view = create_schema(fields, schema_view_id, schema_id);
+
+        // Create first valid schema field "is_accessible"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        let mut toilet_size_field = BTreeMap::new();
-        toilet_size_field.insert(
-            "name".to_string(),
-            OperationValue::Text("toilet_size".to_string()),
+        let bool_field_document_view_id = DocumentViewId::new(vec![relation_operation_id_1]);
+        let bool_field_view = create_field(
+            "is_accessible",
+            "bool",
+            bool_field_document_view_id,
+            bool_field_id,
         );
-        toilet_size_field.insert("type".to_string(), OperationValue::Text("int".to_string()));
 
-        let toilet_size_field_view_id = DocumentViewId::new(vec![relation_operation_id_4]);
-        let toilet_size_field_view: SchemaFieldView = DocumentView::new(
-            toilet_size_field_view_id,
-            toilet_size_field_id,
-            toilet_size_field,
-        )
-        .try_into()
-        .unwrap();
+        // Create second valid schema field "capacity"
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        // Invalid field passed
+        let capacity_field_document_view_id = DocumentViewId::new(vec![relation_operation_id_2]);
+        let capacity_field_view = create_field(
+            "capacity",
+            "int",
+            capacity_field_document_view_id,
+            capacity_field_id.clone(),
+        );
+
+        // Create field with invalid DocumentViewId
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+        let invalid_document_view_id = DocumentViewId::new(vec![invalid_relation_hash]);
+        let field_with_invalid_document_view_id = create_field(
+            "capacity",
+            "int",
+            invalid_document_view_id,
+            capacity_field_id,
+        );
+
+        // Passing field with invalid DocumentViewId should fail
         assert!(Schema::new(
             schema_view.clone(),
-            vec![bool_field_view.clone(), toilet_size_field_view.clone()]
+            vec![
+                bool_field_view.clone(),
+                field_with_invalid_document_view_id.clone()
+            ]
         )
         .is_err());
-        // Too few fields passed
+
+        // Passing too few fields should fail
         assert!(Schema::new(schema_view.clone(), vec![bool_field_view.clone()]).is_err());
-        // Too many fields passed
+
+        // Passing too many fields should fail
         assert!(Schema::new(
             schema_view,
-            vec![bool_field_view, capacity_field_view, toilet_size_field_view]
+            vec![
+                bool_field_view,
+                capacity_field_view,
+                field_with_invalid_document_view_id
+            ]
         )
         .is_err());
     }
