@@ -22,6 +22,8 @@ Highlights are marked with a pancake 🥞
 
 - `Instance` renamed to `DocumentView` [#169](https://github.com/p2panda/p2panda/pull/169) `rs`
 - Fix letter casing in operations [#230](https://github.com/p2panda/p2panda/pull/230) `rs` `js`
+- Fixes and refactorings around schema [#233](https://github.com/p2panda/p2panda/pull/233) `rs`
+- Split `Relation` into pinned and unpinned type [#235](https://github.com/p2panda/p2panda/pull/235) `rs`
 
 ## Fixed
 
@@ -32,6 +34,8 @@ Highlights are marked with a pancake 🥞
 - Easier to read CDDL schema error strings [#207](https://github.com/p2panda/p2panda/pull/207) `rs`
 - Force cache cleanup to fix code coverage report [#231](https://github.com/p2panda/p2panda/pull/231)
 - Split up overly long `operation.rs` file [#232](https://github.com/p2panda/p2panda/pull/232) `rs`
+- Extend test coverage for `OperationFields` [#236](https://github.com/p2panda/p2panda/pull/236) `rs`
+- Further develop our best practices for writing documentation [#240](https://github.com/p2panda/p2panda/pull/240) `rs`
 
 ## [0.3.0]
 

@@ -2,9 +2,7 @@
 
 use thiserror::Error;
 
-use crate::operation::OperationValue;
-
-/// Custom error types for schema validation.
+/// Error types for schema validation.
 #[derive(Error)]
 pub enum SchemaValidationError {
     /// Operation contains invalid fields.
@@ -15,6 +13,10 @@ pub enum SchemaValidationError {
     /// Operation can't be deserialised from invalid CBOR encoding.
     #[error("invalid CBOR format")]
     InvalidCBOR,
+
+    /// Attempted to validate an operation using an invalid CDDL definition
+    #[error("invalid CDDL definition: {0}")]
+    InvalidCDDL(String),
 
     /// There is no schema set.
     #[error("no CDDL schema present")]
@@ -37,7 +39,7 @@ pub enum SchemaValidationError {
     OperationError(#[from] crate::operation::OperationError),
 }
 
-/// Custom error types for schema validation.
+/// Error types for schema validation.
 #[derive(Error, Debug)]
 pub enum SchemaIdError {
     /// `OperationFields` error.
@@ -45,35 +47,16 @@ pub enum SchemaIdError {
     HashError(#[from] crate::hash::HashError),
 }
 
-/// Custom error types for system schema views.
-#[derive(Error, Debug)]
-pub enum SystemSchemaError {
-    /// Passed field type does not match the expected type.
-    #[error("invalid field \"{0}\" with value {1:#?}")]
-    InvalidField(String, OperationValue),
-
-    /// Missing expected field.
-    #[error("missing field \"{0}\"")]
-    MissingField(String),
-
-    /// Too many fields passed.
-    #[error("too many fields")]
-    TooManyFields,
-
-    /// Too few fields passed.
-    #[error("too few fields")]
-    TooFewFields,
-
-    /// Invalid field type found.
-    #[error("invalid field type")]
-    InvalidFieldType,
-}
-
+// This `Debug` implementation improves the display of error values from the `cddl` crate. Without
+// this, all of its errors are concatenated into a long string that quickly becomes hard to read.
+// By displaying cddl errors using `Display` instead of `Debug` below, we get line breaks in error
+// messages. C.f. https://github.com/p2panda/p2panda/pull/207
 impl std::fmt::Debug for SchemaValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
             SchemaValidationError::InvalidSchema(_) => write!(f, "InvalidSchema"),
             SchemaValidationError::InvalidCBOR => write!(f, "InvalidCBOR"),
+            SchemaValidationError::InvalidCDDL(_) => write!(f, "InvalidCDDL"),
             SchemaValidationError::NoSchema => write!(f, "NoSchema"),
             SchemaValidationError::ParsingError(_) => write!(f, "ParsingError"),
             SchemaValidationError::ValidationError(_) => write!(f, "ValidationError"),

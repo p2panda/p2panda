@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::document::{document_view::DocumentViewId, DocumentBuilderError, DocumentView};
+use crate::document::{DocumentBuilderError, DocumentId, DocumentView, DocumentViewId};
 use crate::graph::Graph;
 use crate::hash::Hash;
 use crate::identity::Author;
@@ -65,6 +65,13 @@ pub(super) fn reduce<T: AsOperation>(
     (view, is_edited, is_deleted)
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct DocumentMeta {
+    deleted: bool,
+    edited: bool,
+    operations: Vec<OperationWithMeta>,
+}
+
 /// A replicatable data type designed to handle concurrent updates in a way where all replicas
 /// eventually resolve to the same deterministic value.
 ///
@@ -79,21 +86,14 @@ pub struct Document {
     meta: DocumentMeta,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct DocumentMeta {
-    deleted: bool,
-    edited: bool,
-    operations: Vec<OperationWithMeta>,
-}
-
 impl Document {
     /// Get the document id.
-    pub fn id(&self) -> &Hash {
+    pub fn id(&self) -> &DocumentId {
         self.view.document_id()
     }
 
     /// Get the document view id.
-    pub fn view_id(&self) -> &[Hash] {
+    pub fn view_id(&self) -> &DocumentViewId {
         self.view.id()
     }
 
@@ -117,11 +117,6 @@ impl Document {
         &self.meta.operations
     }
 
-    /// Get the documents graph tips (aka view id).
-    pub fn current_graph_tips(&self) -> &[Hash] {
-        self.view.id()
-    }
-
     /// Returns true if this document has applied an UPDATE operation.
     pub fn is_edited(&self) -> bool {
         self.meta.edited
@@ -133,22 +128,38 @@ impl Document {
     }
 }
 
-/// A struct for building documents from a collection of operations. When calling `build()
-/// a document is returned wrapped in a result. The build will error if the operations passed
-/// don't follow documents validation criteria.
+/// A struct for building [documents][`Document`] from a collection of [operations with
+/// metadata][`crate::operation::OperationWithMeta`].
 ///
-/// Validation checks the following:
-/// - There should be exactly one CREATE operation.
-/// - All operations should be causally connected to the root operation.
-/// - All operations should follow the same schema.
-/// - No cycles exist in the graph.
+/// ## Example
+///
+/// ```
+/// # extern crate p2panda_rs;
+/// # #[cfg(test)]
+/// # mod tests {
+/// # use rstest::rstest;
+/// # use p2panda_rs::document::DocumentBuilder;
+/// # use p2panda_rs::operation::OperationWithMeta;
+/// # use p2panda_rs::test_utils::meta_operation;
+/// #
+/// # #[rstest]
+/// # fn main(#[from(meta_operation)] operation: OperationWithMeta) -> () {
+/// // You need a `Vec<OperationWithMeta>` that includes the `CREATE` operation
+/// let operations: Vec<OperationWithMeta> = vec![operation];
+///
+/// // Then you can make a `Document` from it
+/// let document = DocumentBuilder::new(operations).build();
+/// assert!(document.is_ok());
+/// # }
+/// # }
+/// ```
 #[derive(Debug, Clone)]
 pub struct DocumentBuilder {
     operations: Vec<OperationWithMeta>,
 }
 
 impl DocumentBuilder {
-    /// Instantiate a new DocumentBuilder with a collection of operations.
+    /// Instantiate a new `DocumentBuilder` from a collection of operations.
     pub fn new(operations: Vec<OperationWithMeta>) -> DocumentBuilder {
         Self { operations }
     }
@@ -158,19 +169,24 @@ impl DocumentBuilder {
         self.operations.clone()
     }
 
-    /// Build document. This already resolves the current document view.
-    /// Validate the collection of operations which are contained in this document.
-    /// - there should be exactly one CREATE operation.
-    /// - all operations should follow the same schema.
+    /// Validates the set of operations and builds the document.
+    ///
+    /// The returned document also contains the latest resolved [document view][`DocumentView`].
+    ///
+    /// Validation checks the following:
+    /// - There is exactly one `CREATE` operation.
+    /// - All operations are causally connected to the root operation.
+    /// - All operations follow the same schema.
+    /// - No cycles exist in the graph.
     pub fn build(&self) -> Result<Document, DocumentBuilderError> {
-        // find create message.
+        // Find CREATE operation
         let mut collect_create_operation: Vec<OperationWithMeta> = self
             .operations()
             .into_iter()
             .filter(|op| op.is_create())
             .collect();
 
-        // Check we have only one create operation in the document.
+        // Check we have only one CREATE operation in the document
         let create_operation = match collect_create_operation.len() {
             0 => Err(DocumentBuilderError::NoCreateOperation),
             1 => Ok(collect_create_operation.pop().unwrap()),
@@ -180,7 +196,8 @@ impl DocumentBuilder {
         // Get the document schema
         let schema = create_operation.schema();
 
-        // Get the document author (or rather, the public key of the author who created this document)
+        // Get the document author (or rather, the public key of the author who created this
+        // document)
         let author = create_operation.public_key().to_owned();
 
         // Check all operations match the document schema
@@ -193,7 +210,7 @@ impl DocumentBuilder {
             return Err(DocumentBuilderError::OperationSchemaNotMatching);
         }
 
-        let document_id = create_operation.operation_id().to_owned();
+        let document_id = DocumentId::new(create_operation.operation_id().clone());
 
         // Build the graph  and then sort the operations into a linear order
         let graph = build_graph(&self.operations)?;
@@ -217,10 +234,10 @@ impl DocumentBuilder {
         };
 
         // Construct the document view id
-        let document_view_id = DocumentViewId::new(document_id, graph_tips);
+        let document_view_id = DocumentViewId::new(graph_tips);
 
         // Construct the document view, from the reduced values and the document view id
-        let document_view = DocumentView::new(document_view_id, view);
+        let document_view = DocumentView::new(document_view_id, document_id, view);
 
         Ok(Document {
             schema,
@@ -237,6 +254,7 @@ mod tests {
 
     use rstest::rstest;
 
+    use crate::document::DocumentId;
     use crate::identity::KeyPair;
     use crate::operation::{Operation, OperationValue, OperationWithMeta};
     use crate::schema::SchemaId;
@@ -443,9 +461,8 @@ mod tests {
         assert!(document.is_edited());
         assert!(!document.is_deleted());
         assert_eq!(document.operations(), &expected_op_order);
-        assert_eq!(document.current_graph_tips(), &expected_graph_tip);
-        assert_eq!(document.id(), &panda_entry_1_hash);
-        assert_eq!(document.view_id(), &[penguin_entry_3_hash.clone()]);
+        assert_eq!(document.view_id().graph_tips(), &expected_graph_tip);
+        assert_eq!(document.id(), &DocumentId::new(panda_entry_1_hash.clone()));
 
         // Multiple replicas receiving operations in different orders should resolve to same value.
 
@@ -476,12 +493,18 @@ mod tests {
 
         assert_eq!(replica_1.view().get("name"), replica_2.view().get("name"));
         assert_eq!(replica_1.view().get("name"), replica_3.view().get("name"));
-        assert_eq!(replica_1.id(), &panda_entry_1_hash);
-        assert_eq!(replica_1.view_id(), &[penguin_entry_3_hash.clone()]);
-        assert_eq!(replica_2.id(), &panda_entry_1_hash);
-        assert_eq!(replica_2.view_id(), &[penguin_entry_3_hash.clone()]);
-        assert_eq!(replica_3.id(), &panda_entry_1_hash);
-        assert_eq!(replica_3.view_id(), &[penguin_entry_3_hash]);
+        assert_eq!(replica_1.id(), &DocumentId::new(panda_entry_1_hash.clone()));
+        assert_eq!(
+            replica_1.view_id().graph_tips(),
+            &[penguin_entry_3_hash.clone()]
+        );
+        assert_eq!(replica_2.id(), &DocumentId::new(panda_entry_1_hash.clone()));
+        assert_eq!(
+            replica_2.view_id().graph_tips(),
+            &[penguin_entry_3_hash.clone()]
+        );
+        assert_eq!(replica_3.id(), &DocumentId::new(panda_entry_1_hash));
+        assert_eq!(replica_3.view_id().graph_tips(), &[penguin_entry_3_hash]);
     }
 
     #[rstest]

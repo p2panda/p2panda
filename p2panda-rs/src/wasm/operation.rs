@@ -9,7 +9,7 @@ use wasm_bindgen::JsValue;
 use crate::hash::Hash;
 use crate::operation::{
     Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationValue,
-    Relation,
+    OperationValueRelation, OperationValueRelationList,
 };
 use crate::schema::SchemaId;
 use crate::wasm::error::jserr;
@@ -70,16 +70,16 @@ impl OperationFields {
                 Ok(())
             }
             "relation" => {
-                let relation: Relation = jserr!(deserialize_from_js(value), "Invalid object");
+                let relation: OperationValueRelation =
+                    jserr!(deserialize_from_js(value), "Invalid object");
                 jserr!(relation.validate());
                 jserr!(self.0.add(name, OperationValue::Relation(relation)));
                 Ok(())
             }
             "relation_list" => {
-                let relations: Vec<Relation> = jserr!(deserialize_from_js(value), "Invalid array");
-                for relation in &relations {
-                    jserr!(relation.validate());
-                }
+                let relations: OperationValueRelationList =
+                    jserr!(deserialize_from_js(value), "Invalid array");
+                jserr!(relations.validate());
                 jserr!(self.0.add(name, OperationValue::RelationList(relations)));
                 Ok(())
             }

@@ -362,11 +362,12 @@ mod tests {
     use rstest::rstest;
     use rstest_reuse::apply;
 
+    use crate::document::DocumentId;
     use crate::hash::Hash;
-    use crate::operation::{OperationEncoded, OperationValue, Relation};
+    use crate::operation::{OperationEncoded, OperationValue, OperationValueRelation, Relation};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::templates::many_valid_operations;
-    use crate::test_utils::fixtures::{fields, random_hash, schema};
+    use crate::test_utils::fixtures::{fields, random_document_id, random_hash, schema};
     use crate::Validate;
 
     use super::{AsOperation, Operation, OperationAction, OperationFields, OperationVersion};
@@ -448,7 +449,7 @@ mod tests {
     fn encode_and_decode(
         schema: SchemaId,
         #[from(random_hash)] prev_op_id: Hash,
-        #[from(random_hash)] document: Hash,
+        #[from(random_document_id)] document_id: DocumentId,
     ) {
         // Create test operation
         let mut fields = OperationFields::new();
@@ -469,7 +470,9 @@ mod tests {
         fields
             .add(
                 "profile_picture",
-                OperationValue::Relation(Relation::new(document, Vec::new())),
+                OperationValue::Relation(OperationValueRelation::Unpinned(Relation::new(
+                    document_id,
+                ))),
             )
             .unwrap();
 

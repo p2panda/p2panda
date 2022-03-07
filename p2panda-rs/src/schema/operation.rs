@@ -13,10 +13,9 @@ pub const OPERATION_SCHEMA: &str = r#"
 
     hash = tstr .regexp "[0-9a-f]{68}"
 
-    relation = {
-        document: hash,
-        ? document_view: [+ hash],
-    }
+    relation = hash
+
+    pinned_relation = [+ hash];
 
     ; Create operation
     operation-body = (
@@ -60,11 +59,11 @@ pub const OPERATION_SCHEMA: &str = r#"
 
     operation-value-relation = (
         type: "relation",
-        value: relation,
+        value: relation / pinned_relation,
     )
 
     operation-value-relation-list = (
         type: "relation_list",
-        value: [* relation],
+        value: [* relation] / [* pinned_relation],
     )
 "#;

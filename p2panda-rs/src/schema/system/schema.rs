@@ -3,18 +3,27 @@
 use std::convert::TryFrom;
 use std::str::FromStr;
 
-use crate::document::{DocumentView, DocumentViewId};
-use crate::operation::{OperationValue, Relation};
+use crate::document::{DocumentId, DocumentView, DocumentViewId};
+use crate::operation::{OperationValue, OperationValueRelationList, PinnedRelationList};
 
 use super::SystemSchemaError;
 
+/// Valid field types for publishing an application schema.
 #[derive(Clone, Debug, Copy, PartialEq)]
-#[allow(missing_docs)]
 pub enum FieldType {
+    /// Defines a boolean field.
     Bool,
+
+    /// Defines an integer number field.
     Int,
+
+    /// Defines a floating point number field.
     Float,
+
+    /// Defines a text string field.
     String,
+
+    /// Defines a [`Relation`] field.
     Relation,
 }
 
@@ -28,15 +37,21 @@ impl FromStr for FieldType {
             "float" => Ok(FieldType::Float),
             "str" => Ok(FieldType::String),
             "relation" => Ok(FieldType::Relation),
-            _ => Err(SystemSchemaError::InvalidFieldType),
+            type_str => Err(SystemSchemaError::InvalidFieldType(type_str.into())),
         }
     }
 }
 
+/// View onto materialised schema which has fields "name", "description" and "fields".
+///
+/// The fields are validated when converting a DocumentView struct into this type.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SchemaView {
     /// ID of this schema view.
     id: DocumentViewId,
+
+    /// ID of this schema document.
+    document_id: DocumentId,
 
     /// Name of this schema.
     name: String,
@@ -45,31 +60,19 @@ pub struct SchemaView {
     description: String,
 
     /// The fields in this schema.
-    fields: RelationList,
+    fields: PinnedRelationList,
 }
 
-type RelationList = Vec<Relation>;
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct SchemaFieldView {
-    // ID of this schema field view.
-    id: DocumentViewId,
-
-    /// Name of this schema field.
-    name: String,
-
-    /// Type of this schema field.
-    field_type: FieldType,
-}
-
-/// View onto materialised schema which has fields "name", "description" and "fields".
-///
-/// The fields are validated when converting a DocumentView struct into this type.
 #[allow(dead_code)] // These methods aren't used yet...
 impl SchemaView {
     /// The id of this schema view.
-    pub fn id(&self) -> &DocumentViewId {
+    pub fn view_id(&self) -> &DocumentViewId {
         &self.id
+    }
+
+    /// The id of this schema document.
+    pub fn document_id(&self) -> &DocumentId {
+        &self.document_id
     }
 
     /// The name of this schema.
@@ -83,29 +86,8 @@ impl SchemaView {
     }
 
     /// A list of fields assigned to this schema identified by their document id.
-    pub fn fields(&self) -> &RelationList {
+    pub fn fields(&self) -> &PinnedRelationList {
         &self.fields
-    }
-}
-
-/// View onto materialised schema field which has fields "name" and "type".
-///
-/// The fields are validated when converting a DocumentView struct into this type.
-#[allow(dead_code)] // These methods aren't used yet...
-impl SchemaFieldView {
-    /// The id of this schema view.
-    pub fn id(&self) -> &DocumentViewId {
-        &self.id
-    }
-
-    /// The name of this schema field.
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    /// The type of this schema field represented as a FieldType enum variant.
-    pub fn field_type(&self) -> &FieldType {
-        &self.field_type
     }
 }
 
@@ -113,12 +95,6 @@ impl TryFrom<DocumentView> for SchemaView {
     type Error = SystemSchemaError;
 
     fn try_from(document_view: DocumentView) -> Result<Self, Self::Error> {
-        match document_view.len() {
-            len if len < 3 => Err(SystemSchemaError::TooFewFields),
-            len if len == 3 => Ok(()),
-            _ => Err(SystemSchemaError::TooManyFields),
-        }?;
-
         let name = match document_view.get("name") {
             Some(OperationValue::Text(value)) => Ok(value),
             Some(op) => Err(SystemSchemaError::InvalidField(
@@ -138,7 +114,9 @@ impl TryFrom<DocumentView> for SchemaView {
         }?;
 
         let fields = match document_view.get("fields") {
-            Some(OperationValue::RelationList(value)) => Ok(value),
+            Some(OperationValue::RelationList(OperationValueRelationList::Pinned(value))) => {
+                Ok(value)
+            }
             Some(op) => Err(SystemSchemaError::InvalidField(
                 "fields".to_string(),
                 op.to_owned(),
@@ -147,7 +125,8 @@ impl TryFrom<DocumentView> for SchemaView {
         }?;
 
         Ok(Self {
-            id: document_view.document_view_id().to_owned(),
+            id: document_view.id().clone(),
+            document_id: document_view.document_id().clone(),
             name: name.to_string(),
             description: description.to_string(),
             fields: fields.to_owned(),
@@ -155,16 +134,46 @@ impl TryFrom<DocumentView> for SchemaView {
     }
 }
 
+/// View onto materialised schema field which has fields "name" and "type".
+///
+/// The fields are validated when converting a DocumentView struct into this type.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SchemaFieldView {
+    // Identifier of this schema field view.
+    id: DocumentViewId,
+
+    // Identifier of this schema document.
+    document_id: DocumentId,
+
+    /// Name of this schema field.
+    name: String,
+
+    /// Type of this schema field.
+    field_type: FieldType,
+}
+
+#[allow(dead_code)] // These methods aren't used yet...
+impl SchemaFieldView {
+    /// The id of this schema view.
+    pub fn id(&self) -> &DocumentViewId {
+        &self.id
+    }
+
+    /// The name of this schema field.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// The type of this schema field represented as a FieldType enum variant.
+    pub fn field_type(&self) -> &FieldType {
+        &self.field_type
+    }
+}
+
 impl TryFrom<DocumentView> for SchemaFieldView {
     type Error = SystemSchemaError;
 
     fn try_from(document_view: DocumentView) -> Result<Self, Self::Error> {
-        match document_view.len() {
-            len if len < 2 => Err(SystemSchemaError::TooFewFields),
-            len if len == 2 => Ok(()),
-            _ => Err(SystemSchemaError::TooManyFields),
-        }?;
-
         let name = match document_view.get("name") {
             Some(OperationValue::Text(value)) => Ok(value),
             Some(op) => Err(SystemSchemaError::InvalidField(
@@ -187,7 +196,8 @@ impl TryFrom<DocumentView> for SchemaFieldView {
         }?;
 
         Ok(Self {
-            id: document_view.document_view_id().to_owned(),
+            id: document_view.id().clone(),
+            document_id: document_view.document_id().clone(),
             name: name.to_string(),
             field_type: field_type.to_owned(),
         })
@@ -196,29 +206,25 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, convert::TryFrom};
+    use std::collections::BTreeMap;
+    use std::convert::TryFrom;
 
     use rstest::rstest;
 
-    use crate::{
-        document::{DocumentView, DocumentViewId},
-        hash::Hash,
-        operation::{OperationValue, Relation},
-        schema::system_schema::{FieldType, SchemaFieldView},
-        test_utils::fixtures::random_hash,
-    };
+    use crate::document::{DocumentId, DocumentView, DocumentViewId};
+    use crate::hash::Hash;
+    use crate::operation::{OperationValue, OperationValueRelationList, PinnedRelationList};
+    use crate::schema::system::{FieldType, SchemaFieldView};
+    use crate::test_utils::fixtures::{random_document_id, random_hash};
 
     use super::SchemaView;
 
     #[rstest]
     fn from_document_view(
-        #[from(random_hash)] relation_hash: Hash,
-        #[from(random_hash)] document_id: Hash,
+        #[from(random_hash)] relation_operation_id: Hash,
         #[from(random_hash)] view_id: Hash,
+        #[from(random_document_id)] document_id: DocumentId,
     ) {
-        let document_view_id = DocumentViewId::new(document_id, vec![view_id]);
-        let relation = Relation::new(relation_hash, Vec::new());
-
         let mut bool_field = BTreeMap::new();
         bool_field.insert(
             "name".to_string(),
@@ -230,20 +236,27 @@ mod tests {
         );
         bool_field.insert(
             "fields".to_string(),
-            OperationValue::RelationList(vec![relation]),
+            OperationValue::RelationList(OperationValueRelationList::Pinned(
+                PinnedRelationList::new(vec![DocumentViewId::new(vec![relation_operation_id])]),
+            )),
         );
 
-        let document_view = DocumentView::new(document_view_id, bool_field);
+        let document_view_id = DocumentViewId::new(vec![view_id]);
+        let document_view = DocumentView::new(document_view_id, document_id, bool_field);
 
         assert!(SchemaView::try_from(document_view).is_ok());
     }
 
     #[rstest]
     fn field_type_from_document_view(
-        #[from(random_hash)] document_id: Hash,
+        #[from(random_document_id)] document_id: DocumentId,
         #[from(random_hash)] view_id: Hash,
     ) {
-        let document_view_id = DocumentViewId::new(document_id, vec![view_id]);
+        // Prepare common document view id
+        let document_view_id = DocumentViewId::new(vec![view_id]);
+
+        // Create first schema field "is_accessible"
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         let mut bool_field = BTreeMap::new();
         bool_field.insert(
@@ -252,13 +265,17 @@ mod tests {
         );
         bool_field.insert("type".to_string(), OperationValue::Text("bool".to_string()));
 
-        let document_view = DocumentView::new(document_view_id.clone(), bool_field);
-
+        let document_view =
+            DocumentView::new(document_view_id.clone(), document_id.clone(), bool_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
+
         let field_view = field_view.unwrap();
         assert_eq!(field_view.field_type(), &FieldType::Bool);
         assert_eq!(field_view.name(), "is_accessible");
+
+        // Create second schema field "capacity"
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         let mut capacity_field = BTreeMap::new();
         capacity_field.insert(
@@ -267,11 +284,17 @@ mod tests {
         );
         capacity_field.insert("type".to_string(), OperationValue::Text("int".to_string()));
 
-        let document_view = DocumentView::new(document_view_id.clone(), capacity_field);
-
+        let document_view = DocumentView::new(
+            document_view_id.clone(),
+            document_id.clone(),
+            capacity_field,
+        );
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::Int);
+
+        // Create third schema field "ticket_price"
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         let mut float_field = BTreeMap::new();
         float_field.insert(
@@ -283,11 +306,14 @@ mod tests {
             OperationValue::Text("float".to_string()),
         );
 
-        let document_view = DocumentView::new(document_view_id.clone(), float_field);
-
+        let document_view =
+            DocumentView::new(document_view_id.clone(), document_id.clone(), float_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::Float);
+
+        // Create fourth schema field "venue_name"
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         let mut str_field = BTreeMap::new();
         str_field.insert(
@@ -296,11 +322,14 @@ mod tests {
         );
         str_field.insert("type".to_string(), OperationValue::Text("str".to_string()));
 
-        let document_view = DocumentView::new(document_view_id.clone(), str_field);
-
+        let document_view =
+            DocumentView::new(document_view_id.clone(), document_id.clone(), str_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::String);
+
+        // Create fifth schema field "address"
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         let mut relation_field = BTreeMap::new();
         relation_field.insert(
@@ -312,11 +341,18 @@ mod tests {
             OperationValue::Text("relation".to_string()),
         );
 
-        let document_view = DocumentView::new(document_view_id.clone(), relation_field);
-
+        let document_view = DocumentView::new(document_view_id, document_id, relation_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::Relation);
+    }
+
+    #[rstest]
+    fn invalid_schema_field(
+        #[from(random_document_id)] document_id: DocumentId,
+        #[from(random_hash)] view_id: Hash,
+    ) {
+        let document_view_id = DocumentViewId::new(vec![view_id]);
 
         let mut invalid_field = BTreeMap::new();
         invalid_field.insert(
@@ -325,8 +361,7 @@ mod tests {
         );
         invalid_field.insert("type".to_string(), OperationValue::Text("hash".to_string()));
 
-        let document_view = DocumentView::new(document_view_id, invalid_field);
-
+        let document_view = DocumentView::new(document_view_id, document_id, invalid_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_err());
     }

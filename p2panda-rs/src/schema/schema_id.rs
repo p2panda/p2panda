@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::ops::Deref;
 use std::str::FromStr;
 
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use crate::document::DocumentId;
 use crate::hash::Hash;
 use crate::operation::Relation;
 use crate::schema::error::SchemaIdError;
 
-/// Enum representing existing schema types.
+/// Identifies the schema of an [`crate::operation::Operation`].
 #[derive(Clone, Debug, PartialEq)]
 pub enum SchemaId {
     /// An application schema.
@@ -24,27 +24,24 @@ pub enum SchemaId {
 }
 
 impl SchemaId {
-    /// Instantiate a new SchemaId from a hash string.
+    /// Instantiate a new `SchemaId` from a hash string.
     pub fn new(hash: &str) -> Result<Self, SchemaIdError> {
         match hash {
             "schema_v1" => Ok(SchemaId::Schema),
             "schema_field_v1" => Ok(SchemaId::SchemaField),
             string => {
                 // We only use document_id in a relation at the moment.
-                let hash = Hash::new(string)?;
-                Ok(SchemaId::Application(Relation::new(hash, vec![])))
+                Ok(SchemaId::Application(Relation::new(DocumentId::new(
+                    Hash::new(string)?,
+                ))))
             }
         }
     }
 }
 
-impl SchemaId {
-    fn as_str(&self) -> &str {
-        match self {
-            SchemaId::Application(relation) => relation.document_id().as_str(),
-            SchemaId::Schema => "schema_v1",
-            SchemaId::SchemaField => "schema_field_v1",
-        }
+impl From<Hash> for SchemaId {
+    fn from(hash: Hash) -> Self {
+        Self::Application(Relation::new(DocumentId::new(hash)))
     }
 }
 
@@ -53,14 +50,6 @@ impl FromStr for SchemaId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::new(s)
-    }
-}
-
-impl Deref for SchemaId {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        self.as_str()
     }
 }
 
@@ -88,7 +77,7 @@ impl<'de> Deserialize<'de> for SchemaId {
             "schema_v1" => Ok(SchemaId::Schema),
             "schema_field_v1" => Ok(SchemaId::SchemaField),
             _ => match Hash::new(s.as_str()) {
-                Ok(hash) => Ok(SchemaId::Application(Relation::new(hash, vec![]))),
+                Ok(hash) => Ok(SchemaId::Application(Relation::new(DocumentId::new(hash)))),
                 Err(e) => Err(SchemaIdError::HashError(e)).map_err(Error::custom),
             },
         }
@@ -97,6 +86,9 @@ impl<'de> Deserialize<'de> for SchemaId {
 
 #[cfg(test)]
 mod test {
+    use crate::document::DocumentId;
+    use crate::hash::Hash;
+    use crate::operation::Relation;
     use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
 
     use super::SchemaId;
@@ -161,5 +153,18 @@ mod test {
     fn parse_schema_type() {
         let schema: SchemaId = "schema_v1".parse().unwrap();
         assert_eq!(schema, SchemaId::Schema);
+    }
+
+    #[test]
+    fn conversion() {
+        let hash =
+            Hash::new("00207b3a7de3470bfe34d34ea45472082c307b995b6bd4abe2ac4ee36edef5dea1b3")
+                .unwrap();
+        let schema: SchemaId = hash.clone().into();
+
+        assert_eq!(
+            schema,
+            SchemaId::Application(Relation::new(DocumentId::new(hash)))
+        );
     }
 }
