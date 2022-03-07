@@ -1,30 +1,39 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::{convert::{TryFrom}};
+use std::convert::TryFrom;
 
-use criterion::{Criterion, criterion_group, criterion_main, Throughput, BenchmarkId};
-use p2panda_rs::{identity::KeyPair, entry::{decode_entry, EntrySigned}};
-use p2panda_rs::{operation::{OperationFields, OperationValue, Operation, OperationEncoded}, schema::SchemaId, entry::{Entry, LogId, SeqNum, sign_and_encode}};
-use rand::{thread_rng, distributions::Alphanumeric, Rng};
-
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use p2panda_rs::{
+    entry::{decode_entry, EntrySigned},
+    identity::KeyPair,
+};
+use p2panda_rs::{
+    entry::{sign_and_encode, Entry, LogId, SeqNum},
+    operation::{Operation, OperationEncoded, OperationFields, OperationValue},
+    schema::SchemaId,
+};
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
 /// Encode an [`Entry`] and [`Operation`] given some string payload
-fn run_encode(payload: &String, key_pair: &KeyPair) -> (EntrySigned, OperationEncoded) {
+fn run_encode(payload: &str, key_pair: &KeyPair) -> (EntrySigned, OperationEncoded) {
     let mut fields = OperationFields::new();
     fields
         .add("payload", OperationValue::Text(payload.to_owned()))
         .unwrap();
 
-    let hash = SchemaId::new("0020d3ce4e85222017ffcb4e5ee032716e2e391478379a29e25bc35d74dd614e4132").unwrap();
+    let hash =
+        SchemaId::new("0020d3ce4e85222017ffcb4e5ee032716e2e391478379a29e25bc35d74dd614e4132")
+            .unwrap();
     let operation = Operation::new_create(hash, fields).unwrap();
 
     let entry = Entry::new(
-       &LogId::default(),
-       Some(&operation),
-       None,
-       None,
-       &SeqNum::new(1).unwrap(),
-    ).unwrap();
+        &LogId::default(),
+        Some(&operation),
+        None,
+        None,
+        &SeqNum::new(1).unwrap(),
+    )
+    .unwrap();
 
     let entry_encoded = sign_and_encode(&entry, key_pair).unwrap();
     let operation_encoded = OperationEncoded::try_from(&operation).unwrap();
@@ -40,7 +49,9 @@ fn run_decode(entry_encoded: &EntrySigned, operation_encoded: &OperationEncoded)
 /// Construct a random string given a size
 fn random_string(size: usize) -> String {
     let mut rng = thread_rng();
-    (0..size).map(|_| rng.sample(Alphanumeric) as char).collect()
+    (0..size)
+        .map(|_| rng.sample(Alphanumeric) as char)
+        .collect()
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
