@@ -62,6 +62,8 @@
 #[cfg(test)]
 use rstest_reuse;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub mod cddl;
 pub mod document;
 pub mod entry;
 pub mod graph;

@@ -4,7 +4,6 @@ use std::collections::BTreeMap;
 
 /// CDDL types.
 #[derive(Clone, Debug, Copy)]
-#[allow(missing_docs)]
 pub enum Type {
     Bool,
     Int,
@@ -13,7 +12,7 @@ pub enum Type {
     Relation,
 }
 
-/// CDDL schema type string formats.
+/// CDDL types to string representation.
 impl ToString for Type {
     fn to_string(&self) -> String {
         match self {
@@ -35,7 +34,7 @@ pub enum Field {
     Struct(Group),
 }
 
-/// Format each different data type into a schema string.
+/// Format each different data type into a string.
 impl ToString for Field {
     fn to_string(&self) -> String {
         match self {
@@ -46,11 +45,13 @@ impl ToString for Field {
     }
 }
 
-/// Struct for building and representing CDDL groups. CDDL uses groups to define reusable data
-/// structures they can be merged into schema or used in Vectors, Tables and Structs.
+/// Struct for building and representing CDDL groups.
+///
+/// CDDL uses groups to define reusable data structures they can be merged or used in Vectors,
+/// Tables and Structs.
 #[derive(Clone, Debug)]
 pub struct Group {
-    #[allow(dead_code)] // Remove when schema module is used.
+    #[allow(dead_code)] // Remove when module is used.
     name: String,
     fields: BTreeMap<String, Field>,
 }
@@ -86,15 +87,15 @@ impl ToString for Group {
     }
 }
 
-/// CDDLBuilder struct for programmatically creating CDDL schemas and validating OperationFields.
+/// CddlGenerator struct for programmatically creating CDDL strings.
 #[derive(Clone, Debug)]
-pub struct CDDLBuilder {
+pub struct CddlGenerator {
     name: String,
     fields: BTreeMap<String, Field>,
 }
 
-impl CDDLBuilder {
-    /// Create a new blank `Schema`.
+impl CddlGenerator {
+    /// Create a new blank CDDL.
     pub fn new(name: String) -> Self {
         Self {
             name,
@@ -102,7 +103,7 @@ impl CDDLBuilder {
         }
     }
 
-    /// Add a field definition to this schema.
+    /// Add a field definition.
     pub fn add_operation_field(&mut self, key: String, field_type: Type) {
         // Match passed type and map it to our OperationFields type and CDDL types
         let type_string = match field_type {
@@ -121,13 +122,12 @@ impl CDDLBuilder {
         // Format operation fields group as a struct
         let operation_fields = Field::Struct(operation_fields);
 
-        // Insert new operation field into Schema fields. If this Schema was created from a cddl
-        // string `fields` will be None
+        // Insert new operation field. If this was created from a cddl string `fields` will be None
         self.fields.insert(key, operation_fields);
     }
 }
 
-impl ToString for CDDLBuilder {
+impl ToString for CddlGenerator {
     fn to_string(&self) -> String {
         let mut cddl_str = "".to_string();
         cddl_str += &format!("{} = {{ ", self.name);
@@ -146,16 +146,16 @@ impl ToString for CDDLBuilder {
 mod tests {
     use crate::operation::{OperationFields, OperationValue};
 
-    use super::{CDDLBuilder, Type};
+    use super::{CddlGenerator, Type};
 
-    // Only `person` schema.
-    pub const PERSON_SCHEMA: &str = r#"person = { age: { ( type: "int", value: int ) }, name: { ( type: "str", value: tstr ) } }"#;
+    pub const PERSON_CDDL: &str = r#"person = { age: { ( type: "int", value: int ) }, name: { ( type: "str", value: tstr ) } }"#;
+
     #[test]
-    pub fn schema_builder() {
-        // Instantiate new empty schema named "person"
-        let mut person = CDDLBuilder::new("person".to_owned());
+    pub fn cddl_builder() {
+        // Instantiate new empty CDDL named "person"
+        let mut person = CddlGenerator::new("person".to_owned());
 
-        // Add two operation fields to the schema
+        // Add two operation fields to the CDDL
         person.add_operation_field("name".to_owned(), Type::Tstr);
         person.add_operation_field("age".to_owned(), Type::Int);
 
@@ -165,7 +165,7 @@ mod tests {
             .unwrap();
         me.add("age", OperationValue::Integer(35)).unwrap();
 
-        // Validate operation fields against person schema
-        assert_eq!(person.to_string(), PERSON_SCHEMA);
+        // Validate operation fields against person CDDL
+        assert_eq!(person.to_string(), PERSON_CDDL);
     }
 }

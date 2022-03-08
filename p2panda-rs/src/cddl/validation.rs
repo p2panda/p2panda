@@ -2,14 +2,14 @@
 
 use cddl::validator::cbor;
 
-use super::SchemaValidationError;
+use crate::cddl::CddlValidationError;
 
-/// Checks CBOR bytes against CDDL schemas.
+/// Checks CBOR bytes against CDDL.
 ///
 /// This method also converts validation errors coming from the `cddl` crate into an
 /// concatenated error operation and returns it.
-pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaValidationError> {
-    match cddl::validate_cbor_from_slice(cddl_schema, &bytes) {
+pub fn validate_cbor(cddl: &str, bytes: &[u8]) -> Result<(), CddlValidationError> {
+    match cddl::validate_cbor_from_slice(cddl, bytes) {
         Err(cbor::Error::Validation(err)) => {
             let err_str = err
                 .iter()
@@ -23,10 +23,10 @@ pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaVa
                 })
                 .collect::<Vec<String>>();
 
-            Err(SchemaValidationError::InvalidSchema(err_str))
+            Err(CddlValidationError::InvalidCBOR(err_str))
         }
-        Err(cbor::Error::CBORParsing(_err)) => Err(SchemaValidationError::InvalidCBOR),
-        Err(cbor::Error::CDDLParsing(err)) => Err(SchemaValidationError::InvalidCDDL(err)),
+        Err(cbor::Error::CBORParsing(_err)) => Err(CddlValidationError::ParsingCBOR),
+        Err(cbor::Error::CDDLParsing(err)) => Err(CddlValidationError::ParsingCDDL(err)),
         _ => Ok(()),
     }
 }
@@ -34,21 +34,11 @@ pub fn validate_schema(cddl_schema: &str, bytes: Vec<u8>) -> Result<(), SchemaVa
 #[cfg(test)]
 mod tests {
     use ciborium::cbor;
-    use rstest::rstest;
 
-    use crate::{
-        operation::OperationEncoded,
-        schema::{validation::validate_schema, OPERATION_SCHEMA},
-        test_utils::fixtures::operation_encoded,
-    };
-
-    #[rstest]
-    fn validate_operation_cbor(operation_encoded: OperationEncoded) {
-        assert!(validate_schema(OPERATION_SCHEMA, operation_encoded.to_bytes()).is_ok())
-    }
+    use super::validate_cbor;
 
     #[test]
-    fn validate_cbor() {
+    fn validate() {
         let cddl = r#"
         panda = {
             name: tstr,
@@ -56,15 +46,17 @@ mod tests {
         }
         "#;
 
+        let age: usize = 4;
+
         let value = cbor!({
             "name" => "Latte",
-            "age" => 4
+            "age" => age,
         })
         .unwrap();
 
         let mut cbor_bytes = Vec::new();
         ciborium::ser::into_writer(&value, &mut cbor_bytes).unwrap();
-        assert!(validate_schema(cddl, cbor_bytes).is_ok());
+        assert!(validate_cbor(cddl, &cbor_bytes).is_ok());
     }
 
     #[test]
@@ -84,7 +76,7 @@ mod tests {
 
         let mut cbor_bytes = Vec::new();
         ciborium::ser::into_writer(&value, &mut cbor_bytes).unwrap();
-        assert!(validate_schema(cddl, cbor_bytes).is_err());
+        assert!(validate_cbor(cddl, &cbor_bytes).is_err());
     }
 
     #[test]
@@ -96,9 +88,9 @@ mod tests {
         }
         "#;
 
-        // invalid CBOR
+        // Invalid CBOR
         let cbor_bytes = Vec::from("}");
-        assert!(validate_schema(cddl, cbor_bytes).is_err());
+        assert!(validate_cbor(cddl, &cbor_bytes).is_err());
     }
 
     #[test]
@@ -110,6 +102,6 @@ mod tests {
         }
         "#;
 
-        assert!(validate_schema(cddl, vec![1u8]).is_err());
+        assert!(validate_cbor(cddl, &vec![1u8]).is_err());
     }
 }
