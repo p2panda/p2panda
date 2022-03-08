@@ -62,10 +62,6 @@
 #[cfg(test)]
 use rstest_reuse;
 
-<<<<<<< HEAD
-=======
-#[cfg(not(target_arch = "wasm32"))]
->>>>>>> Separate `cddl` from `schema` more clearly (#239)
 pub mod cddl;
 pub mod document;
 pub mod entry;
