@@ -14,7 +14,6 @@ const CDDL_HEADER: &str = r#"
 ; - update_fields
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
->>>>>>> Add cddl definitions for schema_v1 and schema_field_v1:p2panda-rs/src/cddl/definitions.rs
 operation = {
     version: 1,
     schema: schema_id,
