@@ -13,5 +13,8 @@ mod validation;
 
 pub use definitions::{OPERATION_FORMAT, SCHEMA_FIELD_V1_FORMAT, SCHEMA_V1_FORMAT};
 pub use error::CddlValidationError;
+<<<<<<< HEAD
 pub use generator::generate_cddl_definition;
+=======
+>>>>>>> Complete refactor of CDDL generation code
 pub use validation::validate_cbor;

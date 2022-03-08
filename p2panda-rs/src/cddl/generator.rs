@@ -6,7 +6,11 @@ use crate::schema::system::FieldType;
 
 /// CDDL types.
 #[derive(Clone, Debug)]
+<<<<<<< HEAD
 pub enum CddlType {
+=======
+pub enum Type {
+>>>>>>> Complete refactor of CDDL generation code
     Bool,
     Int,
     Float,
@@ -15,9 +19,15 @@ pub enum CddlType {
 }
 
 /// CDDL types to string representation.
+<<<<<<< HEAD
 impl CddlType {
     // Returns the CDDL type string
     fn as_str(&self) -> &str {
+=======
+impl Type {
+    // Returns the CDDL type string
+    fn as_cddl_type(&self) -> &str {
+>>>>>>> Complete refactor of CDDL generation code
         match self {
             CddlType::Bool => "bool",
             CddlType::Int => "int",
@@ -26,6 +36,7 @@ impl CddlType {
             CddlType::Relation => "tstr .regexp \"[0-9a-f]{68}\"",
         }
     }
+<<<<<<< HEAD
 }
 
 impl From<FieldType> for CddlType {
@@ -36,10 +47,22 @@ impl From<FieldType> for CddlType {
             FieldType::Float => CddlType::Float,
             FieldType::String => CddlType::Tstr,
             FieldType::Relation => CddlType::Relation,
+=======
+
+    // Returns the p2panda `OperationValue` type string
+    fn as_field_type(&self) -> &str {
+        match self {
+            Type::Bool => "bool",
+            Type::Int => "int",
+            Type::Float => "float",
+            Type::Tstr => "str",
+            Type::Relation => "relation",
+>>>>>>> Complete refactor of CDDL generation code
         }
     }
 }
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 type FieldName = String;
 
@@ -70,36 +93,64 @@ impl Group {
     pub fn new() -> Self {
         Self(BTreeMap::new())
 >>>>>>> Refactor cddl_generator
+=======
+type FieldName = String;
+
+// NB: These methods could accept a `DocumentView` instead of an arbitrary map. Then it would infer
+// the types from the `OperationValue`.
+pub fn generate_fields(fields: BTreeMap<FieldName, Type>) -> String {
+    let mut cddl_str = "".to_string();
+    for (count, (name, field_type)) in fields.iter().enumerate() {
+        if count != 0 {
+            cddl_str += " ";
+        };
+        cddl_str += &format!("{name} = {{ ");
+        cddl_str += &format!("type: \"{}\", ", field_type.as_field_type());
+        cddl_str += &format!("value: {}, ", field_type.as_cddl_type());
+        cddl_str += "}";
+>>>>>>> Complete refactor of CDDL generation code
     }
     cddl_str
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 /// Generate a CDDL definition for the compulsory fields of a CREATE operation.
 pub fn generate_create_fields(fields: &[&String]) -> String {
+=======
+pub fn generate_create_fields(fields: Vec<String>) -> String {
+>>>>>>> Complete refactor of CDDL generation code
     let mut cddl_str = "create-fields = { ".to_string();
     for (count, key) in fields.iter().enumerate() {
         if count != 0 {
             cddl_str += ", ";
         }
         cddl_str += key;
+<<<<<<< HEAD
 =======
     /// Add a field to the group.
     pub fn add_field(&mut self, key: &str, field_type: Field) {
         self.0.insert(key.to_owned(), field_type);
 >>>>>>> Refactor cddl_generator
+=======
+>>>>>>> Complete refactor of CDDL generation code
     }
     cddl_str += " }";
     cddl_str
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 /// Generate a CDDL definition for the optional fields of an UPDATE operation.
 pub fn generate_update_fields(fields: &[&String]) -> String {
+=======
+pub fn generate_update_fields(fields: Vec<String>) -> String {
+>>>>>>> Complete refactor of CDDL generation code
     let mut cddl_str = "update-fields = { + ( ".to_string();
     for (count, key) in fields.iter().enumerate() {
         if count != 0 {
             cddl_str += " // ";
+<<<<<<< HEAD
 =======
 impl ToString for Group {
     fn to_string(&self) -> String {
@@ -111,11 +162,14 @@ impl ToString for Group {
             }
             cddl_str += &format!("{}: {}", key, value.to_string());
 >>>>>>> Refactor cddl_generator
+=======
+>>>>>>> Complete refactor of CDDL generation code
         }
         cddl_str += key;
     }
     cddl_str += " ) }";
     cddl_str
+<<<<<<< HEAD
 }
 
 <<<<<<< HEAD
@@ -134,11 +188,14 @@ pub fn generate_cddl_definition(fields: &BTreeMap<FieldName, FieldType>) -> Stri
     cddl_str += &generate_update_fields(&field_names);
 
     cddl_str
+=======
+>>>>>>> Complete refactor of CDDL generation code
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+<<<<<<< HEAD
 
     use crate::{
         cddl::{
@@ -171,24 +228,14 @@ mod tests {
 /// CddlGenerator struct for programmatically creating CDDL strings.
 #[derive(Clone, Debug)]
 pub struct CddlGenerator(BTreeMap<String, Field>);
+=======
+>>>>>>> Complete refactor of CDDL generation code
 
-impl CddlGenerator {
-    /// Create a new blank CDDL.
-    pub fn new() -> Self {
-        Self(BTreeMap::new())
-    }
+    use crate::cddl::generator::{generate_create_fields, generate_update_fields};
 
-    /// Add a field definition.
-    pub fn add_operation_field(&mut self, key: String, field_type: Type) {
-        // Match passed type and map it to our OperationFields type and CDDL types
-        let type_string = match field_type {
-            Type::Tstr => "\"str\"",
-            Type::Int => "\"int\"",
-            Type::Float => "\"float\"",
-            Type::Bool => "\"bool\"",
-            Type::Relation => "\"relation\"",
-        };
+    use super::{generate_fields, Type};
 
+<<<<<<< HEAD
         // Create an operation field group and add fields
         let mut operation_fields = Group::new();
         operation_fields.add_field("type", Field::String(type_string.to_owned()));
@@ -279,5 +326,44 @@ impl ToString for CddlGenerator {
         // Validate operation fields against person CDDL
         assert_eq!(person.to_string(), PERSON_CDDL);
 >>>>>>> Refactor cddl_generator
+=======
+    fn person() -> BTreeMap<String, Type> {
+        let mut person = BTreeMap::new();
+
+        person.insert("name".to_string(), Type::Tstr);
+        person.insert("age".to_string(), Type::Int);
+
+        person
+    }
+
+    #[test]
+    pub fn generate_cddl_fields() {
+        let expected_fields_cddl: &str =
+            r#"age = { type: "int", value: int, } name = { type: "str", value: tstr, }"#;
+
+        let fields_cddl = generate_fields(person());
+
+        assert_eq!(fields_cddl, expected_fields_cddl);
+    }
+
+    #[test]
+    pub fn generate_cddl_create_fields() {
+        let expected_create_fields_cddl: &str = r#"create-fields = { age, name }"#;
+
+        let fields: Vec<String> = person().keys().cloned().collect();
+        let create_fields_cddl = generate_create_fields(fields);
+
+        assert_eq!(create_fields_cddl, expected_create_fields_cddl);
+    }
+
+    #[test]
+    pub fn generate_cddl_update_fields() {
+        let expected_update_fields_cddl: &str = r#"update-fields = { + ( age // name ) }"#;
+
+        let fields: Vec<String> = person().keys().cloned().collect();
+        let update_fields_cddl = generate_update_fields(fields);
+
+        assert_eq!(update_fields_cddl, expected_update_fields_cddl);
+>>>>>>> Complete refactor of CDDL generation code
     }
 }

@@ -43,7 +43,10 @@ impl FromStr for FieldType {
 }
 
 impl FieldType {
+<<<<<<< HEAD
     /// Returns the string representation of this type.
+=======
+>>>>>>> Complete refactor of CDDL generation code
     pub fn as_str(&self) -> &str {
         match self {
             FieldType::Bool => "bool",
