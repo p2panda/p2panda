@@ -42,6 +42,18 @@ impl FromStr for FieldType {
     }
 }
 
+impl FieldType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            FieldType::Bool => "bool",
+            FieldType::Int => "int",
+            FieldType::Float => "float",
+            FieldType::String => "str",
+            FieldType::Relation => "relation",
+        }
+    }
+}
+
 /// View onto materialised schema which has fields "name", "description" and "fields".
 ///
 /// The fields are validated when converting a DocumentView struct into this type.
