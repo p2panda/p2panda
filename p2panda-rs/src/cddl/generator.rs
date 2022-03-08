@@ -129,11 +129,16 @@ mod tests {
 
     #[test]
     pub fn generate_cddl_fields() {
+<<<<<<< HEAD
         let expected_fields_cddl = "age = { type: \"int\", value: int, }\n".to_string()
             + "favorite_food = { type: \"relation\", value: tstr .regexp \"[0-9a-f]{68}\", }\n"
             + "height = { type: \"float\", value: float, }\n"
             + "is_cool = { type: \"bool\", value: bool, }\n"
             + "name = { type: \"str\", value: tstr, }";
+=======
+        let expected_fields_cddl: &str =
+            "age = { type: \"int\", value: int, }\nname = { type: \"str\", value: tstr, }";
+>>>>>>> Newlines in field definitions
 
         let fields_cddl = generate_fields(&person());
 
@@ -142,8 +147,12 @@ mod tests {
 
     #[test]
     pub fn generate_cddl_create_fields() {
+<<<<<<< HEAD
         let expected_create_fields_cddl: &str =
             "create-fields = { age, favorite_food, height, is_cool, name }";
+=======
+        let expected_create_fields_cddl: &str = "create-fields = { age, name }";
+>>>>>>> Newlines in field definitions
 
         let person = person();
         let field_names: Vec<&String> = person.keys().collect();
@@ -154,8 +163,12 @@ mod tests {
 
     #[test]
     pub fn generate_cddl_update_fields() {
+<<<<<<< HEAD
         let expected_update_fields_cddl: &str =
             "update-fields = { + ( age // favorite_food // height // is_cool // name ) }";
+=======
+        let expected_update_fields_cddl: &str = "update-fields = { + ( age // name ) }";
+>>>>>>> Newlines in field definitions
 
         let person = person();
         let field_names: Vec<&String> = person.keys().collect();
