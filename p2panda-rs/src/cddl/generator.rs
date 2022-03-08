@@ -332,14 +332,20 @@ impl ToString for CddlGenerator {
 
         person.insert("name".to_string(), Type::Tstr);
         person.insert("age".to_string(), Type::Int);
+        person.insert("height".to_string(), Type::Float);
+        person.insert("is_cool".to_string(), Type::Bool);
+        person.insert("favorite_food".to_string(), Type::Relation);
 
         person
     }
 
     #[test]
     pub fn generate_cddl_fields() {
-        let expected_fields_cddl: &str =
-            "age = { type: \"int\", value: int, }\nname = { type: \"str\", value: tstr, }";
+        let expected_fields_cddl = "age = { type: \"int\", value: int, }\n".to_string()
+            + "favorite_food = { type: \"relation\", value: tstr .regexp \"[0-9a-f]{68}\", }\n"
+            + "height = { type: \"float\", value: float, }\n"
+            + "is_cool = { type: \"bool\", value: bool, }\n"
+            + "name = { type: \"str\", value: tstr, }";
 
         let fields_cddl = generate_fields(person());
 
@@ -348,7 +354,8 @@ impl ToString for CddlGenerator {
 
     #[test]
     pub fn generate_cddl_create_fields() {
-        let expected_create_fields_cddl: &str = "create-fields = { age, name }";
+        let expected_create_fields_cddl: &str =
+            "create-fields = { age, favorite_food, height, is_cool, name }";
 
         let fields: Vec<String> = person().keys().cloned().collect();
         let create_fields_cddl = generate_create_fields(fields);
@@ -358,7 +365,8 @@ impl ToString for CddlGenerator {
 
     #[test]
     pub fn generate_cddl_update_fields() {
-        let expected_update_fields_cddl: &str = "update-fields = { + ( age // name ) }";
+        let expected_update_fields_cddl: &str =
+            "update-fields = { + ( age // favorite_food // height // is_cool // name ) }";
 
         let fields: Vec<String> = person().keys().cloned().collect();
         let update_fields_cddl = generate_update_fields(fields);
