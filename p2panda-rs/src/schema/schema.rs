@@ -2,8 +2,9 @@
 
 use std::collections::BTreeMap;
 
+use crate::cddl::generate_cddl_definition;
 use crate::document::DocumentViewId;
-use crate::schema::system::{SchemaFieldView, SchemaView};
+use crate::schema::system::{FieldType, SchemaFieldView, SchemaView};
 use crate::schema::SchemaError;
 
 /// The key of a schema field
@@ -17,7 +18,7 @@ pub struct Schema {
     id: DocumentViewId,
     name: String,
     description: String,
-    fields: BTreeMap<FieldKey, SchemaFieldView>,
+    fields: BTreeMap<FieldKey, FieldType>,
 }
 
 impl Schema {
@@ -43,7 +44,7 @@ impl Schema {
         // Construct a key-value map of fields
         let mut fields_map = BTreeMap::new();
         for field in fields {
-            fields_map.insert(field.name().to_string(), field);
+            fields_map.insert(field.name().to_string(), field.field_type().to_owned());
         }
 
         Ok(Schema {
@@ -52,6 +53,12 @@ impl Schema {
             description: schema.description().to_owned(),
             fields: fields_map,
         })
+    }
+
+    /// Return a definition for this schema expressed as a CDDL string.
+    #[allow(unused)]
+    pub fn as_cddl(&self) -> String {
+        generate_cddl_definition(&self.fields)
     }
 }
 
@@ -160,7 +167,18 @@ mod tests {
         // Create venue schema from schema and field views
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        assert!(Schema::new(schema_view, vec![bool_field_view, capacity_field_view]).is_ok());
+        let schema = Schema::new(schema_view, vec![bool_field_view, capacity_field_view]);
+
+        // Schema should be ok
+        assert!(schema.is_ok());
+
+        let expected_cddl = "capacity = { type: \"int\", value: int, }\n".to_string()
+            + "is_accessible = { type: \"bool\", value: bool, }\n"
+            + "create-fields = { capacity, is_accessible }\n"
+            + "update-fields = { + ( capacity // is_accessible ) }";
+
+        // Schema should return correct cddl string
+        assert_eq!(expected_cddl, schema.unwrap().as_cddl());
     }
 
     #[rstest]
