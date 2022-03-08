@@ -102,7 +102,7 @@ pub fn generate_fields(fields: BTreeMap<FieldName, Type>) -> String {
     let mut cddl_str = "".to_string();
     for (count, (name, field_type)) in fields.iter().enumerate() {
         if count != 0 {
-            cddl_str += " ";
+            cddl_str += "\n";
         };
         cddl_str += &format!("{name} = {{ ");
         cddl_str += &format!("type: \"{}\", ", field_type.as_field_type());
@@ -339,7 +339,7 @@ impl ToString for CddlGenerator {
     #[test]
     pub fn generate_cddl_fields() {
         let expected_fields_cddl: &str =
-            r#"age = { type: "int", value: int, } name = { type: "str", value: tstr, }"#;
+            "age = { type: \"int\", value: int, }\nname = { type: \"str\", value: tstr, }";
 
         let fields_cddl = generate_fields(person());
 
@@ -348,7 +348,7 @@ impl ToString for CddlGenerator {
 
     #[test]
     pub fn generate_cddl_create_fields() {
-        let expected_create_fields_cddl: &str = r#"create-fields = { age, name }"#;
+        let expected_create_fields_cddl: &str = "create-fields = { age, name }";
 
         let fields: Vec<String> = person().keys().cloned().collect();
         let create_fields_cddl = generate_create_fields(fields);
@@ -358,7 +358,7 @@ impl ToString for CddlGenerator {
 
     #[test]
     pub fn generate_cddl_update_fields() {
-        let expected_update_fields_cddl: &str = r#"update-fields = { + ( age // name ) }"#;
+        let expected_update_fields_cddl: &str = "update-fields = { + ( age // name ) }";
 
         let fields: Vec<String> = person().keys().cloned().collect();
         let update_fields_cddl = generate_update_fields(fields);
