@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 use crate::cddl::generate_cddl_definition;
 use crate::document::DocumentViewId;
 use crate::schema::system::{FieldType, SchemaFieldView, SchemaView};
@@ -10,6 +11,11 @@ use crate::schema::system::{FieldType, SchemaFieldView, SchemaView};
 use crate::document::DocumentViewId;
 use crate::schema::system::{SchemaFieldView, SchemaView};
 >>>>>>> Introduce `Schema` struct (again...)
+=======
+use crate::cddl::generate_cddl_definition;
+use crate::document::DocumentViewId;
+use crate::schema::system::{FieldType, SchemaFieldView, SchemaView};
+>>>>>>> Generate CDDL definition from Schema struct
 use crate::schema::SchemaError;
 
 /// The key of a schema field
@@ -24,10 +30,14 @@ pub struct Schema {
     name: String,
     description: String,
 <<<<<<< HEAD
+<<<<<<< HEAD
     fields: BTreeMap<FieldKey, FieldType>,
 =======
     fields: BTreeMap<FieldKey, SchemaFieldView>,
 >>>>>>> Introduce `Schema` struct (again...)
+=======
+    fields: BTreeMap<FieldKey, FieldType>,
+>>>>>>> Generate CDDL definition from Schema struct
 }
 
 impl Schema {
@@ -61,10 +71,14 @@ impl Schema {
         let mut fields_map = BTreeMap::new();
         for field in fields {
 <<<<<<< HEAD
+<<<<<<< HEAD
             fields_map.insert(field.name().to_string(), field.field_type().to_owned());
 =======
             fields_map.insert(field.name().to_string(), field);
 >>>>>>> Introduce `Schema` struct (again...)
+=======
+            fields_map.insert(field.name().to_string(), field.field_type().to_owned());
+>>>>>>> Generate CDDL definition from Schema struct
         }
 
         Ok(Schema {
@@ -75,12 +89,16 @@ impl Schema {
         })
     }
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> Generate CDDL definition from Schema struct
 
     /// Return a definition for this schema expressed as a CDDL string.
     #[allow(unused)]
     pub fn as_cddl(&self) -> String {
         generate_cddl_definition(&self.fields)
     }
+<<<<<<< HEAD
 }
 
 #[cfg(test)]
@@ -282,6 +300,8 @@ mod tests {
     }
 =======
 >>>>>>> Introduce `Schema` struct (again...)
+=======
+>>>>>>> Generate CDDL definition from Schema struct
 }
 
 #[cfg(test)]
@@ -389,7 +409,18 @@ mod tests {
         // Create venue schema from schema and field views
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        assert!(Schema::new(schema_view, vec![bool_field_view, capacity_field_view]).is_ok());
+        let schema = Schema::new(schema_view, vec![bool_field_view, capacity_field_view]);
+
+        // Schema should be ok
+        assert!(schema.is_ok());
+
+        let expected_cddl = "capacity = { type: \"int\", value: int, }\n".to_string()
+            + "is_accessible = { type: \"bool\", value: bool, }\n"
+            + "create-fields = { capacity, is_accessible }\n"
+            + "update-fields = { + ( capacity // is_accessible ) }";
+
+        // Schema should return correct cddl string
+        assert_eq!(expected_cddl, schema.unwrap().as_cddl());
     }
 
     #[rstest]

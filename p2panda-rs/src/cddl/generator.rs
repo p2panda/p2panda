@@ -119,9 +119,8 @@ impl Group {
 =======
 type FieldName = String;
 
-// NB: These methods could accept a `DocumentView` instead of an arbitrary map. Then it would infer
-// the types from the `OperationValue`.
-pub fn generate_fields(fields: BTreeMap<FieldName, FieldType>) -> String {
+/// Generate a CDDL definition for the passed field name and type mappings.
+pub fn generate_fields(fields: &BTreeMap<FieldName, FieldType>) -> String {
     let mut cddl_str = "".to_string();
     for (count, (name, field_type)) in fields.iter().enumerate() {
         if count != 0 {
@@ -141,11 +140,16 @@ pub fn generate_fields(fields: BTreeMap<FieldName, FieldType>) -> String {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 /// Generate a CDDL definition for the compulsory fields of a CREATE operation.
 pub fn generate_create_fields(fields: &[&String]) -> String {
 =======
 pub fn generate_create_fields(fields: Vec<String>) -> String {
 >>>>>>> Complete refactor of CDDL generation code
+=======
+/// Generate a CDDL definition for the compulsory fields of a CREATE operation.
+pub fn generate_create_fields(fields: &[&String]) -> String {
+>>>>>>> Generate CDDL definition from Schema struct
     let mut cddl_str = "create-fields = { ".to_string();
     for (count, key) in fields.iter().enumerate() {
         if count != 0 {
@@ -167,11 +171,16 @@ pub fn generate_create_fields(fields: Vec<String>) -> String {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 /// Generate a CDDL definition for the optional fields of an UPDATE operation.
 pub fn generate_update_fields(fields: &[&String]) -> String {
 =======
 pub fn generate_update_fields(fields: Vec<String>) -> String {
 >>>>>>> Complete refactor of CDDL generation code
+=======
+/// Generate a CDDL definition for the optional fields of an UPDATE operation.
+pub fn generate_update_fields(fields: &[&String]) -> String {
+>>>>>>> Generate CDDL definition from Schema struct
     let mut cddl_str = "update-fields = { + ( ".to_string();
     for (count, key) in fields.iter().enumerate() {
         if count != 0 {
@@ -218,6 +227,23 @@ pub fn generate_cddl_definition(fields: &BTreeMap<FieldName, FieldType>) -> Stri
 >>>>>>> Complete refactor of CDDL generation code
 }
 
+/// Generate a CDDL definition according to the fields of an application schema definition.
+///
+/// This can be used to validate CBOR encoded operations which follow this particular application
+/// schema.
+pub fn generate_cddl_definition(fields: &BTreeMap<FieldName, FieldType>) -> String {
+    let field_names: Vec<&String> = fields.keys().collect();
+    let mut cddl_str = String::from("");
+
+    cddl_str += &generate_fields(&fields.clone());
+    cddl_str += "\n";
+    cddl_str += &generate_create_fields(&field_names);
+    cddl_str += "\n";
+    cddl_str += &generate_update_fields(&field_names);
+
+    cddl_str
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -258,7 +284,10 @@ pub struct CddlGenerator(BTreeMap<String, Field>);
 >>>>>>> Complete refactor of CDDL generation code
 
     use crate::{
-        cddl::generator::{generate_create_fields, generate_fields, generate_update_fields},
+        cddl::{
+            generate_cddl_definition,
+            generator::{generate_create_fields, generate_fields, generate_update_fields},
+        },
         schema::system::FieldType,
     };
 
@@ -378,7 +407,7 @@ impl ToString for CddlGenerator {
             + "is_cool = { type: \"bool\", value: bool, }\n"
             + "name = { type: \"str\", value: tstr, }";
 
-        let fields_cddl = generate_fields(person());
+        let fields_cddl = generate_fields(&person());
 
         assert_eq!(fields_cddl, expected_fields_cddl);
     }
@@ -388,8 +417,9 @@ impl ToString for CddlGenerator {
         let expected_create_fields_cddl: &str =
             "create-fields = { age, favorite_food, height, is_cool, name }";
 
-        let fields: Vec<String> = person().keys().cloned().collect();
-        let create_fields_cddl = generate_create_fields(fields);
+        let person = person();
+        let field_names: Vec<&String> = person.keys().collect();
+        let create_fields_cddl = generate_create_fields(&field_names);
 
         assert_eq!(create_fields_cddl, expected_create_fields_cddl);
     }
@@ -399,10 +429,27 @@ impl ToString for CddlGenerator {
         let expected_update_fields_cddl: &str =
             "update-fields = { + ( age // favorite_food // height // is_cool // name ) }";
 
-        let fields: Vec<String> = person().keys().cloned().collect();
-        let update_fields_cddl = generate_update_fields(fields);
+        let person = person();
+        let field_names: Vec<&String> = person.keys().collect();
+        let update_fields_cddl = generate_update_fields(&field_names);
 
         assert_eq!(update_fields_cddl, expected_update_fields_cddl);
 >>>>>>> Complete refactor of CDDL generation code
+    }
+
+    #[test]
+    pub fn generates_cddl_definition() {
+        let expected_cddl = "age = { type: \"int\", value: int, }\n".to_string()
+            + "favorite_food = { type: \"relation\", value: tstr .regexp \"[0-9a-f]{68}\", }\n"
+            + "height = { type: \"float\", value: float, }\n"
+            + "is_cool = { type: \"bool\", value: bool, }\n"
+            + "name = { type: \"str\", value: tstr, }\n"
+            + "create-fields = { age, favorite_food, height, is_cool, name }\n"
+            + "update-fields = { + ( age // favorite_food // height // is_cool // name ) }";
+
+        let person = person();
+        let generated_cddl = generate_cddl_definition(&person);
+
+        assert_eq!(expected_cddl, generated_cddl);
     }
 }
