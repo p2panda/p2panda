@@ -7,10 +7,14 @@ use crate::schema::system::FieldType;
 /// CDDL types.
 #[derive(Clone, Debug)]
 <<<<<<< HEAD
+<<<<<<< HEAD
 pub enum CddlType {
 =======
 pub enum Type {
 >>>>>>> Complete refactor of CDDL generation code
+=======
+pub enum CddlType {
+>>>>>>> Use conversion trait for FieldType -> CddlType
     Bool,
     Int,
     Float,
@@ -20,6 +24,7 @@ pub enum Type {
 
 /// CDDL types to string representation.
 <<<<<<< HEAD
+<<<<<<< HEAD
 impl CddlType {
     // Returns the CDDL type string
     fn as_str(&self) -> &str {
@@ -28,6 +33,11 @@ impl Type {
     // Returns the CDDL type string
     fn as_cddl_type(&self) -> &str {
 >>>>>>> Complete refactor of CDDL generation code
+=======
+impl CddlType {
+    // Returns the CDDL type string
+    fn as_str(&self) -> &str {
+>>>>>>> Use conversion trait for FieldType -> CddlType
         match self {
             CddlType::Bool => "bool",
             CddlType::Int => "int",
@@ -36,6 +46,7 @@ impl Type {
             CddlType::Relation => "tstr .regexp \"[0-9a-f]{68}\"",
         }
     }
+<<<<<<< HEAD
 <<<<<<< HEAD
 }
 
@@ -58,6 +69,18 @@ impl From<FieldType> for CddlType {
             Type::Tstr => "str",
             Type::Relation => "relation",
 >>>>>>> Complete refactor of CDDL generation code
+=======
+}
+
+impl From<FieldType> for CddlType {
+    fn from(field_type: FieldType) -> Self {
+        match field_type {
+            FieldType::Bool => CddlType::Bool,
+            FieldType::Int => CddlType::Int,
+            FieldType::Float => CddlType::Float,
+            FieldType::String => CddlType::Tstr,
+            FieldType::Relation => CddlType::Relation,
+>>>>>>> Use conversion trait for FieldType -> CddlType
         }
     }
 }
@@ -98,15 +121,18 @@ type FieldName = String;
 
 // NB: These methods could accept a `DocumentView` instead of an arbitrary map. Then it would infer
 // the types from the `OperationValue`.
-pub fn generate_fields(fields: BTreeMap<FieldName, Type>) -> String {
+pub fn generate_fields(fields: BTreeMap<FieldName, FieldType>) -> String {
     let mut cddl_str = "".to_string();
     for (count, (name, field_type)) in fields.iter().enumerate() {
         if count != 0 {
             cddl_str += "\n";
         };
         cddl_str += &format!("{name} = {{ ");
-        cddl_str += &format!("type: \"{}\", ", field_type.as_field_type());
-        cddl_str += &format!("value: {}, ", field_type.as_cddl_type());
+        cddl_str += &format!("type: \"{}\", ", field_type.as_str());
+        cddl_str += &format!(
+            "value: {}, ",
+            CddlType::from(field_type.to_owned()).as_str()
+        );
         cddl_str += "}";
 >>>>>>> Complete refactor of CDDL generation code
     }
@@ -231,10 +257,12 @@ pub struct CddlGenerator(BTreeMap<String, Field>);
 =======
 >>>>>>> Complete refactor of CDDL generation code
 
-    use crate::cddl::generator::{generate_create_fields, generate_update_fields};
+    use crate::{
+        cddl::generator::{generate_create_fields, generate_fields, generate_update_fields},
+        schema::system::FieldType,
+    };
 
-    use super::{generate_fields, Type};
-
+<<<<<<< HEAD
 <<<<<<< HEAD
         // Create an operation field group and add fields
         let mut operation_fields = Group::new();
@@ -328,13 +356,16 @@ impl ToString for CddlGenerator {
 >>>>>>> Refactor cddl_generator
 =======
     fn person() -> BTreeMap<String, Type> {
+=======
+    fn person() -> BTreeMap<String, FieldType> {
+>>>>>>> Use conversion trait for FieldType -> CddlType
         let mut person = BTreeMap::new();
 
-        person.insert("name".to_string(), Type::Tstr);
-        person.insert("age".to_string(), Type::Int);
-        person.insert("height".to_string(), Type::Float);
-        person.insert("is_cool".to_string(), Type::Bool);
-        person.insert("favorite_food".to_string(), Type::Relation);
+        person.insert("name".to_string(), FieldType::String);
+        person.insert("age".to_string(), FieldType::Int);
+        person.insert("height".to_string(), FieldType::Float);
+        person.insert("is_cool".to_string(), FieldType::Bool);
+        person.insert("favorite_food".to_string(), FieldType::Relation);
 
         person
     }
