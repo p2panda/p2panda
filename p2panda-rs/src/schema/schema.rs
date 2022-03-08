@@ -33,9 +33,13 @@ pub struct Schema {
 impl Schema {
     /// Instantiate a new `Schema` from a `SchemaView` and it's `SchemaFieldView`s
 <<<<<<< HEAD
+<<<<<<< HEAD
     #[allow(unused)]
 =======
 >>>>>>> Introduce `Schema` struct (again...)
+=======
+    #[allow(unused)]
+>>>>>>> Make clipply a little happy
     pub fn new(schema: SchemaView, fields: Vec<SchemaFieldView>) -> Result<Schema, SchemaError> {
         // Validate that the passed `SchemaFields` are the correct ones for this `Schema`.
         for schema_field in schema.fields().iter() {

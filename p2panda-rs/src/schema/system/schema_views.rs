@@ -44,9 +44,13 @@ impl FromStr for FieldType {
 
 impl FieldType {
 <<<<<<< HEAD
+<<<<<<< HEAD
     /// Returns the string representation of this type.
 =======
 >>>>>>> Complete refactor of CDDL generation code
+=======
+    /// Returns the string representation of this type.
+>>>>>>> Make clipply a little happy
     pub fn as_str(&self) -> &str {
         match self {
             FieldType::Bool => "bool",
