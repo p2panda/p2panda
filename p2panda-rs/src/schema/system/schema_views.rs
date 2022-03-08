@@ -43,6 +43,7 @@ impl FromStr for FieldType {
 }
 
 impl FieldType {
+    /// Returns the string representation of this type.
     pub fn as_str(&self) -> &str {
         match self {
             FieldType::Bool => "bool",
