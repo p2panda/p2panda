@@ -6,12 +6,12 @@
 //! CDDL.
 //!
 //! Read more about CDDL: https://tools.ietf.org/html/rfc8610
+mod definitions;
 mod error;
 mod generator;
-mod operation_format;
 mod validation;
 
+pub use definitions::{OPERATION_FORMAT, SCHEMA_FIELD_V1_FORMAT, SCHEMA_V1_FORMAT};
 pub use error::CddlValidationError;
 pub use generator::CddlGenerator;
-pub use operation_format::OPERATION_FORMAT;
 pub use validation::validate_cbor;

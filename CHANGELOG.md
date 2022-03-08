@@ -17,6 +17,7 @@ Highlights are marked with a pancake 🥞
 - `SchemaView` and `SchemaFieldView` for representing materialised system documents [#226](https://github.com/p2panda/p2panda/pull/226) `rs`
 - `relation` & `relation_list` field type [#205](https://github.com/p2panda/p2panda/pull/205) `rs` `js`
 - `SchemaId` enum for identifying different schema types [#221](https://github.com/p2panda/p2panda/pull/221) `rs`
+- CDDL for _schema_v1_ and _schema_field_v1_, use `cddl-cat` instead of `cddl` [#248](https://github.com/p2panda/p2panda/pull/248) `rs`
 
 ## Changed
 

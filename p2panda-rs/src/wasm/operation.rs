@@ -2,7 +2,6 @@
 
 use std::convert::TryFrom;
 
-use js_sys::Array;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
@@ -152,13 +151,16 @@ pub fn encode_create_operation(
 #[wasm_bindgen(js_name = encodeUpdateOperation)]
 pub fn encode_update_operation(
     schema_hash: String,
-    previous_operations: Array,
+    previous_operations: JsValue,
     fields: OperationFields,
 ) -> Result<String, JsValue> {
     let schema = jserr!(SchemaId::new(&schema_hash));
 
     // Decode JsValue into vector of strings
-    let prev_op_strings: Vec<String> = jserr!(previous_operations.into_serde());
+    let prev_op_strings: Vec<String> = jserr!(
+        deserialize_from_js(previous_operations),
+        "Can not deserialize array"
+    );
 
     // Create hashes from strings and collect wrapped in a result
     let prev_op_result: Result<Vec<Hash>, _> = prev_op_strings
@@ -176,12 +178,15 @@ pub fn encode_update_operation(
 #[wasm_bindgen(js_name = encodeDeleteOperation)]
 pub fn encode_delete_operation(
     schema_hash: String,
-    previous_operations: Array,
+    previous_operations: JsValue,
 ) -> Result<String, JsValue> {
     let schema = jserr!(SchemaId::new(&schema_hash));
 
     // Decode JsValue into vector of strings
-    let prev_op_strings: Vec<String> = jserr!(previous_operations.into_serde());
+    let prev_op_strings: Vec<String> = jserr!(
+        deserialize_from_js(previous_operations),
+        "Can not deserialize array"
+    );
 
     // Create hashes from strings and collect wrapped in a result
     let prev_op_result: Result<Vec<Hash>, _> = prev_op_strings

@@ -1,34 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use cddl::validator::cbor;
+use cddl_cat::validate_cbor_bytes;
 
 use crate::cddl::CddlValidationError;
 
 /// Checks CBOR bytes against CDDL.
-///
-/// This method also converts validation errors coming from the `cddl` crate into an
-/// concatenated error operation and returns it.
 pub fn validate_cbor(cddl: &str, bytes: &[u8]) -> Result<(), CddlValidationError> {
-    match cddl::validate_cbor_from_slice(cddl, bytes) {
-        Err(cbor::Error::Validation(err)) => {
-            let err_str = err
-                .iter()
-                .map(|fe| {
-                    format!("{}", fe)
-                        // Quotes escaped in error messages from `cddl` crate are actually not unescaped by
-                        // format macro.
-                        //
-                        // See: https://github.com/anweiss/cddl/blob/main/src/validator/cbor.rs#L100
-                        .replace('"', "'")
-                })
-                .collect::<Vec<String>>();
-
-            Err(CddlValidationError::InvalidCBOR(err_str))
-        }
-        Err(cbor::Error::CBORParsing(_err)) => Err(CddlValidationError::ParsingCBOR),
-        Err(cbor::Error::CDDLParsing(err)) => Err(CddlValidationError::ParsingCDDL(err)),
-        _ => Ok(()),
-    }
+    validate_cbor_bytes("operation", cddl, bytes)?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -40,7 +19,7 @@ mod tests {
     #[test]
     fn validate() {
         let cddl = r#"
-        panda = {
+        operation = {
             name: tstr,
             age: int
         }
@@ -62,7 +41,7 @@ mod tests {
     #[test]
     fn validate_cbor_error() {
         let cddl = r#"
-        panda = {
+        operation = {
             name: tstr,
             age: int
         }
@@ -82,7 +61,7 @@ mod tests {
     #[test]
     fn invalid_cbor() {
         let cddl = r#"
-        panda = {
+        operation = {
             name: tstr,
             age: int
         }
@@ -97,7 +76,7 @@ mod tests {
     fn invalid_cddl() {
         // cddl definition with an unmatched `{` character
         let cddl = r#"
-        panda = {
+        operation = {
             name: {
         }
         "#;
