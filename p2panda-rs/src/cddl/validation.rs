@@ -81,6 +81,6 @@ mod tests {
         }
         "#;
 
-        assert!(validate_cbor(cddl, &vec![1u8]).is_err());
+        assert!(validate_cbor(cddl, &[1u8]).is_err());
     }
 }

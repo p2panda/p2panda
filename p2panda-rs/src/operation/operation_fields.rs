@@ -400,6 +400,7 @@ mod tests {
     }
 
     #[rstest]
+    #[allow(clippy::too_many_arguments)]
     fn encode_decode_relations(
         #[from(random_hash)] hash_1: Hash,
         #[from(random_hash)] hash_2: Hash,
