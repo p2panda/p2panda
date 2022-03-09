@@ -174,10 +174,12 @@ fn encodes_operations() {
     // CREATE
     // ~~~~~~
 
-    let schema = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+    let hash = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+    let schema = Array::new();
+    schema.push(&JsValue::from_str(hash.as_str()));
 
     // Encode as CREATE operation
-    let create_operation = encode_create_operation(schema.as_str().into(), fields.clone());
+    let create_operation = encode_create_operation(schema.clone().into(), fields.clone());
 
     assert!(create_operation.is_ok());
 
@@ -195,7 +197,7 @@ fn encodes_operations() {
     previous_operations.push(&JsValue::from_str(document_id.as_str()));
 
     let update_operation =
-        encode_update_operation(schema.as_str().into(), previous_operations.into(), fields);
+        encode_update_operation(schema.clone().into(), previous_operations.into(), fields);
 
     assert!(update_operation.is_ok());
 
@@ -213,7 +215,7 @@ fn encodes_operations() {
     previous_operations.push(&JsValue::from_str(update_op_hash.as_str()));
 
     let delete_operation =
-        encode_delete_operation(schema.as_str().into(), previous_operations.into());
+        encode_delete_operation(schema.into(), previous_operations.into());
 
     assert!(delete_operation.is_ok());
 }
