@@ -7,9 +7,11 @@ use crate::document::{DocumentBuilderError, DocumentId, DocumentView, DocumentVi
 use crate::graph::Graph;
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{AsOperation, OperationValue, OperationWithMeta, Relation};
+use crate::operation::{AsOperation, OperationValue, OperationWithMeta};
 use crate::schema::system::{SchemaFieldView, SchemaView};
-use crate::schema::{SchemaFieldV1, SchemaId, SchemaV1};
+use crate::schema::SchemaId;
+
+use super::AsDocumentView;
 
 /// Construct a graph from a list of operations.
 pub(super) fn build_graph(
@@ -80,12 +82,12 @@ pub struct DocumentMeta {
 /// `Document`s are immutable and contain a resolved document view as well as metadata relating
 /// to the specific document instance. These can be accessed through getter methods. To create
 /// documents you should use `DocumentBuilder`.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Document {
     id: DocumentId,
     author: Author,
     schema: SchemaId,
-    view: DocumentView,
+    view: Box<dyn AsDocumentView>,
     meta: DocumentMeta,
 }
 
@@ -111,7 +113,7 @@ impl Document {
     }
 
     /// Get the view of this document.
-    pub fn view(&self) -> &DocumentView {
+    pub fn view(&self) -> &Box<dyn AsDocumentView> {
         &self.view
     }
 
@@ -131,39 +133,39 @@ impl Document {
     }
 }
 
-trait IntoView<SchemaId> {
-    type Output;
+// trait IntoView<SchemaId> {
+//     type Output;
 
-    fn into_view(&self, schema: SchemaId) -> Self::Output;
-}
+//     fn into_view(&self, schema: SchemaId) -> Self::Output;
+// }
 
-impl IntoView<Relation> for Document {
-    type Output = DocumentView;
+// impl IntoView<Relation> for Document {
+//     type Output = DocumentView;
 
-    fn into_view(&self, _schema: Relation) -> Self::Output {
-        self.view().to_owned()
-    }
-}
+//     fn into_view(&self, _schema: Relation) -> Self::Output {
+//         self.view().to_owned()
+//     }
+// }
 
-impl IntoView<SchemaV1> for Document {
-    type Output = SchemaView;
+// impl IntoView<SchemaV1> for Document {
+//     type Output = SchemaView;
 
-    fn into_view(&self, _schema: SchemaV1) -> Self::Output {
-        let document_view = self.view().to_owned();
-        let schema_view: SchemaView = document_view.try_into().unwrap();
-        schema_view
-    }
-}
+//     fn into_view(&self, _schema: SchemaV1) -> Self::Output {
+//         let document_view = self.view().to_owned();
+//         let schema_view: SchemaView = document_view.try_into().unwrap();
+//         schema_view
+//     }
+// }
 
-impl IntoView<SchemaFieldV1> for Document {
-    type Output = SchemaFieldView;
+// impl IntoView<SchemaFieldV1> for Document {
+//     type Output = SchemaFieldView;
 
-    fn into_view(&self, _schema: SchemaFieldV1) -> Self::Output {
-        let document_view = self.view().to_owned();
-        let schema_view: SchemaFieldView = document_view.try_into().unwrap();
-        schema_view
-    }
-}
+//     fn into_view(&self, _schema: SchemaFieldV1) -> Self::Output {
+//         let document_view = self.view().to_owned();
+//         let schema_view: SchemaFieldView = document_view.try_into().unwrap();
+//         schema_view
+//     }
+// }
 
 /// A struct for building [documents][`Document`] from a collection of [operations with
 /// metadata][`crate::operation::OperationWithMeta`].
@@ -276,11 +278,24 @@ impl DocumentBuilder {
         // Construct the document view, from the reduced values and the document view id
         let document_view = DocumentView::new(document_view_id, view);
 
+        // Depending on the defined schema, convert into it's associated document view
+        let specific_document_view: Box<dyn AsDocumentView> = match schema {
+            SchemaId::Application(_) => Box::new(document_view),
+            SchemaId::Schema(_) => {
+                let view: SchemaView = document_view.try_into().unwrap();
+                Box::new(view)
+            }
+            SchemaId::SchemaField(_) => {
+                let view: SchemaFieldView = document_view.try_into().unwrap();
+                Box::new(view)
+            }
+        };
+
         Ok(Document {
             id: document_id,
             schema,
             author,
-            view: document_view,
+            view: specific_document_view,
             meta,
         })
     }
@@ -292,7 +307,6 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::document::document::IntoView;
     use crate::document::DocumentId;
     use crate::identity::KeyPair;
     use crate::operation::{Operation, OperationValue, OperationWithMeta};
@@ -762,17 +776,6 @@ mod tests {
         operations.push(operation_5);
 
         let document = DocumentBuilder::new(operations.clone()).build().unwrap();
-        match document.schema() {
-            SchemaId::Application(relation) => {
-                let view = document.into_view(relation.to_owned());
-            }
-            SchemaId::Schema(schema_v1) => {
-                let view = document.into_view(schema_v1.to_owned());
-            }
-            SchemaId::SchemaField(schema_field_v1) => {
-                let view = document.into_view(schema_field_v1.to_owned());
-            }
-        };
         assert!(document.is_deleted());
     }
 

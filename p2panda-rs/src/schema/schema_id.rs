@@ -10,6 +10,7 @@ use crate::hash::Hash;
 use crate::operation::Relation;
 use crate::schema::error::SchemaIdError;
 
+/// Struct representing a SchemaV1 id.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SchemaV1(String);
 
@@ -25,6 +26,7 @@ impl Default for SchemaV1 {
     }
 }
 
+/// Struct representing a SchemaFieldV1 id.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SchemaFieldV1(String);
 

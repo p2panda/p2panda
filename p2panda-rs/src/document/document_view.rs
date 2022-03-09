@@ -3,66 +3,15 @@
 //! Types and methods for deriving and maintaining materialised documents.
 use std::collections::btree_map::Iter as BTreeMapIter;
 use std::collections::BTreeMap;
+use std::fmt::Debug;
 
 use crate::document::DocumentViewId;
 use crate::operation::OperationValue;
 
 type FieldKey = String;
 
-/// The materialised view of a `Document`. It's fields match the documents schema definition.
-///
-/// `DocumentViews` are immutable versions of a `Document`. They represent a document at a certain
-/// point in time.
-#[derive(Debug, PartialEq, Clone)]
-pub struct DocumentView {
-    /// Identifier of this document view.
-    pub(crate) id: DocumentViewId,
-
-    /// Materialized data held by this document view.
-    pub(crate) view: BTreeMap<FieldKey, OperationValue>,
-}
-
-impl DocumentView {
-    /// Construct a document view.
-    ///
-    /// Requires the DocumentViewId and field values to be calculated seperately and
-    /// then passed in during construction.
-    pub fn new(id: DocumentViewId, view: BTreeMap<FieldKey, OperationValue>) -> Self {
-        Self { id, view }
-    }
-
-    /// Get the id of this document view.
-    pub fn id(&self) -> &DocumentViewId {
-        &self.id
-    }
-
-    /// Get a single value from this instance by it's key.
-    pub fn get(&self, key: &str) -> Option<&OperationValue> {
-        self.view.get(key)
-    }
-
-    /// Returns a vector containing the keys of this instance.
-    pub fn keys(&self) -> Vec<String> {
-        self.view.clone().into_keys().collect::<Vec<FieldKey>>()
-    }
-
-    /// Returns an iterator of existing instance fields.
-    pub fn iter(&self) -> BTreeMapIter<FieldKey, OperationValue> {
-        self.view.iter()
-    }
-
-    /// Returns the number of fields on this instance.
-    pub fn len(&self) -> usize {
-        self.view.len()
-    }
-
-    /// Returns true if the instance is empty, otherwise false.
-    pub fn is_empty(&self) -> bool {
-        self.view.is_empty()
-    }
-}
-
-pub trait AsDocumentView {
+/// Trait which should be implemented on all DocumentView variants.
+pub trait AsDocumentView: Debug {
     /// Get the id of this document view.
     fn id(&self) -> &DocumentViewId;
 
@@ -95,6 +44,29 @@ pub trait AsDocumentView {
     }
 }
 
+/// The materialised view of a `Document`. It's fields match the documents schema definition.
+///
+/// `DocumentViews` are immutable versions of a `Document`. They represent a document at a certain
+/// point in time.
+#[derive(Debug, PartialEq, Clone)]
+pub struct DocumentView {
+    /// Identifier of this document view.
+    pub(crate) id: DocumentViewId,
+
+    /// Materialized data held by this document view.
+    pub(crate) view: BTreeMap<FieldKey, OperationValue>,
+}
+
+impl DocumentView {
+    /// Construct a document view.
+    ///
+    /// Requires the DocumentViewId and field values to be calculated seperately and
+    /// then passed in during construction.
+    pub fn new(id: DocumentViewId, view: BTreeMap<FieldKey, OperationValue>) -> Self {
+        Self { id, view }
+    }
+}
+
 impl AsDocumentView for DocumentView {
     /// Get the id of this document view.
     fn id(&self) -> &DocumentViewId {
@@ -107,11 +79,24 @@ impl AsDocumentView for DocumentView {
     }
 }
 
+trait AsDocumentViewClone {
+    fn clone_box(&self) -> Box<dyn AsDocumentView>;
+}
+
+impl<T> AsDocumentViewClone for T
+where
+    T: 'static + AsDocumentView + Clone,
+{
+    fn clone_box(&self) -> Box<dyn AsDocumentView> {
+        Box::new(self.clone())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::{fixture, rstest};
 
-    use crate::document::{reduce, DocumentId};
+    use crate::document::{reduce, AsDocumentView, DocumentId};
     use crate::hash::Hash;
     use crate::operation::{Operation, OperationValue, OperationValueRelation, Relation};
     use crate::schema::SchemaId;
