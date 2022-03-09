@@ -5,7 +5,7 @@
 //! All operations in p2panda are encoded via CBOR and can be checked against the right format via
 //! CDDL.
 //!
-//! Read more about CDDL: https://tools.ietf.org/html/rfc8610
+//! Read more about CDDL: <https://tools.ietf.org/html/rfc8610>
 mod definitions;
 mod error;
 mod generator;
