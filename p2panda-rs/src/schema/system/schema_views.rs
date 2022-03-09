@@ -25,6 +25,15 @@ pub enum FieldType {
 
     /// Defines a [`Relation`][`crate::operation::Relation`] field.
     Relation,
+
+    /// Defines a [`RelationList`][`crate::operation::RelationList`] field.
+    RelationList,
+
+    /// Defines a [`PinnedRelation`][`crate::operation::PinnedRelation`] field.
+    PinnedRelation,
+
+    /// Defines a [`PinnedRelationList`][`crate::operation::PinnedRelationList`] field.
+    PinnedRelationList,
 }
 
 impl FromStr for FieldType {
@@ -37,6 +46,9 @@ impl FromStr for FieldType {
             "float" => Ok(FieldType::Float),
             "str" => Ok(FieldType::String),
             "relation" => Ok(FieldType::Relation),
+            "relation_list" => Ok(FieldType::RelationList),
+            "pinned_relation" => Ok(FieldType::PinnedRelation),
+            "pinned_relation_list" => Ok(FieldType::PinnedRelationList),
             type_str => Err(SystemSchemaError::InvalidFieldType(type_str.into())),
         }
     }
@@ -51,6 +63,9 @@ impl FieldType {
             FieldType::Float => "float",
             FieldType::String => "str",
             FieldType::Relation => "relation",
+            FieldType::RelationList => "relation_list",
+            FieldType::PinnedRelation => "pinned_relation",
+            FieldType::PinnedRelationList => "pinned_relation_list",
         }
     }
 }

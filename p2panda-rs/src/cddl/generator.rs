@@ -12,6 +12,9 @@ pub enum CddlType {
     Float,
     Tstr,
     Relation,
+    RelationList,
+    PinnedRelation,
+    PinnedRelationList,
 }
 
 /// CDDL types to string representation.
@@ -24,6 +27,9 @@ impl CddlType {
             CddlType::Float => "float",
             CddlType::Tstr => "tstr",
             CddlType::Relation => "tstr .regexp \"[0-9a-f]{68}\"",
+            CddlType::RelationList => "[* tstr .regexp \"[0-9a-f]{68}\"]",
+            CddlType::PinnedRelation => "[+ tstr .regexp \"[0-9a-f]{68}\"]",
+            CddlType::PinnedRelationList => "[* [+ tstr .regexp \"[0-9a-f]{68}\"]]",
         }
     }
 }
@@ -36,6 +42,9 @@ impl From<FieldType> for CddlType {
             FieldType::Float => CddlType::Float,
             FieldType::String => CddlType::Tstr,
             FieldType::Relation => CddlType::Relation,
+            FieldType::RelationList => CddlType::RelationList,
+            FieldType::PinnedRelation => CddlType::PinnedRelation,
+            FieldType::PinnedRelationList => CddlType::PinnedRelationList,
         }
     }
 }
