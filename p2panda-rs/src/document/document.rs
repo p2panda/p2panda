@@ -133,40 +133,6 @@ impl Document {
     }
 }
 
-// trait IntoView<SchemaId> {
-//     type Output;
-
-//     fn into_view(&self, schema: SchemaId) -> Self::Output;
-// }
-
-// impl IntoView<Relation> for Document {
-//     type Output = DocumentView;
-
-//     fn into_view(&self, _schema: Relation) -> Self::Output {
-//         self.view().to_owned()
-//     }
-// }
-
-// impl IntoView<SchemaV1> for Document {
-//     type Output = SchemaView;
-
-//     fn into_view(&self, _schema: SchemaV1) -> Self::Output {
-//         let document_view = self.view().to_owned();
-//         let schema_view: SchemaView = document_view.try_into().unwrap();
-//         schema_view
-//     }
-// }
-
-// impl IntoView<SchemaFieldV1> for Document {
-//     type Output = SchemaFieldView;
-
-//     fn into_view(&self, _schema: SchemaFieldV1) -> Self::Output {
-//         let document_view = self.view().to_owned();
-//         let schema_view: SchemaFieldView = document_view.try_into().unwrap();
-//         schema_view
-//     }
-// }
-
 /// A struct for building [documents][`Document`] from a collection of [operations with
 /// metadata][`crate::operation::OperationWithMeta`].
 ///
