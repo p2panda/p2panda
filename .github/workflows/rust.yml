@@ -144,3 +144,17 @@ jobs:
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2
+  rust-benchmark:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Run criterion benchmark comparison against PR target
+        uses: boa-dev/criterion-compare-action@v3.0.0
+        with:
+          cwd: "p2panda-rs"
+          branchName: ${{ github.base_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
