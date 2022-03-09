@@ -5,7 +5,7 @@
 //! They are defined as part of the p2panda specification and may differ from application schemas
 //! in how they are materialised.
 mod error;
-mod schema;
+mod schema_views;
 
 pub use error::SystemSchemaError;
-pub use schema::{FieldType, SchemaFieldView, SchemaView};
+pub use schema_views::{FieldType, SchemaFieldView, SchemaView};

@@ -17,6 +17,8 @@ Highlights are marked with a pancake 🥞
 - `SchemaView` and `SchemaFieldView` for representing materialised system documents [#226](https://github.com/p2panda/p2panda/pull/226) `rs`
 - `relation` & `relation_list` field type [#205](https://github.com/p2panda/p2panda/pull/205) `rs` `js`
 - `SchemaId` enum for identifying different schema types [#221](https://github.com/p2panda/p2panda/pull/221) `rs`
+- CDDL for _schema_v1_ and _schema_field_v1_, use `cddl-cat` instead of `cddl` [#248](https://github.com/p2panda/p2panda/pull/248) `rs`
+- `Schema` for representing application schema [#250](https://github.com/p2panda/p2panda/pull/250) `rs`
 
 ## Changed
 
@@ -24,6 +26,7 @@ Highlights are marked with a pancake 🥞
 - Fix letter casing in operations [#230](https://github.com/p2panda/p2panda/pull/230) `rs` `js`
 - Fixes and refactorings around schema [#233](https://github.com/p2panda/p2panda/pull/233) `rs`
 - Split `Relation` into pinned and unpinned type [#235](https://github.com/p2panda/p2panda/pull/235) `rs`
+- Separate `cddl` from `schema` more clearly [#239](https://github.com/p2panda/p2panda/pull/239) `rs`
 
 ## Fixed
 

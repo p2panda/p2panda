@@ -42,18 +42,11 @@ pub enum OperationFieldsError {
 
 /// Custom error types for `OperationEncoded`.
 #[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
 pub enum OperationEncodedError {
     /// Encoded operation string contains invalid hex characters.
     #[error("invalid hex encoding in operation")]
     InvalidHexEncoding,
-
-    /// Operation can't be deserialised from invalid CBOR encoding.
-    #[error("invalid CBOR format")]
-    InvalidCBOR,
-
-    /// Handle errors from validating CBOR schemas.
-    #[error(transparent)]
-    SchemaError(#[from] crate::schema::SchemaValidationError),
 }
 
 /// Error types for methods of `OperationWithMeta` struct.
