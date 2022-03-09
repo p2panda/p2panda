@@ -105,6 +105,22 @@ Visit the corresponding folders for development instructions:
 
 [cargo-edit]: https://github.com/killercup/cargo-edit
 
+## Benchmarks
+
+Performance benchmarks can be found in [benches](/benches). You can run them
+using [`cargo-criterion`](https://crates.io/crates/cargo-criterion):
+
+```sh
+$ cargo install cargo-criterion
+$ cargo criterion
+# An HTML report with plots is generated automatically
+$ open target/criterion/reports/index.html
+```
+
+These benchmarks  can be used to compare the performance across branches by
+running them first in a base branch and then in the comparison branch. The
+HTML-reports will include a comparison of the two results.
+
 ## License
 
 GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)
