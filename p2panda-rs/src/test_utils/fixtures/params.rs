@@ -9,12 +9,14 @@ use std::convert::TryFrom;
 use rand::Rng;
 use rstest::fixture;
 
+use crate::document::DocumentId;
 use crate::entry::{sign_and_encode, Entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::{
     Operation, OperationEncoded, OperationFields, OperationValue, OperationWithMeta,
 };
+use crate::schema::SchemaId;
 use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
 use crate::test_utils::fixtures::defaults;
 use crate::test_utils::utils;
@@ -48,8 +50,8 @@ pub fn seq_num(#[default(1)] n: u64) -> SeqNum {
 /// Fixture which injects the default schema Hash into a test method. Default value can be
 /// overridden at testing time by passing in a custom schema hash string.
 #[fixture]
-pub fn schema(#[default(DEFAULT_SCHEMA_HASH)] schema_str: &str) -> Hash {
-    utils::hash(schema_str)
+pub fn schema(#[default(DEFAULT_SCHEMA_HASH)] schema_str: &str) -> SchemaId {
+    SchemaId::new(schema_str).unwrap()
 }
 
 /// Fixture which injects the default Hash into a test method. Default value can be overridden at
@@ -59,11 +61,24 @@ pub fn hash(#[default(DEFAULT_HASH)] hash_str: &str) -> Hash {
     utils::hash(hash_str)
 }
 
+/// Fixture which injects the default DocumentId into a test method. Default value can be overridden at
+/// testing time by passing in a custom hash string.
+#[fixture]
+pub fn document_id(#[default(DEFAULT_HASH)] hash_str: &str) -> DocumentId {
+    DocumentId::new(hash(hash_str))
+}
+
 /// Fixture which injects a random hash into a test method.
 #[fixture]
 pub fn random_hash() -> Hash {
     let random_data = rand::thread_rng().gen::<[u8; 32]>().to_vec();
     Hash::new_from_bytes(random_data).unwrap()
+}
+
+/// Fixture which injects a random document id.
+#[fixture]
+pub fn random_document_id() -> DocumentId {
+    DocumentId::new(random_hash())
 }
 
 /// Fixture which injects the default OperationFields value into a test method.
@@ -144,7 +159,7 @@ pub fn operation_encoded(operation: Operation) -> OperationEncoded {
 /// Default value can be overridden at testing time by passing in custom schema hash and operation
 /// fields.
 #[fixture]
-pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
+pub fn create_operation(schema: SchemaId, fields: OperationFields) -> Operation {
     utils::create_operation(schema, fields)
 }
 
@@ -154,7 +169,7 @@ pub fn create_operation(schema: Hash, fields: OperationFields) -> Operation {
 /// hash and operation fields.
 #[fixture]
 pub fn update_operation(
-    schema: Hash,
+    schema: SchemaId,
     #[default(vec![hash(DEFAULT_HASH)])] previous_operations: Vec<Hash>,
     #[default(fields(vec![("message", OperationValue::Text("Updated, hello!".to_string()))]))]
     fields: OperationFields,
@@ -168,7 +183,7 @@ pub fn update_operation(
 /// id hash.
 #[fixture]
 pub fn delete_operation(
-    schema: Hash,
+    schema: SchemaId,
     #[default(vec![hash(DEFAULT_HASH)])] previous_operations: Vec<Hash>,
 ) -> Operation {
     utils::delete_operation(schema, previous_operations)

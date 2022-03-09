@@ -139,8 +139,8 @@ jobs:
       - name: Run cargo-tarpaulin
         uses: actions-rs/tarpaulin@v0.1
         with:
-          # Skip cleaning via `--skip-clean` flag to be able to use cache
-          args: --manifest-path ${{ env.cargo_manifest }} --skip-clean --locked
+          # Force cleaning via `--force-clean` flag to prevent buggy code coverage
+          args: --manifest-path ${{ env.cargo_manifest }} --locked --force-clean
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2

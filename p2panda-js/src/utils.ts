@@ -1,35 +1,10 @@
-import type { Fields, FieldsTagged, Relation } from './types';
+import type { Fields, FieldsTagged } from './types';
 
 const FIELD_TYPE_MAPPING = {
   bigint: 'int',
   boolean: 'bool',
   number: 'int',
   string: 'str',
-};
-
-/**
- * Helper method to validate if required fields are given in relation object.
- *
- * @param relation object
- * @returns boolean
- */
-const validateRelation = (relation: object): boolean => {
-  if (!('document' in relation)) {
-    throw new Error('`document` field is missing in relation');
-  }
-
-  // `document_view` is optional but if set it needs at least one item inside
-  if ('document_view' in relation) {
-    const documentView = (relation as Relation)['document_view'];
-
-    if (!Array.isArray(documentView)) {
-      throw new Error('`document_view` is not an array');
-    } else if (documentView.length === 0) {
-      throw new Error('`document_view` array can not be empty ');
-    }
-  }
-
-  return true;
 };
 
 /**
@@ -47,32 +22,12 @@ const validateRelation = (relation: object): boolean => {
 const getFieldType = (
   fields: Fields,
   key: string,
-): 'str' | 'bool' | 'int' | 'relation' | 'relation_list' | null => {
+): 'str' | 'bool' | 'int' | null => {
   const type = typeof fields[key];
 
   if (type === 'undefined') {
     // Return null if a key has no value
     return null;
-  }
-
-  if (type === 'object') {
-    // Value is probably a relation or relation_list
-    if (Array.isArray(fields[key])) {
-      const list = fields[key] as Array<Relation>;
-
-      if (list.length === 0) {
-        throw new Error('Empty array found');
-      }
-
-      list.forEach((relation) => {
-        validateRelation(relation as object);
-      });
-
-      return 'relation_list';
-    } else {
-      validateRelation(fields[key] as object);
-      return 'relation';
-    }
   }
 
   if (!Object.keys(FIELD_TYPE_MAPPING).includes(type)) {
@@ -119,18 +74,6 @@ export const marshallRequestFields = (fields: Fields): FieldsTagged => {
         break;
       case 'bool':
         map.set(key, { value: value as boolean, type: 'bool' });
-        break;
-      case 'relation':
-        map.set(key, {
-          value: value as Relation,
-          type: 'relation',
-        });
-        break;
-      case 'relation_list':
-        map.set(key, {
-          value: value as Array<Relation>,
-          type: 'relation_list',
-        });
         break;
       case null:
         // Skip fields that have no value

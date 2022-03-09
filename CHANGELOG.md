@@ -12,13 +12,23 @@ Highlights are marked with a pancake 🥞
 ## Added
 
 - `Document` for sorting and reducing a graph of `Operations` [#169](https://github.com/p2panda/p2panda/pull/169) `rs` 🥞
-- Derive `Ord` and `PartialOrd` for `LogId` [#201](https://github.com/p2panda/p2panda/pull/201)
 - Add `proptests` for creating and encoding operations [#188](https://github.com/p2panda/p2panda/pull/188) `rs`
+- Derive `Ord` and `PartialOrd` for `LogId` [#201](https://github.com/p2panda/p2panda/pull/201) `rs`
+- Rename `SchemaBuilder` to `CDDLBuilder` [#226](https://github.com/p2panda/p2panda/pull/226) `rs`
+- `SchemaView` and `SchemaFieldView` for representing materialised system documents [#226](https://github.com/p2panda/p2panda/pull/226) `rs`
 - `relation` & `relation_list` field type [#205](https://github.com/p2panda/p2panda/pull/205) `rs` `js`
+- `SchemaId` enum for identifying different schema types [#221](https://github.com/p2panda/p2panda/pull/221) `rs`
+- CDDL for _schema_v1_ and _schema_field_v1_, use `cddl-cat` instead of `cddl` [#248](https://github.com/p2panda/p2panda/pull/248) `rs`
+- `Schema` for representing application schema [#250](https://github.com/p2panda/p2panda/pull/250) `rs`
+- Move `DocumentId` from `DocmentView` into `Document` [#255](https://github.com/p2panda/p2panda/pull/255) `rs`
 
 ## Changed
 
 - `Instance` renamed to `DocumentView` [#169](https://github.com/p2panda/p2panda/pull/169) `rs`
+- Fix letter casing in operations [#230](https://github.com/p2panda/p2panda/pull/230) `rs` `js`
+- Fixes and refactorings around schema [#233](https://github.com/p2panda/p2panda/pull/233) `rs`
+- Split `Relation` into pinned and unpinned type [#235](https://github.com/p2panda/p2panda/pull/235) `rs`
+- Separate `cddl` from `schema` more clearly [#239](https://github.com/p2panda/p2panda/pull/239) `rs`
 
 ## Fixed
 
@@ -27,6 +37,10 @@ Highlights are marked with a pancake 🥞
 ## Everything burrito
 
 - Easier to read CDDL schema error strings [#207](https://github.com/p2panda/p2panda/pull/207) `rs`
+- Force cache cleanup to fix code coverage report [#231](https://github.com/p2panda/p2panda/pull/231)
+- Split up overly long `operation.rs` file [#232](https://github.com/p2panda/p2panda/pull/232) `rs`
+- Extend test coverage for `OperationFields` [#236](https://github.com/p2panda/p2panda/pull/236) `rs`
+- Further develop our best practices for writing documentation [#240](https://github.com/p2panda/p2panda/pull/240) `rs`
 
 ## [0.3.0]
 

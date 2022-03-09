@@ -14,11 +14,7 @@ pub enum DocumentBuilderError {
     #[error("Multiple create operations found")]
     MoreThanOneCreateOperation,
 
-    /// Handle errors from validating CBOR schemas.
-    #[error(transparent)]
-    SchemaError(#[from] crate::schema::SchemaError),
-
-    /// All operation in a document must follow the same schema.
+    /// All operations in a document must follow the same schema.
     #[error("All operations in a document must follow the same schema")]
     OperationSchemaNotMatching,
 
@@ -53,6 +49,7 @@ pub enum DocumentError {
 }
 
 /// Custom error types for `DocumentView`.
+#[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
 pub enum DocumentViewError {
     /// TryFrom operation must be CREATE.
@@ -62,8 +59,4 @@ pub enum DocumentViewError {
     /// Operation passed to `update()` must be UPDATE or DELETE.
     #[error("Operation passed to update() must be UPDATE or DELETE")]
     NotUpdateOrDeleteOperation,
-
-    /// Validation error.
-    #[error("Error while creating instance")]
-    ValidationError(#[from] crate::schema::SchemaError),
 }

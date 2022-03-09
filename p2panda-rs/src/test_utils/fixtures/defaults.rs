@@ -5,6 +5,7 @@
 use crate::entry::Entry;
 use crate::hash::Hash;
 use crate::operation::{Operation, OperationFields, OperationValue, OperationWithMeta};
+use crate::schema::SchemaId;
 use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
 use crate::test_utils::fixtures;
 
@@ -16,6 +17,11 @@ pub fn hash() -> Hash {
 /// The default hash as an option.
 pub fn some_hash() -> Option<Hash> {
     fixtures::some_hash(DEFAULT_HASH)
+}
+
+/// The default schema.
+pub fn schema() -> SchemaId {
+    fixtures::schema(DEFAULT_SCHEMA_HASH)
 }
 
 /// The default operation value.

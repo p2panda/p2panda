@@ -21,13 +21,13 @@
 //! # use std::convert::TryFrom;
 //! # use rstest::rstest;
 //! # use rstest_reuse::apply;
-//! # use crate::entry::{sign_and_encode, Entry};
-//! # use crate::identity::KeyPair;
-//! # use crate::operation::{Operation, OperationEncoded};
+//! # use p2panda_rs::entry::{sign_and_encode, Entry};
+//! # use p2panda_rs::identity::KeyPair;
+//! # use p2panda_rs::operation::{Operation, OperationEncoded};
 //! // These are the fixtures we will be using below
-//! use crate::test_utils::fixtures::{create_operation, defaults, entry, key_pair, Fixture};
+//! use p2panda_rs::test_utils::fixtures::{create_operation, defaults, entry, key_pair, Fixture};
 //! // And these are the templates we can run tests against
-//! use crate::test_utils::fixtures::templates::{
+//! use p2panda_rs::test_utils::fixtures::templates::{
 //!     many_valid_entries, non_default_operation_values_panic, version_fixtures,
 //! };
 //!
@@ -98,6 +98,7 @@
 #[cfg(test)]
 pub mod defaults;
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod fixtures;
 #[cfg(test)]
 mod params;

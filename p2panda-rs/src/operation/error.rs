@@ -10,7 +10,7 @@ pub enum OperationError {
     #[error("operation fields can not be empty")]
     EmptyFields,
 
-    /// Invalid attempt to create a delete operation with fields
+    /// Invalid attempt to create a delete operation with fields.
     #[error("DELETE operation must not have fields")]
     DeleteWithFields,
 
@@ -42,18 +42,11 @@ pub enum OperationFieldsError {
 
 /// Custom error types for `OperationEncoded`.
 #[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
 pub enum OperationEncodedError {
     /// Encoded operation string contains invalid hex characters.
     #[error("invalid hex encoding in operation")]
     InvalidHexEncoding,
-
-    /// Operation can't be deserialised from invalid CBOR encoding.
-    #[error("invalid CBOR format")]
-    InvalidCBOR,
-
-    /// Handle errors from validating CBOR schemas.
-    #[error(transparent)]
-    SchemaError(#[from] crate::schema::SchemaError),
 }
 
 /// Error types for methods of `OperationWithMeta` struct.

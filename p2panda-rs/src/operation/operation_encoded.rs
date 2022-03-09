@@ -7,8 +7,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::hash::Hash;
 use crate::operation::{Operation, OperationEncodedError};
-#[cfg(not(target_arch = "wasm32"))]
-use crate::schema::{validate_schema, OPERATION_SCHEMA};
 use crate::Validate;
 
 /// Operation represented in hex encoded CBOR format.
@@ -57,30 +55,10 @@ impl TryFrom<&Operation> for OperationEncoded {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-impl Validate for OperationEncoded {
-    type Error = OperationEncodedError;
-
-    /// Checks encoded operation value against hex format and CDDL schema.
-    fn validate(&self) -> Result<(), Self::Error> {
-        // Validate hex encoding
-        let bytes = hex::decode(&self.0).map_err(|_| OperationEncodedError::InvalidHexEncoding)?;
-
-        // Validate CDDL schema
-        validate_schema(OPERATION_SCHEMA, bytes)?;
-
-        Ok(())
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
 impl Validate for OperationEncoded {
     type Error = OperationEncodedError;
 
     /// Checks encoded operation value against hex format.
-    ///
-    /// Skips CDDL schema validation as this is not supported for wasm targets. See:
-    /// https://github.com/anweiss/cddl/issues/83
     fn validate(&self) -> Result<(), Self::Error> {
         hex::decode(&self.0).map_err(|_| OperationEncodedError::InvalidHexEncoding)?;
         Ok(())
@@ -94,12 +72,16 @@ mod tests {
     use rstest::rstest;
     use rstest_reuse::apply;
 
-    use crate::hash::Hash;
-    use crate::operation::{AsOperation, Operation, OperationValue, Relation};
+    use crate::document::DocumentId;
+    use crate::operation::{
+        AsOperation, Operation, OperationValue, OperationValueRelation, OperationValueRelationList,
+        Relation, RelationList,
+    };
+    use crate::schema::SchemaId;
     use crate::test_utils::fixtures::templates::version_fixtures;
     use crate::test_utils::fixtures::{
-        encoded_create_string, fields, operation_encoded_invalid_relation_fields, random_hash,
-        schema, update_operation, Fixture,
+        encoded_create_string, fields, operation_encoded_invalid_relation_fields,
+        random_document_id, random_hash, schema, update_operation, Fixture,
     };
     use crate::Validate;
 
@@ -109,9 +91,6 @@ mod tests {
     fn validate(encoded_create_string: String) {
         // Invalid hex string
         assert!(OperationEncoded::new("123456789Z").is_err());
-
-        // Invalid operation
-        assert!(OperationEncoded::new("68656c6c6f2062616d626f6f21").is_err());
 
         // Valid CREATE operation
         assert!(OperationEncoded::new(&encoded_create_string).is_ok());
@@ -142,11 +121,10 @@ mod tests {
 
     #[rstest]
     fn encode_decode_all_field_types(
-        schema: Hash,
-        #[from(random_hash)] picture_document: Hash,
-        #[from(random_hash)] friend_document_1: Hash,
-        #[from(random_hash)] friend_document_2: Hash,
-        #[from(random_hash)] friend_operation_id: Hash,
+        schema: SchemaId,
+        #[from(random_document_id)] picture_document: DocumentId,
+        #[from(random_document_id)] friend_document_1: DocumentId,
+        #[from(random_document_id)] friend_document_2: DocumentId,
         #[with(
             // Schema hash
             schema.clone(),
@@ -158,11 +136,11 @@ mod tests {
               ("age", OperationValue::Integer(28)),
               ("height", OperationValue::Float(3.5)),
               ("is_admin", OperationValue::Boolean(false)),
-              ("profile_picture", OperationValue::Relation(Relation::new(picture_document.clone(), Vec::new()))),
-              ("my_friends", OperationValue::RelationList(vec![
-                  Relation::new(friend_document_1.clone(), vec![friend_operation_id.clone()]),
-                  Relation::new(friend_document_2.clone(), Vec::new()),
-              ])),
+              ("profile_picture", OperationValue::Relation(OperationValueRelation::Unpinned(Relation::new(picture_document.clone())))),
+              ("my_friends", OperationValue::RelationList(OperationValueRelationList::Unpinned(RelationList::new(vec![
+                  friend_document_1.clone(),
+                  friend_document_2.clone(),
+              ])))),
             ])
         )]
         update_operation: Operation,
@@ -187,14 +165,15 @@ mod tests {
         );
         assert_eq!(
             fields.get("profile_picture").unwrap(),
-            &OperationValue::Relation(Relation::new(picture_document, Vec::new()))
+            &OperationValue::Relation(OperationValueRelation::Unpinned(Relation::new(
+                picture_document
+            )))
         );
         assert_eq!(
             fields.get("my_friends").unwrap(),
-            &OperationValue::RelationList(vec![
-                Relation::new(friend_document_1, vec![friend_operation_id]),
-                Relation::new(friend_document_2, vec![])
-            ])
+            &OperationValue::RelationList(OperationValueRelationList::Unpinned(RelationList::new(
+                vec![friend_document_1, friend_document_2,]
+            )))
         );
     }
 }

@@ -47,7 +47,7 @@ export type Entry = {
 export type Operation = {
   action: 'create' | 'update' | 'delete';
   schema: string;
-  previousOperations?: string[];
+  previous_operations?: string[];
   fields?: Fields;
   id?: string;
 };
@@ -62,8 +62,20 @@ export type Fields = {
     | string
     | BigInt
     | Relation
-    | Array<Relation>;
+    | Relation[]
+    | PinnedRelation
+    | PinnedRelation[];
 };
+
+/**
+ * Relation pointing at a document id.
+ */
+export type Relation = string;
+
+/**
+ * Pinned relation pointing at a document view id.
+ */
+export type PinnedRelation = string[];
 
 /**
  * Decoded entry containing optional `Operation`.
@@ -81,18 +93,9 @@ export type EntryTagged = {
  */
 export type OperationTagged = {
   action: 'create' | 'update' | 'delete';
-  previousOperations?: string[];
+  previous_operations?: string[];
   schema: string;
   fields: FieldsTagged;
-};
-
-/**
- * Decoded form of a relation, a type used in `relation` and `relation_list`
- * operation fields.
- */
-export type Relation = {
-  document: string;
-  document_view?: string[];
 };
 
 /**
@@ -145,7 +148,7 @@ export type OperationValueText = {
  * An operation value of `relation` type.
  */
 export type OperationValueRelation = {
-  value: Relation;
+  value: Relation | PinnedRelation;
   type: 'relation';
 };
 
@@ -153,7 +156,7 @@ export type OperationValueRelation = {
  * An operation value of `relation_list` type.
  */
 export type OperationValueRelationList = {
-  value: Array<Relation>;
+  value: Relation[] | PinnedRelation[];
   type: 'relation_list';
 };
 

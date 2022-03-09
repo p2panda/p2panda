@@ -3,136 +3,83 @@
 //! Types and methods for deriving and maintaining materialised documents.
 use std::collections::btree_map::Iter as BTreeMapIter;
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 
-use crate::document::error::DocumentViewError;
-use crate::operation::{AsOperation, Operation, OperationValue, OperationWithMeta};
+use crate::document::DocumentViewId;
+use crate::operation::OperationValue;
+
+type FieldKey = String;
 
 /// The materialised view of a `Document`. It's fields match the documents schema definition.
 ///
-/// `DocumentViews` can be instantiated from a CREATE operation and then mutated with UPDATE
-/// or DELETE operations.
-#[derive(Debug, PartialEq, Default, Clone)]
-pub struct DocumentView(BTreeMap<String, OperationValue>);
+/// `DocumentViews` are immutable versions of a `Document`. They represent a document at a certain
+/// point in time.
+#[derive(Debug, PartialEq, Clone)]
+pub struct DocumentView {
+    /// Identifier of this document view.
+    pub(crate) id: DocumentViewId,
+
+    /// Materialized data held by this document view.
+    pub(crate) view: BTreeMap<FieldKey, OperationValue>,
+}
 
 impl DocumentView {
-    /// Returns a new `DocumentView`.
-    fn new() -> Self {
-        Self(BTreeMap::new())
+    /// Construct a document view.
+    ///
+    /// Requires the DocumentViewId and field values to be calculated seperately and
+    /// then passed in during construction.
+    pub fn new(id: DocumentViewId, view: BTreeMap<FieldKey, OperationValue>) -> Self {
+        Self { id, view }
+    }
+
+    /// Get the id of this document view.
+    pub fn id(&self) -> &DocumentViewId {
+        &self.id
     }
 
     /// Get a single value from this instance by it's key.
     pub fn get(&self, key: &str) -> Option<&OperationValue> {
-        self.0.get(key)
-    }
-
-    /// Update this `DocumentView` from an UPDATE `Operation`.
-    pub fn apply_update<T: AsOperation>(&mut self, operation: T) -> Result<(), DocumentViewError> {
-        if operation.is_create() {
-            return Err(DocumentViewError::NotUpdateOrDeleteOperation);
-        };
-
-        let fields = operation.fields();
-
-        if let Some(fields) = fields {
-            for (key, value) in fields.iter() {
-                self.0.insert(key.to_string(), value.to_owned());
-            }
-        }
-
-        Ok(())
+        self.view.get(key)
     }
 
     /// Returns a vector containing the keys of this instance.
     pub fn keys(&self) -> Vec<String> {
-        self.0.clone().into_keys().collect::<Vec<String>>()
+        self.view.clone().into_keys().collect::<Vec<FieldKey>>()
     }
 
     /// Returns an iterator of existing instance fields.
-    pub fn iter(&self) -> BTreeMapIter<String, OperationValue> {
-        self.0.iter()
+    pub fn iter(&self) -> BTreeMapIter<FieldKey, OperationValue> {
+        self.view.iter()
     }
 
     /// Returns the number of fields on this instance.
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.view.len()
     }
 
     /// Returns true if the instance is empty, otherwise false.
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.view.is_empty()
     }
 }
-
-impl TryFrom<Operation> for DocumentView {
-    type Error = DocumentViewError;
-
-    fn try_from(operation: Operation) -> Result<DocumentView, DocumentViewError> {
-        if !operation.is_create() {
-            return Err(DocumentViewError::NotCreateOperation);
-        };
-
-        let mut instance: DocumentView = DocumentView::new();
-        let fields = operation.fields();
-
-        if let Some(fields) = fields {
-            for (key, value) in fields.iter() {
-                instance.0.insert(key.to_string(), value.to_owned());
-            }
-        }
-
-        Ok(instance)
-    }
-}
-
-impl TryFrom<OperationWithMeta> for DocumentView {
-    type Error = DocumentViewError;
-
-    fn try_from(operation: OperationWithMeta) -> Result<DocumentView, DocumentViewError> {
-        if !operation.is_create() {
-            return Err(DocumentViewError::NotCreateOperation);
-        };
-
-        let mut instance: DocumentView = DocumentView::new();
-        let fields = operation.fields();
-
-        if let Some(fields) = fields {
-            for (key, value) in fields.iter() {
-                instance.0.insert(key.to_string(), value.to_owned());
-            }
-        }
-
-        Ok(instance)
-    }
-}
-
-impl From<BTreeMap<String, OperationValue>> for DocumentView {
-    fn from(map: BTreeMap<String, OperationValue>) -> Self {
-        Self(map)
-    }
-}
-
-// @TODO: This currently makes sure the wasm tests work as cddl does not have any wasm support
-// (yet). Remove this with: https://github.com/p2panda/p2panda/issues/99
-#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
-    use std::convert::{TryFrom, TryInto};
+    use rstest::{fixture, rstest};
 
-    use rstest::rstest;
-
+    use crate::document::{reduce, DocumentId};
     use crate::hash::Hash;
-    use crate::operation::{AsOperation, Operation, OperationValue, Relation};
-    use crate::schema::Schema;
+    use crate::operation::{Operation, OperationValue, OperationValueRelation, Relation};
+    use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, fields, hash, random_hash, schema, update_operation,
+        create_operation, document_id, fields, random_hash, schema, update_operation,
     };
 
-    use super::DocumentView;
+    use super::{DocumentView, DocumentViewId};
 
-    #[rstest]
-    fn basic_methods(schema: Hash, #[from(random_hash)] document: Hash) {
-        let operation = create_operation(
+    #[fixture]
+    fn test_create_operation(schema: SchemaId, document_id: DocumentId) -> Operation {
+        let relation = Relation::new(document_id);
+
+        create_operation(
             schema,
             fields(vec![
                 ("username", OperationValue::Text("bubu".to_owned())),
@@ -141,111 +88,92 @@ mod tests {
                 ("is_admin", OperationValue::Boolean(false)),
                 (
                     "profile_picture",
-                    OperationValue::Relation(Relation::new(document, Vec::new())),
+                    OperationValue::Relation(OperationValueRelation::Unpinned(relation)),
                 ),
             ]),
-        );
+        )
+    }
 
-        // Convert a CREATE `Operation` into an `DocumentView`
-        let instance: DocumentView = operation.try_into().unwrap();
+    #[fixture]
+    fn test_update_operation(
+        schema: SchemaId,
+        #[from(random_hash)] prev_op_hash: Hash,
+    ) -> Operation {
+        update_operation(
+            schema,
+            vec![prev_op_hash],
+            fields(vec![
+                ("age", OperationValue::Integer(29)),
+                ("is_admin", OperationValue::Boolean(true)),
+            ]),
+        )
+    }
+
+    #[rstest]
+    fn from_single_create_op(
+        test_create_operation: Operation,
+        #[from(random_hash)] view_id: Hash,
+        #[from(document_id)] relation_id: DocumentId,
+    ) {
+        let document_view_id = DocumentViewId::new(vec![view_id]);
+        let expected_relation = Relation::new(relation_id);
+
+        // Reduce a single CREATE `Operation`
+        let (view, is_edited, is_deleted) = reduce(&[test_create_operation]);
+
+        let document_view = DocumentView::new(document_view_id, view);
 
         assert_eq!(
-            instance.keys(),
+            document_view.keys(),
             vec!["age", "height", "is_admin", "profile_picture", "username"]
         );
-
-        assert!(!instance.is_empty());
-
-        let empty_instance = DocumentView::new();
-        assert!(empty_instance.is_empty());
-
-        assert_eq!(instance.len(), 5)
+        assert!(!document_view.is_empty());
+        assert_eq!(document_view.len(), 5);
+        assert_eq!(
+            document_view.get("username").unwrap(),
+            &OperationValue::Text("bubu".to_owned())
+        );
+        assert_eq!(
+            document_view.get("height").unwrap(),
+            &OperationValue::Float(3.5)
+        );
+        assert_eq!(
+            document_view.get("age").unwrap(),
+            &OperationValue::Integer(28)
+        );
+        assert_eq!(
+            document_view.get("is_admin").unwrap(),
+            &OperationValue::Boolean(false)
+        );
+        assert_eq!(
+            document_view.get("profile_picture").unwrap(),
+            &OperationValue::Relation(OperationValueRelation::Unpinned(expected_relation))
+        );
+        assert!(!is_edited);
+        assert!(!is_deleted);
     }
 
     #[rstest]
-    fn try_from_operation(
-        create_operation: Operation,
-        update_operation: Operation,
-        delete_operation: Operation,
+    fn with_update_op(
+        test_create_operation: Operation,
+        test_update_operation: Operation,
+        #[from(random_hash)] view_id: Hash,
     ) {
-        // Convert a CREATE `Operation` into an `DocumentView`
-        let instance: DocumentView = create_operation.clone().try_into().unwrap();
+        let document_view_id = DocumentViewId::new(vec![view_id]);
 
-        let mut expected_instance = DocumentView::new();
-        expected_instance.0.insert(
-            "message".to_string(),
-            create_operation
-                .fields()
-                .unwrap()
-                .get("message")
-                .unwrap()
-                .to_owned(),
+        let (view, is_edited, is_deleted) = reduce(&[test_create_operation, test_update_operation]);
+
+        let document_view = DocumentView::new(document_view_id, view);
+
+        assert_eq!(
+            document_view.get("age").unwrap(),
+            &OperationValue::Integer(29)
         );
-        assert_eq!(instance, expected_instance);
-
-        // Convert an UPDATE or DELETE `Operation` into an `DocumentView`
-        let instance_1 = DocumentView::try_from(update_operation);
-        let instance_2 = DocumentView::try_from(delete_operation);
-
-        assert!(instance_1.is_err());
-        assert!(instance_2.is_err());
-    }
-
-    #[rstest]
-    pub fn update(create_operation: Operation, update_operation: Operation) {
-        let mut chat_instance = DocumentView::try_from(create_operation.clone()).unwrap();
-        chat_instance
-            .apply_update(update_operation.clone())
-            .unwrap();
-
-        let mut exp_chat_instance = DocumentView::new();
-
-        exp_chat_instance.0.insert(
-            "message".to_string(),
-            create_operation
-                .fields()
-                .unwrap()
-                .get("message")
-                .unwrap()
-                .to_owned(),
+        assert_eq!(
+            document_view.get("is_admin").unwrap(),
+            &OperationValue::Boolean(true)
         );
-
-        exp_chat_instance.0.insert(
-            "message".to_string(),
-            update_operation
-                .fields()
-                .unwrap()
-                .get("message")
-                .unwrap()
-                .to_owned(),
-        );
-
-        assert_eq!(chat_instance, exp_chat_instance)
-    }
-
-    #[rstest]
-    pub fn create_from_schema(#[from(hash)] schema_hash: Hash, create_operation: Operation) {
-        // Instantiate "chat" schema from CDDL string
-        let chat_schema_definition = "
-            chat = { (
-                message: { type: \"str\", value: tstr }
-            ) }
-        ";
-
-        let chat = Schema::new(&schema_hash, &chat_schema_definition.to_string()).unwrap();
-        let chat_instance = chat.instance_from_create(create_operation.clone()).unwrap();
-
-        let mut exp_chat_instance = DocumentView::new();
-        exp_chat_instance.0.insert(
-            "message".to_string(),
-            create_operation
-                .fields()
-                .unwrap()
-                .get("message")
-                .unwrap()
-                .to_owned(),
-        );
-
-        assert_eq!(chat_instance, exp_chat_instance)
+        assert!(is_edited);
+        assert!(!is_deleted);
     }
 }
