@@ -32,7 +32,7 @@
 //! # let panda = Client::new(
 //! #     "panda".to_string(),
 //! #     KeyPair::from_private_key_str(
-//! #         "1c86b2524b48f0ba86103cddc6bdfd87774ab77ab4c0ea989ed0eeab3d28827a",
+//! #         "1d86b2524b48f0ba86103cddc6bdfd87774ab77ab4c0ea989ed0eeab3d28827a",
 //! #     )
 //! #     .unwrap(),
 //! # );
@@ -131,7 +131,7 @@
 //! //
 //! //   ++++++++++++++++++++++++++++    ++++++++++++++++++++++++++++
 //! //   | name : "Polar Bear Cafe" |    | name : "ʕ •ᴥ•ʔ Cafe!"    |
-//! //   | owner: "Polar Bear"      |<---| owner: "しろくま"　　　　　 |
+//! //   | owner: "Polar Bear"      |<---| owner: "しろくま"　　　  |
 //! //   | house-number: 12         |    ++++++++++++++++++++++++++++
 //! //   ++++++++++++++++++++++++++++
 //! //
@@ -168,7 +168,7 @@
 //! //
 //! //   ++++++++++++++++++++++++++++    +++++++++++++++++++++++++++
 //! //   | name : "Polar Bear Cafe" |    | name :  "ʕ •ᴥ•ʔ Cafe!"  |
-//! //   | owner: "Polar Bear"      |<---| owner: "しろくま"　　　　　|
+//! //   | owner: "Polar Bear"      |<---| owner: "しろくま"　　　 |
 //! //   | house-number: 12         |    +++++++++++++++++++++++++++
 //! //   ++++++++++++++++++++++++++++
 //! //                A
@@ -191,10 +191,10 @@
 //! let document = DocumentBuilder::new(operations.clone()).build().unwrap();
 //! let document_view = document.view();
 //!
-//! // Here we see that "ʕ •ᴥ•ʔ Cafe!" won the conflict, meaning it was applied after "🐼 Cafe!".
+//! // Here we see that "🐼 Cafe!" won the conflict, meaning it was applied after "ʕ •ᴥ•ʔ Cafe!".
 //! assert_eq!(
 //!     document_view.get("name").unwrap(),
-//!     &OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into())
+//!     &OperationValue::Text("🐼 Cafe!".into())
 //! );
 //! assert_eq!(
 //!     document_view.get("owner").unwrap(),
@@ -213,7 +213,7 @@
 //! //
 //! //   ++++++++++++++++++++++++++++    +++++++++++++++++++++++++++
 //! //   | name : "Polar Bear Cafe" |    | name :  "ʕ •ᴥ•ʔ Cafe!"  |
-//! //   | owner: "Polar Bear"      |<---| owner: "しろくま"　　　　　|<---\
+//! //   | owner: "Polar Bear"      |<---| owner: "しろくま"　　　 |<---\
 //! //   | house-number: 12         |    +++++++++++++++++++++++++++     \
 //! //   ++++++++++++++++++++++++++++                                    ++++++++++++++++++++++
 //! //                A                                                  | house-number: 102  |
@@ -231,7 +231,7 @@
 //!
 //! assert_eq!(
 //!     document_view.get("name").unwrap(),
-//!     &OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into())
+//!     &OperationValue::Text("🐼 Cafe!".into())
 //! );
 //! assert_eq!(
 //!     document_view.get("owner").unwrap(),
