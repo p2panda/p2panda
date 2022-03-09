@@ -191,10 +191,10 @@
 //! let document = DocumentBuilder::new(operations.clone()).build().unwrap();
 //! let document_view = document.view();
 //!
-//! // Here we see that "🐼 Cafe!" won the conflict, meaning it was applied after "ʕ •ᴥ•ʔ Cafe!".
+//! // Here we see that "ʕ •ᴥ•ʔ Cafe!" won the conflict, meaning it was applied after "🐼 Cafe!".
 //! assert_eq!(
 //!     document_view.get("name").unwrap(),
-//!     &OperationValue::Text("🐼 Cafe!".into())
+//!     &OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into())
 //! );
 //! assert_eq!(
 //!     document_view.get("owner").unwrap(),
@@ -231,7 +231,7 @@
 //!
 //! assert_eq!(
 //!     document_view.get("name").unwrap(),
-//!     &OperationValue::Text("🐼 Cafe!".into())
+//!     &OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into())
 //! );
 //! assert_eq!(
 //!     document_view.get("owner").unwrap(),
