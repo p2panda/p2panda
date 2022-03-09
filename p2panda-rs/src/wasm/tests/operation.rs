@@ -214,8 +214,7 @@ fn encodes_operations() {
     let previous_operations = Array::new();
     previous_operations.push(&JsValue::from_str(update_op_hash.as_str()));
 
-    let delete_operation =
-        encode_delete_operation(schema.into(), previous_operations.into());
+    let delete_operation = encode_delete_operation(schema.into(), previous_operations.into());
 
     assert!(delete_operation.is_ok());
 }
