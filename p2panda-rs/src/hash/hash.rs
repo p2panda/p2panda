@@ -28,7 +28,7 @@ pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
 /// [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, StdHash)]
 #[cfg_attr(test, derive(Arbitrary))]
-pub struct Hash(#[cfg_attr(test, proptest(regex = "[0-9a-f]{68}"))] String);
+pub struct Hash(#[cfg_attr(test, proptest(regex = "0020[0-9a-f]{64}"))] String);
 
 impl Hash {
     /// Validates and wraps encoded hash string into new `Hash` instance.
