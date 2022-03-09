@@ -23,7 +23,7 @@ pub enum FieldType {
     /// Defines a text string field.
     String,
 
-    /// Defines a [`Relation`] field.
+    /// Defines a [`Relation`][`crate::operation::Relation`] field.
     Relation,
 }
 
