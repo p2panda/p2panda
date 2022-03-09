@@ -3,7 +3,7 @@
 use std::convert::TryFrom;
 use std::str::FromStr;
 
-use crate::document::{DocumentId, DocumentView, DocumentViewId};
+use crate::document::{DocumentView, DocumentViewId};
 use crate::operation::{OperationValue, OperationValueRelationList, PinnedRelationList};
 
 use super::SystemSchemaError;
@@ -63,9 +63,6 @@ pub struct SchemaView {
     /// ID of this schema view.
     id: DocumentViewId,
 
-    /// ID of this schema document.
-    document_id: DocumentId,
-
     /// Name of this schema.
     name: String,
 
@@ -81,11 +78,6 @@ impl SchemaView {
     /// The id of this schema view.
     pub fn view_id(&self) -> &DocumentViewId {
         &self.id
-    }
-
-    /// The id of this schema document.
-    pub fn document_id(&self) -> &DocumentId {
-        &self.document_id
     }
 
     /// The name of this schema.
@@ -139,7 +131,6 @@ impl TryFrom<DocumentView> for SchemaView {
 
         Ok(Self {
             id: document_view.id().clone(),
-            document_id: document_view.document_id().clone(),
             name: name.to_string(),
             description: description.to_string(),
             fields: fields.to_owned(),
@@ -154,9 +145,6 @@ impl TryFrom<DocumentView> for SchemaView {
 pub struct SchemaFieldView {
     // Identifier of this schema field view.
     id: DocumentViewId,
-
-    // Identifier of this schema document.
-    document_id: DocumentId,
 
     /// Name of this schema field.
     name: String,
@@ -210,7 +198,6 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 
         Ok(Self {
             id: document_view.id().clone(),
-            document_id: document_view.document_id().clone(),
             name: name.to_string(),
             field_type: field_type.to_owned(),
         })
@@ -224,11 +211,11 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::document::{DocumentId, DocumentView, DocumentViewId};
+    use crate::document::{DocumentView, DocumentViewId};
     use crate::hash::Hash;
     use crate::operation::{OperationValue, OperationValueRelationList, PinnedRelationList};
     use crate::schema::system::{FieldType, SchemaFieldView};
-    use crate::test_utils::fixtures::{random_document_id, random_hash};
+    use crate::test_utils::fixtures::random_hash;
 
     use super::SchemaView;
 
@@ -236,7 +223,6 @@ mod tests {
     fn from_document_view(
         #[from(random_hash)] relation_operation_id: Hash,
         #[from(random_hash)] view_id: Hash,
-        #[from(random_document_id)] document_id: DocumentId,
     ) {
         let mut bool_field = BTreeMap::new();
         bool_field.insert(
@@ -255,16 +241,13 @@ mod tests {
         );
 
         let document_view_id = DocumentViewId::new(vec![view_id]);
-        let document_view = DocumentView::new(document_view_id, document_id, bool_field);
+        let document_view = DocumentView::new(document_view_id, bool_field);
 
         assert!(SchemaView::try_from(document_view).is_ok());
     }
 
     #[rstest]
-    fn field_type_from_document_view(
-        #[from(random_document_id)] document_id: DocumentId,
-        #[from(random_hash)] view_id: Hash,
-    ) {
+    fn field_type_from_document_view(#[from(random_hash)] view_id: Hash) {
         // Prepare common document view id
         let document_view_id = DocumentViewId::new(vec![view_id]);
 
@@ -278,8 +261,7 @@ mod tests {
         );
         bool_field.insert("type".to_string(), OperationValue::Text("bool".to_string()));
 
-        let document_view =
-            DocumentView::new(document_view_id.clone(), document_id.clone(), bool_field);
+        let document_view = DocumentView::new(document_view_id.clone(), bool_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
 
@@ -297,11 +279,7 @@ mod tests {
         );
         capacity_field.insert("type".to_string(), OperationValue::Text("int".to_string()));
 
-        let document_view = DocumentView::new(
-            document_view_id.clone(),
-            document_id.clone(),
-            capacity_field,
-        );
+        let document_view = DocumentView::new(document_view_id.clone(), capacity_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::Int);
@@ -319,8 +297,7 @@ mod tests {
             OperationValue::Text("float".to_string()),
         );
 
-        let document_view =
-            DocumentView::new(document_view_id.clone(), document_id.clone(), float_field);
+        let document_view = DocumentView::new(document_view_id.clone(), float_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::Float);
@@ -335,8 +312,7 @@ mod tests {
         );
         str_field.insert("type".to_string(), OperationValue::Text("str".to_string()));
 
-        let document_view =
-            DocumentView::new(document_view_id.clone(), document_id.clone(), str_field);
+        let document_view = DocumentView::new(document_view_id.clone(), str_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::String);
@@ -354,17 +330,14 @@ mod tests {
             OperationValue::Text("relation".to_string()),
         );
 
-        let document_view = DocumentView::new(document_view_id, document_id, relation_field);
+        let document_view = DocumentView::new(document_view_id, relation_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
         assert_eq!(field_view.unwrap().field_type(), &FieldType::Relation);
     }
 
     #[rstest]
-    fn invalid_schema_field(
-        #[from(random_document_id)] document_id: DocumentId,
-        #[from(random_hash)] view_id: Hash,
-    ) {
+    fn invalid_schema_field(#[from(random_hash)] view_id: Hash) {
         let document_view_id = DocumentViewId::new(vec![view_id]);
 
         let mut invalid_field = BTreeMap::new();
@@ -374,7 +347,7 @@ mod tests {
         );
         invalid_field.insert("type".to_string(), OperationValue::Text("hash".to_string()));
 
-        let document_view = DocumentView::new(document_view_id, document_id, invalid_field);
+        let document_view = DocumentView::new(document_view_id, invalid_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_err());
     }

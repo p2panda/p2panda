@@ -61,6 +61,13 @@ pub fn hash(#[default(DEFAULT_HASH)] hash_str: &str) -> Hash {
     utils::hash(hash_str)
 }
 
+/// Fixture which injects the default DocumentId into a test method. Default value can be overridden at
+/// testing time by passing in a custom hash string.
+#[fixture]
+pub fn document_id(#[default(DEFAULT_HASH)] hash_str: &str) -> DocumentId {
+    DocumentId::new(hash(hash_str))
+}
+
 /// Fixture which injects a random hash into a test method.
 #[fixture]
 pub fn random_hash() -> Hash {

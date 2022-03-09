@@ -4,7 +4,7 @@
 use std::collections::btree_map::Iter as BTreeMapIter;
 use std::collections::BTreeMap;
 
-use crate::document::{DocumentId, DocumentViewId};
+use crate::document::DocumentViewId;
 use crate::operation::OperationValue;
 
 type FieldKey = String;
@@ -18,9 +18,6 @@ pub struct DocumentView {
     /// Identifier of this document view.
     pub(crate) id: DocumentViewId,
 
-    /// Identifier of the document this view is derived from.
-    pub(crate) document_id: DocumentId,
-
     /// Materialized data held by this document view.
     pub(crate) view: BTreeMap<FieldKey, OperationValue>,
 }
@@ -28,28 +25,15 @@ pub struct DocumentView {
 impl DocumentView {
     /// Construct a document view.
     ///
-    /// Requires the DocumentId, DocumentViewId and field values to be calculated seperately and
+    /// Requires the DocumentViewId and field values to be calculated seperately and
     /// then passed in during construction.
-    pub fn new(
-        id: DocumentViewId,
-        document_id: DocumentId,
-        view: BTreeMap<FieldKey, OperationValue>,
-    ) -> Self {
-        Self {
-            id,
-            document_id,
-            view,
-        }
+    pub fn new(id: DocumentViewId, view: BTreeMap<FieldKey, OperationValue>) -> Self {
+        Self { id, view }
     }
 
     /// Get the id of this document view.
     pub fn id(&self) -> &DocumentViewId {
         &self.id
-    }
-
-    /// Get the id of this document.
-    pub fn document_id(&self) -> &DocumentId {
-        &self.document_id
     }
 
     /// Get a single value from this instance by it's key.
@@ -79,33 +63,24 @@ impl DocumentView {
 }
 #[cfg(test)]
 mod tests {
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
 
     use crate::document::{reduce, DocumentId};
     use crate::hash::Hash;
-    use crate::operation::{OperationValue, OperationValueRelation, Relation};
+    use crate::operation::{Operation, OperationValue, OperationValueRelation, Relation};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, fields, random_document_id, random_hash, schema,
-        update_operation,
+        create_operation, document_id, fields, random_hash, schema, update_operation,
     };
 
     use super::{DocumentView, DocumentViewId};
 
-    #[rstest]
-    fn gets_the_right_values(
-        schema: SchemaId,
-        #[from(random_hash)] prev_op_hash: Hash,
-        #[from(random_document_id)] document_id: DocumentId,
-        #[from(random_document_id)] profile_picture_id: DocumentId,
-        #[from(random_hash)] view_id: Hash,
-    ) {
-        let document_view_id = DocumentViewId::new(vec![view_id]);
+    #[fixture]
+    fn test_create_operation(schema: SchemaId, document_id: DocumentId) -> Operation {
+        let relation = Relation::new(document_id);
 
-        let relation = Relation::new(profile_picture_id);
-
-        let create_operation = create_operation(
-            schema.clone(),
+        create_operation(
+            schema,
             fields(vec![
                 ("username", OperationValue::Text("bubu".to_owned())),
                 ("height", OperationValue::Float(3.5)),
@@ -113,15 +88,40 @@ mod tests {
                 ("is_admin", OperationValue::Boolean(false)),
                 (
                     "profile_picture",
-                    OperationValue::Relation(OperationValueRelation::Unpinned(relation.clone())),
+                    OperationValue::Relation(OperationValueRelation::Unpinned(relation)),
                 ),
             ]),
-        );
+        )
+    }
+
+    #[fixture]
+    fn test_update_operation(
+        schema: SchemaId,
+        #[from(random_hash)] prev_op_hash: Hash,
+    ) -> Operation {
+        update_operation(
+            schema,
+            vec![prev_op_hash],
+            fields(vec![
+                ("age", OperationValue::Integer(29)),
+                ("is_admin", OperationValue::Boolean(true)),
+            ]),
+        )
+    }
+
+    #[rstest]
+    fn from_single_create_op(
+        test_create_operation: Operation,
+        #[from(random_hash)] view_id: Hash,
+        #[from(document_id)] relation_id: DocumentId,
+    ) {
+        let document_view_id = DocumentViewId::new(vec![view_id]);
+        let expected_relation = Relation::new(relation_id);
 
         // Reduce a single CREATE `Operation`
-        let (view, is_edited, is_deleted) = reduce(&[create_operation.clone()]);
+        let (view, is_edited, is_deleted) = reduce(&[test_create_operation]);
 
-        let document_view = DocumentView::new(document_view_id.clone(), document_id.clone(), view);
+        let document_view = DocumentView::new(document_view_id, view);
 
         assert_eq!(
             document_view.keys(),
@@ -147,25 +147,23 @@ mod tests {
         );
         assert_eq!(
             document_view.get("profile_picture").unwrap(),
-            &OperationValue::Relation(OperationValueRelation::Unpinned(relation))
+            &OperationValue::Relation(OperationValueRelation::Unpinned(expected_relation))
         );
         assert!(!is_edited);
         assert!(!is_deleted);
+    }
 
-        let update_operation = update_operation(
-            schema.clone(),
-            vec![prev_op_hash.clone()],
-            fields(vec![
-                ("age", OperationValue::Integer(29)),
-                ("is_admin", OperationValue::Boolean(true)),
-            ]),
-        );
+    #[rstest]
+    fn with_update_op(
+        test_create_operation: Operation,
+        test_update_operation: Operation,
+        #[from(random_hash)] view_id: Hash,
+    ) {
+        let document_view_id = DocumentViewId::new(vec![view_id]);
 
-        // Reduce again now with an UPDATE operation as well
-        let (view, is_edited, is_deleted) =
-            reduce(&[create_operation.clone(), update_operation.clone()]);
+        let (view, is_edited, is_deleted) = reduce(&[test_create_operation, test_update_operation]);
 
-        let document_view = DocumentView::new(document_view_id, document_id, view);
+        let document_view = DocumentView::new(document_view_id, view);
 
         assert_eq!(
             document_view.get("age").unwrap(),
@@ -177,14 +175,5 @@ mod tests {
         );
         assert!(is_edited);
         assert!(!is_deleted);
-
-        let delete_operation = delete_operation(schema, vec![prev_op_hash]);
-
-        // Reduce again now with a DELETE operation as well
-        let (_document_view, is_edited, is_deleted) =
-            reduce(&[create_operation, update_operation, delete_operation]);
-
-        assert!(is_edited);
-        assert!(is_deleted);
     }
 }
