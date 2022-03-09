@@ -28,6 +28,7 @@ Highlights are marked with a pancake 🥞
 - Fixes and refactorings around schema [#233](https://github.com/p2panda/p2panda/pull/233) `rs`
 - Split `Relation` into pinned and unpinned type [#235](https://github.com/p2panda/p2panda/pull/235) `rs`
 - Separate `cddl` from `schema` more clearly [#239](https://github.com/p2panda/p2panda/pull/239) `rs`
+- Turn schema field in operations into a pinned relation [#256](https://github.com/p2panda/p2panda/pull/256) `rs`
 
 ## Fixed
 

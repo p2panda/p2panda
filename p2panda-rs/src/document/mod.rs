@@ -32,7 +32,7 @@
 //! # let panda = Client::new(
 //! #     "panda".to_string(),
 //! #     KeyPair::from_private_key_str(
-//! #         "1c86b2524b48f0ba86103cddc6bdfd87774ab77ab4c0ea989ed0eeab3d28827a",
+//! #         "1d86b2524b48f0ba86103cddc6bdfd87774ab77ab4c0ea989ed0eeab3d28827a",
 //! #     )
 //! #     .unwrap(),
 //! # );

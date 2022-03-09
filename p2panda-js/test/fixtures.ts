@@ -8,6 +8,7 @@ import type {
   Operation,
   OperationTagged,
   OperationValue,
+  SchemaId,
 } from '~/types';
 
 import TEST_DATA from './test-data.json';
@@ -39,7 +40,7 @@ const decodedOperations = TEST_DATA.panda.logs[0].decodedOperations.map(
   },
 );
 
-export const schemaFixture = (): string => {
+export const schemaFixture = (): SchemaId => {
   return decodedOperations[0].schema;
 };
 

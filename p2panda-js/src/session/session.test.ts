@@ -52,7 +52,7 @@ describe('Session', () => {
 
     session.setSchema(schemaFixture());
     expect(`${session}`).toMatch(
-      /<Session http:\/\/localhost:2020 key pair \w{8} schema \w{8}>/,
+      /<Session http:\/\/localhost:2020 key pair \w{8} schema \w{68}>/,
     );
   });
 

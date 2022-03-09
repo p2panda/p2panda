@@ -83,7 +83,7 @@ const CDDL_ANY_OPERATION: &str = r#"
 ; p2panda Operation Body v1
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-schema_id = "schema_v1" / "schema_field_v1" / entry_hash
+schema_id = "schema_v1" / "schema_field_v1" / pinned_relation
 
 create_fields = fields
 
@@ -214,7 +214,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "create",
-                    "schema" => "0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
+                    "schema" => ["0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457"],
                     "version" => 1,
                     "fields" => {
                         "national_dish" => {
@@ -248,7 +248,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "update",
-                    "schema" => "00208432597826bef4ac1c3cb56ba4c79c1b2b656dadbb808d8af46c62dcef6f987d",
+                    "schema" => ["00208432597826bef4ac1c3cb56ba4c79c1b2b656dadbb808d8af46c62dcef6f987d"],
                     "version" => 1,
                     "previous_operations" => [
                         "00208f7492d6eb01360a886dac93da88982029484d8c04a0bd2ac0607101b80a6634",
@@ -271,7 +271,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "delete",
-                    "schema" => "002094734a821e9987876a30e6040191baea92702ce3e18342032fde6e54b0f63fd0",
+                    "schema" => ["002094734a821e9987876a30e6040191baea92702ce3e18342032fde6e54b0f63fd0"],
                     "version" => 1,
                     "previous_operations" => [
                         "00203ea9940af9e5a191a81a49a118ee049283c3f62e879b33f879e154abad3e682f",
@@ -291,7 +291,7 @@ mod tests {
                 cbor!({
                     "action" => "create",
                     // Hash invalid (64 instead of 68 characters)
-                    "schema" => "80f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
+                    "schema" => ["80f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457"],
                     "version" => 1,
                     "fields" => {
                         "food" => {
@@ -311,7 +311,7 @@ mod tests {
                 cbor!({
                     // Fields missing in UPDATE operation
                     "action" => "update",
-                    "schema" => "002080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
+                    "schema" => ["002080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457"],
                     "version" => 1,
                     "previous_operations" => [
                         "002062b773e62f48cdbbfd3e24956cffd3a9ccb0a844917f1cb726f17405b5e9e2ca",
@@ -329,7 +329,7 @@ mod tests {
                 cbor!({
                     // Previous operations missing in DELETE operation
                     "action" => "delete",
-                    "schema" => "002080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
+                    "schema" => ["002080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457"],
                     "version" => 1,
                 })
                 .unwrap()
@@ -342,7 +342,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "create",
-                    "schema" => "002080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
+                    "schema" => ["002080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457"],
                     "version" => 1,
                     "fields" => {
                         "size" => {
@@ -363,7 +363,7 @@ mod tests {
                 cbor!({
                     // Version missing
                     "action" => "delete",
-                    "schema" => "0020687af9bd717de34ac24ce601116a3b5dabc396eabaf92c2da8010b5703dc4612",
+                    "schema" => ["0020687af9bd717de34ac24ce601116a3b5dabc396eabaf92c2da8010b5703dc4612"],
                     "previous_operations" => [
                         "00201b9ce32f4783941109210d349558baa9cf9216411201c848394379ef5bbc85b2",
                     ],
@@ -378,7 +378,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "delete",
-                    "schema" => "0020458710a538d2f11b811ba6db8851e52323916e906cdd695cc2d4f4e77d35b2a2",
+                    "schema" => ["0020458710a538d2f11b811ba6db8851e52323916e906cdd695cc2d4f4e77d35b2a2"],
                     "version" => 1,
                     "previous_operations" => [
                         "0020b39b995e4f9d782a51d9afbc8260e5802b3a13920beb3d09e787ccfc74176c26",
@@ -396,7 +396,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "delete",
-                    "schema" => "0020687af9bd717de34ac24ce601116a3b5dabc396eabaf92c2da8010b5703dc4612",
+                    "schema" => ["0020687af9bd717de34ac24ce601116a3b5dabc396eabaf92c2da8010b5703dc4612"],
                     "version" => 1,
                     // Huch!
                     "racoon" => "Bwaahaha!",

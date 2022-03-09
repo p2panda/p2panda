@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+export type SchemaId = 'schema_v1' | 'schema_field_v1' | string[];
+
 /**
  * Arguments for publishing the next entry.
  */
@@ -46,7 +48,7 @@ export type Entry = {
  */
 export type Operation = {
   action: 'create' | 'update' | 'delete';
-  schema: string;
+  schema: SchemaId;
   previous_operations?: string[];
   fields?: Fields;
   id?: string;
@@ -94,7 +96,7 @@ export type EntryTagged = {
 export type OperationTagged = {
   action: 'create' | 'update' | 'delete';
   previous_operations?: string[];
-  schema: string;
+  schema: SchemaId;
   fields: FieldsTagged;
 };
 
@@ -173,7 +175,7 @@ export type InstanceRecord = Record<
     deleted: boolean;
     edited: boolean;
     entries: EntryRecord[];
-    schema: string;
+    schema: SchemaId;
     // The tip of the operation graph which produced this instance.
     last_operation: string;
   };
