@@ -177,6 +177,16 @@ mod test {
     }
 
     #[test]
+    fn invalid_deserialization() {
+        assert!(serde_json::from_str::<SchemaId>("[\"This is not a hash\"]").is_err());
+        assert!(serde_json::from_str::<SchemaId>(
+            "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+        )
+        .is_err());
+        assert!(serde_json::from_str::<SchemaId>("unknown_system_schema_name_v1").is_err());
+    }
+
+    #[test]
     fn new_schema_type() {
         let appl_schema =
             SchemaId::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")
