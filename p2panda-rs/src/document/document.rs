@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::BTreeMap;
+use std::convert::TryInto;
 
 use crate::document::{DocumentBuilderError, DocumentId, DocumentView, DocumentViewId};
 use crate::graph::Graph;
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{AsOperation, OperationValue, OperationWithMeta};
-use crate::schema::SchemaId;
+use crate::operation::{AsOperation, OperationValue, OperationWithMeta, Relation};
+use crate::schema::system::{SchemaFieldView, SchemaView};
+use crate::schema::{SchemaFieldV1, SchemaId, SchemaV1};
 
 /// Construct a graph from a list of operations.
 pub(super) fn build_graph(
@@ -125,6 +127,40 @@ impl Document {
     /// Returns true if this document has processed a DELETE operation.
     pub fn is_deleted(&self) -> bool {
         self.meta.deleted
+    }
+}
+
+trait IntoView<SchemaId> {
+    type Output;
+
+    fn into_view(&self, schema: SchemaId) -> Self::Output;
+}
+
+impl IntoView<Relation> for Document {
+    type Output = DocumentView;
+
+    fn into_view(&self, _schema: Relation) -> Self::Output {
+        self.view().to_owned()
+    }
+}
+
+impl IntoView<SchemaV1> for Document {
+    type Output = SchemaView;
+
+    fn into_view(&self, _schema: SchemaV1) -> Self::Output {
+        let document_view = self.view().to_owned();
+        let schema_view: SchemaView = document_view.try_into().unwrap();
+        schema_view
+    }
+}
+
+impl IntoView<SchemaFieldV1> for Document {
+    type Output = SchemaFieldView;
+
+    fn into_view(&self, _schema: SchemaFieldV1) -> Self::Output {
+        let document_view = self.view().to_owned();
+        let schema_view: SchemaFieldView = document_view.try_into().unwrap();
+        schema_view
     }
 }
 
@@ -254,6 +290,7 @@ mod tests {
 
     use rstest::rstest;
 
+    use crate::document::document::IntoView;
     use crate::document::DocumentId;
     use crate::identity::KeyPair;
     use crate::operation::{Operation, OperationValue, OperationWithMeta};
@@ -723,7 +760,17 @@ mod tests {
         operations.push(operation_5);
 
         let document = DocumentBuilder::new(operations.clone()).build().unwrap();
-
+        match document.schema() {
+            SchemaId::Application(relation) => {
+                let view = document.into_view(relation.to_owned());
+            }
+            SchemaId::Schema(schema_v1) => {
+                let view = document.into_view(schema_v1.to_owned());
+            }
+            SchemaId::SchemaField(schema_field_v1) => {
+                let view = document.into_view(schema_field_v1.to_owned());
+            }
+        };
         assert!(document.is_deleted());
     }
 

@@ -8,4 +8,4 @@ mod schema_id;
 pub mod system;
 
 pub use error::{SchemaError, SchemaIdError};
-pub use schema_id::SchemaId;
+pub use schema_id::{SchemaFieldV1, SchemaId, SchemaV1};
