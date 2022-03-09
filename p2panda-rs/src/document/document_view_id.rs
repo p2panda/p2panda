@@ -2,6 +2,8 @@
 
 use std::str::FromStr;
 
+#[cfg(test)]
+use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 
 use crate::hash::{Hash, HashError};
@@ -28,6 +30,7 @@ use crate::Validate;
 ///                          \__ [UPDATE] (Hash: "eff..")
 /// ```
 #[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct DocumentViewId(Vec<Hash>);
 
 impl DocumentViewId {

@@ -3,6 +3,8 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
+#[cfg(test)]
+use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentId, DocumentViewId};
@@ -67,6 +69,7 @@ use crate::Validate;
 /// ```
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub enum OperationValueRelation {
     /// Value refers to a document.
     Unpinned(Relation),
@@ -101,6 +104,7 @@ impl From<DocumentViewId> for OperationValueRelation {
 /// Wrapper around relation list types which can be both pinned and unpinned.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub enum OperationValueRelationList {
     /// Value refers to a list of documents.
     Unpinned(RelationList),
@@ -147,6 +151,7 @@ impl From<Vec<DocumentViewId>> for OperationValueRelationList {
 /// Enum of possible data types which can be added to the operations fields as values.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
+#[cfg_attr(test, derive(Arbitrary))]
 pub enum OperationValue {
     /// Boolean value.
     #[serde(rename = "bool")]
@@ -225,6 +230,8 @@ impl OperationValue {
 /// }
 /// ```
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct OperationFields(BTreeMap<String, OperationValue>);
 
 impl OperationFields {

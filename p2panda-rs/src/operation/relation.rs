@@ -47,6 +47,8 @@
 //! Pinned relations give us immutability and the option to restore a historical state across
 //! documents. However, most cases will probably only need unpinned relations: For example when
 //! referring to a user-profile you probably want to always get the _latest_ version.
+#[cfg(test)]
+use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentId, DocumentViewId};
@@ -55,6 +57,7 @@ use crate::Validate;
 
 /// Field type representing references to other documents.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct Relation(DocumentId);
 
 impl Relation {
@@ -79,6 +82,7 @@ impl Validate for Relation {
 
 /// Reference to the exact version of the document.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct PinnedRelation(DocumentViewId);
 
 impl PinnedRelation {
@@ -98,6 +102,7 @@ impl Validate for PinnedRelation {
 
 /// A `RelationList` can be used to reference multiple foreign documents from a document field.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct RelationList(Vec<DocumentId>);
 
 impl RelationList {
@@ -126,6 +131,7 @@ impl Validate for RelationList {
 
 /// A `PinnedRelationList` can be used to reference multiple documents views.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct PinnedRelationList(Vec<DocumentViewId>);
 
 impl PinnedRelationList {

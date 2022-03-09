@@ -4,13 +4,14 @@ use std::convert::TryFrom;
 
 use proptest::prelude::*;
 
-use crate::hash::Hash;
 use crate::operation::{Operation, OperationEncoded, OperationFields};
+use crate::test_utils::fixtures::defaults::schema;
 
 proptest! {
     #[test]
-    fn operation_value_as_parameter(fields: OperationFields, hash: Hash) {
-        let operation = Operation::new_create(hash, fields.clone());
+    fn operation_value_as_parameter(fields: OperationFields) {
+        // Create an operation using the default testing schema hash
+        let operation = Operation::new_create(schema(), fields.clone());
 
         if fields.is_empty() {
             prop_assert!(operation.is_err());

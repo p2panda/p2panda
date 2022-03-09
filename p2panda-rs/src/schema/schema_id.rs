@@ -2,6 +2,8 @@
 
 use std::str::FromStr;
 
+#[cfg(test)]
+use proptest_derive::Arbitrary;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -12,6 +14,7 @@ use crate::schema::error::SchemaIdError;
 
 /// Identifies the schema of an [`crate::operation::Operation`].
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub enum SchemaId {
     /// An application schema.
     Application(Relation),
