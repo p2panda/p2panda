@@ -61,6 +61,52 @@ impl DocumentView {
         self.view.is_empty()
     }
 }
+
+pub trait AsDocumentView {
+    /// Get the id of this document view.
+    fn id(&self) -> &DocumentViewId;
+
+    /// Get the view onto this DocumentView as a map of key values
+    fn view(&self) -> &BTreeMap<FieldKey, OperationValue>;
+
+    /// Get a single value from this instance by it's key.
+    fn get(&self, key: &str) -> Option<&OperationValue> {
+        self.view().get(key)
+    }
+
+    /// Returns a vector containing the keys of this instance.
+    fn keys(&self) -> Vec<String> {
+        self.view().clone().into_keys().collect::<Vec<FieldKey>>()
+    }
+
+    /// Returns an iterator of existing instance fields.
+    fn iter(&self) -> BTreeMapIter<FieldKey, OperationValue> {
+        self.view().iter()
+    }
+
+    /// Returns the number of fields on this instance.
+    fn len(&self) -> usize {
+        self.view().len()
+    }
+
+    /// Returns true if the instance is empty, otherwise false.
+    fn is_empty(&self) -> bool {
+        self.view().is_empty()
+    }
+}
+
+impl AsDocumentView for DocumentView {
+    /// Get the id of this document view.
+    fn id(&self) -> &DocumentViewId {
+        &self.id
+    }
+
+    /// Get the view onto this DocumentView as a map of key values
+    fn view(&self) -> &BTreeMap<FieldKey, OperationValue> {
+        &self.view
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::{fixture, rstest};

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::str::FromStr;
 
-use crate::document::{DocumentView, DocumentViewId};
+use crate::document::{AsDocumentView, DocumentView, DocumentViewId};
 use crate::operation::{OperationValue, OperationValueRelationList, PinnedRelationList};
 
 use super::SystemSchemaError;
@@ -71,6 +72,9 @@ pub struct SchemaView {
 
     /// The fields in this schema.
     fields: PinnedRelationList,
+
+    /// All fields contained in this schema view.
+    document_view: BTreeMap<String, OperationValue>,
 }
 
 #[allow(dead_code)] // These methods aren't used yet...
@@ -93,6 +97,18 @@ impl SchemaView {
     /// A list of fields assigned to this schema identified by their document id.
     pub fn fields(&self) -> &PinnedRelationList {
         &self.fields
+    }
+}
+
+impl AsDocumentView for SchemaView {
+    /// Get the id of this document view.
+    fn id(&self) -> &DocumentViewId {
+        &self.id
+    }
+
+    /// Get the view onto this DocumentView as a map of key values
+    fn view(&self) -> &BTreeMap<String, OperationValue> {
+        &self.document_view
     }
 }
 
@@ -134,6 +150,7 @@ impl TryFrom<DocumentView> for SchemaView {
             name: name.to_string(),
             description: description.to_string(),
             fields: fields.to_owned(),
+            document_view: document_view.view().to_owned(),
         })
     }
 }
@@ -151,6 +168,9 @@ pub struct SchemaFieldView {
 
     /// Type of this schema field.
     field_type: FieldType,
+
+    /// All fields contained in this schema view.
+    document_view: BTreeMap<String, OperationValue>,
 }
 
 #[allow(dead_code)] // These methods aren't used yet...
@@ -168,6 +188,18 @@ impl SchemaFieldView {
     /// The type of this schema field represented as a FieldType enum variant.
     pub fn field_type(&self) -> &FieldType {
         &self.field_type
+    }
+}
+
+impl AsDocumentView for SchemaFieldView {
+    /// Get the id of this document view.
+    fn id(&self) -> &DocumentViewId {
+        &self.id
+    }
+
+    /// Get the view onto this DocumentView as a map of key values
+    fn view(&self) -> &BTreeMap<String, OperationValue> {
+        &self.document_view
     }
 }
 
@@ -200,6 +232,7 @@ impl TryFrom<DocumentView> for SchemaFieldView {
             id: document_view.id().clone(),
             name: name.to_string(),
             field_type: field_type.to_owned(),
+            document_view: document_view.view().to_owned(),
         })
     }
 }

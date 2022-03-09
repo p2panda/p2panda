@@ -266,6 +266,6 @@ pub use document::DocumentBuilder;
 #[allow(unused_imports)]
 use document::{build_graph, reduce};
 pub use document_id::DocumentId;
-pub use document_view::DocumentView;
+pub use document_view::{AsDocumentView, DocumentView};
 pub use document_view_id::DocumentViewId;
 pub use error::{DocumentBuilderError, DocumentError, DocumentViewError};
