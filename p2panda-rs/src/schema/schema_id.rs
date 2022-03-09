@@ -216,10 +216,19 @@ mod test {
             Hash::new("00207b3a7de3470bfe34d34ea45472082c307b995b6bd4abe2ac4ee36edef5dea1b3")
                 .unwrap();
         let schema: SchemaId = hash.clone().into();
+        let document_view_id = DocumentViewId::new(vec![hash]);
 
+        // From Hash
         assert_eq!(
             schema,
-            SchemaId::Application(PinnedRelation::new(DocumentViewId::new(vec![hash])))
+            SchemaId::Application(PinnedRelation::new(document_view_id.clone()))
+        );
+
+        // From DocumentViewId
+        let schema: SchemaId = document_view_id.clone().into();
+        assert_eq!(
+            schema,
+            SchemaId::Application(PinnedRelation::new(document_view_id))
         );
     }
 }
