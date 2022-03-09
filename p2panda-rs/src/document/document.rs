@@ -79,7 +79,7 @@ pub struct DocumentMeta {
 /// to the specific document instance. These can be accessed through getter methods. To create
 /// documents you should use `DocumentBuilder`.
 #[derive(Debug, Clone)]
-pub struct Document {
+struct Document {
     author: Author,
     schema: SchemaId,
     view: DocumentView,
