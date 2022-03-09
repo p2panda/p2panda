@@ -666,10 +666,10 @@ mod tests {
         let document = DocumentBuilder::new(operations.clone()).build().unwrap();
         let document_view = document.view();
 
-        // Here we see that "🐼 Cafe!" won the conflict, meaning it was applied after "ʕ •ᴥ•ʔ Cafe!".
+        // Here we see that "ʕ •ᴥ•ʔ Cafe!" won the conflict, meaning it was applied after "🐼 Cafe!".
         assert_eq!(
             document_view.get("name").unwrap(),
-            &OperationValue::Text("🐼 Cafe!".into())
+            &OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into())
         );
         assert_eq!(
             document_view.get("owner").unwrap(),
@@ -688,7 +688,7 @@ mod tests {
         //
         //   ++++++++++++++++++++++++++++    +++++++++++++++++++++++++++
         //   | name : "Polar Bear Cafe" |    | name :  "ʕ •ᴥ•ʔ Cafe!"  |
-        //   | owner: "Polar Bear"      |<---| owner: "しろくま"　　　　　|<---\
+        //   | owner: "Polar Bear"      |<---| owner: "しろくま"　　　 |<---\
         //   | house-number: 12         |    +++++++++++++++++++++++++++     \
         //   ++++++++++++++++++++++++++++                                    ++++++++++++++++++++++
         //                A                                                  | house-number: 102  |
@@ -706,7 +706,7 @@ mod tests {
 
         assert_eq!(
             document_view.get("name").unwrap(),
-            &OperationValue::Text("🐼 Cafe!".into())
+            &OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into())
         );
         assert_eq!(
             document_view.get("owner").unwrap(),
