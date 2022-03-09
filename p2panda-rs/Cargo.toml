@@ -92,5 +92,5 @@ name = "graph"
 harness = false
 
 [[bench]]
-name = "operation_encoding"
+name = "encode_decode"
 harness = false
