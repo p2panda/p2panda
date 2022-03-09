@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::schema::system::FieldType;
+use crate::schema::FieldType;
 
 /// CDDL types.
 #[derive(Clone, Debug)]
@@ -121,7 +121,7 @@ mod tests {
             generate_cddl_definition,
             generator::{generate_create_fields, generate_fields, generate_update_fields},
         },
-        schema::system::FieldType,
+        schema::FieldType,
     };
 
     fn person() -> BTreeMap<String, FieldType> {

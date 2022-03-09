@@ -1,74 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
-use std::str::FromStr;
 
 use crate::document::{DocumentView, DocumentViewId};
 use crate::operation::{OperationValue, OperationValueRelationList, PinnedRelationList};
+use crate::schema::FieldType;
 
 use super::SystemSchemaError;
-
-/// Valid field types for publishing an application schema.
-#[derive(Clone, Debug, Copy, PartialEq)]
-pub enum FieldType {
-    /// Defines a boolean field.
-    Bool,
-
-    /// Defines an integer number field.
-    Int,
-
-    /// Defines a floating point number field.
-    Float,
-
-    /// Defines a text string field.
-    String,
-
-    /// Defines a [`Relation`][`crate::operation::Relation`] field.
-    Relation,
-
-    /// Defines a [`RelationList`][`crate::operation::RelationList`] field.
-    RelationList,
-
-    /// Defines a [`PinnedRelation`][`crate::operation::PinnedRelation`] field.
-    PinnedRelation,
-
-    /// Defines a [`PinnedRelationList`][`crate::operation::PinnedRelationList`] field.
-    PinnedRelationList,
-}
-
-impl FromStr for FieldType {
-    type Err = SystemSchemaError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "bool" => Ok(FieldType::Bool),
-            "int" => Ok(FieldType::Int),
-            "float" => Ok(FieldType::Float),
-            "str" => Ok(FieldType::String),
-            "relation" => Ok(FieldType::Relation),
-            "relation_list" => Ok(FieldType::RelationList),
-            "pinned_relation" => Ok(FieldType::PinnedRelation),
-            "pinned_relation_list" => Ok(FieldType::PinnedRelationList),
-            type_str => Err(SystemSchemaError::InvalidFieldType(type_str.into())),
-        }
-    }
-}
-
-impl FieldType {
-    /// Returns the string representation of this type.
-    pub fn as_str(&self) -> &str {
-        match self {
-            FieldType::Bool => "bool",
-            FieldType::Int => "int",
-            FieldType::Float => "float",
-            FieldType::String => "str",
-            FieldType::Relation => "relation",
-            FieldType::RelationList => "relation_list",
-            FieldType::PinnedRelation => "pinned_relation",
-            FieldType::PinnedRelationList => "pinned_relation_list",
-        }
-    }
-}
 
 /// View onto materialised schema which has fields "name", "description" and "fields".
 ///
@@ -202,7 +140,7 @@ impl TryFrom<DocumentView> for SchemaFieldView {
         let field_type = match document_view.get("type") {
             Some(OperationValue::Text(type_str)) => {
                 // Validate the type string parses into a FieldType
-                type_str.parse::<FieldType>()
+                Ok(type_str.parse::<FieldType>()?)
             }
             Some(op) => Err(SystemSchemaError::InvalidField(
                 "type".to_string(),
@@ -229,10 +167,10 @@ mod tests {
     use crate::document::{DocumentView, DocumentViewId};
     use crate::hash::Hash;
     use crate::operation::{OperationValue, OperationValueRelationList, PinnedRelationList};
-    use crate::schema::system::{FieldType, SchemaFieldView};
+    use crate::schema::system::SchemaFieldView;
     use crate::test_utils::fixtures::random_hash;
 
-    use super::SchemaView;
+    use super::{FieldType, SchemaView};
 
     #[rstest]
     fn from_document_view(
