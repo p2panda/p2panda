@@ -1,20 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::fmt;
 use std::str::FromStr;
 
-use serde::de::Error;
+use serde::de::{SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::document::DocumentId;
+use crate::document::DocumentViewId;
 use crate::hash::Hash;
-use crate::operation::Relation;
+use crate::operation::PinnedRelation;
 use crate::schema::error::SchemaIdError;
+use crate::Validate;
 
 /// Identifies the schema of an [`crate::operation::Operation`].
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SchemaId {
     /// An application schema.
-    Application(Relation),
+    Application(PinnedRelation),
 
     /// A schema definition.
     Schema,
@@ -23,25 +25,96 @@ pub enum SchemaId {
     SchemaField,
 }
 
+impl Serialize for SchemaId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match &self {
+            SchemaId::Application(relation) => relation.serialize(serializer),
+            SchemaId::Schema => serializer.serialize_str("schema_v1"),
+            SchemaId::SchemaField => serializer.serialize_str("schema_field_v1"),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for SchemaId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct SchemaIdVisitor;
+
+        impl<'de> Visitor<'de> for SchemaIdVisitor {
+            type Value = SchemaId;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("string or sequence of hash strings")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "schema_v1" => Ok(SchemaId::Schema),
+                    "schema_field_v1" => Ok(SchemaId::SchemaField),
+                    _ => Err(serde::de::Error::custom(format!(
+                        "Unknown system schema name: {}",
+                        value
+                    ))),
+                }
+            }
+
+            fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
+            where
+                S: SeqAccess<'de>,
+            {
+                let mut hashes: Vec<Hash> = Vec::new();
+
+                while let Some(hash) = seq.next_element::<Hash>()? {
+                    if hash.validate().is_err() {
+                        return Err(serde::de::Error::custom(format!(
+                            "Invalid hash {:?}",
+                            hash.as_str()
+                        )));
+                    }
+
+                    hashes.push(hash);
+                }
+
+                let document_view_id = DocumentViewId::new(hashes);
+                Ok(SchemaId::Application(PinnedRelation::new(document_view_id)))
+            }
+        }
+
+        deserializer.deserialize_any(SchemaIdVisitor)
+    }
+}
+
 impl SchemaId {
-    /// Instantiate a new `SchemaId` from a hash string.
-    pub fn new(hash: &str) -> Result<Self, SchemaIdError> {
-        match hash {
+    /// Instantiate a new `SchemaId` from a hash string or system schema name.
+    ///
+    /// If a hash string is passed, it will be converted into a document view id with only one hash
+    /// inside.
+    pub fn new(id: &str) -> Result<Self, SchemaIdError> {
+        match id {
             "schema_v1" => Ok(SchemaId::Schema),
             "schema_field_v1" => Ok(SchemaId::SchemaField),
-            string => {
-                // We only use document_id in a relation at the moment.
-                Ok(SchemaId::Application(Relation::new(DocumentId::new(
-                    Hash::new(string)?,
-                ))))
-            }
+            hash_str => Ok(SchemaId::from(Hash::new(hash_str)?)),
         }
     }
 }
 
 impl From<Hash> for SchemaId {
     fn from(hash: Hash) -> Self {
-        Self::Application(Relation::new(DocumentId::new(hash)))
+        Self::Application(PinnedRelation::new(DocumentViewId::new(vec![hash])))
+    }
+}
+
+impl From<DocumentViewId> for SchemaId {
+    fn from(view_id: DocumentViewId) -> Self {
+        Self::Application(PinnedRelation::new(view_id))
     }
 }
 
@@ -53,42 +126,11 @@ impl FromStr for SchemaId {
     }
 }
 
-impl Serialize for SchemaId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(match &*self {
-            SchemaId::Application(relation) => relation.document_id().as_str(),
-            SchemaId::Schema => "schema_v1",
-            SchemaId::SchemaField => "schema_field_v1",
-        })
-    }
-}
-
-impl<'de> Deserialize<'de> for SchemaId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-
-        match s.as_str() {
-            "schema_v1" => Ok(SchemaId::Schema),
-            "schema_field_v1" => Ok(SchemaId::SchemaField),
-            _ => match Hash::new(s.as_str()) {
-                Ok(hash) => Ok(SchemaId::Application(Relation::new(DocumentId::new(hash)))),
-                Err(e) => Err(SchemaIdError::HashError(e)).map_err(Error::custom),
-            },
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use crate::document::DocumentId;
+    use crate::document::DocumentViewId;
     use crate::hash::Hash;
-    use crate::operation::Relation;
+    use crate::operation::PinnedRelation;
     use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
 
     use super::SchemaId;
@@ -98,10 +140,12 @@ mod test {
         let app_schema = SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap();
         assert_eq!(
             serde_json::to_string(&app_schema).unwrap(),
-            "\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\""
+            "[\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"]"
         );
+
         let schema = SchemaId::Schema;
         assert_eq!(serde_json::to_string(&schema).unwrap(), "\"schema_v1\"");
+
         let schema_field = SchemaId::SchemaField;
         assert_eq!(
             serde_json::to_string(&schema_field).unwrap(),
@@ -114,7 +158,7 @@ mod test {
         let app_schema = SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap();
         assert_eq!(
             serde_json::from_str::<SchemaId>(
-                "\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\""
+                "[\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"]"
             )
             .unwrap(),
             app_schema
@@ -164,7 +208,7 @@ mod test {
 
         assert_eq!(
             schema,
-            SchemaId::Application(Relation::new(DocumentId::new(hash)))
+            SchemaId::Application(PinnedRelation::new(DocumentViewId::new(vec![hash])))
         );
     }
 }
