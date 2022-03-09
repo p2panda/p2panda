@@ -60,13 +60,13 @@ fn random_string(size: usize) -> String {
         .collect()
 }
 
-fn get_benchmark_name(function: &str, size: &usize) -> BenchmarkId {
+fn get_benchmark_id(function_name: &str, size: &usize) -> BenchmarkId {
     static KB: usize = 1024;
     let benchmark_parameter = match size > &KB {
         false => format!("{} B", size),
         true => format!("{} KiB", size / KB),
     };
-    BenchmarkId::new(function, benchmark_parameter)
+    BenchmarkId::new(function_name, benchmark_parameter)
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
@@ -79,7 +79,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let payload = random_string(*size);
 
         encode_decode.throughput(Throughput::Bytes(*size as u64));
-        encode_decode.bench_with_input(get_benchmark_name("encode", size), size, |b, &_size| {
+        encode_decode.bench_with_input(get_benchmark_id("encode", size), size, |b, &_size| {
             b.iter(|| run_encode(&payload, &key_pair))
         });
     }
@@ -90,7 +90,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let (entry_encoded, operation_encoded) = run_encode(&payload, &key_pair);
 
         encode_decode.throughput(Throughput::Bytes(*size as u64));
-        encode_decode.bench_with_input(get_benchmark_name("decode", size), size, |b, &_size| {
+        encode_decode.bench_with_input(get_benchmark_id("decode", size), size, |b, &_size| {
             b.iter(|| run_decode(&entry_encoded, &operation_encoded))
         });
     }
