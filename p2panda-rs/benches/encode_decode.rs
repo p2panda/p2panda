@@ -64,7 +64,7 @@ fn get_benchmark_name(function: &str, size: &usize) -> BenchmarkId {
     static KB: usize = 1024;
     let benchmark_parameter = match size > &KB {
         false => format!("{} B", size),
-        true => format!("{} KiB", size / KB)
+        true => format!("{} KiB", size / KB),
     };
     BenchmarkId::new(function, benchmark_parameter)
 }
@@ -96,7 +96,6 @@ fn criterion_benchmark(c: &mut Criterion) {
     }
     encode_decode.finish();
 }
-
 
 criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);
