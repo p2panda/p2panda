@@ -282,6 +282,9 @@ impl DocumentBuilder {
         let specific_document_view: Box<dyn AsDocumentView> = match schema {
             SchemaId::Application(_) => Box::new(document_view),
             SchemaId::Schema(_) => {
+                // Here we can unwrap as we are assuming the operations
+                // contained in this view were already validated against
+                // the schema_format CDDL definition.
                 let view: SchemaView = document_view.try_into().unwrap();
                 Box::new(view)
             }
