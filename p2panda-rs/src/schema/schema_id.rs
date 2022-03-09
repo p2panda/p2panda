@@ -25,73 +25,6 @@ pub enum SchemaId {
     SchemaField,
 }
 
-impl Serialize for SchemaId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match &self {
-            SchemaId::Application(relation) => relation.serialize(serializer),
-            SchemaId::Schema => serializer.serialize_str("schema_v1"),
-            SchemaId::SchemaField => serializer.serialize_str("schema_field_v1"),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for SchemaId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct SchemaIdVisitor;
-
-        impl<'de> Visitor<'de> for SchemaIdVisitor {
-            type Value = SchemaId;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("string or sequence of hash strings")
-            }
-
-            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                match value {
-                    "schema_v1" => Ok(SchemaId::Schema),
-                    "schema_field_v1" => Ok(SchemaId::SchemaField),
-                    _ => Err(serde::de::Error::custom(format!(
-                        "Unknown system schema name: {}",
-                        value
-                    ))),
-                }
-            }
-
-            fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
-            where
-                S: SeqAccess<'de>,
-            {
-                let mut hashes: Vec<Hash> = Vec::new();
-
-                while let Some(hash) = seq.next_element::<Hash>()? {
-                    if hash.validate().is_err() {
-                        return Err(serde::de::Error::custom(format!(
-                            "Invalid hash {:?}",
-                            hash.as_str()
-                        )));
-                    }
-
-                    hashes.push(hash);
-                }
-
-                let document_view_id = DocumentViewId::new(hashes);
-                Ok(SchemaId::Application(PinnedRelation::new(document_view_id)))
-            }
-        }
-
-        deserializer.deserialize_any(SchemaIdVisitor)
-    }
-}
-
 impl SchemaId {
     /// Instantiate a new `SchemaId` from a hash string or system schema name.
     ///
@@ -123,6 +56,74 @@ impl FromStr for SchemaId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::new(s)
+    }
+}
+
+/// Serde `Visitor` implementation used to deserialize `SchemaId`.
+struct SchemaIdVisitor;
+
+impl<'de> Visitor<'de> for SchemaIdVisitor {
+    type Value = SchemaId;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("string or sequence of hash strings")
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        match value {
+            "schema_v1" => Ok(SchemaId::Schema),
+            "schema_field_v1" => Ok(SchemaId::SchemaField),
+            _ => Err(serde::de::Error::custom(format!(
+                "Unknown system schema name: {}",
+                value
+            ))),
+        }
+    }
+
+    fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
+    where
+        S: SeqAccess<'de>,
+    {
+        let mut hashes: Vec<Hash> = Vec::new();
+
+        while let Some(hash) = seq.next_element::<Hash>()? {
+            if hash.validate().is_err() {
+                return Err(serde::de::Error::custom(format!(
+                    "Invalid hash {:?}",
+                    hash.as_str()
+                )));
+            }
+
+            hashes.push(hash);
+        }
+
+        let document_view_id = DocumentViewId::new(hashes);
+        Ok(SchemaId::Application(PinnedRelation::new(document_view_id)))
+    }
+}
+
+impl Serialize for SchemaId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match &self {
+            SchemaId::Application(relation) => relation.serialize(serializer),
+            SchemaId::Schema => serializer.serialize_str("schema_v1"),
+            SchemaId::SchemaField => serializer.serialize_str("schema_field_v1"),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for SchemaId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(SchemaIdVisitor)
     }
 }
 
