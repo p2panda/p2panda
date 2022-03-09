@@ -90,4 +90,7 @@ wasm-bindgen-test = "0.3.28"
 [[bench]]
 name = "graph"
 harness = false
-html_reports = true
+
+[[bench]]
+name = "encode_decode"
+harness = false

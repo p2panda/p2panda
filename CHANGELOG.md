@@ -19,6 +19,7 @@ Highlights are marked with a pancake 🥞
 - `SchemaId` enum for identifying different schema types [#221](https://github.com/p2panda/p2panda/pull/221) `rs`
 - CDDL for _schema_v1_ and _schema_field_v1_, use `cddl-cat` instead of `cddl` [#248](https://github.com/p2panda/p2panda/pull/248) `rs`
 - `Schema` for representing application schema [#250](https://github.com/p2panda/p2panda/pull/250) `rs`
+- Performance benchmarks for entry and operation encoding/decoding [#254](https://github.com/p2panda/p2panda/pull/254) `rs`
 - Move `DocumentId` from `DocmentView` into `Document` [#255](https://github.com/p2panda/p2panda/pull/255) `rs`
 
 ## Changed

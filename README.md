@@ -43,7 +43,10 @@
 
 <br/>
 
-This library provides all tools required to write a client for the [`p2panda`] network. It is shipped both as a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web browser.
+This library provides all tools required to write a client for the [`p2panda`]
+network. It is shipped both as a Rust crate [`p2panda-rs`] with WebAssembly
+bindings and a NPM package [`p2panda-js`] with TypeScript definitions running
+in NodeJS or any modern web browser.
 
 [`p2panda`]: https://github.com/p2panda/handbook
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
@@ -76,7 +79,9 @@ let key_pair = KeyPair::new();
 println!("{}", key_pair.public_key());
 ```
 
-See [the demo application](https://p2panda.org/demo/#) and its [source code](https://github.com/p2panda/beep-boop). More examples can be found in the [`p2panda-rs`] and [`p2panda-js`] directories.
+See [the demo application](https://p2panda.org/demo/#) and its
+[source code](https://github.com/p2panda/beep-boop). More examples can be found
+in the [`p2panda-rs`] and [`p2panda-js`] directories.
 
 ## Installation
 
@@ -100,12 +105,32 @@ Visit the corresponding folders for development instructions:
 
 [cargo-edit]: https://github.com/killercup/cargo-edit
 
+## Benchmarks
+
+Performance benchmarks can be found in [benches](/benches). You can run them
+using [`cargo-criterion`](https://crates.io/crates/cargo-criterion):
+
+```sh
+$ cargo install cargo-criterion
+$ cargo criterion
+# An HTML report with plots is generated automatically
+$ open target/criterion/reports/index.html
+```
+
+These benchmarks  can be used to compare the performance across branches by
+running them first in a base branch and then in the comparison branch. The
+HTML-reports will include a comparison of the two results.
+
 ## License
 
 GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)
 
 ## Supported by
 
-<img src="https://p2panda.org/images/ngi-logo.png" width="auto" height="80px"><br /><img src="https://p2panda.org/images/eu-flag-logo.png" width="auto" height="80px">
+<img src="https://p2panda.org/images/ngi-logo.png" width="auto" height="80px">
+<br />
+<img src="https://p2panda.org/images/eu-flag-logo.png" width="auto" height="80px">
 
-*This project has received funding from the European Union’s Horizon 2020 research and innovation programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528*
+*This project has received funding from the European Union’s Horizon 2020
+research and innovation programme within the framework of the NGI-POINTER
+Project funded under grant agreement No 871528*
