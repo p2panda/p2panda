@@ -2,9 +2,8 @@
 
 import wasm from '~/wasm';
 
-import TEST_DATA from '../test/test-data.json';
-
-const TEST_SCHEMA = TEST_DATA.panda.logs[0].decodedOperations[0].schema;
+const TEST_HASH =
+  '0020ddc99aca776df0ca9d1b5871ba39d4edacc752a0a3426b12c3958971b6c847ac';
 
 describe('WebAssembly interface', () => {
   describe('KeyPair', () => {
@@ -44,16 +43,16 @@ describe('WebAssembly interface', () => {
       fields.add('temperature', 'int', '32');
       fields.add('isCute', 'bool', true);
       fields.add('degree', 'float', 12.322);
-      fields.add('username', 'relation', TEST_SCHEMA);
-      fields.add('locations', 'relation_list', [[TEST_SCHEMA]]);
+      fields.add('username', 'relation', TEST_HASH);
+      fields.add('locations', 'relation_list', [[TEST_HASH]]);
 
       // Returns the correct fields
       expect(fields.get('description')).toBe('Hello, Panda');
       expect(fields.get('temperature')).toEqual(BigInt(32));
       expect(fields.get('isCute')).toBe(true);
       expect(fields.get('degree')).toBe(12.322);
-      expect(fields.get('username')).toEqual(TEST_SCHEMA);
-      expect(fields.get('locations')).toEqual([[TEST_SCHEMA]]);
+      expect(fields.get('username')).toEqual(TEST_HASH);
+      expect(fields.get('locations')).toEqual([[TEST_HASH]]);
 
       // Return nothing when field does not exist
       expect(fields.get('message')).toBe(null);
@@ -128,7 +127,7 @@ describe('WebAssembly interface', () => {
       fields.add('description', 'str', 'Hello, Panda');
       expect(fields.get('description')).toBe('Hello, Panda');
 
-      const operationEncoded = encodeCreateOperation(TEST_SCHEMA, fields);
+      const operationEncoded = encodeCreateOperation([TEST_HASH], fields);
 
       // Sign and encode entry
       const { entryEncoded, entryHash } = signEncodeEntry(
@@ -148,7 +147,7 @@ describe('WebAssembly interface', () => {
       expect(decodedEntry.entryHashBacklink).toBeUndefined();
       expect(decodedEntry.entryHashSkiplink).toBeUndefined();
       expect(decodedEntry.operation.action).toBe('create');
-      expect(decodedEntry.operation.schema).toBe(TEST_SCHEMA);
+      expect(decodedEntry.operation.schema).toEqual([TEST_HASH]);
 
       // Test operation fields map
       const { fields: operationFields } = decodedEntry.operation;
@@ -188,7 +187,7 @@ describe('WebAssembly interface', () => {
       fields.add('large_f64', 'float', LARGE_F64);
       fields.add('large_f64_negative', 'float', LARGE_F64_NEGATIVE);
 
-      const operationEncoded = encodeCreateOperation(TEST_SCHEMA, fields);
+      const operationEncoded = encodeCreateOperation([TEST_HASH], fields);
 
       // Sign and encode entry with a very high `log_id` value
       const { entryEncoded } = signEncodeEntry(

@@ -138,10 +138,10 @@ impl Default for OperationFields {
 /// Returns an encoded CREATE operation that creates a document of the provided schema.
 #[wasm_bindgen(js_name = encodeCreateOperation)]
 pub fn encode_create_operation(
-    schema_hash: String,
+    schema_id: JsValue,
     fields: OperationFields,
 ) -> Result<String, JsValue> {
-    let schema = jserr!(SchemaId::new(&schema_hash));
+    let schema: SchemaId = jserr!(deserialize_from_js(schema_id), "Invalid schema id");
     let operation = jserr!(Operation::new_create(schema, fields.0));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
@@ -150,11 +150,11 @@ pub fn encode_create_operation(
 /// Returns an encoded UPDATE operation that updates fields of a given document.
 #[wasm_bindgen(js_name = encodeUpdateOperation)]
 pub fn encode_update_operation(
-    schema_hash: String,
+    schema_id: JsValue,
     previous_operations: JsValue,
     fields: OperationFields,
 ) -> Result<String, JsValue> {
-    let schema = jserr!(SchemaId::new(&schema_hash));
+    let schema: SchemaId = jserr!(deserialize_from_js(schema_id), "Invalid schema id");
 
     // Decode JsValue into vector of strings
     let prev_op_strings: Vec<String> = jserr!(
@@ -177,10 +177,10 @@ pub fn encode_update_operation(
 /// Returns an encoded DELETE operation that deletes a given document.
 #[wasm_bindgen(js_name = encodeDeleteOperation)]
 pub fn encode_delete_operation(
-    schema_hash: String,
+    schema_id: JsValue,
     previous_operations: JsValue,
 ) -> Result<String, JsValue> {
-    let schema = jserr!(SchemaId::new(&schema_hash));
+    let schema: SchemaId = jserr!(deserialize_from_js(schema_id), "Invalid schema id");
 
     // Decode JsValue into vector of strings
     let prev_op_strings: Vec<String> = jserr!(

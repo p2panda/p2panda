@@ -9,11 +9,12 @@ import { queryInstances } from '~/instance';
 import { marshallResponseFields } from '~/utils';
 
 import type {
+  EncodedEntry,
   EntryArgs,
   EntryRecord,
-  EncodedEntry,
   Fields,
   InstanceRecord,
+  SchemaId,
 } from '~/types';
 import type { KeyPair } from 'wasm';
 
@@ -21,7 +22,7 @@ const log = debug('p2panda-js:session');
 
 export type Context = {
   keyPair: KeyPair;
-  schema: string;
+  schema: SchemaId;
   session: Session;
 };
 
@@ -61,14 +62,14 @@ export class Session {
     this.client = new Client(new RequestManager([transport]));
   }
 
-  private _schema: string | null = null;
+  private _schema: SchemaId | null = null;
 
   /**
    * Return currently configured schema.
    *
    * Throws if no schema is configured.
    */
-  get schema(): string {
+  get schema(): SchemaId {
     if (!this._schema) {
       throw new Error(
         'Configure a schema with `session.schema()` or with the `options` ' +
@@ -82,11 +83,17 @@ export class Session {
    * Set a fixed schema for this session, which will be used if no other schema
    * is defined through a methods `options` parameter.
    *
-   * @param val schema hash
+   * @param val schema id
    * @returns Session
    */
-  setSchema(val: string): Session {
-    this._schema = val;
+  setSchema(val: SchemaId | string): Session {
+    if (typeof val === 'string') {
+      // Automatically convert to document view id when given only a hash
+      this._schema = [val];
+    } else {
+      this._schema = val;
+    }
+
     return this;
   }
 
@@ -204,7 +211,7 @@ export class Session {
    * @param schema schema id
    * @returns an array of encoded entries
    */
-  private async queryEntriesEncoded(schema: string): Promise<EncodedEntry[]> {
+  private async queryEntriesEncoded(schema: SchemaId): Promise<EncodedEntry[]> {
     if (!schema) {
       throw new Error('Schema must be provided');
     }
@@ -228,7 +235,7 @@ export class Session {
    * @param schema schema id
    * @returns an array of decoded entries
    */
-  async queryEntries(schema: string): Promise<EntryRecord[]> {
+  async queryEntries(schema: SchemaId): Promise<EntryRecord[]> {
     if (!schema) {
       throw new Error('Schema must be provided');
     }
