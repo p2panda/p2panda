@@ -90,7 +90,7 @@ pub struct Document {
 impl Document {
     /// Get the document id.
     pub fn id(&self) -> &DocumentId {
-        self.view.document_id()
+        &self.id
     }
 
     /// Get the document view id.
@@ -238,9 +238,10 @@ impl DocumentBuilder {
         let document_view_id = DocumentViewId::new(graph_tips);
 
         // Construct the document view, from the reduced values and the document view id
-        let document_view = DocumentView::new(document_view_id, document_id, view);
+        let document_view = DocumentView::new(document_view_id, view);
 
         Ok(Document {
+            id: document_id,
             schema,
             author,
             view: document_view,

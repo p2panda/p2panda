@@ -69,18 +69,14 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::document::{DocumentId, DocumentView, DocumentViewId};
+    use crate::document::{DocumentView, DocumentViewId};
     use crate::hash::Hash;
     use crate::operation::{OperationValue, OperationValueRelationList, PinnedRelationList};
     use crate::schema::schema::Schema;
     use crate::schema::system::{SchemaFieldView, SchemaView};
-    use crate::test_utils::fixtures::{random_document_id, random_hash};
+    use crate::test_utils::fixtures::random_hash;
 
-    fn create_schema(
-        fields: PinnedRelationList,
-        view_id: DocumentViewId,
-        document_id: DocumentId,
-    ) -> SchemaView {
+    fn create_schema(fields: PinnedRelationList, view_id: DocumentViewId) -> SchemaView {
         let mut schema = BTreeMap::new();
         schema.insert(
             "name".to_string(),
@@ -94,18 +90,11 @@ mod tests {
             "fields".to_string(),
             OperationValue::RelationList(OperationValueRelationList::Pinned(fields)),
         );
-        let schema_view: SchemaView = DocumentView::new(view_id, document_id, schema)
-            .try_into()
-            .unwrap();
+        let schema_view: SchemaView = DocumentView::new(view_id, schema).try_into().unwrap();
         schema_view
     }
 
-    fn create_field(
-        name: &str,
-        field_type: &str,
-        view_id: DocumentViewId,
-        document_id: DocumentId,
-    ) -> SchemaFieldView {
+    fn create_field(name: &str, field_type: &str, view_id: DocumentViewId) -> SchemaFieldView {
         let mut capacity_field = BTreeMap::new();
         capacity_field.insert("name".to_string(), OperationValue::Text(name.to_string()));
         capacity_field.insert(
@@ -113,10 +102,9 @@ mod tests {
             OperationValue::Text(field_type.to_string()),
         );
 
-        let capacity_field_view: SchemaFieldView =
-            DocumentView::new(view_id, document_id, capacity_field)
-                .try_into()
-                .unwrap();
+        let capacity_field_view: SchemaFieldView = DocumentView::new(view_id, capacity_field)
+            .try_into()
+            .unwrap();
         capacity_field_view
     }
 
@@ -126,9 +114,6 @@ mod tests {
         #[from(random_hash)] relation_operation_id_2: Hash,
         #[from(random_hash)] relation_operation_id_3: Hash,
         #[from(random_hash)] schema_view_id: Hash,
-        #[from(random_document_id)] schema_id: DocumentId,
-        #[from(random_document_id)] bool_field_id: DocumentId,
-        #[from(random_document_id)] capacity_field_id: DocumentId,
     ) {
         // Create schema definition for "venue"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -142,7 +127,7 @@ mod tests {
             ]),
         ]);
 
-        let schema_view = create_schema(fields, schema_view_id, schema_id);
+        let schema_view = create_schema(fields, schema_view_id);
 
         // Create first schema field "is_accessible"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -151,7 +136,6 @@ mod tests {
             "is_accessible",
             "bool",
             DocumentViewId::new(vec![relation_operation_id_1]),
-            bool_field_id,
         );
 
         // Create second schema field "capacity"
@@ -161,7 +145,6 @@ mod tests {
             "capacity",
             "int",
             DocumentViewId::new(vec![relation_operation_id_2, relation_operation_id_3]),
-            capacity_field_id,
         );
 
         // Create venue schema from schema and field views
@@ -187,9 +170,6 @@ mod tests {
         #[from(random_hash)] relation_operation_id_2: Hash,
         #[from(random_hash)] invalid_relation_hash: Hash,
         #[from(random_hash)] schema_view_id: Hash,
-        #[from(random_document_id)] schema_id: DocumentId,
-        #[from(random_document_id)] bool_field_id: DocumentId,
-        #[from(random_document_id)] capacity_field_id: DocumentId,
     ) {
         // Create schema definition for "venue"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -200,40 +180,26 @@ mod tests {
             DocumentViewId::new(vec![relation_operation_id_2.clone()]),
         ]);
 
-        let schema_view = create_schema(fields, schema_view_id, schema_id);
+        let schema_view = create_schema(fields, schema_view_id);
 
         // Create first valid schema field "is_accessible"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         let bool_field_document_view_id = DocumentViewId::new(vec![relation_operation_id_1]);
-        let bool_field_view = create_field(
-            "is_accessible",
-            "bool",
-            bool_field_document_view_id,
-            bool_field_id,
-        );
+        let bool_field_view = create_field("is_accessible", "bool", bool_field_document_view_id);
 
         // Create second valid schema field "capacity"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         let capacity_field_document_view_id = DocumentViewId::new(vec![relation_operation_id_2]);
-        let capacity_field_view = create_field(
-            "capacity",
-            "int",
-            capacity_field_document_view_id,
-            capacity_field_id.clone(),
-        );
+        let capacity_field_view = create_field("capacity", "int", capacity_field_document_view_id);
 
         // Create field with invalid DocumentViewId
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         let invalid_document_view_id = DocumentViewId::new(vec![invalid_relation_hash]);
-        let field_with_invalid_document_view_id = create_field(
-            "capacity",
-            "int",
-            invalid_document_view_id,
-            capacity_field_id,
-        );
+        let field_with_invalid_document_view_id =
+            create_field("capacity", "int", invalid_document_view_id);
 
         // Passing field with invalid DocumentViewId should fail
         assert!(Schema::new(

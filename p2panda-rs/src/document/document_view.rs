@@ -4,7 +4,7 @@
 use std::collections::btree_map::Iter as BTreeMapIter;
 use std::collections::BTreeMap;
 
-use crate::document::{DocumentId, DocumentViewId};
+use crate::document::DocumentViewId;
 use crate::operation::OperationValue;
 
 type FieldKey = String;
@@ -18,9 +18,6 @@ pub struct DocumentView {
     /// Identifier of this document view.
     pub(crate) id: DocumentViewId,
 
-    /// Identifier of the document this view is derived from.
-    pub(crate) document_id: DocumentId,
-
     /// Materialized data held by this document view.
     pub(crate) view: BTreeMap<FieldKey, OperationValue>,
 }
@@ -30,26 +27,13 @@ impl DocumentView {
     ///
     /// Requires the DocumentId, DocumentViewId and field values to be calculated seperately and
     /// then passed in during construction.
-    pub fn new(
-        id: DocumentViewId,
-        document_id: DocumentId,
-        view: BTreeMap<FieldKey, OperationValue>,
-    ) -> Self {
-        Self {
-            id,
-            document_id,
-            view,
-        }
+    pub fn new(id: DocumentViewId, view: BTreeMap<FieldKey, OperationValue>) -> Self {
+        Self { id, view }
     }
 
     /// Get the id of this document view.
     pub fn id(&self) -> &DocumentViewId {
         &self.id
-    }
-
-    /// Get the id of this document.
-    pub fn document_id(&self) -> &DocumentId {
-        &self.document_id
     }
 
     /// Get a single value from this instance by it's key.
@@ -96,7 +80,6 @@ mod tests {
     fn gets_the_right_values(
         schema: SchemaId,
         #[from(random_hash)] prev_op_hash: Hash,
-        #[from(random_document_id)] document_id: DocumentId,
         #[from(random_document_id)] profile_picture_id: DocumentId,
         #[from(random_hash)] view_id: Hash,
     ) {
@@ -121,7 +104,7 @@ mod tests {
         // Reduce a single CREATE `Operation`
         let (view, is_edited, is_deleted) = reduce(&[create_operation.clone()]);
 
-        let document_view = DocumentView::new(document_view_id.clone(), document_id.clone(), view);
+        let document_view = DocumentView::new(document_view_id.clone(), view);
 
         assert_eq!(
             document_view.keys(),
@@ -165,7 +148,7 @@ mod tests {
         let (view, is_edited, is_deleted) =
             reduce(&[create_operation.clone(), update_operation.clone()]);
 
-        let document_view = DocumentView::new(document_view_id, document_id, view);
+        let document_view = DocumentView::new(document_view_id, view);
 
         assert_eq!(
             document_view.get("age").unwrap(),
