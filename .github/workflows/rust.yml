@@ -155,6 +155,6 @@ jobs:
         uses: boa-dev/criterion-compare-action@v3.0.0
         with:
           cwd: "p2panda-rs"
-          branchName: ${{ github.base_ref }}
+          branchName: "main"
           token: ${{ secrets.GITHUB_TOKEN }}
 
