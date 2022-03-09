@@ -10,38 +10,6 @@ use crate::hash::Hash;
 use crate::operation::Relation;
 use crate::schema::error::SchemaIdError;
 
-/// Struct representing a SchemaV1 id.
-#[derive(Clone, Debug, PartialEq)]
-pub struct SchemaV1(String);
-
-impl SchemaV1 {
-    fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-impl Default for SchemaV1 {
-    fn default() -> Self {
-        Self("schema_v1".to_string())
-    }
-}
-
-/// Struct representing a SchemaFieldV1 id.
-#[derive(Clone, Debug, PartialEq)]
-pub struct SchemaFieldV1(String);
-
-impl SchemaFieldV1 {
-    fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-impl Default for SchemaFieldV1 {
-    fn default() -> Self {
-        Self("schema_field_v1".to_string())
-    }
-}
-
 /// Identifies the schema of an [`crate::operation::Operation`].
 #[derive(Clone, Debug, PartialEq)]
 pub enum SchemaId {
@@ -49,18 +17,18 @@ pub enum SchemaId {
     Application(Relation),
 
     /// A schema definition.
-    Schema(SchemaV1),
+    Schema,
 
     /// A schema definition field.
-    SchemaField(SchemaFieldV1),
+    SchemaField,
 }
 
 impl SchemaId {
     /// Instantiate a new `SchemaId` from a hash string.
     pub fn new(hash: &str) -> Result<Self, SchemaIdError> {
         match hash {
-            "schema_v1" => Ok(SchemaId::Schema(SchemaV1::default())),
-            "schema_field_v1" => Ok(SchemaId::SchemaField(SchemaFieldV1::default())),
+            "schema_v1" => Ok(SchemaId::Schema),
+            "schema_field_v1" => Ok(SchemaId::SchemaField),
             string => {
                 // We only use document_id in a relation at the moment.
                 Ok(SchemaId::Application(Relation::new(DocumentId::new(
@@ -92,8 +60,8 @@ impl Serialize for SchemaId {
     {
         serializer.serialize_str(match &*self {
             SchemaId::Application(relation) => relation.document_id().as_str(),
-            SchemaId::Schema(schema) => schema.as_str(),
-            SchemaId::SchemaField(schema) => schema.as_str(),
+            SchemaId::Schema => "schema_v1",
+            SchemaId::SchemaField => "schema_field_v1",
         })
     }
 }
@@ -106,8 +74,8 @@ impl<'de> Deserialize<'de> for SchemaId {
         let s = String::deserialize(deserializer)?;
 
         match s.as_str() {
-            "schema_v1" => Ok(SchemaId::Schema(SchemaV1::default())),
-            "schema_field_v1" => Ok(SchemaId::SchemaField(SchemaFieldV1::default())),
+            "schema_v1" => Ok(SchemaId::Schema),
+            "schema_field_v1" => Ok(SchemaId::SchemaField),
             _ => match Hash::new(s.as_str()) {
                 Ok(hash) => Ok(SchemaId::Application(Relation::new(DocumentId::new(hash)))),
                 Err(e) => Err(SchemaIdError::HashError(e)).map_err(Error::custom),
@@ -121,7 +89,6 @@ mod test {
     use crate::document::DocumentId;
     use crate::hash::Hash;
     use crate::operation::Relation;
-    use crate::schema::schema_id::{SchemaFieldV1, SchemaV1};
     use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
 
     use super::SchemaId;
@@ -133,9 +100,9 @@ mod test {
             serde_json::to_string(&app_schema).unwrap(),
             "\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\""
         );
-        let schema = SchemaId::Schema(SchemaV1::default());
+        let schema = SchemaId::Schema;
         assert_eq!(serde_json::to_string(&schema).unwrap(), "\"schema_v1\"");
-        let schema_field = SchemaId::SchemaField(SchemaFieldV1::default());
+        let schema_field = SchemaId::SchemaField;
         assert_eq!(
             serde_json::to_string(&schema_field).unwrap(),
             "\"schema_field_v1\""
@@ -152,12 +119,12 @@ mod test {
             .unwrap(),
             app_schema
         );
-        let schema = SchemaId::Schema(SchemaV1::default());
+        let schema = SchemaId::Schema;
         assert_eq!(
             serde_json::from_str::<SchemaId>("\"schema_v1\"").unwrap(),
             schema
         );
-        let schema_field = SchemaId::SchemaField(SchemaFieldV1::default());
+        let schema_field = SchemaId::SchemaField;
         assert_eq!(
             serde_json::from_str::<SchemaId>("\"schema_field_v1\"").unwrap(),
             schema_field
@@ -176,19 +143,16 @@ mod test {
         );
 
         let schema = SchemaId::new("schema_v1").unwrap();
-        assert_eq!(schema, SchemaId::Schema(SchemaV1::default()));
+        assert_eq!(schema, SchemaId::Schema);
 
         let schema_field = SchemaId::new("schema_field_v1").unwrap();
-        assert_eq!(
-            schema_field,
-            SchemaId::SchemaField(SchemaFieldV1::default())
-        );
+        assert_eq!(schema_field, SchemaId::SchemaField);
     }
 
     #[test]
     fn parse_schema_type() {
         let schema: SchemaId = "schema_v1".parse().unwrap();
-        assert_eq!(schema, SchemaId::Schema(SchemaV1::default()));
+        assert_eq!(schema, SchemaId::Schema);
     }
 
     #[test]
