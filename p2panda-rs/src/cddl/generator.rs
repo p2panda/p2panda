@@ -132,6 +132,12 @@ mod tests {
         person.insert("height".to_string(), FieldType::Float);
         person.insert("is_cool".to_string(), FieldType::Bool);
         person.insert("favorite_food".to_string(), FieldType::Relation);
+        person.insert("top_ten_foods".to_string(), FieldType::RelationList);
+        person.insert("one_specific_meal".to_string(), FieldType::PinnedRelation);
+        person.insert(
+            "top_ten_specific_meals".to_string(),
+            FieldType::PinnedRelationList,
+        );
 
         person
     }
@@ -139,10 +145,13 @@ mod tests {
     #[test]
     pub fn generate_cddl_fields() {
         let expected_fields_cddl = "age = { type: \"int\", value: int, }\n".to_string()
-            + "favorite_food = { type: \"relation\", value: tstr .regexp \"[0-9a-f]{68}\", }\n"
-            + "height = { type: \"float\", value: float, }\n"
-            + "is_cool = { type: \"bool\", value: bool, }\n"
-            + "name = { type: \"str\", value: tstr, }";
+        + "favorite_food = { type: \"relation\", value: tstr .regexp \"[0-9a-f]{68}\", }\n"
+        + "height = { type: \"float\", value: float, }\n"
+        + "is_cool = { type: \"bool\", value: bool, }\n"
+        + "name = { type: \"str\", value: tstr, }\n"
+        + "one_specific_meal = { type: \"pinned_relation\", value: [+ tstr .regexp \"[0-9a-f]{68}\"], }\n"
+        + "top_ten_foods = { type: \"relation_list\", value: [* tstr .regexp \"[0-9a-f]{68}\"], }\n"
+        + "top_ten_specific_meals = { type: \"pinned_relation_list\", value: [* [+ tstr .regexp \"[0-9a-f]{68}\"]], }";
 
         let fields_cddl = generate_fields(&person());
 
@@ -152,7 +161,7 @@ mod tests {
     #[test]
     pub fn generate_cddl_create_fields() {
         let expected_create_fields_cddl: &str =
-            "create-fields = { age, favorite_food, height, is_cool, name }";
+        "create-fields = { age, favorite_food, height, is_cool, name, one_specific_meal, top_ten_foods, top_ten_specific_meals }";
 
         let person = person();
         let field_names: Vec<&String> = person.keys().collect();
@@ -164,7 +173,7 @@ mod tests {
     #[test]
     pub fn generate_cddl_update_fields() {
         let expected_update_fields_cddl: &str =
-            "update-fields = { + ( age // favorite_food // height // is_cool // name ) }";
+        "update-fields = { + ( age // favorite_food // height // is_cool // name // one_specific_meal // top_ten_foods // top_ten_specific_meals ) }";
 
         let person = person();
         let field_names: Vec<&String> = person.keys().collect();
@@ -176,12 +185,15 @@ mod tests {
     #[test]
     pub fn generates_cddl_definition() {
         let expected_cddl = "age = { type: \"int\", value: int, }\n".to_string()
-            + "favorite_food = { type: \"relation\", value: tstr .regexp \"[0-9a-f]{68}\", }\n"
-            + "height = { type: \"float\", value: float, }\n"
-            + "is_cool = { type: \"bool\", value: bool, }\n"
-            + "name = { type: \"str\", value: tstr, }\n"
-            + "create-fields = { age, favorite_food, height, is_cool, name }\n"
-            + "update-fields = { + ( age // favorite_food // height // is_cool // name ) }";
+        + "favorite_food = { type: \"relation\", value: tstr .regexp \"[0-9a-f]{68}\", }\n"
+        + "height = { type: \"float\", value: float, }\n"
+        + "is_cool = { type: \"bool\", value: bool, }\n"
+        + "name = { type: \"str\", value: tstr, }\n"
+        + "one_specific_meal = { type: \"pinned_relation\", value: [+ tstr .regexp \"[0-9a-f]{68}\"], }\n"
+        + "top_ten_foods = { type: \"relation_list\", value: [* tstr .regexp \"[0-9a-f]{68}\"], }\n"
+        + "top_ten_specific_meals = { type: \"pinned_relation_list\", value: [* [+ tstr .regexp \"[0-9a-f]{68}\"]], }\n"
+        + "create-fields = { age, favorite_food, height, is_cool, name, one_specific_meal, top_ten_foods, top_ten_specific_meals }\n"
+        + "update-fields = { + ( age // favorite_food // height // is_cool // name // one_specific_meal // top_ten_foods // top_ten_specific_meals ) }";
 
         let person = person();
         let generated_cddl = generate_cddl_definition(&person);
