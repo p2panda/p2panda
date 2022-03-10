@@ -32,6 +32,22 @@ pub enum FieldType {
     PinnedRelationList,
 }
 
+impl FieldType {
+    /// Returns the string representation of this type.
+    pub fn as_str(&self) -> &str {
+        match self {
+            FieldType::Bool => "bool",
+            FieldType::Int => "int",
+            FieldType::Float => "float",
+            FieldType::String => "str",
+            FieldType::Relation => "relation",
+            FieldType::RelationList => "relation_list",
+            FieldType::PinnedRelation => "pinned_relation",
+            FieldType::PinnedRelationList => "pinned_relation_list",
+        }
+    }
+}
+
 impl FromStr for FieldType {
     type Err = FieldTypeError;
 
@@ -52,32 +68,7 @@ impl FromStr for FieldType {
 
 impl From<FieldType> for String {
     fn from(field_type: FieldType) -> Self {
-        match field_type {
-            FieldType::Bool => "bool".to_string(),
-            FieldType::Int => "int".to_string(),
-            FieldType::Float => "float".to_string(),
-            FieldType::String => "str".to_string(),
-            FieldType::Relation => "relation".to_string(),
-            FieldType::RelationList => "relation_list".to_string(),
-            FieldType::PinnedRelation => "pinned_relation".to_string(),
-            FieldType::PinnedRelationList => "pinned_relation_list".to_string(),
-        }
-    }
-}
-
-impl FieldType {
-    /// Returns the string representation of this type.
-    pub fn as_str(&self) -> &str {
-        match self {
-            FieldType::Bool => "bool",
-            FieldType::Int => "int",
-            FieldType::Float => "float",
-            FieldType::String => "str",
-            FieldType::Relation => "relation",
-            FieldType::RelationList => "relation_list",
-            FieldType::PinnedRelation => "pinned_relation",
-            FieldType::PinnedRelationList => "pinned_relation_list",
-        }
+        field_type.as_str().to_string()
     }
 }
 
@@ -117,6 +108,29 @@ mod tests {
             "pinned_relation_list".parse().unwrap()
         );
     }
+    #[test]
+    fn into_string() {
+        let bool_type: String = FieldType::Bool.into();
+        assert_eq!(bool_type, "bool".to_string());
+        let int_type: String = FieldType::Int.into();
+        assert_eq!(int_type, "int".to_string());
+        let type_float: String = FieldType::Float.into();
+        assert_eq!(type_float, "float".to_string());
+        let type_string: String = FieldType::String.into();
+        assert_eq!(type_string, "str".to_string());
+        let type_relation: String = FieldType::Relation.into();
+        assert_eq!(type_relation, "relation".to_string());
+        let type_relation_list: String = FieldType::RelationList.into();
+        assert_eq!(type_relation_list, "relation_list".to_string());
+        let type_pinned_relation: String = FieldType::PinnedRelation.into();
+        assert_eq!(type_pinned_relation, "pinned_relation".to_string());
+        let type_pinned_relation_list: String = FieldType::PinnedRelationList.into();
+        assert_eq!(
+            type_pinned_relation_list,
+            "pinned_relation_list".to_string()
+        );
+    }
+
     #[test]
     fn invalid_type_string() {
         assert!("poopy".parse::<FieldType>().is_err());
