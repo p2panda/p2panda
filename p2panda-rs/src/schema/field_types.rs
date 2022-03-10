@@ -50,6 +50,21 @@ impl FromStr for FieldType {
     }
 }
 
+impl From<FieldType> for String {
+    fn from(field_type: FieldType) -> Self {
+        match field_type {
+            FieldType::Bool => "bool".to_string(),
+            FieldType::Int => "int".to_string(),
+            FieldType::Float => "float".to_string(),
+            FieldType::String => "str".to_string(),
+            FieldType::Relation => "relation".to_string(),
+            FieldType::RelationList => "relation_list".to_string(),
+            FieldType::PinnedRelation => "pinned_relation".to_string(),
+            FieldType::PinnedRelationList => "pinned_relation_list".to_string(),
+        }
+    }
+}
+
 impl FieldType {
     /// Returns the string representation of this type.
     pub fn as_str(&self) -> &str {

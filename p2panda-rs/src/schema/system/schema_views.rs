@@ -212,7 +212,10 @@ mod tests {
             "name".to_string(),
             OperationValue::Text("is_accessible".to_string()),
         );
-        bool_field.insert("type".to_string(), OperationValue::Text("bool".to_string()));
+        bool_field.insert(
+            "type".to_string(),
+            OperationValue::Text(FieldType::Bool.into()),
+        );
 
         let document_view = DocumentView::new(document_view_id.clone(), bool_field);
         let field_view = SchemaFieldView::try_from(document_view);
@@ -230,7 +233,10 @@ mod tests {
             "name".to_string(),
             OperationValue::Text("capacity".to_string()),
         );
-        capacity_field.insert("type".to_string(), OperationValue::Text("int".to_string()));
+        capacity_field.insert(
+            "type".to_string(),
+            OperationValue::Text(FieldType::Int.into()),
+        );
 
         let document_view = DocumentView::new(document_view_id.clone(), capacity_field);
         let field_view = SchemaFieldView::try_from(document_view);
@@ -247,7 +253,7 @@ mod tests {
         );
         float_field.insert(
             "type".to_string(),
-            OperationValue::Text("float".to_string()),
+            OperationValue::Text(FieldType::Float.into()),
         );
 
         let document_view = DocumentView::new(document_view_id.clone(), float_field);
@@ -263,7 +269,10 @@ mod tests {
             "name".to_string(),
             OperationValue::Text("venue_name".to_string()),
         );
-        str_field.insert("type".to_string(), OperationValue::Text("str".to_string()));
+        str_field.insert(
+            "type".to_string(),
+            OperationValue::Text(FieldType::String.into()),
+        );
 
         let document_view = DocumentView::new(document_view_id.clone(), str_field);
         let field_view = SchemaFieldView::try_from(document_view);
@@ -280,7 +289,7 @@ mod tests {
         );
         relation_field.insert(
             "type".to_string(),
-            OperationValue::Text("relation".to_string()),
+            OperationValue::Text(FieldType::Relation.into()),
         );
 
         let document_view = DocumentView::new(document_view_id, relation_field);
