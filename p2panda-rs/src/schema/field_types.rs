@@ -65,3 +65,45 @@ impl FieldType {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use crate::schema::FieldType;
+
+    #[test]
+    fn serialises() {
+        assert_eq!(FieldType::Bool.as_str(), "bool");
+        assert_eq!(FieldType::Int.as_str(), "int");
+        assert_eq!(FieldType::Float.as_str(), "float");
+        assert_eq!(FieldType::String.as_str(), "str");
+        assert_eq!(FieldType::Relation.as_str(), "relation");
+        assert_eq!(FieldType::RelationList.as_str(), "relation_list");
+        assert_eq!(FieldType::PinnedRelation.as_str(), "pinned_relation");
+        assert_eq!(
+            FieldType::PinnedRelationList.as_str(),
+            "pinned_relation_list"
+        );
+    }
+    #[test]
+    fn deserialises() {
+        assert_eq!(FieldType::Bool, "bool".parse().unwrap());
+        assert_eq!(FieldType::Int, "int".parse().unwrap());
+        assert_eq!(FieldType::Float, "float".parse().unwrap());
+        assert_eq!(FieldType::String, "str".parse().unwrap());
+        assert_eq!(FieldType::Relation, "relation".parse().unwrap());
+        assert_eq!(FieldType::RelationList, "relation_list".parse().unwrap());
+        assert_eq!(
+            FieldType::PinnedRelation,
+            "pinned_relation".parse().unwrap()
+        );
+        assert_eq!(
+            FieldType::PinnedRelationList,
+            "pinned_relation_list".parse().unwrap()
+        );
+    }
+    #[test]
+    fn invalid_type_string() {
+        assert!("poopy".parse::<FieldType>().is_err());
+    }
+}
