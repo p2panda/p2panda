@@ -30,7 +30,7 @@ Highlights are marked with a pancake 🥞
 - Split `Relation` into pinned and unpinned type [#235](https://github.com/p2panda/p2panda/pull/235) `rs`
 - Separate `cddl` from `schema` more clearly [#239](https://github.com/p2panda/p2panda/pull/239) `rs`
 - Turn schema field in operations into a pinned relation [#256](https://github.com/p2panda/p2panda/pull/256) `rs`
-- Implement `OperationValue` variants for all relation types [#260](https://github.com/p2panda/p2panda/pull/260)
+- Implement `OperationValue` variants for all relation types [#260](https://github.com/p2panda/p2panda/pull/260) `rs` `js`
 
 ## Fixed
 
