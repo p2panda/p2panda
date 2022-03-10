@@ -8,7 +8,7 @@ use wasm_bindgen::JsValue;
 use crate::hash::Hash;
 use crate::operation::{
     Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationValue,
-    OperationValueRelation, OperationValueRelationList,
+    PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
 use crate::schema::SchemaId;
 use crate::wasm::error::jserr;
@@ -69,17 +69,30 @@ impl OperationFields {
                 Ok(())
             }
             "relation" => {
-                let relation: OperationValueRelation =
-                    jserr!(deserialize_from_js(value), "Invalid object");
+                let relation: Relation = jserr!(deserialize_from_js(value), "Invalid object");
                 jserr!(relation.validate());
                 jserr!(self.0.add(name, OperationValue::Relation(relation)));
                 Ok(())
             }
             "relation_list" => {
-                let relations: OperationValueRelationList =
-                    jserr!(deserialize_from_js(value), "Invalid array");
+                let relations: RelationList = jserr!(deserialize_from_js(value), "Invalid array");
                 jserr!(relations.validate());
                 jserr!(self.0.add(name, OperationValue::RelationList(relations)));
+                Ok(())
+            }
+            "pinned_relation" => {
+                let relation: PinnedRelation = jserr!(deserialize_from_js(value), "Invalid object");
+                jserr!(relation.validate());
+                jserr!(self.0.add(name, OperationValue::PinnedRelation(relation)));
+                Ok(())
+            }
+            "pinned_relation_list" => {
+                let relations: PinnedRelationList =
+                    jserr!(deserialize_from_js(value), "Invalid array");
+                jserr!(relations.validate());
+                jserr!(self
+                    .0
+                    .add(name, OperationValue::PinnedRelationList(relations)));
                 Ok(())
             }
             _ => Err(js_sys::Error::new("Unknown value type").into()),
@@ -103,6 +116,8 @@ impl OperationFields {
             Some(OperationValue::Text(value)) => Ok(JsValue::from_str(value)),
             Some(OperationValue::Relation(value)) => Ok(jserr!(serialize_to_js(value))),
             Some(OperationValue::RelationList(value)) => Ok(jserr!(serialize_to_js(value))),
+            Some(OperationValue::PinnedRelation(value)) => Ok(jserr!(serialize_to_js(value))),
+            Some(OperationValue::PinnedRelationList(value)) => Ok(jserr!(serialize_to_js(value))),
             Some(OperationValue::Float(value)) => Ok(JsValue::from_f64(value.to_owned())),
             Some(OperationValue::Integer(value)) => Ok(JsValue::from(value.to_owned())),
             None => Ok(JsValue::NULL),
