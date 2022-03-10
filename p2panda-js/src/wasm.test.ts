@@ -44,7 +44,13 @@ describe('WebAssembly interface', () => {
       fields.add('isCute', 'bool', true);
       fields.add('degree', 'float', 12.322);
       fields.add('username', 'relation', TEST_HASH);
-      fields.add('locations', 'relation_list', [[TEST_HASH]]);
+      fields.add('locations', 'relation_list', [TEST_HASH]);
+      fields.add('that_one_funny_comment_i_made', 'pinned_relation', [
+        TEST_HASH,
+      ]);
+      fields.add('those_many_funny_comments_i_made', 'pinned_relation_list', [
+        [TEST_HASH],
+      ]);
 
       // Returns the correct fields
       expect(fields.get('description')).toBe('Hello, Panda');
@@ -52,7 +58,11 @@ describe('WebAssembly interface', () => {
       expect(fields.get('isCute')).toBe(true);
       expect(fields.get('degree')).toBe(12.322);
       expect(fields.get('username')).toEqual(TEST_HASH);
-      expect(fields.get('locations')).toEqual([[TEST_HASH]]);
+      expect(fields.get('locations')).toEqual([TEST_HASH]);
+      expect(fields.get('that_one_funny_comment_i_made')).toEqual([TEST_HASH]);
+      expect(fields.get('those_many_funny_comments_i_made')).toEqual([
+        [TEST_HASH],
+      ]);
 
       // Return nothing when field does not exist
       expect(fields.get('message')).toBe(null);
