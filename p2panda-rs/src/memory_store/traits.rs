@@ -18,25 +18,25 @@ pub struct PublishEntryResponse {
 }
 
 pub trait FromMemoryStoreValue: Sized {
-    type Error: Debug + Clone + PartialEq;
+    type Error: Debug;
     fn from_store_value(ksv: &[u8]) -> Result<Self, Self::Error>;
 }
 
 pub trait ToMemoryStoreValue {
-    type Error: Debug + Clone + PartialEq;
+    type Error: Debug;
     fn to_store_value(&self) -> Result<Vec<u8>, Self::Error>;
 }
 
 #[async_trait]
 pub trait Insert<Modal>: Send + Sync {
-    type Error: Debug + Clone + PartialEq;
+    type Error: Debug;
 
     async fn insert(&self, log: Modal) -> Result<bool, Self::Error>;
 }
 
 #[async_trait]
 pub trait MemoryStore {
-    type Error: Debug + Clone + PartialEq;
+    type Error: Debug;
 
     /// Determines the next unused log_id of an author.
     async fn next_log_id(&self, author: &Author) -> Result<LogId, Self::Error>;
