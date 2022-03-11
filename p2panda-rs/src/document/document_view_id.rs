@@ -54,6 +54,16 @@ impl Validate for DocumentViewId {
     }
 }
 
+impl IntoIterator for DocumentViewId {
+    type Item = Hash;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 /// Convenience method converting a single hash into a document view id.
 ///
 /// Converts a `Hash` instance into a `DocumentViewId`, assuming that this document view only

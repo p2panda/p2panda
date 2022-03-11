@@ -50,7 +50,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentId, DocumentViewId};
-use crate::hash::HashError;
+use crate::hash::{Hash, HashError};
 use crate::Validate;
 
 /// Field type representing references to other documents.
@@ -96,6 +96,16 @@ impl Validate for PinnedRelation {
     }
 }
 
+impl IntoIterator for PinnedRelation {
+    type Item = Hash;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 /// A `RelationList` can be used to reference multiple foreign documents from a document field.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RelationList(Vec<DocumentId>);
@@ -121,6 +131,16 @@ impl Validate for RelationList {
         }
 
         Ok(())
+    }
+}
+
+impl IntoIterator for RelationList {
+    type Item = DocumentId;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 
