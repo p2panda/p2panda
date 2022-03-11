@@ -174,7 +174,8 @@ description = (
 field_type = (
     field_type: {
         type: "str",
-        value: "str" / "int" / "float" / "bool" / "relation" / "relation_list" / "pinned_relation" / "pinned_relation_list",
+        value: "str" / "int" / "float" / "bool" / "relation" /
+            "relation_list" / "pinned_relation" / "pinned_relation_list",
     }
 )
 "#;
