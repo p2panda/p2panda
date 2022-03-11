@@ -50,7 +50,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentId, DocumentViewId};
-use crate::hash::HashError;
+use crate::hash::{Hash, HashError};
 use crate::Validate;
 
 /// Field type representing references to other documents.
@@ -96,6 +96,16 @@ impl Validate for PinnedRelation {
     }
 }
 
+impl IntoIterator for PinnedRelation {
+    type Item = Hash;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 /// A `RelationList` can be used to reference multiple foreign documents from a document field.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RelationList(Vec<DocumentId>);
@@ -124,6 +134,16 @@ impl Validate for RelationList {
     }
 }
 
+impl IntoIterator for RelationList {
+    type Item = DocumentId;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 /// A `PinnedRelationList` can be used to reference multiple documents views.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PinnedRelationList(Vec<DocumentViewId>);
@@ -149,6 +169,16 @@ impl Validate for PinnedRelationList {
         }
 
         Ok(())
+    }
+}
+
+impl IntoIterator for PinnedRelationList {
+    type Item = DocumentViewId;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 
@@ -185,5 +215,35 @@ mod tests {
             DocumentViewId::new(vec![operation_id_2]),
         ]);
         assert!(pinned_relation_list.validate().is_ok());
+    }
+
+    #[rstest]
+    fn iterates(#[from(random_hash)] hash_1: Hash, #[from(random_hash)] hash_2: Hash) {
+        let pinned_relation =
+            PinnedRelation::new(DocumentViewId::new(vec![hash_1.clone(), hash_2.clone()]));
+
+        for hash in pinned_relation {
+            assert!(hash.validate().is_ok());
+        }
+
+        let relation_list = RelationList::new(vec![
+            DocumentId::new(hash_1.clone()),
+            DocumentId::new(hash_2.clone()),
+        ]);
+
+        for document_id in relation_list {
+            assert!(document_id.validate().is_ok());
+        }
+
+        let pinned_relation_list = PinnedRelationList::new(vec![
+            DocumentViewId::new(vec![hash_1]),
+            DocumentViewId::new(vec![hash_2]),
+        ]);
+
+        for pinned_relation in pinned_relation_list {
+            for hash in pinned_relation {
+                assert!(hash.validate().is_ok());
+            }
+        }
     }
 }
