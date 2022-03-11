@@ -99,6 +99,22 @@ describe('WebAssembly interface', () => {
         'Invalid integer value',
       );
 
+      expect(() => fields.add('contact', 'relation', [TEST_HASH])).toThrow(
+        'Invalid object',
+      );
+
+      expect(() => fields.add('contact', 'relation_list', TEST_HASH)).toThrow(
+        'Invalid array',
+      );
+
+      expect(() => fields.add('contact', 'pinned_relation', TEST_HASH)).toThrow(
+        'Invalid object',
+      );
+
+      expect(() =>
+        fields.add('contact', 'pinned_relation_list', [TEST_HASH]),
+      ).toThrow('Invalid array');
+
       // Throw when relation is an invalid hash
       expect(() =>
         fields.add('contact', 'relation', 'this is not a hash'),
