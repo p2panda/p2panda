@@ -17,3 +17,11 @@ pub enum SchemaError {
     #[error("invalid fields found for this schema")]
     InvalidFields,
 }
+
+/// Custom error types for field types.
+#[derive(Error, Debug)]
+pub enum FieldTypeError {
+    /// Invalid field type found.
+    #[error("invalid field type '{0}'")]
+    InvalidFieldType(String),
+}
