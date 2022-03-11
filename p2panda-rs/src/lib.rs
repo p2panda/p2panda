@@ -68,6 +68,7 @@ pub mod entry;
 pub mod graph;
 pub mod hash;
 pub mod identity;
+pub mod memory_store;
 pub mod operation;
 pub mod schema;
 pub mod secret_group;
