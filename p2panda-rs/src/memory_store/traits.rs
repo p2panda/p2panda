@@ -3,12 +3,9 @@
 use async_trait::async_trait;
 use std::fmt::Debug;
 
-use crate::entry::{Entry, EntrySigned, SeqNum};
+use crate::entry::{Entry, SeqNum};
 use crate::hash::Hash;
-use crate::operation::OperationEncoded;
 use crate::{entry::LogId, identity::Author};
-
-use super::EntryModal;
 
 pub struct PublishEntryResponse {
     pub entry_hash_backlink: Option<Hash>,
@@ -64,7 +61,7 @@ pub trait MemoryStore {
         author: &Author,
         log_id: &LogId,
         seq_num: &SeqNum,
-    ) -> Result<Option<EntryModal>, Self::Error>;
+    ) -> Result<Option<Entry>, Self::Error>;
 
     /// Returns the latest Bamboo entry of an author's log.
     async fn latest_entry(
