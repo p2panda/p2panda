@@ -100,20 +100,22 @@ describe('WebAssembly interface', () => {
       );
 
       expect(() => fields.add('contact', 'relation', [TEST_HASH])).toThrow(
-        'Invalid object',
+        'Expected a hash value for field of type relation',
       );
 
       expect(() => fields.add('contact', 'relation_list', TEST_HASH)).toThrow(
-        'Invalid array',
+        'Exptected an array of hashes for field of type relation list',
       );
 
       expect(() => fields.add('contact', 'pinned_relation', TEST_HASH)).toThrow(
-        'Invalid object',
+        'Expected an array of hashes for field of type relation list',
       );
 
       expect(() =>
         fields.add('contact', 'pinned_relation_list', [TEST_HASH]),
-      ).toThrow('Invalid array');
+      ).toThrow(
+        'Expected a nested array of hashes for field of type pinned relation list',
+      );
 
       // Throw when relation is an invalid hash
       expect(() =>

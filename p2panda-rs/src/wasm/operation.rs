@@ -69,26 +69,37 @@ impl OperationFields {
                 Ok(())
             }
             "relation" => {
-                let relation: Relation = jserr!(deserialize_from_js(value), "Invalid object");
+                let relation: Relation = jserr!(
+                    deserialize_from_js(value),
+                    "Expected a hash value for field of type relation"
+                );
                 jserr!(relation.validate());
                 jserr!(self.0.add(name, OperationValue::Relation(relation)));
                 Ok(())
             }
             "relation_list" => {
-                let relations: RelationList = jserr!(deserialize_from_js(value), "Invalid array");
+                let relations: RelationList = jserr!(
+                    deserialize_from_js(value),
+                    "Exptected an array of hashes for field of type relation list"
+                );
                 jserr!(relations.validate());
                 jserr!(self.0.add(name, OperationValue::RelationList(relations)));
                 Ok(())
             }
             "pinned_relation" => {
-                let relation: PinnedRelation = jserr!(deserialize_from_js(value), "Invalid object");
+                let relation: PinnedRelation = jserr!(
+                    deserialize_from_js(value),
+                    "Expected an array of hashes for field of type relation list"
+                );
                 jserr!(relation.validate());
                 jserr!(self.0.add(name, OperationValue::PinnedRelation(relation)));
                 Ok(())
             }
             "pinned_relation_list" => {
-                let relations: PinnedRelationList =
-                    jserr!(deserialize_from_js(value), "Invalid array");
+                let relations: PinnedRelationList = jserr!(
+                    deserialize_from_js(value),
+                    "Expected a nested array of hashes for field of type pinned relation list"
+                );
                 jserr!(relations.validate());
                 jserr!(self
                     .0
