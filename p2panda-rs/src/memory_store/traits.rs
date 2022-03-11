@@ -76,11 +76,4 @@ pub trait MemoryStore {
     /// Determine skiplink entry hash ("lipmaa"-link) for entry in this log, return `None` when no
     /// skiplink is required for the next entry.
     async fn determine_skiplink(&self, entry: &Entry) -> Result<Option<Hash>, Self::Error>;
-
-    /// Stores an author's Bamboo entry with operation payload in database after validating it.
-    async fn publish_entry(
-        &self,
-        entry_encoded: &EntrySigned,
-        operation_encoded: &OperationEncoded,
-    ) -> Result<PublishEntryResponse, Self::Error>;
 }
