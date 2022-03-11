@@ -33,6 +33,7 @@ Highlights are marked with a pancake 🥞
 - Implement `OperationValue` variants for all relation types [#260](https://github.com/p2panda/p2panda/pull/260) `rs` `js`
 - Support all `Relation` flavours in `cddl` module [#259](https://github.com/p2panda/p2panda/pull/259) `rs`
 - Impl `IntoIter` trait for `PinnedRelation`, `RelationList` and `DocumentViewId` [#266](https://github.com/p2panda/p2panda/pull/266) `rs`
+- Improve error reporting when adding operation fields [#262](https://github.com/p2panda/p2panda/issues/262)] `rs` `js`
 
 ## Fixed
 
