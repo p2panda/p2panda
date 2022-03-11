@@ -92,6 +92,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::test_utils::fixtures::random_hash;
+    use crate::Validate;
 
     use super::DocumentViewId;
 
@@ -111,5 +112,14 @@ mod tests {
 
         // Fails when string is not a hash
         assert!("This is not a hash".parse::<DocumentViewId>().is_err());
+    }
+
+    #[rstest]
+    fn iterates(#[from(random_hash)] hash_1: Hash, #[from(random_hash)] hash_2: Hash) {
+        let document_view_id = DocumentViewId::new(vec![hash_1, hash_2]);
+
+        for hash in document_view_id {
+            assert!(hash.validate().is_ok());
+        }
     }
 }

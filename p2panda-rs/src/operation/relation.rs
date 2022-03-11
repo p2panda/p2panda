@@ -206,4 +206,21 @@ mod tests {
         ]);
         assert!(pinned_relation_list.validate().is_ok());
     }
+
+    #[rstest]
+    fn iterates(#[from(random_hash)] hash_1: Hash, #[from(random_hash)] hash_2: Hash) {
+        let pinned_relation =
+            PinnedRelation::new(DocumentViewId::new(vec![hash_1.clone(), hash_2.clone()]));
+
+        for hash in pinned_relation {
+            assert!(hash.validate().is_ok());
+        }
+
+        let relation_list =
+            RelationList::new(vec![DocumentId::new(hash_1), DocumentId::new(hash_2)]);
+
+        for document_id in relation_list {
+            assert!(document_id.validate().is_ok());
+        }
+    }
 }
