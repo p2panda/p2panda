@@ -81,6 +81,14 @@ impl EntrySigned {
         self.0.len() as u64 / 2
     }
 
+    /// Returns the hash of the payload of this entry.
+    pub fn payload_hash(&self) -> Hash {
+        let bamboo_entry: BambooEntry = self.into();
+        // unwrap because we know it was alread validated on creating
+        // the p2panda entry.
+        bamboo_entry.payload_hash.try_into().unwrap()
+    }
+
     /// Takes an [`OperationEncoded`] and validates it against the operation hash encoded in this
     /// `EntrySigned`.
     ///
