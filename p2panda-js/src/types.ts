@@ -149,8 +149,8 @@ export type OperationValueText = {
 /**
  * An operation value of `relation` type.
  */
-export type OperationValueRelation = {
-  value: Relation | PinnedRelation;
+ export type OperationValueRelation = {
+  value: Relation;
   type: 'relation';
 };
 
@@ -158,8 +158,23 @@ export type OperationValueRelation = {
  * An operation value of `relation_list` type.
  */
 export type OperationValueRelationList = {
-  value: Relation[] | PinnedRelation[];
+  value: Relation[];
   type: 'relation_list';
+};
+/**
+ * An operation value of `pinned_relation` type.
+ */
+export type OperationValuePinnedRelation = {
+  value: PinnedRelation;
+  type: 'pinned_relation';
+};
+
+/**
+ * An operation value of `pinned_relation_list` type.
+ */
+export type OperationValuePinnedRelationList = {
+  value: PinnedRelation[];
+  type: 'pinned_relation_list';
 };
 
 /**

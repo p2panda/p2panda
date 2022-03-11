@@ -3,7 +3,7 @@
 use std::convert::TryFrom;
 
 use crate::document::{DocumentView, DocumentViewId};
-use crate::operation::{OperationValue, OperationValueRelationList, PinnedRelationList};
+use crate::operation::{OperationValue, PinnedRelationList};
 use crate::schema::FieldType;
 
 use super::SystemSchemaError;
@@ -72,9 +72,7 @@ impl TryFrom<DocumentView> for SchemaView {
         }?;
 
         let fields = match document_view.get("fields") {
-            Some(OperationValue::RelationList(OperationValueRelationList::Pinned(value))) => {
-                Ok(value)
-            }
+            Some(OperationValue::PinnedRelationList(value)) => Ok(value),
             Some(op) => Err(SystemSchemaError::InvalidField(
                 "fields".to_string(),
                 op.to_owned(),
@@ -166,7 +164,7 @@ mod tests {
 
     use crate::document::{DocumentView, DocumentViewId};
     use crate::hash::Hash;
-    use crate::operation::{OperationValue, OperationValueRelationList, PinnedRelationList};
+    use crate::operation::{OperationValue, PinnedRelationList};
     use crate::schema::system::SchemaFieldView;
     use crate::test_utils::fixtures::random_hash;
 
@@ -188,9 +186,9 @@ mod tests {
         );
         bool_field.insert(
             "fields".to_string(),
-            OperationValue::RelationList(OperationValueRelationList::Pinned(
-                PinnedRelationList::new(vec![DocumentViewId::new(vec![relation_operation_id])]),
-            )),
+            OperationValue::PinnedRelationList(PinnedRelationList::new(vec![DocumentViewId::new(
+                vec![relation_operation_id],
+            )])),
         );
 
         let document_view_id = DocumentViewId::new(vec![view_id]);

@@ -71,7 +71,7 @@ mod tests {
 
     use crate::document::{DocumentView, DocumentViewId};
     use crate::hash::Hash;
-    use crate::operation::{OperationValue, OperationValueRelationList, PinnedRelationList};
+    use crate::operation::{OperationValue, PinnedRelationList};
     use crate::schema::schema::Schema;
     use crate::schema::system::{SchemaFieldView, SchemaView};
     use crate::test_utils::fixtures::random_hash;
@@ -88,7 +88,7 @@ mod tests {
         );
         schema.insert(
             "fields".to_string(),
-            OperationValue::RelationList(OperationValueRelationList::Pinned(fields)),
+            OperationValue::PinnedRelationList(fields),
         );
         let schema_view: SchemaView = DocumentView::new(view_id, schema).try_into().unwrap();
         schema_view

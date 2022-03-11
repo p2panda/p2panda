@@ -17,8 +17,6 @@ pub use error::{
 };
 pub use operation::{AsOperation, Operation, OperationAction, OperationVersion};
 pub use operation_encoded::OperationEncoded;
-pub use operation_fields::{
-    OperationFields, OperationValue, OperationValueRelation, OperationValueRelationList,
-};
+pub use operation_fields::{OperationFields, OperationValue};
 pub use operation_meta::OperationWithMeta;
 pub use relation::{PinnedRelation, PinnedRelationList, Relation, RelationList};

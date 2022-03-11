@@ -364,7 +364,7 @@ mod tests {
 
     use crate::document::DocumentId;
     use crate::hash::Hash;
-    use crate::operation::{OperationEncoded, OperationValue, OperationValueRelation, Relation};
+    use crate::operation::{OperationEncoded, OperationValue, Relation};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::templates::many_valid_operations;
     use crate::test_utils::fixtures::{fields, random_document_id, random_hash, schema};
@@ -470,9 +470,7 @@ mod tests {
         fields
             .add(
                 "profile_picture",
-                OperationValue::Relation(OperationValueRelation::Unpinned(Relation::new(
-                    document_id,
-                ))),
+                OperationValue::Relation(Relation::new(document_id)),
             )
             .unwrap();
 
