@@ -165,7 +165,7 @@ mod tests {
     use crate::document::{DocumentView, DocumentViewId};
     use crate::hash::Hash;
     use crate::operation::{OperationValue, PinnedRelationList};
-    use crate::schema::system::{FieldType, SchemaFieldView};
+    use crate::schema::system::SchemaFieldView;
     use crate::test_utils::fixtures::random_hash;
 
     use super::{FieldType, SchemaView};
