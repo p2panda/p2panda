@@ -8,4 +8,4 @@ mod error;
 mod schema_views;
 
 pub use error::SystemSchemaError;
-pub use schema_views::{FieldType, SchemaFieldView, SchemaView};
+pub use schema_views::{SchemaFieldView, SchemaView};

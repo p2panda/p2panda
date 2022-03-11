@@ -4,8 +4,8 @@ use std::collections::BTreeMap;
 
 use crate::cddl::generate_cddl_definition;
 use crate::document::DocumentViewId;
-use crate::schema::system::{FieldType, SchemaFieldView, SchemaView};
-use crate::schema::SchemaError;
+use crate::schema::system::{SchemaFieldView, SchemaView};
+use crate::schema::{FieldType, SchemaError};
 
 /// The key of a schema field
 type FieldKey = String;

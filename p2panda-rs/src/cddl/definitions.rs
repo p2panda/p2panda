@@ -69,12 +69,22 @@ value_boolean = (
 
 value_relation = (
     type: "relation",
-    value: relation / pinned_relation,
+    value: relation,
 )
 
 value_relation_list = (
     type: "relation_list",
-    value: relation_list / pinned_relation_list,
+    value: relation_list,
+)
+
+value_pinned_relation = (
+    type: "pinned_relation",
+    value: pinned_relation,
+)
+
+value_pinned_relation_list = (
+    type: "pinned_relation_list",
+    value: pinned_relation_list,
 )
 "#;
 
@@ -100,7 +110,9 @@ fields = {
         value_float //
         value_boolean //
         value_relation //
-        value_relation-list
+        value_relation_list //
+        value_pinned_relation //
+        value_pinned_relation_list
     }
 }
 "#;
@@ -162,7 +174,8 @@ description = (
 field_type = (
     field_type: {
         type: "str",
-        value: "str" / "int" / "float" / "bool" / "relation" / "relation_list",
+        value: "str" / "int" / "float" / "bool" / "relation" /
+            "relation_list" / "pinned_relation" / "pinned_relation_list",
     }
 )
 "#;
@@ -612,7 +625,19 @@ mod tests {
                     ],
                     "fields" => {
                         "field_type" => {
+                            "value" => "relation",
+                            "type" => "str"
+                        },
+                        "field_type" => {
                             "value" => "relation_list",
+                            "type" => "str"
+                        },
+                        "field_type" => {
+                            "value" => "pinned_relation",
+                            "type" => "str"
+                        },
+                        "field_type" => {
+                            "value" => "pinned_relation_list",
                             "type" => "str"
                         },
                     },

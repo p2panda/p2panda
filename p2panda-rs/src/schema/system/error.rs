@@ -16,6 +16,6 @@ pub enum SystemSchemaError {
     MissingField(String),
 
     /// Invalid field type found.
-    #[error("invalid field type '{0}'")]
-    InvalidFieldType(String),
+    #[error("invalid field type")]
+    InvalidFieldType(#[from] crate::schema::FieldTypeError),
 }
