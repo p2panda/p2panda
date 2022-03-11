@@ -1,59 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
-use std::str::FromStr;
 
 use crate::document::{DocumentView, DocumentViewId};
 use crate::operation::{OperationValue, PinnedRelationList};
+use crate::schema::FieldType;
 
 use super::SystemSchemaError;
-
-/// Valid field types for publishing an application schema.
-#[derive(Clone, Debug, Copy, PartialEq)]
-pub enum FieldType {
-    /// Defines a boolean field.
-    Bool,
-
-    /// Defines an integer number field.
-    Int,
-
-    /// Defines a floating point number field.
-    Float,
-
-    /// Defines a text string field.
-    String,
-
-    /// Defines a [`Relation`][`crate::operation::Relation`] field.
-    Relation,
-}
-
-impl FromStr for FieldType {
-    type Err = SystemSchemaError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "bool" => Ok(FieldType::Bool),
-            "int" => Ok(FieldType::Int),
-            "float" => Ok(FieldType::Float),
-            "str" => Ok(FieldType::String),
-            "relation" => Ok(FieldType::Relation),
-            type_str => Err(SystemSchemaError::InvalidFieldType(type_str.into())),
-        }
-    }
-}
-
-impl FieldType {
-    /// Returns the string representation of this type.
-    pub fn as_str(&self) -> &str {
-        match self {
-            FieldType::Bool => "bool",
-            FieldType::Int => "int",
-            FieldType::Float => "float",
-            FieldType::String => "str",
-            FieldType::Relation => "relation",
-        }
-    }
-}
 
 /// View onto materialised schema which has fields "name", "description" and "fields".
 ///
@@ -185,7 +138,7 @@ impl TryFrom<DocumentView> for SchemaFieldView {
         let field_type = match document_view.get("type") {
             Some(OperationValue::Text(type_str)) => {
                 // Validate the type string parses into a FieldType
-                type_str.parse::<FieldType>()
+                Ok(type_str.parse::<FieldType>()?)
             }
             Some(op) => Err(SystemSchemaError::InvalidField(
                 "type".to_string(),
@@ -215,7 +168,7 @@ mod tests {
     use crate::schema::system::{FieldType, SchemaFieldView};
     use crate::test_utils::fixtures::random_hash;
 
-    use super::SchemaView;
+    use super::{FieldType, SchemaView};
 
     #[rstest]
     fn from_document_view(
@@ -257,7 +210,10 @@ mod tests {
             "name".to_string(),
             OperationValue::Text("is_accessible".to_string()),
         );
-        bool_field.insert("type".to_string(), OperationValue::Text("bool".to_string()));
+        bool_field.insert(
+            "type".to_string(),
+            OperationValue::Text(FieldType::Bool.into()),
+        );
 
         let document_view = DocumentView::new(document_view_id.clone(), bool_field);
         let field_view = SchemaFieldView::try_from(document_view);
@@ -275,7 +231,10 @@ mod tests {
             "name".to_string(),
             OperationValue::Text("capacity".to_string()),
         );
-        capacity_field.insert("type".to_string(), OperationValue::Text("int".to_string()));
+        capacity_field.insert(
+            "type".to_string(),
+            OperationValue::Text(FieldType::Int.into()),
+        );
 
         let document_view = DocumentView::new(document_view_id.clone(), capacity_field);
         let field_view = SchemaFieldView::try_from(document_view);
@@ -292,7 +251,7 @@ mod tests {
         );
         float_field.insert(
             "type".to_string(),
-            OperationValue::Text("float".to_string()),
+            OperationValue::Text(FieldType::Float.into()),
         );
 
         let document_view = DocumentView::new(document_view_id.clone(), float_field);
@@ -308,7 +267,10 @@ mod tests {
             "name".to_string(),
             OperationValue::Text("venue_name".to_string()),
         );
-        str_field.insert("type".to_string(), OperationValue::Text("str".to_string()));
+        str_field.insert(
+            "type".to_string(),
+            OperationValue::Text(FieldType::String.into()),
+        );
 
         let document_view = DocumentView::new(document_view_id.clone(), str_field);
         let field_view = SchemaFieldView::try_from(document_view);
@@ -325,7 +287,7 @@ mod tests {
         );
         relation_field.insert(
             "type".to_string(),
-            OperationValue::Text("relation".to_string()),
+            OperationValue::Text(FieldType::Relation.into()),
         );
 
         let document_view = DocumentView::new(document_view_id, relation_field);
