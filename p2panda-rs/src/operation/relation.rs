@@ -172,6 +172,16 @@ impl Validate for PinnedRelationList {
     }
 }
 
+impl IntoIterator for PinnedRelationList {
+    type Item = DocumentViewId;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -216,11 +226,24 @@ mod tests {
             assert!(hash.validate().is_ok());
         }
 
-        let relation_list =
-            RelationList::new(vec![DocumentId::new(hash_1), DocumentId::new(hash_2)]);
+        let relation_list = RelationList::new(vec![
+            DocumentId::new(hash_1.clone()),
+            DocumentId::new(hash_2.clone()),
+        ]);
 
         for document_id in relation_list {
             assert!(document_id.validate().is_ok());
+        }
+
+        let pinned_relation_list = PinnedRelationList::new(vec![
+            DocumentViewId::new(vec![hash_1]),
+            DocumentViewId::new(vec![hash_2]),
+        ]);
+
+        for pinned_relation in pinned_relation_list {
+            for hash in pinned_relation {
+                assert!(hash.validate().is_ok());
+            }
         }
     }
 }
