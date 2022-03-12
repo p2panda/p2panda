@@ -109,6 +109,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::hash::Hash;
+    use crate::test_utils::constants::DEFAULT_HASH;
     use crate::test_utils::fixtures::random_hash;
     use crate::Validate;
 
@@ -141,13 +142,13 @@ mod tests {
         }
     }
 
-    #[rstest]
-    fn hashes(#[from(random_hash)] hash_1: Hash, #[from(random_hash)] hash_2: Hash) {
-        let document_view_id = DocumentViewId::new(vec![hash_1, hash_2]);
+    #[test]
+    fn hashes() {
+        let document_view_id = DEFAULT_HASH.parse::<DocumentViewId>().unwrap();
 
         assert_eq!(
             document_view_id.hash().as_str(),
-            "002078559f175cd145855326705975a62440d4ebf31b835da646161485ea5cdb781c"
+            "0020fc76e3a452648023d5e169369116be1526f6d3fc2b7742ed1af2b55f11bca7fb"
         );
     }
 }
