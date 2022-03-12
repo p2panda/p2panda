@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::fmt;
+use std::fmt::{self, Display};
 use std::str::FromStr;
 
 use serde::de::{SeqAccess, Visitor};
@@ -40,6 +40,17 @@ impl SchemaId {
 impl From<OperationId> for SchemaId {
     fn from(operation_id: OperationId) -> Self {
         Self::Application(PinnedRelation::new(operation_id.into()))
+    }
+}
+
+impl Display for SchemaId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let repr = match &self {
+            SchemaId::Application(relation) => relation.view_id().hash().as_str().into(),
+            SchemaId::Schema => "schema_v1".to_string(),
+            SchemaId::SchemaField => "schema_field_v1".to_string(),
+        };
+        write!(f, "{}", repr)
     }
 }
 

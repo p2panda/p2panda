@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::fmt::Display;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -62,6 +63,12 @@ impl DocumentViewId {
             .flat_map(|graph_tip| graph_tip.as_hash().to_bytes())
             .collect();
         Hash::new_from_bytes(graph_tip_bytes).unwrap()
+    }
+}
+
+impl Display for DocumentViewId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.hash().as_str())
     }
 }
 
@@ -207,5 +214,12 @@ mod tests {
             format!("{}", view_id_1.validate().unwrap_err()),
             "Expected sorted operation ids in document view id"
         );
+    }
+
+    #[rstest]
+    fn hashes(#[from(random_operation_id)] op_1: OperationId, #[from(random_operation_id)] op_2: OperationId) {
+        let document_view_id = DocumentViewId::new(&[op_1, op_2]);
+
+        assert_eq!(document_view_id.hash().as_str(), "");
     }
 }
