@@ -8,43 +8,65 @@ use crate::entry::SeqNum;
 use crate::hash::Hash;
 use crate::{entry::LogId, identity::Author};
 
+/// Params passed when a log is requested
+#[derive(Debug)]
 pub struct GetLogParams {
     pub author: Author,
     pub document_id: Hash,
 }
 
+/// Trait implemented on all types which are to be stored into memory store.
 pub trait ToMemoryStore {
+    /// The returned type
     type Output;
+    /// The error type
     type ToMemoryStoreError: Debug;
+    /// Returns a data store friendly conversion of this type.
     fn to_store_value(self) -> Result<Self::Output, Self::ToMemoryStoreError>;
 }
 
+/// Trait implemented on all implementation specific types which are retrieved from memory store.
 pub trait FromMemoryStore {
+    /// The returned type
     type Output;
+    /// The error type
     type FromMemoryStoreError: Debug;
+    /// Returns a returns the in memory (probably a p2panda_rs type) conversion of this type.
     fn from_store_value(self) -> Result<Self::Output, Self::FromMemoryStoreError>;
 }
 
+/// Trait used for inserting items into the memory store.
+///
+/// Should be implemented on every type an implementation handles.
 #[async_trait]
 pub trait Insert<Type: ToMemoryStore>: Send + Sync {
+    /// The error type
     type InsertError: Debug;
-
+    /// Insert item into the memory store.
     async fn insert(&self, value: Type) -> Result<bool, Self::InsertError>;
 }
 
+/// Trait used for getting items from the memory store.
+///
+/// Should be implemented on every type an implementation handles.
 #[async_trait]
 pub trait Get: Send + Sync {
+    /// The error type
     type GetError: Debug;
+    /// The returned type
     type Output: FromMemoryStore;
 
+    /// Get an item from the memory store.
     async fn get<Type>(
         &self,
         get_params: GetLogParams,
     ) -> Result<Option<Self::Output>, Self::GetError>;
 }
 
+/// Trait which handles all memory store actions relating to `Log`s.
 #[async_trait]
 pub trait LogStore {
+    /// The error type
     type LogError: Debug;
 
     /// Returns registered or possible log id for a document.
@@ -60,10 +82,14 @@ pub trait LogStore {
     async fn next_log_id(&self, author: &Author) -> Result<LogId, Self::LogError>;
 }
 
+/// Trait which handles all memory store actions relating to `Entries`.
 #[async_trait]
 pub trait EntryStore {
+    /// Type representing an entry as it is stored in the memory store
     type StoredEntry: FromMemoryStore + TryFrom<Self::EntryRow>;
+    /// An internal type representing an enty row (here because of an `aquadoggo` quirk)
     type EntryRow;
+    /// The error type
     type EntryError: Debug;
 
     /// Returns entry at sequence position within an author's log.
@@ -97,8 +123,10 @@ pub trait EntryStore {
     ) -> Result<Option<Hash>, Self::EntryError>;
 }
 
+/// All other methods needed to be implemented by a p2panda `MemoryStore`
 #[async_trait]
 pub trait MemoryStore: LogStore + EntryStore {
+    /// The error type
     type Error: Debug;
 
     /// Returns the related document for any entry.
