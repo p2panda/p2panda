@@ -41,10 +41,10 @@ impl From<FieldType> for CddlType {
             FieldType::Int => CddlType::Int,
             FieldType::Float => CddlType::Float,
             FieldType::String => CddlType::Tstr,
-            FieldType::Relation => CddlType::Relation,
-            FieldType::RelationList => CddlType::RelationList,
-            FieldType::PinnedRelation => CddlType::PinnedRelation,
-            FieldType::PinnedRelationList => CddlType::PinnedRelationList,
+            FieldType::Relation(_) => CddlType::Relation,
+            FieldType::RelationList(_) => CddlType::RelationList,
+            FieldType::PinnedRelation(_) => CddlType::PinnedRelation,
+            FieldType::PinnedRelationList(_) => CddlType::PinnedRelationList,
         }
     }
 }
@@ -122,21 +122,23 @@ mod tests {
             generator::{generate_create_fields, generate_fields, generate_update_fields},
         },
         schema::FieldType,
+        test_utils::fixtures::defaults::schema,
     };
 
     fn person() -> BTreeMap<String, FieldType> {
         let mut person = BTreeMap::new();
+        let test_schema = schema();
 
         person.insert("name".to_string(), FieldType::String);
         person.insert("age".to_string(), FieldType::Int);
         person.insert("height".to_string(), FieldType::Float);
         person.insert("is_cool".to_string(), FieldType::Bool);
-        person.insert("favorite_food".to_string(), FieldType::Relation);
-        person.insert("top_ten_foods".to_string(), FieldType::RelationList);
-        person.insert("one_specific_meal".to_string(), FieldType::PinnedRelation);
+        person.insert("favorite_food".to_string(), FieldType::Relation(test_schema));
+        person.insert("top_ten_foods".to_string(), FieldType::RelationList(test_schema));
+        person.insert("one_specific_meal".to_string(), FieldType::PinnedRelation(test_schema));
         person.insert(
             "top_ten_specific_meals".to_string(),
-            FieldType::PinnedRelationList,
+            FieldType::PinnedRelationList(test_schema),
         );
 
         person

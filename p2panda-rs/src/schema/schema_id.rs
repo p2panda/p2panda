@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::fmt;
+use std::fmt::{self, Display};
 use std::str::FromStr;
 
 use serde::de::{SeqAccess, Visitor};
@@ -37,6 +37,18 @@ impl SchemaId {
             hash_str => Ok(SchemaId::from(Hash::new(hash_str)?)),
         }
     }
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            SchemaId::Application(schema) => {
+                let mut cbor_bytes = Vec::new();
+                ciborium::ser::into_writer(&schema, &mut cbor_bytes).unwrap();
+                &hex::encode(cbor_bytes)
+            },
+            SchemaId::Schema => "schema_v1",
+            SchemaId::SchemaField => "schema_field_v1"
+        }
+    }
 }
 
 impl From<Hash> for SchemaId {
@@ -56,6 +68,12 @@ impl FromStr for SchemaId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::new(s)
+    }
+}
+
+impl Display for SchemaId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -112,8 +130,7 @@ impl Serialize for SchemaId {
     {
         match &self {
             SchemaId::Application(relation) => relation.serialize(serializer),
-            SchemaId::Schema => serializer.serialize_str("schema_v1"),
-            SchemaId::SchemaField => serializer.serialize_str("schema_field_v1"),
+            _ => serializer.serialize_str(self.as_str())
         }
     }
 }

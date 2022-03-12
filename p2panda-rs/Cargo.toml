@@ -48,6 +48,7 @@ tls_codec = { version = "0.2.0-pre.3", features = [
   "serde_serialize",
 ] }
 yasmf-hash = "0.1.0"
+regex = "1.5.5"
 
 # @TODO: Use `openmls` crate as soon as changes got merged into `main` in
 # upstream and released as version `0.4.0`.
