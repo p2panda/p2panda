@@ -147,7 +147,7 @@ mod tests {
         let document_view_id = DEFAULT_HASH.parse::<DocumentViewId>().unwrap();
 
         assert_eq!(
-            document_view_id.hash().as_str(),
+            format!("{}", document_view_id),
             "0020fc76e3a452648023d5e169369116be1526f6d3fc2b7742ed1af2b55f11bca7fb"
         );
     }
