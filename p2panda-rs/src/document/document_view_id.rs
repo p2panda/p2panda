@@ -220,6 +220,9 @@ mod tests {
     fn hashes(#[from(random_operation_id)] op_1: OperationId, #[from(random_operation_id)] op_2: OperationId) {
         let document_view_id = DocumentViewId::new(&[op_1, op_2]);
 
-        assert_eq!(document_view_id.hash().as_str(), "");
+        assert_eq!(
+            document_view_id.hash().as_str(),
+            "002078559f175cd145855326705975a62440d4ebf31b835da646161485ea5cdb781c"
+        );
     }
 }
