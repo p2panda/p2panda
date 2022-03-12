@@ -145,6 +145,9 @@ mod tests {
     fn hashes(#[from(random_hash)] hash_1: Hash, #[from(random_hash)] hash_2: Hash) {
         let document_view_id = DocumentViewId::new(vec![hash_1, hash_2]);
 
-        assert_eq!(document_view_id.hash().as_str(), "");
+        assert_eq!(
+            document_view_id.hash().as_str(),
+            "002078559f175cd145855326705975a62440d4ebf31b835da646161485ea5cdb781c"
+        );
     }
 }
