@@ -86,6 +86,11 @@ impl PinnedRelation {
     pub fn new(document_view_id: DocumentViewId) -> Self {
         Self(document_view_id)
     }
+
+    /// Access the contained view id.
+    pub fn view_id(&self) -> &DocumentViewId {
+        &self.0
+    }
 }
 
 impl Validate for PinnedRelation {

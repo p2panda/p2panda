@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::fmt::Display;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,23 @@ impl DocumentViewId {
     /// Get the graph tip hashes of this view id.
     pub fn graph_tips(&self) -> &[Hash] {
         self.0.as_slice()
+    }
+
+    /// Returns a hash over the graph tips constituting this view id.
+    pub fn hash(&self) -> Hash {
+        let graph_tip_bytes = self
+            .0
+            .clone()
+            .into_iter()
+            .flat_map(|graph_tip| graph_tip.to_bytes())
+            .collect();
+        Hash::new_from_bytes(graph_tip_bytes).unwrap()
+    }
+}
+
+impl Display for DocumentViewId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.hash().as_str())
     }
 }
 
@@ -121,5 +139,12 @@ mod tests {
         for hash in document_view_id {
             assert!(hash.validate().is_ok());
         }
+    }
+
+    #[rstest]
+    fn hashes(#[from(random_hash)] hash_1: Hash, #[from(random_hash)] hash_2: Hash) {
+        let document_view_id = DocumentViewId::new(vec![hash_1, hash_2]);
+
+        assert_eq!(document_view_id.hash().as_str(), "");
     }
 }
