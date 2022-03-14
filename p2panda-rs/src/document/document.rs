@@ -6,7 +6,7 @@ use crate::document::{DocumentBuilderError, DocumentId, DocumentView, DocumentVi
 use crate::graph::Graph;
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{AsOperation, OperationValue, OperationWithMeta};
+use crate::operation::{AsOperation, OperationValue, OperationWithMeta, OperationId};
 use crate::schema::SchemaId;
 
 /// Construct a graph from a list of operations.
@@ -218,7 +218,7 @@ impl DocumentBuilder {
         let sorted_graph_data = graph.sort()?;
 
         // These are the current graph tips, to be added to the document view id
-        let graph_tips: Vec<Hash> = sorted_graph_data
+        let graph_tips: Vec<OperationId> = sorted_graph_data
             .current_graph_tips()
             .iter()
             .map(|operation| operation.operation_id().to_owned())
