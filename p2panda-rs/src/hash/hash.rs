@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
+use std::fmt;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
@@ -59,6 +60,12 @@ impl Hash {
     /// Returns hash as hex string.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+}
+
+impl fmt::Display for Hash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

@@ -43,14 +43,13 @@ impl From<OperationId> for SchemaId {
     }
 }
 
-impl Display for SchemaId {
+impl fmt::Display for SchemaId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let repr = match &self {
-            SchemaId::Application(relation) => relation.view_id().hash().as_str().into(),
-            SchemaId::Schema => "schema_v1".to_string(),
-            SchemaId::SchemaField => "schema_field_v1".to_string(),
-        };
-        write!(f, "{}", repr)
+        match self {
+            SchemaId::Application(relation) => write!(f, "{}", relation.view_id()),
+            SchemaId::Schema => write!(f, "schema_v1"),
+            SchemaId::SchemaField => write!(f, "schema_field_v1"),
+        }
     }
 }
 
@@ -218,11 +217,18 @@ mod test {
                 .unwrap()
         );
 
+        assert_eq!(
+            format!("{}", appl_schema),
+            "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+        );
+
         let schema = SchemaId::new("schema_v1").unwrap();
         assert_eq!(schema, SchemaId::Schema);
+        assert_eq!(format!("{}", schema), "schema_v1");
 
         let schema_field = SchemaId::new("schema_field_v1").unwrap();
         assert_eq!(schema_field, SchemaId::SchemaField);
+        assert_eq!(format!("{}", schema_field), "schema_field_v1");
     }
 
     #[test]
