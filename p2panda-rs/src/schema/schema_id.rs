@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::fmt::{self, Display};
+use std::fmt;
 use std::str::FromStr;
 
 use serde::de::{SeqAccess, Visitor};
@@ -183,17 +183,6 @@ mod test {
             serde_json::from_str::<SchemaId>("\"schema_field_v1\"").unwrap(),
             schema_field
         );
-    }
-
-    #[test]
-    fn string_representation() {
-        let app_schema = SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap();
-        assert_eq!(
-            format!("{}", app_schema),
-            "0020505ecc036ed0fbac12acbc5cabe0efb985e53a7e36a71fc67fe0f50f631cd3ec"
-        );
-        assert_eq!(format!("{}", SchemaId::Schema), "schema_v1");
-        assert_eq!(format!("{}", SchemaId::SchemaField), "schema_field_v1");
     }
 
     #[test]
