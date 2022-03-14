@@ -218,7 +218,7 @@ mod tests {
     }
 
     #[test]
-    fn hashes() {
+    fn string_representation() {
         let document_view_id = DEFAULT_HASH.parse::<DocumentViewId>().unwrap();
 
         assert_eq!(
