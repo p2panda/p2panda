@@ -13,7 +13,7 @@ type FieldKey = String;
 
 /// A struct representing a materialised schema.
 ///
-/// It is constructed from a `SchemaView` and all related `SchemaFieldView`s.
+/// It is constructed from a [`SchemaView`] and all related [`SchemaFieldView`]s.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Schema {
     id: DocumentViewId,
