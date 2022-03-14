@@ -4,15 +4,18 @@ use async_trait::async_trait;
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use std::fmt::Debug;
 
-use crate::entry::SeqNum;
+use crate::document::DocumentId;
+use crate::entry::{decode_entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
+use crate::operation::{AsOperation, Operation, OperationEncoded};
 use crate::Validate;
 use crate::{entry::LogId, identity::Author};
 
-use super::models::{AsEntry, AsLog};
+use super::models::{AsEntry, AsLog, Log};
 use super::requests::AsEntryArgsRequest;
 use super::responses::AsEntryArgsResponse;
 use super::StorageProviderError;
+use crate::storage_provider::conversions::ToStorage;
 
 /// Trait which handles all storage actions relating to `Log`s.
 #[async_trait]
@@ -202,5 +205,137 @@ pub trait StorageProvider<T, U>: EntryStore<T> + LogStore<U> {
                 log,
             )),
         }
+    }
+
+    /// Implementation of `panda_publishEntry` RPC method.
+    ///
+    /// Stores an author's Bamboo entry with operation payload in database after validating it.
+    async fn publish_entry(
+        &self,
+        entry_encoded: EntrySigned,
+        operation_encoded: OperationEncoded,
+    ) -> Result<Self::EntryArgsResponse, StorageProviderError> {
+        // Validate request parameters
+        entry_encoded
+            .validate()
+            .map_err(|_| StorageProviderError::Error)?;
+        operation_encoded
+            .validate()
+            .map_err(|_| StorageProviderError::Error)?;
+
+        // Decode author, entry and operation. This conversion validates the operation hash
+        let author = entry_encoded.author();
+        let entry = decode_entry(&entry_encoded, Some(&operation_encoded))
+            .map_err(|_| StorageProviderError::Error)?;
+        let operation = Operation::from(&operation_encoded);
+
+        // Every operation refers to a document we need to determine. A document is identified by the
+        // hash of its first `CREATE` operation, it is the root operation of every document graph
+        let document_id = if operation.is_create() {
+            // This is easy: We just use the entry hash directly to determine the document id
+            entry_encoded.hash()
+        } else {
+            // For any other operations which followed after creation we need to either walk the operation
+            // graph back to its `CREATE` operation or more easily look up the database since we keep track
+            // of all log ids and documents there.
+            //
+            // We can determine the used document hash by looking at what we know about the previous
+            // entry in this author's log.
+            //
+            // @TODO: This currently looks at the backlink, in the future we want to use
+            // "previousOperation", since in a multi-writer setting there might be no backlink for
+            // update operations! See: https://github.com/p2panda/aquadoggo/issues/49
+            let backlink_entry_hash = entry.backlink_hash().ok_or(StorageProviderError::Error)?;
+
+            self.get_document_by_entry(backlink_entry_hash)
+                .await
+                .map_err(|_| StorageProviderError::Error)?
+                .unwrap()
+        };
+
+        // Determine expected log id for new entry
+        let document_log_id = self
+            .find_document_log_id(&author, Some(&document_id))
+            .await
+            .map_err(|_| StorageProviderError::Error)?;
+
+        // Check if provided log id matches expected log id
+        if &document_log_id != entry.log_id() {
+            return Err(StorageProviderError::Error.into());
+        }
+
+        // Get related bamboo backlink and skiplink entries
+        let entry_backlink_bytes = if !entry.seq_num().is_first() {
+            self.entry_at_seq_num(&author, entry.log_id(), &entry.seq_num_backlink().unwrap())
+                .await
+                .map_err(|_| StorageProviderError::Error)?
+                .map(|link| {
+                    let bytes = link.entry_encoded().to_bytes();
+                    Some(bytes)
+                })
+                .ok_or(StorageProviderError::Error)
+        } else {
+            Ok(None)
+        }?;
+
+        let entry_skiplink_bytes = if !entry.seq_num().is_first() {
+            self.entry_at_seq_num(&author, entry.log_id(), &entry.seq_num_skiplink().unwrap())
+                .await
+                .map_err(|_| StorageProviderError::Error)?
+                .map(|link| {
+                    let bytes = link.entry_encoded().to_bytes();
+                    Some(bytes)
+                })
+                .ok_or(StorageProviderError::Error)
+        } else {
+            Ok(None)
+        }?;
+
+        // Verify bamboo entry integrity, including encoding, signature of the entry correct back- and
+        // skiplinks.
+        bamboo_rs_core_ed25519_yasmf::verify(
+            &entry_encoded.to_bytes(),
+            Some(&operation_encoded.to_bytes()),
+            entry_skiplink_bytes.as_deref(),
+            entry_backlink_bytes.as_deref(),
+        )
+        .map_err(|_| StorageProviderError::Error)?;
+
+        // Register log in database when a new document is created
+        if operation.is_create() {
+            let log = Self::Log::new(
+                author.clone(),
+                DocumentId::new(document_id),
+                operation.schema(),
+                *entry.log_id(),
+            );
+            self.insert_log(log)
+                .await
+                .map_err(|_| StorageProviderError::Error)?;
+        }
+
+        // Finally insert Entry in database
+        self.insert_entry(Self::Entry::new(&entry_encoded, Some(&operation_encoded)))
+            .await
+            .map_err(|_| StorageProviderError::Error)?;
+
+        // Already return arguments for next entry creation
+        let entry_latest: Self::Entry = self
+            .latest_entry(&author, entry.log_id())
+            .await
+            .map_err(|_| StorageProviderError::Error)?
+            .unwrap();
+        let entry_hash_skiplink = self
+            .determine_skiplink(&entry_latest)
+            .await
+            .map_err(|_| StorageProviderError::Error)?;
+        let next_seq_num = entry_latest.seq_num().next().unwrap();
+
+        Ok(Self::EntryArgsResponse::new(
+            Some(entry_encoded.hash()),
+            entry_hash_skiplink,
+            next_seq_num,
+            *entry.log_id(),
+        ))
     }
 }

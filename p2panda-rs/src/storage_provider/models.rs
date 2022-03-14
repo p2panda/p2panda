@@ -13,6 +13,8 @@ use super::conversions::{FromStorage, ToStorage};
 pub trait AsEntry<T>: Sized + Send + Sync + FromStorage<T> + ToStorage<T> {
     type Error: Debug;
 
+    fn new(entry_encoded: &EntrySigned, operation_encoded: Option<&OperationEncoded>) -> Self;
+
     fn entry_encoded(&self) -> EntrySigned;
 
     fn operation_encoded(&self) -> Option<OperationEncoded>;
@@ -39,9 +41,24 @@ pub trait AsEntry<T>: Sized + Send + Sync + FromStorage<T> + ToStorage<T> {
     }
 }
 
+pub struct Log {
+    /// Public key of the author.
+    pub author: Author,
+
+    /// Log id used for this document.
+    pub log_id: LogId,
+
+    /// Hash that identifies the document this log is for.
+    pub document: DocumentId,
+
+    /// SchemaId which identifies the schema for operations in this log.
+    pub schema: SchemaId,
+}
+
 pub trait AsLog<T>: Sized + Send + Sync + FromStorage<T> + ToStorage<T> {
     type Error: Debug;
 
+    fn new(author: Author, document: DocumentId, schema: SchemaId, log_id: LogId) -> Self;
     fn author(&self) -> Author;
     fn log_id(&self) -> LogId;
     fn document(&self) -> DocumentId;
