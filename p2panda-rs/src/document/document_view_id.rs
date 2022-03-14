@@ -28,16 +28,16 @@ use crate::Validate;
 ///                          \__ [UPDATE] (Hash: "eff..")
 /// ```
 #[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
-pub struct DocumentViewId(Vec<Hash>);
+pub struct DocumentViewId(Vec<OperationId>);
 
 impl DocumentViewId {
     /// Create a new document view id.
-    pub fn new(graph_tips: Vec<Hash>) -> Self {
+    pub fn new(graph_tips: Vec<OperationId>) -> Self {
         Self(graph_tips)
     }
 
     /// Get the graph tip hashes of this view id.
-    pub fn graph_tips(&self) -> &[Hash] {
+    pub fn graph_tips(&self) -> &[OperationId] {
         self.0.as_slice()
     }
 }
