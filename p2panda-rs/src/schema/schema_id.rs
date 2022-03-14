@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::fmt::{self, Display};
+use std::fmt;
 use std::str::FromStr;
 
 use serde::de::{SeqAccess, Visitor};
@@ -36,17 +36,6 @@ impl SchemaId {
             "schema_field_v1" => Ok(SchemaId::SchemaField),
             hash_str => Ok(SchemaId::from(Hash::new(hash_str)?)),
         }
-    }
-}
-
-impl Display for SchemaId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let repr = match &self {
-            SchemaId::Application(relation) => relation.view_id().hash().as_str().into(),
-            SchemaId::Schema => "schema_v1".to_string(),
-            SchemaId::SchemaField => "schema_field_v1".to_string(),
-        };
-        write!(f, "{}", repr)
     }
 }
 
@@ -185,17 +174,6 @@ mod test {
             serde_json::from_str::<SchemaId>("\"schema_field_v1\"").unwrap(),
             schema_field
         );
-    }
-
-    #[test]
-    fn string_representation() {
-        let app_schema = SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap();
-        assert_eq!(
-            format!("{}", app_schema),
-            "0020505ecc036ed0fbac12acbc5cabe0efb985e53a7e36a71fc67fe0f50f631cd3ec"
-        );
-        assert_eq!(format!("{}", SchemaId::Schema), "schema_v1");
-        assert_eq!(format!("{}", SchemaId::SchemaField), "schema_field_v1");
     }
 
     #[test]
