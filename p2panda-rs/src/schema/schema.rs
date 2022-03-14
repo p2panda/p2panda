@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::BTreeMap;
+use std::fmt::Display;
 
 use crate::cddl::generate_cddl_definition;
 use crate::document::DocumentViewId;
@@ -13,7 +14,7 @@ type FieldKey = String;
 /// A struct representing a materialised schema.
 ///
 /// It is constructed from a `SchemaView` and all related `SchemaFieldView`s.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Schema {
     id: DocumentViewId,
     name: String,
@@ -60,6 +61,19 @@ impl Schema {
     pub fn as_cddl(&self) -> String {
         generate_cddl_definition(&self.fields)
     }
+
+    /// Returns a unique string identifier for this schema
+    ///
+    /// This has the format "<schema name>_<hashed schema document view graph tips>".
+    pub fn hash_id(&self) -> String {
+        format!("{}_{}", self.name, self.id.hash().as_str())
+    }
+}
+
+impl Display for Schema {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.hash_id())
+    }
 }
 
 #[cfg(test)]
@@ -68,6 +82,7 @@ mod tests {
     use std::convert::TryInto;
 
     use rstest::rstest;
+    use yasmf_hash::MAX_YAMF_HASH_SIZE;
 
     use crate::document::{DocumentView, DocumentViewId};
     use crate::hash::Hash;
@@ -150,10 +165,12 @@ mod tests {
         // Create venue schema from schema and field views
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        let schema = Schema::new(schema_view, vec![bool_field_view, capacity_field_view]);
+        let result = Schema::new(schema_view, vec![bool_field_view, capacity_field_view]);
 
         // Schema should be ok
-        assert!(schema.is_ok());
+        assert!(result.is_ok());
+
+        let schema = result.unwrap();
 
         let expected_cddl = "capacity = { type: \"int\", value: int, }\n".to_string()
             + "is_accessible = { type: \"bool\", value: bool, }\n"
@@ -161,7 +178,13 @@ mod tests {
             + "update-fields = { + ( capacity // is_accessible ) }";
 
         // Schema should return correct cddl string
-        assert_eq!(expected_cddl, schema.unwrap().as_cddl());
+        assert_eq!(expected_cddl, schema.as_cddl());
+
+        // Schema should have a hash id
+        assert_eq!(
+            format!("{}", schema).len(),
+            "venue_name_".len() + MAX_YAMF_HASH_SIZE * 2
+        )
     }
 
     #[rstest]
