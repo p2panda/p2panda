@@ -4,7 +4,7 @@ use thiserror::Error;
 
 #[allow(missing_copy_implementations)]
 #[derive(Error, Debug, Clone, PartialEq)]
-pub enum MemoryStoreError {
+pub enum StorageProviderError {
     #[error("not a very useful error!")]
     Error,
 }

@@ -68,10 +68,10 @@ pub mod entry;
 pub mod graph;
 pub mod hash;
 pub mod identity;
-pub mod memory_store;
 pub mod operation;
 pub mod schema;
 pub mod secret_group;
+pub mod storage_provider;
 pub mod test_utils;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
