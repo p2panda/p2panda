@@ -64,15 +64,16 @@ impl Schema {
 
     /// Returns a unique string identifier for this schema
     ///
-    /// This has the format "<schema name>_<hashed schema document view graph tips>".
+    /// This has the format "<schema name>-<hashed schema document view graph tips>".
+    #[allow(unused)]
     pub fn hash_id(&self) -> String {
-        format!("{}_{}", self.name, self.id.hash().as_str())
+        format!("{}-{}", self.name, self.id.hash().as_str())
     }
 }
 
 impl Display for Schema {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.hash_id())
+        write!(f, "{}_{}", self.name, self.id)
     }
 }
 
@@ -82,7 +83,6 @@ mod tests {
     use std::convert::TryInto;
 
     use rstest::rstest;
-    use yasmf_hash::MAX_YAMF_HASH_SIZE;
 
     use crate::document::{DocumentView, DocumentViewId};
     use crate::hash::Hash;
@@ -180,11 +180,11 @@ mod tests {
         // Schema should return correct cddl string
         assert_eq!(expected_cddl, schema.as_cddl());
 
+        // Schema should have a string representation
+        assert!(format!("{}", schema).starts_with("venue_name_0020"));
+
         // Schema should have a hash id
-        assert_eq!(
-            format!("{}", schema).len(),
-            "venue_name_".len() + MAX_YAMF_HASH_SIZE * 2
-        )
+        assert!(schema.hash_id().starts_with("venue_name-0020"));
     }
 
     #[rstest]
