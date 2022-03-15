@@ -21,7 +21,7 @@ use crate::Validate;
 /// make up the required methods for inserting and querying logs from storage.
 #[async_trait]
 pub trait LogStore<StorageLog: AsStorageLog> {
-    /// The error type
+    /// The error type returned by this traits' methods.
     type LogError: Debug;
 
     /// Insert a log into storage.
@@ -72,7 +72,7 @@ pub trait LogStore<StorageLog: AsStorageLog> {
 /// make up the required methods for inserting and querying entries from storage.
 #[async_trait]
 pub trait EntryStore<StorageEntry: AsStorageEntry> {
-    /// The error type
+    /// The error type returned by this traits' methods.
     type EntryError: Debug;
 
     /// Insert an entry into storage.
@@ -142,10 +142,13 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog>:
     EntryStore<StorageEntry> + LogStore<StorageLog>
 {
-    /// The error type
+    /// The error type returned by this traits' methods.
     type Error: Debug;
+    /// Response from a call to `get_entry_args`.
     type EntryArgsResponse: AsEntryArgsResponse;
+    /// Response from a call to `publish_entry`.
     type PublishEntryResponse: AsEntryArgsResponse;
+
     /// Returns the related document for any entry.
     ///
     /// Every entry is part of a document and, through that, associated with a specific log id used
