@@ -44,7 +44,7 @@ pub trait AsStorageEntry:
 /// bring something in, then we can also define conversion traits here.
 pub trait AsStorageLog: Sized + Send + Sync {
     /// Constructor method for struts
-    fn new(author: Author, document: DocumentId, schema: SchemaId, log_id: LogId) -> Self;
+    fn new(author: &Author, document: &DocumentId, schema: &SchemaId, log_id: &LogId) -> Self;
 
     /// Returns the Author of this log.
     fn author(&self) -> Author;

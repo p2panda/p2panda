@@ -297,10 +297,10 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         // Register log in database when a new document is created
         if operation.is_create() {
             let log = StorageLog::new(
-                author.clone(),
-                DocumentId::new(document_id),
-                operation.schema(),
-                *entry.log_id(),
+                &author.clone(),
+                &DocumentId::new(document_id),
+                &operation.schema(),
+                entry.log_id(),
             );
 
             self.insert_log(log).await?;
