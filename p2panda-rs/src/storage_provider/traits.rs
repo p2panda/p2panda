@@ -96,9 +96,9 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// skiplink is required for the next entry.
     async fn determine_skiplink(
         &self,
-        entry: &StorageEntry,
+        storage_entry: &StorageEntry,
     ) -> Result<Option<Hash>, Self::EntryError> {
-        let next_seq_num = entry.seq_num().clone().next().unwrap();
+        let next_seq_num = storage_entry.entry().seq_num().clone().next().unwrap();
 
         // Unwrap as we know that an skiplink exists as soon as previous entry is given
         let skiplink_seq_num = next_seq_num.skiplink_seq_num().unwrap();
@@ -106,10 +106,14 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         // Check if skiplink is required and return hash if so
         let entry_skiplink_hash = if is_lipmaa_required(next_seq_num.as_u64()) {
             let skiplink_entry = self
-                .entry_at_seq_num(&entry.author(), &entry.log_id(), &skiplink_seq_num)
+                .entry_at_seq_num(
+                    &storage_entry.entry_encoded().author(),
+                    &storage_entry.entry().log_id(),
+                    &skiplink_seq_num,
+                )
                 .await?
                 .unwrap();
-            Some(skiplink_entry.entry_hash())
+            Some(skiplink_entry.entry_encoded().hash())
         } else {
             None
         };
@@ -120,11 +124,8 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 
 /// All other methods needed to be implemented by a p2panda `StorageProvider`
 #[async_trait]
-pub trait StorageProvider<StorageEntry, StorageLog>
-where
-    Self: EntryStore<StorageEntry> + LogStore<StorageLog>,
-    StorageEntry: AsStorageEntry,
-    StorageLog: AsLog,
+pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsLog>:
+    EntryStore<StorageEntry> + LogStore<StorageLog>
 {
     /// The error type
     type Error: Debug;
@@ -172,26 +173,21 @@ where
             .await
             .map_err(|_| StorageProviderError::Error)?;
 
-        match entry_latest {
+        match entry_latest.clone() {
             // An entry was found which serves as the backlink for the upcoming entry
             Some(entry_backlink) => {
                 let entry_hash_backlink = entry_backlink.entry_encoded().hash();
-                let entry_latest: StorageEntry = self
-                    .latest_entry(author, &log)
-                    .await
-                    .map_err(|_| StorageProviderError::Error)?
-                    .unwrap();
                 // Determine skiplink ("lipmaa"-link) entry in this log
                 let entry_hash_skiplink = self
-                    .determine_skiplink(&entry_latest)
+                    .determine_skiplink(&entry_latest.unwrap())
                     .await
                     .map_err(|_| StorageProviderError::Error)?;
 
                 Ok(Self::EntryArgsResponse::new(
                     Some(entry_hash_backlink),
                     entry_hash_skiplink,
-                    entry_backlink.seq_num(),
-                    entry_backlink.log_id(),
+                    *entry_backlink.entry().seq_num(),
+                    *entry_backlink.entry().log_id(),
                 ))
             }
             // No entry was given yet, we can assume this is the beginning of the log
@@ -226,7 +222,7 @@ where
             .map_err(|_| StorageProviderError::Error)?;
 
         // Decode author, entry and operation. This conversion validates the operation hash
-        let author = store_entry.author();
+        let author = store_entry.entry_encoded().author();
         let entry = decode_entry(
             &store_entry.entry_encoded(),
             store_entry.operation_encoded().as_ref(),
@@ -238,7 +234,7 @@ where
         // hash of its first `CREATE` operation, it is the root operation of every document graph
         let document_id = if operation.is_create() {
             // This is easy: We just use the entry hash directly to determine the document id
-            store_entry.entry_hash()
+            store_entry.entry_encoded().hash()
         } else {
             // For any other operations which followed after creation we need to either walk the operation
             // graph back to its `CREATE` operation or more easily look up the database since we keep track
@@ -334,7 +330,7 @@ where
             .determine_skiplink(&entry_latest)
             .await
             .map_err(|_| StorageProviderError::Error)?;
-        let next_seq_num = entry_latest.seq_num().next().unwrap();
+        let next_seq_num = entry_latest.entry().seq_num().clone().next().unwrap();
 
         Ok(Self::PublishEntryResponse::new(
             Some(store_entry.entry_encoded().hash()),

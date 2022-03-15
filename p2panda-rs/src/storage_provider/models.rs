@@ -31,9 +31,8 @@ impl EntryWithOperation {
 }
 
 /// Trait required for entries which will pass in and out of storage.
-pub trait AsStorageEntry
-where
-    Self: Sized + Clone + Send + Sync + TryInto<EntryWithOperation> + TryFrom<EntryWithOperation>,
+pub trait AsStorageEntry:
+    Sized + Clone + Send + Sync + TryInto<EntryWithOperation> + TryFrom<EntryWithOperation>
 {
     type AsStorageEntryError: Debug;
 
@@ -46,22 +45,6 @@ where
     fn entry(&self) -> Entry {
         // Unwrapping optimistically for now...
         decode_entry(&self.entry_encoded(), self.operation_encoded().as_ref()).unwrap()
-    }
-
-    fn author(&self) -> Author {
-        self.entry_encoded().author()
-    }
-
-    fn seq_num(&self) -> SeqNum {
-        self.entry().seq_num().to_owned()
-    }
-
-    fn log_id(&self) -> LogId {
-        self.entry().log_id().to_owned()
-    }
-
-    fn entry_hash(&self) -> Hash {
-        self.entry_encoded().hash()
     }
 }
 
