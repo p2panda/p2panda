@@ -1,20 +1,43 @@
+use std::convert::{TryFrom, TryInto};
 // SPDX-License-Identifier: AGPL-3.0-or-later
 use std::fmt::Debug;
 
+use super::StorageProviderError;
 use crate::document::DocumentId;
-use crate::entry::{decode_entry, Entry, EntrySigned, EntrySignedError, LogId, SeqNum};
+use crate::entry::{decode_entry, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::OperationEncoded;
 use crate::schema::SchemaId;
 
-use super::conversions::{FromStorage, ToStorage};
+#[derive(Debug, Clone)]
+pub struct EntryWithOperation(EntrySigned, Option<OperationEncoded>);
+
+impl EntryWithOperation {
+    pub fn new(
+        entry: EntrySigned,
+        operation: Option<OperationEncoded>,
+    ) -> Result<Self, StorageProviderError> {
+        // TODO: Validate entry + operation here
+
+        Ok(Self(entry, operation))
+    }
+    pub fn entry_encoded(&self) -> &EntrySigned {
+        &self.0
+    }
+    pub fn operation_encoded(&self) -> Option<&OperationEncoded> {
+        self.1.as_ref()
+    }
+}
 
 /// Trait required for entries which will pass in and out of storage.
-pub trait AsEntry<T: ToStorage<Self>>: Sized + Send + Sync + FromStorage {
-    type Error: Debug;
+pub trait AsStorageEntry
+where
+    Self: Sized + Clone + Send + Sync + TryInto<EntryWithOperation> + TryFrom<EntryWithOperation>,
+{
+    type AsStorageEntryError: Debug;
 
-    fn new(entry_encoded: EntrySigned, operation_encoded: Option<OperationEncoded>) -> Self;
+    fn new(entry_with_operation: EntryWithOperation) -> Result<Self, Self::AsStorageEntryError>;
 
     fn entry_encoded(&self) -> EntrySigned;
 
@@ -42,23 +65,8 @@ pub trait AsEntry<T: ToStorage<Self>>: Sized + Send + Sync + FromStorage {
     }
 }
 
-#[derive(Debug)]
-pub struct Log {
-    /// Public key of the author.
-    pub author: Author,
-
-    /// Log id used for this document.
-    pub log_id: LogId,
-
-    /// Hash that identifies the document this log is for.
-    pub document: DocumentId,
-
-    /// SchemaId which identifies the schema for operations in this log.
-    pub schema: SchemaId,
-}
-
-pub trait AsLog<T: ToStorage<Self>>: Sized + Send + Sync + FromStorage {
-    type Error: Debug;
+pub trait AsLog: Sized + Send + Sync {
+    type AsLogError: Debug;
 
     fn new(author: Author, document: DocumentId, schema: SchemaId, log_id: LogId) -> Self;
     fn author(&self) -> Author;

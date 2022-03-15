@@ -1,4 +1,3 @@
-pub mod conversions;
 mod errors;
 pub mod models;
 pub mod requests;

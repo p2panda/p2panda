@@ -5,20 +5,19 @@ use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use std::fmt::Debug;
 
 use crate::document::DocumentId;
-use crate::entry::{decode_entry, EntrySigned, SeqNum};
+use crate::entry::{decode_entry, SeqNum};
 use crate::hash::Hash;
-use crate::operation::{AsOperation, Operation, OperationEncoded};
+use crate::operation::{AsOperation, Operation};
 use crate::Validate;
 use crate::{entry::LogId, identity::Author};
 
-use super::conversions::ToStorage;
-use super::models::{AsEntry, AsLog};
+use super::models::{AsLog, AsStorageEntry, EntryWithOperation};
 use super::responses::AsEntryArgsResponse;
 use super::StorageProviderError;
 
 /// Trait which handles all storage actions relating to `Log`s.
 #[async_trait]
-pub trait LogStore<StorageLog: AsLog<MemoryLog> + Send, MemoryLog: ToStorage<StorageLog>> {
+pub trait LogStore<StorageLog: AsLog> {
     /// The error type
     type LogError: Debug;
 
@@ -66,7 +65,7 @@ pub trait LogStore<StorageLog: AsLog<MemoryLog> + Send, MemoryLog: ToStorage<Sto
 
 /// Trait which handles all storage actions relating to `Entries`.
 #[async_trait]
-pub trait EntryStore<StorageEntry: AsEntry<MemoryEntry>, MemoryEntry: ToStorage<StorageEntry>> {
+pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// The error type
     type EntryError: Debug;
 
@@ -121,17 +120,16 @@ pub trait EntryStore<StorageEntry: AsEntry<MemoryEntry>, MemoryEntry: ToStorage<
 
 /// All other methods needed to be implemented by a p2panda `StorageProvider`
 #[async_trait]
-pub trait StorageProvider<
-    StorageEntry: AsEntry<MemoryEntry> + Send + Sync + Clone + Copy,
-    MemoryEntry: ToStorage<StorageEntry> + Send + Sync,
-    StorageLog: AsLog<MemoryLog> + Send,
-    MemoryLog: ToStorage<StorageLog>,
->: EntryStore<StorageEntry, MemoryEntry> + LogStore<StorageLog, MemoryLog>
+pub trait StorageProvider<StorageEntry, StorageLog>
+where
+    Self: EntryStore<StorageEntry> + LogStore<StorageLog>,
+    StorageEntry: AsStorageEntry,
+    StorageLog: AsLog,
 {
     /// The error type
-    type Error: Debug + Send + Sync;
-    type EntryArgsResponse: AsEntryArgsResponse + Send + Sync;
-    type PublishEntryResponse: AsEntryArgsResponse + Send + Sync;
+    type Error: Debug;
+    type EntryArgsResponse: AsEntryArgsResponse;
+    type PublishEntryResponse: AsEntryArgsResponse;
     /// Returns the related document for any entry.
     ///
     /// Every entry is part of a document and, through that, associated with a specific log id used
@@ -211,9 +209,10 @@ pub trait StorageProvider<
     /// Stores an author's Bamboo entry with operation payload in database after validating it.
     async fn publish_entry(
         &self,
-        entry: &MemoryEntry,
+        entry_with_operation: &EntryWithOperation,
     ) -> Result<Self::PublishEntryResponse, StorageProviderError> {
-        let store_entry = entry.to_store_value().unwrap();
+        let store_entry = StorageEntry::try_from(entry_with_operation.clone())
+            .map_err(|_| StorageProviderError::Error)?;
 
         // Validate request parameters
         store_entry
@@ -321,7 +320,7 @@ pub trait StorageProvider<
         }
 
         // Finally insert Entry in database
-        self.insert_entry(store_entry)
+        self.insert_entry(store_entry.clone())
             .await
             .map_err(|_| StorageProviderError::Error)?;
 
