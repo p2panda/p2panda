@@ -5,19 +5,19 @@ use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use std::fmt::Debug;
 
 use crate::document::DocumentId;
+use crate::entry::LogId;
 use crate::entry::{decode_entry, SeqNum};
 use crate::hash::Hash;
+use crate::identity::Author;
 use crate::operation::{AsOperation, Operation};
+use crate::storage_provider::models::EntryWithOperation;
+use crate::storage_provider::traits::{AsEntryArgsResponse, AsStorageEntry, AsStorageLog};
+use crate::storage_provider::StorageProviderError;
 use crate::Validate;
-use crate::{entry::LogId, identity::Author};
-
-use super::models::{AsLog, AsStorageEntry, EntryWithOperation};
-use super::responses::AsEntryArgsResponse;
-use super::StorageProviderError;
 
 /// Trait which handles all storage actions relating to `Log`s.
 #[async_trait]
-pub trait LogStore<StorageLog: AsLog> {
+pub trait LogStore<StorageLog: AsStorageLog> {
     /// The error type
     type LogError: Debug;
 
@@ -98,7 +98,12 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         &self,
         storage_entry: &StorageEntry,
     ) -> Result<Option<Hash>, Self::EntryError> {
-        let next_seq_num = storage_entry.entry().seq_num().clone().next().unwrap();
+        let next_seq_num = storage_entry
+            .entry_decoded()
+            .seq_num()
+            .clone()
+            .next()
+            .unwrap();
 
         // Unwrap as we know that an skiplink exists as soon as previous entry is given
         let skiplink_seq_num = next_seq_num.skiplink_seq_num().unwrap();
@@ -108,7 +113,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
             let skiplink_entry = self
                 .entry_at_seq_num(
                     &storage_entry.entry_encoded().author(),
-                    &storage_entry.entry().log_id(),
+                    &storage_entry.entry_decoded().log_id(),
                     &skiplink_seq_num,
                 )
                 .await?
@@ -124,7 +129,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 
 /// All other methods needed to be implemented by a p2panda `StorageProvider`
 #[async_trait]
-pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsLog>:
+pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog>:
     EntryStore<StorageEntry> + LogStore<StorageLog>
 {
     /// The error type
@@ -186,8 +191,8 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsLog>:
                 Ok(Self::EntryArgsResponse::new(
                     Some(entry_hash_backlink),
                     entry_hash_skiplink,
-                    *entry_backlink.entry().seq_num(),
-                    *entry_backlink.entry().log_id(),
+                    *entry_backlink.entry_decoded().seq_num(),
+                    *entry_backlink.entry_decoded().log_id(),
                 ))
             }
             // No entry was given yet, we can assume this is the beginning of the log
@@ -330,7 +335,12 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsLog>:
             .determine_skiplink(&entry_latest)
             .await
             .map_err(|_| StorageProviderError::Error)?;
-        let next_seq_num = entry_latest.entry().seq_num().clone().next().unwrap();
+        let next_seq_num = entry_latest
+            .entry_decoded()
+            .seq_num()
+            .clone()
+            .next()
+            .unwrap();
 
         Ok(Self::PublishEntryResponse::new(
             Some(store_entry.entry_encoded().hash()),
