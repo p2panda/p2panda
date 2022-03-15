@@ -8,6 +8,10 @@ use crate::operation::{OperationEncodedError, OperationError};
 #[derive(thiserror::Error, Debug)]
 pub enum StorageProviderError {
     /// Error returned from validating p2panda-rs `Author` data types.
+    #[error("Error occured in `StorageProvider`: {0}")]
+    Error(String),
+
+    /// Error returned from validating p2panda-rs `Author` data types.
     #[error(transparent)]
     AuthorValidation(#[from] AuthorError),
 
