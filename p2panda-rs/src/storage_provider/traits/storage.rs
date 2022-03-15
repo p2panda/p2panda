@@ -16,6 +16,9 @@ use crate::storage_provider::StorageProviderError;
 use crate::Validate;
 
 /// Trait which handles all storage actions relating to `Log`s.
+///
+/// This trait should be implemented on the root storage provider struct. It's definitions
+/// make up the required methods for inserting and querying logs from storage.
 #[async_trait]
 pub trait LogStore<StorageLog: AsStorageLog> {
     /// The error type
@@ -63,7 +66,10 @@ pub trait LogStore<StorageLog: AsStorageLog> {
     async fn next_log_id(&self, author: &Author) -> Result<LogId, Self::LogError>;
 }
 
-/// Trait which handles all storage actions relating to `Entries`.
+/// Trait which handles all storage actions relating to `Entries`s.
+///
+/// This trait should be implemented on the root storage provider struct. It's definitions
+/// make up the required methods for inserting and querying entries from storage.
 #[async_trait]
 pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// The error type
@@ -127,7 +133,11 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     }
 }
 
-/// All other methods needed to be implemented by a p2panda `StorageProvider`
+/// Trait which handles all high level storage queries and insertions.
+///
+/// This trait should be implemented on the root storage provider struct. It's definitions
+/// make up the the higher level methods a p2panda client needs for interacting with data
+/// storage.
 #[async_trait]
 pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog>:
     EntryStore<StorageEntry> + LogStore<StorageLog>
@@ -315,6 +325,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
                 operation.schema(),
                 *entry.log_id(),
             );
+
             self.insert_log(log)
                 .await
                 .map_err(|_| StorageProviderError::Error)?;

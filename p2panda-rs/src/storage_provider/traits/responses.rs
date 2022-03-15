@@ -7,9 +7,11 @@ use crate::{
     hash::Hash,
 };
 
-/// Response body of `panda_getEntryArguments`.
+/// Trait to be implemented on the response body of `panda_getEntryArguments`.
 #[async_trait]
 pub trait AsEntryArgsResponse {
+    /// Just the constructor method is defined here as all we need this trait for
+    /// is constructing entry args to be returned from the default trait methods.
     fn new(
         entry_hash_backlink: Option<Hash>,
         entry_hash_skiplink: Option<Hash>,

@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use async_trait::async_trait;
-
-use crate::entry::{EntrySigned, LogId, SeqNum};
+use crate::entry::EntrySigned;
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::OperationEncoded;
