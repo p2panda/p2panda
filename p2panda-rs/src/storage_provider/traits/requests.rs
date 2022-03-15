@@ -9,14 +9,19 @@ use crate::Validate;
 
 /// Request body of `panda_getEntryArguments`.
 pub trait AsEntryArgsRequest {
+    /// Returns the Author parameter.
     fn author(&self) -> &Author;
+    /// Returns the document id Hash parameter.
+    ///
+    /// TODO: Needs updating once we use `DocumentId` here.
     fn document(&self) -> &Option<Hash>;
+    /// Validates the `EntryArgument` parameters
     fn validate(&self) -> Result<(), StorageProviderError> {
         // Validate `author` request parameter
         self.author().validate()?;
 
         // Validate `document` request parameter when it is set
-        let document = match self.document() {
+        match self.document() {
             Some(doc) => {
                 doc.validate()?;
                 Some(doc)
@@ -29,6 +34,10 @@ pub trait AsEntryArgsRequest {
 
 /// Request body of `panda_publishEntry`.
 pub trait AsPublishEntryRequest {
+    /// Returns the EntrySigned parameter
     fn entry_encoded(&self) -> &EntrySigned;
-    fn operation_encoded(&self) -> Option<&OperationEncoded>;
+    /// Returns the OperationEncoded parameter
+    ///
+    /// Currently not optional.
+    fn operation_encoded(&self) -> &OperationEncoded;
 }

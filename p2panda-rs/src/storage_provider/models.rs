@@ -2,8 +2,9 @@
 use std::fmt::Debug;
 
 use super::StorageProviderError;
-use crate::entry::EntrySigned;
+use crate::entry::{decode_entry, EntrySigned};
 use crate::operation::OperationEncoded;
+use crate::Validate;
 
 /// Struct wrapping an entry with it's operation.
 ///
@@ -11,17 +12,18 @@ use crate::operation::OperationEncoded;
 /// The `AsStorageEntry` trait requires `TryFrom<EntryWithOperation>` & `TryInto<EntryWithOperation>`
 /// conversion traits to be present.
 #[derive(Debug, Clone)]
-pub struct EntryWithOperation(EntrySigned, Option<OperationEncoded>);
+pub struct EntryWithOperation(EntrySigned, OperationEncoded);
 
 impl EntryWithOperation {
     /// Instantiate a new EntryWithOperation.
     pub fn new(
         entry: EntrySigned,
-        operation: Option<OperationEncoded>,
+        operation: OperationEncoded,
     ) -> Result<Self, StorageProviderError> {
         // TODO: Validate entry + operation here
-
-        Ok(Self(entry, operation))
+        let entry_with_operation = Self(entry, operation);
+        entry_with_operation.validate()?;
+        Ok(entry_with_operation)
     }
 
     /// Returns a reference to the encoded entry.
@@ -30,7 +32,18 @@ impl EntryWithOperation {
     }
 
     /// Returns a refernce to the optional encoded operation.
-    pub fn operation_encoded(&self) -> Option<&OperationEncoded> {
-        self.1.as_ref()
+    pub fn operation_encoded(&self) -> &OperationEncoded {
+        &self.1
+    }
+}
+
+impl Validate for EntryWithOperation {
+    type Error = StorageProviderError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        self.entry_encoded().validate()?;
+        self.operation_encoded().validate()?;
+        decode_entry(self.entry_encoded(), Some(self.operation_encoded()))?;
+        Ok(())
     }
 }

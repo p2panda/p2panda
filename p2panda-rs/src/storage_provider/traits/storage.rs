@@ -16,7 +16,6 @@ use crate::storage_provider::traits::{
     AsStorageEntry, AsStorageLog,
 };
 use crate::storage_provider::StorageProviderError;
-use crate::Validate;
 
 /// Trait which handles all storage actions relating to `Log`s.
 ///
@@ -210,32 +209,23 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         &self,
         params: &Self::PublishEntryRequest,
     ) -> Result<Self::PublishEntryResponse, StorageProviderError> {
-        // TODO: Apply validation in `EntryWithOperation`
+        // Create an `EntryWithOperation` which also validates the encoded entry and operation.
         let entry_with_operation = EntryWithOperation::new(
             params.entry_encoded().to_owned(),
-            params.operation_encoded().cloned(),
+            params.operation_encoded().to_owned(),
         )?;
-
-        let store_entry = StorageEntry::try_from(entry_with_operation.clone())
-            .map_err(|_| PublishEntryError::InvalidEntryWithOperation)?;
-
-        // Validate request parameters
-        store_entry.entry_encoded().validate()?;
-        store_entry.operation_encoded().unwrap().validate()?;
 
         // Decode author, entry and operation. This conversion validates the operation hash
-        let author = store_entry.entry_encoded().author();
-        let entry = decode_entry(
-            &store_entry.entry_encoded(),
-            store_entry.operation_encoded().as_ref(),
-        )?;
-        let operation = Operation::from(&store_entry.operation_encoded().unwrap());
+        let author = params.entry_encoded().author();
+        let entry_encoded = params.entry_encoded();
+        let entry = decode_entry(params.entry_encoded(), Some(params.operation_encoded()))?;
+        let operation = Operation::from(params.operation_encoded());
 
         // Every operation refers to a document we need to determine. A document is identified by the
         // hash of its first `CREATE` operation, it is the root operation of every document graph
         let document_id = if operation.is_create() {
             // This is easy: We just use the entry hash directly to determine the document id
-            store_entry.entry_encoded().hash()
+            entry_encoded.hash()
         } else {
             // For any other operations which followed after creation we need to either walk the operation
             // graph back to its `CREATE` operation or more easily look up the database since we keep track
@@ -298,8 +288,8 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         // Verify bamboo entry integrity, including encoding, signature of the entry correct back- and
         // skiplinks.
         bamboo_rs_core_ed25519_yasmf::verify(
-            &store_entry.entry_encoded().to_bytes(),
-            Some(&store_entry.operation_encoded().unwrap().to_bytes()),
+            &entry_encoded.to_bytes(),
+            Some(&params.operation_encoded().to_bytes()),
             entry_skiplink_bytes.as_deref(),
             entry_backlink_bytes.as_deref(),
         )?;
@@ -316,6 +306,9 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
             self.insert_log(log).await?;
         }
 
+        let store_entry = StorageEntry::try_from(entry_with_operation)
+            .map_err(|_| PublishEntryError::InvalidEntryWithOperation)?;
+
         // Finally insert Entry in database
         self.insert_entry(store_entry.clone()).await?;
 
@@ -330,7 +323,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
             .unwrap();
 
         Ok(Self::PublishEntryResponse::new(
-            Some(store_entry.entry_encoded().hash()),
+            Some(entry_encoded.hash()),
             entry_hash_skiplink,
             next_seq_num,
             *entry.log_id(),

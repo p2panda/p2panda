@@ -3,7 +3,7 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 
 use crate::document::DocumentId;
-use crate::entry::{decode_entry, Entry, EntrySigned, LogId, SeqNum};
+use crate::entry::{decode_entry, Entry, EntrySigned, LogId};
 use crate::identity::Author;
 use crate::operation::OperationEncoded;
 use crate::schema::SchemaId;
