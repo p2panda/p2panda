@@ -11,7 +11,10 @@ use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{AsOperation, Operation};
 use crate::storage_provider::models::EntryWithOperation;
-use crate::storage_provider::traits::{AsEntryArgsResponse, AsStorageEntry, AsStorageLog};
+use crate::storage_provider::traits::{
+    AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
+    AsStorageEntry, AsStorageLog,
+};
 use crate::storage_provider::StorageProviderError;
 use crate::Validate;
 
@@ -144,10 +147,14 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 {
     /// The error type returned by this traits' methods.
     type Error: Debug;
+    /// Params when making a request to `get_entry_args`.
+    type EntryArgsRequest: AsEntryArgsRequest + Sync;
     /// Response from a call to `get_entry_args`.
     type EntryArgsResponse: AsEntryArgsResponse;
+    /// Params when making a request to `publish_entry`.
+    type PublishEntryRequest: AsPublishEntryRequest + Sync;
     /// Response from a call to `publish_entry`.
-    type PublishEntryResponse: AsEntryArgsResponse;
+    type PublishEntryResponse: AsPublishEntryResponse;
 
     /// Returns the related document for any entry.
     ///
@@ -162,14 +169,16 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
     /// document's log_id) to encode a new bamboo entry.
     async fn get_entry_args(
         &self,
-        author: &Author,
-        document: Option<&Hash>,
+        entry_args_request: &Self::EntryArgsRequest,
     ) -> Result<Self::EntryArgsResponse, StorageProviderError> {
         // Validate `author` request parameter
-        author.validate().map_err(|_| StorageProviderError::Error)?;
+        entry_args_request
+            .author()
+            .validate()
+            .map_err(|_| StorageProviderError::Error)?;
 
         // Validate `document` request parameter when it is set
-        let document = match document {
+        let document = match entry_args_request.document() {
             Some(doc) => {
                 doc.validate().map_err(|_| StorageProviderError::Error)?;
                 Some(doc)
@@ -180,14 +189,14 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         // Determine log_id for this document. If this is the very first operation in the document
         // graph, the `document` value is None and we will return the next free log id
         let log = self
-            .find_document_log_id(author, document)
+            .find_document_log_id(entry_args_request.author(), document)
             .await
             .map_err(|_| StorageProviderError::Error)?;
 
         // Determine backlink and skiplink hashes for the next entry. To do this we need the latest
         // entry in this log
         let entry_latest: Option<StorageEntry> = self
-            .latest_entry(author, &log)
+            .latest_entry(entry_args_request.author(), &log)
             .await
             .map_err(|_| StorageProviderError::Error)?;
 
@@ -223,8 +232,14 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
     /// Stores an author's Bamboo entry with operation payload in database after validating it.
     async fn publish_entry(
         &self,
-        entry_with_operation: &EntryWithOperation,
+        params: &Self::PublishEntryRequest,
     ) -> Result<Self::PublishEntryResponse, StorageProviderError> {
+        let entry_with_operation = EntryWithOperation::new(
+            params.entry_encoded().to_owned(),
+            params.operation_encoded().cloned(),
+        )
+        .map_err(|_| StorageProviderError::Error)?;
+
         let store_entry = StorageEntry::try_from(entry_with_operation.clone())
             .map_err(|_| StorageProviderError::Error)?;
 

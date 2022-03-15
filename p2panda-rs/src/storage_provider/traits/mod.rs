@@ -5,5 +5,5 @@ mod storage;
 
 pub use models::{AsStorageEntry, AsStorageLog};
 pub use requests::{AsEntryArgsRequest, AsPublishEntryRequest};
-pub use responses::AsEntryArgsResponse;
+pub use responses::{AsEntryArgsResponse, AsPublishEntryResponse};
 pub use storage::{EntryStore, LogStore, StorageProvider};
