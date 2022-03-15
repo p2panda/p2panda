@@ -2,12 +2,16 @@
 
 //! Traits used when implementing a custom storage provider for a p2panda client or node.
 
+mod entry_store;
+mod log_store;
 mod models;
 mod requests;
 mod responses;
-mod storage;
+mod storage_provider;
 
+pub use entry_store::EntryStore;
+pub use log_store::LogStore;
 pub use models::{AsStorageEntry, AsStorageLog};
 pub use requests::{AsEntryArgsRequest, AsPublishEntryRequest};
 pub use responses::{AsEntryArgsResponse, AsPublishEntryResponse};
-pub use storage::{EntryStore, LogStore, StorageProvider};
+pub use storage_provider::StorageProvider;

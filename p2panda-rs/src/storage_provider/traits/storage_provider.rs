@@ -1,133 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use async_trait::async_trait;
-use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 
 use crate::document::DocumentId;
-use crate::entry::LogId;
 use crate::entry::{decode_entry, SeqNum};
 use crate::hash::Hash;
-use crate::identity::Author;
 use crate::operation::{AsOperation, Operation};
-use crate::storage_provider::errors::{EntryStorageError, LogStorageError, PublishEntryError};
+use crate::storage_provider::errors::PublishEntryError;
 use crate::storage_provider::models::EntryWithOperation;
 use crate::storage_provider::traits::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
-    AsStorageEntry, AsStorageLog,
+    AsStorageEntry, AsStorageLog, EntryStore, LogStore,
 };
 use crate::storage_provider::StorageProviderError;
-
-/// Trait which handles all storage actions relating to `Log`s.
-///
-/// This trait should be implemented on the root storage provider struct. It's definitions
-/// make up the required methods for inserting and querying logs from storage.
-#[async_trait]
-pub trait LogStore<StorageLog: AsStorageLog> {
-    /// Insert a log into storage.
-    async fn insert_log(&self, value: StorageLog) -> Result<bool, LogStorageError>;
-
-    /// Get a log from storage
-    async fn get(
-        &self,
-        author: &Author,
-        document_id: &Hash,
-    ) -> Result<Option<LogId>, LogStorageError>;
-
-    /// Returns registered or possible log id for a document.
-    ///
-    /// If no log has been previously registered for this document it
-    /// automatically returns the next unused log_id.
-
-    /// Returns registered or possible log id for a document.
-    ///
-    /// If no log has been previously registered for this document it
-    /// automatically returns the next unused log_id.
-    async fn find_document_log_id(
-        &self,
-        author: &Author,
-        document_id: Option<&Hash>,
-    ) -> Result<LogId, LogStorageError> {
-        // Determine log_id for this document when a hash was given
-        let document_log_id = match document_id {
-            Some(id) => self.get(author, id).await?,
-            None => None,
-        };
-
-        // Use result or find next possible log_id automatically when nothing was found yet
-        let log_id = match document_log_id {
-            Some(value) => value,
-            None => self.next_log_id(author).await?,
-        };
-
-        Ok(log_id)
-    }
-    /// Determines the next unused log_id of an author.
-    async fn next_log_id(&self, author: &Author) -> Result<LogId, LogStorageError>;
-}
-
-/// Trait which handles all storage actions relating to `Entries`s.
-///
-/// This trait should be implemented on the root storage provider struct. It's definitions
-/// make up the required methods for inserting and querying entries from storage.
-#[async_trait]
-pub trait EntryStore<StorageEntry: AsStorageEntry> {
-    /// Insert an entry into storage.
-    async fn insert_entry(&self, value: StorageEntry) -> Result<bool, EntryStorageError>;
-
-    /// Returns entry at sequence position within an author's log.
-    async fn entry_at_seq_num(
-        &self,
-        author: &Author,
-        log_id: &LogId,
-        seq_num: &SeqNum,
-    ) -> Result<Option<StorageEntry>, EntryStorageError>;
-
-    /// Returns the latest Bamboo entry of an author's log.
-    async fn latest_entry(
-        &self,
-        author: &Author,
-        log_id: &LogId,
-    ) -> Result<Option<StorageEntry>, EntryStorageError>;
-
-    /// Return vector of all entries of a given schema
-    async fn by_schema(&self, schema: &Hash) -> Result<Vec<StorageEntry>, EntryStorageError>;
-
-    /// Determine skiplink entry hash ("lipmaa"-link) for entry in this log, return `None` when no
-    /// skiplink is required for the next entry.
-    /// Determine skiplink entry hash ("lipmaa"-link) for entry in this log, return `None` when no
-    /// skiplink is required for the next entry.
-    async fn determine_skiplink(
-        &self,
-        storage_entry: &StorageEntry,
-    ) -> Result<Option<Hash>, EntryStorageError> {
-        let next_seq_num = storage_entry
-            .entry_decoded()
-            .seq_num()
-            .clone()
-            .next()
-            .unwrap();
-
-        // Unwrap as we know that an skiplink exists as soon as previous entry is given
-        let skiplink_seq_num = next_seq_num.skiplink_seq_num().unwrap();
-
-        // Check if skiplink is required and return hash if so
-        let entry_skiplink_hash = if is_lipmaa_required(next_seq_num.as_u64()) {
-            let skiplink_entry = self
-                .entry_at_seq_num(
-                    &storage_entry.entry_encoded().author(),
-                    storage_entry.entry_decoded().log_id(),
-                    &skiplink_seq_num,
-                )
-                .await?
-                .unwrap();
-            Some(skiplink_entry.entry_encoded().hash())
-        } else {
-            None
-        };
-
-        Ok(entry_skiplink_hash)
-    }
-}
 
 /// Trait which handles all high level storage queries and insertions.
 ///
