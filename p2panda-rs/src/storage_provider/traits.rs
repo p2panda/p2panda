@@ -11,25 +11,19 @@ use crate::operation::{AsOperation, Operation, OperationEncoded};
 use crate::Validate;
 use crate::{entry::LogId, identity::Author};
 
-use super::models::{AsEntry, AsLog, Log};
-use super::requests::AsEntryArgsRequest;
+use super::conversions::ToStorage;
+use super::models::{AsEntry, AsLog};
 use super::responses::AsEntryArgsResponse;
 use super::StorageProviderError;
-use crate::storage_provider::conversions::ToStorage;
 
 /// Trait which handles all storage actions relating to `Log`s.
 #[async_trait]
-pub trait LogStore<T> {
+pub trait LogStore<StorageLog: AsLog<MemoryLog> + Send, MemoryLog: ToStorage<StorageLog>> {
     /// The error type
     type LogError: Debug;
-    /// The type representing a Log
-    ///
-    /// NB: Interestingly, there is no struct representing this in p2panda_rs,
-    /// but that is all cool, thank you generics ;-p
-    type Log: AsLog<T> + Send;
 
     /// Insert a log into storage.
-    async fn insert_log(&self, value: Self::Log) -> Result<bool, Self::LogError>;
+    async fn insert_log(&self, value: StorageLog) -> Result<bool, Self::LogError>;
 
     /// Get a log from storage
     async fn get(
@@ -72,14 +66,12 @@ pub trait LogStore<T> {
 
 /// Trait which handles all storage actions relating to `Entries`.
 #[async_trait]
-pub trait EntryStore<T> {
-    /// Type representing an entry, must implement the `AsEntry` trait.
-    type Entry: AsEntry<T>;
+pub trait EntryStore<StorageEntry: AsEntry<MemoryEntry>, MemoryEntry: ToStorage<StorageEntry>> {
     /// The error type
     type EntryError: Debug;
 
     /// Insert an entry into storage.
-    async fn insert_entry(&self, value: Self::Entry) -> Result<bool, Self::EntryError>;
+    async fn insert_entry(&self, value: StorageEntry) -> Result<bool, Self::EntryError>;
 
     /// Returns entry at sequence position within an author's log.
     async fn entry_at_seq_num(
@@ -87,17 +79,17 @@ pub trait EntryStore<T> {
         author: &Author,
         log_id: &LogId,
         seq_num: &SeqNum,
-    ) -> Result<Option<Self::Entry>, Self::EntryError>;
+    ) -> Result<Option<StorageEntry>, Self::EntryError>;
 
     /// Returns the latest Bamboo entry of an author's log.
     async fn latest_entry(
         &self,
         author: &Author,
         log_id: &LogId,
-    ) -> Result<Option<Self::Entry>, Self::EntryError>;
+    ) -> Result<Option<StorageEntry>, Self::EntryError>;
 
     /// Return vector of all entries of a given schema
-    async fn by_schema(&self, schema: &Hash) -> Result<Vec<Self::Entry>, Self::EntryError>;
+    async fn by_schema(&self, schema: &Hash) -> Result<Vec<StorageEntry>, Self::EntryError>;
 
     /// Determine skiplink entry hash ("lipmaa"-link) for entry in this log, return `None` when no
     /// skiplink is required for the next entry.
@@ -105,7 +97,7 @@ pub trait EntryStore<T> {
     /// skiplink is required for the next entry.
     async fn determine_skiplink(
         &self,
-        entry: &Self::Entry,
+        entry: &StorageEntry,
     ) -> Result<Option<Hash>, Self::EntryError> {
         let next_seq_num = entry.seq_num().clone().next().unwrap();
 
@@ -129,10 +121,17 @@ pub trait EntryStore<T> {
 
 /// All other methods needed to be implemented by a p2panda `StorageProvider`
 #[async_trait]
-pub trait StorageProvider<T, U>: EntryStore<T> + LogStore<U> {
+pub trait StorageProvider<
+    StorageEntry: AsEntry<MemoryEntry>,
+    MemoryEntry: ToStorage<StorageEntry>,
+    StorageLog: AsLog<MemoryLog> + Send,
+    MemoryLog: ToStorage<StorageLog>,
+>: EntryStore<StorageEntry, MemoryEntry> + LogStore<StorageLog, MemoryLog>
+{
     /// The error type
     type Error: Debug + Send + Sync;
     type EntryArgsResponse: AsEntryArgsResponse + Send + Sync;
+    type PublishEntryResponse: AsEntryArgsResponse + Send + Sync;
     /// Returns the related document for any entry.
     ///
     /// Every entry is part of a document and, through that, associated with a specific log id used
@@ -170,7 +169,7 @@ pub trait StorageProvider<T, U>: EntryStore<T> + LogStore<U> {
 
         // Determine backlink and skiplink hashes for the next entry. To do this we need the latest
         // entry in this log
-        let entry_latest: Option<Self::Entry> = self
+        let entry_latest: Option<StorageEntry> = self
             .latest_entry(author, &log)
             .await
             .map_err(|_| StorageProviderError::Error)?;
@@ -179,7 +178,7 @@ pub trait StorageProvider<T, U>: EntryStore<T> + LogStore<U> {
             // An entry was found which serves as the backlink for the upcoming entry
             Some(entry_backlink) => {
                 let entry_hash_backlink = entry_backlink.entry_encoded().hash();
-                let entry_latest: Self::Entry = self
+                let entry_latest: StorageEntry = self
                     .latest_entry(author, &log)
                     .await
                     .map_err(|_| StorageProviderError::Error)?
@@ -214,7 +213,7 @@ pub trait StorageProvider<T, U>: EntryStore<T> + LogStore<U> {
         &self,
         entry_encoded: EntrySigned,
         operation_encoded: OperationEncoded,
-    ) -> Result<Self::EntryArgsResponse, StorageProviderError> {
+    ) -> Result<Self::PublishEntryResponse, StorageProviderError> {
         // Validate request parameters
         entry_encoded
             .validate()
@@ -261,7 +260,7 @@ pub trait StorageProvider<T, U>: EntryStore<T> + LogStore<U> {
 
         // Check if provided log id matches expected log id
         if &document_log_id != entry.log_id() {
-            return Err(StorageProviderError::Error.into());
+            return Err(StorageProviderError::Error);
         }
 
         // Get related bamboo backlink and skiplink entries
@@ -303,7 +302,7 @@ pub trait StorageProvider<T, U>: EntryStore<T> + LogStore<U> {
 
         // Register log in database when a new document is created
         if operation.is_create() {
-            let log = Self::Log::new(
+            let log = StorageLog::new(
                 author.clone(),
                 DocumentId::new(document_id),
                 operation.schema(),
@@ -315,12 +314,15 @@ pub trait StorageProvider<T, U>: EntryStore<T> + LogStore<U> {
         }
 
         // Finally insert Entry in database
-        self.insert_entry(Self::Entry::new(&entry_encoded, Some(&operation_encoded)))
-            .await
-            .map_err(|_| StorageProviderError::Error)?;
+        self.insert_entry(StorageEntry::new(
+            entry_encoded.clone(),
+            Some(operation_encoded),
+        ))
+        .await
+        .map_err(|_| StorageProviderError::Error)?;
 
         // Already return arguments for next entry creation
-        let entry_latest: Self::Entry = self
+        let entry_latest: StorageEntry = self
             .latest_entry(&author, entry.log_id())
             .await
             .map_err(|_| StorageProviderError::Error)?
@@ -331,7 +333,7 @@ pub trait StorageProvider<T, U>: EntryStore<T> + LogStore<U> {
             .map_err(|_| StorageProviderError::Error)?;
         let next_seq_num = entry_latest.seq_num().next().unwrap();
 
-        Ok(Self::EntryArgsResponse::new(
+        Ok(Self::PublishEntryResponse::new(
             Some(entry_encoded.hash()),
             entry_hash_skiplink,
             next_seq_num,

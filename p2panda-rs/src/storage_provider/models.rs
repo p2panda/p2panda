@@ -10,10 +10,11 @@ use crate::schema::SchemaId;
 
 use super::conversions::{FromStorage, ToStorage};
 
-pub trait AsEntry<T>: Sized + Send + Sync + FromStorage<T> + ToStorage<T> {
+/// Trait required for entries which will pass in and out of storage.
+pub trait AsEntry<T: ToStorage<Self>>: Sized + Send + Sync + FromStorage {
     type Error: Debug;
 
-    fn new(entry_encoded: &EntrySigned, operation_encoded: Option<&OperationEncoded>) -> Self;
+    fn new(entry_encoded: EntrySigned, operation_encoded: Option<OperationEncoded>) -> Self;
 
     fn entry_encoded(&self) -> EntrySigned;
 
@@ -41,6 +42,7 @@ pub trait AsEntry<T>: Sized + Send + Sync + FromStorage<T> + ToStorage<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct Log {
     /// Public key of the author.
     pub author: Author,
@@ -55,7 +57,7 @@ pub struct Log {
     pub schema: SchemaId,
 }
 
-pub trait AsLog<T>: Sized + Send + Sync + FromStorage<T> + ToStorage<T> {
+pub trait AsLog<T: ToStorage<Self>>: Sized + Send + Sync + FromStorage {
     type Error: Debug;
 
     fn new(author: Author, document: DocumentId, schema: SchemaId, log_id: LogId) -> Self;
