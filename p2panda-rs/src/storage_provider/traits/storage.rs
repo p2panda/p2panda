@@ -2,7 +2,6 @@
 
 use async_trait::async_trait;
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
-use std::fmt::Debug;
 
 use crate::document::DocumentId;
 use crate::entry::LogId;
@@ -10,6 +9,7 @@ use crate::entry::{decode_entry, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{AsOperation, Operation};
+use crate::storage_provider::errors::{EntryStorageError, LogStorageError, PublishEntryError};
 use crate::storage_provider::models::EntryWithOperation;
 use crate::storage_provider::traits::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
@@ -24,18 +24,15 @@ use crate::Validate;
 /// make up the required methods for inserting and querying logs from storage.
 #[async_trait]
 pub trait LogStore<StorageLog: AsStorageLog> {
-    /// The error type returned by this traits' methods.
-    type LogError: Debug;
-
     /// Insert a log into storage.
-    async fn insert_log(&self, value: StorageLog) -> Result<bool, Self::LogError>;
+    async fn insert_log(&self, value: StorageLog) -> Result<bool, LogStorageError>;
 
     /// Get a log from storage
     async fn get(
         &self,
         author: &Author,
         document_id: &Hash,
-    ) -> Result<Option<LogId>, Self::LogError>;
+    ) -> Result<Option<LogId>, LogStorageError>;
 
     /// Returns registered or possible log id for a document.
     ///
@@ -50,7 +47,7 @@ pub trait LogStore<StorageLog: AsStorageLog> {
         &self,
         author: &Author,
         document_id: Option<&Hash>,
-    ) -> Result<LogId, Self::LogError> {
+    ) -> Result<LogId, LogStorageError> {
         // Determine log_id for this document when a hash was given
         let document_log_id = match document_id {
             Some(id) => self.get(author, id).await?,
@@ -66,7 +63,7 @@ pub trait LogStore<StorageLog: AsStorageLog> {
         Ok(log_id)
     }
     /// Determines the next unused log_id of an author.
-    async fn next_log_id(&self, author: &Author) -> Result<LogId, Self::LogError>;
+    async fn next_log_id(&self, author: &Author) -> Result<LogId, LogStorageError>;
 }
 
 /// Trait which handles all storage actions relating to `Entries`s.
@@ -75,11 +72,8 @@ pub trait LogStore<StorageLog: AsStorageLog> {
 /// make up the required methods for inserting and querying entries from storage.
 #[async_trait]
 pub trait EntryStore<StorageEntry: AsStorageEntry> {
-    /// The error type returned by this traits' methods.
-    type EntryError: Debug;
-
     /// Insert an entry into storage.
-    async fn insert_entry(&self, value: StorageEntry) -> Result<bool, Self::EntryError>;
+    async fn insert_entry(&self, value: StorageEntry) -> Result<bool, EntryStorageError>;
 
     /// Returns entry at sequence position within an author's log.
     async fn entry_at_seq_num(
@@ -87,17 +81,17 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         author: &Author,
         log_id: &LogId,
         seq_num: &SeqNum,
-    ) -> Result<Option<StorageEntry>, Self::EntryError>;
+    ) -> Result<Option<StorageEntry>, EntryStorageError>;
 
     /// Returns the latest Bamboo entry of an author's log.
     async fn latest_entry(
         &self,
         author: &Author,
         log_id: &LogId,
-    ) -> Result<Option<StorageEntry>, Self::EntryError>;
+    ) -> Result<Option<StorageEntry>, EntryStorageError>;
 
     /// Return vector of all entries of a given schema
-    async fn by_schema(&self, schema: &Hash) -> Result<Vec<StorageEntry>, Self::EntryError>;
+    async fn by_schema(&self, schema: &Hash) -> Result<Vec<StorageEntry>, EntryStorageError>;
 
     /// Determine skiplink entry hash ("lipmaa"-link) for entry in this log, return `None` when no
     /// skiplink is required for the next entry.
@@ -106,7 +100,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     async fn determine_skiplink(
         &self,
         storage_entry: &StorageEntry,
-    ) -> Result<Option<Hash>, Self::EntryError> {
+    ) -> Result<Option<Hash>, EntryStorageError> {
         let next_seq_num = storage_entry
             .entry_decoded()
             .seq_num()
@@ -122,7 +116,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
             let skiplink_entry = self
                 .entry_at_seq_num(
                     &storage_entry.entry_encoded().author(),
-                    &storage_entry.entry_decoded().log_id(),
+                    storage_entry.entry_decoded().log_id(),
                     &skiplink_seq_num,
                 )
                 .await?
@@ -145,8 +139,6 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog>:
     EntryStore<StorageEntry> + LogStore<StorageLog>
 {
-    /// The error type returned by this traits' methods.
-    type Error: Debug;
     /// Params when making a request to `get_entry_args`.
     type EntryArgsRequest: AsEntryArgsRequest + Sync;
     /// Response from a call to `get_entry_args`.
@@ -161,7 +153,10 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
     /// Every entry is part of a document and, through that, associated with a specific log id used
     /// by this document and author. This method returns that document id by looking up the log
     /// that the entry was stored in.
-    async fn get_document_by_entry(&self, entry_hash: &Hash) -> Result<Option<Hash>, Self::Error>;
+    async fn get_document_by_entry(
+        &self,
+        entry_hash: &Hash,
+    ) -> Result<Option<Hash>, StorageProviderError>;
 
     /// Implementation of `panda_getEntryArguments` RPC method.
     ///
@@ -169,46 +164,27 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
     /// document's log_id) to encode a new bamboo entry.
     async fn get_entry_args(
         &self,
-        entry_args_request: &Self::EntryArgsRequest,
+        params: &Self::EntryArgsRequest,
     ) -> Result<Self::EntryArgsResponse, StorageProviderError> {
-        // Validate `author` request parameter
-        entry_args_request
-            .author()
-            .validate()
-            .map_err(|_| StorageProviderError::Error)?;
-
-        // Validate `document` request parameter when it is set
-        let document = match entry_args_request.document() {
-            Some(doc) => {
-                doc.validate().map_err(|_| StorageProviderError::Error)?;
-                Some(doc)
-            }
-            None => None,
-        };
+        // Validate the entry args request parameters.
+        params.validate()?;
 
         // Determine log_id for this document. If this is the very first operation in the document
         // graph, the `document` value is None and we will return the next free log id
         let log = self
-            .find_document_log_id(entry_args_request.author(), document)
-            .await
-            .map_err(|_| StorageProviderError::Error)?;
+            .find_document_log_id(params.author(), params.document().as_ref())
+            .await?;
 
         // Determine backlink and skiplink hashes for the next entry. To do this we need the latest
         // entry in this log
-        let entry_latest: Option<StorageEntry> = self
-            .latest_entry(entry_args_request.author(), &log)
-            .await
-            .map_err(|_| StorageProviderError::Error)?;
+        let entry_latest = self.latest_entry(params.author(), &log).await?;
 
         match entry_latest.clone() {
             // An entry was found which serves as the backlink for the upcoming entry
             Some(entry_backlink) => {
                 let entry_hash_backlink = entry_backlink.entry_encoded().hash();
                 // Determine skiplink ("lipmaa"-link) entry in this log
-                let entry_hash_skiplink = self
-                    .determine_skiplink(&entry_latest.unwrap())
-                    .await
-                    .map_err(|_| StorageProviderError::Error)?;
+                let entry_hash_skiplink = self.determine_skiplink(&entry_latest.unwrap()).await?;
 
                 Ok(Self::EntryArgsResponse::new(
                     Some(entry_hash_backlink),
@@ -234,33 +210,25 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         &self,
         params: &Self::PublishEntryRequest,
     ) -> Result<Self::PublishEntryResponse, StorageProviderError> {
+        // TODO: Apply validation in `EntryWithOperation`
         let entry_with_operation = EntryWithOperation::new(
             params.entry_encoded().to_owned(),
             params.operation_encoded().cloned(),
-        )
-        .map_err(|_| StorageProviderError::Error)?;
+        )?;
 
         let store_entry = StorageEntry::try_from(entry_with_operation.clone())
-            .map_err(|_| StorageProviderError::Error)?;
+            .map_err(|_| PublishEntryError::InvalidEntryWithOperation)?;
 
         // Validate request parameters
-        store_entry
-            .entry_encoded()
-            .validate()
-            .map_err(|_| StorageProviderError::Error)?;
-        store_entry
-            .operation_encoded()
-            .unwrap()
-            .validate()
-            .map_err(|_| StorageProviderError::Error)?;
+        store_entry.entry_encoded().validate()?;
+        store_entry.operation_encoded().unwrap().validate()?;
 
         // Decode author, entry and operation. This conversion validates the operation hash
         let author = store_entry.entry_encoded().author();
         let entry = decode_entry(
             &store_entry.entry_encoded(),
             store_entry.operation_encoded().as_ref(),
-        )
-        .map_err(|_| StorageProviderError::Error)?;
+        )?;
         let operation = Operation::from(&store_entry.operation_encoded().unwrap());
 
         // Every operation refers to a document we need to determine. A document is identified by the
@@ -279,48 +247,50 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
             // @TODO: This currently looks at the backlink, in the future we want to use
             // "previousOperation", since in a multi-writer setting there might be no backlink for
             // update operations! See: https://github.com/p2panda/aquadoggo/issues/49
-            let backlink_entry_hash = entry.backlink_hash().ok_or(StorageProviderError::Error)?;
+            let backlink_entry_hash = entry
+                .backlink_hash()
+                .ok_or(PublishEntryError::OperationWithoutBacklink)?;
 
             self.get_document_by_entry(backlink_entry_hash)
-                .await
-                .map_err(|_| StorageProviderError::Error)?
-                .unwrap()
+                .await?
+                .ok_or(PublishEntryError::DocumentMissing)?
         };
 
         // Determine expected log id for new entry
         let document_log_id = self
             .find_document_log_id(&author, Some(&document_id))
-            .await
-            .map_err(|_| StorageProviderError::Error)?;
+            .await?;
 
         // Check if provided log id matches expected log id
         if &document_log_id != entry.log_id() {
-            return Err(StorageProviderError::Error);
+            return Err(PublishEntryError::InvalidLogId(
+                entry.log_id().as_u64(),
+                document_log_id.as_u64(),
+            )
+            .into());
         }
 
         // Get related bamboo backlink and skiplink entries
         let entry_backlink_bytes = if !entry.seq_num().is_first() {
             self.entry_at_seq_num(&author, entry.log_id(), &entry.seq_num_backlink().unwrap())
-                .await
-                .map_err(|_| StorageProviderError::Error)?
+                .await?
                 .map(|link| {
                     let bytes = link.entry_encoded().to_bytes();
                     Some(bytes)
                 })
-                .ok_or(StorageProviderError::Error)
+                .ok_or(PublishEntryError::BacklinkMissing)
         } else {
             Ok(None)
         }?;
 
         let entry_skiplink_bytes = if !entry.seq_num().is_first() {
             self.entry_at_seq_num(&author, entry.log_id(), &entry.seq_num_skiplink().unwrap())
-                .await
-                .map_err(|_| StorageProviderError::Error)?
+                .await?
                 .map(|link| {
                     let bytes = link.entry_encoded().to_bytes();
                     Some(bytes)
                 })
-                .ok_or(StorageProviderError::Error)
+                .ok_or(PublishEntryError::SkiplinkMissing)
         } else {
             Ok(None)
         }?;
@@ -332,8 +302,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
             Some(&store_entry.operation_encoded().unwrap().to_bytes()),
             entry_skiplink_bytes.as_deref(),
             entry_backlink_bytes.as_deref(),
-        )
-        .map_err(|_| StorageProviderError::Error)?;
+        )?;
 
         // Register log in database when a new document is created
         if operation.is_create() {
@@ -344,26 +313,15 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
                 *entry.log_id(),
             );
 
-            self.insert_log(log)
-                .await
-                .map_err(|_| StorageProviderError::Error)?;
+            self.insert_log(log).await?;
         }
 
         // Finally insert Entry in database
-        self.insert_entry(store_entry.clone())
-            .await
-            .map_err(|_| StorageProviderError::Error)?;
+        self.insert_entry(store_entry.clone()).await?;
 
         // Already return arguments for next entry creation
-        let entry_latest: StorageEntry = self
-            .latest_entry(&author, entry.log_id())
-            .await
-            .map_err(|_| StorageProviderError::Error)?
-            .unwrap();
-        let entry_hash_skiplink = self
-            .determine_skiplink(&entry_latest)
-            .await
-            .map_err(|_| StorageProviderError::Error)?;
+        let entry_latest: StorageEntry = self.latest_entry(&author, entry.log_id()).await?.unwrap();
+        let entry_hash_skiplink = self.determine_skiplink(&entry_latest).await?;
         let next_seq_num = entry_latest
             .entry_decoded()
             .seq_num()

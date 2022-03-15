@@ -2,11 +2,8 @@
 
 use async_trait::async_trait;
 
-use crate::{
-    entry::{EntrySigned, LogId, SeqNum},
-    hash::Hash,
-    operation::OperationEncoded,
-};
+use crate::entry::{LogId, SeqNum};
+use crate::hash::Hash;
 
 /// Trait to be implemented on the response body of `panda_getEntryArguments`.
 #[async_trait]
