@@ -3,7 +3,6 @@
 use std::hash::Hash as StdHash;
 
 use crate::entry::{decode_entry, EntrySigned};
-use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{
     AsOperation, Operation, OperationAction, OperationEncoded, OperationFields, OperationVersion,
@@ -88,7 +87,7 @@ impl AsOperation for OperationWithMeta {
     }
 
     /// Returns vector of previous operations.
-    fn previous_operations(&self) -> Option<Vec<Hash>> {
+    fn previous_operations(&self) -> Option<Vec<OperationId>> {
         self.operation.previous_operations()
     }
 }

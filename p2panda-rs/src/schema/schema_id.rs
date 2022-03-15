@@ -7,8 +7,7 @@ use serde::de::{SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::document::DocumentViewId;
-use crate::hash::Hash;
-use crate::operation::PinnedRelation;
+use crate::operation::{OperationId, PinnedRelation};
 use crate::schema::error::SchemaIdError;
 use crate::Validate;
 
@@ -34,14 +33,14 @@ impl SchemaId {
         match id {
             "schema_v1" => Ok(SchemaId::Schema),
             "schema_field_v1" => Ok(SchemaId::SchemaField),
-            hash_str => Ok(SchemaId::from(Hash::new(hash_str)?)),
+            hash_str => Ok(hash_str.parse::<OperationId>()?.into()),
         }
     }
 }
 
-impl From<Hash> for SchemaId {
-    fn from(hash: Hash) -> Self {
-        Self::Application(PinnedRelation::new(DocumentViewId::new(vec![hash])))
+impl From<OperationId> for SchemaId {
+    fn from(operation_id: OperationId) -> Self {
+        Self::Application(PinnedRelation::new(operation_id.into()))
     }
 }
 
@@ -66,7 +65,7 @@ impl<'de> Visitor<'de> for SchemaIdVisitor {
     type Value = SchemaId;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("string or sequence of hash strings")
+        formatter.write_str("string or sequence of operation id strings")
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
@@ -87,20 +86,20 @@ impl<'de> Visitor<'de> for SchemaIdVisitor {
     where
         S: SeqAccess<'de>,
     {
-        let mut hashes: Vec<Hash> = Vec::new();
+        let mut op_ids: Vec<OperationId> = Vec::new();
 
-        while let Some(hash) = seq.next_element::<Hash>()? {
-            if hash.validate().is_err() {
+        while let Some(operation_id) = seq.next_element::<OperationId>()? {
+            if operation_id.validate().is_err() {
                 return Err(serde::de::Error::custom(format!(
-                    "Invalid hash {:?}",
-                    hash.as_str()
+                    "Invalid operation id {:?}",
+                    operation_id.as_str()
                 )));
             }
 
-            hashes.push(hash);
+            op_ids.push(operation_id);
         }
 
-        let document_view_id = DocumentViewId::new(hashes);
+        let document_view_id = DocumentViewId::new(op_ids);
         Ok(SchemaId::Application(PinnedRelation::new(document_view_id)))
     }
 }
@@ -130,8 +129,7 @@ impl<'de> Deserialize<'de> for SchemaId {
 #[cfg(test)]
 mod test {
     use crate::document::DocumentViewId;
-    use crate::hash::Hash;
-    use crate::operation::PinnedRelation;
+    use crate::operation::{OperationId, PinnedRelation};
     use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
 
     use super::SchemaId;
@@ -212,11 +210,12 @@ mod test {
 
     #[test]
     fn conversion() {
-        let hash =
-            Hash::new("00207b3a7de3470bfe34d34ea45472082c307b995b6bd4abe2ac4ee36edef5dea1b3")
+        let operation_id: OperationId =
+            "00207b3a7de3470bfe34d34ea45472082c307b995b6bd4abe2ac4ee36edef5dea1b3"
+                .parse()
                 .unwrap();
-        let schema: SchemaId = hash.clone().into();
-        let document_view_id = DocumentViewId::new(vec![hash]);
+        let schema: SchemaId = operation_id.clone().into();
+        let document_view_id = DocumentViewId::new(vec![operation_id]);
 
         // From Hash
         assert_eq!(

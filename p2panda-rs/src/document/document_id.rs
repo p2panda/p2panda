@@ -73,7 +73,10 @@ mod tests {
         // Converts any string to `DocumentId`
         let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         let document_id: DocumentId = hash_str.parse().unwrap();
-        assert_eq!(document_id, DocumentId::new(hash_str.parse::<OperationId>().unwrap()));
+        assert_eq!(
+            document_id,
+            DocumentId::new(hash_str.parse::<OperationId>().unwrap())
+        );
         assert_eq!(document_id.as_str(), hash_str);
 
         // Converts any `Hash` to `DocumentId`

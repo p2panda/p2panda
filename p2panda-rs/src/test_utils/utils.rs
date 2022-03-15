@@ -13,7 +13,7 @@ use crate::entry::{Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::{
-    Operation, OperationEncoded, OperationFields, OperationValue, OperationWithMeta,
+    Operation, OperationEncoded, OperationFields, OperationId, OperationValue, OperationWithMeta,
 };
 use crate::schema::SchemaId;
 use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
@@ -44,7 +44,7 @@ pub struct NextEntryArgs {
 /// provided, this is a DELETE operation.
 pub fn any_operation(
     fields: Option<OperationFields>,
-    previous_operations: Option<Vec<Hash>>,
+    previous_operations: Option<Vec<OperationId>>,
 ) -> Operation {
     match fields {
         // It's a CREATE operation
@@ -127,14 +127,14 @@ pub fn create_operation(schema: SchemaId, fields: OperationFields) -> Operation 
 /// Generate an UPDATE operation based on passed schema hash, document id and operation fields.
 pub fn update_operation(
     schema: SchemaId,
-    previous_operations: Vec<Hash>,
+    previous_operations: Vec<OperationId>,
     fields: OperationFields,
 ) -> Operation {
     Operation::new_update(schema, previous_operations, fields).unwrap()
 }
 
 /// Generate a DELETE operation based on passed schema hash and document id.
-pub fn delete_operation(schema: SchemaId, previous_operations: Vec<Hash>) -> Operation {
+pub fn delete_operation(schema: SchemaId, previous_operations: Vec<OperationId>) -> Operation {
     Operation::new_delete(schema, previous_operations).unwrap()
 }
 

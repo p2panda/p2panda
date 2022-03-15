@@ -4,9 +4,8 @@ use std::collections::BTreeMap;
 
 use crate::document::{DocumentBuilderError, DocumentId, DocumentView, DocumentViewId};
 use crate::graph::Graph;
-use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{AsOperation, OperationValue, OperationWithMeta, OperationId};
+use crate::operation::{AsOperation, OperationId, OperationValue, OperationWithMeta};
 use crate::schema::SchemaId;
 
 /// Construct a graph from a list of operations.
@@ -258,7 +257,7 @@ mod tests {
 
     use crate::document::DocumentId;
     use crate::identity::KeyPair;
-    use crate::operation::{Operation, OperationValue, OperationWithMeta};
+    use crate::operation::{Operation, OperationId, OperationValue, OperationWithMeta};
     use crate::schema::SchemaId;
     use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::fixtures::{
@@ -349,7 +348,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone()],
+                vec![panda_entry_1_hash.clone().into()],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Panda Cafe!".to_string()),
@@ -368,7 +367,7 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone()],
+                vec![panda_entry_1_hash.clone().into()],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Penguin Cafe".to_string()),
@@ -387,7 +386,10 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![penguin_entry_1_hash.clone(), panda_entry_2_hash.clone()],
+                vec![
+                    penguin_entry_1_hash.clone().into(),
+                    panda_entry_2_hash.clone().into(),
+                ],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Polar Bear Cafe".to_string()),
@@ -405,7 +407,7 @@ mod tests {
             &penguin,
             &update_operation(
                 schema,
-                vec![penguin_entry_2_hash.clone()],
+                vec![penguin_entry_2_hash.clone().into()],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
@@ -447,7 +449,7 @@ mod tests {
             "name".to_string(),
             OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
         );
-        let expected_graph_tip = vec![penguin_entry_3_hash.clone()];
+        let expected_graph_tips: Vec<OperationId> = vec![penguin_entry_3_hash.clone().into()];
         let expected_op_order = vec![
             panda_1.clone(),
             panda_2.clone(),
@@ -463,8 +465,11 @@ mod tests {
         assert!(document.is_edited());
         assert!(!document.is_deleted());
         assert_eq!(document.operations(), &expected_op_order);
-        assert_eq!(document.view_id().graph_tips(), &expected_graph_tip);
-        assert_eq!(document.id(), &DocumentId::new(panda_entry_1_hash.clone()));
+        assert_eq!(document.view_id().graph_tips(), expected_graph_tips);
+        assert_eq!(
+            document.id(),
+            &DocumentId::new(panda_entry_1_hash.clone().into())
+        );
 
         // Multiple replicas receiving operations in different orders should resolve to same value.
 
@@ -495,18 +500,27 @@ mod tests {
 
         assert_eq!(replica_1.view().get("name"), replica_2.view().get("name"));
         assert_eq!(replica_1.view().get("name"), replica_3.view().get("name"));
-        assert_eq!(replica_1.id(), &DocumentId::new(panda_entry_1_hash.clone()));
+        assert_eq!(
+            replica_1.id(),
+            &DocumentId::new(panda_entry_1_hash.clone().into())
+        );
         assert_eq!(
             replica_1.view_id().graph_tips(),
-            &[penguin_entry_3_hash.clone()]
+            &[penguin_entry_3_hash.clone().into()]
         );
-        assert_eq!(replica_2.id(), &DocumentId::new(panda_entry_1_hash.clone()));
+        assert_eq!(
+            replica_2.id(),
+            &DocumentId::from(panda_entry_1_hash.clone())
+        );
         assert_eq!(
             replica_2.view_id().graph_tips(),
-            &[penguin_entry_3_hash.clone()]
+            &[penguin_entry_3_hash.clone().into()]
         );
-        assert_eq!(replica_3.id(), &DocumentId::new(panda_entry_1_hash));
-        assert_eq!(replica_3.view_id().graph_tips(), &[penguin_entry_3_hash]);
+        assert_eq!(replica_3.id(), &DocumentId::from(panda_entry_1_hash));
+        assert_eq!(
+            replica_3.view_id().graph_tips(),
+            &[penguin_entry_3_hash.into()]
+        );
     }
 
     #[rstest]
@@ -545,7 +559,7 @@ mod tests {
             &polar,
             &update_operation(
                 schema.clone(),
-                vec![polar_entry_1_hash.clone()],
+                vec![polar_entry_1_hash.clone().into()],
                 operation_fields(vec![
                     ("name", OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".to_string())),
                     ("owner", OperationValue::Text("しろくま".to_string())),
@@ -558,7 +572,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema.clone(),
-                vec![polar_entry_1_hash.clone()],
+                vec![polar_entry_1_hash.clone().into()],
                 operation_fields(vec![("name", OperationValue::Text("🐼 Cafe!".to_string()))]),
             ),
         )
@@ -568,7 +582,10 @@ mod tests {
             &polar,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone(), polar_entry_2_hash.clone()],
+                vec![
+                    panda_entry_1_hash.clone().into(),
+                    polar_entry_2_hash.clone().into(),
+                ],
                 operation_fields(vec![("house-number", OperationValue::Integer(102))]),
             ),
         )
@@ -576,7 +593,7 @@ mod tests {
         let (polar_entry_4_hash, _) = send_to_node(
             &mut node,
             &polar,
-            &delete_operation(schema, vec![polar_entry_3_hash.clone()]),
+            &delete_operation(schema, vec![polar_entry_3_hash.clone().into()]),
         )
         .unwrap();
         let entry_1 = node.get_entry(&polar_entry_1_hash);
@@ -756,7 +773,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema,
-                vec![panda_entry_1_hash],
+                vec![panda_entry_1_hash.into()],
                 fields(vec![(
                     "name",
                     OperationValue::Text("Panda Cafe!".to_string()),
@@ -802,7 +819,7 @@ mod tests {
         send_to_node(
             &mut node,
             &panda,
-            &delete_operation(schema, vec![panda_entry_1_hash]),
+            &delete_operation(schema, vec![panda_entry_1_hash.into()]),
         )
         .unwrap();
 

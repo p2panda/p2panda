@@ -166,7 +166,7 @@ mod tests {
     use crate::hash::Hash;
     use crate::operation::{OperationValue, PinnedRelationList};
     use crate::schema::system::SchemaFieldView;
-    use crate::test_utils::fixtures::random_hash;
+    use crate::test_utils::fixtures::{document_view_id, random_hash};
 
     use super::{FieldType, SchemaView};
 
@@ -186,22 +186,19 @@ mod tests {
         );
         bool_field.insert(
             "fields".to_string(),
-            OperationValue::PinnedRelationList(PinnedRelationList::new(vec![DocumentViewId::new(
-                vec![relation_operation_id],
-            )])),
+            OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
+                relation_operation_id.into(),
+            ])),
         );
 
-        let document_view_id = DocumentViewId::new(vec![view_id]);
+        let document_view_id = DocumentViewId::from(view_id);
         let document_view = DocumentView::new(document_view_id, bool_field);
 
         assert!(SchemaView::try_from(document_view).is_ok());
     }
 
     #[rstest]
-    fn field_type_from_document_view(#[from(random_hash)] view_id: Hash) {
-        // Prepare common document view id
-        let document_view_id = DocumentViewId::new(vec![view_id]);
-
+    fn field_type_from_document_view(document_view_id: DocumentViewId) {
         // Create first schema field "is_accessible"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -297,9 +294,7 @@ mod tests {
     }
 
     #[rstest]
-    fn invalid_schema_field(#[from(random_hash)] view_id: Hash) {
-        let document_view_id = DocumentViewId::new(vec![view_id]);
-
+    fn invalid_schema_field(document_view_id: DocumentViewId) {
         let mut invalid_field = BTreeMap::new();
         invalid_field.insert(
             "name".to_string(),

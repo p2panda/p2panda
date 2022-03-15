@@ -50,8 +50,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentId, DocumentViewId};
-use crate::hash::{Hash, HashError};
+use crate::hash::HashError;
 use crate::Validate;
+
+use super::OperationId;
 
 /// Field type representing references to other documents.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -97,7 +99,7 @@ impl Validate for PinnedRelation {
 }
 
 impl IntoIterator for PinnedRelation {
-    type Item = Hash;
+    type Item = OperationId;
 
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
@@ -203,32 +205,31 @@ mod tests {
         let relation = Relation::new(document_1.clone());
         assert!(relation.validate().is_ok());
 
-        let pinned_relation =
-            PinnedRelation::new(DocumentViewId::new(vec![operation_id_1.clone()]));
+        let pinned_relation = PinnedRelation::new(DocumentViewId::from(operation_id_1.clone()));
         assert!(pinned_relation.validate().is_ok());
 
         let relation_list = RelationList::new(vec![document_1, document_2]);
         assert!(relation_list.validate().is_ok());
 
-        let pinned_relation_list = PinnedRelationList::new(vec![
-            DocumentViewId::new(vec![operation_id_1]),
-            DocumentViewId::new(vec![operation_id_2]),
-        ]);
+        let pinned_relation_list =
+            PinnedRelationList::new(vec![operation_id_1.into(), operation_id_2.into()]);
         assert!(pinned_relation_list.validate().is_ok());
     }
 
     #[rstest]
     fn iterates(#[from(random_hash)] hash_1: Hash, #[from(random_hash)] hash_2: Hash) {
-        let pinned_relation =
-            PinnedRelation::new(DocumentViewId::new(vec![hash_1.clone(), hash_2.clone()]));
+        let pinned_relation = PinnedRelation::new(DocumentViewId::new(vec![
+            hash_1.clone().into(),
+            hash_2.clone().into(),
+        ]));
 
         for hash in pinned_relation {
             assert!(hash.validate().is_ok());
         }
 
         let relation_list = RelationList::new(vec![
-            DocumentId::new(hash_1.clone()),
-            DocumentId::new(hash_2.clone()),
+            DocumentId::new(hash_1.clone().into()),
+            DocumentId::new(hash_2.clone().into()),
         ]);
 
         for document_id in relation_list {
@@ -236,8 +237,8 @@ mod tests {
         }
 
         let pinned_relation_list = PinnedRelationList::new(vec![
-            DocumentViewId::new(vec![hash_1]),
-            DocumentViewId::new(vec![hash_2]),
+            DocumentViewId::from(hash_1),
+            DocumentViewId::from(hash_2),
         ]);
 
         for pinned_relation in pinned_relation_list {

@@ -59,7 +59,7 @@
 //! #     &polar,
 //! #     &update_operation(
 //! #         schema.clone(),
-//! #         vec![polar_entry_1_hash.clone()],
+//! #         vec![polar_entry_1_hash.clone().into()],
 //! #         operation_fields(vec![
 //! #             ("name", OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".to_string())),
 //! #             ("owner", OperationValue::Text("しろくま".to_string())),
@@ -73,7 +73,7 @@
 //! #     &panda,
 //! #     &update_operation(
 //! #         schema.clone(),
-//! #         vec![polar_entry_1_hash.clone()],
+//! #         vec![polar_entry_1_hash.clone().into()],
 //! #         operation_fields(vec![("name", OperationValue::Text("🐼 Cafe!".to_string()))]),
 //! #     ),
 //! # )
@@ -84,7 +84,7 @@
 //! #     &polar,
 //! #     &update_operation(
 //! #         schema.clone(),
-//! #         vec![panda_entry_1_hash.clone(), polar_entry_2_hash.clone()],
+//! #         vec![panda_entry_1_hash.clone().into(), polar_entry_2_hash.clone().into()],
 //! #         operation_fields(vec![("house-number", OperationValue::Integer(102))]),
 //! #     ),
 //! # )
@@ -95,7 +95,7 @@
 //! #     &polar,
 //! #     &delete_operation(
 //! #         schema,
-//! #         vec![polar_entry_3_hash.clone()]
+//! #         vec![polar_entry_3_hash.clone().into()]
 //! #     ),
 //! # )
 //! # .unwrap();
@@ -116,7 +116,7 @@
 //! # let operation_5 =
 //! #     OperationWithMeta::new(&entry_5.entry_encoded(), &entry_5.operation_encoded()).unwrap();
 //! #
-//! //== Operation creation it hidden for brevity, see the operation module docs for details ==//
+//! //== Operation creation is hidden for brevity, see the operation module docs for details ==//
 //!
 //! // Here we have a collection of 2 operations
 //! let mut operations = vec![

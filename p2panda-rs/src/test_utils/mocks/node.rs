@@ -44,7 +44,7 @@
 //!     &panda,
 //!     &update_operation(
 //!         schema(DEFAULT_SCHEMA_HASH),
-//!         vec![document1_hash_id.clone()],
+//!         vec![document1_hash_id.clone().into()],
 //!         operation_fields(vec![(
 //!             "message",
 //!             OperationValue::Text("Which I now update.".to_string()),
@@ -59,7 +59,7 @@
 //!     &panda,
 //!     &delete_operation(
 //!         schema(DEFAULT_SCHEMA_HASH),
-//!         vec![entry2_hash]
+//!         vec![entry2_hash.into()]
 //!     )
 //! )
 //! .unwrap();
@@ -129,7 +129,7 @@ pub fn send_to_node(
 
         // Using the first previous operation in the list we retrieve the associated document
         // id from the database.
-        let document_id = node.get_document_by_entry(&previous_operations[0]);
+        let document_id = node.get_document_by_entry(previous_operations[0].as_hash());
 
         Some(document_id.expect("This node does not contain the required document"))
     };
@@ -399,7 +399,7 @@ impl Node {
                 )
             });
             let document_id = self
-                .get_document_by_entry(&previous_operations[0])
+                .get_document_by_entry(previous_operations[0].as_hash())
                 .unwrap_or_else(|| {
                     panic!(
                         "Document log for entry {} not found on node",
@@ -593,7 +593,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone()],
+                vec![panda_entry_1_hash.clone().into()],
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Which I now update. [Panda]".to_string()),
@@ -645,7 +645,7 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_2_hash],
+                vec![panda_entry_2_hash.into()],
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("My turn to update. [Penguin]".to_string()),
@@ -679,7 +679,7 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![penguin_entry_1_hash],
+                vec![penguin_entry_1_hash.into()],
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("And again. [Penguin]".to_string()),
@@ -776,7 +776,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema,
-                vec![entry1_hash.clone()],
+                vec![entry1_hash.clone().into()],
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Which I now update.".to_string()),
@@ -855,7 +855,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone()],
+                vec![panda_entry_1_hash.clone().into()],
                 operation_fields(vec![(
                     "cafe_name",
                     OperationValue::Text("Polar Bear Cafe".to_string()),
@@ -881,7 +881,7 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone()],
+                vec![panda_entry_1_hash.clone().into()],
                 operation_fields(vec![(
                     "address",
                     OperationValue::Text("1, Polar Bear rd, Panda Town".to_string()),
@@ -907,7 +907,7 @@ mod tests {
             &penguin,
             &update_operation(
                 schema,
-                vec![penguin_entry_1_hash, panda_entry_2_hash],
+                vec![penguin_entry_1_hash.into(), panda_entry_2_hash.into()],
                 operation_fields(vec![(
                     "cafe_name",
                     OperationValue::Text("Polar Bear Café".to_string()),

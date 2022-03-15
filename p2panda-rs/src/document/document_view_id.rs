@@ -5,6 +5,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 use crate::hash::{Hash, HashError};
+use crate::operation::OperationId;
 use crate::Validate;
 
 /// The identifier of a document view.
@@ -55,12 +56,22 @@ impl Validate for DocumentViewId {
 }
 
 impl IntoIterator for DocumentViewId {
-    type Item = Hash;
+    type Item = OperationId;
 
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
+    }
+}
+
+/// Convenience method converting a single [`OperationId`] into a document view id.
+///
+/// Converts an `OperationId` instance into a `DocumentViewId`, assuming that this document view
+/// only consists of one graph tip hash.
+impl From<OperationId> for DocumentViewId {
+    fn from(operation_id: OperationId) -> Self {
+        Self::new(vec![operation_id])
     }
 }
 
@@ -70,7 +81,7 @@ impl IntoIterator for DocumentViewId {
 /// consists of one graph tip hash.
 impl From<Hash> for DocumentViewId {
     fn from(hash: Hash) -> Self {
-        Self::new(vec![hash])
+        Self::new(vec![hash.into()])
     }
 }
 
@@ -82,7 +93,7 @@ impl FromStr for DocumentViewId {
     type Err = HashError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::new(vec![Hash::new(s)?]))
+        Ok(Self::new(vec![Hash::new(s)?.into()]))
     }
 }
 
@@ -91,33 +102,36 @@ mod tests {
     use rstest::rstest;
 
     use crate::hash::Hash;
-    use crate::test_utils::fixtures::random_hash;
+    use crate::operation::OperationId;
+    use crate::test_utils::fixtures::{document_view_id, random_hash};
     use crate::Validate;
 
     use super::DocumentViewId;
 
     #[rstest]
     fn conversion(#[from(random_hash)] hash: Hash) {
-        // Converts any string to `DocumentViewId`
+        // Converts a string to `DocumentViewId`
         let hash_str = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79";
         let document_id: DocumentViewId = hash_str.parse().unwrap();
         assert_eq!(
             document_id,
-            DocumentViewId::new(vec![Hash::new(hash_str).unwrap()])
+            DocumentViewId::new(vec![hash_str.parse::<OperationId>().unwrap()])
         );
 
-        // Converts any `Hash` to `DocumentViewId`
-        let document_id = DocumentViewId::from(hash.clone());
-        assert_eq!(document_id, DocumentViewId::new(vec![hash]));
+        // Converts a `Hash` to `DocumentViewId`
+        let document_id: DocumentViewId = hash.clone().into();
+        assert_eq!(document_id, DocumentViewId::new(vec![hash.clone().into()]));
+
+        // Converts an `OperationId` to `DocumentViewId`
+        let document_id: DocumentViewId = OperationId::new(hash.clone()).into();
+        assert_eq!(document_id, DocumentViewId::new(vec![hash.into()]));
 
         // Fails when string is not a hash
         assert!("This is not a hash".parse::<DocumentViewId>().is_err());
     }
 
     #[rstest]
-    fn iterates(#[from(random_hash)] hash_1: Hash, #[from(random_hash)] hash_2: Hash) {
-        let document_view_id = DocumentViewId::new(vec![hash_1, hash_2]);
-
+    fn iterates(document_view_id: DocumentViewId) {
         for hash in document_view_id {
             assert!(hash.validate().is_ok());
         }

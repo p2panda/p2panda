@@ -23,6 +23,11 @@ impl OperationId {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
+
+    /// Access the inner [`Hash`] value of this operation id.
+    pub fn as_hash(&self) -> &Hash {
+        &self.0
+    }
 }
 
 impl Validate for OperationId {

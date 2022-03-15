@@ -212,14 +212,14 @@ mod tests {
 
     use crate::entry::{LogId, SeqNum};
     use crate::hash::Hash;
-    use crate::operation::{Operation, OperationFields, OperationValue};
+    use crate::operation::{Operation, OperationFields, OperationId, OperationValue};
     use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::random_hash;
+    use crate::test_utils::fixtures::random_operation_id;
 
     use super::Entry;
 
     #[rstest]
-    fn validation(#[from(random_hash)] operation_id: Hash) {
+    fn validation(#[from(random_operation_id)] operation_id: OperationId) {
         // Prepare sample values
         let mut fields = OperationFields::new();
         fields
