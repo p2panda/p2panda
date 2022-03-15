@@ -5,6 +5,7 @@ use crate::hash::HashError;
 use crate::identity::AuthorError;
 use crate::operation::{OperationEncodedError, OperationError};
 
+/// `StorageProvider` errors which also handle errors originating in LogStorage and EntryStorage.
 #[derive(thiserror::Error, Debug)]
 pub enum StorageProviderError {
     /// Error returned from validating p2panda-rs `Author` data types.
@@ -60,6 +61,7 @@ pub enum StorageProviderError {
     EntryStorageError(#[from] EntryStorageError),
 }
 
+/// `LogStorage` errors.
 #[derive(thiserror::Error, Debug)]
 pub enum LogStorageError {
     /// Error returned from validating p2panda-rs `Author` data types.
@@ -67,6 +69,7 @@ pub enum LogStorageError {
     Error(String),
 }
 
+/// `EntryStorage` errors.
 #[derive(thiserror::Error, Debug)]
 pub enum EntryStorageError {
     /// Error returned from validating p2panda-rs `Author` data types.
@@ -74,6 +77,7 @@ pub enum EntryStorageError {
     Error(String),
 }
 
+/// Errors which can occur in a call to `publish_entry()`..
 #[derive(thiserror::Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum PublishEntryError {
