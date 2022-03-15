@@ -122,8 +122,8 @@ pub trait EntryStore<StorageEntry: AsEntry<MemoryEntry>, MemoryEntry: ToStorage<
 /// All other methods needed to be implemented by a p2panda `StorageProvider`
 #[async_trait]
 pub trait StorageProvider<
-    StorageEntry: AsEntry<MemoryEntry>,
-    MemoryEntry: ToStorage<StorageEntry>,
+    StorageEntry: AsEntry<MemoryEntry> + Send + Sync + Clone + Copy,
+    MemoryEntry: ToStorage<StorageEntry> + Send + Sync,
     StorageLog: AsLog<MemoryLog> + Send,
     MemoryLog: ToStorage<StorageLog>,
 >: EntryStore<StorageEntry, MemoryEntry> + LogStore<StorageLog, MemoryLog>
@@ -211,28 +211,35 @@ pub trait StorageProvider<
     /// Stores an author's Bamboo entry with operation payload in database after validating it.
     async fn publish_entry(
         &self,
-        entry_encoded: EntrySigned,
-        operation_encoded: OperationEncoded,
+        entry: &MemoryEntry,
     ) -> Result<Self::PublishEntryResponse, StorageProviderError> {
+        let store_entry = entry.to_store_value().unwrap();
+
         // Validate request parameters
-        entry_encoded
+        store_entry
+            .entry_encoded()
             .validate()
             .map_err(|_| StorageProviderError::Error)?;
-        operation_encoded
+        store_entry
+            .operation_encoded()
+            .unwrap()
             .validate()
             .map_err(|_| StorageProviderError::Error)?;
 
         // Decode author, entry and operation. This conversion validates the operation hash
-        let author = entry_encoded.author();
-        let entry = decode_entry(&entry_encoded, Some(&operation_encoded))
-            .map_err(|_| StorageProviderError::Error)?;
-        let operation = Operation::from(&operation_encoded);
+        let author = store_entry.author();
+        let entry = decode_entry(
+            &store_entry.entry_encoded(),
+            store_entry.operation_encoded().as_ref(),
+        )
+        .map_err(|_| StorageProviderError::Error)?;
+        let operation = Operation::from(&store_entry.operation_encoded().unwrap());
 
         // Every operation refers to a document we need to determine. A document is identified by the
         // hash of its first `CREATE` operation, it is the root operation of every document graph
         let document_id = if operation.is_create() {
             // This is easy: We just use the entry hash directly to determine the document id
-            entry_encoded.hash()
+            store_entry.entry_hash()
         } else {
             // For any other operations which followed after creation we need to either walk the operation
             // graph back to its `CREATE` operation or more easily look up the database since we keep track
@@ -293,8 +300,8 @@ pub trait StorageProvider<
         // Verify bamboo entry integrity, including encoding, signature of the entry correct back- and
         // skiplinks.
         bamboo_rs_core_ed25519_yasmf::verify(
-            &entry_encoded.to_bytes(),
-            Some(&operation_encoded.to_bytes()),
+            &store_entry.entry_encoded().to_bytes(),
+            Some(&store_entry.operation_encoded().unwrap().to_bytes()),
             entry_skiplink_bytes.as_deref(),
             entry_backlink_bytes.as_deref(),
         )
@@ -314,12 +321,9 @@ pub trait StorageProvider<
         }
 
         // Finally insert Entry in database
-        self.insert_entry(StorageEntry::new(
-            entry_encoded.clone(),
-            Some(operation_encoded),
-        ))
-        .await
-        .map_err(|_| StorageProviderError::Error)?;
+        self.insert_entry(store_entry)
+            .await
+            .map_err(|_| StorageProviderError::Error)?;
 
         // Already return arguments for next entry creation
         let entry_latest: StorageEntry = self
@@ -334,7 +338,7 @@ pub trait StorageProvider<
         let next_seq_num = entry_latest.seq_num().next().unwrap();
 
         Ok(Self::PublishEntryResponse::new(
-            Some(entry_encoded.hash()),
+            Some(store_entry.entry_encoded().hash()),
             entry_hash_skiplink,
             next_seq_num,
             *entry.log_id(),
