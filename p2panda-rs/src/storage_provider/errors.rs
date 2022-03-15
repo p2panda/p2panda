@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Errors for `Storage` provider and associated traits.
+
 use crate::entry::{EntryError, EntrySignedError, LogIdError, SeqNumError};
 use crate::hash::HashError;
 use crate::identity::AuthorError;
@@ -79,7 +81,7 @@ pub enum EntryStorageError {
 
 /// Errors which can occur in a call to `publish_entry()`..
 #[derive(thiserror::Error, Debug)]
-#[allow(missing_copy_implementations)]
+#[allow(missing_copy_implementations, missing_docs)]
 pub enum PublishEntryError {
     #[error("Could not find backlink entry in database")]
     BacklinkMissing,

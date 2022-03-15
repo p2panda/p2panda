@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+
+//! Data models which are used in StorageProvider.
+
 use std::fmt::Debug;
 
 use super::StorageProviderError;
