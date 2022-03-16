@@ -38,8 +38,6 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 
     /// Determine skiplink entry hash ("lipmaa"-link) for entry in this log, return `None` when no
     /// skiplink is required for the next entry.
-    /// Determine skiplink entry hash ("lipmaa"-link) for entry in this log, return `None` when no
-    /// skiplink is required for the next entry.
     async fn determine_skiplink(
         &self,
         storage_entry: &StorageEntry,
@@ -81,14 +79,16 @@ mod tests {
     use rstest::rstest;
     use std::sync::{Arc, Mutex};
 
-    use crate::entry::{EntrySigned, LogId, SeqNum};
-    use crate::identity::Author;
+    use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
+    use crate::identity::{Author, KeyPair};
     use crate::operation::{AsOperation, OperationEncoded};
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::EntryStorageError;
     use crate::storage_provider::models::EntryWithOperation;
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
-    use crate::test_utils::fixtures::{entry_signed_encoded, operation_encoded};
+    use crate::test_utils::fixtures::{
+        entry, entry_signed_encoded, operation_encoded, random_key_pair, schema,
+    };
 
     #[derive(Debug, Clone, PartialEq)]
     struct StorageEntry(EntrySigned, OperationEncoded);
@@ -205,7 +205,7 @@ mod tests {
         let storage_entry = StorageEntry(entry_signed_encoded, operation_encoded);
         let decoded_entry = storage_entry.entry_decoded();
 
-        // Insert a entry into the store.
+        // Insert an entry into the store.
         assert!(store.insert_entry(storage_entry.clone()).await.is_ok());
 
         let author = storage_entry.entry_encoded().author();
@@ -217,5 +217,88 @@ mod tests {
 
         assert!(entry_at_seq_num.is_ok());
         assert_eq!(entry_at_seq_num.unwrap().unwrap(), storage_entry)
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn get_latest_entry(
+        entry_signed_encoded: EntrySigned,
+        operation_encoded: OperationEncoded,
+    ) {
+        // Instantiate a new store.
+        let store = SimplestStorage(Arc::new(Mutex::new(Vec::new())));
+
+        let storage_entry = StorageEntry(entry_signed_encoded, operation_encoded);
+
+        let author = storage_entry.entry_encoded().author();
+
+        // Before an entry is inserted the latest entry should be none.
+        assert!(store
+            .latest_entry(&author, &LogId::default())
+            .await
+            .unwrap()
+            .is_none());
+
+        // Insert an entry into the store.
+        assert!(store.insert_entry(storage_entry.clone()).await.is_ok());
+
+        assert_eq!(
+            store
+                .latest_entry(&author, &LogId::default())
+                .await
+                .unwrap()
+                .unwrap(),
+            storage_entry
+        );
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn get_by_schema(
+        #[from(random_key_pair)] key_pair_1: KeyPair,
+        #[from(random_key_pair)] key_pair_2: KeyPair,
+        entry: Entry,
+        operation_encoded: OperationEncoded,
+        schema: SchemaId,
+    ) {
+        // Instantiate a new store.
+        let store = SimplestStorage(Arc::new(Mutex::new(Vec::new())));
+
+        let author_1_entry = sign_and_encode(&entry, &key_pair_1).unwrap();
+        let author_2_entry = sign_and_encode(&entry, &key_pair_2).unwrap();
+        let author_1_entry = StorageEntry(author_1_entry, operation_encoded.clone());
+        let author_2_entry = StorageEntry(author_2_entry, operation_encoded);
+
+        // Before an entry with this schema is inserted this method should return an empty array.
+        assert!(store.by_schema(&schema).await.unwrap().is_empty());
+
+        // Insert two entries into the store.
+        store.insert_entry(author_1_entry).await.unwrap();
+        store.insert_entry(author_2_entry).await.unwrap();
+
+        assert_eq!(store.by_schema(&schema).await.unwrap().len(), 2);
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn can_determine_skiplink(
+        entry_signed_encoded: EntrySigned,
+        operation_encoded: OperationEncoded,
+    ) {
+        // Instantiate a new store.
+        let store = SimplestStorage(Arc::new(Mutex::new(Vec::new())));
+
+        let storage_entry = StorageEntry(entry_signed_encoded, operation_encoded);
+
+        // Insert an entry into the store.
+        assert!(store.insert_entry(storage_entry.clone()).await.is_ok());
+
+        // Request the skiplink hash for this entry
+        let skiplink_hash = store.determine_skiplink(&storage_entry).await.unwrap();
+
+        // It should be none.
+        assert!(skiplink_hash.is_none())
+
+        // NB: This method is tested more thoroughly in `storage_provider`
     }
 }
