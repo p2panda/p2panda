@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::document::DocumentId;
 use crate::entry::EntrySigned;
-use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::OperationEncoded;
 use crate::storage_provider::StorageProviderError;
@@ -14,7 +14,7 @@ pub trait AsEntryArgsRequest {
     /// Returns the document id Hash parameter.
     ///
     /// TODO: Needs updating once we use `DocumentId` here.
-    fn document(&self) -> &Option<Hash>;
+    fn document(&self) -> &Option<DocumentId>;
     /// Validates the `EntryArgument` parameters
     fn validate(&self) -> Result<(), StorageProviderError> {
         // Validate `author` request parameter

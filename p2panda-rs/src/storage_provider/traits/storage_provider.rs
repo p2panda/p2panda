@@ -40,7 +40,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
     async fn get_document_by_entry(
         &self,
         entry_hash: &Hash,
-    ) -> Result<Option<Hash>, StorageProviderError>;
+    ) -> Result<Option<DocumentId>, StorageProviderError>;
 
     /// Implementation of `panda_getEntryArguments` RPC method.
     ///
@@ -110,7 +110,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         // hash of its first `CREATE` operation, it is the root operation of every document graph
         let document_id = if operation.is_create() {
             // This is easy: We just use the entry hash directly to determine the document id
-            entry_encoded.hash()
+            DocumentId::new(entry_encoded.hash())
         } else {
             // For any other operations which followed after creation we need to either walk the operation
             // graph back to its `CREATE` operation or more easily look up the database since we keep track
@@ -183,7 +183,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         if operation.is_create() {
             let log = StorageLog::new(
                 &author.clone(),
-                &DocumentId::new(document_id),
+                &document_id,
                 &operation.schema(),
                 entry.log_id(),
             );
