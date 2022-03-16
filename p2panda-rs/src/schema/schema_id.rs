@@ -9,7 +9,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::document::DocumentViewId;
 use crate::operation::{OperationId, PinnedRelation};
 use crate::schema::error::SchemaIdError;
-use crate::Validate;
 
 /// Identifies the schema of an [`crate::operation::Operation`].
 #[derive(Clone, Debug, PartialEq, Eq)]

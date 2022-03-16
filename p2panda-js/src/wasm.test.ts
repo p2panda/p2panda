@@ -100,21 +100,21 @@ describe('WebAssembly interface', () => {
       );
 
       expect(() => fields.add('contact', 'relation', [TEST_HASH])).toThrow(
-        'Expected a hash value for field of type relation',
+        'Expected an operation id value for field of type relation',
       );
 
       expect(() => fields.add('contact', 'relation_list', TEST_HASH)).toThrow(
-        'Exptected an array of hashes for field of type relation list',
+        'Exptected an array of operation ids for field of type relation list',
       );
 
       expect(() => fields.add('contact', 'pinned_relation', TEST_HASH)).toThrow(
-        'Expected an array of hashes for field of type relation list',
+        'Expected an array of operation ids for field of type relation list',
       );
 
       expect(() =>
         fields.add('contact', 'pinned_relation_list', [TEST_HASH]),
       ).toThrow(
-        'Expected a nested array of hashes for field of type pinned relation list',
+        'Expected a nested array of operation ids for field of type pinned relation list',
       );
 
       // Throw when relation is an invalid hash
