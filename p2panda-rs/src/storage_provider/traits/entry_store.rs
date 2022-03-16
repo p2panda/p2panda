@@ -5,6 +5,7 @@ use crate::entry::LogId;
 use crate::entry::SeqNum;
 use crate::hash::Hash;
 use crate::identity::Author;
+use crate::schema::SchemaId;
 use crate::storage_provider::errors::EntryStorageError;
 use crate::storage_provider::traits::AsStorageEntry;
 
@@ -33,7 +34,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     ) -> Result<Option<StorageEntry>, EntryStorageError>;
 
     /// Return vector of all entries of a given schema
-    async fn by_schema(&self, schema: &Hash) -> Result<Vec<StorageEntry>, EntryStorageError>;
+    async fn by_schema(&self, schema: &SchemaId) -> Result<Vec<StorageEntry>, EntryStorageError>;
 
     /// Determine skiplink entry hash ("lipmaa"-link) for entry in this log, return `None` when no
     /// skiplink is required for the next entry.
@@ -69,5 +70,152 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         };
 
         Ok(entry_skiplink_hash)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::convert::{TryFrom, TryInto};
+
+    use async_trait::async_trait;
+    use rstest::rstest;
+    use std::sync::{Arc, Mutex};
+
+    use crate::entry::{EntrySigned, LogId, SeqNum};
+    use crate::identity::Author;
+    use crate::operation::{AsOperation, OperationEncoded};
+    use crate::schema::SchemaId;
+    use crate::storage_provider::errors::EntryStorageError;
+    use crate::storage_provider::models::EntryWithOperation;
+    use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
+    use crate::test_utils::fixtures::{entry_signed_encoded, operation_encoded};
+
+    #[derive(Debug, Clone, PartialEq)]
+    struct StorageEntry(EntrySigned, OperationEncoded);
+
+    /// Implement `AsStorageEntry` trait for `EntryWithOperation`
+    impl AsStorageEntry for StorageEntry {
+        type AsStorageEntryError = EntryStorageError;
+
+        fn entry_encoded(&self) -> EntrySigned {
+            self.0.to_owned()
+        }
+
+        fn operation_encoded(&self) -> Option<OperationEncoded> {
+            Some(self.1.to_owned())
+        }
+    }
+
+    impl TryFrom<EntryWithOperation> for StorageEntry {
+        type Error = EntryStorageError;
+
+        fn try_from(value: EntryWithOperation) -> Result<Self, Self::Error> {
+            Ok(StorageEntry(
+                value.entry_encoded().to_owned(),
+                value.operation_encoded().to_owned(),
+            ))
+        }
+    }
+    impl TryInto<EntryWithOperation> for StorageEntry {
+        type Error = EntryStorageError;
+
+        fn try_into(self) -> Result<EntryWithOperation, Self::Error> {
+            Ok(EntryWithOperation::new(self.0, self.1).unwrap())
+        }
+    }
+
+    /// A strange database which stores
+    #[derive(Default)]
+    struct SimplestStorage(Arc<Mutex<Vec<StorageEntry>>>);
+
+    #[async_trait]
+    impl EntryStore<StorageEntry> for SimplestStorage {
+        /// Insert an entry into storage.
+        async fn insert_entry(&self, entry: StorageEntry) -> Result<bool, EntryStorageError> {
+            let mut entries = self.0.lock().unwrap();
+            entries.push(entry);
+            // Remove duplicate entries.
+            entries.dedup();
+            Ok(true)
+        }
+
+        /// Returns entry at sequence position within an author's log.
+        async fn entry_at_seq_num(
+            &self,
+            author: &Author,
+            log_id: &LogId,
+            seq_num: &SeqNum,
+        ) -> Result<Option<StorageEntry>, EntryStorageError> {
+            let entries = self.0.lock().unwrap();
+
+            let entry = entries.iter().find(|entry| {
+                entry.entry_encoded().author() == *author
+                    && entry.entry_decoded().log_id() == log_id
+                    && entry.entry_decoded().seq_num() == seq_num
+            });
+
+            Ok(entry.cloned())
+        }
+
+        /// Returns the latest Bamboo entry of an author's log.
+        async fn latest_entry(
+            &self,
+            author: &Author,
+            log_id: &LogId,
+        ) -> Result<Option<StorageEntry>, EntryStorageError> {
+            let entries = self.0.lock().unwrap();
+
+            let latest_entry = entries
+                .iter()
+                .filter(|entry| {
+                    entry.entry_encoded().author() == *author
+                        && entry.entry_decoded().log_id() == log_id
+                })
+                .max_by_key(|entry| entry.entry_decoded().seq_num().as_u64());
+
+            Ok(latest_entry.cloned())
+        }
+
+        /// Return vector of all entries of a given schema
+        async fn by_schema(
+            &self,
+            schema: &SchemaId,
+        ) -> Result<Vec<StorageEntry>, EntryStorageError> {
+            let entries = self.0.lock().unwrap();
+
+            let entries: Vec<StorageEntry> = entries
+                .iter()
+                .filter(|entry| entry.entry_decoded().operation().unwrap().schema() == *schema)
+                .map(|e| e.to_owned())
+                .collect();
+
+            Ok(entries)
+        }
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn insert_get_entry(
+        entry_signed_encoded: EntrySigned,
+        operation_encoded: OperationEncoded,
+    ) {
+        // Instantiate a new store.
+        let store = SimplestStorage(Arc::new(Mutex::new(Vec::new())));
+
+        let storage_entry = StorageEntry(entry_signed_encoded, operation_encoded);
+        let decoded_entry = storage_entry.entry_decoded();
+
+        // Insert a entry into the store.
+        assert!(store.insert_entry(storage_entry.clone()).await.is_ok());
+
+        let author = storage_entry.entry_encoded().author();
+
+        // Get an entry at a specific seq number from an authors log.
+        let entry_at_seq_num = store
+            .entry_at_seq_num(&author, decoded_entry.log_id(), decoded_entry.seq_num())
+            .await;
+
+        assert!(entry_at_seq_num.is_ok());
+        assert_eq!(entry_at_seq_num.unwrap().unwrap(), storage_entry)
     }
 }
