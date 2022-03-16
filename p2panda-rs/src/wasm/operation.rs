@@ -5,10 +5,9 @@ use std::convert::TryFrom;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
-use crate::hash::Hash;
 use crate::operation::{
-    Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationValue,
-    PinnedRelation, PinnedRelationList, Relation, RelationList,
+    Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationId,
+    OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
 use crate::schema::SchemaId;
 use crate::wasm::error::jserr;
@@ -188,10 +187,10 @@ pub fn encode_update_operation(
         "Can not deserialize array"
     );
 
-    // Create hashes from strings and collect wrapped in a result
-    let prev_op_result: Result<Vec<Hash>, _> = prev_op_strings
+    // Create operation ids from strings and collect wrapped in a result
+    let prev_op_result: Result<Vec<OperationId>, _> = prev_op_strings
         .iter()
-        .map(|prev_op| Hash::new(prev_op))
+        .map(|prev_op| prev_op.parse())
         .collect();
 
     let previous = jserr!(prev_op_result);
@@ -214,10 +213,10 @@ pub fn encode_delete_operation(
         "Can not deserialize array"
     );
 
-    // Create hashes from strings and collect wrapped in a result
-    let prev_op_result: Result<Vec<Hash>, _> = prev_op_strings
+    // Create operation ids from strings and collect wrapped in a result
+    let prev_op_result: Result<Vec<OperationId>, _> = prev_op_strings
         .iter()
-        .map(|prev_op| Hash::new(prev_op))
+        .map(|prev_op| prev_op.parse())
         .collect();
 
     let previous = jserr!(prev_op_result);

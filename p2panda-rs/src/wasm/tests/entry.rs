@@ -4,7 +4,6 @@ use std::convert::TryFrom;
 
 use wasm_bindgen_test::*;
 
-use crate::document::DocumentViewId;
 use crate::hash::Hash;
 use crate::operation::{OperationEncoded, OperationFields, OperationValue, PinnedRelation};
 use crate::schema::SchemaId;
@@ -16,9 +15,9 @@ wasm_bindgen_test_configure!(run_in_browser);
 #[wasm_bindgen_test]
 fn encodes_decodes_entries() {
     let key_pair = KeyPair::new();
-    let schema = SchemaId::Application(PinnedRelation::new(DocumentViewId::new(vec![
-        Hash::new_from_bytes(vec![1, 2, 3]).unwrap(),
-    ])));
+    let schema = SchemaId::Application(PinnedRelation::new(
+        Hash::new_from_bytes(vec![1, 2, 3]).unwrap().into(),
+    ));
 
     let mut fields = OperationFields::new();
     fields
