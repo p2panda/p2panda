@@ -88,15 +88,16 @@ impl<'de> Visitor<'de> for SchemaIdVisitor {
     {
         let mut op_ids: Vec<OperationId> = Vec::new();
 
-        while let Some(operation_id) = seq.next_element::<OperationId>()? {
-            if operation_id.validate().is_err() {
-                return Err(serde::de::Error::custom(format!(
-                    "Invalid operation id {:?}",
-                    operation_id.as_str()
-                )));
-            }
-
-            op_ids.push(operation_id);
+        while let Some(seq_value) = seq.next_element::<String>()? {
+            match seq_value.parse::<OperationId>() {
+                Ok(operation_id) => op_ids.push(operation_id),
+                Err(hash_err) => {
+                    return Err(serde::de::Error::custom(format!(
+                        "Error parsing application schema id: {}",
+                        hash_err
+                    )))
+                }
+            };
         }
 
         let document_view_id = DocumentViewId::new(op_ids);
@@ -182,6 +183,17 @@ mod test {
             "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
         )
         .is_err());
+
+        // Test invalid hash
+        let invalid_hash = serde_json::from_str::<SchemaId>(
+            "[\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc7\"]",
+        );
+        assert_eq!(
+            format!("{:?}", invalid_hash.unwrap_err()),
+            "Error(\"Error parsing application schema id: invalid hash \
+            length 33 bytes, expected 34 bytes\", line: 1, column: 70)"
+        );
+
         assert!(serde_json::from_str::<SchemaId>("unknown_system_schema_name_v1").is_err());
     }
 
