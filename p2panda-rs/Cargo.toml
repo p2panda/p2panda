@@ -82,6 +82,7 @@ rand = { version = "0.7.3", features = ["wasm-bindgen"] }
 wasm-bindgen = "0.2.78"
 
 [dev-dependencies]
+async-std = { version = "1.10.0", features = ["attributes"] }
 criterion = "0.3.4"
 ctor = "0.1.2"
 incremental-topo = "0.1.2"
