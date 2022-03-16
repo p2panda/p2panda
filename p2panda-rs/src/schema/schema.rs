@@ -166,7 +166,7 @@ mod tests {
     fn invalid_fields_fail(
         #[from(random_operation_id)] relation_operation_id_1: OperationId,
         #[from(random_operation_id)] relation_operation_id_2: OperationId,
-        #[from(random_operation_id)] invalid_relation_hash: OperationId,
+        #[from(random_operation_id)] invalid_relation_id: OperationId,
         #[from(document_view_id)] schema_view_id: DocumentViewId,
     ) {
         // Create schema definition for "venue"
@@ -194,7 +194,7 @@ mod tests {
         // Create field with invalid DocumentViewId
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        let invalid_document_view_id = DocumentViewId::from(invalid_relation_hash);
+        let invalid_document_view_id = DocumentViewId::from(invalid_relation_id);
         let field_with_invalid_document_view_id =
             create_field("capacity", "int", invalid_document_view_id);
 

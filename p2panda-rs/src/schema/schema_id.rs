@@ -33,7 +33,7 @@ impl SchemaId {
         match id {
             "schema_v1" => Ok(SchemaId::Schema),
             "schema_field_v1" => Ok(SchemaId::SchemaField),
-            hash_str => Ok(hash_str.parse::<OperationId>()?.into()),
+            hash_str => Ok(hash_str.parse::<DocumentViewId>()?.into()),
         }
     }
 }

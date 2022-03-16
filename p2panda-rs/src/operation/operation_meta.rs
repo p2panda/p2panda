@@ -13,11 +13,11 @@ use crate::Validate;
 
 use super::OperationId;
 
-/// Wrapper struct containing an operation, the hash of its entry, and the public key of its
+/// Wrapper struct containing an operation, its operation id, and the public key of its
 /// author.
 #[derive(Debug, Clone, Eq, PartialEq, StdHash)]
 pub struct OperationWithMeta {
-    /// The hash of this operations entry.
+    /// The hash of this operation's entry.
     operation_id: OperationId,
 
     /// The public key of the author who published this operation.

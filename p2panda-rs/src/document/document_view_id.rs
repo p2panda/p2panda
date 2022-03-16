@@ -10,8 +10,8 @@ use crate::Validate;
 
 /// The identifier of a document view.
 ///
-/// Contains the hashes of the document graph tips which is all the information we need to reliably
-/// reconstruct a specific version of a document.
+/// Contains the operation ids of the document graph tips, which is all the information we need
+/// to reliably reconstruct a specific version of a document.
 ///
 /// ```text
 /// The document with the following operation graph has the id "2fa.." and six different document
@@ -37,7 +37,7 @@ impl DocumentViewId {
         Self(graph_tips)
     }
 
-    /// Get the graph tip hashes of this view id.
+    /// Get the graph tip ids of this view id.
     pub fn graph_tips(&self) -> &[OperationId] {
         self.0.as_slice()
     }

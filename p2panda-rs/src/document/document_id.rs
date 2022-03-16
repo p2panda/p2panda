@@ -11,8 +11,9 @@ use crate::Validate;
 /// Identifier of a document.
 ///
 /// Documents are formed by one or many operations which create, update or delete the regarding
-/// document. The hash of the entry containing the CREATE operation is automatically also the
-/// identifier of the whole document.
+/// document. The whole document is always identified by the [`OperationId`] of its initial `CREATE`
+/// operation. This operation id is equivalent to the [`Hash`] of the entry with which that
+/// operation was published.
 ///
 /// ```text
 /// The document with the following operation graph has the id "2fa..":

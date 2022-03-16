@@ -81,7 +81,7 @@ impl<'de> Deserialize<'de> for OperationAction {
 /// entire graph and no more UPDATE operations should be published.
 ///
 /// All UPDATE and DELETE operations have a `previous_operations` field which contains a vector of
-/// operation hash ids which identify the known branch tips at the time of publication. These allow
+/// operation ids which identify the known branch tips at the time of publication. These allow
 /// us to build the graph and retain knowledge of the graph state at the time the specific
 /// operation was published.
 ///

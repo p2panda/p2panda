@@ -41,8 +41,8 @@
 //! Document: [Comment "This was great!"]
 //! ```
 //!
-//! Document view ids contain the hashes of the document graph tips, which is all the information
-//! we need to reliably recreate the document at this certain point in time.
+//! Document view ids contain the operation ids of the document graph tips, which is all the
+//! information we need to reliably recreate the document at this certain point in time.
 //!
 //! Pinned relations give us immutability and the option to restore a historical state across
 //! documents. However, most cases will probably only need unpinned relations: For example when

@@ -339,7 +339,7 @@ mod tests {
         .unwrap();
 
         // Panda publishes an update operation.
-        // It contains the hash of the previous operation in it's `previous_operations` array
+        // It contains the id of the previous operation in it's `previous_operations` array
         //
         // DOCUMENT: [panda_1]<--[panda_2]
         //
@@ -377,7 +377,7 @@ mod tests {
         .unwrap();
 
         // Penguin publishes a new operation while now being aware of the previous branching situation.
-        // Their `previous_operations` field now contains 2 operation hash id's.
+        // Their `previous_operations` field now contains 2 operation id's.
         //
         // DOCUMENT: [panda_1]<--[penguin_1]<---[penguin_2]
         //                    \----[panda_2]<--/
@@ -767,7 +767,7 @@ mod tests {
         .unwrap();
 
         // Panda publishes an update operation.
-        // It contains the hash of the previous operation in it's `previous_operations` array
+        // It contains the id of the previous operation in it's `previous_operations` array
         send_to_node(
             &mut node,
             &panda,
@@ -815,7 +815,7 @@ mod tests {
         .unwrap();
 
         // Panda publishes an delete operation.
-        // It contains the hash of the previous operation in it's `previous_operations` array.
+        // It contains the id of the previous operation in it's `previous_operations` array.
         send_to_node(
             &mut node,
             &panda,

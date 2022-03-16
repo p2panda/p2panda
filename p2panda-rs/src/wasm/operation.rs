@@ -31,10 +31,18 @@ impl OperationFields {
 
     /// Adds a field with a value and a given value type.
     ///
-    /// The type is defined by a simple string, similar to an enum. Since Rust enums can not (yet)
-    /// be exported via wasm-bindgen we have to do it like this. Possible type values are "str"
-    /// (String), "bool" (Boolean), "float" (Number), "relation" (String representing a hex-encoded
-    /// hash) and "int" (Number).
+    /// The type is defined by a simple string, similar to an enum. Possible type values are:
+    ///
+    /// - "bool" (Boolean)
+    /// - "float" (Number)
+    /// - "int" (Number)
+    /// - "str" (String)
+    /// - "relation" (hex-encoded document id)
+    /// - "relation_list" (array of hex-encoded document ids)
+    /// - "pinned_relation" (document view id, represented as an array
+    ///     of hex-encoded operation ids)
+    /// - "pinned_relation_list" (array of document view ids, represented as an array
+    ///     of arrays of hex-encoded operation ids)
     ///
     /// This method will throw an error when the field was already set, an invalid type value got
     /// passed or when the value does not reflect the given type.
@@ -70,7 +78,7 @@ impl OperationFields {
             "relation" => {
                 let relation: Relation = jserr!(
                     deserialize_from_js(value),
-                    "Expected a hash value for field of type relation"
+                    "Expected an operation id value for field of type relation"
                 );
                 jserr!(relation.validate());
                 jserr!(self.0.add(name, OperationValue::Relation(relation)));
@@ -79,7 +87,7 @@ impl OperationFields {
             "relation_list" => {
                 let relations: RelationList = jserr!(
                     deserialize_from_js(value),
-                    "Exptected an array of hashes for field of type relation list"
+                    "Exptected an array of operation ids for field of type relation list"
                 );
                 jserr!(relations.validate());
                 jserr!(self.0.add(name, OperationValue::RelationList(relations)));
@@ -88,7 +96,7 @@ impl OperationFields {
             "pinned_relation" => {
                 let relation: PinnedRelation = jserr!(
                     deserialize_from_js(value),
-                    "Expected an array of hashes for field of type relation list"
+                    "Expected an array of operation ids for field of type relation list"
                 );
                 jserr!(relation.validate());
                 jserr!(self.0.add(name, OperationValue::PinnedRelation(relation)));
@@ -97,7 +105,7 @@ impl OperationFields {
             "pinned_relation_list" => {
                 let relations: PinnedRelationList = jserr!(
                     deserialize_from_js(value),
-                    "Expected a nested array of hashes for field of type pinned relation list"
+                    "Expected a nested array of operation ids for field of type pinned relation list"
                 );
                 jserr!(relations.validate());
                 jserr!(self

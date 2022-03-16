@@ -119,12 +119,12 @@ pub fn entry(
     .unwrap()
 }
 
-/// Generate a CREATE operation based on passed schema hash and operation fields.
+/// Generate a CREATE operation based on passed schema id and operation fields.
 pub fn create_operation(schema: SchemaId, fields: OperationFields) -> Operation {
     Operation::new_create(schema, fields).unwrap()
 }
 
-/// Generate an UPDATE operation based on passed schema hash, document id and operation fields.
+/// Generate an UPDATE operation based on passed schema id, document id and operation fields.
 pub fn update_operation(
     schema: SchemaId,
     previous_operations: Vec<OperationId>,
@@ -133,7 +133,7 @@ pub fn update_operation(
     Operation::new_update(schema, previous_operations, fields).unwrap()
 }
 
-/// Generate a DELETE operation based on passed schema hash and document id.
+/// Generate a DELETE operation based on passed schema id and document id.
 pub fn delete_operation(schema: SchemaId, previous_operations: Vec<OperationId>) -> Operation {
     Operation::new_delete(schema, previous_operations).unwrap()
 }
