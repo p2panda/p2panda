@@ -51,9 +51,9 @@ impl DocumentViewId {
     /// Keep in mind that when you refer to document views with this hash value it will not be
     /// possible to recover the document view id from it.
     pub fn hash(&self) -> Hash {
-        let graph_tip_bytes = self
-            .0
-            .clone()
+        let mut graph_tips = self.0.clone();
+        graph_tips.sort();
+        let graph_tip_bytes = graph_tips
             .into_iter()
             .flat_map(|graph_tip| graph_tip.as_hash().to_bytes())
             .collect();
@@ -160,7 +160,9 @@ mod tests {
         #[from(random_operation_id)] operation_id_1: OperationId,
         #[from(random_operation_id)] operation_id_2: OperationId,
     ) {
-        let view_id = DocumentViewId::new(vec![operation_id_1, operation_id_2]);
-        assert!(view_id.hash().validate().is_ok());
+        let view_id_1 = DocumentViewId::new(vec![operation_id_1.clone(), operation_id_2.clone()]);
+        let view_id_2 = DocumentViewId::new(vec![operation_id_2, operation_id_1]);
+        assert!(view_id_1.hash().validate().is_ok());
+        assert_eq!(view_id_1.hash(), view_id_2.hash());
     }
 }
