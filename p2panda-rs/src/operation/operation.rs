@@ -5,8 +5,7 @@ use std::hash::{Hash as StdHash, Hasher};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::hash::Hash;
-use crate::operation::{OperationEncoded, OperationError, OperationFields};
+use crate::operation::{OperationEncoded, OperationError, OperationFields, OperationId};
 use crate::schema::SchemaId;
 use crate::Validate;
 
@@ -82,7 +81,7 @@ impl<'de> Deserialize<'de> for OperationAction {
 /// entire graph and no more UPDATE operations should be published.
 ///
 /// All UPDATE and DELETE operations have a `previous_operations` field which contains a vector of
-/// operation hash ids which identify the known branch tips at the time of publication. These allow
+/// operation ids which identify the known branch tips at the time of publication. These allow
 /// us to build the graph and retain knowledge of the graph state at the time the specific
 /// operation was published.
 ///
@@ -131,10 +130,9 @@ pub struct Operation {
     /// Version schema of this operation.
     version: OperationVersion,
 
-    /// Optional array of hashes referring to operations directly preceding this one in the
-    /// document.
+    /// Optional array of operation ids directly preceding this one in the document.
     #[serde(skip_serializing_if = "Option::is_none")]
-    previous_operations: Option<Vec<Hash>>,
+    previous_operations: Option<Vec<OperationId>>,
 
     /// Optional fields map holding the operation data.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -187,7 +185,7 @@ impl Operation {
     /// Returns new UPDATE operation.
     pub fn new_update(
         schema: SchemaId,
-        previous_operations: Vec<Hash>,
+        previous_operations: Vec<OperationId>,
         fields: OperationFields,
     ) -> Result<Self, OperationError> {
         let operation = Self {
@@ -206,7 +204,7 @@ impl Operation {
     /// Returns new DELETE operation.
     pub fn new_delete(
         schema: SchemaId,
-        previous_operations: Vec<Hash>,
+        previous_operations: Vec<OperationId>,
     ) -> Result<Self, OperationError> {
         let operation = Self {
             action: OperationAction::Delete,
@@ -244,8 +242,8 @@ pub trait AsOperation {
     /// Returns application data fields of operation.
     fn fields(&self) -> Option<OperationFields>;
 
-    /// Returns vector of known previous operation hashes of this operation.
-    fn previous_operations(&self) -> Option<Vec<Hash>>;
+    /// Returns vector of this operation's previous operation ids
+    fn previous_operations(&self) -> Option<Vec<OperationId>>;
 
     /// Returns true if operation contains fields.
     fn has_fields(&self) -> bool {
@@ -295,7 +293,7 @@ impl AsOperation for Operation {
     }
 
     /// Returns known previous operations vector of this operation.
-    fn previous_operations(&self) -> Option<Vec<Hash>> {
+    fn previous_operations(&self) -> Option<Vec<OperationId>> {
         self.previous_operations.clone()
     }
 }
@@ -363,11 +361,10 @@ mod tests {
     use rstest_reuse::apply;
 
     use crate::document::DocumentId;
-    use crate::hash::Hash;
-    use crate::operation::{OperationEncoded, OperationValue, Relation};
+    use crate::operation::{OperationEncoded, OperationId, OperationValue, Relation};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::templates::many_valid_operations;
-    use crate::test_utils::fixtures::{fields, random_document_id, random_hash, schema};
+    use crate::test_utils::fixtures::{fields, random_document_id, random_operation_id, schema};
     use crate::Validate;
 
     use super::{AsOperation, Operation, OperationAction, OperationFields, OperationVersion};
@@ -376,7 +373,7 @@ mod tests {
     fn operation_validation(
         fields: OperationFields,
         schema: SchemaId,
-        #[from(random_hash)] prev_op_id: Hash,
+        #[from(random_operation_id)] prev_op_id: OperationId,
     ) {
         let invalid_create_operation_1 = Operation {
             action: OperationAction::Create,
@@ -448,7 +445,7 @@ mod tests {
     #[rstest]
     fn encode_and_decode(
         schema: SchemaId,
-        #[from(random_hash)] prev_op_id: Hash,
+        #[from(random_operation_id)] prev_op_id: OperationId,
         #[from(random_document_id)] document_id: DocumentId,
     ) {
         // Create test operation

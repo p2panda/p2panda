@@ -35,15 +35,15 @@ use crate::Validate;
 ///
 /// // == FIRST ENTRY IN NEW LOG ==
 ///
-/// // Create schema hash
-/// let schema_hash = SchemaId::new(schema_hash_str)?;
+/// // Create schema id
+/// let schema_id = SchemaId::new(schema_hash_str)?;
 ///
 /// // Create a OperationFields instance and add a text field string with the key "title"
 /// let mut fields = OperationFields::new();
 /// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
 ///
 /// // Create an operation containing the above fields
-/// let operation = Operation::new_create(schema_hash, fields)?;
+/// let operation = Operation::new_create(schema_id, fields)?;
 ///
 /// // Create the first Entry in a log
 /// let entry = Entry::new(
@@ -70,14 +70,14 @@ use crate::Validate;
 /// # let schema_hash_string = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 ///
 /// // Create schema
-/// let schema = SchemaId::new(schema_hash_string)?;
+/// let schema_id = SchemaId::new(schema_hash_string)?;
 ///
 /// // Create a OperationFields instance and add a text field string with the key "title"
 /// let mut fields = OperationFields::new();
 /// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
 ///
 /// // Create an operation containing the above fields
-/// let operation = Operation::new_create(schema, fields)?;
+/// let operation = Operation::new_create(schema_id, fields)?;
 ///
 /// // Create log ID from u64
 /// let log_id = LogId::new(1);
@@ -212,14 +212,14 @@ mod tests {
 
     use crate::entry::{LogId, SeqNum};
     use crate::hash::Hash;
-    use crate::operation::{Operation, OperationFields, OperationValue};
+    use crate::operation::{Operation, OperationFields, OperationId, OperationValue};
     use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::random_hash;
+    use crate::test_utils::fixtures::random_operation_id;
 
     use super::Entry;
 
     #[rstest]
-    fn validation(#[from(random_hash)] operation_id: Hash) {
+    fn validation(#[from(random_operation_id)] operation_id: OperationId) {
         // Prepare sample values
         let mut fields = OperationFields::new();
         fields

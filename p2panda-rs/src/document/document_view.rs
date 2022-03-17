@@ -66,11 +66,11 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use crate::document::{reduce, DocumentId};
-    use crate::hash::Hash;
-    use crate::operation::{Operation, OperationValue, Relation};
+    use crate::operation::{Operation, OperationId, OperationValue, Relation};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        create_operation, document_id, fields, random_hash, schema, update_operation,
+        create_operation, document_id, document_view_id, fields, random_operation_id, schema,
+        update_operation,
     };
 
     use super::{DocumentView, DocumentViewId};
@@ -94,11 +94,11 @@ mod tests {
     #[fixture]
     fn test_update_operation(
         schema: SchemaId,
-        #[from(random_hash)] prev_op_hash: Hash,
+        #[from(random_operation_id)] prev_op_id: OperationId,
     ) -> Operation {
         update_operation(
             schema,
-            vec![prev_op_hash],
+            vec![prev_op_id],
             fields(vec![
                 ("age", OperationValue::Integer(29)),
                 ("is_admin", OperationValue::Boolean(true)),
@@ -109,10 +109,9 @@ mod tests {
     #[rstest]
     fn from_single_create_op(
         test_create_operation: Operation,
-        #[from(random_hash)] view_id: Hash,
+        document_view_id: DocumentViewId,
         #[from(document_id)] relation_id: DocumentId,
     ) {
-        let document_view_id = DocumentViewId::new(vec![view_id]);
         let expected_relation = Relation::new(relation_id);
 
         // Reduce a single CREATE `Operation`
@@ -154,10 +153,8 @@ mod tests {
     fn with_update_op(
         test_create_operation: Operation,
         test_update_operation: Operation,
-        #[from(random_hash)] view_id: Hash,
+        document_view_id: DocumentViewId,
     ) {
-        let document_view_id = DocumentViewId::new(vec![view_id]);
-
         let (view, is_edited, is_deleted) = reduce(&[test_create_operation, test_update_operation]);
 
         let document_view = DocumentView::new(document_view_id, view);

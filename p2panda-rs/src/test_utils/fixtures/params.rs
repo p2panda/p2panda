@@ -9,12 +9,12 @@ use std::convert::TryFrom;
 use rand::Rng;
 use rstest::fixture;
 
-use crate::document::DocumentId;
+use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::{sign_and_encode, Entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::{
-    Operation, OperationEncoded, OperationFields, OperationValue, OperationWithMeta,
+    Operation, OperationEncoded, OperationFields, OperationId, OperationValue, OperationWithMeta,
 };
 use crate::schema::SchemaId;
 use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
@@ -61,11 +61,29 @@ pub fn hash(#[default(DEFAULT_HASH)] hash_str: &str) -> Hash {
     utils::hash(hash_str)
 }
 
-/// Fixture which injects the default DocumentId into a test method. Default value can be overridden at
+/// Fixture which injects the default `DocumentId` into a test method. Default value can be overridden at
 /// testing time by passing in a custom hash string.
 #[fixture]
 pub fn document_id(#[default(DEFAULT_HASH)] hash_str: &str) -> DocumentId {
-    DocumentId::new(hash(hash_str))
+    DocumentId::new(operation_id(hash_str))
+}
+
+/// Fixture which injects the default `DocumentViewId` into a test method. Default value can be
+/// overridden at testing time by passing in a custom hash string vector.
+#[fixture]
+pub fn document_view_id(#[default(vec![DEFAULT_HASH])] hash_str_vec: Vec<&str>) -> DocumentViewId {
+    let hashes: Vec<OperationId> = hash_str_vec
+        .into_iter()
+        .map(|hash| hash.parse::<OperationId>().unwrap())
+        .collect();
+    DocumentViewId::new(hashes)
+}
+
+/// Fixture which injects the default `OperationId` into a test method. Default value can be
+/// overridden at testing time by passing in a custom hash string.
+#[fixture]
+pub fn operation_id(#[default(DEFAULT_HASH)] hash_str: &str) -> OperationId {
+    OperationId::new(hash(hash_str))
 }
 
 /// Fixture which injects a random hash into a test method.
@@ -75,10 +93,16 @@ pub fn random_hash() -> Hash {
     Hash::new_from_bytes(random_data).unwrap()
 }
 
+/// Fixture which injects a random operation id into a test method.
+#[fixture]
+pub fn random_operation_id() -> OperationId {
+    random_hash().into()
+}
+
 /// Fixture which injects a random document id.
 #[fixture]
 pub fn random_document_id() -> DocumentId {
-    DocumentId::new(random_hash())
+    DocumentId::new(random_hash().into())
 }
 
 /// Fixture which injects the default OperationFields value into a test method.
@@ -130,7 +154,7 @@ pub fn entry(
 #[fixture]
 pub fn operation(
     #[from(some_fields)] fields: Option<OperationFields>,
-    #[default(None)] previous_operations: Option<Vec<Hash>>,
+    #[default(None)] previous_operations: Option<Vec<OperationId>>,
 ) -> Operation {
     utils::any_operation(fields, previous_operations)
 }
@@ -170,7 +194,7 @@ pub fn create_operation(schema: SchemaId, fields: OperationFields) -> Operation 
 #[fixture]
 pub fn update_operation(
     schema: SchemaId,
-    #[default(vec![hash(DEFAULT_HASH)])] previous_operations: Vec<Hash>,
+    #[default(vec![operation_id(DEFAULT_HASH)])] previous_operations: Vec<OperationId>,
     #[default(fields(vec![("message", OperationValue::Text("Updated, hello!".to_string()))]))]
     fields: OperationFields,
 ) -> Operation {
@@ -184,7 +208,7 @@ pub fn update_operation(
 #[fixture]
 pub fn delete_operation(
     schema: SchemaId,
-    #[default(vec![hash(DEFAULT_HASH)])] previous_operations: Vec<Hash>,
+    #[default(vec![operation_id(DEFAULT_HASH)])] previous_operations: Vec<OperationId>,
 ) -> Operation {
     utils::delete_operation(schema, previous_operations)
 }

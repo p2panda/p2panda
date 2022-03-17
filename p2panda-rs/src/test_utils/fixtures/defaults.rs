@@ -43,7 +43,7 @@ pub fn create_operation() -> Operation {
 pub fn update_operation() -> Operation {
     fixtures::update_operation(
         fixtures::schema(DEFAULT_SCHEMA_HASH),
-        vec![fixtures::hash(DEFAULT_HASH)],
+        vec![fixtures::operation_id(DEFAULT_HASH)],
         fields(),
     )
 }
@@ -52,7 +52,7 @@ pub fn update_operation() -> Operation {
 pub fn delete_operation() -> Operation {
     fixtures::delete_operation(
         fixtures::schema(DEFAULT_SCHEMA_HASH),
-        vec![fixtures::hash(DEFAULT_HASH)],
+        vec![fixtures::operation_id(DEFAULT_HASH)],
     )
 }
 
