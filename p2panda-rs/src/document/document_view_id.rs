@@ -41,6 +41,18 @@ impl DocumentViewId {
     pub fn graph_tips(&self) -> &[OperationId] {
         self.0.as_slice()
     }
+
+    /// Returns a hash over the graph tips constituting this view id.
+    pub fn hash(&self) -> Hash {
+        let graph_tip_bytes = self
+            .0
+            .clone()
+            .into_iter()
+            .flat_map(|graph_tip| graph_tip.as_hash().to_bytes())
+            .collect();
+        Hash::new_from_bytes(graph_tip_bytes).unwrap()
+    }
+}
 }
 
 impl Validate for DocumentViewId {
@@ -103,7 +115,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::operation::OperationId;
-    use crate::test_utils::fixtures::{document_view_id, random_hash};
+    use crate::test_utils::fixtures::{document_view_id, random_hash, random_operation_id};
     use crate::Validate;
 
     use super::DocumentViewId;
@@ -135,5 +147,14 @@ mod tests {
         for hash in document_view_id {
             assert!(hash.validate().is_ok());
         }
+    }
+
+    #[rstest]
+    fn document_view_hash(
+        #[from(random_operation_id)] operation_id_1: OperationId,
+        #[from(random_operation_id)] operation_id_2: OperationId,
+    ) {
+        let view_id = DocumentViewId::new(vec![operation_id_1, operation_id_2]);
+        assert!(view_id.hash().validate().is_ok());
     }
 }
