@@ -72,6 +72,7 @@ pub struct Log {
 }
 
 impl Log {
+    /// Instantiate a new Log.
     pub fn new(author: Author, schema: SchemaId, document: DocumentId, log_id: LogId) -> Log {
         Log {
             author,
@@ -81,18 +82,22 @@ impl Log {
         }
     }
 
+    /// Return the Author of this Log.
     pub fn author(&self) -> &Author {
         &self.author
     }
 
+    /// Return the LogId of this Log.
     pub fn log_id(&self) -> &LogId {
         &self.log_id
     }
 
+    /// Return the DocumentId of this Log.
     pub fn document(&self) -> &DocumentId {
         &self.document
     }
 
+    /// Return the SchemaId of this Log.
     pub fn schema(&self) -> &SchemaId {
         &self.schema
     }
