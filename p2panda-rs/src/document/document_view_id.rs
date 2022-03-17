@@ -53,7 +53,6 @@ impl DocumentViewId {
         Hash::new_from_bytes(graph_tip_bytes).unwrap()
     }
 }
-}
 
 impl Validate for DocumentViewId {
     type Error = HashError;
