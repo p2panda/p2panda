@@ -87,7 +87,7 @@ impl OperationFields {
             "relation_list" => {
                 let relations: RelationList = jserr!(
                     deserialize_from_js(value),
-                    "Exptected an array of operation ids for field of type relation list"
+                    "Expected an array of operation ids for field of type relation list"
                 );
                 jserr!(relations.validate());
                 jserr!(self.0.add(name, OperationValue::RelationList(relations)));
@@ -96,7 +96,7 @@ impl OperationFields {
             "pinned_relation" => {
                 let relation: PinnedRelation = jserr!(
                     deserialize_from_js(value),
-                    "Expected an array of operation ids for field of type relation list"
+                    "Expected an array of operation ids for field of type pinned relation list"
                 );
                 jserr!(relation.validate());
                 jserr!(self.0.add(name, OperationValue::PinnedRelation(relation)));

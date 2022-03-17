@@ -104,11 +104,11 @@ describe('WebAssembly interface', () => {
       );
 
       expect(() => fields.add('contact', 'relation_list', TEST_HASH)).toThrow(
-        'Exptected an array of operation ids for field of type relation list',
+        'Expected an array of operation ids for field of type relation list',
       );
 
       expect(() => fields.add('contact', 'pinned_relation', TEST_HASH)).toThrow(
-        'Expected an array of operation ids for field of type relation list',
+        'Expected an array of operation ids for field of type pinned relation list',
       );
 
       expect(() =>
