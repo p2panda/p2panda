@@ -52,7 +52,7 @@ impl AsStorageLog for StorageLog {
             log_id.as_u64()
         );
 
-        StorageLog(log_string)
+        Self(log_string)
     }
 
     fn author(&self) -> Author {
@@ -76,20 +76,31 @@ impl AsStorageLog for StorageLog {
     }
 }
 
-/// A struct representing an entry and operation pair in storage.
+/// A struct which represents an entry and operation pair in storage as a concatenated string.
 #[derive(Debug, Clone, PartialEq)]
-pub struct StorageEntry(pub EntrySigned, pub OperationEncoded);
+pub struct StorageEntry(String);
+
+impl StorageEntry {
+    pub fn new(entry_encoded: EntrySigned, operation_encoded: OperationEncoded) -> Self {
+        // Concat all values
+        let log_string = format!("{}-{}", entry_encoded.as_str(), operation_encoded.as_str());
+
+        Self(log_string)
+    }
+}
 
 /// Implement `AsStorageEntry` trait for `StorageEntry`
 impl AsStorageEntry for StorageEntry {
     type AsStorageEntryError = EntryStorageError;
 
     fn entry_encoded(&self) -> EntrySigned {
-        self.0.to_owned()
+        let params: Vec<&str> = self.0.split('-').collect();
+        EntrySigned::new(params[0]).unwrap()
     }
 
     fn operation_encoded(&self) -> Option<OperationEncoded> {
-        Some(self.1.to_owned())
+        let params: Vec<&str> = self.0.split('-').collect();
+        Some(OperationEncoded::new(params[1]).unwrap())
     }
 }
 
@@ -98,7 +109,7 @@ impl TryFrom<EntryWithOperation> for StorageEntry {
     type Error = EntryStorageError;
 
     fn try_from(value: EntryWithOperation) -> Result<Self, Self::Error> {
-        Ok(StorageEntry(
+        Ok(StorageEntry::new(
             value.entry_encoded().to_owned(),
             value.operation_encoded().to_owned(),
         ))
@@ -110,6 +121,9 @@ impl TryInto<EntryWithOperation> for StorageEntry {
     type Error = EntryStorageError;
 
     fn try_into(self) -> Result<EntryWithOperation, Self::Error> {
-        Ok(EntryWithOperation::new(self.0, self.1).unwrap())
+        Ok(
+            EntryWithOperation::new(self.entry_encoded(), self.operation_encoded().unwrap())
+                .unwrap(),
+        )
     }
 }

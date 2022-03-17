@@ -167,7 +167,7 @@ pub mod tests {
             entries: Arc::new(Mutex::new(Vec::new())),
         };
 
-        let storage_entry = StorageEntry(entry_signed_encoded, operation_encoded);
+        let storage_entry = StorageEntry::new(entry_signed_encoded, operation_encoded);
         let decoded_entry = storage_entry.entry_decoded();
 
         // Insert an entry into the store.
@@ -196,7 +196,7 @@ pub mod tests {
             entries: Arc::new(Mutex::new(Vec::new())),
         };
 
-        let storage_entry = StorageEntry(entry_signed_encoded, operation_encoded);
+        let storage_entry = StorageEntry::new(entry_signed_encoded, operation_encoded);
 
         let author = storage_entry.entry_encoded().author();
 
@@ -237,8 +237,8 @@ pub mod tests {
 
         let author_1_entry = sign_and_encode(&entry, &key_pair_1).unwrap();
         let author_2_entry = sign_and_encode(&entry, &key_pair_2).unwrap();
-        let author_1_entry = StorageEntry(author_1_entry, operation_encoded.clone());
-        let author_2_entry = StorageEntry(author_2_entry, operation_encoded);
+        let author_1_entry = StorageEntry::new(author_1_entry, operation_encoded.clone());
+        let author_2_entry = StorageEntry::new(author_2_entry, operation_encoded);
 
         // Before an entry with this schema is inserted this method should return an empty array.
         assert!(store.by_schema(&schema).await.unwrap().is_empty());
@@ -262,7 +262,7 @@ pub mod tests {
             entries: Arc::new(Mutex::new(Vec::new())),
         };
 
-        let storage_entry = StorageEntry(entry_signed_encoded, operation_encoded);
+        let storage_entry = StorageEntry::new(entry_signed_encoded, operation_encoded);
 
         // Insert an entry into the store.
         assert!(store.insert_entry(storage_entry.clone()).await.is_ok());
