@@ -97,13 +97,3 @@ impl Log {
         &self.schema
     }
 }
-
-impl Validate for Log {
-    type Error = StorageProviderError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        self.author().validate()?;
-        self.document().validate()?;
-        Ok(())
-    }
-}
