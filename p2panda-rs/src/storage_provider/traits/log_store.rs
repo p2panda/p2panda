@@ -7,7 +7,7 @@ use crate::storage_provider::errors::LogStorageError;
 use crate::storage_provider::traits::AsStorageLog;
 use async_trait::async_trait;
 
-/// Trait which handles all storage actions relating to `Log`s.
+/// Trait which handles all storage actions relating to `StorageLog`s.
 ///
 /// This trait should be implemented on the root storage provider struct. It's definitions
 /// make up the required methods for inserting and querying logs from storage.
@@ -52,88 +52,27 @@ pub trait LogStore<StorageLog: AsStorageLog> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use std::convert::TryFrom;
-    use std::str::FromStr;
 
     use async_trait::async_trait;
     use rstest::rstest;
     use std::sync::{Arc, Mutex};
 
-    use super::LogStore;
     use crate::document::DocumentId;
     use crate::entry::LogId;
     use crate::identity::{Author, KeyPair};
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::LogStorageError;
-    use crate::storage_provider::traits::AsStorageLog;
+    use crate::storage_provider::traits::test_setup::{SimplestStorageProvider, StorageLog};
+    use crate::storage_provider::traits::{AsStorageLog, LogStore};
     use crate::test_utils::fixtures::{document_id, key_pair, schema};
 
-    /// A log entry represented as a concatenated string of `"{author}-{schema}-{document_id}-{log_id}"`
-    #[derive(Debug, Clone, PartialEq)]
-    pub struct Log(String);
-
-    /// Implement `AsStorageLog` trait for our `Log` struct
-    impl AsStorageLog for Log {
-        fn new(author: &Author, document: &DocumentId, schema: &SchemaId, log_id: &LogId) -> Self {
-            // Convert SchemaId into a string
-            let schema_id = match schema.clone() {
-                SchemaId::Application(pinned_relation) => {
-                    let mut id_str = "".to_string();
-                    let mut relation_iter = pinned_relation.into_iter().peekable();
-                    while let Some(hash) = relation_iter.next() {
-                        id_str += hash.as_str();
-                        if relation_iter.peek().is_none() {
-                            id_str += "_"
-                        }
-                    }
-                    id_str
-                }
-                SchemaId::Schema => "schema_v1".to_string(),
-                SchemaId::SchemaField => "schema_field_v1".to_string(),
-            };
-
-            // Concat all values
-            let log_string = format!(
-                "{}-{}-{}-{}",
-                author.as_str(),
-                schema_id,
-                document.as_str(),
-                log_id.as_u64()
-            );
-
-            Log(log_string)
-        }
-
-        fn author(&self) -> Author {
-            let params: Vec<&str> = self.0.split('-').collect();
-            Author::new(params[0]).unwrap()
-        }
-
-        fn schema(&self) -> SchemaId {
-            let params: Vec<&str> = self.0.split('-').collect();
-            SchemaId::from_str(params[1]).unwrap()
-        }
-
-        fn document(&self) -> DocumentId {
-            let params: Vec<&str> = self.0.split('-').collect();
-            DocumentId::from_str(params[2]).unwrap()
-        }
-
-        fn log_id(&self) -> LogId {
-            let params: Vec<&str> = self.0.split('-').collect();
-            LogId::from_str(params[3]).unwrap()
-        }
-    }
-
-    /// A strange database which stores
-    #[derive(Default)]
-    struct SimplestStorage(Arc<Mutex<Vec<Log>>>);
-
+    /// Implement the `LogStore` trait on SimplestStorageProvider
     #[async_trait]
-    impl LogStore<Log> for SimplestStorage {
-        async fn insert_log(&self, log: Log) -> Result<bool, LogStorageError> {
-            let mut logs = self.0.lock().unwrap();
+    impl LogStore<StorageLog> for SimplestStorageProvider {
+        async fn insert_log(&self, log: StorageLog) -> Result<bool, LogStorageError> {
+            let mut logs = self.logs.lock().unwrap();
             logs.push(log);
             // Remove duplicate log entries.
             logs.dedup();
@@ -146,7 +85,7 @@ mod tests {
             author: &Author,
             document_id: &DocumentId,
         ) -> Result<Option<LogId>, LogStorageError> {
-            let logs = self.0.lock().unwrap();
+            let logs = self.logs.lock().unwrap();
 
             let log = logs
                 .iter()
@@ -157,7 +96,7 @@ mod tests {
         }
 
         async fn next_log_id(&self, author: &Author) -> Result<LogId, LogStorageError> {
-            let logs = self.0.lock().unwrap();
+            let logs = self.logs.lock().unwrap();
 
             let author_logs = logs.iter().filter(|log| log.author() == *author);
             let next_log_id = author_logs.count() + 1;
@@ -169,10 +108,13 @@ mod tests {
     #[async_std::test]
     async fn insert_get_log(key_pair: KeyPair, schema: SchemaId, document_id: DocumentId) {
         // Instantiate a new store.
-        let store = SimplestStorage(Arc::new(Mutex::new(Vec::new())));
+        let store = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(Mutex::new(Vec::new())),
+        };
 
         let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
-        let log = Log::new(&author, &document_id, &schema, &LogId::default());
+        let log = StorageLog::new(&author, &document_id, &schema, &LogId::default());
 
         // Insert a log into the store.
         assert!(store.insert_log(log).await.is_ok());
@@ -187,13 +129,17 @@ mod tests {
     #[rstest]
     #[async_std::test]
     async fn get_next_log_id(key_pair: KeyPair, schema: SchemaId, document_id: DocumentId) {
-        let store = SimplestStorage(Arc::new(Mutex::new(Vec::new())));
+        // Instantiate a new store.
+        let store = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(Mutex::new(Vec::new())),
+        };
 
         let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
         let log_id = store.next_log_id(&author).await.unwrap();
         assert_eq!(log_id, LogId::default());
 
-        let log = Log::new(&author, &document_id, &schema, &LogId::default());
+        let log = StorageLog::new(&author, &document_id, &schema, &LogId::default());
 
         assert!(store.insert_log(log).await.is_ok());
 
