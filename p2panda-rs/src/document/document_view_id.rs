@@ -34,7 +34,9 @@ pub struct DocumentViewId(Vec<OperationId>);
 impl DocumentViewId {
     /// Create a new document view id.
     pub fn new(graph_tips: Vec<OperationId>) -> Self {
-        Self(graph_tips)
+        let mut graph_tips_mut = graph_tips.to_owned();
+        graph_tips_mut.sort();
+        Self(graph_tips_mut)
     }
 
     /// Get the graph tip ids of this view id.
@@ -51,9 +53,9 @@ impl DocumentViewId {
     /// Keep in mind that when you refer to document views with this hash value it will not be
     /// possible to recover the document view id from it.
     pub fn hash(&self) -> Hash {
-        let mut graph_tips = self.0.clone();
-        graph_tips.sort();
-        let graph_tip_bytes = graph_tips
+        let graph_tip_bytes = self
+            .0
+            .clone()
             .into_iter()
             .flat_map(|graph_tip| graph_tip.as_hash().to_bytes())
             .collect();
@@ -153,6 +155,16 @@ mod tests {
         for hash in document_view_id {
             assert!(hash.validate().is_ok());
         }
+    }
+
+    #[rstest]
+    fn equality(
+        #[from(random_operation_id)] operation_id_1: OperationId,
+        #[from(random_operation_id)] operation_id_2: OperationId,
+    ) {
+        let view_id_1 = DocumentViewId::new(vec![operation_id_1.clone(), operation_id_2.clone()]);
+        let view_id_2 = DocumentViewId::new(vec![operation_id_2, operation_id_1]);
+        assert_eq!(view_id_1, view_id_2);
     }
 
     #[rstest]
