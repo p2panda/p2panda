@@ -9,7 +9,7 @@ use crate::entry::{EntrySigned, LogId};
 use crate::identity::Author;
 use crate::operation::OperationEncoded;
 use crate::schema::SchemaId;
-use crate::storage_provider::errors::{EntryStorageError, LogStorageError};
+use crate::storage_provider::errors::{EntryStorageError, LogStorageError, StorageProviderError};
 use crate::storage_provider::models::{EntryWithOperation, Log};
 use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog};
 
@@ -119,25 +119,20 @@ impl AsStorageEntry for StorageEntry {
 }
 
 /// Implement required `TryFrom` conversion trait.
-impl TryFrom<EntryWithOperation> for StorageEntry {
-    type Error = EntryStorageError;
-
-    fn try_from(value: EntryWithOperation) -> Result<Self, Self::Error> {
-        Ok(StorageEntry::new(
-            value.entry_encoded().to_owned(),
-            value.operation_encoded().to_owned(),
-        ))
+impl From<EntryWithOperation> for StorageEntry {
+    fn from(entry: EntryWithOperation) -> Self {
+        StorageEntry::new(
+            entry.entry_encoded().to_owned(),
+            entry.operation_encoded().to_owned(),
+        )
     }
 }
 
 /// Implement required `TryInto` conversion trait.
 impl TryInto<EntryWithOperation> for StorageEntry {
-    type Error = EntryStorageError;
+    type Error = StorageProviderError;
 
     fn try_into(self) -> Result<EntryWithOperation, Self::Error> {
-        Ok(
-            EntryWithOperation::new(self.entry_encoded(), self.operation_encoded().unwrap())
-                .unwrap(),
-        )
+        EntryWithOperation::new(self.entry_encoded(), self.operation_encoded().unwrap())
     }
 }

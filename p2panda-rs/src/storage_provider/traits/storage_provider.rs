@@ -192,11 +192,8 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
             self.insert_log(log).await?;
         }
 
-        let store_entry = StorageEntry::try_from(entry_with_operation)
-            .map_err(|_| PublishEntryError::InvalidEntryWithOperation)?;
-
         // Finally insert Entry in database
-        self.insert_entry(store_entry.clone()).await?;
+        self.insert_entry(entry_with_operation.into()).await?;
 
         // Already return arguments for next entry creation
         let entry_latest: StorageEntry = self.latest_entry(&author, entry.log_id()).await?.unwrap();

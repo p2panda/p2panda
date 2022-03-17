@@ -17,7 +17,7 @@ use crate::storage_provider::models::{EntryWithOperation, Log};
 /// reading values from the entry and it's operation and ensures the required conversion
 /// (to and from `EntryWithOperation`) are present.
 pub trait AsStorageEntry:
-    Sized + Clone + Send + Sync + TryInto<EntryWithOperation> + TryFrom<EntryWithOperation>
+    Sized + Clone + Send + Sync + TryInto<EntryWithOperation> + From<EntryWithOperation>
 {
     /// The error type returned by this traits' methods.
     type AsStorageEntryError: Debug;
