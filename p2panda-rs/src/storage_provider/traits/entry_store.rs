@@ -75,18 +75,23 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 pub mod tests {
 
     use async_trait::async_trait;
+    use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
     use rstest::rstest;
+    use std::convert::TryFrom;
     use std::sync::{Arc, Mutex};
 
+    use crate::document::DocumentId;
     use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
     use crate::identity::{Author, KeyPair};
-    use crate::operation::{AsOperation, OperationEncoded};
+    use crate::operation::{AsOperation, Operation, OperationEncoded};
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::EntryStorageError;
+    use crate::storage_provider::models::Log;
     use crate::storage_provider::traits::test_setup::{SimplestStorageProvider, StorageEntry};
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
     use crate::test_utils::fixtures::{
-        entry, entry_signed_encoded, operation_encoded, random_key_pair, schema,
+        create_operation, document_id, entry, entry_signed_encoded, operation_encoded,
+        random_key_pair, schema, update_operation,
     };
 
     /// Implement `EntryStore` trait on `SimplestStorageProvider`
@@ -253,26 +258,71 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn can_determine_skiplink(
-        entry_signed_encoded: EntrySigned,
-        operation_encoded: OperationEncoded,
+        #[from(random_key_pair)] key_pair: KeyPair,
+        create_operation: Operation,
+        update_operation: Operation,
+        schema: SchemaId,
+        document_id: DocumentId,
     ) {
-        // Instantiate a new store.
+        let skiplink_entries = [3, 7];
+        let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
+        let mut db_entries: Vec<StorageEntry> = vec![];
+        let db_logs = vec![Log::new(&author, &schema, &document_id, &LogId::new(1)).into()];
+
+        let create_entry = entry(
+            create_operation.clone(),
+            SeqNum::new(1).unwrap(),
+            None,
+            None,
+        );
+
+        let encoded_entry = sign_and_encode(&create_entry, &key_pair).unwrap();
+        let encoded_operation = OperationEncoded::try_from(&create_operation).unwrap();
+        let storage_entry = StorageEntry::new(encoded_entry, encoded_operation);
+        db_entries.push(storage_entry);
+
+        for seq_num in 2..10 {
+            let seq_num = SeqNum::new(seq_num).unwrap();
+            let mut skiplink = None;
+            let backlink = db_entries
+                .get(seq_num.as_u64() as usize - 2)
+                .unwrap()
+                .entry_encoded()
+                .hash();
+
+            if skiplink_entries.contains(&seq_num.as_u64()) {
+                let skiplink_seq_num = seq_num.skiplink_seq_num().unwrap();
+                skiplink = Some(
+                    db_entries
+                        .get(skiplink_seq_num.as_u64() as usize - 1)
+                        .unwrap()
+                        .entry_encoded()
+                        .hash(),
+                );
+            };
+
+            let update_entry = entry(update_operation.clone(), seq_num, Some(backlink), skiplink);
+            let encoded_entry = sign_and_encode(&update_entry, &key_pair).unwrap();
+            let encoded_operation = OperationEncoded::try_from(&update_operation).unwrap();
+            let storage_entry = StorageEntry::new(encoded_entry, encoded_operation);
+
+            db_entries.push(storage_entry)
+        }
+
+        // Instantiate a SimpleStorage with already existing entry and log values stored.
         let store = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
+            logs: Arc::new(Mutex::new(db_logs)),
+            entries: Arc::new(Mutex::new(db_entries.clone())),
         };
 
-        let storage_entry = StorageEntry::new(entry_signed_encoded, operation_encoded);
-
-        // Insert an entry into the store.
-        assert!(store.insert_entry(storage_entry.clone()).await.is_ok());
-
-        // Request the skiplink hash for this entry
-        let skiplink_hash = store.determine_skiplink(&storage_entry).await.unwrap();
-
-        // It should be none.
-        assert!(skiplink_hash.is_none())
-
-        // NB: This method is tested more thoroughly in `storage_provider`
+        for entry in db_entries {
+            let result = store.determine_skiplink(&entry).await;
+            assert!(result.is_ok());
+            if skiplink_entries.contains(&entry.entry_decoded().seq_num().as_u64()) {
+                assert!(result.unwrap().is_some());
+            } else {
+                assert!(result.unwrap().is_none())
+            }
+        }
     }
 }

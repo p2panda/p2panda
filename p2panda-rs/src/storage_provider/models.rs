@@ -26,7 +26,6 @@ impl EntryWithOperation {
         entry: EntrySigned,
         operation: OperationEncoded,
     ) -> Result<Self, StorageProviderError> {
-        // TODO: Validate entry + operation here
         let entry_with_operation = Self(entry, operation);
         entry_with_operation.validate()?;
         Ok(entry_with_operation)
@@ -73,12 +72,12 @@ pub struct Log {
 
 impl Log {
     /// Instantiate a new Log.
-    pub fn new(author: Author, schema: SchemaId, document: DocumentId, log_id: LogId) -> Log {
+    pub fn new(author: &Author, schema: &SchemaId, document: &DocumentId, log_id: &LogId) -> Log {
         Log {
-            author,
-            log_id,
-            document,
-            schema,
+            author: author.to_owned(),
+            log_id: log_id.to_owned(),
+            document: document.to_owned(),
+            schema: schema.to_owned(),
         }
     }
 
