@@ -34,7 +34,7 @@ pub struct DocumentViewId(Vec<OperationId>);
 impl DocumentViewId {
     /// Create a new document view id.
     pub fn new(graph_tips: Vec<OperationId>) -> Self {
-        let mut graph_tips_mut = graph_tips.to_owned();
+        let mut graph_tips_mut = graph_tips;
         graph_tips_mut.sort();
         Self(graph_tips_mut)
     }
