@@ -43,6 +43,13 @@ impl DocumentViewId {
     }
 
     /// Returns a hash over the graph tips constituting this view id.
+    ///
+    /// Use this as a unique identifier for a document if you need a value with a limited size. The
+    /// document view id itself grows with the number of graph tips that the document has, which
+    /// may not be desirable for an identifier.
+    ///
+    /// Keep in mind that when you refer to document views with this hash value it will not be
+    /// possible to recover the document view id from it.
     pub fn hash(&self) -> Hash {
         let graph_tip_bytes = self
             .0
