@@ -64,6 +64,7 @@ pub mod tests {
     use crate::identity::{Author, KeyPair};
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::LogStorageError;
+    use crate::storage_provider::models::Log;
     use crate::storage_provider::traits::test_setup::{SimplestStorageProvider, StorageLog};
     use crate::storage_provider::traits::{AsStorageLog, LogStore};
     use crate::test_utils::fixtures::{document_id, key_pair, schema};
@@ -114,7 +115,12 @@ pub mod tests {
         };
 
         let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
-        let log = StorageLog::new(&author, &document_id, &schema, &LogId::default());
+        let log = StorageLog::new(Log::new(
+            author.clone(),
+            schema,
+            document_id.clone(),
+            LogId::default(),
+        ));
 
         // Insert a log into the store.
         assert!(store.insert_log(log).await.is_ok());
@@ -139,7 +145,7 @@ pub mod tests {
         let log_id = store.next_log_id(&author).await.unwrap();
         assert_eq!(log_id, LogId::default());
 
-        let log = StorageLog::new(&author, &document_id, &schema, &LogId::default());
+        let log = Log::new(author.clone(), schema, document_id, LogId::default()).into();
 
         assert!(store.insert_log(log).await.is_ok());
 

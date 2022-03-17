@@ -9,8 +9,8 @@ use crate::entry::{EntrySigned, LogId};
 use crate::identity::Author;
 use crate::operation::OperationEncoded;
 use crate::schema::SchemaId;
-use crate::storage_provider::errors::EntryStorageError;
-use crate::storage_provider::models::EntryWithOperation;
+use crate::storage_provider::errors::{EntryStorageError, LogStorageError};
+use crate::storage_provider::models::{EntryWithOperation, Log};
 use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog};
 
 /// The simplest storage provider. Used for tests in `entry_store`, `log_store` & `storage_provider`
@@ -25,9 +25,9 @@ pub struct StorageLog(String);
 
 /// Implement `AsStorageLog` trait for our `StorageLog` struct
 impl AsStorageLog for StorageLog {
-    fn new(author: &Author, document: &DocumentId, schema: &SchemaId, log_id: &LogId) -> Self {
+    fn new(log: Log) -> Self {
         // Convert SchemaId into a string
-        let schema_id = match schema.clone() {
+        let schema_id = match log.schema().clone() {
             SchemaId::Application(pinned_relation) => {
                 let mut id_str = "".to_string();
                 let mut relation_iter = pinned_relation.into_iter().peekable();
@@ -46,10 +46,10 @@ impl AsStorageLog for StorageLog {
         // Concat all values
         let log_string = format!(
             "{}-{}-{}-{}",
-            author.as_str(),
+            log.author().as_str(),
             schema_id,
-            document.as_str(),
-            log_id.as_u64()
+            log.document().as_str(),
+            log.log_id().as_u64()
         );
 
         Self(log_string)
@@ -73,6 +73,20 @@ impl AsStorageLog for StorageLog {
     fn log_id(&self) -> LogId {
         let params: Vec<&str> = self.0.split('-').collect();
         LogId::from_str(params[3]).unwrap()
+    }
+}
+
+impl From<Log> for StorageLog {
+    fn from(log: Log) -> Self {
+        StorageLog::new(log)
+    }
+}
+
+impl TryInto<Log> for StorageLog {
+    type Error = LogStorageError;
+
+    fn try_into(self) -> Result<Log, Self::Error> {
+        todo!()
     }
 }
 

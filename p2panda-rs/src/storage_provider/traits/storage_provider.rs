@@ -7,7 +7,7 @@ use crate::entry::{decode_entry, SeqNum};
 use crate::hash::Hash;
 use crate::operation::{AsOperation, Operation};
 use crate::storage_provider::errors::PublishEntryError;
-use crate::storage_provider::models::EntryWithOperation;
+use crate::storage_provider::models::{EntryWithOperation, Log};
 use crate::storage_provider::traits::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
     AsStorageEntry, AsStorageLog, EntryStore, LogStore,
@@ -181,12 +181,13 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
         // Register log in database when a new document is created
         if operation.is_create() {
-            let log = StorageLog::new(
-                &author.clone(),
-                &document_id,
-                &operation.schema(),
-                entry.log_id(),
-            );
+            let log = Log::new(
+                author.clone(),
+                operation.schema(),
+                document_id,
+                *entry.log_id(),
+            )
+            .into();
 
             self.insert_log(log).await?;
         }

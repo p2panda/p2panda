@@ -5,8 +5,11 @@
 use std::fmt::Debug;
 
 use super::StorageProviderError;
-use crate::entry::{decode_entry, EntrySigned};
+use crate::document::DocumentId;
+use crate::entry::{decode_entry, EntrySigned, LogId};
+use crate::identity::Author;
 use crate::operation::OperationEncoded;
+use crate::schema::SchemaId;
 use crate::Validate;
 
 /// Struct wrapping an entry with it's operation.
@@ -47,6 +50,60 @@ impl Validate for EntryWithOperation {
         self.entry_encoded().validate()?;
         self.operation_encoded().validate()?;
         decode_entry(self.entry_encoded(), Some(self.operation_encoded()))?;
+        Ok(())
+    }
+}
+
+/// Struct representing a bamboo append-only log structure,
+#[derive(Debug, Clone)]
+
+pub struct Log {
+    /// Public key of the author.
+    pub author: Author,
+
+    /// Log id used for this document.
+    pub log_id: LogId,
+
+    /// Hash that identifies the document this log is for.
+    pub document: DocumentId,
+
+    /// SchemaId which identifies the schema for operations in this log.
+    pub schema: SchemaId,
+}
+
+impl Log {
+    pub fn new(author: Author, schema: SchemaId, document: DocumentId, log_id: LogId) -> Log {
+        Log {
+            author,
+            log_id,
+            document,
+            schema,
+        }
+    }
+
+    pub fn author(&self) -> &Author {
+        &self.author
+    }
+
+    pub fn log_id(&self) -> &LogId {
+        &self.log_id
+    }
+
+    pub fn document(&self) -> &DocumentId {
+        &self.document
+    }
+
+    pub fn schema(&self) -> &SchemaId {
+        &self.schema
+    }
+}
+
+impl Validate for Log {
+    type Error = StorageProviderError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        self.author().validate()?;
+        self.document().validate()?;
         Ok(())
     }
 }

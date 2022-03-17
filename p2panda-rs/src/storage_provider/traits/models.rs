@@ -8,7 +8,7 @@ use crate::entry::{decode_entry, Entry, EntrySigned, LogId};
 use crate::identity::Author;
 use crate::operation::OperationEncoded;
 use crate::schema::SchemaId;
-use crate::storage_provider::models::EntryWithOperation;
+use crate::storage_provider::models::{EntryWithOperation, Log};
 
 /// Trait to be implemented on a struct representing a stored entry.
 ///
@@ -40,12 +40,9 @@ pub trait AsStorageEntry:
 /// Should be defined within a specific storage implementation on a data struct which
 /// represents a log as it is stored in the database. This trait defines methods for
 /// reading values from the log.
-///
-/// NB: Currently there is no struct representing a log in p2panda-rs, if we choose to
-/// bring something in, then we can also define conversion traits here.
-pub trait AsStorageLog: Sized + Send + Sync {
+pub trait AsStorageLog: Sized + Send + Sync + TryInto<Log> + From<Log> {
     /// Constructor method for struts
-    fn new(author: &Author, document: &DocumentId, schema: &SchemaId, log_id: &LogId) -> Self;
+    fn new(log: Log) -> Self;
 
     /// Returns the Author of this log.
     fn author(&self) -> Author;
