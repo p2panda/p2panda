@@ -22,6 +22,7 @@ Highlights are marked with a pancake 🥞
 - Performance benchmarks for entry and operation encoding/decoding [#254](https://github.com/p2panda/p2panda/pull/254) `rs`
 - Move `DocumentId` from `DocmentView` into `Document` [#255](https://github.com/p2panda/p2panda/pull/255) `rs`
 - Introduce `OperationId` to increase type safety around uses of `Hash` [#272](https://github.com/p2panda/p2panda/pull/272) `rs`
+- `StorageProvider` and associated traits for implementing storage solutions [274](https://github.com/p2panda/p2panda/pull/274) `rs`
 
 ## Changed
 
