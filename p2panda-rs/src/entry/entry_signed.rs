@@ -151,7 +151,10 @@ mod tests {
     use crate::{
         entry::{sign_and_encode, Entry, EntrySigned},
         identity::KeyPair,
-        test_utils::fixtures::{entry_signed_encoded, key_pair, templates::many_valid_entries},
+        operation::OperationEncoded,
+        test_utils::fixtures::{
+            entry_signed_encoded, key_pair, operation_encoded, templates::many_valid_entries,
+        },
     };
 
     #[rstest]
@@ -168,6 +171,12 @@ mod tests {
     fn test_size(entry_signed_encoded: EntrySigned) {
         let size: usize = entry_signed_encoded.size().try_into().unwrap();
         assert_eq!(size, entry_signed_encoded.to_bytes().len())
+    }
+
+    #[rstest]
+    fn test_payload_hash(entry_signed_encoded: EntrySigned, operation_encoded: OperationEncoded) {
+        let expected_payload_hash = operation_encoded.hash();
+        assert_eq!(entry_signed_encoded.payload_hash(), expected_payload_hash)
     }
 
     #[test]
