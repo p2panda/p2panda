@@ -101,10 +101,8 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         params: &Self::PublishEntryRequest,
     ) -> Result<Self::PublishEntryResponse, StorageProviderError> {
         // Create an `EntryWithOperation` which also validates the encoded entry and operation.
-        let entry_with_operation = EntryWithOperation::new(
-            params.entry_encoded().to_owned(),
-            params.operation_encoded().to_owned(),
-        )?;
+        let entry_with_operation =
+            EntryWithOperation::new(params.entry_encoded(), params.operation_encoded())?;
 
         // Decode author, entry and operation. This conversion validates the operation hash
         let author = params.entry_encoded().author();
@@ -417,7 +415,7 @@ pub mod tests {
         let request_with_wrong_log_id =
             PublishEntryRequest(signed_entry_with_wrong_log_id, encoded_operation);
 
-        // Should error as the published entry contains an invalid log id.
+        // Should error as the published entry contains an invalid log.
         let error_response = new_db.publish_entry(&request_with_wrong_log_id).await;
 
         assert_eq!(

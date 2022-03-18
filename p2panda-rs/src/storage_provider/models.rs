@@ -23,10 +23,10 @@ pub struct EntryWithOperation(EntrySigned, OperationEncoded);
 impl EntryWithOperation {
     /// Instantiate a new EntryWithOperation.
     pub fn new(
-        entry: EntrySigned,
-        operation: OperationEncoded,
+        entry: &EntrySigned,
+        operation: &OperationEncoded,
     ) -> Result<Self, StorageProviderError> {
-        let entry_with_operation = Self(entry, operation);
+        let entry_with_operation = Self(entry.clone(), operation.clone());
         entry_with_operation.validate()?;
         Ok(entry_with_operation)
     }

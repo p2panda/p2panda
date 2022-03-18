@@ -143,12 +143,20 @@ impl TryInto<EntryWithOperation> for StorageEntry {
     type Error = StorageProviderError;
 
     fn try_into(self) -> Result<EntryWithOperation, Self::Error> {
-        EntryWithOperation::new(self.entry_encoded(), self.operation_encoded().unwrap())
+        EntryWithOperation::new(&self.entry_encoded(), &self.operation_encoded().unwrap())
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PublishEntryRequest(pub EntrySigned, pub OperationEncoded);
+
+impl TryInto<EntryWithOperation> for PublishEntryRequest {
+    type Error = StorageProviderError;
+
+    fn try_into(self) -> Result<EntryWithOperation, Self::Error> {
+        EntryWithOperation::new(self.entry_encoded(), self.operation_encoded())
+    }
+}
 
 impl AsPublishEntryRequest for PublishEntryRequest {
     fn entry_encoded(&self) -> &EntrySigned {
