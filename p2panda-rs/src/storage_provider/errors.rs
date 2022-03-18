@@ -81,6 +81,7 @@ pub enum EntryStorageError {
     #[error("Error occured during `EntryStorage` request in storage provider: {0}")]
     Error(String),
 
+    /// Error which originates in `determine_skiplink` if the skiplink is missing.
     #[error("Could not find skiplink entry in database")]
     SkiplinkMissing,
 }
