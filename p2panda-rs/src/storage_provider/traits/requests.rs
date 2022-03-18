@@ -22,11 +22,10 @@ pub trait AsEntryArgsRequest {
 
         // Validate `document` request parameter when it is set
         match self.document() {
+            None => (),
             Some(doc) => {
                 doc.validate()?;
-                Some(doc)
             }
-            None => None,
         };
         Ok(())
     }
