@@ -217,11 +217,14 @@ pub mod tests {
     use crate::document::DocumentId;
     use crate::entry::LogId;
     use crate::hash::Hash;
+    use crate::operation::AsOperation;
     use crate::storage_provider::traits::test_setup::{
         test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
         SimplestStorageProvider, StorageEntry, StorageLog, SKIPLINK_ENTRIES,
     };
-    use crate::storage_provider::traits::{AsPublishEntryResponse, AsStorageEntry, AsStorageLog};
+    use crate::storage_provider::traits::{
+        AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
+    };
     use crate::storage_provider::StorageProviderError;
 
     use super::StorageProvider;
@@ -283,35 +286,87 @@ pub mod tests {
             // Response should be ok.
             assert!(publish_entry_response.is_ok());
 
-            // Calculate expected response.
             let mut seq_num = *entry.entry_decoded().seq_num();
-            let next_seq_num = seq_num.next().unwrap();
-            let mut skiplink = None;
 
-            if SKIPLINK_ENTRIES.contains(&next_seq_num.as_u64()) {
-                let skiplink_seq_num = next_seq_num.skiplink_seq_num().unwrap();
-                skiplink = Some(
-                    entries
-                        .get(skiplink_seq_num.as_u64() as usize - 1)
-                        .unwrap()
-                        .entry_encoded()
-                        .hash(),
-                );
+            // If this is the highest entry in the db then break here, the test is over.
+            if seq_num.as_u64() == entries.len() as u64 {
+                break;
             };
 
-            let backlink = Some(
-                entries
-                    .get(seq_num.as_u64() as usize - 1)
-                    .unwrap()
-                    .entry_encoded()
-                    .hash(),
-            );
+            // Calculate expected response.
+            let next_seq_num = seq_num.next().unwrap();
+            let skiplink = entries
+                .get(next_seq_num.as_u64() as usize - 1)
+                .unwrap()
+                .entry_decoded()
+                .skiplink_hash()
+                .cloned();
+
+            let backlink = entries
+                .get(next_seq_num.as_u64() as usize - 1)
+                .unwrap()
+                .entry_decoded()
+                .backlink_hash()
+                .cloned();
 
             let expected_reponse =
                 PublishEntryResponse::new(backlink, skiplink, next_seq_num, LogId::default());
 
             // Response and expected response should match.
             assert_eq!(publish_entry_response.unwrap(), expected_reponse);
+        }
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn gets_entry_args(test_db: SimplestStorageProvider) {
+        // Instantiate a new store.
+        let empty_db = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(Mutex::new(Vec::new())),
+        };
+
+        let entries = test_db.entries.lock().unwrap().clone();
+
+        for entry in entries.clone() {
+            let is_create = entry.entry_decoded().operation().unwrap().is_create();
+
+            // Determine document id.
+            let document_id: Option<DocumentId> = match is_create {
+                true => None,
+                false => Some(entries.get(0).unwrap().entry_encoded().hash().into()),
+            };
+
+            // Construct entry args request.
+            let entry_args_request = EntryArgsRequest {
+                author: entry.entry_encoded().author().clone(),
+                document: document_id,
+            };
+
+            let entry_args_response = empty_db.get_entry_args(&entry_args_request).await;
+
+            // Response should be ok.
+            assert!(entry_args_response.is_ok());
+
+            // Calculate expected response.
+            let seq_num = *entry.entry_decoded().seq_num();
+            let backlink = entry.entry_decoded().backlink_hash().cloned();
+            let skiplink = entry.entry_decoded().skiplink_hash().cloned();
+
+            let expected_reponse =
+                EntryArgsResponse::new(backlink, skiplink, seq_num, LogId::default());
+
+            // Response and expected response should match.
+            assert_eq!(entry_args_response.unwrap(), expected_reponse);
+
+            // Publish each test entry in order before next loop.
+            let publish_entry_request =
+                PublishEntryRequest(entry.entry_encoded(), entry.operation_encoded().unwrap());
+
+            empty_db
+                .publish_entry(&publish_entry_request)
+                .await
+                .unwrap();
         }
     }
 }
