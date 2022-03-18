@@ -66,15 +66,21 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         match entry_latest.clone() {
             // An entry was found which serves as the backlink for the upcoming entry
             Some(entry_backlink) => {
+                let entry_latest = entry_latest.unwrap();
                 let entry_hash_backlink = entry_backlink.entry_encoded().hash();
                 // Determine skiplink ("lipmaa"-link) entry in this log
-                let entry_hash_skiplink = self.determine_skiplink(&entry_latest.unwrap()).await?;
+                let entry_hash_skiplink = self.determine_skiplink(&entry_latest).await?;
 
                 Ok(Self::EntryArgsResponse::new(
                     Some(entry_hash_backlink),
                     entry_hash_skiplink,
-                    *entry_backlink.entry_decoded().seq_num(),
-                    *entry_backlink.entry_decoded().log_id(),
+                    entry_latest
+                        .entry_decoded()
+                        .seq_num()
+                        .clone()
+                        .next()
+                        .unwrap(),
+                    *entry_latest.entry_decoded().log_id(),
                 ))
             }
             // No entry was given yet, we can assume this is the beginning of the log
@@ -220,7 +226,7 @@ pub mod tests {
     use crate::operation::AsOperation;
     use crate::storage_provider::traits::test_setup::{
         test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
-        SimplestStorageProvider, StorageEntry, StorageLog, SKIPLINK_ENTRIES,
+        SimplestStorageProvider, StorageEntry, StorageLog,
     };
     use crate::storage_provider::traits::{
         AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
