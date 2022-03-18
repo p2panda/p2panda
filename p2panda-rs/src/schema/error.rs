@@ -5,9 +5,9 @@ use thiserror::Error;
 /// Custom errors related to `SchemaId`.
 #[derive(Error, Debug)]
 pub enum SchemaIdError {
-    /// Invalid hash in schema id.
-    #[error("invalid hash string")]
-    HashError(#[from] crate::hash::HashError),
+    /// Handle errors from validating operation id hashes
+    #[error(transparent)]
+    DocumentViewIdError(#[from] crate::document::DocumentViewIdError),
 }
 
 /// Custom errors related to `Schema`.

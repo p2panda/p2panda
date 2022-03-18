@@ -2,6 +2,8 @@
 
 use thiserror::Error;
 
+use crate::hash::HashError;
+
 /// Error types for methods of `DocumentBuilder` struct.
 #[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
@@ -59,4 +61,17 @@ pub enum DocumentViewError {
     /// Operation passed to `update()` must be UPDATE or DELETE.
     #[error("Operation passed to update() must be UPDATE or DELETE")]
     NotUpdateOrDeleteOperation,
+}
+
+/// Error types for `DocumentViewId`
+#[allow(missing_copy_implementations)]
+#[derive(Error, Debug)]
+pub enum DocumentViewIdError {
+    /// Document view ids must contain sorted operation ids
+    #[error("Expected sorted operation ids in document view id")]
+    UnsortedOperationIds,
+
+    /// Handle errors from validating operation id hashes
+    #[error(transparent)]
+    InvalidOperationId(#[from] HashError),
 }
