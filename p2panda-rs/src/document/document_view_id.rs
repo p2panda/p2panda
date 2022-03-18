@@ -178,4 +178,34 @@ mod tests {
         let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);
         assert_eq!(view_id_1.hash(), view_id_2.hash());
     }
+
+    #[test]
+    fn deserialize_unsorted_view_id() {
+        // Unsorted operation ids in document view id array:
+        //
+        // [
+        //  "0020c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa72ec8",
+        //  "00202dce4b32cd35d61cf54634b93a526df333c5ed3d93230c2f026f8d1ecabc0cd7"
+        // ]
+        let unsorted_operation_ids = "827844303032306331336364633538646663366634656264333239393266663038396462373939383033363331343462646232373433363933613031393633366661373265633878443030323032646365346233326364333564363163663534363334623933613532366466333333633565643364393332333063326630323666386431656361626330636437";
+
+        // Construct document view id by deserializing CBOR data
+        let view_id_1: DocumentViewId =
+            ciborium::de::from_reader(&hex::decode(unsorted_operation_ids).unwrap()[..]).unwrap();
+
+        // Create the same view id via constructor API
+        let view_id_2 = DocumentViewId::new(vec![
+            Hash::new("0020c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa72ec8")
+                .unwrap()
+                .into(),
+            Hash::new("00202dce4b32cd35d61cf54634b93a526df333c5ed3d93230c2f026f8d1ecabc0cd7")
+                .unwrap()
+                .into(),
+        ]);
+
+        // Should result in the same hash
+        assert!(view_id_1.hash().validate().is_ok());
+        assert!(view_id_2.hash().validate().is_ok());
+        assert_eq!(view_id_1.hash(), view_id_2.hash());
+    }
 }
