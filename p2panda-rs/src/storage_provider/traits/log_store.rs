@@ -53,27 +53,21 @@ pub trait LogStore<StorageLog: AsStorageLog> {
 
 #[cfg(test)]
 pub mod tests {
-    use std::convert::{TryFrom, TryInto};
+    use std::convert::TryFrom;
 
     use async_trait::async_trait;
     use rstest::rstest;
     use std::sync::{Arc, Mutex};
 
     use crate::document::DocumentId;
-    use crate::entry::{sign_and_encode, LogId, SeqNum};
+    use crate::entry::LogId;
     use crate::identity::{Author, KeyPair};
-    use crate::operation::{Operation, OperationEncoded};
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::LogStorageError;
     use crate::storage_provider::models::Log;
-    use crate::storage_provider::traits::test_setup::{
-        SimplestStorageProvider, StorageEntry, StorageLog,
-    };
+    use crate::storage_provider::traits::test_setup::{SimplestStorageProvider, StorageLog};
     use crate::storage_provider::traits::{AsStorageLog, LogStore};
-    use crate::test_utils::fixtures::{
-        create_operation, document_id, key_pair, schema, update_operation,
-    };
-    use crate::test_utils::utils::entry;
+    use crate::test_utils::fixtures::{document_id, key_pair, schema};
 
     /// Implement the `LogStore` trait on SimplestStorageProvider
     #[async_trait]
