@@ -4,7 +4,7 @@ use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
-use rstest::fixture;
+use rstest::{fixture, rstest};
 
 use crate::document::DocumentId;
 use crate::entry::{sign_and_encode, EntrySigned, LogId, SeqNum};
@@ -22,6 +22,8 @@ use crate::storage_provider::traits::{
 use crate::test_utils::fixtures::{
     create_operation, document_id, entry, random_key_pair, schema, update_operation,
 };
+
+use super::StorageProvider;
 /// The simplest storage provider. Used for tests in `entry_store`, `log_store` & `storage_provider`
 pub struct SimplestStorageProvider {
     pub logs: Arc<Mutex<Vec<StorageLog>>>,
@@ -292,5 +294,55 @@ pub fn test_db(
     SimplestStorageProvider {
         logs: Arc::new(Mutex::new(db_logs)),
         entries: Arc::new(Mutex::new(db_entries.clone())),
+    }
+}
+
+#[rstest]
+#[async_std::test]
+async fn test_the_test_db(test_db: SimplestStorageProvider) {
+    let entries = test_db.entries.lock().unwrap().clone();
+    for seq_num in 1..10 {
+        let entry = entries.get(seq_num - 1).unwrap();
+
+        let expected_seq_num = SeqNum::new(seq_num as u64).unwrap();
+        assert_eq!(expected_seq_num, *entry.entry_decoded().seq_num());
+
+        let expected_log_id = LogId::default();
+        assert_eq!(expected_log_id, *entry.entry_decoded().log_id());
+
+        let mut expected_backlink_hash = None;
+
+        if seq_num != 1 {
+            expected_backlink_hash = entries
+                .get(seq_num - 2)
+                .map(|backlink_entry| backlink_entry.entry_encoded().hash());
+        }
+        assert_eq!(
+            expected_backlink_hash,
+            entry.entry_decoded().backlink_hash().cloned()
+        );
+
+        let mut expected_skiplink_hash = None;
+
+        if SKIPLINK_ENTRIES.contains(&(seq_num as u64)) {
+            let skiplink_seq_num = entry
+                .entry_decoded()
+                .seq_num()
+                .skiplink_seq_num()
+                .unwrap()
+                .as_u64();
+
+            let skiplink_entry = entries
+                .get((skiplink_seq_num as usize) - 1)
+                .unwrap()
+                .clone();
+
+            expected_skiplink_hash = Some(skiplink_entry.entry_encoded().hash());
+        };
+
+        assert_eq!(
+            expected_skiplink_hash,
+            entry.entry_decoded().skiplink_hash().cloned()
+        );
     }
 }
