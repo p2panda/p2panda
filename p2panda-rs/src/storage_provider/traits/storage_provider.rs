@@ -207,3 +207,111 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         ))
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use async_trait::async_trait;
+    use rstest::rstest;
+    use std::sync::{Arc, Mutex};
+
+    use crate::document::DocumentId;
+    use crate::entry::LogId;
+    use crate::hash::Hash;
+    use crate::storage_provider::traits::test_setup::{
+        test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
+        SimplestStorageProvider, StorageEntry, StorageLog, SKIPLINK_ENTRIES,
+    };
+    use crate::storage_provider::traits::{AsPublishEntryResponse, AsStorageEntry, AsStorageLog};
+    use crate::storage_provider::StorageProviderError;
+
+    use super::StorageProvider;
+
+    #[async_trait]
+    impl StorageProvider<StorageEntry, StorageLog> for SimplestStorageProvider {
+        type EntryArgsRequest = EntryArgsRequest;
+
+        type EntryArgsResponse = EntryArgsResponse;
+
+        type PublishEntryRequest = PublishEntryRequest;
+
+        type PublishEntryResponse = PublishEntryResponse;
+
+        async fn get_document_by_entry(
+            &self,
+            entry_hash: &Hash,
+        ) -> Result<Option<DocumentId>, StorageProviderError> {
+            let entries = self.entries.lock().unwrap();
+
+            let entry = entries
+                .iter()
+                .find(|entry| entry.entry_encoded().hash() == *entry_hash);
+
+            let entry = match entry {
+                Some(entry) => entry,
+                None => return Ok(None),
+            };
+
+            let logs = self.logs.lock().unwrap();
+
+            let log = logs.iter().find(|log| {
+                log.log_id() == *entry.entry_decoded().log_id()
+                    && log.author() == entry.entry_encoded().author()
+            });
+
+            Ok(Some(log.unwrap().document()))
+        }
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn can_publish_entries(test_db: SimplestStorageProvider) {
+        // Instantiate a new store.
+        let empty_db = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(Mutex::new(Vec::new())),
+        };
+
+        let entries = test_db.entries.lock().unwrap().clone();
+
+        for entry in entries.clone() {
+            // Publish each test entry in order.
+            let publish_entry_request =
+                PublishEntryRequest(entry.entry_encoded(), entry.operation_encoded().unwrap());
+
+            let publish_entry_response = empty_db.publish_entry(&publish_entry_request).await;
+
+            // Response should be ok.
+            assert!(publish_entry_response.is_ok());
+
+            // Calculate expected response.
+            let mut seq_num = *entry.entry_decoded().seq_num();
+            let next_seq_num = seq_num.next().unwrap();
+            let mut skiplink = None;
+
+            if SKIPLINK_ENTRIES.contains(&next_seq_num.as_u64()) {
+                let skiplink_seq_num = next_seq_num.skiplink_seq_num().unwrap();
+                skiplink = Some(
+                    entries
+                        .get(skiplink_seq_num.as_u64() as usize - 1)
+                        .unwrap()
+                        .entry_encoded()
+                        .hash(),
+                );
+            };
+
+            let backlink = Some(
+                entries
+                    .get(seq_num.as_u64() as usize - 1)
+                    .unwrap()
+                    .entry_encoded()
+                    .hash(),
+            );
+
+            let expected_reponse =
+                PublishEntryResponse::new(backlink, skiplink, next_seq_num, LogId::default());
+
+            // Response and expected response should match.
+            assert_eq!(publish_entry_response.unwrap(), expected_reponse);
+        }
+    }
+}

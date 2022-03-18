@@ -11,10 +11,10 @@ use crate::Validate;
 pub trait AsEntryArgsRequest {
     /// Returns the Author parameter.
     fn author(&self) -> &Author;
+
     /// Returns the document id Hash parameter.
-    ///
-    /// TODO: Needs updating once we use `DocumentId` here.
     fn document(&self) -> &Option<DocumentId>;
+
     /// Validates the `EntryArgument` parameters
     fn validate(&self) -> Result<(), StorageProviderError> {
         // Validate `author` request parameter
@@ -36,6 +36,7 @@ pub trait AsEntryArgsRequest {
 pub trait AsPublishEntryRequest {
     /// Returns the EntrySigned parameter
     fn entry_encoded(&self) -> &EntrySigned;
+
     /// Returns the OperationEncoded parameter
     ///
     /// Currently not optional.

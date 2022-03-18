@@ -75,94 +75,21 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 pub mod tests {
 
     use async_trait::async_trait;
-    use rstest::{fixture, rstest};
-    use std::convert::TryFrom;
+    use rstest::rstest;
     use std::sync::{Arc, Mutex};
 
-    use crate::document::DocumentId;
     use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
     use crate::identity::{Author, KeyPair};
-    use crate::operation::{AsOperation, Operation, OperationEncoded};
+    use crate::operation::{AsOperation, OperationEncoded};
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::EntryStorageError;
-    use crate::storage_provider::models::Log;
     use crate::storage_provider::traits::test_setup::{
-        SimplestStorageProvider, StorageEntry, StorageLog,
+        test_db, SimplestStorageProvider, StorageEntry, SKIPLINK_ENTRIES,
     };
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
     use crate::test_utils::fixtures::{
-        create_operation, document_id, entry, entry_signed_encoded, operation_encoded,
-        random_key_pair, schema, update_operation,
+        entry, entry_signed_encoded, operation_encoded, random_key_pair, schema,
     };
-
-    const SKIPLINK_ENTRIES: [u64; 2] = [4, 8];
-
-    #[fixture]
-    fn test_db(
-        #[from(random_key_pair)] key_pair: KeyPair,
-        create_operation: Operation,
-        update_operation: Operation,
-        schema: SchemaId,
-        document_id: DocumentId,
-    ) -> SimplestStorageProvider {
-        // Initial empty entry vec.
-        let mut db_entries: Vec<StorageEntry> = vec![];
-
-        // Create a log vec with one log in it (which we create the entries for below)
-        let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
-        let db_logs: Vec<StorageLog> =
-            vec![Log::new(&author, &schema, &document_id, &LogId::new(1)).into()];
-
-        // Create and push a first entry containing a CREATE operation to the entries list
-        let create_entry = entry(
-            create_operation.clone(),
-            SeqNum::new(1).unwrap(),
-            None,
-            None,
-        );
-
-        let encoded_entry = sign_and_encode(&create_entry, &key_pair).unwrap();
-        let encoded_operation = OperationEncoded::try_from(&create_operation).unwrap();
-        let storage_entry = StorageEntry::new(encoded_entry, encoded_operation);
-
-        db_entries.push(storage_entry);
-
-        // Create 9 more entries containing UPDATE operations with valid back- and skip- links
-        for seq_num in 2..10 {
-            let seq_num = SeqNum::new(seq_num).unwrap();
-            let mut skiplink = None;
-            let backlink = db_entries
-                .get(seq_num.as_u64() as usize - 2)
-                .unwrap()
-                .entry_encoded()
-                .hash();
-
-            if SKIPLINK_ENTRIES.contains(&seq_num.as_u64()) {
-                let skiplink_seq_num = seq_num.skiplink_seq_num().unwrap();
-                skiplink = Some(
-                    db_entries
-                        .get(skiplink_seq_num.as_u64() as usize - 1)
-                        .unwrap()
-                        .entry_encoded()
-                        .hash(),
-                );
-            };
-
-            let update_entry = entry(update_operation.clone(), seq_num, Some(backlink), skiplink);
-
-            let encoded_entry = sign_and_encode(&update_entry, &key_pair).unwrap();
-            let encoded_operation = OperationEncoded::try_from(&update_operation).unwrap();
-            let storage_entry = StorageEntry::new(encoded_entry, encoded_operation);
-
-            db_entries.push(storage_entry)
-        }
-
-        // Instantiate a SimpleStorage with the existing entry and log values stored.
-        SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(db_logs)),
-            entries: Arc::new(Mutex::new(db_entries.clone())),
-        }
-    }
 
     /// Implement `EntryStore` trait on `SimplestStorageProvider`
     #[async_trait]

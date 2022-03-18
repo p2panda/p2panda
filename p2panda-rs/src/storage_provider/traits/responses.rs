@@ -10,6 +10,8 @@ use crate::hash::Hash;
 pub trait AsEntryArgsResponse {
     /// Just the constructor method is defined here as all we need this trait for
     /// is constructing entry args to be returned from the default trait methods.
+    ///
+    /// NB: We could validate that entries at seq nums that require skiplinks have them.
     fn new(
         entry_hash_backlink: Option<Hash>,
         entry_hash_skiplink: Option<Hash>,
@@ -23,6 +25,8 @@ pub trait AsEntryArgsResponse {
 pub trait AsPublishEntryResponse {
     /// Just the constructor method is defined here as all we need this trait for
     /// is constructing entry args to be returned from the default trait methods.
+    ///
+    /// NB: We could validate that entries at seq nums that require skiplinks have them.
     fn new(
         entry_hash_backlink: Option<Hash>,
         entry_hash_skiplink: Option<Hash>,
