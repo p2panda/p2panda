@@ -80,7 +80,7 @@ let (panda_entry_1_hash, next_entry_args) = send_to_node(
 .unwrap();
 
 // Panda publishes an update operation. This appends a new entry to the document log, the operation also refers to the previous
-// tip of the graph by it's hash id.
+// tip of the graph by it's operation id.
 //
 // PANDA  : [1] <--[2]
 // PENGUIN:

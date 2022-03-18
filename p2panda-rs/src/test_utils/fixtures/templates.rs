@@ -64,9 +64,9 @@ fn many_valid_entries(#[case] entry: Entry) {}
 #[case::update_operation_many_previous(crate::test_utils::utils::any_operation(
     Some(crate::test_utils::fixtures::defaults::fields()),
     Some(vec![
-        crate::test_utils::fixtures::random_hash(),
-        crate::test_utils::fixtures::random_hash(),
-        crate::test_utils::fixtures::random_hash()
+        crate::test_utils::fixtures::random_operation_id(),
+        crate::test_utils::fixtures::random_operation_id(),
+        crate::test_utils::fixtures::random_operation_id()
         ])
     )
 )]
@@ -74,9 +74,9 @@ fn many_valid_entries(#[case] entry: Entry) {}
     None,
     #[allow(unused_qualifications)]
     Some(vec![
-        crate::test_utils::fixtures::random_hash(),
-        crate::test_utils::fixtures::random_hash(),
-        crate::test_utils::fixtures::random_hash()
+        crate::test_utils::fixtures::random_operation_id(),
+        crate::test_utils::fixtures::random_operation_id(),
+        crate::test_utils::fixtures::random_operation_id()
         ])
     )
 )]

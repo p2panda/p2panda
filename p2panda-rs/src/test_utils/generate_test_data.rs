@@ -40,7 +40,7 @@ fn main() {
         &panda,
         &update_operation(
             SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
-            vec![entry1_hash],
+            vec![entry1_hash.into()],
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("Which I now update.".to_string()),
@@ -55,7 +55,7 @@ fn main() {
         &panda,
         &update_operation(
             SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
-            vec![entry2_hash],
+            vec![entry2_hash.into()],
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("And then update again.".to_string()),
@@ -70,7 +70,7 @@ fn main() {
         &panda,
         &delete_operation(
             SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
-            vec![entry3_hash],
+            vec![entry3_hash.into()],
         ),
     )
     .unwrap();
