@@ -80,6 +80,9 @@ pub enum EntryStorageError {
     /// up the chain.
     #[error("Error occured during `EntryStorage` request in storage provider: {0}")]
     Error(String),
+
+    #[error("Could not find skiplink entry in database")]
+    SkiplinkMissing,
 }
 
 /// Errors which can occur in a call to `publish_entry()`..

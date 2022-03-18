@@ -40,32 +40,30 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// skiplink is required for the next entry.
     async fn determine_skiplink(
         &self,
-        storage_entry: &StorageEntry,
+        entry: &StorageEntry,
     ) -> Result<Option<Hash>, EntryStorageError> {
-        let next_seq_num = storage_entry
-            .entry_decoded()
-            .seq_num()
-            .clone()
-            .next()
-            .unwrap();
+        let next_seq_num = entry.entry_decoded().seq_num().clone().next().unwrap();
 
         // Unwrap as we know that an skiplink exists as soon as previous entry is given
         let skiplink_seq_num = next_seq_num.skiplink_seq_num().unwrap();
 
         // Check if skiplink is required and return hash if so
         let entry_skiplink_hash = if is_lipmaa_required(next_seq_num.as_u64()) {
-            let skiplink_entry = self
+            let skiplink_entry = match self
                 .entry_at_seq_num(
-                    &storage_entry.entry_encoded().author(),
-                    storage_entry.entry_decoded().log_id(),
+                    &entry.entry_encoded().author(),
+                    entry.entry_decoded().log_id(),
                     &skiplink_seq_num,
                 )
                 .await?
-                .unwrap();
-            Some(skiplink_entry.entry_encoded().hash())
+            {
+                Some(entry) => Ok(entry),
+                None => Err(EntryStorageError::SkiplinkMissing),
+            }?;
+            Ok(Some(skiplink_entry.entry_encoded().hash()))
         } else {
-            None
-        };
+            Ok(None)
+        }?;
 
         Ok(entry_skiplink_hash)
     }
@@ -266,5 +264,32 @@ pub mod tests {
                 assert!(next_entry_skiplink.unwrap().is_none())
             }
         }
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn skiplink_does_not_exist(test_db: SimplestStorageProvider) {
+        let entries = test_db.entries.lock().unwrap().clone();
+        let logs = test_db.logs.lock().unwrap().clone();
+
+        let log_entries_with_skiplink_missing = vec![
+            entries.get(0).unwrap().clone(),
+            entries.get(1).unwrap().clone(),
+            entries.get(2).unwrap().clone(),
+            entries.get(4).unwrap().clone(),
+            entries.get(5).unwrap().clone(),
+        ];
+
+        let new_db = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(logs)),
+            entries: Arc::new(Mutex::new(log_entries_with_skiplink_missing)),
+        };
+
+        let error_response = new_db.determine_skiplink(entries.get(6).unwrap()).await;
+
+        assert_eq!(
+            format!("{}", error_response.unwrap_err()),
+            "Could not find skiplink entry in database"
+        )
     }
 }
