@@ -387,14 +387,16 @@ pub mod tests {
 
         let entries = test_db.entries.lock().unwrap().clone();
 
-        // Publish each test entry in order before next loop.
+        // Entry request for valid first intry in log 1.
         let publish_entry_request = PublishEntryRequest(
             entries.get(0).unwrap().entry_encoded(),
             entries.get(0).unwrap().operation_encoded().unwrap(),
         );
 
+        // Publish the first valid entry.
         new_db.publish_entry(&publish_entry_request).await.unwrap();
 
+        // Create a new entry with an invalid log id.
         let entry_with_wrong_log_id = Entry::new(
             &LogId::new(2), // This is wrong!!
             entries.get(1).unwrap().entry_decoded().operation(),
@@ -411,9 +413,11 @@ pub mod tests {
         )
         .unwrap();
 
+        // Create request and publish invalid entry.
         let request_with_wrong_log_id =
             PublishEntryRequest(signed_entry_with_wrong_log_id, encoded_operation);
 
+        // Should error as the published entry contains an invalid log id.
         let error_response = new_db.publish_entry(&request_with_wrong_log_id).await;
 
         assert_eq!(
@@ -425,18 +429,26 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn document_does_not_exist(test_db: SimplestStorageProvider) {
-        // Instantiate a new store.
-        let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-        };
-
         let entries = test_db.entries.lock().unwrap().clone();
 
-        // Publish each test entry in order before next loop.
+        // Init database with one document missing it's CREATE entry.
+        let log_entries_without_document_root = vec![
+            entries.get(1).unwrap().clone(),
+            entries.get(2).unwrap().clone(),
+            entries.get(3).unwrap().clone(),
+            entries.get(4).unwrap().clone(),
+        ];
+
+        let new_db = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(Mutex::new(log_entries_without_document_root)),
+        };
+
+        // Create request for publishing an entry which has a valid backlink and skiplink,
+        // but the document it is associated with does not exist.
         let publish_entry_with_non_existant_document = PublishEntryRequest(
-            entries.get(1).unwrap().entry_encoded(),
-            entries.get(1).unwrap().operation_encoded().unwrap(),
+            entries.get(6).unwrap().entry_encoded(),
+            entries.get(6).unwrap().operation_encoded().unwrap(),
         );
 
         let error_response = new_db
@@ -455,6 +467,7 @@ pub mod tests {
         let entries = test_db.entries.lock().unwrap().clone();
         let logs = test_db.logs.lock().unwrap().clone();
 
+        // Init database with on document log which has an entry at seq num 4 missing.
         let log_entries_with_skiplink_missing = vec![
             entries.get(0).unwrap().clone(),
             entries.get(1).unwrap().clone(),
@@ -474,6 +487,7 @@ pub mod tests {
             entries.get(7).unwrap().operation_encoded().unwrap(),
         );
 
+        // Should error as an entry at seq num 8 should have a skiplink relation to the missing entry at seq num 4.
         let error_response = new_db.publish_entry(&publish_entry_request).await;
 
         assert_eq!(

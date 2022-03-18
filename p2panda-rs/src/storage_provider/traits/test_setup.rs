@@ -23,7 +23,6 @@ use crate::test_utils::fixtures::{
     create_operation, document_id, entry, random_key_pair, schema, update_operation,
 };
 
-use super::StorageProvider;
 /// The simplest storage provider. Used for tests in `entry_store`, `log_store` & `storage_provider`
 pub struct SimplestStorageProvider {
     pub logs: Arc<Mutex<Vec<StorageLog>>>,
