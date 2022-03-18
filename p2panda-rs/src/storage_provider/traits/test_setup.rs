@@ -213,8 +213,8 @@ impl AsEntryArgsResponse for EntryArgsResponse {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EntryArgsRequest {
-    author: Author,
-    document: Option<DocumentId>,
+    pub author: Author,
+    pub document: Option<DocumentId>,
 }
 
 impl AsEntryArgsRequest for EntryArgsRequest {
