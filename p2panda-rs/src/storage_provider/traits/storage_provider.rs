@@ -218,12 +218,14 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 pub mod tests {
     use async_trait::async_trait;
     use rstest::rstest;
+    use std::convert::TryFrom;
     use std::sync::{Arc, Mutex};
 
     use crate::document::DocumentId;
-    use crate::entry::LogId;
+    use crate::entry::{sign_and_encode, Entry, LogId};
     use crate::hash::Hash;
-    use crate::operation::AsOperation;
+    use crate::identity::KeyPair;
+    use crate::operation::{AsOperation, OperationEncoded};
     use crate::storage_provider::traits::test_setup::{
         test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
         SimplestStorageProvider, StorageEntry, StorageLog,
@@ -232,6 +234,7 @@ pub mod tests {
         AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
     };
     use crate::storage_provider::StorageProviderError;
+    use crate::test_utils::fixtures::key_pair;
 
     use super::StorageProvider;
 
@@ -275,7 +278,7 @@ pub mod tests {
     #[async_std::test]
     async fn can_publish_entries(test_db: SimplestStorageProvider) {
         // Instantiate a new store.
-        let empty_db = SimplestStorageProvider {
+        let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
         };
@@ -287,7 +290,7 @@ pub mod tests {
             let publish_entry_request =
                 PublishEntryRequest(entry.entry_encoded(), entry.operation_encoded().unwrap());
 
-            let publish_entry_response = empty_db.publish_entry(&publish_entry_request).await;
+            let publish_entry_response = new_db.publish_entry(&publish_entry_request).await;
 
             // Response should be ok.
             assert!(publish_entry_response.is_ok());
@@ -327,7 +330,7 @@ pub mod tests {
     #[async_std::test]
     async fn gets_entry_args(test_db: SimplestStorageProvider) {
         // Instantiate a new store.
-        let empty_db = SimplestStorageProvider {
+        let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
         };
@@ -349,7 +352,7 @@ pub mod tests {
                 document: document_id,
             };
 
-            let entry_args_response = empty_db.get_entry_args(&entry_args_request).await;
+            let entry_args_response = new_db.get_entry_args(&entry_args_request).await;
 
             // Response should be ok.
             assert!(entry_args_response.is_ok());
@@ -369,10 +372,113 @@ pub mod tests {
             let publish_entry_request =
                 PublishEntryRequest(entry.entry_encoded(), entry.operation_encoded().unwrap());
 
-            empty_db
-                .publish_entry(&publish_entry_request)
-                .await
-                .unwrap();
+            new_db.publish_entry(&publish_entry_request).await.unwrap();
         }
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn wrong_log_id(key_pair: KeyPair, test_db: SimplestStorageProvider) {
+        // Instantiate a new store.
+        let new_db = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(Mutex::new(Vec::new())),
+        };
+
+        let entries = test_db.entries.lock().unwrap().clone();
+
+        // Publish each test entry in order before next loop.
+        let publish_entry_request = PublishEntryRequest(
+            entries.get(0).unwrap().entry_encoded(),
+            entries.get(0).unwrap().operation_encoded().unwrap(),
+        );
+
+        new_db.publish_entry(&publish_entry_request).await.unwrap();
+
+        let entry_with_wrong_log_id = Entry::new(
+            &LogId::new(2), // This is wrong!!
+            entries.get(1).unwrap().entry_decoded().operation(),
+            entries.get(1).unwrap().entry_decoded().skiplink_hash(),
+            entries.get(1).unwrap().entry_decoded().backlink_hash(),
+            entries.get(1).unwrap().entry_decoded().seq_num(),
+        )
+        .unwrap();
+
+        let signed_entry_with_wrong_log_id =
+            sign_and_encode(&entry_with_wrong_log_id, &key_pair).unwrap();
+        let encoded_operation = OperationEncoded::try_from(
+            entries.get(1).unwrap().entry_decoded().operation().unwrap(),
+        )
+        .unwrap();
+
+        let request_with_wrong_log_id =
+            PublishEntryRequest(signed_entry_with_wrong_log_id, encoded_operation);
+
+        let error_response = new_db.publish_entry(&request_with_wrong_log_id).await;
+
+        assert_eq!(
+            format!("{}", error_response.unwrap_err()),
+            "Requested log id 2 does not match expected log id 1"
+        )
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn document_does_not_exist(test_db: SimplestStorageProvider) {
+        // Instantiate a new store.
+        let new_db = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(Mutex::new(Vec::new())),
+        };
+
+        let entries = test_db.entries.lock().unwrap().clone();
+
+        // Publish each test entry in order before next loop.
+        let publish_entry_with_non_existant_document = PublishEntryRequest(
+            entries.get(1).unwrap().entry_encoded(),
+            entries.get(1).unwrap().operation_encoded().unwrap(),
+        );
+
+        let error_response = new_db
+            .publish_entry(&publish_entry_with_non_existant_document)
+            .await;
+
+        assert_eq!(
+            format!("{}", error_response.unwrap_err()),
+            "Could not find document hash for entry in database"
+        )
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn skiplink_does_not_exist(test_db: SimplestStorageProvider) {
+        let entries = test_db.entries.lock().unwrap().clone();
+        let logs = test_db.logs.lock().unwrap().clone();
+
+        let log_entries_with_skiplink_missing = vec![
+            entries.get(0).unwrap().clone(),
+            entries.get(1).unwrap().clone(),
+            entries.get(2).unwrap().clone(),
+            entries.get(4).unwrap().clone(),
+            entries.get(5).unwrap().clone(),
+            entries.get(6).unwrap().clone(),
+        ];
+
+        let new_db = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(logs)),
+            entries: Arc::new(Mutex::new(log_entries_with_skiplink_missing)),
+        };
+
+        let publish_entry_request = PublishEntryRequest(
+            entries.get(7).unwrap().entry_encoded(),
+            entries.get(7).unwrap().operation_encoded().unwrap(),
+        );
+
+        let error_response = new_db.publish_entry(&publish_entry_request).await;
+
+        assert_eq!(
+            format!("{}", error_response.unwrap_err()),
+            "Could not find skiplink entry in database"
+        )
     }
 }
