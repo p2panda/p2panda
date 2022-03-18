@@ -10,7 +10,8 @@ use crate::operation::{OperationEncodedError, OperationError};
 /// `StorageProvider` errors which also handle errors originating in LogStorage and EntryStorage.
 #[derive(thiserror::Error, Debug)]
 pub enum StorageProviderError {
-    /// Error returned from validating p2panda-rs `Author` data types.
+    /// Catch all error which implementers can use for passing their own errors
+    /// up the chain.
     #[error("Error occured in `StorageProvider`: {0}")]
     Error(String),
 
@@ -66,7 +67,8 @@ pub enum StorageProviderError {
 /// `LogStorage` errors.
 #[derive(thiserror::Error, Debug)]
 pub enum LogStorageError {
-    /// Error returned from validating p2panda-rs `Author` data types.
+    /// Catch all error which implementers can use for passing their own errors
+    /// up the chain.
     #[error("Error occured during `LogStorage` request in storage provider: {0}")]
     Error(String),
 }
@@ -74,7 +76,8 @@ pub enum LogStorageError {
 /// `EntryStorage` errors.
 #[derive(thiserror::Error, Debug)]
 pub enum EntryStorageError {
-    /// Error returned from validating p2panda-rs `Author` data types.
+    /// Catch all error which implementers can use for passing their own errors
+    /// up the chain.
     #[error("Error occured during `EntryStorage` request in storage provider: {0}")]
     Error(String),
 }
