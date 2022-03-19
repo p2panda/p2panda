@@ -43,7 +43,7 @@ impl AsStorageLog for StorageLog {
                 let mut relation_iter = pinned_relation.into_iter().peekable();
                 while let Some(hash) = relation_iter.next() {
                     id_str += hash.as_str();
-                    if relation_iter.peek().is_none() {
+                    if relation_iter.peek().is_some() {
                         id_str += "_"
                     }
                 }
