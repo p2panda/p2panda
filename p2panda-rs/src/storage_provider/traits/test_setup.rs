@@ -96,7 +96,12 @@ impl TryInto<Log> for StorageLog {
     type Error = LogStorageError;
 
     fn try_into(self) -> Result<Log, Self::Error> {
-        todo!()
+        Ok(Log {
+            author: self.author(),
+            log_id: self.log_id(),
+            document: self.document(),
+            schema: self.schema(),
+        })
     }
 }
 
@@ -352,4 +357,31 @@ async fn test_the_test_db(test_db: SimplestStorageProvider) {
             entry.entry_decoded().skiplink_hash().cloned()
         );
     }
+}
+
+#[rstest]
+#[async_std::test]
+async fn test_the_test_data_conversions(test_db: SimplestStorageProvider) {
+    let storage_entry = test_db.entries.lock().unwrap().get(0).unwrap().clone();
+    let storage_log = test_db.logs.lock().unwrap().get(0).unwrap().clone();
+
+    let entry_with_operation: Result<EntryWithOperation, _> = storage_entry.clone().try_into();
+    assert!(entry_with_operation.is_ok());
+
+    let storage_entry_again = StorageEntry::try_from(entry_with_operation.unwrap());
+    assert!(storage_entry_again.is_ok());
+
+    let log: Result<Log, _> = storage_log.try_into();
+    assert!(log.is_ok());
+
+    let storage_log_again = StorageLog::try_from(log.unwrap());
+    assert!(storage_log_again.is_ok());
+
+    let publish_entry_request = PublishEntryRequest(
+        storage_entry.entry_encoded(),
+        storage_entry.operation_encoded().unwrap(),
+    );
+
+    let entry_with_operation: Result<EntryWithOperation, _> = publish_entry_request.try_into();
+    assert!(entry_with_operation.is_ok());
 }
