@@ -88,6 +88,10 @@ impl PinnedRelation {
     pub fn new(document_view_id: DocumentViewId) -> Self {
         Self(document_view_id)
     }
+
+    pub fn view_id(&self) -> DocumentViewId {
+        self.0.clone()
+    }
 }
 
 impl Validate for PinnedRelation {
