@@ -47,6 +47,10 @@ pub enum OperationValue {
     /// Reference to a list of document views.
     #[serde(rename = "pinned_relation_list")]
     PinnedRelationList(PinnedRelationList),
+
+    /// Reference to a document's owner key group.
+    #[serde(rename = "owner")]
+    Owner(Relation)
 }
 
 impl Validate for OperationValue {
@@ -56,6 +60,7 @@ impl Validate for OperationValue {
         match self {
             Self::Relation(relation) => relation.validate(),
             Self::RelationList(relations) => relations.validate(),
+            Self::Owner(relation) => relation.validate(),
             _ => Ok(()),
         }
     }
@@ -245,6 +250,7 @@ mod tests {
         #[from(random_operation_id)] operation_6: OperationId,
         #[from(random_operation_id)] operation_7: OperationId,
         #[from(random_operation_id)] operation_8: OperationId,
+        #[from(random_operation_id)] operation_9: OperationId,
     ) {
         // 1. Unpinned relation
         let relation = OperationValue::Relation(Relation::new(DocumentId::new(operation_1)));
@@ -283,6 +289,13 @@ mod tests {
         assert_eq!(
             pinned_relation_list,
             OperationValue::deserialize_str(&pinned_relation_list.serialize())
+        );
+
+        // 5. Owner
+        let owner = OperationValue::Owner(Relation::new(DocumentId::new(operation_9)));
+        assert_eq!(
+            owner,
+            OperationValue::deserialize_str(&owner.serialize())
         );
     }
 
