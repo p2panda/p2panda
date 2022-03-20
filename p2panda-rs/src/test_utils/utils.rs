@@ -67,8 +67,7 @@ pub fn any_operation(
     }
 }
 
-/// Helper method for generating OperationFields from a vector of key-value tuples, currently only
-/// string types are implemented.
+/// Helper method for generating OperationFields from a vector of key-value tuples
 pub fn operation_fields(fields: Vec<(&str, OperationValue)>) -> OperationFields {
     let mut operation_fields = OperationFields::new();
     for (key, value) in fields.iter() {

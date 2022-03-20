@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use crate::identity::AuthorError;
 use crate::Validate;
 
+use super::KeyPair;
+
 /// Authors are hex encoded Ed25519 public key strings.
 #[derive(Clone, Debug, Serialize, Eq, StdHash, Deserialize, PartialEq)]
 pub struct Author(String);
@@ -53,6 +55,13 @@ impl TryFrom<PublicKey> for Author {
 
     fn try_from(public_key: PublicKey) -> Result<Self, Self::Error> {
         Self::new(&hex::encode(public_key.to_bytes()))
+    }
+}
+
+/// Convert a full [`KeyPair`] instance into an `Author`.
+impl From<KeyPair> for Author {
+    fn from(key_pair: KeyPair) -> Self {
+        Self::try_from(key_pair.public_key().clone()).unwrap()
     }
 }
 

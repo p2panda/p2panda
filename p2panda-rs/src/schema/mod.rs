@@ -7,6 +7,7 @@ mod field_types;
 mod schema;
 mod schema_id;
 pub mod system;
+pub mod key_group;
 
 pub use error::{FieldTypeError, SchemaError, SchemaIdError};
 pub use field_types::FieldType;

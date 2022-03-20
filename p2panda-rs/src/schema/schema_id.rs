@@ -21,6 +21,12 @@ pub enum SchemaId {
 
     /// A schema definition field.
     SchemaField,
+
+    KeyGroup,
+
+    KeyGroupMembership,
+
+    KeyGroupMembershipRequest,
 }
 
 impl SchemaId {
@@ -29,10 +35,20 @@ impl SchemaId {
     /// If a hash string is passed, it will be converted into a document view id with only one hash
     /// inside.
     pub fn new(id: &str) -> Result<Self, SchemaIdError> {
+        match SchemaId::parse_system_schema_id(id) {
+            Some(value) => Ok(value),
+            None => Ok(id.parse::<DocumentViewId>()?.into()),
+        }
+    }
+
+    fn parse_system_schema_id(id: &str) -> Option<SchemaId> {
         match id {
-            "schema_v1" => Ok(SchemaId::Schema),
-            "schema_field_v1" => Ok(SchemaId::SchemaField),
-            hash_str => Ok(hash_str.parse::<DocumentViewId>()?.into()),
+            "schema_v1" => Some(SchemaId::Schema),
+            "schema_field_v1" => Some(SchemaId::SchemaField),
+            "key_group_v1" => Some(SchemaId::KeyGroup),
+            "key_group_membership_v1" => Some(SchemaId::KeyGroupMembership),
+            "key_group_membership_request_v1" => Some(SchemaId::KeyGroupMembershipRequest),
+            _ => None
         }
     }
 }
@@ -71,10 +87,9 @@ impl<'de> Visitor<'de> for SchemaIdVisitor {
     where
         E: serde::de::Error,
     {
-        match value {
-            "schema_v1" => Ok(SchemaId::Schema),
-            "schema_field_v1" => Ok(SchemaId::SchemaField),
-            _ => Err(serde::de::Error::custom(format!(
+        match SchemaId::parse_system_schema_id(value) {
+            Some(schema_id) => Ok(schema_id),
+            None => Err(serde::de::Error::custom(format!(
                 "Unknown system schema name: {}",
                 value
             ))),
@@ -113,6 +128,9 @@ impl Serialize for SchemaId {
             SchemaId::Application(relation) => relation.serialize(serializer),
             SchemaId::Schema => serializer.serialize_str("schema_v1"),
             SchemaId::SchemaField => serializer.serialize_str("schema_field_v1"),
+            SchemaId::KeyGroup => serializer.serialize_str("key_group_v1"),
+            SchemaId::KeyGroupMembership => serializer.serialize_str("key_group_membership_v1"),
+            SchemaId::KeyGroupMembershipRequest => serializer.serialize_str("key_group_membership_request_v1")
         }
     }
 }
