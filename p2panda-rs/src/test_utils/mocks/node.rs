@@ -90,7 +90,7 @@ use log::{debug, info};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 
-use crate::document::{DocumentBuilder, DocumentView};
+use crate::document::{DocumentBuilder, DocumentView, Document};
 use crate::entry::{decode_entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
@@ -493,6 +493,18 @@ impl Node {
             .collect();
         let document = DocumentBuilder::new(operations).build().unwrap();
         document.view().to_owned()
+    }
+
+    pub fn get_document_but_dont_make_it_look_like_a_view(&self, id: &Hash) -> Document {
+        let entries = self.get_document_entries(id);
+        let operations = entries
+            .iter()
+            .map(|entry| {
+                OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap()
+            })
+            .collect();
+        let document = DocumentBuilder::new(operations).build().unwrap();
+        document.to_owned()
     }
 
     /// Get all documents in their resolved state from the node.
