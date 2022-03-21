@@ -303,15 +303,17 @@ export class Session {
 
   /**
    * Signs and publishes an UPDATE operation for the given application data and
-   * matching schema. An UPDATE operation references the entry hash of the
-   * CREATE operation which is the root of this document.
+   * matching schema.
+   *
+   * The document to be updated is referenced by its document id, which is the
+   * operation id of that document's initial `CREATE` operation.
    *
    * Caches arguments for creating the next entry of this schema in the given
    * session.
    *
-   * @param documentId id of the document we update, this is the hash of the root `create` entry
+   * @param documentId id of the document we update, this is the id of the root `create` operation
    * @param fields application data to publish with the new entry, needs to match schema
-   * @param previousOperations array of operation hash ids identifying the tips of all currently un-merged branches in the document graph
+   * @param previousOperations array of operation ids identifying the tips of all currently un-merged branches in the document graph
    * @param options optional config object:
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id
@@ -354,13 +356,15 @@ export class Session {
   }
 
   /**
-   * Signs and publishes a DELETE operation for the given schema. References
-   * the entry hash of the CREATE operation which is the id of this document.
+   * Signs and publishes a DELETE operation for the given schema.
+   *
+   * The document to be deleted is referenced by its document id, which is the
+   * operation id of that document's initial `CREATE` operation.
    *
    * Caches arguments for creating the next entry of this schema in the given session.
    *
    * @param documentId id of the document we delete, this is the hash of the root `create` entry
-   * @param previousOperations array of operation hash ids identifying the tips of all currently un-merged branches in the document graph
+   * @param previousOperations array of operation ids identifying the tips of all currently un-merged branches in the document graph
    * @param options optional config object:
    * @param options.keyPair will be used to sign the new entry
    * @param options.schema hex-encoded schema id

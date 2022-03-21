@@ -3,7 +3,6 @@
 use std::hash::Hash as StdHash;
 
 use crate::entry::{decode_entry, EntrySigned};
-use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{
     AsOperation, Operation, OperationAction, OperationEncoded, OperationFields, OperationVersion,
@@ -12,12 +11,14 @@ use crate::operation::{
 use crate::schema::SchemaId;
 use crate::Validate;
 
-/// Wrapper struct containing an operation, the hash of its entry, and the public key of its
+use super::OperationId;
+
+/// Wrapper struct containing an operation, its operation id, and the public key of its
 /// author.
 #[derive(Debug, Clone, Eq, PartialEq, StdHash)]
 pub struct OperationWithMeta {
-    /// The hash of this operations entry.
-    operation_id: Hash,
+    /// The hash of this operation's entry.
+    operation_id: OperationId,
 
     /// The public key of the author who published this operation.
     public_key: Author,
@@ -38,7 +39,7 @@ impl OperationWithMeta {
         decode_entry(entry_encoded, Some(operation_encoded))?;
 
         let operation_with_meta = Self {
-            operation_id: entry_encoded.hash(),
+            operation_id: entry_encoded.hash().into(),
             public_key: entry_encoded.author(),
             operation,
         };
@@ -49,7 +50,7 @@ impl OperationWithMeta {
     }
 
     /// Returns the identifier for this operation.
-    pub fn operation_id(&self) -> &Hash {
+    pub fn operation_id(&self) -> &OperationId {
         &self.operation_id
     }
 
@@ -86,7 +87,7 @@ impl AsOperation for OperationWithMeta {
     }
 
     /// Returns vector of previous operations.
-    fn previous_operations(&self) -> Option<Vec<Hash>> {
+    fn previous_operations(&self) -> Option<Vec<OperationId>> {
         self.operation.previous_operations()
     }
 }
