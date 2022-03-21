@@ -23,6 +23,7 @@ Highlights are marked with a pancake 🥞
 - Move `DocumentId` from `DocmentView` into `Document` [#255](https://github.com/p2panda/p2panda/pull/255) `rs`
 - Introduce `OperationId` to increase type safety around uses of `Hash` [#272](https://github.com/p2panda/p2panda/pull/272) `rs`
 - Implement `Display` trait for hash, schema, schema id and document view id [#281](https://github.com/p2panda/p2panda/pull/281) `rs`
+- Implement document view id hash as a limited-size identifier for document views [#277](https://github.com/p2panda/p2panda/pull/277) `rs`
 
 ## Changed
 

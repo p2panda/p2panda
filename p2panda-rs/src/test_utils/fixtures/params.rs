@@ -76,7 +76,7 @@ pub fn document_view_id(#[default(vec![DEFAULT_HASH])] hash_str_vec: Vec<&str>) 
         .into_iter()
         .map(|hash| hash.parse::<OperationId>().unwrap())
         .collect();
-    DocumentViewId::new(hashes)
+    DocumentViewId::new(&hashes)
 }
 
 /// Fixture which injects the default `OperationId` into a test method. Default value can be

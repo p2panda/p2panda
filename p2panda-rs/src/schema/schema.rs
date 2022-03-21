@@ -125,8 +125,8 @@ mod tests {
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         let fields = PinnedRelationList::new(vec![
-            DocumentViewId::new(vec![relation_operation_id_1.clone()]),
-            DocumentViewId::new(vec![
+            DocumentViewId::new(&[relation_operation_id_1.clone()]),
+            DocumentViewId::new(&[
                 relation_operation_id_2.clone(),
                 relation_operation_id_3.clone(),
             ]),
@@ -149,7 +149,7 @@ mod tests {
         let capacity_field_view = create_field(
             "capacity",
             "int",
-            DocumentViewId::new(vec![relation_operation_id_2, relation_operation_id_3]),
+            DocumentViewId::new(&[relation_operation_id_2, relation_operation_id_3]),
         );
 
         // Create venue schema from schema and field views

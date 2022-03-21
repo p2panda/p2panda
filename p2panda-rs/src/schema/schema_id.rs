@@ -108,7 +108,7 @@ impl<'de> Visitor<'de> for SchemaIdVisitor {
             };
         }
 
-        let document_view_id = DocumentViewId::new(op_ids);
+        let document_view_id = DocumentViewId::new(&op_ids);
         Ok(SchemaId::Application(PinnedRelation::new(document_view_id)))
     }
 }
@@ -243,7 +243,7 @@ mod test {
                 .parse()
                 .unwrap();
         let schema: SchemaId = operation_id.clone().into();
-        let document_view_id = DocumentViewId::new(vec![operation_id]);
+        let document_view_id = DocumentViewId::new(&[operation_id]);
 
         // From Hash
         assert_eq!(
