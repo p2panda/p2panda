@@ -35,12 +35,12 @@ Highlights are marked with a pancake 🥞
 - Support all `Relation` flavours in `cddl` module [#259](https://github.com/p2panda/p2panda/pull/259) `rs`
 - Impl `IntoIter` trait for `PinnedRelation`, `RelationList` and `DocumentViewId` [#266](https://github.com/p2panda/p2panda/pull/266) `rs`
 - Improve error reporting when adding operation fields [#262](https://github.com/p2panda/p2panda/issues/262)] `rs` `js`
-- Require document view ids to consist of sorted operation ids
+- Require document view ids to consist of sorted operation ids [#284](https://github.com/p2panda/p2panda/pull/284) `rs`
 
 ## Fixed
 
 - Fix determination of field types in p2panda-js [#202](https://github.com/p2panda/p2panda/pull/202) `js`
-- Fix equality of document view ids
+- Fix equality of document view ids [#284](https://github.com/p2panda/p2panda/pull/284) `rs`
 
 ## Everything burrito
 
