@@ -103,7 +103,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::operation::OperationId;
-    use crate::test_utils::fixtures::{document_view_id, random_hash};
+    use crate::test_utils::fixtures::{document_view_id, random_hash, random_operation_id};
     use crate::Validate;
 
     use super::DocumentViewId;
@@ -135,5 +135,35 @@ mod tests {
         for hash in document_view_id {
             assert!(hash.validate().is_ok());
         }
+    }
+
+    #[rstest]
+    fn equality(
+        #[from(random_operation_id)] operation_id_1: OperationId,
+        #[from(random_operation_id)] operation_id_2: OperationId,
+    ) {
+        let view_id_1 = DocumentViewId::new(vec![operation_id_1.clone(), operation_id_2.clone()]);
+        let view_id_2 = DocumentViewId::new(vec![operation_id_2, operation_id_1]);
+        assert_eq!(view_id_1, view_id_2);
+    }
+
+    #[test]
+    fn deserialize_unsorted_view_id() {
+        // Unsorted operation ids in document view id array:
+        //
+        // [
+        //  "0020c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa72ec8",
+        //  "00202dce4b32cd35d61cf54634b93a526df333c5ed3d93230c2f026f8d1ecabc0cd7"
+        // ]
+        let unsorted_operation_ids = "827844303032306331336364633538646663366634656264333239393266663038396462373939383033363331343462646232373433363933613031393633366661373265633878443030323032646365346233326364333564363163663534363334623933613532366466333333633565643364393332333063326630323666386431656361626330636437";
+
+        // Construct document view id by deserialising CBOR data
+        let view_id_1: DocumentViewId =
+            ciborium::de::from_reader(&hex::decode(unsorted_operation_ids).unwrap()[..]).unwrap();
+
+        assert_eq!(
+            format!("{}", view_id_1.validate().unwrap_err()),
+            "Expected sorted operation ids in document view id"
+        );
     }
 }
