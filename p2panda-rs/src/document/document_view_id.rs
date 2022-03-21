@@ -185,7 +185,7 @@ mod tests {
         let operation_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
             .parse::<OperationId>()
             .unwrap();
-        let view_id_unmerged = DocumentViewId::new(vec![operation_1, operation_2]);
+        let view_id_unmerged = DocumentViewId::new(&vec![operation_1, operation_2]);
 
         assert_eq!(
             format!("{}", view_id_unmerged),
