@@ -47,12 +47,9 @@ impl DocumentViewId {
 impl Display for DocumentViewId {
     /// Document view ids are displayed by concatenating their hashes with an underscore separator.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut is_first = true;
-        for operation_id in self.0.clone().into_iter() {
-            write!(f, "{}{}", if is_first { "" } else { "_" }, operation_id.as_hash())?;
-            if is_first {
-                is_first = false;
-            }
+        for (i, operation_id) in self.0.clone().into_iter().enumerate() {
+            let separator = if i == 0 { "" } else { "_" };
+            write!(f, "{}{}", separator, operation_id.as_hash())?;
         }
         Ok(())
     }
