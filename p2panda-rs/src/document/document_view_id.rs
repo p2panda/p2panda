@@ -192,7 +192,7 @@ mod tests {
             "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
         );
     }
-  
+
     #[rstest]
     fn document_view_hash(
         #[from(random_operation_id)] operation_id_1: OperationId,
