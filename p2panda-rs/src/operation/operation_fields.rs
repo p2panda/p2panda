@@ -255,7 +255,7 @@ mod tests {
 
         // 2. Pinned relation
         let pinned_relation =
-            OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::new(vec![
+            OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::new(&[
                 operation_2,
                 operation_3,
             ])));
@@ -277,8 +277,8 @@ mod tests {
         // 4. Pinned relation list
         let pinned_relation_list =
             OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
-                DocumentViewId::new(vec![operation_6, operation_7]),
-                DocumentViewId::new(vec![operation_8]),
+                DocumentViewId::new(&[operation_6, operation_7]),
+                DocumentViewId::new(&[operation_8]),
             ]));
         assert_eq!(
             pinned_relation_list,
@@ -297,7 +297,7 @@ mod tests {
         let value = OperationValue::Relation(relation);
         assert!(value.validate().is_ok());
 
-        let pinned_relation = PinnedRelation::new(DocumentViewId::new(vec![
+        let pinned_relation = PinnedRelation::new(DocumentViewId::new(&[
             operation_id_1.clone(),
             operation_id_2.clone(),
         ]));
@@ -371,10 +371,10 @@ mod tests {
         #[from(random_operation_id)] operation_id_5: OperationId,
         #[from(random_operation_id)] operation_id_6: OperationId,
     ) {
-        let document_view_id_1 = DocumentViewId::new(vec![operation_id_1, operation_id_2]);
-        let document_view_id_2 = DocumentViewId::new(vec![operation_id_3]);
+        let document_view_id_1 = DocumentViewId::new(&[operation_id_1, operation_id_2]);
+        let document_view_id_2 = DocumentViewId::new(&[operation_id_3]);
         let document_view_id_3 =
-            DocumentViewId::new(vec![operation_id_4, operation_id_5, operation_id_6]);
+            DocumentViewId::new(&[operation_id_4, operation_id_5, operation_id_6]);
 
         let relations = PinnedRelationList::new(vec![
             document_view_id_1,

@@ -10,7 +10,7 @@ use crate::Validate;
 /// Uniquely identifies an [`Operation`].
 ///
 /// An `OperationId` is the hash of the [`Entry`] with which an operation was published.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct OperationId(Hash);
 
 impl OperationId {

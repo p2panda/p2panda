@@ -234,7 +234,7 @@ impl DocumentBuilder {
         };
 
         // Construct the document view id
-        let document_view_id = DocumentViewId::new(graph_tips);
+        let document_view_id = DocumentViewId::new(&graph_tips);
 
         // Construct the document view, from the reduced values and the document view id
         let document_view = DocumentView::new(document_view_id, view);
