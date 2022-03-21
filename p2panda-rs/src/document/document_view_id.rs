@@ -4,9 +4,11 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use crate::hash::{Hash, HashError};
+use crate::hash::Hash;
 use crate::operation::OperationId;
 use crate::Validate;
+
+use super::DocumentViewIdError;
 
 /// The identifier of a document view.
 ///
@@ -34,7 +36,9 @@ pub struct DocumentViewId(Vec<OperationId>);
 impl DocumentViewId {
     /// Create a new document view id.
     pub fn new(graph_tips: Vec<OperationId>) -> Self {
-        Self(graph_tips)
+        let mut graph_tips_mut = graph_tips;
+        graph_tips_mut.sort();
+        Self(graph_tips_mut)
     }
 
     /// Get the graph tip ids of this view id.
@@ -44,9 +48,18 @@ impl DocumentViewId {
 }
 
 impl Validate for DocumentViewId {
-    type Error = HashError;
+    type Error = DocumentViewIdError;
 
+    /// Checks that constituting operation ids are sorted and represent valid hashes.
     fn validate(&self) -> Result<(), Self::Error> {
+        let is_sorted = self
+            .0
+            .windows(2)
+            .all(|operation_ids| operation_ids[0] <= operation_ids[1]);
+        if !is_sorted {
+            return Err(DocumentViewIdError::UnsortedOperationIds);
+        }
+
         for hash in &self.0 {
             hash.validate()?;
         }
@@ -90,7 +103,7 @@ impl From<Hash> for DocumentViewId {
 /// Converts a hash string into a `DocumentViewId`, assuming that this document view only consists
 /// of one graph tip hash.
 impl FromStr for DocumentViewId {
-    type Err = HashError;
+    type Err = DocumentViewIdError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self::new(vec![Hash::new(s)?.into()]))
