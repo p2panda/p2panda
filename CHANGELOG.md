@@ -22,7 +22,7 @@ Highlights are marked with a pancake 🥞
 - Performance benchmarks for entry and operation encoding/decoding [#254](https://github.com/p2panda/p2panda/pull/254) `rs`
 - Move `DocumentId` from `DocmentView` into `Document` [#255](https://github.com/p2panda/p2panda/pull/255) `rs`
 - Introduce `OperationId` to increase type safety around uses of `Hash` [#272](https://github.com/p2panda/p2panda/pull/272) `rs`
-- Introduce the schema hash id as a unique string identifier for schemas [#268](https://github.com/p2panda/p2panda/pull/268) `rs`
+- Implement `Display` trait for hash, schema, schema id and document view id
 
 ## Changed
 

@@ -61,17 +61,6 @@ impl Schema {
     pub fn as_cddl(&self) -> String {
         generate_cddl_definition(&self.fields)
     }
-
-    /// Returns a unique string identifier for this schema.
-    ///
-    /// This identifier can only be used when it is not necessary to reconstruct this schema's
-    /// document from it.
-    ///
-    /// It has the format "<schema name>__<hashed schema document view graph tips>".
-    #[allow(unused)]
-    pub fn hash_id(&self) -> String {
-        format!("{}__{}", self.name, self.id.hash().as_str())
-    }
 }
 
 impl Display for Schema {
@@ -183,9 +172,6 @@ mod tests {
 
         // Schema should have a string representation
         assert!(format!("{}", schema).starts_with("venue_name_0020"));
-
-        // Schema should have a hash id
-        assert!(schema.hash_id().starts_with("venue_name__0020"));
     }
 
     #[rstest]

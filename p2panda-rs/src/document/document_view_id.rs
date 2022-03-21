@@ -42,17 +42,6 @@ impl DocumentViewId {
     pub fn graph_tips(&self) -> &[OperationId] {
         self.0.as_slice()
     }
-
-    /// Returns a hash over the graph tips constituting this view id.
-    pub fn hash(&self) -> Hash {
-        let graph_tip_bytes = self
-            .0
-            .clone()
-            .into_iter()
-            .flat_map(|graph_tip| graph_tip.as_hash().to_bytes())
-            .collect();
-        Hash::new_from_bytes(graph_tip_bytes).unwrap()
-    }
 }
 
 impl Display for DocumentViewId {
