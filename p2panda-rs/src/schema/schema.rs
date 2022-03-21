@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::BTreeMap;
-use std::fmt::Display;
 
 use crate::cddl::generate_cddl_definition;
 use crate::document::DocumentViewId;
@@ -14,7 +13,7 @@ type FieldKey = String;
 /// A struct representing a materialised schema.
 ///
 /// It is constructed from a [`SchemaView`] and all related [`SchemaFieldView`]s.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Schema {
     id: DocumentViewId,
     name: String,
@@ -71,12 +70,6 @@ impl Schema {
     #[allow(unused)]
     pub fn hash_id(&self) -> String {
         format!("{}__{}", self.name, self.id.hash().as_str())
-    }
-}
-
-impl Display for Schema {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}_{}", self.name, self.id)
     }
 }
 
@@ -180,9 +173,6 @@ mod tests {
 
         // Schema should return correct cddl string
         assert_eq!(expected_cddl, schema.as_cddl());
-
-        // Schema should have a string representation
-        assert!(format!("{}", schema).starts_with("venue_name_0020"));
 
         // Schema should have a hash id
         assert!(schema.hash_id().starts_with("venue_name__0020"));

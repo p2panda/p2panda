@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::fmt::Display;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -63,20 +62,6 @@ impl DocumentViewId {
             .flat_map(|graph_tip| graph_tip.as_hash().to_bytes())
             .collect();
         Hash::new_from_bytes(graph_tip_bytes).unwrap()
-    }
-}
-
-impl Display for DocumentViewId {
-    /// Document view ids are displayed by concatenating their hashes with an underscore separator.
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut is_first = true;
-        for hash in self.0.clone().into_iter() {
-            write!(f, "{}{}", if is_first { "" } else { "_" }, hash)?;
-            if is_first {
-                is_first = false;
-            }
-        }
-        Ok(())
     }
 }
 
@@ -148,7 +133,6 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::operation::OperationId;
-    use crate::test_utils::constants::DEFAULT_HASH;
     use crate::test_utils::fixtures::{document_view_id, random_hash, random_operation_id};
     use crate::Validate;
 
@@ -222,29 +206,6 @@ mod tests {
         assert_eq!(
             format!("{}", view_id_1.validate().unwrap_err()),
             "Expected sorted operation ids in document view id"
-        );
-    }
-
-    #[test]
-    fn string_representation() {
-        let document_view_id = DEFAULT_HASH.parse::<DocumentViewId>().unwrap();
-
-        assert_eq!(
-            format!("{}", document_view_id),
-            "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
-        );
-
-        let hash_1 = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
-            .parse::<Hash>()
-            .unwrap();
-        let hash_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
-            .parse::<Hash>()
-            .unwrap();
-        let view_id_unmerged = DocumentViewId::new(vec![hash_1, hash_2]);
-
-        assert_eq!(
-            format!("{}", view_id_unmerged),
-            "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
         );
     }
 }
