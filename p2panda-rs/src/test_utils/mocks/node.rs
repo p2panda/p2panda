@@ -90,7 +90,7 @@ use log::{debug, info};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 
-use crate::document::{DocumentBuilder, DocumentView};
+use crate::document::{Document, DocumentBuilder};
 use crate::entry::{decode_entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
@@ -129,7 +129,7 @@ pub fn send_to_node(
 
         // Using the first previous operation in the list we retrieve the associated document
         // id from the database.
-        let document_id = node.get_document_by_entry(previous_operations[0].as_hash());
+        let document_id = node.get_document_id_by_entry(previous_operations[0].as_hash());
 
         Some(document_id.expect("This node does not contain the required document"))
     };
@@ -226,7 +226,7 @@ impl Node {
     }
 
     /// Get the document id associated with the passed entry hash.
-    fn get_document_by_entry(&self, entry: &Hash) -> Option<Hash> {
+    fn get_document_id_by_entry(&self, entry: &Hash) -> Option<Hash> {
         let mut document_id = None;
         self.db.iter().any(|(_author, logs)| {
             let document_log = logs.find_document_log_by_entry(entry);
@@ -399,7 +399,7 @@ impl Node {
                 )
             });
             let document_id = self
-                .get_document_by_entry(previous_operations[0].as_hash())
+                .get_document_id_by_entry(previous_operations[0].as_hash())
                 .unwrap_or_else(|| {
                     panic!(
                         "Document log for entry {} not found on node",
@@ -483,7 +483,7 @@ impl Node {
     }
 
     /// Get a single resolved document from the node.
-    pub fn get_document(&self, id: &Hash) -> DocumentView {
+    pub fn get_document(&self, id: &Hash) -> Document {
         let entries = self.get_document_entries(id);
         let operations = entries
             .iter()
@@ -491,12 +491,11 @@ impl Node {
                 OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap()
             })
             .collect();
-        let document = DocumentBuilder::new(operations).build().unwrap();
-        document.view().to_owned()
+        DocumentBuilder::new(operations).build().unwrap()
     }
 
     /// Get all documents in their resolved state from the node.
-    pub fn get_documents(&self) -> Vec<DocumentView> {
+    pub fn get_documents(&self) -> Vec<Document> {
         let mut documents = HashSet::new();
         for (_author, author_logs) in self.db() {
             author_logs.iter().for_each(|log| {
@@ -705,11 +704,11 @@ mod tests {
         assert_eq!(node.get_author_logs(&penguin.author()).unwrap().len(), 1);
 
         // We can query the node for the current document state.
-        let instance = node.get_document(&panda_entry_1_hash);
+        let document = node.get_document(&panda_entry_1_hash);
 
         // It was last updated by Penguin, this writes over previous values.
         assert_eq!(
-            *instance.get("message").unwrap(),
+            *document.view().get("message").unwrap(),
             OperationValue::Text("And again. [Penguin]".to_string())
         );
         // There should only be one document in the database.
@@ -841,9 +840,9 @@ mod tests {
         )
         .unwrap();
 
-        let instance = node.get_document(&panda_entry_1_hash);
+        let document = node.get_document(&panda_entry_1_hash);
         assert_eq!(
-            *instance.get("cafe_name").unwrap(),
+            *document.view().get("cafe_name").unwrap(),
             OperationValue::Text("Polar Pear Cafe".to_string())
         );
 
@@ -864,9 +863,9 @@ mod tests {
         )
         .unwrap();
 
-        let instance = node.get_document(&panda_entry_1_hash);
+        let document = node.get_document(&panda_entry_1_hash);
         assert_eq!(
-            *instance.get("cafe_name").unwrap(),
+            *document.view().get("cafe_name").unwrap(),
             OperationValue::Text("Polar Bear Cafe".to_string())
         );
 
@@ -890,9 +889,9 @@ mod tests {
         )
         .unwrap();
 
-        let instance = node.get_document(&panda_entry_1_hash);
+        let document = node.get_document(&panda_entry_1_hash);
         assert_eq!(
-            *instance.get("address").unwrap(),
+            *document.view().get("address").unwrap(),
             OperationValue::Text("1, Polar Bear rd, Panda Town".to_string())
         );
 
@@ -916,9 +915,9 @@ mod tests {
         )
         .unwrap();
 
-        let instance = node.get_document(&panda_entry_1_hash);
+        let document = node.get_document(&panda_entry_1_hash);
         assert_eq!(
-            *instance.get("cafe_name").unwrap(),
+            *document.view().get("cafe_name").unwrap(),
             OperationValue::Text("Polar Bear Café".to_string())
         );
 
