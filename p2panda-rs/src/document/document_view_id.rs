@@ -36,9 +36,7 @@ pub struct DocumentViewId(Vec<OperationId>);
 impl DocumentViewId {
     /// Create a new document view id.
     pub fn new(graph_tips: &[OperationId]) -> Self {
-        let mut graph_tips_mut = graph_tips.to_owned();
-        graph_tips_mut.sort();
-        Self(graph_tips_mut)
+        Self(graph_tips.to_vec())
     }
 
     /// Get the graph tip ids of this view id.
@@ -46,7 +44,7 @@ impl DocumentViewId {
         self.0.as_slice()
     }
 
-    /// Returns a hash over the graph tips constituting this view id.
+    /// Returns a hash over the sorted graph tips constituting this view id.
     ///
     /// Use this as a unique identifier for a document if you need a value with a limited size. The
     /// document view id itself grows with the number of graph tips that the document has, which
@@ -55,9 +53,11 @@ impl DocumentViewId {
     /// Keep in mind that when you refer to document views with this hash value it will not be
     /// possible to recover the document view id from it.
     pub fn hash(&self) -> Hash {
-        let graph_tip_bytes = self
-            .0
-            .clone()
+        // Sort graph tips to ensure consistent hashes
+        let mut graph_tips_mut = self.0.clone();
+        graph_tips_mut.sort();
+
+        let graph_tip_bytes = graph_tips_mut
             .into_iter()
             .flat_map(|graph_tip| graph_tip.as_hash().to_bytes())
             .collect();
@@ -168,16 +168,6 @@ mod tests {
     }
 
     #[rstest]
-    fn equality(
-        #[from(random_operation_id)] operation_id_1: OperationId,
-        #[from(random_operation_id)] operation_id_2: OperationId,
-    ) {
-        let view_id_1 = DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]);
-        let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);
-        assert_eq!(view_id_1, view_id_2);
-    }
-
-    #[rstest]
     fn document_view_hash(
         #[from(random_operation_id)] operation_id_1: OperationId,
         #[from(random_operation_id)] operation_id_2: OperationId,
@@ -187,25 +177,5 @@ mod tests {
 
         let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);
         assert_eq!(view_id_1.hash(), view_id_2.hash());
-    }
-
-    #[test]
-    fn deserialize_unsorted_view_id() {
-        // Unsorted operation ids in document view id array:
-        //
-        // [
-        //  "0020c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa72ec8",
-        //  "00202dce4b32cd35d61cf54634b93a526df333c5ed3d93230c2f026f8d1ecabc0cd7"
-        // ]
-        let unsorted_operation_ids = "827844303032306331336364633538646663366634656264333239393266663038396462373939383033363331343462646232373433363933613031393633366661373265633878443030323032646365346233326364333564363163663534363334623933613532366466333333633565643364393332333063326630323666386431656361626330636437";
-
-        // Construct document view id by deserialising CBOR data
-        let view_id_1: DocumentViewId =
-            ciborium::de::from_reader(&hex::decode(unsorted_operation_ids).unwrap()[..]).unwrap();
-
-        assert_eq!(
-            format!("{}", view_id_1.validate().unwrap_err()),
-            "Expected sorted operation ids in document view id"
-        );
     }
 }
