@@ -262,7 +262,7 @@ mod document_view;
 mod document_view_id;
 mod error;
 
-pub use document::DocumentBuilder;
+pub use document::{Document, DocumentBuilder};
 #[allow(unused_imports)]
 use document::{build_graph, reduce};
 pub use document_id::DocumentId;
