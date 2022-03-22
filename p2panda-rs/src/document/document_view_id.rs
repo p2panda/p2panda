@@ -69,7 +69,7 @@ impl Display for DocumentViewId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (i, operation_id) in self.0.clone().into_iter().enumerate() {
             let separator = if i == 0 { "" } else { "_" };
-            write!(f, "{}{}", separator, operation_id.as_hash())?;
+            write!(f, "{}{}", separator, operation_id.as_hash().short_str())?;
         }
         Ok(())
     }
@@ -174,10 +174,7 @@ mod tests {
     fn string_representation() {
         let document_view_id = DEFAULT_HASH.parse::<DocumentViewId>().unwrap();
 
-        assert_eq!(
-            format!("{}", document_view_id),
-            "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
-        );
+        assert_eq!(format!("{}", document_view_id), "496543");
 
         let operation_1 = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
             .parse::<OperationId>()
@@ -185,12 +182,8 @@ mod tests {
         let operation_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
             .parse::<OperationId>()
             .unwrap();
-        let view_id_unmerged = DocumentViewId::new(&vec![operation_1, operation_2]);
-
-        assert_eq!(
-            format!("{}", view_id_unmerged),
-            "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
-        );
+        let view_id_unmerged = DocumentViewId::new(&[operation_1, operation_2]);
+        assert_eq!(format!("{}", view_id_unmerged), "496543_f16e79");
     }
 
     #[rstest]

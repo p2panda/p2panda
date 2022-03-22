@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::fmt::Display;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -49,6 +50,12 @@ impl FromStr for OperationId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self::new(Hash::new(s)?))
+    }
+}
+
+impl Display for OperationId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<Operation {}>", self.as_hash().short_str())
     }
 }
 

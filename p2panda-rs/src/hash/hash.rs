@@ -61,11 +61,25 @@ impl Hash {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
+
+    /// Return a shortened six character representation.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+    /// let hash: Hash = hash_str.parse().unwrap();
+    /// assert_eq!(hash.short_str(), "6ec805");
+    /// ```
+    pub fn short_str(&self) -> &str {
+        let offset = MAX_YAMF_HASH_SIZE * 2 - 6;
+        &self.as_str()[offset..]
+    }
 }
 
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "<Hash {}>", self.short_str())
     }
 }
 

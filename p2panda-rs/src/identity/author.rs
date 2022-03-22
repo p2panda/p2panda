@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
+use std::fmt::Display;
 use std::hash::Hash as StdHash;
 
 use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
@@ -44,6 +45,26 @@ impl Author {
     /// Returns author as hex string.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+
+    /// Return a shortened six character representation.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// let pub_key = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
+    /// let author: Author = pub_key.parse().unwrap();
+    /// assert_eq!(author.short_str(), "a5d982");
+    /// ```
+    pub fn short_str(&self) -> &str {
+        let offset = PUBLIC_KEY_LENGTH - 6;
+        &self.as_str()[offset..]
+    }
+}
+
+impl Display for Author {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<Author {}>", self.short_str())
     }
 }
 

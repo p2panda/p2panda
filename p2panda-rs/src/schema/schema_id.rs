@@ -218,7 +218,7 @@ mod test {
 
         assert_eq!(
             format!("{}", appl_schema),
-            "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+            "8fc78b"
         );
 
         let schema = SchemaId::new("schema_v1").unwrap();

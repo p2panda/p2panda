@@ -65,7 +65,7 @@ impl Schema {
 
 impl Display for Schema {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}_{}", self.name, self.id)
+        write!(f, "<Schema {}_{}>", self.name, self.id)
     }
 }
 
@@ -171,7 +171,7 @@ mod tests {
         assert_eq!(expected_cddl, schema.as_cddl());
 
         // Schema should have a string representation
-        assert!(format!("{}", schema).starts_with("venue_name_0020"));
+        assert!(format!("{}", schema).starts_with("<Schema venue_name_"));
     }
 
     #[rstest]
@@ -233,5 +233,30 @@ mod tests {
             ]
         )
         .is_err());
+    }
+
+    #[test]
+    fn schema_display() {
+        let appl_schema =
+            SchemaId::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")
+                .unwrap();
+        assert_eq!(
+            appl_schema,
+            SchemaId::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")
+                .unwrap()
+        );
+
+        assert_eq!(
+            format!("{}", appl_schema),
+            "8fc78b"
+        );
+
+        let schema = Schema::new("schema_v1").unwrap();
+        assert_eq!(schema.id, SchemaId::Schema);
+        assert_eq!(format!("{}", schema), "schema_v1");
+
+        let schema_field = SchemaId::new("schema_field_v1").unwrap();
+        assert_eq!(schema_field, SchemaId::SchemaField);
+        assert_eq!(format!("{}", schema_field), "schema_field_v1");
     }
 }

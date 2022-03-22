@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::BTreeMap;
+use std::fmt::Display;
 
 use crate::document::{DocumentBuilderError, DocumentId, DocumentView, DocumentViewId};
 use crate::graph::Graph;
@@ -125,6 +126,12 @@ impl Document {
     /// Returns true if this document has processed a DELETE operation.
     pub fn is_deleted(&self) -> bool {
         self.meta.deleted
+    }
+}
+
+impl Display for Document {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<Document {}>", self.id)
     }
 }
 
