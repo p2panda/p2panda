@@ -408,7 +408,7 @@ mod test {
 
     #[test]
     fn basics() {
-        let mut graph: Graph<char, char> = Graph::new();
+        let mut graph: Graph<char, char> = Graph::default();
         graph.add_node(&'a', 'A');
         graph.add_node(&'b', 'B');
         graph.add_node(&'c', 'C');
@@ -421,13 +421,19 @@ mod test {
         graph.add_node(&'j', 'J');
         graph.add_node(&'k', 'K');
 
+        assert_eq!(graph.get_node_data(&'a'), Some(&'A'));
+
         // NB: unlinked nodes are simply not visited and do not exist in the sorted result.
+
+        assert!(!graph.is_connected(&'a'));
 
         graph.add_link(&'a', &'b');
         graph.add_link(&'b', &'c');
         graph.add_link(&'c', &'d');
         graph.add_link(&'d', &'e');
         graph.add_link(&'e', &'f');
+
+        assert!(graph.is_connected(&'a'));
 
         // [A]<--[B]<--[C]<--[D]<--[E]<--[F]
 
@@ -491,10 +497,17 @@ mod test {
     #[test]
     fn has_cycle() {
         let mut graph = Graph::new();
+
         graph.add_node(&'a', 1);
         graph.add_node(&'b', 2);
         graph.add_node(&'c', 3);
         graph.add_node(&'d', 4);
+
+        // Can't add self-referential links
+        assert!(!graph.add_link(&'a', &'a'));
+
+        // Can't add links to non-existing nodes
+        assert!(!graph.add_link(&'a', &'x'));
 
         graph.add_link(&'a', &'b');
         graph.add_link(&'b', &'c');
