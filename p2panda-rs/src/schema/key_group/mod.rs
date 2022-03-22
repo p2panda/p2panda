@@ -6,8 +6,8 @@ mod membership_request;
 mod membership;
 mod owner;
 
-pub use owner::Owner;
-pub use membership_request::MembershipRequestView;
-pub use membership::{Membership, MembershipView};
-pub use key_group::KeyGroup;
 pub use error::KeyGroupError;
+pub use key_group::KeyGroup;
+pub use membership::{Membership, MembershipView};
+pub use membership_request::MembershipRequestView;
+pub use owner::Owner;
