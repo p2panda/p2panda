@@ -90,7 +90,7 @@ use log::{debug, info};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 
-use crate::document::{DocumentBuilder, Document};
+use crate::document::{Document, DocumentBuilder};
 use crate::entry::{decode_entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
