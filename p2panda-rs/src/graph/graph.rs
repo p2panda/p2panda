@@ -57,37 +57,37 @@ use super::GraphError;
 /// # }
 /// ```
 #[derive(Debug, PartialEq, Clone)]
-pub struct Graph<K, T>(HashMap<K, Node<K, T>>)
+pub struct Graph<K, V>(HashMap<K, Node<K, V>>)
 where
     K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
-    T: PartialEq + Clone + Debug;
+    V: PartialEq + Clone + Debug;
 
 /// An internal struct which represents a node in the graph and contains generic data.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Node<
     K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
-    D: PartialEq + Clone + Debug,
+    V: PartialEq + Clone + Debug,
 > {
     key: K,
-    data: D,
+    data: V,
     previous: Vec<K>,
     next: Vec<K>,
 }
 
 #[derive(Debug, PartialEq, Clone, Default)]
-pub struct GraphData<T: PartialEq + Clone + Debug> {
-    sorted: Vec<T>,
-    graph_tips: Vec<T>,
+pub struct GraphData<V: PartialEq + Clone + Debug> {
+    sorted: Vec<V>,
+    graph_tips: Vec<V>,
 }
 
-impl<T: PartialEq + Clone + Debug> GraphData<T> {
+impl<V: PartialEq + Clone + Debug> GraphData<V> {
     /// Returns the data from sorted graph nodes.
-    pub fn sorted(&self) -> Vec<T> {
+    pub fn sorted(&self) -> Vec<V> {
         self.sorted.clone()
     }
 
     /// Returns the current tips of this graph.
-    pub fn current_graph_tips(&self) -> Vec<T> {
+    pub fn current_graph_tips(&self) -> Vec<V> {
         self.graph_tips.clone()
     }
 }
@@ -95,8 +95,8 @@ impl<T: PartialEq + Clone + Debug> GraphData<T> {
 impl<
         'a,
         K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
-        T: PartialEq + Clone + Debug,
-    > Node<K, T>
+        V: PartialEq + Clone + Debug,
+    > Node<K, V>
 {
     /// Returns true if this node is the root of this graph.
     fn is_root(&self) -> bool {
@@ -133,7 +133,7 @@ impl<
         &self.next
     }
 
-    fn data(&self) -> T {
+    fn data(&self) -> V {
         self.data.clone()
     }
 }
@@ -141,8 +141,8 @@ impl<
 impl<
         'a,
         K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
-        T: PartialEq + Clone + Debug,
-    > Graph<K, T>
+        V: PartialEq + Clone + Debug,
+    > Graph<K, V>
 {
     /// Instantiate a new empty graph.
     pub fn new() -> Self {
@@ -150,7 +150,7 @@ impl<
     }
 
     /// Add a node to the graph. This node will be detached until it is linked to another node.
-    pub fn add_node(&mut self, key: &K, data: T) {
+    pub fn add_node(&mut self, key: &K, data: V) {
         let new_node = Node {
             key: key.clone(),
             next: Vec::new(),
@@ -185,12 +185,12 @@ impl<
     }
 
     /// Get node from the graph by key, returns `None` if it wasn't found.
-    pub fn get_node(&'a self, key: &K) -> Option<&Node<K, T>> {
+    pub fn get_node(&'a self, key: &K) -> Option<&Node<K, V>> {
         self.0.get(key)
     }
 
     /// Get the data payload from this node.
-    pub fn get_node_data(&self, id: &K) -> Option<&T> {
+    pub fn get_node_data(&self, id: &K) -> Option<&V> {
         self.0.get(id).map(|node| &node.data)
     }
 
@@ -238,8 +238,8 @@ impl<
     }
 
     /// Returns a reference to the root node of this graph.
-    pub fn root_node(&self) -> Result<&Node<K, T>, GraphError> {
-        let root: Vec<&Node<K, T>> = self.0.values().filter(|node| node.is_root()).collect();
+    pub fn root_node(&self) -> Result<&Node<K, V>, GraphError> {
+        let root: Vec<&Node<K, V>> = self.0.values().filter(|node| node.is_root()).collect();
         match root.len() {
             0 => Err(GraphError::NoRootNode),
             1 => Ok(root[0]),
@@ -256,7 +256,7 @@ impl<
     }
 
     /// Check if all a nodes dependencies have been visited.
-    fn dependencies_visited(&self, sorted: &[&Node<K, T>], node: &Node<K, T>) -> bool {
+    fn dependencies_visited(&self, sorted: &[&Node<K, V>], node: &Node<K, V>) -> bool {
         let mut has_dependencies = true;
         let previous_nodes = node.previous();
 
@@ -271,8 +271,8 @@ impl<
     }
 
     /// Returns the next un-visited node following the passed node.
-    fn next(&'a self, sorted: &[&Node<K, T>], node: &Node<K, T>) -> Result<Option<Vec<&'a Node<K, T>>>, GraphError> {
-        let mut next_nodes: Vec<&'a Node<K, T>> = Vec::new();
+    fn next(&'a self, sorted: &[&Node<K, V>], node: &Node<K, V>) -> Result<Option<Vec<&'a Node<K, V>>>, GraphError> {
+        let mut next_nodes: Vec<&'a Node<K, V>> = Vec::new();
 
         for node_key in node.next() {
             // Unwrap here as we are sure the node is in the graph.
@@ -291,7 +291,7 @@ impl<
     }
 
     /// Sorts the graph topologically and returns the sorted
-    pub fn walk_from(&'a self, key: &K) -> Result<GraphData<T>, GraphError> {
+    pub fn walk_from(&'a self, key: &K) -> Result<GraphData<V>, GraphError> {
         let root_node = match self.get_node(key) {
             Some(node) => Ok(node),
             None => Err(GraphError::NodeNotFound),
@@ -383,7 +383,7 @@ impl<
     // }
 
     /// Sort the entire graph, starting from the root node.
-    pub fn sort(&'a self) -> Result<GraphData<T>, GraphError> {
+    pub fn sort(&'a self) -> Result<GraphData<V>, GraphError> {
         let root_node = self.root_node_key()?;
         self.walk_from(root_node)
     }
@@ -392,8 +392,8 @@ impl<
 impl<
         'a,
         K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
-        T: PartialEq + Clone + Debug,
-    > Default for Graph<K, T>
+        V: PartialEq + Clone + Debug,
+    > Default for Graph<K, V>
 {
     fn default() -> Self {
         Self::new()
