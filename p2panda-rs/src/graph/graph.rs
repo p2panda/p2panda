@@ -5,10 +5,11 @@ use std::hash::Hash;
 
 use super::GraphError;
 
-/// This struct contains all functionality implemented in this module. It is can be used for building and sorting a graph of
-/// causally connected nodes.
+/// This struct contains all functionality implemented in this module. It is can be used for
+/// building and sorting a graph of causally connected nodes.
 ///
-/// Sorting is deterministic with > comparison of contained node data being the deciding factor on which paths to walk first.
+/// Sorting is deterministic with > comparison of contained node data being the deciding factor on
+/// which paths to walk first.
 ///
 /// ## Example
 ///
@@ -161,8 +162,8 @@ impl<
     }
 
     /// Add a link between existing nodes to the graph. Returns true if the link was added.
-    /// Returns false if the link was unable to be added. This happens if either of the nodes were not
-    /// present in the graph, or if the link creates a single node loop.
+    /// Returns false if the link was unable to be added. This happens if either of the nodes were
+    /// not present in the graph, or if the link creates a single node loop.
     pub fn add_link(&mut self, from: &K, to: &K) -> bool {
         if from == to {
             return false;
