@@ -29,6 +29,22 @@ pub struct SimplestStorageProvider {
     pub entries: Arc<Mutex<Vec<StorageEntry>>>,
 }
 
+impl SimplestStorageProvider {
+    pub fn db_insert_entry(&self, entry: StorageEntry) {
+        let mut entries = self.entries.lock().unwrap();
+        entries.push(entry);
+        // Remove duplicate entries.
+        entries.dedup();
+    }
+
+    pub fn db_insert_log(&self, log: StorageLog) {
+        let mut logs = self.logs.lock().unwrap();
+        logs.push(log);
+        // Remove duplicate logs.
+        logs.dedup();
+    }
+}
+
 /// A log entry represented as a concatenated string of `"{author}-{schema}-{document_id}-{log_id}"`
 #[derive(Debug, Clone, PartialEq)]
 pub struct StorageLog(String);

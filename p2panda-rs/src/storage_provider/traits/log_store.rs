@@ -74,10 +74,7 @@ pub mod tests {
     #[async_trait]
     impl LogStore<StorageLog> for SimplestStorageProvider {
         async fn insert_log(&self, log: StorageLog) -> Result<bool, LogStorageError> {
-            let mut logs = self.logs.lock().unwrap();
-            logs.push(log);
-            // Remove duplicate log entries.
-            logs.dedup();
+            self.db_insert_log(log);
             Ok(true)
         }
 

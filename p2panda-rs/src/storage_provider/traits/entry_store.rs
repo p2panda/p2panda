@@ -94,10 +94,7 @@ pub mod tests {
     impl EntryStore<StorageEntry> for SimplestStorageProvider {
         /// Insert an entry into storage.
         async fn insert_entry(&self, entry: StorageEntry) -> Result<bool, EntryStorageError> {
-            let mut entries = self.entries.lock().unwrap();
-            entries.push(entry);
-            // Remove duplicate entries.
-            entries.dedup();
+            self.db_insert_entry(entry);
             Ok(true)
         }
 
