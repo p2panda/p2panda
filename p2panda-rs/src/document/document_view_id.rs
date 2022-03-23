@@ -249,12 +249,13 @@ mod tests {
     #[test]
     fn deserialize_unsorted_view_id() {
         // Unsorted operation ids in document view id array:
-        //
-        // [
-        //  "0020c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa72ec8",
-        //  "00202dce4b32cd35d61cf54634b93a526df333c5ed3d93230c2f026f8d1ecabc0cd7"
-        // ]
-        let unsorted_operation_ids = "827844303032306331336364633538646663366634656264333239393266663038396462373939383033363331343462646232373433363933613031393633366661373265633878443030323032646365346233326364333564363163663534363334623933613532366466333333633565643364393332333063326630323666386431656361626330636437";
+        let unsorted_hashes = [
+            "0020c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa72ec8",
+            "00202dce4b32cd35d61cf54634b93a526df333c5ed3d93230c2f026f8d1ecabc0cd7",
+        ];
+        let mut cbor_bytes = Vec::new();
+        ciborium::ser::into_writer(&unsorted_hashes, &mut cbor_bytes).unwrap();
+        let unsorted_operation_ids = hex::encode(cbor_bytes);
 
         // Construct document view id by deserialising CBOR data
         let result: Result<DocumentViewId, ciborium::de::Error<std::io::Error>> =
@@ -271,12 +272,12 @@ mod tests {
     #[test]
     fn deserialize_invalid_view_id() {
         // The second operation id is missing 4 characters
-        let invalid_id = [
+        let invalid_hashes = [
             "0020c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa72ec8",
             "2dce4b32cd35d61cf54634b93a526df333c5ed3d93230c2f026f8d1ecabc0cd7",
         ];
         let mut cbor_bytes = Vec::new();
-        ciborium::ser::into_writer(&invalid_id, &mut cbor_bytes).unwrap();
+        ciborium::ser::into_writer(&invalid_hashes, &mut cbor_bytes).unwrap();
         let invalid_id_encoded = hex::encode(cbor_bytes);
 
         // Construct document view id by deserialising CBOR data
