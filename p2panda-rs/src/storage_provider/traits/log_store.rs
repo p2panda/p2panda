@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use async_trait::async_trait;
+
 use crate::document::DocumentId;
 use crate::entry::LogId;
 use crate::identity::Author;
 use crate::storage_provider::errors::LogStorageError;
 use crate::storage_provider::traits::AsStorageLog;
-use async_trait::async_trait;
 
 /// Trait which handles all storage actions relating to `StorageLog`s.
 ///
@@ -54,10 +55,10 @@ pub trait LogStore<StorageLog: AsStorageLog> {
 #[cfg(test)]
 pub mod tests {
     use std::convert::TryFrom;
+    use std::sync::{Arc, Mutex};
 
     use async_trait::async_trait;
     use rstest::rstest;
-    use std::sync::{Arc, Mutex};
 
     use crate::document::DocumentId;
     use crate::entry::LogId;
