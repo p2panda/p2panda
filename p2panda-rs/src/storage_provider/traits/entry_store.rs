@@ -71,10 +71,10 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 
 #[cfg(test)]
 pub mod tests {
+    use std::sync::{Arc, Mutex};
 
     use async_trait::async_trait;
     use rstest::rstest;
-    use std::sync::{Arc, Mutex};
 
     use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
     use crate::identity::{Author, KeyPair};
