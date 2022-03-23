@@ -24,7 +24,7 @@ pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
 /// to the Bamboo specification.
 ///
 /// [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
-#[derive(Clone, Debug, Serialize, Deserialize, Ord, PartialOrd, PartialEq, Eq, StdHash)]
+#[derive(Clone, Debug, Ord, PartialOrd, Serialize, Deserialize, PartialEq, Eq, StdHash)]
 pub struct Hash(String);
 
 impl Hash {
