@@ -7,7 +7,7 @@ use thiserror::Error;
 pub enum SchemaIdError {
     /// Handle errors from validating operation id hashes.
     #[error(transparent)]
-    DocumentViewIdError(#[from] crate::document::DocumentViewIdError),
+    HashError(#[from] crate::hash::HashError),
 }
 
 /// Custom errors related to `Schema`.
