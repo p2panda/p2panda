@@ -329,10 +329,6 @@ impl<
         Ok(graph_data)
     }
 
-    // pub fn walk_to(&self) -> Result<GraphData<T>, GraphError> {
-
-    // }
-
     /// Sort the entire graph, starting from the root node.
     pub fn sort(&'a self) -> Result<GraphData<V>, GraphError> {
         let root_node = self.root_node_key()?;
