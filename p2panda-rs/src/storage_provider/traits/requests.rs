@@ -4,7 +4,7 @@ use crate::document::DocumentId;
 use crate::entry::EntrySigned;
 use crate::identity::Author;
 use crate::operation::OperationEncoded;
-use crate::storage_provider::StorageProviderError;
+use crate::storage_provider::ValidationError;
 use crate::Validate;
 
 /// Request body of `panda_getEntryArguments`.
@@ -16,7 +16,7 @@ pub trait AsEntryArgsRequest {
     fn document(&self) -> &Option<DocumentId>;
 
     /// Validates the `EntryArgument` parameters
-    fn validate(&self) -> Result<(), StorageProviderError> {
+    fn validate(&self) -> Result<(), ValidationError> {
         // Validate `author` request parameter
         self.author().validate()?;
 

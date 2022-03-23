@@ -7,14 +7,9 @@ use crate::hash::HashError;
 use crate::identity::AuthorError;
 use crate::operation::{OperationEncodedError, OperationError};
 
-/// `StorageProvider` errors which also handle errors originating in LogStorage and EntryStorage.
+/// Data validation errors which can occur in the storage traits.
 #[derive(thiserror::Error, Debug)]
-pub enum StorageProviderError {
-    /// Catch all error which implementers can use for passing their own errors
-    /// up the chain.
-    #[error("Error occured in `StorageProvider`: {0}")]
-    Custom(String),
-
+pub enum ValidationError {
     /// Error returned from validating p2panda-rs `Author` data types.
     #[error(transparent)]
     AuthorValidation(#[from] AuthorError),
@@ -50,18 +45,6 @@ pub enum StorageProviderError {
     /// Error returned from validating Bamboo entries.
     #[error(transparent)]
     BambooValidation(#[from] bamboo_rs_core_ed25519_yasmf::verify::Error),
-
-    /// Error returned from `panda_publishEntry` RPC method.
-    #[error(transparent)]
-    PublishEntryError(#[from] PublishEntryError),
-
-    /// Error returned from `LogStorage` methods.
-    #[error(transparent)]
-    LogStorageError(#[from] LogStorageError),
-
-    /// Error returned from `EntryStorage` methods.
-    #[error(transparent)]
-    EntryStorageError(#[from] EntryStorageError),
 }
 
 /// `LogStorage` errors.
@@ -86,7 +69,7 @@ pub enum EntryStorageError {
     SkiplinkMissing,
 }
 
-/// Errors which can occur in a call to `publish_entry()`..
+/// Errors which can occur in a call to `publish_entry()`
 #[derive(thiserror::Error, Debug)]
 #[allow(missing_copy_implementations, missing_docs)]
 pub enum PublishEntryError {

@@ -12,7 +12,7 @@ use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::{Operation, OperationEncoded};
 use crate::schema::SchemaId;
-use crate::storage_provider::errors::{EntryStorageError, LogStorageError, StorageProviderError};
+use crate::storage_provider::errors::{EntryStorageError, LogStorageError, ValidationError};
 use crate::storage_provider::models::{EntryWithOperation, Log};
 
 use crate::storage_provider::traits::{
@@ -145,7 +145,7 @@ impl From<EntryWithOperation> for StorageEntry {
 
 /// Implement required `TryInto` conversion trait.
 impl TryInto<EntryWithOperation> for StorageEntry {
-    type Error = StorageProviderError;
+    type Error = ValidationError;
 
     fn try_into(self) -> Result<EntryWithOperation, Self::Error> {
         EntryWithOperation::new(&self.entry_encoded(), &self.operation_encoded().unwrap())
@@ -156,7 +156,7 @@ impl TryInto<EntryWithOperation> for StorageEntry {
 pub struct PublishEntryRequest(pub EntrySigned, pub OperationEncoded);
 
 impl TryInto<EntryWithOperation> for PublishEntryRequest {
-    type Error = StorageProviderError;
+    type Error = ValidationError;
 
     fn try_into(self) -> Result<EntryWithOperation, Self::Error> {
         EntryWithOperation::new(self.entry_encoded(), self.operation_encoded())

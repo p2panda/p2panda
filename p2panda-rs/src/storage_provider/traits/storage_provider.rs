@@ -12,7 +12,6 @@ use crate::storage_provider::traits::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
     AsStorageEntry, AsStorageLog, EntryStore, LogStore,
 };
-use crate::storage_provider::StorageProviderError;
 
 /// Trait which handles all high level storage queries and insertions.
 ///
@@ -40,7 +39,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
     async fn get_document_by_entry(
         &self,
         entry_hash: &Hash,
-    ) -> Result<Option<DocumentId>, StorageProviderError>;
+    ) -> Result<Option<DocumentId>, Box<dyn std::error::Error>>;
 
     /// Implementation of `panda_getEntryArguments` RPC method.
     ///
@@ -49,7 +48,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
     async fn get_entry_args(
         &self,
         params: &Self::EntryArgsRequest,
-    ) -> Result<Self::EntryArgsResponse, StorageProviderError> {
+    ) -> Result<Self::EntryArgsResponse, Box<dyn std::error::Error>> {
         // Validate the entry args request parameters.
         params.validate()?;
 
@@ -99,7 +98,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
     async fn publish_entry(
         &self,
         params: &Self::PublishEntryRequest,
-    ) -> Result<Self::PublishEntryResponse, StorageProviderError> {
+    ) -> Result<Self::PublishEntryResponse, Box<dyn std::error::Error>> {
         // Create an `EntryWithOperation` which also validates the encoded entry and operation.
         let entry_with_operation =
             EntryWithOperation::new(params.entry_encoded(), params.operation_encoded())?;
@@ -231,7 +230,6 @@ pub mod tests {
     use crate::storage_provider::traits::{
         AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
     };
-    use crate::storage_provider::StorageProviderError;
     use crate::test_utils::fixtures::key_pair;
 
     use super::StorageProvider;
@@ -249,7 +247,7 @@ pub mod tests {
         async fn get_document_by_entry(
             &self,
             entry_hash: &Hash,
-        ) -> Result<Option<DocumentId>, StorageProviderError> {
+        ) -> Result<Option<DocumentId>, Box<dyn std::error::Error>> {
             let entries = self.entries.lock().unwrap();
 
             let entry = entries

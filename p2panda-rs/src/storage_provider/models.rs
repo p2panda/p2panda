@@ -4,12 +4,12 @@
 
 use std::fmt::Debug;
 
-use super::StorageProviderError;
 use crate::document::DocumentId;
 use crate::entry::{decode_entry, EntrySigned, LogId};
 use crate::identity::Author;
 use crate::operation::OperationEncoded;
 use crate::schema::SchemaId;
+use crate::storage_provider::ValidationError;
 use crate::Validate;
 
 /// Struct wrapping an entry with it's operation.
@@ -22,10 +22,7 @@ pub struct EntryWithOperation(EntrySigned, OperationEncoded);
 
 impl EntryWithOperation {
     /// Instantiate a new EntryWithOperation.
-    pub fn new(
-        entry: &EntrySigned,
-        operation: &OperationEncoded,
-    ) -> Result<Self, StorageProviderError> {
+    pub fn new(entry: &EntrySigned, operation: &OperationEncoded) -> Result<Self, ValidationError> {
         let entry_with_operation = Self(entry.clone(), operation.clone());
         entry_with_operation.validate()?;
         Ok(entry_with_operation)
@@ -43,7 +40,7 @@ impl EntryWithOperation {
 }
 
 impl Validate for EntryWithOperation {
-    type Error = StorageProviderError;
+    type Error = ValidationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
         self.entry_encoded().validate()?;
