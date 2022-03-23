@@ -165,21 +165,21 @@ impl<
     /// Returns false if the link was unable to be added. This happens if either of the nodes were
     /// not present in the graph, or if the link creates a single node loop.
     pub fn add_link(&mut self, from: &K, to: &K) -> bool {
+        // Check for self-referential links
         if from == to {
             return false;
         }
 
-        if let Some(from_node_mut) = self.0.get_mut(from) {
-            from_node_mut.next.push(to.to_owned());
-        } else {
+        // Check that both nodes exist
+        if self.get_node(from).is_none() || self.get_node(to).is_none() {
             return false;
         }
 
-        if let Some(to_node_mut) = self.0.get_mut(to) {
-            to_node_mut.previous.push(from.to_owned());
-        } else {
-            return false;
-        }
+        // Add the outgoing link on the source
+        self.0.get_mut(from).unwrap().next.push(to.to_owned());
+
+        // Add the incoming link on the target
+        self.0.get_mut(to).unwrap().previous.push(from.to_owned());
 
         true
     }
