@@ -11,22 +11,22 @@ use crate::schema::SchemaId;
 /// Construct a graph from a list of operations.
 pub(super) fn build_graph(
     operations: &[OperationWithMeta],
-) -> Result<Graph<OperationWithMeta>, DocumentBuilderError> {
+) -> Result<Graph<OperationId, OperationWithMeta>, DocumentBuilderError> {
     let mut graph = Graph::new();
 
     // Add all operations to the graph.
     for operation in operations {
-        graph.add_node(operation.operation_id().as_str(), operation.clone());
+        graph.add_node(operation.operation_id(), operation.clone());
     }
 
     // Add links between operations in the graph.
     for operation in operations {
         if let Some(previous_operations) = operation.previous_operations() {
             for previous in previous_operations {
-                let success = graph.add_link(previous.as_str(), operation.operation_id().as_str());
+                let success = graph.add_link(&previous, operation.operation_id());
                 if !success {
                     return Err(DocumentBuilderError::InvalidOperationLink(
-                        operation.operation_id().as_str().into(),
+                        operation.operation_id().as_hash().as_str().into(),
                     ));
                 }
             }
