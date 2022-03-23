@@ -259,7 +259,6 @@ mod tests {
     use crate::identity::KeyPair;
     use crate::operation::{Operation, OperationId, OperationValue, OperationWithMeta};
     use crate::schema::SchemaId;
-    use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, fields, random_key_pair, schema, update_operation,
     };
@@ -524,7 +523,7 @@ mod tests {
     }
 
     #[rstest]
-    fn doc_test() {
+    fn doc_test(schema: SchemaId) {
         let polar = Client::new(
             "polar".to_string(),
             KeyPair::from_private_key_str(
@@ -539,7 +538,7 @@ mod tests {
             )
             .unwrap(),
         );
-        let schema = SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap();
+
         let mut node = Node::new();
         let (polar_entry_1_hash, _) = send_to_node(
             &mut node,

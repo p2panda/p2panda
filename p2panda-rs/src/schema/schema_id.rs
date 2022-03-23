@@ -228,11 +228,11 @@ mod test {
     #[test]
     fn new_schema_type() {
         let appl_schema =
-            SchemaId::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")
+            SchemaId::new("venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")
                 .unwrap();
         assert_eq!(
             appl_schema,
-            SchemaId::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")
+            SchemaId::new("venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")
                 .unwrap()
         );
 

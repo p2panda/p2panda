@@ -31,7 +31,7 @@ pub fn v0_3_0_fixture() -> Fixture {
         ),
     ]);
     let operation = create_operation(
-        SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
+        SchemaId::new(&format!("venue_{}", DEFAULT_SCHEMA_HASH)).unwrap(),
         operation_fields,
     );
     let key_pair = utils::keypair_from_private(

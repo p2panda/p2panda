@@ -20,12 +20,14 @@ fn main() {
     // Instantiate one client called "panda"
     let panda = Client::new("panda".to_string(), new_key_pair());
 
+    let schema_id = SchemaId::new(&format!("chat_{}", DEFAULT_SCHEMA_HASH)).unwrap();
+
     // Publish a CREATE operation
     let (entry1_hash, _) = send_to_node(
         &mut node,
         &panda,
         &create_operation(
-            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            schema_id.clone(),
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("Ohh, my first message!".to_string()),
@@ -39,7 +41,7 @@ fn main() {
         &mut node,
         &panda,
         &update_operation(
-            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            schema_id.clone(),
             vec![entry1_hash.into()],
             operation_fields(vec![(
                 "message",
@@ -54,7 +56,7 @@ fn main() {
         &mut node,
         &panda,
         &update_operation(
-            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            schema_id.clone(),
             vec![entry2_hash.into()],
             operation_fields(vec![(
                 "message",
@@ -69,7 +71,7 @@ fn main() {
         &mut node,
         &panda,
         &delete_operation(
-            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            schema_id,
             vec![entry3_hash.into()],
         ),
     )

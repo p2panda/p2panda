@@ -9,6 +9,7 @@
 //! into `rstest` defined methods.
 use serde::Serialize;
 
+use crate::document::DocumentViewId;
 use crate::entry::{Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
@@ -46,21 +47,22 @@ pub fn any_operation(
     fields: Option<OperationFields>,
     previous_operations: Option<Vec<OperationId>>,
 ) -> Operation {
+    let schema_view: DocumentViewId = DEFAULT_SCHEMA_HASH.parse::<DocumentViewId>().unwrap();
     match fields {
         // It's a CREATE operation
         Some(fields) if previous_operations.is_none() => {
-            Operation::new_create(SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(), fields).unwrap()
+            Operation::new_create(SchemaId::new_application("chat", &schema_view), fields).unwrap()
         }
         // It's an UPDATE operation
         Some(fields) => Operation::new_update(
-            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            SchemaId::new_application("chat", &schema_view),
             previous_operations.unwrap(),
             fields,
         )
         .unwrap(),
         // It's a DELETE operation
         None => Operation::new_delete(
-            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            SchemaId::new_application("chat", &schema_view),
             previous_operations.unwrap(),
         )
         .unwrap(),
