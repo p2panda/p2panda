@@ -51,18 +51,18 @@ pub fn any_operation(
     match fields {
         // It's a CREATE operation
         Some(fields) if previous_operations.is_none() => {
-            Operation::new_create(SchemaId::new_application("chat", &schema_view), fields).unwrap()
+            Operation::new_create(SchemaId::new_application("venue", &schema_view), fields).unwrap()
         }
         // It's an UPDATE operation
         Some(fields) => Operation::new_update(
-            SchemaId::new_application("chat", &schema_view),
+            SchemaId::new_application("venue", &schema_view),
             previous_operations.unwrap(),
             fields,
         )
         .unwrap(),
         // It's a DELETE operation
         None => Operation::new_delete(
-            SchemaId::new_application("chat", &schema_view),
+            SchemaId::new_application("venue", &schema_view),
             previous_operations.unwrap(),
         )
         .unwrap(),

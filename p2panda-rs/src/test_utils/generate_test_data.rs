@@ -20,7 +20,7 @@ fn main() {
     // Instantiate one client called "panda"
     let panda = Client::new("panda".to_string(), new_key_pair());
 
-    let schema_id = SchemaId::new(&format!("chat_{}", DEFAULT_SCHEMA_HASH)).unwrap();
+    let schema_id = SchemaId::new(&format!("venue_{}", DEFAULT_SCHEMA_HASH)).unwrap();
 
     // Publish a CREATE operation
     let (entry1_hash, _) = send_to_node(
