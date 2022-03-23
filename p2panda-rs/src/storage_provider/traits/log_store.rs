@@ -65,7 +65,7 @@ pub mod tests {
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::LogStorageError;
     use crate::storage_provider::models::Log;
-    use crate::storage_provider::traits::test_setup::{SimplestStorageProvider, StorageLog};
+    use crate::storage_provider::traits::test_utils::{SimplestStorageProvider, StorageLog};
     use crate::storage_provider::traits::{AsStorageLog, LogStore};
     use crate::test_utils::fixtures::{document_id, key_pair, schema};
 

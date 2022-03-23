@@ -81,7 +81,7 @@ pub mod tests {
     use crate::operation::{AsOperation, OperationEncoded};
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::EntryStorageError;
-    use crate::storage_provider::traits::test_setup::{
+    use crate::storage_provider::traits::test_utils::{
         test_db, SimplestStorageProvider, StorageEntry, SKIPLINK_ENTRIES,
     };
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};

@@ -9,7 +9,7 @@ mod requests;
 mod responses;
 mod storage_provider;
 #[cfg(test)]
-mod test_setup;
+mod test_utils;
 
 pub use entry_store::EntryStore;
 pub use log_store::LogStore;

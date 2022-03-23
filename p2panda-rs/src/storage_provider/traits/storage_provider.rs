@@ -223,7 +223,7 @@ pub mod tests {
     use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::{AsOperation, OperationEncoded};
-    use crate::storage_provider::traits::test_setup::{
+    use crate::storage_provider::traits::test_utils::{
         test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
         SimplestStorageProvider, StorageEntry, StorageLog,
     };

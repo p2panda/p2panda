@@ -50,7 +50,7 @@ mod tests {
 
     use crate::document::DocumentId;
     use crate::identity::{Author, KeyPair};
-    use crate::storage_provider::traits::test_setup::EntryArgsRequest;
+    use crate::storage_provider::traits::test_utils::EntryArgsRequest;
     use crate::storage_provider::traits::AsEntryArgsRequest;
     use crate::test_utils::fixtures::{document_id, key_pair};
 
