@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Errors for `Storage` provider and associated traits.
-
 use crate::entry::{EntryError, EntrySignedError, LogIdError, SeqNumError};
 use crate::hash::HashError;
 use crate::identity::AuthorError;
