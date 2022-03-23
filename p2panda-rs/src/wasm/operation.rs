@@ -43,6 +43,7 @@ impl OperationFields {
     ///     of hex-encoded operation ids)
     /// - "pinned_relation_list" (array of document view ids, represented as an array
     ///     of arrays of hex-encoded operation ids)
+    /// - "owner" (hex-encoded document id)
     ///
     /// This method will throw an error when the field was already set, an invalid type value got
     /// passed or when the value does not reflect the given type.
@@ -113,6 +114,15 @@ impl OperationFields {
                     .add(name, OperationValue::PinnedRelationList(relations)));
                 Ok(())
             }
+            "owner" => {
+                let relation: Owner = jserr!(
+                    deserialize_from_js(value),
+                    "Expected an operation id value for field of type owner"
+                );
+                jserr!(relation.validate());
+                jserr!(self.0.add(name, OperationValue::Owner(relation)));
+                Ok(())
+            }
             _ => Err(js_sys::Error::new("Unknown value type").into()),
         }
     }
@@ -138,6 +148,7 @@ impl OperationFields {
             Some(OperationValue::PinnedRelationList(value)) => Ok(jserr!(serialize_to_js(value))),
             Some(OperationValue::Float(value)) => Ok(JsValue::from_f64(value.to_owned())),
             Some(OperationValue::Integer(value)) => Ok(JsValue::from(value.to_owned())),
+            Some(OperationValue::Owner(value)) => Ok(jserr!(serialize_to_js(value))),
             None => Ok(JsValue::NULL),
         }
     }

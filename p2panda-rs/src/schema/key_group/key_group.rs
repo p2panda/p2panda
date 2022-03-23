@@ -25,7 +25,7 @@ impl KeyGroup {
     pub fn new(
         key_group: Document,
         requests: &[Document],
-        responses: &[DocumentView],
+        responses: &[Document],
     ) -> Result<KeyGroup, KeyGroupError> {
         let key_group_view = KeyGroupView::try_from(key_group.view().clone())?;
         let requests: Vec<MembershipRequestView> = requests
@@ -197,8 +197,8 @@ mod test {
         )
         .unwrap();
 
-        let document_view = node.get_document(&key_group_doc_id);
-        let view = KeyGroupView::try_from(document_view).unwrap();
+        let document = node.get_document(&key_group_doc_id);
+        let view = KeyGroupView::try_from(document.view().clone()).unwrap();
         let members: Vec<Membership> = vec![];
         assert_eq!(
             format!(

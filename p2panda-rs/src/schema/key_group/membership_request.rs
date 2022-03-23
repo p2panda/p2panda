@@ -2,7 +2,7 @@
 
 use std::convert::TryFrom;
 
-use crate::document::{DocumentId, DocumentView, DocumentViewId, Document};
+use crate::document::{DocumentId, Document, DocumentViewId};
 use crate::identity::Author;
 use crate::operation::OperationValue;
 use crate::schema::key_group::Owner;
@@ -23,8 +23,8 @@ pub struct MembershipRequestView {
 
 #[allow(dead_code)]
 impl MembershipRequestView {
-    pub fn new(author: &Author, membership_request: &DocumentView) -> Result<Self, SystemSchemaError> {
-        let key_group = match membership_request.get("key_group") {
+    pub fn new(author: &Author, membership_request: &Document) -> Result<Self, SystemSchemaError> {
+        let key_group = match membership_request.view().get("key_group") {
             Some(OperationValue::Relation(value)) => Ok(value.document_id()),
             Some(op) => Err(SystemSchemaError::InvalidField(
                 "key_group".to_string(),
@@ -33,7 +33,7 @@ impl MembershipRequestView {
             None => Err(SystemSchemaError::MissingField("key_group".to_string())),
         }?;
 
-        let member = match membership_request.get("member") {
+        let member = match membership_request.view().get("member") {
             Some(OperationValue::Relation(value)) => {
                 Ok(Owner::KeyGroup(value.document_id().clone()))
             }
@@ -45,7 +45,7 @@ impl MembershipRequestView {
         }?;
 
         Ok(MembershipRequestView {
-            id: membership_request.id().clone(),
+            id: membership_request.view().id().clone(),
             key_group: key_group.clone(),
             member,
         })
@@ -71,7 +71,7 @@ impl TryFrom<Document> for MembershipRequestView {
     type Error = SystemSchemaError;
 
     fn try_from(document: Document) -> Result<MembershipRequestView, Self::Error> {
-        MembershipRequestView::new(document.author(), document.view())
+        MembershipRequestView::new(document.author(), &document)
     }
 }
 
@@ -108,8 +108,8 @@ mod test {
         )
         .unwrap();
 
-        let document_view = node.get_document(&rabbit_request_hash);
+        let document = node.get_document(&rabbit_request_hash);
         let author = Author::new(&rabbit.public_key()).unwrap();
-        assert!(MembershipRequestView::new(&author, &document_view).is_ok());
+        assert!(MembershipRequestView::new(&author, &document).is_ok());
     }
 }

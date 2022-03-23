@@ -2,7 +2,7 @@
 
 use std::convert::TryFrom;
 
-use crate::document::{DocumentView, DocumentViewId};
+use crate::document::{Document, DocumentViewId};
 use crate::operation::OperationValue;
 use crate::schema::system::SystemSchemaError;
 
@@ -68,12 +68,12 @@ impl MembershipView {
     }
 }
 
-impl TryFrom<DocumentView> for MembershipView {
+impl TryFrom<Document> for MembershipView {
     type Error = SystemSchemaError;
 
-    fn try_from(document_view: DocumentView) -> Result<Self, Self::Error> {
+    fn try_from(document: Document) -> Result<Self, Self::Error> {
         // @TODO: validate that document view has the right schema
-        let request = match document_view.get("request") {
+        let request = match document.view().get("request") {
             Some(OperationValue::PinnedRelation(value)) => Ok(value.view_id()),
             Some(op) => Err(SystemSchemaError::InvalidField(
                 "request".to_string(),
@@ -82,7 +82,7 @@ impl TryFrom<DocumentView> for MembershipView {
             None => Err(SystemSchemaError::MissingField("request".to_string())),
         }?;
 
-        let accepted = match document_view.get("accepted") {
+        let accepted = match document.view().get("accepted") {
             Some(OperationValue::Boolean(value)) => Ok(value),
             Some(op) => Err(SystemSchemaError::InvalidField(
                 "accepted".to_string(),
@@ -92,7 +92,7 @@ impl TryFrom<DocumentView> for MembershipView {
         }?;
 
         Ok(MembershipView {
-            view_id: document_view.id().clone(),
+            view_id: document.view().id().clone(),
             request,
             accepted: accepted.to_owned(),
         })
