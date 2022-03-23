@@ -230,10 +230,6 @@ mod test {
                 "key_group_v1".parse().unwrap(),
                 fields(vec![
                     (
-                        "members",
-                        OperationValue::RelationList(RelationList::new(vec![])),
-                    ),
-                    (
                         "name",
                         OperationValue::Text("Strawberry Picking Gang".to_string()),
                     ),
