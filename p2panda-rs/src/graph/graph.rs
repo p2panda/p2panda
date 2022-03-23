@@ -108,11 +108,6 @@ impl<
         self.previous.len() > 1
     }
 
-    /// Returns true if this is a branch node.
-    fn is_branch(&self) -> bool {
-        self.next.len() > 1
-    }
-
     /// Returns true if this is a graph tip.
     fn is_tip(&self) -> bool {
         self.next.is_empty()
@@ -187,54 +182,6 @@ impl<
     /// Get node from the graph by key, returns `None` if it wasn't found.
     pub fn get_node(&'a self, key: &K) -> Option<&Node<K, V>> {
         self.0.get(key)
-    }
-
-    /// Get the data payload from this node.
-    pub fn get_node_data(&self, id: &K) -> Option<&V> {
-        self.0.get(id).map(|node| &node.data)
-    }
-
-    /// Returns true if this node key is connected to the graph.
-    pub fn is_connected(&self, key: &K) -> bool {
-        if let Some(node) = self.get_node(key) {
-            !node.previous().is_empty() || !node.next().is_empty()
-        } else {
-            false
-        }
-    }
-
-    /// Returns the keys for nodes which follows this node key.
-    pub fn get_next(&'a self, key: &K) -> Option<&Vec<K>> {
-        self.get_node(key).map(|node| node.next())
-    }
-
-    /// Returns the keys for nodes which precede this node key.
-    pub fn get_previous(&'a self, key: &K) -> Option<&Vec<K>> {
-        self.get_node(key).map(|node| node.previous())
-    }
-
-    /// Returns true if this node key is a merge node.
-    pub fn is_merge_node(&self, key: &K) -> bool {
-        match self.get_node(key) {
-            Some(node) => node.is_merge(),
-            None => false,
-        }
-    }
-
-    /// Returns true if this node key is a branch node.
-    pub fn is_branch_node(&self, key: &K) -> bool {
-        match self.get_node(key) {
-            Some(node) => node.is_branch(),
-            None => false,
-        }
-    }
-
-    /// Returns true if this node key is a graph tip.
-    pub fn is_tip_node(&self, key: &K) -> bool {
-        match self.get_node(key) {
-            Some(node) => node.is_tip(),
-            None => false,
-        }
     }
 
     /// Returns a reference to the root node of this graph.
@@ -425,19 +372,13 @@ mod test {
         graph.add_node(&'j', 'J');
         graph.add_node(&'k', 'K');
 
-        assert_eq!(graph.get_node_data(&'a'), Some(&'A'));
-
         // NB: unlinked nodes are simply not visited and do not exist in the sorted result.
-
-        assert!(!graph.is_connected(&'a'));
 
         graph.add_link(&'a', &'b');
         graph.add_link(&'b', &'c');
         graph.add_link(&'c', &'d');
         graph.add_link(&'d', &'e');
         graph.add_link(&'e', &'f');
-
-        assert!(graph.is_connected(&'a'));
 
         // [A]<--[B]<--[C]<--[D]<--[E]<--[F]
 
