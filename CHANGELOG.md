@@ -37,6 +37,7 @@ Highlights are marked with a pancake 🥞
 - Impl `IntoIter` trait for `PinnedRelation`, `RelationList` and `DocumentViewId` [#266](https://github.com/p2panda/p2panda/pull/266) `rs`
 - Improve error reporting when adding operation fields [#262](https://github.com/p2panda/p2panda/issues/262)] `rs` `js`
 - Update mock node API [#286](https://github.com/p2panda/p2panda/issues/286) `rs`
+- Refactored graph module to be generic over graph node keys and other graph improvements [#289](https://github.com/p2panda/p2panda/issues/289) `rs`
 - Require sorted serialisation of document view ids [#284](https://github.com/p2panda/p2panda/pull/284) `js`
 
 ## Fixed
