@@ -3,18 +3,19 @@
 use std::fmt;
 use std::str::FromStr;
 
-use serde::de::{SeqAccess, Visitor};
+use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use yasmf_hash::MAX_YAMF_HASH_SIZE;
 
 use crate::document::DocumentViewId;
-use crate::operation::{OperationId, PinnedRelation};
+use crate::operation::OperationId;
 use crate::schema::error::SchemaIdError;
 
 /// Identifies the schema of an [`crate::operation::Operation`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SchemaId {
     /// An application schema.
-    Application(PinnedRelation),
+    Application(String, DocumentViewId),
 
     /// A schema definition.
     Schema,
@@ -32,20 +33,61 @@ impl SchemaId {
         match id {
             "schema_v1" => Ok(SchemaId::Schema),
             "schema_field_v1" => Ok(SchemaId::SchemaField),
-            hash_str => Ok(hash_str.parse::<DocumentViewId>()?.into()),
+            application_schema_id => Ok(Self::parse_application_schema_str(application_schema_id)?),
         }
     }
-}
 
-impl From<OperationId> for SchemaId {
-    fn from(operation_id: OperationId) -> Self {
-        Self::Application(PinnedRelation::new(operation_id.into()))
+    /// Returns a `SchemaId` given an application schema's name and view id.
+    pub fn new_application(name: &str, view_id: &DocumentViewId) -> Self {
+        SchemaId::Application(name.to_string(), view_id.clone())
     }
-}
 
-impl From<DocumentViewId> for SchemaId {
-    fn from(view_id: DocumentViewId) -> Self {
-        Self::Application(PinnedRelation::new(view_id))
+    /// Parse an application schema id from a string
+    fn parse_application_schema_str(id_str: &str) -> Result<Self, SchemaIdError> {
+        let mut operation_ids = vec![];
+        let mut remainder = id_str.to_string();
+
+        // Iteratively split at `_` from the right
+        while let Some((left, right)) = remainder.rsplit_once('_') {
+            // Catch trying to parse an unknown system schema
+            if right.starts_with('v') && right.len() < MAX_YAMF_HASH_SIZE * 2 {
+                return Err(SchemaIdError::UnknownSystemSchema(id_str.to_string()));
+            }
+
+            operation_ids.push(right.parse::<OperationId>()?);
+
+            // If the remainder is shorter than an entry hash we assume that it's the schema name.
+            remainder = left.to_string();
+            if remainder.chars().count() <= MAX_YAMF_HASH_SIZE * 2 {
+                break;
+            }
+        }
+
+        if remainder.is_empty() {
+            return Err(SchemaIdError::InvalidApplicationSchemaId(
+                "missing schema name".to_string(),
+            ));
+        }
+
+        Ok(SchemaId::Application(
+            remainder,
+            DocumentViewId::new(&operation_ids),
+        ))
+    }
+
+    fn as_str(&self) -> String {
+        match self {
+            SchemaId::Schema => "schema_v1".to_string(),
+            SchemaId::SchemaField => "schema_field_v1".to_string(),
+            SchemaId::Application(name, view_id) => {
+                let mut schema_id = name.clone();
+                for op_id in view_id.sorted().into_iter() {
+                    schema_id.push('_');
+                    schema_id.push_str(op_id.as_hash().as_str());
+                }
+                schema_id
+            }
+        }
     }
 }
 
@@ -71,36 +113,7 @@ impl<'de> Visitor<'de> for SchemaIdVisitor {
     where
         E: serde::de::Error,
     {
-        match value {
-            "schema_v1" => Ok(SchemaId::Schema),
-            "schema_field_v1" => Ok(SchemaId::SchemaField),
-            _ => Err(serde::de::Error::custom(format!(
-                "Unknown system schema name: {}",
-                value
-            ))),
-        }
-    }
-
-    fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
-    where
-        S: SeqAccess<'de>,
-    {
-        let mut op_ids: Vec<OperationId> = Vec::new();
-
-        while let Some(seq_value) = seq.next_element::<String>()? {
-            match seq_value.parse::<OperationId>() {
-                Ok(operation_id) => op_ids.push(operation_id),
-                Err(hash_err) => {
-                    return Err(serde::de::Error::custom(format!(
-                        "Error parsing application schema id: {}",
-                        hash_err
-                    )))
-                }
-            };
-        }
-
-        let document_view_id = DocumentViewId::new(&op_ids);
-        Ok(SchemaId::Application(PinnedRelation::new(document_view_id)))
+        SchemaId::new(value).map_err(|err| serde::de::Error::custom(err.to_string()))
     }
 }
 
@@ -109,11 +122,7 @@ impl Serialize for SchemaId {
     where
         S: Serializer,
     {
-        match &self {
-            SchemaId::Application(relation) => relation.serialize(serializer),
-            SchemaId::Schema => serializer.serialize_str("schema_v1"),
-            SchemaId::SchemaField => serializer.serialize_str("schema_field_v1"),
-        }
+        serializer.serialize_str(&self.as_str())
     }
 }
 
@@ -129,17 +138,19 @@ impl<'de> Deserialize<'de> for SchemaId {
 #[cfg(test)]
 mod test {
     use crate::document::DocumentViewId;
-    use crate::operation::{OperationId, PinnedRelation};
     use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
 
     use super::SchemaId;
 
     #[test]
     fn serialize() {
-        let app_schema = SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap();
+        let app_schema = SchemaId::new_application(
+            "venue",
+            &DEFAULT_SCHEMA_HASH.parse::<DocumentViewId>().unwrap(),
+        );
         assert_eq!(
             serde_json::to_string(&app_schema).unwrap(),
-            "[\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"]"
+            "\"venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\""
         );
 
         let schema = SchemaId::Schema;
@@ -154,10 +165,13 @@ mod test {
 
     #[test]
     fn deserialize() {
-        let app_schema = SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap();
+        let app_schema = SchemaId::new_application(
+            "venue",
+            &DEFAULT_SCHEMA_HASH.parse::<DocumentViewId>().unwrap(),
+        );
         assert_eq!(
             serde_json::from_str::<SchemaId>(
-                "[\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"]"
+                "\"venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\""
             )
             .unwrap(),
             app_schema
@@ -185,15 +199,30 @@ mod test {
 
         // Test invalid hash
         let invalid_hash = serde_json::from_str::<SchemaId>(
-            "[\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc7\"]",
+            "\"venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc7\"",
         );
         assert_eq!(
-            format!("{:?}", invalid_hash.unwrap_err()),
-            "Error(\"Error parsing application schema id: invalid hash \
-            length 33 bytes, expected 34 bytes\", line: 1, column: 70)"
+            format!("{}", invalid_hash.unwrap_err()),
+            "encountered invalid hash while parsing application schema id: invalid hash length 33 \
+            bytes, expected 34 bytes at line 1 column 74"
         );
 
-        assert!(serde_json::from_str::<SchemaId>("unknown_system_schema_name_v1").is_err());
+        assert_eq!(
+            "not a known system schema: unknown_system_schema_name_v1 at line 1 column 31",
+            format!(
+                "{}",
+                serde_json::from_str::<SchemaId>("\"unknown_system_schema_name_v1\"").unwrap_err()
+            )
+        );
+
+        // Test missing schema name
+        let missing_name = serde_json::from_str::<SchemaId>(
+            "\"_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"",
+        );
+        assert_eq!(
+            format!("{}", missing_name.unwrap_err()),
+            "invalid application schema id: missing schema name at line 1 column 71"
+        );
     }
 
     #[test]
@@ -218,28 +247,5 @@ mod test {
     fn parse_schema_type() {
         let schema: SchemaId = "schema_v1".parse().unwrap();
         assert_eq!(schema, SchemaId::Schema);
-    }
-
-    #[test]
-    fn conversion() {
-        let operation_id: OperationId =
-            "00207b3a7de3470bfe34d34ea45472082c307b995b6bd4abe2ac4ee36edef5dea1b3"
-                .parse()
-                .unwrap();
-        let schema: SchemaId = operation_id.clone().into();
-        let document_view_id = DocumentViewId::new(&[operation_id]);
-
-        // From Hash
-        assert_eq!(
-            schema,
-            SchemaId::Application(PinnedRelation::new(document_view_id.clone()))
-        );
-
-        // From DocumentViewId
-        let schema: SchemaId = document_view_id.clone().into();
-        assert_eq!(
-            schema,
-            SchemaId::Application(PinnedRelation::new(document_view_id))
-        );
     }
 }

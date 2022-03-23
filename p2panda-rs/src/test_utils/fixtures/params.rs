@@ -51,7 +51,7 @@ pub fn seq_num(#[default(1)] n: u64) -> SeqNum {
 /// overridden at testing time by passing in a custom schema hash string.
 #[fixture]
 pub fn schema(#[default(DEFAULT_SCHEMA_HASH)] schema_str: &str) -> SchemaId {
-    SchemaId::new(schema_str).unwrap()
+    SchemaId::new_application("venue", &schema_str.parse::<DocumentViewId>().unwrap())
 }
 
 /// Fixture which injects the default Hash into a test method. Default value can be overridden at

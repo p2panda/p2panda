@@ -212,20 +212,20 @@ mod tests {
 
     use crate::entry::{LogId, SeqNum};
     use crate::hash::Hash;
-    use crate::operation::{Operation, OperationFields, OperationId, OperationValue};
+    use crate::operation::{Operation, OperationFields, OperationValue};
     use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::random_operation_id;
+    use crate::test_utils::fixtures::schema;
 
     use super::Entry;
 
     #[rstest]
-    fn validation(#[from(random_operation_id)] operation_id: OperationId) {
+    fn validation(schema: SchemaId) {
         // Prepare sample values
         let mut fields = OperationFields::new();
         fields
             .add("test", OperationValue::Text("Hello".to_owned()))
             .unwrap();
-        let operation = Operation::new_create(SchemaId::from(operation_id), fields).unwrap();
+        let operation = Operation::new_create(schema, fields).unwrap();
         let backlink = Hash::new_from_bytes(vec![7, 8, 9]).unwrap();
 
         // The first entry in a log doesn't need and cannot have references to previous entries

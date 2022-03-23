@@ -6,8 +6,16 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum SchemaIdError {
     /// Invalid hash in schema id.
-    #[error("invalid hash string")]
-    HashError(#[from] crate::hash::HashError),
+    #[error("encountered invalid hash while parsing application schema id: {0}")]
+    ParsingApplicationSchema(#[from] crate::hash::HashError),
+
+    /// Invalid application schema id.
+    #[error("invalid application schema id: {0}")]
+    InvalidApplicationSchemaId(String),
+
+    /// Invalid system schema id.
+    #[error("not a known system schema: {0}")]
+    UnknownSystemSchema(String),
 }
 
 /// Custom errors related to `Schema`.
