@@ -69,14 +69,6 @@ impl Validate for DocumentViewId {
     type Error = DocumentViewIdError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        let is_sorted = self
-            .0
-            .windows(2)
-            .all(|operation_ids| operation_ids[0] <= operation_ids[1]);
-        if !is_sorted {
-            return Err(DocumentViewIdError::UnsortedOperationIds);
-        }
-
         for hash in &self.0 {
             hash.validate()?;
         }
