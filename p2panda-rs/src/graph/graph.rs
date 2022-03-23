@@ -271,23 +271,24 @@ impl<
     }
 
     /// Returns the next un-visited node following the passed node.
-    fn next(&'a self, sorted: &[&Node<K, V>], node: &Node<K, V>) -> Result<Option<Vec<&'a Node<K, V>>>, GraphError> {
+    fn next(&'a self, sorted: &[&Node<K, V>], node: &Node<K, V>) -> Option<Vec<&'a Node<K, V>>> {
         let mut next_nodes: Vec<&'a Node<K, V>> = Vec::new();
 
         for node_key in node.next() {
-            // Unwrap here as we are sure the node is in the graph.
-            let node = self.get_node(node_key).ok_or(GraphError::NodeNotFound)?;
+            // Nodes returned by `next()` have always been added by `add_link()`, which ensures
+            // that these keys all have corresponding nodes in the graph so we can unwrap here.
+            let node = self.get_node(node_key).unwrap();
             if !sorted.contains(&node) {
                 next_nodes.push(node)
             }
         }
 
         if next_nodes.is_empty() {
-            return Ok(None);
+            return None;
         };
         next_nodes.sort_by_key(|node_a| node_a.key());
         next_nodes.reverse();
-        Ok(Some(next_nodes))
+        Some(next_nodes)
     }
 
     /// Sorts the graph topologically and returns the sorted
@@ -322,9 +323,12 @@ impl<
             );
 
             // ...and then walk the graph starting from this node.
-            while let Some(mut next_nodes) = self.next(&sorted_nodes, current_node)? {
+            while let Some(mut next_nodes) = self.next(&sorted_nodes, current_node) {
                 // Pop off the next node we will visit.
-                let next_node = next_nodes.pop().ok_or(GraphError::NodeNotFound)?;
+                //
+                // Nodes returned by `next()` have always been added by `add_link()`, which ensures
+                // that these keys all have corresponding nodes in the graph so we can unwrap.
+                let next_node = next_nodes.pop().unwrap();
                 debug!("visiting: {:?}", next_node.key());
 
                 // Push all other nodes connected to this one to the queue, we will visit these later.
