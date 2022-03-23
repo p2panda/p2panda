@@ -255,7 +255,7 @@ mod test {
         .unwrap();
 
         let frog_request =
-            node.get_document_but_dont_make_it_look_like_a_view(&frog_request_doc_id);
+            node.get_document(&frog_request_doc_id);
 
         let (frog_membership_doc_id, _) = send_to_node(
             &mut node,
@@ -277,7 +277,7 @@ mod test {
         let frog_response = node.get_document(&frog_membership_doc_id);
 
         let key_group = KeyGroup::new(
-            node.get_document_but_dont_make_it_look_like_a_view(&key_group_id),
+            node.get_document(&key_group_id),
             &[frog_request.clone()],
             &[frog_response.clone()],
         )
@@ -301,11 +301,11 @@ mod test {
         )
         .unwrap();
         let rabbit_request =
-            node.get_document_but_dont_make_it_look_like_a_view(&rabbit_request_doc_id);
+            node.get_document(&rabbit_request_doc_id);
 
         // But rabbit is not a member yet
         let key_group = KeyGroup::new(
-            node.get_document_but_dont_make_it_look_like_a_view(&key_group_id),
+            node.get_document(&key_group_id),
             &[frog_request.clone(), rabbit_request.clone()],
             &[frog_response.clone()],
         )
@@ -335,7 +335,7 @@ mod test {
         let rabbit_response = node.get_document(&rabbit_membership_doc_id);
 
         let key_group = KeyGroup::new(
-            node.get_document_but_dont_make_it_look_like_a_view(&key_group_id),
+            node.get_document(&key_group_id),
             &[frog_request.clone(), rabbit_request.clone()],
             &[frog_response.clone(), rabbit_response.clone()],
         )
@@ -358,7 +358,7 @@ mod test {
         let frog_response = node.get_document(&frog_membership_doc_id);
 
         let key_group = KeyGroup::new(
-            node.get_document_but_dont_make_it_look_like_a_view(&key_group_id),
+            node.get_document(&key_group_id),
             &[frog_request, rabbit_request],
             &[frog_response, rabbit_response],
         )

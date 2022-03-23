@@ -494,18 +494,6 @@ impl Node {
         DocumentBuilder::new(operations).build().unwrap()
     }
 
-    pub fn get_document_but_dont_make_it_look_like_a_view(&self, id: &Hash) -> Document {
-        let entries = self.get_document_entries(id);
-        let operations = entries
-            .iter()
-            .map(|entry| {
-                OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap()
-            })
-            .collect();
-        let document = DocumentBuilder::new(operations).build().unwrap();
-        document.to_owned()
-    }
-
     /// Get all documents in their resolved state from the node.
     pub fn get_documents(&self) -> Vec<Document> {
         let mut documents = HashSet::new();

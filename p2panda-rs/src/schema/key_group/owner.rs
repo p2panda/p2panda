@@ -99,7 +99,7 @@ mod test {
         )
         .unwrap();
 
-        let doc = node.get_document_but_dont_make_it_look_like_a_view(&rabbit_request_hash);
+        let doc = node.get_document(&rabbit_request_hash);
         let owner = Owner::for_document(&doc).unwrap();
         assert_eq!(
             owner,
@@ -129,7 +129,7 @@ mod test {
         )
         .unwrap();
 
-        let doc = node.get_document_but_dont_make_it_look_like_a_view(&rabbit_request_hash);
+        let doc = node.get_document(&rabbit_request_hash);
         let owner = Owner::for_document(&doc).unwrap();
         assert_eq!(owner, Owner::KeyGroup(DocumentId::new(key_group_id)));
     }
@@ -165,7 +165,7 @@ mod test {
         )
         .unwrap();
 
-        let doc = node.get_document_but_dont_make_it_look_like_a_view(&rabbit_request_hash);
+        let doc = node.get_document(&rabbit_request_hash);
         let result = Owner::for_document(&doc).unwrap_err();
         assert_eq!(
             format!("{}", result),
