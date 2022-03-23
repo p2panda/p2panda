@@ -49,6 +49,7 @@ Highlights are marked with a pancake 🥞
 - Split up overly long `operation.rs` file [#232](https://github.com/p2panda/p2panda/pull/232) `rs`
 - Extend test coverage for `OperationFields` [#236](https://github.com/p2panda/p2panda/pull/236) `rs`
 - Further develop our best practices for writing documentation [#240](https://github.com/p2panda/p2panda/pull/240) `rs`
+- Test `debug` macro calls in Github CI [#288](https://github.com/p2panda/p2panda/pull/288) `rs`
 
 ## [0.3.0]
 
