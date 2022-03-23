@@ -37,12 +37,12 @@ Highlights are marked with a pancake 🥞
 - Impl `IntoIter` trait for `PinnedRelation`, `RelationList` and `DocumentViewId` [#266](https://github.com/p2panda/p2panda/pull/266) `rs`
 - Improve error reporting when adding operation fields [#262](https://github.com/p2panda/p2panda/issues/262)] `rs` `js`
 - Update mock node API [#286](https://github.com/p2panda/p2panda/issues/286) `rs`
-- Require document view ids to consist of sorted operation ids
+- Require sorted serialisation of document view ids [#284](https://github.com/p2panda/p2panda/pull/284) `js`
 
 ## Fixed
 
 - Fix determination of field types in p2panda-js [#202](https://github.com/p2panda/p2panda/pull/202) `js`
-- Fix equality of document view ids
+- Fix equality of document view ids by sorting before comparison [#284](https://github.com/p2panda/p2panda/pull/284) `js`
 
 ## Everything burrito
 
