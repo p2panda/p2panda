@@ -13,7 +13,7 @@ pub enum StorageProviderError {
     /// Catch all error which implementers can use for passing their own errors
     /// up the chain.
     #[error("Error occured in `StorageProvider`: {0}")]
-    Error(String),
+    Custom(String),
 
     /// Error returned from validating p2panda-rs `Author` data types.
     #[error(transparent)]
@@ -70,7 +70,7 @@ pub enum LogStorageError {
     /// Catch all error which implementers can use for passing their own errors
     /// up the chain.
     #[error("Error occured during `LogStorage` request in storage provider: {0}")]
-    Error(String),
+    Custom(String),
 }
 
 /// `EntryStorage` errors.
@@ -79,7 +79,7 @@ pub enum EntryStorageError {
     /// Catch all error which implementers can use for passing their own errors
     /// up the chain.
     #[error("Error occured during `EntryStorage` request in storage provider: {0}")]
-    Error(String),
+    Custom(String),
 
     /// Error which originates in `determine_skiplink` if the skiplink is missing.
     #[error("Could not find skiplink entry in database")]
