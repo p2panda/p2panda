@@ -10,6 +10,7 @@ use crate::operation::{
     OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
 use crate::schema::SchemaId;
+use crate::schema::key_group::Owner;
 use crate::wasm::error::jserr;
 use crate::wasm::serde::{deserialize_from_js, serialize_to_js};
 use crate::Validate;
@@ -115,7 +116,7 @@ impl OperationFields {
                 Ok(())
             }
             "owner" => {
-                let relation: Owner = jserr!(
+                let relation: Relation = jserr!(
                     deserialize_from_js(value),
                     "Expected an operation id value for field of type owner"
                 );
