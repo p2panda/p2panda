@@ -30,6 +30,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 aquamarine = "0.1.11"
 arrayvec = "0.5.2"
+async-trait = "0.1.52"
 bamboo-rs-core-ed25519-yasmf = "0.1.0"
 ciborium = "0.2.0"
 cddl-cat = { version = "0.6.0", default-features = false, features = [
@@ -50,7 +51,6 @@ tls_codec = { version = "0.2.0-pre.3", features = [
   "serde_serialize",
 ] }
 yasmf-hash = "0.1.0"
-async-trait = "0.1.52"
 
 # @TODO: Use `openmls` crate as soon as changes got merged into `main` in
 # upstream and released as version `0.4.0`.
