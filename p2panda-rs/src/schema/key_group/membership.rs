@@ -52,8 +52,8 @@ impl Membership {
     /// Returns true if this membership is accepted.
     ///
     /// Memberships that are not accepted have been revoked and should be considered void.
-    pub fn accepted(&self) -> &bool {
-        &self.accepted
+    pub fn accepted(&self) -> bool {
+        self.accepted
     }
 }
 
