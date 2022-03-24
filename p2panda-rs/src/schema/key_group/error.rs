@@ -7,18 +7,23 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum KeyGroupError {
-    #[error("invalid membership: {0}")]
-    InvalidMembership(String),
-
+    /// A public key can only have one membership in a key group.
     #[error("duplicate member: {0}")]
     DuplicateMembership(String),
 
-    #[error("key group must have at least one member")]
-    NoMemberships,
+    /// Memberships must have matching and valid request and response.
+    #[error("invalid membership: {0}")]
+    InvalidMembership(String),
 
+    /// Authorised documents must not have more than one owner.
     #[error("unexpected multiple owner fields in document {0}")]
     MultipleOwners(String),
 
+    /// Key group instances must have members.
+    #[error("key group must have at least one member")]
+    NoMemberships,
+
+    /// Error from parsing system schema.
     #[error(transparent)]
     ParsingError(#[from] crate::schema::system::SystemSchemaError),
 }

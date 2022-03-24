@@ -22,10 +22,13 @@ pub enum SchemaId {
     /// A schema definition field.
     SchemaField,
 
+    /// A key group.
     KeyGroup,
 
+    /// A key group membership response.
     KeyGroupMembership,
 
+    /// A key group membership request.
     KeyGroupMembershipRequest,
 }
 

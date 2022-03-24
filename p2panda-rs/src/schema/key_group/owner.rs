@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::HashMap;
-
 use crate::document::{Document, DocumentId};
 use crate::identity::Author;
 use crate::operation::OperationValue;
@@ -37,7 +35,7 @@ impl Owner {
             // Take document view field values
             .map(|(_, value)| value)
             // Map to `Option<Owner>`
-            .map(|value| get_owner_values(value))
+            .map(get_owner_values)
             // Unwrap
             .filter(|value| value.is_some())
             .map(|value| value.unwrap())

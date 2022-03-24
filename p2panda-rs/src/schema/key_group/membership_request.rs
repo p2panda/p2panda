@@ -23,6 +23,7 @@ pub struct MembershipRequestView {
 
 #[allow(dead_code)]
 impl MembershipRequestView {
+    /// Create a membership request view from its author and the request's document.
     pub fn new(author: &Author, membership_request: &Document) -> Result<Self, SystemSchemaError> {
         let key_group = match membership_request.view().get("key_group") {
             Some(OperationValue::Relation(value)) => Ok(value.document_id()),

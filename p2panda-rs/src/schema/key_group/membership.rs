@@ -10,6 +10,7 @@ use super::error::KeyGroupError;
 use super::membership_request::MembershipRequestView;
 use super::Owner;
 
+/// Memership in a key group.
 #[derive(Clone, Debug)]
 pub struct Membership {
     view_id: DocumentViewId,
@@ -18,6 +19,9 @@ pub struct Membership {
 }
 
 impl Membership {
+    /// Create a new membership instance.
+    ///
+    /// Requires matching a membership request that matches the membership response's request field.
     pub fn new(
         request: MembershipRequestView,
         response: MembershipView,
@@ -35,19 +39,25 @@ impl Membership {
         })
     }
 
+    /// Access the membership's view id.
     pub fn view_id(&self) -> &DocumentViewId {
         &self.view_id
     }
 
+    /// Access the [`Owner`] whose membership this describes.
     pub fn member(&self) -> &Owner {
         &self.member
     }
 
+    /// Returns true if this membership is accepted.
+    ///
+    /// Memberships that are not accepted have been revoked and should be considered void.
     pub fn accepted(&self) -> &bool {
         &self.accepted
     }
 }
 
+/// Represents a membership document.
 #[derive(Clone, Debug)]
 pub struct MembershipView {
     view_id: DocumentViewId,
@@ -65,6 +75,11 @@ impl MembershipView {
     /// The view id of the request for this membership.
     pub fn request(&self) -> &DocumentViewId {
         &self.request
+    }
+
+    /// Returns true if this membership is accepted.
+    pub fn accepted(&self) -> &bool {
+        &self.accepted
     }
 }
 
@@ -93,7 +108,7 @@ impl TryFrom<Document> for MembershipView {
 
         Ok(MembershipView {
             view_id: document.view().id().clone(),
-            request,
+            request: request.clone(),
             accepted: accepted.to_owned(),
         })
     }
@@ -105,16 +120,14 @@ mod test {
 
     use rstest::rstest;
 
-    use crate::document::{DocumentId, DocumentViewId};
-    use crate::identity::{Author, KeyPair};
-    use crate::operation::{OperationId, OperationValue, PinnedRelation, Relation};
-    use crate::schema::key_group::{MembershipView, MembershipRequestView};
+    use crate::document::DocumentViewId;
+    use crate::identity::KeyPair;
+    use crate::operation::{OperationId, OperationValue, PinnedRelation};
+    use crate::schema::key_group::MembershipView;
     use crate::test_utils::fixtures::{
         create_operation, fields, random_key_pair, random_operation_id,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
-
-    use super::Membership;
 
     #[rstest]
     fn from_document(

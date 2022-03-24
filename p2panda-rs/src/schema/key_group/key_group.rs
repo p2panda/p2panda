@@ -88,7 +88,7 @@ impl KeyGroup {
 
     /// Returns the key group's id.
     pub fn id(&self) -> &DocumentId {
-        todo!()
+        &self.id
     }
 
     /// Access the key group's name.
@@ -171,7 +171,7 @@ mod test {
 
     use crate::document::{DocumentId, DocumentViewId};
     use crate::identity::{Author, KeyPair};
-    use crate::operation::{PinnedRelation, Relation, RelationList, OperationValue};
+    use crate::operation::{PinnedRelation, Relation, OperationValue};
     use crate::schema::key_group::Membership;
     use crate::test_utils::fixtures::{create_operation, fields, random_key_pair};
     use crate::test_utils::mocks::{send_to_node, Client, Node};
@@ -266,7 +266,7 @@ mod test {
                     (
                         "request",
                         OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::from(
-                            frog_request_doc_id.clone(),
+                            frog_request_doc_id,
                         ))),
                     ),
                     ("accepted", OperationValue::Boolean(true)),
@@ -284,6 +284,8 @@ mod test {
         .unwrap();
 
         assert!(key_group.is_member(&frog_author));
+        let expected_key_group_id = key_group_id.as_str().parse::<DocumentId>().unwrap();
+        assert_eq!(key_group.id(), &expected_key_group_id);
 
         // Rabbit asks to become a member as well
         let (rabbit_request_doc_id, _) = send_to_node(
@@ -337,7 +339,7 @@ mod test {
         let key_group = KeyGroup::new(
             node.get_document(&key_group_id),
             &[frog_request.clone(), rabbit_request.clone()],
-            &[frog_response.clone(), rabbit_response.clone()],
+            &[frog_response, rabbit_response.clone()],
         )
         .unwrap();
 
