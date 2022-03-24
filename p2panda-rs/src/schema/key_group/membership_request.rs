@@ -35,9 +35,7 @@ impl MembershipRequestView {
         }?;
 
         let member = match membership_request.view().get("member") {
-            Some(OperationValue::Owner(value)) => {
-                Ok(Owner::KeyGroup(value.document_id().clone()))
-            }
+            Some(OperationValue::Owner(value)) => Ok(Owner::KeyGroup(value.document_id().clone())),
             Some(op) => Err(SystemSchemaError::InvalidField(
                 "member".to_string(),
                 op.to_owned(),

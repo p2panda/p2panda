@@ -22,6 +22,10 @@ pub enum KeyGroupError {
     #[error("unexpected multiple owner fields in document {0}")]
     MultipleOwners(String),
 
+    /// The [`KeyGroupView`] must be supplied when creating key groups from document collections.
+    #[error("key group to be created not found among supplied documents")]
+    MissingKeyGroupView,
+
     /// Key group instances must have members.
     #[error("key group must have at least one member")]
     NoMemberships,

@@ -22,7 +22,12 @@ pub struct KeyGroup {
 }
 
 impl KeyGroup {
-    /// Create a key group from documents of itself, its memberships and membership requests.
+    /// Create a new key group from predecessor items.
+    ///
+    /// The `documents` parameter should contain documents for the key group itself and all
+    /// (request, response) pairs.
+    ///
+    /// The `member_key_groups` parameter should contain all [`KeyGroup`]s that are members.
     pub fn new_from_documents(
         key_group_id: DocumentId,
         documents: &[Document],
@@ -39,7 +44,9 @@ impl KeyGroup {
                 }
                 SchemaId::KeyGroupMembershipRequest => {
                     let request = MembershipRequestView::try_from(document.clone())?;
-                    requests.insert(request.view_id().clone(), request);
+                    if request.key_group() == &key_group_id {
+                        requests.insert(request.view_id().clone(), request);
+                    }
                 }
                 _ => (),
             }
@@ -48,7 +55,7 @@ impl KeyGroup {
             }
         }
         if key_group.is_none() {
-            return Err(KeyGroupError::InvalidMembership("this".to_string()));
+            return Err(KeyGroupError::MissingKeyGroupView);
         }
 
         let mut members: Vec<Membership> = Vec::new();
@@ -66,6 +73,10 @@ impl KeyGroup {
     }
 
     /// Create a key group from a key group view and a set of memberships.
+    ///
+    /// The members parameter must only contain memberships of the key group to be created.
+    /// The `member_key_groups` parameter must contain all key groups that have membership and may
+    /// contain additional unrelated key groups.
     pub fn new(
         key_group: &KeyGroupView,
         members: &[Membership],
@@ -80,7 +91,7 @@ impl KeyGroup {
                 Owner::Author(value) => {
                     member_pool.push((value, membership));
                 }
-                // When a key group is a member, recursively add those key group's members to the
+                // When a key group is a member, recursively add that key group's members to the
                 // pool, assigned to a shared `membership`
                 Owner::KeyGroup(value) => {
                     match member_key_groups
@@ -89,6 +100,7 @@ impl KeyGroup {
                     {
                         Some(sub_key_group) => {
                             for (author, sub_membership) in sub_key_group.members() {
+                                // Only add if a member is accepted within the sub key group.
                                 if sub_membership.accepted() {
                                     member_pool.push((author, membership));
                                 }
@@ -171,7 +183,7 @@ impl Validate for KeyGroup {
 /// Represents a root key group definition.
 ///
 /// Can be used to make a [`KeyGroup`].
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct KeyGroupView {
     id: DocumentId,
     view_id: DocumentViewId,
@@ -315,8 +327,6 @@ mod test {
         )
         .unwrap();
 
-        let frog_request = node.get_document(&frog_request_doc_id);
-
         let (frog_membership_doc_id, _) = send_to_node(
             &mut node,
             &frog,
@@ -334,7 +344,6 @@ mod test {
             ),
         )
         .unwrap();
-        let frog_response = node.get_document(&frog_membership_doc_id);
 
         let key_group =
             KeyGroup::new_from_documents(key_group_id.clone().into(), &node.get_documents(), &[])
@@ -387,8 +396,6 @@ mod test {
         )
         .unwrap();
 
-        let rabbit_response = node.get_document(&rabbit_membership_doc_id);
-
         let key_group =
             KeyGroup::new_from_documents(key_group_id.clone().into(), &node.get_documents(), &[])
                 .unwrap();
@@ -406,8 +413,6 @@ mod test {
             ),
         )
         .unwrap();
-
-        let frog_response = node.get_document(&frog_membership_doc_id);
 
         let key_group =
             KeyGroup::new_from_documents(key_group_id.clone().into(), &node.get_documents(), &[])
@@ -446,8 +451,6 @@ mod test {
         )
         .unwrap();
 
-        let frog_blueberry_request = node.get_document(&frog_blueberry_request_doc_id);
-
         let (frog_blueberry_membership_doc_id, _) = send_to_node(
             &mut node,
             &frog,
@@ -466,8 +469,6 @@ mod test {
         )
         .unwrap();
 
-        let frog_blueberry_response = node.get_document(&frog_blueberry_membership_doc_id);
-
         // Rabbit concedes and asks for the whole strawberry picking gang to become members
         let (spg_blueberry_request_doc_id, _) = send_to_node(
             &mut node,
@@ -477,7 +478,7 @@ mod test {
                 fields(vec![
                     (
                         "key_group",
-                        OperationValue::Relation(Relation::new(key_group.id().clone())),
+                        OperationValue::Relation(Relation::new(blueberry_id.clone().into())),
                     ),
                     (
                         "member",
@@ -487,8 +488,6 @@ mod test {
             ),
         )
         .unwrap();
-
-        let spg_blueberry_request = node.get_document(&spg_blueberry_request_doc_id);
 
         let (spg_blueberry_response_doc_id, _) = send_to_node(
             &mut node,
@@ -507,7 +506,6 @@ mod test {
             ),
         )
         .unwrap();
-        let spg_blueberry_response = node.get_document(&spg_blueberry_response_doc_id);
 
         let blueberry_picking_gang = KeyGroup::new_from_documents(
             blueberry_id.into(),
