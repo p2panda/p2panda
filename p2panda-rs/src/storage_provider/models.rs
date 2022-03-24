@@ -13,8 +13,8 @@ use crate::Validate;
 
 /// Struct wrapping an entry with it's operation.
 ///
-/// Used internally throughout `storage_provider` in method args and default trait definitions.
-/// The `AsStorageEntry` trait requires `TryFrom<EntryWithOperation>` & `TryInto<EntryWithOperation>`
+/// Used internally throughout `storage_provider` in method args and default trait definitions. The
+/// `AsStorageEntry` trait requires `TryFrom<EntryWithOperation>` & `TryInto<EntryWithOperation>`
 /// conversion traits to be present.
 #[derive(Debug, Clone)]
 pub struct EntryWithOperation(EntrySigned, OperationEncoded);
@@ -49,9 +49,8 @@ impl Validate for EntryWithOperation {
     }
 }
 
-/// Struct representing a bamboo append-only log structure,
+/// Struct representing a bamboo append-only log structure.
 #[derive(Debug, Clone)]
-
 pub struct Log {
     /// Public key of the author.
     pub author: Author,
