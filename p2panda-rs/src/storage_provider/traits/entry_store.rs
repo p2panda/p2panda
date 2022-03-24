@@ -9,10 +9,10 @@ use crate::schema::SchemaId;
 use crate::storage_provider::errors::EntryStorageError;
 use crate::storage_provider::traits::AsStorageEntry;
 
-/// Trait which handles all storage actions relating to `Entries`s.
+/// Trait which handles all storage actions relating to `Entry`.
 ///
-/// This trait should be implemented on the root storage provider struct. It's definitions
-/// make up the required methods for inserting and querying entries from storage.
+/// This trait should be implemented on the root storage provider struct. It's definitions make up
+/// the required methods for inserting and querying entries from storage.
 #[async_trait]
 pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// Insert an entry into storage.
@@ -33,7 +33,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         log_id: &LogId,
     ) -> Result<Option<StorageEntry>, EntryStorageError>;
 
-    /// Return vector of all entries of a given schema
+    /// Return vector of all entries of a given schema.
     async fn by_schema(&self, schema: &SchemaId) -> Result<Vec<StorageEntry>, EntryStorageError>;
 
     /// Determine skiplink entry hash ("lipmaa"-link) for entry in this log, return `None` when no

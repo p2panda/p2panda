@@ -5,11 +5,11 @@ use async_trait::async_trait;
 use crate::entry::{LogId, SeqNum};
 use crate::hash::Hash;
 
-/// Trait to be implemented on the response body of `panda_getEntryArguments`.
+/// Response when requesting arguments to create a new entry.
 #[async_trait]
 pub trait AsEntryArgsResponse {
-    /// Just the constructor method is defined here as all we need this trait for
-    /// is constructing entry args to be returned from the default trait methods.
+    /// Just the constructor method is defined here as all we need this trait for is constructing
+    /// entry arguments to be returned from the default trait methods.
     ///
     /// NB: We could validate that entries at seq nums that require skiplinks have them.
     fn new(
@@ -20,11 +20,11 @@ pub trait AsEntryArgsResponse {
     ) -> Self;
 }
 
-/// Trait to be implemented on the response body of `panda_publishEntry`.
+/// Response when publishing a new entry.
 #[async_trait]
 pub trait AsPublishEntryResponse {
-    /// Just the constructor method is defined here as all we need this trait for
-    /// is constructing entry args to be returned from the default trait methods.
+    /// Just the constructor method is defined here as all we need this trait for is constructing
+    /// entry args to be returned from the default trait methods.
     ///
     /// NB: We could validate that entries at seq nums that require skiplinks have them.
     fn new(

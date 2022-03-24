@@ -55,6 +55,13 @@ impl EntrySigned {
         Signature::from_bytes(&array_vec.into_inner().unwrap()).unwrap()
     }
 
+    /// Returns the hash of the payload of this entry.
+    pub fn payload_hash(&self) -> Hash {
+        let bamboo_entry: BambooEntry = self.into();
+        // Unwrap because we know it was already validated on creating the p2panda entry
+        bamboo_entry.payload_hash.try_into().unwrap()
+    }
+
     /// Returns encoded entry as string.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
@@ -79,14 +86,6 @@ impl EntrySigned {
     /// Returns payload size (number of bytes) of total encoded entry.
     pub fn size(&self) -> u64 {
         self.0.len() as u64 / 2
-    }
-
-    /// Returns the hash of the payload of this entry.
-    pub fn payload_hash(&self) -> Hash {
-        let bamboo_entry: BambooEntry = self.into();
-        // unwrap because we know it was alread validated on creating
-        // the p2panda entry.
-        bamboo_entry.payload_hash.try_into().unwrap()
     }
 
     /// Takes an [`OperationEncoded`] and validates it against the operation hash encoded in this
@@ -143,19 +142,17 @@ impl Validate for EntrySigned {
 
 #[cfg(test)]
 mod tests {
-    use rstest::rstest;
-    use rstest_reuse::apply;
     use std::collections::HashMap;
     use std::convert::TryInto;
 
-    use crate::{
-        entry::{sign_and_encode, Entry, EntrySigned},
-        identity::KeyPair,
-        operation::OperationEncoded,
-        test_utils::fixtures::{
-            entry_signed_encoded, key_pair, operation_encoded, templates::many_valid_entries,
-        },
-    };
+    use rstest::rstest;
+    use rstest_reuse::apply;
+
+    use crate::entry::{sign_and_encode, Entry, EntrySigned};
+    use crate::identity::KeyPair;
+    use crate::operation::OperationEncoded;
+    use crate::test_utils::fixtures::templates::many_valid_entries;
+    use crate::test_utils::fixtures::{entry_signed_encoded, key_pair, operation_encoded};
 
     #[rstest]
     fn test_entry_signed(entry_signed_encoded: EntrySigned, key_pair: KeyPair) {

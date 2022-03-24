@@ -15,19 +15,21 @@ use crate::storage_provider::traits::{
 
 /// Trait which handles all high level storage queries and insertions.
 ///
-/// This trait should be implemented on the root storage provider struct. It's definitions
-/// make up the the higher level methods a p2panda client needs for interacting with data
-/// storage.
+/// This trait should be implemented on the root storage provider struct. It's definitions make up
+/// the the higher level methods a p2panda client needs for interacting with data storage.
 #[async_trait]
 pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog>:
     EntryStore<StorageEntry> + LogStore<StorageLog>
 {
     /// Params when making a request to `get_entry_args`.
     type EntryArgsRequest: AsEntryArgsRequest + Sync;
+
     /// Response from a call to `get_entry_args`.
     type EntryArgsResponse: AsEntryArgsResponse;
+
     /// Params when making a request to `publish_entry`.
     type PublishEntryRequest: AsPublishEntryRequest + Sync;
+
     /// Response from a call to `publish_entry`.
     type PublishEntryResponse: AsPublishEntryResponse;
 
@@ -41,8 +43,6 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         entry_hash: &Hash,
     ) -> Result<Option<DocumentId>, Box<dyn std::error::Error>>;
 
-    /// Implementation of `panda_getEntryArguments` RPC method.
-    ///
     /// Returns required data (backlink and skiplink entry hashes, last sequence number and the
     /// document's log_id) to encode a new bamboo entry.
     async fn get_entry_args(
@@ -92,8 +92,6 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         }
     }
 
-    /// Implementation of `panda_publishEntry` RPC method.
-    ///
     /// Stores an author's Bamboo entry with operation payload in database after validating it.
     async fn publish_entry(
         &self,
@@ -173,8 +171,8 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
             Ok(None)
         }?;
 
-        // Verify bamboo entry integrity, including encoding, signature of the entry correct back- and
-        // skiplinks.
+        // Verify bamboo entry integrity, including encoding, signature of the entry correct back-
+        // and skiplinks
         bamboo_rs_core_ed25519_yasmf::verify(
             &entry_encoded.to_bytes(),
             Some(&params.operation_encoded().to_bytes()),
@@ -213,10 +211,11 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
 #[cfg(test)]
 pub mod tests {
-    use async_trait::async_trait;
-    use rstest::rstest;
     use std::convert::TryFrom;
     use std::sync::{Arc, Mutex};
+
+    use async_trait::async_trait;
+    use rstest::rstest;
 
     use crate::document::DocumentId;
     use crate::entry::{sign_and_encode, Entry, LogId};
@@ -273,7 +272,7 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn can_publish_entries(test_db: SimplestStorageProvider) {
-        // Instantiate a new store.
+        // Instantiate a new store
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
@@ -282,23 +281,23 @@ pub mod tests {
         let entries = test_db.entries.lock().unwrap().clone();
 
         for entry in entries.clone() {
-            // Publish each test entry in order.
+            // Publish each test entry in order
             let publish_entry_request =
                 PublishEntryRequest(entry.entry_signed(), entry.operation_encoded().unwrap());
 
             let publish_entry_response = new_db.publish_entry(&publish_entry_request).await;
 
-            // Response should be ok.
+            // Response should be ok
             assert!(publish_entry_response.is_ok());
 
             let mut seq_num = *entry.entry_decoded().seq_num();
 
-            // If this is the highest entry in the db then break here, the test is over.
+            // If this is the highest entry in the db then break here, the test is over
             if seq_num.as_u64() == entries.len() as u64 {
                 break;
             };
 
-            // Calculate expected response.
+            // Calculate expected response
             let next_seq_num = seq_num.next().unwrap();
             let skiplink = entries
                 .get(next_seq_num.as_u64() as usize - 1)
@@ -317,7 +316,7 @@ pub mod tests {
             let expected_reponse =
                 PublishEntryResponse::new(backlink, skiplink, next_seq_num, LogId::default());
 
-            // Response and expected response should match.
+            // Response and expected response should match
             assert_eq!(publish_entry_response.unwrap(), expected_reponse);
         }
     }
@@ -325,7 +324,7 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn gets_entry_args(test_db: SimplestStorageProvider) {
-        // Instantiate a new store.
+        // Instantiate a new store
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
@@ -336,13 +335,13 @@ pub mod tests {
         for entry in entries.clone() {
             let is_create = entry.entry_decoded().operation().unwrap().is_create();
 
-            // Determine document id.
+            // Determine document id
             let document_id: Option<DocumentId> = match is_create {
                 true => None,
                 false => Some(entries.get(0).unwrap().entry_signed().hash().into()),
             };
 
-            // Construct entry args request.
+            // Construct entry args request
             let entry_args_request = EntryArgsRequest {
                 author: entry.entry_signed().author().clone(),
                 document: document_id,
@@ -350,10 +349,10 @@ pub mod tests {
 
             let entry_args_response = new_db.get_entry_args(&entry_args_request).await;
 
-            // Response should be ok.
+            // Response should be ok
             assert!(entry_args_response.is_ok());
 
-            // Calculate expected response.
+            // Calculate expected response
             let seq_num = *entry.entry_decoded().seq_num();
             let backlink = entry.entry_decoded().backlink_hash().cloned();
             let skiplink = entry.entry_decoded().skiplink_hash().cloned();
@@ -361,10 +360,10 @@ pub mod tests {
             let expected_reponse =
                 EntryArgsResponse::new(backlink, skiplink, seq_num, LogId::default());
 
-            // Response and expected response should match.
+            // Response and expected response should match
             assert_eq!(entry_args_response.unwrap(), expected_reponse);
 
-            // Publish each test entry in order before next loop.
+            // Publish each test entry in order before next loop
             let publish_entry_request =
                 PublishEntryRequest(entry.entry_signed(), entry.operation_encoded().unwrap());
 
@@ -375,7 +374,7 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn wrong_log_id(key_pair: KeyPair, test_db: SimplestStorageProvider) {
-        // Instantiate a new store.
+        // Instantiate a new store
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
@@ -383,16 +382,16 @@ pub mod tests {
 
         let entries = test_db.entries.lock().unwrap().clone();
 
-        // Entry request for valid first intry in log 1.
+        // Entry request for valid first intry in log 1
         let publish_entry_request = PublishEntryRequest(
             entries.get(0).unwrap().entry_signed(),
             entries.get(0).unwrap().operation_encoded().unwrap(),
         );
 
-        // Publish the first valid entry.
+        // Publish the first valid entry
         new_db.publish_entry(&publish_entry_request).await.unwrap();
 
-        // Create a new entry with an invalid log id.
+        // Create a new entry with an invalid log id
         let entry_with_wrong_log_id = Entry::new(
             &LogId::new(2), // This is wrong!!
             entries.get(1).unwrap().entry_decoded().operation(),
@@ -409,11 +408,11 @@ pub mod tests {
         )
         .unwrap();
 
-        // Create request and publish invalid entry.
+        // Create request and publish invalid entry
         let request_with_wrong_log_id =
             PublishEntryRequest(signed_entry_with_wrong_log_id, encoded_operation);
 
-        // Should error as the published entry contains an invalid log.
+        // Should error as the published entry contains an invalid log
         let error_response = new_db.publish_entry(&request_with_wrong_log_id).await;
 
         assert_eq!(
@@ -427,7 +426,7 @@ pub mod tests {
     async fn document_does_not_exist(test_db: SimplestStorageProvider) {
         let entries = test_db.entries.lock().unwrap().clone();
 
-        // Init database with one document missing it's CREATE entry.
+        // Init database with one document missing it's CREATE entry
         let log_entries_without_document_root = vec![
             entries.get(1).unwrap().clone(),
             entries.get(2).unwrap().clone(),
@@ -440,8 +439,8 @@ pub mod tests {
             entries: Arc::new(Mutex::new(log_entries_without_document_root)),
         };
 
-        // Create request for publishing an entry which has a valid backlink and skiplink,
-        // but the document it is associated with does not exist.
+        // Create request for publishing an entry which has a valid backlink and skiplink, but the
+        // document it is associated with does not exist
         let publish_entry_with_non_existant_document = PublishEntryRequest(
             entries.get(6).unwrap().entry_signed(),
             entries.get(6).unwrap().operation_encoded().unwrap(),
@@ -463,7 +462,7 @@ pub mod tests {
         let entries = test_db.entries.lock().unwrap().clone();
         let logs = test_db.logs.lock().unwrap().clone();
 
-        // Init database with on document log which has an entry at seq num 4 missing.
+        // Init database with on document log which has an entry at seq num 4 missing
         let log_entries_with_skiplink_missing = vec![
             entries.get(0).unwrap().clone(),
             entries.get(1).unwrap().clone(),
@@ -483,7 +482,8 @@ pub mod tests {
             entries.get(7).unwrap().operation_encoded().unwrap(),
         );
 
-        // Should error as an entry at seq num 8 should have a skiplink relation to the missing entry at seq num 4.
+        // Should error as an entry at seq num 8 should have a skiplink relation to the missing
+        // entry at seq num 4
         let error_response = new_db.publish_entry(&publish_entry_request).await;
 
         assert_eq!(
