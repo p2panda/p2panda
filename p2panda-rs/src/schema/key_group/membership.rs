@@ -5,6 +5,7 @@ use std::convert::TryFrom;
 use crate::document::{Document, DocumentViewId};
 use crate::operation::OperationValue;
 use crate::schema::system::SystemSchemaError;
+use crate::schema::SchemaId;
 
 use super::error::KeyGroupError;
 use super::membership_request::MembershipRequestView;
@@ -98,7 +99,12 @@ impl TryFrom<Document> for MembershipView {
     type Error = SystemSchemaError;
 
     fn try_from(document: Document) -> Result<Self, Self::Error> {
-        // @TODO: validate that document view has the right schema
+        if document.schema() != &SchemaId::KeyGroupMembership {
+            return Err(SystemSchemaError::UnexpectedSchema(
+                SchemaId::KeyGroupMembership,
+                document.schema().clone(),
+            ));
+        }
         let request = match document.view().get("request") {
             Some(OperationValue::PinnedRelation(value)) => Ok(value.view_id()),
             Some(op) => Err(SystemSchemaError::InvalidField(

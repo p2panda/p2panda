@@ -3,6 +3,7 @@
 use thiserror::Error;
 
 use crate::operation::OperationValue;
+use crate::schema::SchemaId;
 
 /// Custom error types for system schema views.
 #[derive(Error, Debug)]
@@ -18,4 +19,8 @@ pub enum SystemSchemaError {
     /// Invalid field type found.
     #[error("invalid field type")]
     InvalidFieldType(#[from] crate::schema::FieldTypeError),
+
+    /// A different schema was expected when parsing.
+    #[error("expected schema {0:?} got {1:?}")]
+    UnexpectedSchema(SchemaId, SchemaId),
 }
