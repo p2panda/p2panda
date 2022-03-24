@@ -23,7 +23,7 @@ pub trait AsStorageEntry:
     type AsStorageEntryError: Debug;
 
     /// Return the encoded entry.
-    fn entry_encoded(&self) -> EntrySigned;
+    fn entry_signed(&self) -> EntrySigned;
 
     /// Returns the optional encoded operation.
     fn operation_encoded(&self) -> Option<OperationEncoded>;
@@ -31,7 +31,7 @@ pub trait AsStorageEntry:
     /// Returns the decoded operation.
     fn entry_decoded(&self) -> Entry {
         // Unwrapping as validation occurs in `EntryWithOperation`.
-        decode_entry(&self.entry_encoded(), self.operation_encoded().as_ref()).unwrap()
+        decode_entry(&self.entry_signed(), self.operation_encoded().as_ref()).unwrap()
     }
 }
 

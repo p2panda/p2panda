@@ -52,7 +52,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         let entry_skiplink_hash = if is_lipmaa_required(next_seq_num.as_u64()) {
             let skiplink_entry = match self
                 .entry_at_seq_num(
-                    &entry.entry_encoded().author(),
+                    &entry.entry_signed().author(),
                     decoded_entry.log_id(),
                     &skiplink_seq_num,
                 )
@@ -61,7 +61,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
                 Some(entry) => Ok(entry),
                 None => Err(EntryStorageError::SkiplinkMissing),
             }?;
-            Ok(Some(skiplink_entry.entry_encoded().hash()))
+            Ok(Some(skiplink_entry.entry_signed().hash()))
         } else {
             Ok(None)
         }?;
@@ -111,7 +111,7 @@ pub mod tests {
             let entry = entries.iter().find(|entry| {
                 let decoded_entry = entry.entry_decoded();
 
-                entry.entry_encoded().author() == *author
+                entry.entry_signed().author() == *author
                     && decoded_entry.log_id() == log_id
                     && decoded_entry.seq_num() == seq_num
             });
@@ -130,7 +130,7 @@ pub mod tests {
             let latest_entry = entries
                 .iter()
                 .filter(|entry| {
-                    entry.entry_encoded().author() == *author
+                    entry.entry_signed().author() == *author
                         && entry.entry_decoded().log_id() == log_id
                 })
                 .max_by_key(|entry| entry.entry_decoded().seq_num().as_u64());
@@ -173,7 +173,7 @@ pub mod tests {
         // Insert an entry into the store.
         assert!(store.insert_entry(storage_entry.clone()).await.is_ok());
 
-        let author = storage_entry.entry_encoded().author();
+        let author = storage_entry.entry_signed().author();
 
         // Get an entry at a specific seq number from an authors log.
         let entry_at_seq_num = store
@@ -198,7 +198,7 @@ pub mod tests {
 
         let storage_entry = StorageEntry::new(entry_signed_encoded, operation_encoded);
 
-        let author = storage_entry.entry_encoded().author();
+        let author = storage_entry.entry_signed().author();
 
         // Before an entry is inserted the latest entry should be none.
         assert!(store

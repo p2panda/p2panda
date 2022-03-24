@@ -126,9 +126,9 @@ impl TryInto<Log> for StorageLog {
 pub struct StorageEntry(String);
 
 impl StorageEntry {
-    pub fn new(entry_encoded: EntrySigned, operation_encoded: OperationEncoded) -> Self {
+    pub fn new(entry_signed: EntrySigned, operation_encoded: OperationEncoded) -> Self {
         // Concat all values
-        let log_string = format!("{}-{}", entry_encoded.as_str(), operation_encoded.as_str());
+        let log_string = format!("{}-{}", entry_signed.as_str(), operation_encoded.as_str());
 
         Self(log_string)
     }
@@ -138,7 +138,7 @@ impl StorageEntry {
 impl AsStorageEntry for StorageEntry {
     type AsStorageEntryError = EntryStorageError;
 
-    fn entry_encoded(&self) -> EntrySigned {
+    fn entry_signed(&self) -> EntrySigned {
         let params: Vec<&str> = self.0.split('-').collect();
         EntrySigned::new(params[0]).unwrap()
     }
@@ -153,7 +153,7 @@ impl AsStorageEntry for StorageEntry {
 impl From<EntryWithOperation> for StorageEntry {
     fn from(entry: EntryWithOperation) -> Self {
         StorageEntry::new(
-            entry.entry_encoded().to_owned(),
+            entry.entry_signed().to_owned(),
             entry.operation_encoded().to_owned(),
         )
     }
@@ -164,7 +164,7 @@ impl TryInto<EntryWithOperation> for StorageEntry {
     type Error = ValidationError;
 
     fn try_into(self) -> Result<EntryWithOperation, Self::Error> {
-        EntryWithOperation::new(&self.entry_encoded(), &self.operation_encoded().unwrap())
+        EntryWithOperation::new(&self.entry_signed(), &self.operation_encoded().unwrap())
     }
 }
 
@@ -175,12 +175,12 @@ impl TryInto<EntryWithOperation> for PublishEntryRequest {
     type Error = ValidationError;
 
     fn try_into(self) -> Result<EntryWithOperation, Self::Error> {
-        EntryWithOperation::new(self.entry_encoded(), self.operation_encoded())
+        EntryWithOperation::new(self.entry_signed(), self.operation_encoded())
     }
 }
 
 impl AsPublishEntryRequest for PublishEntryRequest {
-    fn entry_encoded(&self) -> &EntrySigned {
+    fn entry_signed(&self) -> &EntrySigned {
         &self.0
     }
 
@@ -295,7 +295,7 @@ pub fn test_db(
         let backlink = db_entries
             .get(seq_num.as_u64() as usize - 2)
             .unwrap()
-            .entry_encoded()
+            .entry_signed()
             .hash();
 
         if SKIPLINK_ENTRIES.contains(&seq_num.as_u64()) {
@@ -304,7 +304,7 @@ pub fn test_db(
                 db_entries
                     .get(skiplink_seq_num.as_u64() as usize - 1)
                     .unwrap()
-                    .entry_encoded()
+                    .entry_signed()
                     .hash(),
             );
         };
@@ -343,7 +343,7 @@ async fn test_the_test_db(test_db: SimplestStorageProvider) {
         if seq_num != 1 {
             expected_backlink_hash = entries
                 .get(seq_num - 2)
-                .map(|backlink_entry| backlink_entry.entry_encoded().hash());
+                .map(|backlink_entry| backlink_entry.entry_signed().hash());
         }
         assert_eq!(
             expected_backlink_hash,
@@ -365,7 +365,7 @@ async fn test_the_test_db(test_db: SimplestStorageProvider) {
                 .unwrap()
                 .clone();
 
-            expected_skiplink_hash = Some(skiplink_entry.entry_encoded().hash());
+            expected_skiplink_hash = Some(skiplink_entry.entry_signed().hash());
         };
 
         assert_eq!(
@@ -394,7 +394,7 @@ async fn test_the_test_data_conversions(test_db: SimplestStorageProvider) {
     assert!(storage_log_again.is_ok());
 
     let publish_entry_request = PublishEntryRequest(
-        storage_entry.entry_encoded(),
+        storage_entry.entry_signed(),
         storage_entry.operation_encoded().unwrap(),
     );
 

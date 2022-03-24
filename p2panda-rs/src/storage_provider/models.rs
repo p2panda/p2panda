@@ -29,7 +29,7 @@ impl EntryWithOperation {
     }
 
     /// Returns a reference to the encoded entry.
-    pub fn entry_encoded(&self) -> &EntrySigned {
+    pub fn entry_signed(&self) -> &EntrySigned {
         &self.0
     }
 
@@ -43,9 +43,9 @@ impl Validate for EntryWithOperation {
     type Error = ValidationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        self.entry_encoded().validate()?;
+        self.entry_signed().validate()?;
         self.operation_encoded().validate()?;
-        decode_entry(self.entry_encoded(), Some(self.operation_encoded()))?;
+        decode_entry(self.entry_signed(), Some(self.operation_encoded()))?;
         Ok(())
     }
 }

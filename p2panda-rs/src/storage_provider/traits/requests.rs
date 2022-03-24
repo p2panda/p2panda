@@ -34,7 +34,7 @@ pub trait AsEntryArgsRequest {
 /// Request body of `panda_publishEntry`.
 pub trait AsPublishEntryRequest {
     /// Returns the EntrySigned parameter
-    fn entry_encoded(&self) -> &EntrySigned;
+    fn entry_signed(&self) -> &EntrySigned;
 
     /// Returns the OperationEncoded parameter
     ///
