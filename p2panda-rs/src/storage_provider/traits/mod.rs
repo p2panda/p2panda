@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Traits used when implementing a custom storage provider for a p2panda client or node.
-
 mod entry_store;
 mod log_store;
 mod models;

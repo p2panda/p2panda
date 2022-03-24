@@ -14,7 +14,6 @@ use crate::operation::{Operation, OperationEncoded};
 use crate::schema::SchemaId;
 use crate::storage_provider::errors::{EntryStorageError, LogStorageError, ValidationError};
 use crate::storage_provider::models::{EntryWithOperation, Log};
-
 use crate::storage_provider::traits::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
     AsStorageEntry, AsStorageLog,

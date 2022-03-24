@@ -41,7 +41,7 @@ pub trait AsStorageEntry:
 /// represents a log as it is stored in the database. This trait defines methods for
 /// reading values from the log.
 pub trait AsStorageLog: Sized + Send + Sync + TryInto<Log> + From<Log> {
-    /// Constructor method for struts
+    /// Constructor method for structs.
     fn new(log: Log) -> Self;
 
     /// Returns the Author of this log.

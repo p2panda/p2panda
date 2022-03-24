@@ -213,10 +213,11 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
 #[cfg(test)]
 pub mod tests {
-    use async_trait::async_trait;
-    use rstest::rstest;
     use std::convert::TryFrom;
     use std::sync::{Arc, Mutex};
+
+    use async_trait::async_trait;
+    use rstest::rstest;
 
     use crate::document::DocumentId;
     use crate::entry::{sign_and_encode, Entry, LogId};
