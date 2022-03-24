@@ -29,15 +29,11 @@ impl Owner {
             }
         }
 
+        // Collect `Owner` field values
         let owners: Vec<Owner> = document
             .view()
             .iter()
-            // Take document view field values
-            .map(|(_, value)| value)
-            // Map to `Option<Owner>`
-            .map(get_owner_values)
-            // Unwrap
-            .flatten()
+            .filter_map(|(_, value)| get_owner_values(value))
             .collect();
 
         match owners.len() {

@@ -58,10 +58,9 @@ impl TryFrom<PublicKey> for Author {
     }
 }
 
-/// Convert a full [`KeyPair`] instance into an `Author`.
 impl From<KeyPair> for Author {
     fn from(key_pair: KeyPair) -> Self {
-        Self::try_from(key_pair.public_key().clone()).unwrap()
+        Self::try_from(key_pair.public_key().to_owned()).unwrap()
     }
 }
 
