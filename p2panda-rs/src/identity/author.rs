@@ -99,6 +99,11 @@ impl Validate for Author {
 mod tests {
     use std::convert::TryFrom;
 
+    use rstest::rstest;
+
+    use crate::identity::KeyPair;
+    use crate::test_utils::fixtures::key_pair;
+
     use super::Author;
 
     #[test]
@@ -115,5 +120,12 @@ mod tests {
         let author_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
         let author = Author::try_from(author_str).unwrap();
         assert_eq!(author_str, author.as_str());
+    }
+
+    #[rstest]
+    fn convert_key_pair(key_pair: KeyPair) {
+        let expected = hex::encode(key_pair.public_key().to_bytes());
+        let author: Author = key_pair.into();
+        assert_eq!(author.as_str(), expected)
     }
 }
