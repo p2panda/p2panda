@@ -17,7 +17,8 @@ use crate::Validate;
 ///
 /// Document view ids are considered equal if they contain the same set of operation ids,
 /// independent of their order. Serialised document view ids always contain sorted operation ids
-/// and deserialisation of a value will fail if this does not hold.
+/// and deserialisation of a value will fail if this does not hold. This follows p2panda's
+/// requirement that all serialised arrays must be sorted and leads to deterministic serialisation.
 ///
 /// ```text
 /// The document with the following operation graph has the id "2fa.." and six different document
@@ -246,8 +247,11 @@ mod tests {
         assert_eq!(view_id_1, view_id_2);
     }
 
-    #[test]
-    fn deserialize_unsorted_view_id() {
+    #[rstest]
+    fn deserialize_unsorted_view_id(
+        #[from(random_operation_id)] operation_id_1: OperationId,
+        #[from(random_operation_id)] operation_id_2: OperationId,
+    ) {
         // Unsorted operation ids in document view id array:
         let unsorted_hashes = [
             "0020c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa72ec8",
@@ -267,6 +271,20 @@ mod tests {
         );
 
         assert_eq!(result.unwrap_err().to_string(), expected_result.to_string());
+
+        // However, unsorted values in an id are sorted during serialisation
+        let mut reversed_ids = vec![operation_id_1, operation_id_2];
+        reversed_ids.sort();
+        reversed_ids.reverse();
+        let view_id_unsorted = DocumentViewId::new(&reversed_ids);
+
+        let mut cbor_bytes = Vec::new();
+        ciborium::ser::into_writer(&view_id_unsorted, &mut cbor_bytes).unwrap();
+
+        let result: Result<DocumentViewId, ciborium::de::Error<std::io::Error>> =
+            ciborium::de::from_reader(&cbor_bytes[..]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), view_id_unsorted);
     }
 
     #[test]
