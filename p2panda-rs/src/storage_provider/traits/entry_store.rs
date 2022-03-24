@@ -42,7 +42,8 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         &self,
         entry: &StorageEntry,
     ) -> Result<Option<Hash>, EntryStorageError> {
-        let next_seq_num = entry.entry_decoded().seq_num().clone().next().unwrap();
+        let decoded_entry = entry.entry_decoded();
+        let next_seq_num = decoded_entry.seq_num().clone().next().unwrap();
 
         // Unwrap as we know that an skiplink exists as soon as previous entry is given
         let skiplink_seq_num = next_seq_num.skiplink_seq_num().unwrap();
@@ -52,7 +53,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
             let skiplink_entry = match self
                 .entry_at_seq_num(
                     &entry.entry_encoded().author(),
-                    entry.entry_decoded().log_id(),
+                    decoded_entry.log_id(),
                     &skiplink_seq_num,
                 )
                 .await?
@@ -108,9 +109,11 @@ pub mod tests {
             let entries = self.entries.lock().unwrap();
 
             let entry = entries.iter().find(|entry| {
+                let decoded_entry = entry.entry_decoded();
+
                 entry.entry_encoded().author() == *author
-                    && entry.entry_decoded().log_id() == log_id
-                    && entry.entry_decoded().seq_num() == seq_num
+                    && decoded_entry.log_id() == log_id
+                    && decoded_entry.seq_num() == seq_num
             });
 
             Ok(entry.cloned())
