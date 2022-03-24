@@ -11,7 +11,7 @@ use super::membership_request::MembershipRequestView;
 use super::Owner;
 
 /// Memership in a key group.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Membership {
     view_id: DocumentViewId,
     member: Owner,

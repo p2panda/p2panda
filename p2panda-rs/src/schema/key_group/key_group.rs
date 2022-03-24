@@ -14,7 +14,7 @@ use super::error::KeyGroupError;
 use super::{Membership, MembershipRequestView, MembershipView, Owner};
 
 /// Represents a group of key pairs that can be assigned shared ownership of documents.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct KeyGroup {
     id: DocumentId,
     name: String,
@@ -53,8 +53,7 @@ impl KeyGroup {
 
         let mut members: Vec<Membership> = Vec::new();
         for response in responses {
-            match requests.get(response.request())
-            {
+            match requests.get(response.request()) {
                 Some(request) => {
                     members.push(Membership::new(request.clone(), response.clone())?);
                 }
@@ -72,28 +71,34 @@ impl KeyGroup {
         members: &[Membership],
         member_key_groups: &[KeyGroup],
     ) -> Result<KeyGroup, KeyGroupError> {
-        // Collect all (author, membership) pairs in this pool, including duplicate author values.
-        let mut pool = vec![];
+        // Collect all (author, membership) pairs from `members` parameter, including duplicate
+        // author values.
+        let mut member_pool = vec![];
         for membership in members {
             match membership.member() {
                 // Simple case: for single key memberships just add that key to the pool.
                 Owner::Author(value) => {
-                    pool.push((value, membership));
+                    member_pool.push((value, membership));
                 }
                 // When a key group is a member, recursively add those key group's members to the
-                // pool, assigned to one collective membership
+                // pool, assigned to a shared `membership`
                 Owner::KeyGroup(value) => {
                     match member_key_groups
                         .iter()
                         .find(|key_group| key_group.id() == value)
                     {
-                        Some(key_group) => {
-                            for (author, membership) in key_group.members() {
-                                pool.push((author, membership));
+                        Some(sub_key_group) => {
+                            for (author, sub_membership) in sub_key_group.members() {
+                                if sub_membership.accepted() {
+                                    member_pool.push((author, membership));
+                                }
                             }
                         }
                         None => {
-                            return Err(KeyGroupError::MissingMemberKeyGroup(format!("{:?}", value)));
+                            return Err(KeyGroupError::MissingMemberKeyGroup(format!(
+                                "{:?}",
+                                value
+                            )));
                         }
                     };
                 }
@@ -104,7 +109,7 @@ impl KeyGroup {
         // takes precedence here. At the moment that is just memberships that are accepted, vs not
         // accepted.
         let mut member_map: HashMap<Author, Membership> = HashMap::new();
-        for (author, membership) in pool {
+        for (author, membership) in member_pool {
             if let Some(value) = member_map.get(author) {
                 if value.accepted() {
                     continue;
@@ -233,7 +238,7 @@ mod test {
     use crate::document::{DocumentId, DocumentViewId};
     use crate::identity::{Author, KeyPair};
     use crate::operation::{OperationValue, PinnedRelation, Relation};
-    use crate::schema::key_group::Membership;
+    use crate::schema::key_group::{Membership, Owner};
     use crate::test_utils::fixtures::{create_operation, fields, random_key_pair};
     use crate::test_utils::mocks::{send_to_node, Client, Node};
     use crate::test_utils::utils::update_operation;
@@ -262,10 +267,7 @@ mod test {
         let view = KeyGroupView::try_from(document).unwrap();
         let members: Vec<Membership> = vec![];
         assert_eq!(
-            format!(
-                "{}",
-                KeyGroup::new(&view, &members, &[]).unwrap_err()
-            ),
+            format!("{}", KeyGroup::new(&view, &members, &[]).unwrap_err()),
             "key group must have at least one member"
         );
     }
@@ -334,16 +336,9 @@ mod test {
         .unwrap();
         let frog_response = node.get_document(&frog_membership_doc_id);
 
-        let key_group = KeyGroup::new_from_documents(
-            key_group_id.clone().into(),
-            &[
-                node.get_document(&key_group_id),
-                frog_request.clone(),
-                frog_response.clone(),
-            ],
-            &[],
-        )
-        .unwrap();
+        let key_group =
+            KeyGroup::new_from_documents(key_group_id.clone().into(), &node.get_documents(), &[])
+                .unwrap();
 
         assert!(key_group.is_member(&frog_author));
         let expected_key_group_id = key_group_id.as_str().parse::<DocumentId>().unwrap();
@@ -367,17 +362,9 @@ mod test {
         let rabbit_request = node.get_document(&rabbit_request_doc_id);
 
         // But rabbit is not a member yet
-        let key_group = KeyGroup::new_from_documents(
-            key_group_id.clone().into(),
-            &[
-                node.get_document(&key_group_id),
-                frog_request.clone(),
-                frog_response.clone(),
-                rabbit_request.clone(),
-            ],
-            &[],
-        )
-        .unwrap();
+        let key_group =
+            KeyGroup::new_from_documents(key_group_id.clone().into(), &node.get_documents(), &[])
+                .unwrap();
 
         assert!(!key_group.is_member(&rabbit_author));
 
@@ -402,18 +389,9 @@ mod test {
 
         let rabbit_response = node.get_document(&rabbit_membership_doc_id);
 
-        let key_group = KeyGroup::new_from_documents(
-            key_group_id.clone().into(),
-            &[
-                node.get_document(&key_group_id),
-                frog_request.clone(),
-                frog_response,
-                rabbit_request.clone(),
-                rabbit_response.clone(),
-            ],
-            &[],
-        )
-        .unwrap();
+        let key_group =
+            KeyGroup::new_from_documents(key_group_id.clone().into(), &node.get_documents(), &[])
+                .unwrap();
 
         assert!(key_group.is_member(&rabbit_author));
 
@@ -431,19 +409,128 @@ mod test {
 
         let frog_response = node.get_document(&frog_membership_doc_id);
 
-        let key_group = KeyGroup::new_from_documents(
-            key_group_id.clone().into(),
-            &[
-                node.get_document(&key_group_id),
-                frog_request,
-                frog_response,
-                rabbit_request,
-                rabbit_response,
-            ],
-            &[],
+        let key_group =
+            KeyGroup::new_from_documents(key_group_id.clone().into(), &node.get_documents(), &[])
+                .unwrap();
+
+        assert!(!key_group.is_member(&frog_author));
+
+        // So Frog makes a new key group for blueberry picking that has the whole strawberry
+        // picking gang in it.
+
+        let (blueberry_id, _) = send_to_node(
+            &mut node,
+            &frog,
+            &create_operation(
+                "key_group_v1".parse().unwrap(),
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Blueberry Picking Gang".to_string()),
+                )]),
+            ),
         )
         .unwrap();
 
-        assert!(!key_group.is_member(&frog_author));
+        let (frog_blueberry_request_doc_id, _) = send_to_node(
+            &mut node,
+            &frog,
+            &create_operation(
+                "key_group_membership_request_v1".parse().unwrap(),
+                fields(vec![(
+                    "key_group",
+                    OperationValue::Relation(Relation::new(DocumentId::new(
+                        blueberry_id.clone().into(),
+                    ))),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let frog_blueberry_request = node.get_document(&frog_blueberry_request_doc_id);
+
+        let (frog_blueberry_membership_doc_id, _) = send_to_node(
+            &mut node,
+            &frog,
+            &create_operation(
+                "key_group_membership_v1".parse().unwrap(),
+                fields(vec![
+                    (
+                        "request",
+                        OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::from(
+                            frog_blueberry_request_doc_id,
+                        ))),
+                    ),
+                    ("accepted", OperationValue::Boolean(true)),
+                ]),
+            ),
+        )
+        .unwrap();
+
+        let frog_blueberry_response = node.get_document(&frog_blueberry_membership_doc_id);
+
+        // Rabbit concedes and asks for the whole strawberry picking gang to become members
+        let (spg_blueberry_request_doc_id, _) = send_to_node(
+            &mut node,
+            &rabbit,
+            &create_operation(
+                "key_group_membership_request_v1".parse().unwrap(),
+                fields(vec![
+                    (
+                        "key_group",
+                        OperationValue::Relation(Relation::new(key_group.id().clone())),
+                    ),
+                    (
+                        "member",
+                        OperationValue::Owner(Relation::new(key_group.id().clone())),
+                    ),
+                ]),
+            ),
+        )
+        .unwrap();
+
+        let spg_blueberry_request = node.get_document(&spg_blueberry_request_doc_id);
+
+        let (spg_blueberry_response_doc_id, _) = send_to_node(
+            &mut node,
+            &frog,
+            &create_operation(
+                "key_group_membership_v1".parse().unwrap(),
+                fields(vec![
+                    (
+                        "request",
+                        OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::from(
+                            spg_blueberry_request_doc_id,
+                        ))),
+                    ),
+                    ("accepted", OperationValue::Boolean(true)),
+                ]),
+            ),
+        )
+        .unwrap();
+        let spg_blueberry_response = node.get_document(&spg_blueberry_response_doc_id);
+
+        let blueberry_picking_gang = KeyGroup::new_from_documents(
+            blueberry_id.into(),
+            &node.get_documents(),
+            &[key_group.clone()],
+        )
+        .unwrap();
+
+        // Rabbit is a member by way of the Strawberry Picking Gang
+        assert_eq!(
+            blueberry_picking_gang.get(&rabbit_author).unwrap().member(),
+            &Owner::KeyGroup(key_group.id().clone()),
+            "{:?}",
+            blueberry_picking_gang.get(&rabbit_author)
+        );
+
+        // Frog is not a member as part of the Strawberry Picking Gang because she added herself
+        // directly to the group and her membership in the SPG is void.
+        assert_eq!(
+            blueberry_picking_gang.get(&frog_author).unwrap().member(),
+            &Owner::Author(frog_author.clone()),
+            "{:?}",
+            blueberry_picking_gang.get(&frog_author)
+        );
     }
 }
