@@ -15,10 +15,10 @@ use crate::storage_provider::traits::AsStorageEntry;
 /// the required methods for inserting and querying entries from storage.
 #[async_trait]
 pub trait EntryStore<StorageEntry: AsStorageEntry> {
-    /// Insert an entry into storage
+    /// Insert an entry into storage.
     async fn insert_entry(&self, value: StorageEntry) -> Result<bool, EntryStorageError>;
 
-    /// Returns entry at sequence position within an author's log
+    /// Returns entry at sequence position within an author's log.
     async fn entry_at_seq_num(
         &self,
         author: &Author,
@@ -26,18 +26,18 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         seq_num: &SeqNum,
     ) -> Result<Option<StorageEntry>, EntryStorageError>;
 
-    /// Returns the latest Bamboo entry of an author's log
+    /// Returns the latest Bamboo entry of an author's log.
     async fn latest_entry(
         &self,
         author: &Author,
         log_id: &LogId,
     ) -> Result<Option<StorageEntry>, EntryStorageError>;
 
-    /// Return vector of all entries of a given schema
+    /// Return vector of all entries of a given schema.
     async fn by_schema(&self, schema: &SchemaId) -> Result<Vec<StorageEntry>, EntryStorageError>;
 
     /// Determine skiplink entry hash ("lipmaa"-link) for entry in this log, return `None` when no
-    /// skiplink is required for the next entry
+    /// skiplink is required for the next entry.
     async fn determine_skiplink(
         &self,
         entry: &StorageEntry,
