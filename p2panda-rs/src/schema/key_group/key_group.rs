@@ -23,22 +23,23 @@ pub struct KeyGroup {
 
 impl KeyGroup {
     /// Create a key group from documents of itself, its memberships and membership requests.
-    pub fn new(
+    pub fn new_from_documents(
         key_group_id: DocumentId,
         documents: &[Document],
         member_key_groups: &[KeyGroup],
     ) -> Result<KeyGroup, KeyGroupError> {
         let mut key_group = None;
-        let mut requests = vec![];
-        let mut responses = vec![];
+        let mut requests = HashMap::new();
+        let mut responses = Vec::new();
 
         for document in documents {
             match document.schema() {
                 SchemaId::KeyGroupMembership => {
-                    responses.push(MembershipView::try_from(document.clone())?)
+                    responses.push(MembershipView::try_from(document.clone())?);
                 }
                 SchemaId::KeyGroupMembershipRequest => {
-                    requests.push(MembershipRequestView::try_from(document.clone())?)
+                    let request = MembershipRequestView::try_from(document.clone())?;
+                    requests.insert(request.view_id().clone(), request);
                 }
                 _ => (),
             }
@@ -52,9 +53,7 @@ impl KeyGroup {
 
         let mut members: Vec<Membership> = Vec::new();
         for response in responses {
-            match requests
-                .iter()
-                .find(|request| request.view_id() == response.request())
+            match requests.get(response.request())
             {
                 Some(request) => {
                     members.push(Membership::new(request.clone(), response.clone())?);
@@ -64,22 +63,25 @@ impl KeyGroup {
                 }
             };
         }
-        KeyGroup::new_from_members(&key_group.unwrap(), &members, member_key_groups)
+        KeyGroup::new(&key_group.unwrap(), &members, member_key_groups)
     }
 
     /// Create a key group from a key group view and a set of memberships.
-    pub fn new_from_members(
+    pub fn new(
         key_group: &KeyGroupView,
         members: &[Membership],
         member_key_groups: &[KeyGroup],
     ) -> Result<KeyGroup, KeyGroupError> {
-        let mut mem = vec![];
+        // Collect all (author, membership) pairs in this pool, including duplicate author values.
+        let mut pool = vec![];
         for membership in members {
             match membership.member() {
+                // Simple case: for single key memberships just add that key to the pool.
                 Owner::Author(value) => {
-                    // member_map.insert(value.clone(), membership.clone())
-                    mem.push((value, membership));
+                    pool.push((value, membership));
                 }
+                // When a key group is a member, recursively add those key group's members to the
+                // pool, assigned to one collective membership
                 Owner::KeyGroup(value) => {
                     match member_key_groups
                         .iter()
@@ -87,20 +89,22 @@ impl KeyGroup {
                     {
                         Some(key_group) => {
                             for (author, membership) in key_group.members() {
-                                // member_map.insert(author.clone(), membership.clone())
-                                mem.push((author, membership));
+                                pool.push((author, membership));
                             }
                         }
                         None => {
-                            return Err(KeyGroupError::InvalidMembership("oops".to_string()));
+                            return Err(KeyGroupError::MissingMemberKeyGroup(format!("{:?}", value)));
                         }
                     };
                 }
             };
         }
 
+        // Deduplicate so we have one membership per public key. A membership with more rights
+        // takes precedence here. At the moment that is just memberships that are accepted, vs not
+        // accepted.
         let mut member_map: HashMap<Author, Membership> = HashMap::new();
-        for (author, membership) in mem {
+        for (author, membership) in pool {
             if let Some(value) = member_map.get(author) {
                 if value.accepted() {
                     continue;
@@ -187,7 +191,7 @@ impl KeyGroupView {
 }
 
 impl TryFrom<Document> for KeyGroupView {
-    type Error = SystemSchemaError;
+    type Error = KeyGroupError;
 
     fn try_from(document: Document) -> Result<Self, Self::Error> {
         let name = match document.view().get("name") {
@@ -199,11 +203,24 @@ impl TryFrom<Document> for KeyGroupView {
             None => Err(SystemSchemaError::MissingField("name".to_string())),
         }?;
 
-        Ok(Self {
+        let view = Self {
             id: document.id().clone(),
             view_id: document.view().id().clone(),
             name: name.clone(),
-        })
+        };
+        view.validate()?;
+        Ok(view)
+    }
+}
+
+impl Validate for KeyGroupView {
+    type Error = KeyGroupError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        if self.name.is_empty() {
+            return Err(KeyGroupError::InvalidName(self.name.clone()));
+        }
+        Ok(())
     }
 }
 
@@ -247,7 +264,7 @@ mod test {
         assert_eq!(
             format!(
                 "{}",
-                KeyGroup::new_from_members(&view, &members, &[]).unwrap_err()
+                KeyGroup::new(&view, &members, &[]).unwrap_err()
             ),
             "key group must have at least one member"
         );
@@ -317,7 +334,7 @@ mod test {
         .unwrap();
         let frog_response = node.get_document(&frog_membership_doc_id);
 
-        let key_group = KeyGroup::new(
+        let key_group = KeyGroup::new_from_documents(
             key_group_id.clone().into(),
             &[
                 node.get_document(&key_group_id),
@@ -350,7 +367,7 @@ mod test {
         let rabbit_request = node.get_document(&rabbit_request_doc_id);
 
         // But rabbit is not a member yet
-        let key_group = KeyGroup::new(
+        let key_group = KeyGroup::new_from_documents(
             key_group_id.clone().into(),
             &[
                 node.get_document(&key_group_id),
@@ -385,7 +402,7 @@ mod test {
 
         let rabbit_response = node.get_document(&rabbit_membership_doc_id);
 
-        let key_group = KeyGroup::new(
+        let key_group = KeyGroup::new_from_documents(
             key_group_id.clone().into(),
             &[
                 node.get_document(&key_group_id),
@@ -414,7 +431,7 @@ mod test {
 
         let frog_response = node.get_document(&frog_membership_doc_id);
 
-        let key_group = KeyGroup::new(
+        let key_group = KeyGroup::new_from_documents(
             key_group_id.clone().into(),
             &[
                 node.get_document(&key_group_id),

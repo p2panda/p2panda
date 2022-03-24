@@ -28,7 +28,7 @@ use crate::Validate;
 ///                         \
 ///                          \__ [UPDATE] (Hash: "eff..")
 /// ```
-#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub struct DocumentViewId(Vec<OperationId>);
 
 impl DocumentViewId {

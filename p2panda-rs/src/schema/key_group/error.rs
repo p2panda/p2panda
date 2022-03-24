@@ -14,6 +14,10 @@ pub enum KeyGroupError {
     #[error("invalid membership: {0}")]
     InvalidMembership(String),
 
+    /// Key groups must have a name.
+    #[error("invalid key group name '{0}'")]
+    InvalidName(String),
+
     /// Authorised documents must not have more than one owner.
     #[error("unexpected multiple owner fields in document {0}")]
     MultipleOwners(String),
@@ -21,6 +25,10 @@ pub enum KeyGroupError {
     /// Key group instances must have members.
     #[error("key group must have at least one member")]
     NoMemberships,
+
+    /// All key groups that are members must be passed to the [`KeyGroup`] constructor.
+    #[error("key group is a member but was not included in parameters: {0}")]
+    MissingMemberKeyGroup(String),
 
     /// Error from parsing system schema.
     #[error(transparent)]
