@@ -13,6 +13,8 @@ mod key_group;
 mod membership;
 mod membership_request;
 mod owner;
+#[cfg(test)]
+mod tests;
 
 pub use error::KeyGroupError;
 pub use key_group::KeyGroup;
