@@ -49,7 +49,7 @@
 //! referring to a user-profile you probably want to always get the _latest_ version.
 use serde::{Deserialize, Serialize};
 
-use crate::document::{DocumentId, DocumentViewId, DocumentViewIdError};
+use crate::document::{DocumentId, DocumentViewId};
 use crate::hash::HashError;
 use crate::Validate;
 
@@ -91,7 +91,7 @@ impl PinnedRelation {
 }
 
 impl Validate for PinnedRelation {
-    type Error = DocumentViewIdError;
+    type Error = HashError;
 
     fn validate(&self) -> Result<(), Self::Error> {
         self.0.validate()
@@ -163,7 +163,7 @@ impl PinnedRelationList {
 }
 
 impl Validate for PinnedRelationList {
-    type Error = DocumentViewIdError;
+    type Error = HashError;
 
     fn validate(&self) -> Result<(), Self::Error> {
         for document_view in &self.0 {
@@ -218,7 +218,7 @@ mod tests {
 
     #[rstest]
     fn iterates(#[from(random_hash)] hash_1: Hash, #[from(random_hash)] hash_2: Hash) {
-        let pinned_relation = PinnedRelation::new(DocumentViewId::new(vec![
+        let pinned_relation = PinnedRelation::new(DocumentViewId::new(&[
             hash_1.clone().into(),
             hash_2.clone().into(),
         ]));
