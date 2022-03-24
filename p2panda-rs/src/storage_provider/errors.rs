@@ -49,8 +49,7 @@ pub enum ValidationError {
 /// `LogStorage` errors.
 #[derive(thiserror::Error, Debug)]
 pub enum LogStorageError {
-    /// Catch all error which implementers can use for passing their own errors
-    /// up the chain.
+    /// Catch all error which implementers can use for passing their own errors up the chain.
     #[error("Error occured during `LogStorage` request in storage provider: {0}")]
     Custom(String),
 }
@@ -58,8 +57,7 @@ pub enum LogStorageError {
 /// `EntryStorage` errors.
 #[derive(thiserror::Error, Debug)]
 pub enum EntryStorageError {
-    /// Catch all error which implementers can use for passing their own errors
-    /// up the chain.
+    /// Catch all error which implementers can use for passing their own errors up the chain.
     #[error("Error occured during `EntryStorage` request in storage provider: {0}")]
     Custom(String),
 
@@ -68,7 +66,7 @@ pub enum EntryStorageError {
     SkiplinkMissing,
 }
 
-/// Errors which can occur in a call to `publish_entry()`
+/// Errors which can occur when publishing a new entry.
 #[derive(thiserror::Error, Debug)]
 #[allow(missing_copy_implementations, missing_docs)]
 pub enum PublishEntryError {
