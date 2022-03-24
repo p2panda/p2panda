@@ -37,8 +37,7 @@ impl Owner {
             // Map to `Option<Owner>`
             .map(get_owner_values)
             // Unwrap
-            .filter(|value| value.is_some())
-            .map(|value| value.unwrap())
+            .flatten()
             .collect();
 
         match owners.len() {
