@@ -13,7 +13,8 @@ use super::Owner;
 /// Memership in a key group.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Membership {
-    view_id: DocumentViewId,
+    response_view: Option<DocumentViewId>,
+    request_view: DocumentViewId,
     member: Owner,
     accepted: bool,
 }
@@ -24,24 +25,34 @@ impl Membership {
     /// Requires matching a membership request that matches the membership response's request field.
     pub fn new(
         request: MembershipRequestView,
-        response: MembershipView,
+        response: Option<MembershipView>,
     ) -> Result<Self, KeyGroupError> {
-        if response.request() != request.view_id() {
-            return Err(KeyGroupError::InvalidMembership(
-                "response doesn't reference supplied request".to_string(),
-            ));
+        match response {
+            Some(response) => {
+                if response.request() != request.view_id() {
+                    return Err(KeyGroupError::InvalidMembership(
+                        "response doesn't reference supplied request".to_string(),
+                    ));
+                }
+                Ok(Membership {
+                    request_view: request.view_id().clone(),
+                    response_view: Some(response.view_id().clone()),
+                    member: request.member().clone(),
+                    accepted: *response.accepted(),
+                })
+            }
+            None => Ok(Membership {
+                request_view: request.view_id().clone(),
+                response_view: None,
+                member: request.member().clone(),
+                accepted: false,
+            }),
         }
-
-        Ok(Membership {
-            view_id: response.view_id,
-            member: request.member().clone(),
-            accepted: response.accepted,
-        })
     }
 
     /// Access the membership's view id.
-    pub fn view_id(&self) -> &DocumentViewId {
-        &self.view_id
+    pub fn response_view_id(&self) -> &Option<DocumentViewId> {
+        &self.response_view
     }
 
     /// Access the [`Owner`] whose membership this describes.

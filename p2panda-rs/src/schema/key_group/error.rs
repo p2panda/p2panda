@@ -26,10 +26,6 @@ pub enum KeyGroupError {
     #[error("key group to be created not found among supplied documents")]
     MissingKeyGroupView,
 
-    /// Key group instances must have members.
-    #[error("key group must have at least one member")]
-    NoMemberships,
-
     /// All key groups that are members must be passed to the [`KeyGroup`] constructor.
     #[error("key group is a member but was not included in parameters: {0}")]
     MissingMemberKeyGroup(String),

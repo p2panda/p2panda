@@ -5,7 +5,7 @@ use std::convert::TryFrom;
 
 use crate::document::{Document, DocumentId, DocumentViewId};
 use crate::identity::Author;
-use crate::operation::OperationValue;
+use crate::operation::{Operation, OperationFields, OperationValue, PinnedRelation, Relation};
 use crate::schema::system::SystemSchemaError;
 use crate::schema::SchemaId;
 use crate::Validate;
@@ -60,15 +60,16 @@ impl KeyGroup {
 
         let mut members: Vec<Membership> = Vec::new();
         for response in responses {
-            match requests.get(response.request()) {
-                Some(request) => {
-                    members.push(Membership::new(request.clone(), response.clone())?);
-                }
-                None => {
-                    continue;
-                }
+            // Remove requests for which we have a response
+            if let Some(request) = requests.remove(response.request()) {
+                members.push(Membership::new(request.clone(), Some(response.clone()))?);
             };
         }
+
+        for request in requests.values() {
+            members.push(Membership::new(request.clone(), None)?);
+        }
+
         KeyGroup::new(&key_group.unwrap(), &members, member_key_groups)
     }
 
@@ -136,7 +137,6 @@ impl KeyGroup {
             members: member_map,
         };
 
-        key_group.validate()?;
         Ok(key_group)
     }
 
@@ -167,16 +167,63 @@ impl KeyGroup {
     pub fn get(&self, author: &Author) -> Option<&Membership> {
         self.members.get(author)
     }
-}
 
-impl Validate for KeyGroup {
-    type Error = KeyGroupError;
+    /// Make create operation for key group
+    pub fn create(name: &str) -> Operation {
+        let mut key_group_fields = OperationFields::new();
+        key_group_fields
+            .add("name", OperationValue::Text(name.to_string()))
+            .unwrap();
+        Operation::new_create(SchemaId::KeyGroup, key_group_fields).unwrap()
+    }
 
-    fn validate(&self) -> Result<(), Self::Error> {
-        if self.members.is_empty() {
-            return Err(KeyGroupError::NoMemberships);
+    /// Make create operation for membership requests
+    pub fn request_membership(&self, member: &Owner) -> Operation {
+        let mut request_fields = OperationFields::new();
+        request_fields
+            .add(
+                "key_group",
+                OperationValue::Relation(Relation::new(self.id().clone())),
+            )
+            .unwrap();
+        if let Owner::KeyGroup(kg_member) = member {
+            request_fields
+                .add(
+                    "member",
+                    OperationValue::Owner(Relation::new(kg_member.clone())),
+                )
+                .unwrap();
         }
-        Ok(())
+        Operation::new_create(SchemaId::KeyGroupMembershipRequest, request_fields).unwrap()
+    }
+
+    /// Make a new response for a membership request.
+    pub fn respond_to_request(request_view_id: &DocumentViewId, accepted: bool) -> Operation {
+        let mut response_fields = OperationFields::new();
+        response_fields
+            .add("accepted", OperationValue::Boolean(accepted))
+            .unwrap();
+        response_fields
+            .add(
+                "request",
+                OperationValue::PinnedRelation(PinnedRelation::new(request_view_id.clone())),
+            )
+            .unwrap();
+        Operation::new_create(SchemaId::KeyGroupMembership, response_fields).unwrap()
+    }
+
+    /// Update a membership given a previous response's view id.
+    pub fn update_membership(response_view_id: &DocumentViewId, accepted: bool) -> Operation {
+        let mut response_fields = OperationFields::new();
+        response_fields
+            .add("accepted", OperationValue::Boolean(accepted))
+            .unwrap();
+        Operation::new_update(
+            SchemaId::KeyGroupMembership,
+            response_view_id.graph_tips().to_vec(),
+            response_fields,
+        )
+        .unwrap()
     }
 }
 
@@ -243,46 +290,16 @@ impl Validate for KeyGroupView {
 
 #[cfg(test)]
 mod test {
-    use std::convert::TryFrom;
-
     use rstest::rstest;
 
     use crate::document::{DocumentId, DocumentViewId};
     use crate::identity::{Author, KeyPair};
-    use crate::operation::{OperationValue, PinnedRelation, Relation};
-    use crate::schema::key_group::{Membership, Owner};
-    use crate::test_utils::fixtures::{create_operation, fields, random_key_pair};
+
+    use crate::schema::key_group::Owner;
+    use crate::test_utils::fixtures::random_key_pair;
     use crate::test_utils::mocks::{send_to_node, Client, Node};
-    use crate::test_utils::utils::update_operation;
 
-    use super::{KeyGroup, KeyGroupView};
-
-    #[rstest]
-    fn no_members(random_key_pair: KeyPair) {
-        let frog = Client::new("frog".to_string(), random_key_pair);
-        let mut node = Node::new();
-
-        let (key_group_doc_id, _) = send_to_node(
-            &mut node,
-            &frog,
-            &create_operation(
-                "key_group_v1".parse().unwrap(),
-                fields(vec![(
-                    "name",
-                    OperationValue::Text("Strawberry Picking Gang".to_string()),
-                )]),
-            ),
-        )
-        .unwrap();
-
-        let document = node.get_document(&key_group_doc_id);
-        let view = KeyGroupView::try_from(document).unwrap();
-        let members: Vec<Membership> = vec![];
-        assert_eq!(
-            format!("{}", KeyGroup::new(&view, &members, &[]).unwrap_err()),
-            "key group must have at least one member"
-        );
-    }
+    use super::KeyGroup;
 
     #[rstest]
     fn key_group_creation(
@@ -298,56 +315,35 @@ mod test {
         let mut node = Node::new();
 
         // Frog creates the 'Strawberry Picking Gang' key group
-        let (key_group_id, _) = send_to_node(
+        let (create_hash, _) = send_to_node(
             &mut node,
             &frog,
-            &create_operation(
-                "key_group_v1".parse().unwrap(),
-                fields(vec![(
-                    "name",
-                    OperationValue::Text("Strawberry Picking Gang".to_string()),
-                )]),
-            ),
+            &KeyGroup::create("Strawberry Picking Gang"),
         )
         .unwrap();
+
+        let key_group_id: DocumentId = create_hash.into();
+
+        let key_group =
+            KeyGroup::new_from_documents(key_group_id.clone(), &node.get_documents(), &[]).unwrap();
 
         // ... and makes herself a member
         let (frog_request_doc_id, _) = send_to_node(
             &mut node,
             &frog,
-            &create_operation(
-                "key_group_membership_request_v1".parse().unwrap(),
-                fields(vec![(
-                    "key_group",
-                    OperationValue::Relation(Relation::new(DocumentId::new(
-                        key_group_id.clone().into(),
-                    ))),
-                )]),
-            ),
+            &key_group.request_membership(&frog_author.clone().into()),
         )
         .unwrap();
 
         let (frog_membership_doc_id, _) = send_to_node(
             &mut node,
             &frog,
-            &create_operation(
-                "key_group_membership_v1".parse().unwrap(),
-                fields(vec![
-                    (
-                        "request",
-                        OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::from(
-                            frog_request_doc_id,
-                        ))),
-                    ),
-                    ("accepted", OperationValue::Boolean(true)),
-                ]),
-            ),
+            &KeyGroup::respond_to_request(&DocumentViewId::from(frog_request_doc_id), true),
         )
         .unwrap();
 
         let key_group =
-            KeyGroup::new_from_documents(key_group_id.clone().into(), &node.get_documents(), &[])
-                .unwrap();
+            KeyGroup::new_from_documents(key_group_id.clone(), &node.get_documents(), &[]).unwrap();
 
         assert!(key_group.is_member(&frog_author));
         let expected_key_group_id = key_group_id.as_str().parse::<DocumentId>().unwrap();
@@ -357,48 +353,27 @@ mod test {
         let (rabbit_request_doc_id, _) = send_to_node(
             &mut node,
             &rabbit,
-            &create_operation(
-                "key_group_membership_request_v1".parse().unwrap(),
-                fields(vec![(
-                    "key_group",
-                    OperationValue::Relation(Relation::new(DocumentId::new(
-                        key_group_id.clone().into(),
-                    ))),
-                )]),
-            ),
+            &key_group.request_membership(&rabbit_author.clone().into()),
         )
         .unwrap();
-        let rabbit_request = node.get_document(&rabbit_request_doc_id);
+        node.get_document(&rabbit_request_doc_id);
 
         // But rabbit is not a member yet
         let key_group =
-            KeyGroup::new_from_documents(key_group_id.clone().into(), &node.get_documents(), &[])
-                .unwrap();
+            KeyGroup::new_from_documents(key_group_id.clone(), &node.get_documents(), &[]).unwrap();
 
         assert!(!key_group.is_member(&rabbit_author));
 
         // Now frog let's rabbit in :)
-        let (rabbit_membership_doc_id, _) = send_to_node(
+        send_to_node(
             &mut node,
             &frog,
-            &create_operation(
-                "key_group_membership_v1".parse().unwrap(),
-                fields(vec![
-                    (
-                        "request",
-                        OperationValue::PinnedRelation(PinnedRelation::new(
-                            rabbit_request.view_id().clone(),
-                        )),
-                    ),
-                    ("accepted", OperationValue::Boolean(true)),
-                ]),
-            ),
+            &KeyGroup::respond_to_request(&DocumentViewId::from(rabbit_request_doc_id), true),
         )
         .unwrap();
 
         let key_group =
-            KeyGroup::new_from_documents(key_group_id.clone().into(), &node.get_documents(), &[])
-                .unwrap();
+            KeyGroup::new_from_documents(key_group_id.clone(), &node.get_documents(), &[]).unwrap();
 
         assert!(key_group.is_member(&rabbit_author));
 
@@ -406,17 +381,12 @@ mod test {
         send_to_node(
             &mut node,
             &rabbit,
-            &update_operation(
-                "key_group_membership_v1".parse().unwrap(),
-                vec![frog_membership_doc_id.clone().into()],
-                fields(vec![("accepted", OperationValue::Boolean(false))]),
-            ),
+            &KeyGroup::update_membership(&DocumentViewId::from(frog_membership_doc_id), false),
         )
         .unwrap();
 
         let key_group =
-            KeyGroup::new_from_documents(key_group_id.clone().into(), &node.get_documents(), &[])
-                .unwrap();
+            KeyGroup::new_from_documents(key_group_id.clone(), &node.get_documents(), &[]).unwrap();
 
         assert!(!key_group.is_member(&frog_author));
 
@@ -426,83 +396,45 @@ mod test {
         let (blueberry_id, _) = send_to_node(
             &mut node,
             &frog,
-            &create_operation(
-                "key_group_v1".parse().unwrap(),
-                fields(vec![(
-                    "name",
-                    OperationValue::Text("Blueberry Picking Gang".to_string()),
-                )]),
-            ),
+            &KeyGroup::create("Blueberry Picking Gang"),
         )
         .unwrap();
+
+        let blueberry_picking_gang =
+            KeyGroup::new_from_documents(blueberry_id.clone().into(), &node.get_documents(), &[])
+                .unwrap();
 
         let (frog_blueberry_request_doc_id, _) = send_to_node(
             &mut node,
             &frog,
-            &create_operation(
-                "key_group_membership_request_v1".parse().unwrap(),
-                fields(vec![(
-                    "key_group",
-                    OperationValue::Relation(Relation::new(DocumentId::new(
-                        blueberry_id.clone().into(),
-                    ))),
-                )]),
-            ),
+            &blueberry_picking_gang.request_membership(&frog_author.clone().into()),
         )
         .unwrap();
 
-        let (frog_blueberry_membership_doc_id, _) = send_to_node(
+        send_to_node(
             &mut node,
             &frog,
-            &create_operation(
-                "key_group_membership_v1".parse().unwrap(),
-                fields(vec![
-                    (
-                        "request",
-                        OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::from(
-                            frog_blueberry_request_doc_id,
-                        ))),
-                    ),
-                    ("accepted", OperationValue::Boolean(true)),
-                ]),
+            &KeyGroup::respond_to_request(
+                &DocumentViewId::from(frog_blueberry_request_doc_id),
+                true,
             ),
         )
         .unwrap();
 
-        // Rabbit concedes and asks for the whole strawberry picking gang to become members
+        // Rabbit concedes and asks for the whole strawberry picking gang to also become members
         let (spg_blueberry_request_doc_id, _) = send_to_node(
             &mut node,
             &rabbit,
-            &create_operation(
-                "key_group_membership_request_v1".parse().unwrap(),
-                fields(vec![
-                    (
-                        "key_group",
-                        OperationValue::Relation(Relation::new(blueberry_id.clone().into())),
-                    ),
-                    (
-                        "member",
-                        OperationValue::Owner(Relation::new(key_group.id().clone())),
-                    ),
-                ]),
-            ),
+            &blueberry_picking_gang.request_membership(&key_group.clone().into()),
         )
         .unwrap();
 
-        let (spg_blueberry_response_doc_id, _) = send_to_node(
+        send_to_node(
             &mut node,
             &frog,
-            &create_operation(
-                "key_group_membership_v1".parse().unwrap(),
-                fields(vec![
-                    (
-                        "request",
-                        OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::from(
-                            spg_blueberry_request_doc_id,
-                        ))),
-                    ),
-                    ("accepted", OperationValue::Boolean(true)),
-                ]),
+            &KeyGroup::respond_to_request(
+                &DocumentViewId::from(spg_blueberry_request_doc_id),
+                true,
             ),
         )
         .unwrap();

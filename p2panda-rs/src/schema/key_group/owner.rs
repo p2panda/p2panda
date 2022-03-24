@@ -7,7 +7,7 @@ use crate::operation::OperationValue;
 use super::{KeyGroup, KeyGroupError};
 
 /// Represents the owner of a document, which may be a public key or a key group.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub enum Owner {
     /// Key group owners are represented by the key group's [`DocumentId`].
     KeyGroup(DocumentId),
