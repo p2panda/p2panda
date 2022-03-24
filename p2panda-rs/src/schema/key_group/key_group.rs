@@ -171,7 +171,7 @@ mod test {
 
     use crate::document::{DocumentId, DocumentViewId};
     use crate::identity::{Author, KeyPair};
-    use crate::operation::{PinnedRelation, Relation, OperationValue};
+    use crate::operation::{OperationValue, PinnedRelation, Relation};
     use crate::schema::key_group::Membership;
     use crate::test_utils::fixtures::{create_operation, fields, random_key_pair};
     use crate::test_utils::mocks::{send_to_node, Client, Node};
@@ -228,12 +228,10 @@ mod test {
             &frog,
             &create_operation(
                 "key_group_v1".parse().unwrap(),
-                fields(vec![
-                    (
-                        "name",
-                        OperationValue::Text("Strawberry Picking Gang".to_string()),
-                    ),
-                ]),
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Strawberry Picking Gang".to_string()),
+                )]),
             ),
         )
         .unwrap();
@@ -254,8 +252,7 @@ mod test {
         )
         .unwrap();
 
-        let frog_request =
-            node.get_document(&frog_request_doc_id);
+        let frog_request = node.get_document(&frog_request_doc_id);
 
         let (frog_membership_doc_id, _) = send_to_node(
             &mut node,
@@ -302,8 +299,7 @@ mod test {
             ),
         )
         .unwrap();
-        let rabbit_request =
-            node.get_document(&rabbit_request_doc_id);
+        let rabbit_request = node.get_document(&rabbit_request_doc_id);
 
         // But rabbit is not a member yet
         let key_group = KeyGroup::new(

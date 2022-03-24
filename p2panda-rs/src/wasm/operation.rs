@@ -9,8 +9,8 @@ use crate::operation::{
     Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationId,
     OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
-use crate::schema::SchemaId;
 use crate::schema::key_group::Owner;
+use crate::schema::SchemaId;
 use crate::wasm::error::jserr;
 use crate::wasm::serde::{deserialize_from_js, serialize_to_js};
 use crate::Validate;

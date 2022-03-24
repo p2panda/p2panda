@@ -51,7 +51,7 @@ impl SchemaId {
             "key_group_v1" => Some(SchemaId::KeyGroup),
             "key_group_membership_v1" => Some(SchemaId::KeyGroupMembership),
             "key_group_membership_request_v1" => Some(SchemaId::KeyGroupMembershipRequest),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -133,7 +133,9 @@ impl Serialize for SchemaId {
             SchemaId::SchemaField => serializer.serialize_str("schema_field_v1"),
             SchemaId::KeyGroup => serializer.serialize_str("key_group_v1"),
             SchemaId::KeyGroupMembership => serializer.serialize_str("key_group_membership_v1"),
-            SchemaId::KeyGroupMembershipRequest => serializer.serialize_str("key_group_membership_request_v1")
+            SchemaId::KeyGroupMembershipRequest => {
+                serializer.serialize_str("key_group_membership_request_v1")
+            }
         }
     }
 }

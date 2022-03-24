@@ -145,7 +145,9 @@ mod test {
                 fields(vec![
                     (
                         "request",
-                        OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::from(request_id))),
+                        OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::from(
+                            request_id,
+                        ))),
                     ),
                     ("accepted", OperationValue::Boolean(true)),
                 ]),

@@ -2,7 +2,7 @@
 
 use std::convert::TryFrom;
 
-use crate::document::{DocumentId, Document, DocumentViewId};
+use crate::document::{Document, DocumentId, DocumentViewId};
 use crate::identity::Author;
 use crate::operation::OperationValue;
 use crate::schema::key_group::Owner;
@@ -82,8 +82,8 @@ mod test {
 
     use crate::identity::KeyPair;
     use crate::operation::{OperationId, Relation};
-    use crate::test_utils::fixtures::{random_key_pair, random_operation_id, fields};
-    use crate::test_utils::mocks::{Client, send_to_node, Node};
+    use crate::test_utils::fixtures::{fields, random_key_pair, random_operation_id};
+    use crate::test_utils::mocks::{send_to_node, Client, Node};
     use crate::test_utils::utils::create_operation;
 
     use super::*;

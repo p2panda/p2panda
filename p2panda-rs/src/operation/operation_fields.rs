@@ -50,7 +50,7 @@ pub enum OperationValue {
 
     /// Reference to a document's owner key group.
     #[serde(rename = "owner")]
-    Owner(Relation)
+    Owner(Relation),
 }
 
 impl Validate for OperationValue {
@@ -293,10 +293,7 @@ mod tests {
 
         // 5. Owner
         let owner = OperationValue::Owner(Relation::new(DocumentId::new(operation_9)));
-        assert_eq!(
-            owner,
-            OperationValue::deserialize_str(&owner.serialize())
-        );
+        assert_eq!(owner, OperationValue::deserialize_str(&owner.serialize()));
     }
 
     #[rstest]

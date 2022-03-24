@@ -3,11 +3,11 @@
 //! Schemas describe the format of data used in operation fields.
 mod error;
 mod field_types;
+pub mod key_group;
 #[allow(clippy::module_inception)]
 mod schema;
 mod schema_id;
 pub mod system;
-pub mod key_group;
 
 pub use error::{FieldTypeError, SchemaError, SchemaIdError};
 pub use field_types::FieldType;

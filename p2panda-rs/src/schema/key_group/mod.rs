@@ -10,8 +10,8 @@
 mod error;
 #[allow(clippy::module_inception)]
 mod key_group;
-mod membership_request;
 mod membership;
+mod membership_request;
 mod owner;
 
 pub use error::KeyGroupError;
