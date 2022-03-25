@@ -2,6 +2,9 @@
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::fmt::Display;
+
+use log::debug;
 
 use crate::document::{Document, DocumentId, DocumentViewId};
 use crate::identity::Author;
@@ -86,10 +89,12 @@ impl KeyGroup {
         // Collect all (author, membership) pairs from `members` parameter, including duplicate
         // author values.
         let mut member_pool = vec![];
+        debug!("Building {}", key_group.name());
         for membership in members {
             match membership.member() {
                 // Simple case: for single key memberships just add that key to the pool.
                 Owner::Author(value) => {
+                    debug!("Adding author {:?}", value.as_str());
                     member_pool.push((value, membership));
                 }
                 // When a key group is a member, recursively add that key group's members to the
@@ -100,10 +105,14 @@ impl KeyGroup {
                         .find(|key_group| key_group.id() == value)
                     {
                         Some(sub_key_group) => {
+                            debug!("Adding members of key group {}", sub_key_group.name());
                             for (author, sub_membership) in sub_key_group.members() {
                                 // Only add if a member is accepted within the sub key group.
                                 if sub_membership.accepted() {
+                                    debug!("Adding {}", author.as_str());
                                     member_pool.push((author, membership));
+                                } else {
+                                    debug!("Skipping {}", author.as_str());
                                 }
                             }
                         }
@@ -178,7 +187,7 @@ impl KeyGroup {
     }
 
     /// Make create operation for membership requests
-    pub fn request_membership(&self, member: &Owner) -> Operation {
+    pub fn request_membership(&self, key_group_id: Option<&DocumentId>) -> Operation {
         let mut request_fields = OperationFields::new();
         request_fields
             .add(
@@ -186,11 +195,11 @@ impl KeyGroup {
                 OperationValue::Relation(Relation::new(self.id().clone())),
             )
             .unwrap();
-        if let Owner::KeyGroup(kg_member) = member {
+        if let Some(key_group_id) = key_group_id {
             request_fields
                 .add(
                     "member",
-                    OperationValue::Owner(Relation::new(kg_member.clone())),
+                    OperationValue::Owner(Relation::new(key_group_id.clone())),
                 )
                 .unwrap();
         }
@@ -248,7 +257,7 @@ impl KeyGroupView {
     pub fn name(&self) -> &str {
         match self.0.view().get("name") {
             Some(OperationValue::Text(value)) => value,
-            _ => panic!()
+            _ => panic!(),
         }
     }
 }
@@ -283,4 +292,3 @@ impl Validate for KeyGroupView {
         Ok(())
     }
 }
-

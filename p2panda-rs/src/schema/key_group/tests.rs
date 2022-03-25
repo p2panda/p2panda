@@ -38,12 +38,8 @@ fn key_group_management(
         KeyGroup::new_from_documents(key_group_id.clone(), &node.get_documents(), &[]).unwrap();
 
     // ... and makes herself a member
-    let (frog_request_doc_id, _) = send_to_node(
-        &mut node,
-        &frog,
-        &key_group.request_membership(&frog_author.clone().into()),
-    )
-    .unwrap();
+    let (frog_request_doc_id, _) =
+        send_to_node(&mut node, &frog, &key_group.request_membership(None)).unwrap();
 
     let (frog_membership_doc_id, _) = send_to_node(
         &mut node,
@@ -60,12 +56,8 @@ fn key_group_management(
     assert_eq!(key_group.id(), &expected_key_group_id);
 
     // Rabbit asks to become a member as well
-    let (rabbit_request_doc_id, _) = send_to_node(
-        &mut node,
-        &rabbit,
-        &key_group.request_membership(&rabbit_author.clone().into()),
-    )
-    .unwrap();
+    let (rabbit_request_doc_id, _) =
+        send_to_node(&mut node, &rabbit, &key_group.request_membership(None)).unwrap();
     node.get_document(&rabbit_request_doc_id);
 
     // But rabbit is not a member yet
@@ -117,7 +109,7 @@ fn key_group_management(
     let (frog_blueberry_request_doc_id, _) = send_to_node(
         &mut node,
         &frog,
-        &blueberry_picking_gang.request_membership(&frog_author.clone().into()),
+        &blueberry_picking_gang.request_membership(None),
     )
     .unwrap();
 
@@ -132,7 +124,7 @@ fn key_group_management(
     let (spg_blueberry_request_doc_id, _) = send_to_node(
         &mut node,
         &rabbit,
-        &blueberry_picking_gang.request_membership(&key_group.clone().into()),
+        &blueberry_picking_gang.request_membership(Some(key_group.id())),
     )
     .unwrap();
 

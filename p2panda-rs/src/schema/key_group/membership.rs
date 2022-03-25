@@ -2,11 +2,11 @@
 
 use std::convert::TryFrom;
 
-use crate::Validate;
 use crate::document::{Document, DocumentViewId};
 use crate::operation::OperationValue;
 use crate::schema::system::SystemSchemaError;
 use crate::schema::SchemaId;
+use crate::Validate;
 
 use super::error::KeyGroupError;
 use super::membership_request::MembershipRequestView;
@@ -85,7 +85,7 @@ impl MembershipView {
     pub fn request(&self) -> &DocumentViewId {
         match self.0.view().get("request") {
             Some(OperationValue::PinnedRelation(value)) => value.view_id(),
-            _ => panic!()
+            _ => panic!(),
         }
     }
 
@@ -93,7 +93,7 @@ impl MembershipView {
     pub fn accepted(&self) -> &bool {
         match self.0.view().get("accepted") {
             Some(OperationValue::Boolean(value)) => value,
-            _ => panic!()
+            _ => panic!(),
         }
     }
 }

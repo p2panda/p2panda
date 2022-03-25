@@ -2,11 +2,11 @@
 
 use std::convert::TryFrom;
 
-use crate::Validate;
 use crate::document::{Document, DocumentId, DocumentViewId};
 use crate::operation::OperationValue;
 use crate::schema::key_group::Owner;
 use crate::schema::system::SystemSchemaError;
+use crate::Validate;
 
 #[derive(Clone, Debug)]
 /// A request for key group membership.
@@ -16,9 +16,9 @@ pub struct MembershipRequestView(Document);
 impl MembershipRequestView {
     /// Create a membership request view from its author and the request's document.
     pub fn new(membership_request: &Document) -> Result<Self, SystemSchemaError> {
-        let doc = Self(membership_request.clone());
-        doc.validate()?;
-        Ok(doc)
+        let view = Self(membership_request.clone());
+        view.validate()?;
+        Ok(view)
     }
 
     /// The id of this membership request view.
@@ -30,16 +30,18 @@ impl MembershipRequestView {
     pub fn key_group(&self) -> &DocumentId {
         match self.0.view().get("key_group") {
             Some(OperationValue::Relation(relation)) => relation.document_id(),
-            _ => panic!()
+            _ => panic!(),
         }
     }
 
     /// The public key or key group that is requesting membership.
     pub fn member(&self) -> Owner {
-        match self.0.view().get("owner") {
-            Some(OperationValue::Owner(relation)) => Owner::KeyGroup(relation.document_id().clone()),
+        match self.0.view().get("member") {
+            Some(OperationValue::Owner(relation)) => {
+                Owner::KeyGroup(relation.document_id().clone())
+            }
             Some(_) => panic!(),
-            None => Owner::Author(self.0.author().clone())
+            None => Owner::Author(self.0.author().clone()),
         }
     }
 }
@@ -63,6 +65,7 @@ impl Validate for MembershipRequestView {
                 "member".to_string(),
                 op.to_owned(),
             )),
+            // optional field, so `None` is ok as well
             None => Ok(()),
         }?;
 
