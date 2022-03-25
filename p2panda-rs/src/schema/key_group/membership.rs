@@ -1,22 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
-
-use crate::document::{Document, DocumentViewId};
-use crate::operation::OperationValue;
-use crate::schema::system::SystemSchemaError;
-use crate::schema::SchemaId;
-use crate::Validate;
-
-use super::error::KeyGroupError;
-use super::membership_request::MembershipRequestView;
-use super::Owner;
+use crate::schema::key_group::error::KeyGroupError;
+use crate::schema::key_group::{MembershipRequestView, MembershipView, Owner};
 
 /// Memership in a key group.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Membership {
+    /// True if this membership is confirmed and has not been unvalidated.
     accepted: bool,
+
+    /// True if the request for this membership has received a response.
     has_response: bool,
+
+    /// Reference to the public key or key group that this membership is about.
     member: Owner,
 }
 
@@ -79,80 +75,6 @@ impl Membership {
     /// Returns true if this membership has a valid response.
     pub fn has_response(&self) -> bool {
         self.has_response
-    }
-}
-
-/// Represents a membership document.
-#[derive(Clone, Debug)]
-pub struct MembershipView(Document);
-
-#[allow(dead_code)]
-impl MembershipView {
-    /// The id of this membership request view.
-    pub fn view_id(&self) -> &DocumentViewId {
-        self.0.view().id()
-    }
-
-    /// The view id of the request for this membership.
-    pub fn request(&self) -> &DocumentViewId {
-        match self.0.view().get("request") {
-            Some(OperationValue::PinnedRelation(value)) => value.view_id(),
-            _ => panic!(),
-        }
-    }
-
-    /// Returns true if this membership is accepted.
-    pub fn accepted(&self) -> &bool {
-        match self.0.view().get("accepted") {
-            Some(OperationValue::Boolean(value)) => value,
-            _ => panic!(),
-        }
-    }
-}
-
-impl Validate for MembershipView {
-    type Error = SystemSchemaError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        if self.0.is_deleted() {
-            return Err(SystemSchemaError::Deleted(self.0.id().clone()));
-        }
-
-        if self.0.schema() != &SchemaId::KeyGroupMembership {
-            return Err(SystemSchemaError::UnexpectedSchema(
-                SchemaId::KeyGroupMembership,
-                self.0.schema().clone(),
-            ));
-        }
-
-        match self.0.view().get("request") {
-            Some(OperationValue::PinnedRelation(_)) => Ok(()),
-            Some(op) => Err(SystemSchemaError::InvalidField(
-                "request".to_string(),
-                op.to_owned(),
-            )),
-            None => Err(SystemSchemaError::MissingField("request".to_string())),
-        }?;
-
-        match self.0.view().get("accepted") {
-            Some(OperationValue::Boolean(_)) => Ok(()),
-            Some(op) => Err(SystemSchemaError::InvalidField(
-                "accepted".to_string(),
-                op.to_owned(),
-            )),
-            None => Err(SystemSchemaError::MissingField("accepted".to_string())),
-        }?;
-        Ok(())
-    }
-}
-
-impl TryFrom<Document> for MembershipView {
-    type Error = SystemSchemaError;
-
-    fn try_from(document: Document) -> Result<Self, Self::Error> {
-        let membership_view = Self(document);
-        membership_view.validate()?;
-        Ok(membership_view)
     }
 }
 

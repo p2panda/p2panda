@@ -11,13 +11,15 @@ mod error;
 #[allow(clippy::module_inception)]
 mod key_group;
 mod membership;
-mod membership_request;
 mod owner;
 #[cfg(test)]
 mod tests;
+mod views;
 
 pub use error::KeyGroupError;
-pub use key_group::{KeyGroup, KeyGroupView};
-pub use membership::{Membership, MembershipView};
-pub use membership_request::MembershipRequestView;
+pub use key_group::KeyGroup;
+pub use membership::Membership;
 pub use owner::Owner;
+pub use views::key_group::KeyGroupView;
+pub use views::request::MembershipRequestView;
+pub use views::response::MembershipView;

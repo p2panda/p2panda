@@ -87,8 +87,7 @@ fn key_group_management(
     )
     .unwrap();
 
-    let key_group =
-        KeyGroup::new_from_documents(key_group_id.clone(), &node.get_documents(), &[]).unwrap();
+    let key_group = KeyGroup::new_from_documents(key_group_id, &node.get_documents(), &[]).unwrap();
 
     assert!(!key_group.is_member(&frog_author));
 

@@ -8,12 +8,10 @@ use log::debug;
 use crate::document::{Document, DocumentId, DocumentViewId};
 use crate::identity::Author;
 use crate::operation::{Operation, OperationFields, OperationValue, PinnedRelation, Relation};
-use crate::schema::system::SystemSchemaError;
+use crate::schema::key_group::{
+    KeyGroupError, KeyGroupView, Membership, MembershipRequestView, MembershipView, Owner,
+};
 use crate::schema::SchemaId;
-use crate::Validate;
-
-use super::error::KeyGroupError;
-use super::{Membership, MembershipRequestView, MembershipView, Owner};
 
 /// Represents a group of key pairs that can be assigned shared ownership of documents.
 #[derive(Debug, Clone)]
@@ -240,138 +238,19 @@ impl KeyGroup {
     }
 }
 
-/// Represents a root key group definition.
-///
-/// Can be used to make a [`KeyGroup`].
-#[derive(Clone, Debug)]
-pub struct KeyGroupView(Document);
-
-#[allow(dead_code)]
-impl KeyGroupView {
-    /// The id the key group.
-    pub fn id(&self) -> &DocumentId {
-        self.0.id()
-    }
-
-    /// The id of this key group view.
-    pub fn view_id(&self) -> &DocumentViewId {
-        self.0.view().id()
-    }
-
-    /// The name of this key group.
-    pub fn name(&self) -> &str {
-        match self.0.view().get("name") {
-            Some(OperationValue::Text(value)) => value,
-            _ => panic!(),
-        }
-    }
-}
-
-impl TryFrom<Document> for KeyGroupView {
-    type Error = KeyGroupError;
-
-    fn try_from(document: Document) -> Result<Self, Self::Error> {
-        let view = Self(document);
-        view.validate()?;
-        Ok(view)
-    }
-}
-
-impl Validate for KeyGroupView {
-    type Error = SystemSchemaError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        if self.0.is_deleted() {
-            return Err(SystemSchemaError::Deleted(self.0.id().clone()));
-        }
-
-        let name = match self.0.view().get("name") {
-            Some(OperationValue::Text(value)) => Ok(value),
-            Some(op) => Err(SystemSchemaError::InvalidField(
-                "name".to_string(),
-                op.to_owned(),
-            )),
-            None => Err(SystemSchemaError::MissingField("name".to_string())),
-        }?;
-
-        if name.is_empty() {
-            return Err(SystemSchemaError::InvalidField(
-                "name".to_string(),
-                self.0.view().get("name").unwrap().clone(),
-            ));
-        }
-
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::convert::{TryFrom, TryInto};
+    use std::convert::TryInto;
 
     use rstest::rstest;
 
     use crate::document::Document;
     use crate::hash::Hash;
     use crate::identity::{Author, KeyPair};
-    use crate::operation::OperationValue;
-    use crate::schema::key_group::{KeyGroupView, Membership};
-    use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::{
-        create_operation, document, fields, key_group, key_pair, random_hash,
-    };
+    use crate::schema::key_group::Membership;
+    use crate::test_utils::fixtures::{document, key_group, key_pair, random_hash};
 
     use super::KeyGroup;
-
-    #[rstest]
-    fn basics(key_group: KeyGroup) {
-        assert_eq!(key_group.name(), "The Ants");
-        key_group.view_id();
-    }
-
-    #[rstest]
-    #[case(None, "missing field 'name'")]
-    #[case(
-        Some(OperationValue::Boolean(true)),
-        "invalid field 'name' with value Boolean(true)"
-    )]
-    #[case(Some(OperationValue::Text("".to_string())), "invalid field 'name' with value Text(\"\")")]
-    fn view_basics(
-        #[case] name: Option<OperationValue>,
-        key_pair: KeyPair,
-        #[case] expected_err: String,
-    ) {
-        let doc_fields = match name {
-            Some(value) => vec![("name", value)],
-            None => vec![("badoozle", OperationValue::Integer(0))],
-        };
-        let key_group_doc = document(
-            create_operation(SchemaId::KeyGroup, fields(doc_fields)),
-            key_pair,
-            false,
-        );
-        let result = KeyGroupView::try_from(key_group_doc);
-        assert_eq!(format!("{}", result.unwrap_err()), expected_err);
-    }
-
-    #[rstest]
-    fn deleted_doc(key_pair: KeyPair) {
-        let key_group_doc = document(
-            create_operation(
-                SchemaId::KeyGroup,
-                fields(vec![("name", OperationValue::Text("Test".to_string()))]),
-            ),
-            key_pair,
-            true,
-        );
-        let result = KeyGroupView::try_from(key_group_doc);
-        assert_eq!(
-            format!("{}", result.unwrap_err()),
-            "unable to create view for deleted document \
-        DocumentId(OperationId(Hash(\"0020655926244370ace06086e934b54bd69a6e9ab38458356c6217a13238\
-        120d9621\")))"
-        );
-    }
 
     #[rstest]
     fn missing_member_group(
