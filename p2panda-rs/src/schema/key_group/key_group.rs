@@ -19,6 +19,7 @@ use super::{Membership, MembershipRequestView, MembershipView, Owner};
 #[derive(Debug, Clone)]
 pub struct KeyGroup {
     id: DocumentId,
+    view_id: DocumentViewId,
     name: String,
     members: HashMap<Author, Vec<Membership>>,
 }
@@ -85,6 +86,7 @@ impl KeyGroup {
 
         let key_group = KeyGroup {
             id: key_group.id().clone(),
+            view_id: key_group.view_id().clone(),
             name: key_group.name().to_string(),
             members: member_map,
         };
