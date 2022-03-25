@@ -231,26 +231,25 @@ impl KeyGroup {
 ///
 /// Can be used to make a [`KeyGroup`].
 #[derive(Clone, Debug)]
-pub struct KeyGroupView {
-    id: DocumentId,
-    view_id: DocumentViewId,
-    name: String,
-}
+pub struct KeyGroupView(Document);
 
 #[allow(dead_code)]
 impl KeyGroupView {
     pub fn id(&self) -> &DocumentId {
-        &self.id
+        self.0.id()
     }
 
     /// The id of this key group view.
     pub fn view_id(&self) -> &DocumentViewId {
-        &self.view_id
+        self.0.view().id()
     }
 
     /// The name of this key group.
     pub fn name(&self) -> &str {
-        &self.name
+        match self.0.view().get("name") {
+            Some(OperationValue::Text(value)) => value,
+            _ => panic!()
+        }
     }
 }
 
@@ -258,20 +257,7 @@ impl TryFrom<Document> for KeyGroupView {
     type Error = KeyGroupError;
 
     fn try_from(document: Document) -> Result<Self, Self::Error> {
-        let name = match document.view().get("name") {
-            Some(OperationValue::Text(value)) => Ok(value),
-            Some(op) => Err(SystemSchemaError::InvalidField(
-                "name".to_string(),
-                op.to_owned(),
-            )),
-            None => Err(SystemSchemaError::MissingField("name".to_string())),
-        }?;
-
-        let view = Self {
-            id: document.id().clone(),
-            view_id: document.view().id().clone(),
-            name: name.clone(),
-        };
+        let view = Self(document);
         view.validate()?;
         Ok(view)
     }
@@ -281,9 +267,19 @@ impl Validate for KeyGroupView {
     type Error = KeyGroupError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        if self.name.is_empty() {
-            return Err(KeyGroupError::InvalidName(self.name.clone()));
+        let name = match self.0.view().get("name") {
+            Some(OperationValue::Text(value)) => Ok(value),
+            Some(op) => Err(SystemSchemaError::InvalidField(
+                "name".to_string(),
+                op.to_owned(),
+            )),
+            None => Err(SystemSchemaError::MissingField("name".to_string())),
+        }?;
+
+        if name.is_empty() {
+            return Err(KeyGroupError::InvalidName(name.clone()));
         }
+
         Ok(())
     }
 }

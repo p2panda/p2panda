@@ -2,31 +2,54 @@
 
 use std::convert::TryFrom;
 
+use crate::Validate;
 use crate::document::{Document, DocumentId, DocumentViewId};
-use crate::identity::Author;
 use crate::operation::OperationValue;
 use crate::schema::key_group::Owner;
 use crate::schema::system::SystemSchemaError;
 
 #[derive(Clone, Debug)]
 /// A request for key group membership.
-pub struct MembershipRequestView {
-    /// Identifies this request.
-    id: DocumentViewId,
-
-    /// The key group to be joined.
-    key_group: DocumentId,
-
-    /// Specifies whether membership is requested for a key group or the author of this document.
-    member: Owner,
-}
+pub struct MembershipRequestView(Document);
 
 #[allow(dead_code)]
 impl MembershipRequestView {
     /// Create a membership request view from its author and the request's document.
-    pub fn new(author: &Author, membership_request: &Document) -> Result<Self, SystemSchemaError> {
-        let key_group = match membership_request.view().get("key_group") {
-            Some(OperationValue::Relation(value)) => Ok(value.document_id()),
+    pub fn new(membership_request: &Document) -> Result<Self, SystemSchemaError> {
+        let doc = Self(membership_request.clone());
+        doc.validate()?;
+        Ok(doc)
+    }
+
+    /// The id of this membership request view.
+    pub fn view_id(&self) -> &DocumentViewId {
+        self.0.view().id()
+    }
+
+    /// The key group of this membership request view.
+    pub fn key_group(&self) -> &DocumentId {
+        match self.0.view().get("key_group") {
+            Some(OperationValue::Relation(relation)) => relation.document_id(),
+            _ => panic!()
+        }
+    }
+
+    /// The public key or key group that is requesting membership.
+    pub fn member(&self) -> Owner {
+        match self.0.view().get("owner") {
+            Some(OperationValue::Owner(relation)) => Owner::KeyGroup(relation.document_id().clone()),
+            Some(_) => panic!(),
+            None => Owner::Author(self.0.author().clone())
+        }
+    }
+}
+
+impl Validate for MembershipRequestView {
+    type Error = SystemSchemaError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        match self.0.view().get("key_group") {
+            Some(OperationValue::Relation(_)) => Ok(()),
             Some(op) => Err(SystemSchemaError::InvalidField(
                 "key_group".to_string(),
                 op.to_owned(),
@@ -34,35 +57,16 @@ impl MembershipRequestView {
             None => Err(SystemSchemaError::MissingField("key_group".to_string())),
         }?;
 
-        let member = match membership_request.view().get("member") {
-            Some(OperationValue::Owner(value)) => Ok(Owner::KeyGroup(value.document_id().clone())),
+        match self.0.view().get("member") {
+            Some(OperationValue::Owner(_)) => Ok(()),
             Some(op) => Err(SystemSchemaError::InvalidField(
                 "member".to_string(),
                 op.to_owned(),
             )),
-            None => Ok(Owner::Author(author.clone())),
+            None => Ok(()),
         }?;
 
-        Ok(MembershipRequestView {
-            id: membership_request.view().id().clone(),
-            key_group: key_group.clone(),
-            member,
-        })
-    }
-
-    /// The id of this membership request view.
-    pub fn view_id(&self) -> &DocumentViewId {
-        &self.id
-    }
-
-    /// The key group of this membership request view.
-    pub fn key_group(&self) -> &DocumentId {
-        &self.key_group
-    }
-
-    /// The public key or key group that is requesting membership.
-    pub fn member(&self) -> &Owner {
-        &self.member
+        Ok(())
     }
 }
 
@@ -70,7 +74,7 @@ impl TryFrom<Document> for MembershipRequestView {
     type Error = SystemSchemaError;
 
     fn try_from(document: Document) -> Result<MembershipRequestView, Self::Error> {
-        MembershipRequestView::new(document.author(), &document)
+        MembershipRequestView::new(&document)
     }
 }
 
@@ -108,7 +112,6 @@ mod test {
         .unwrap();
 
         let document = node.get_document(&rabbit_request_hash);
-        let author = Author::new(&rabbit.public_key()).unwrap();
-        assert!(MembershipRequestView::new(&author, &document).is_ok());
+        assert!(MembershipRequestView::new(&document).is_ok());
     }
 }

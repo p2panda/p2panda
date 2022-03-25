@@ -2,6 +2,7 @@
 
 use std::convert::TryFrom;
 
+use crate::Validate;
 use crate::document::{Document, DocumentViewId};
 use crate::operation::OperationValue;
 use crate::schema::system::SystemSchemaError;
@@ -38,14 +39,14 @@ impl Membership {
                 Ok(Membership {
                     request_view: request.view_id().clone(),
                     response_view: Some(response.view_id().clone()),
-                    member: request.member().clone(),
+                    member: request.member(),
                     accepted: *response.accepted(),
                 })
             }
             None => Ok(Membership {
                 request_view: request.view_id().clone(),
                 response_view: None,
-                member: request.member().clone(),
+                member: request.member(),
                 accepted: false,
             }),
         }
@@ -71,42 +72,45 @@ impl Membership {
 
 /// Represents a membership document.
 #[derive(Clone, Debug)]
-pub struct MembershipView {
-    view_id: DocumentViewId,
-    request: DocumentViewId,
-    accepted: bool,
-}
+pub struct MembershipView(Document);
 
 #[allow(dead_code)]
 impl MembershipView {
     /// The id of this membership request view.
     pub fn view_id(&self) -> &DocumentViewId {
-        &self.view_id
+        self.0.view().id()
     }
 
     /// The view id of the request for this membership.
     pub fn request(&self) -> &DocumentViewId {
-        &self.request
+        match self.0.view().get("request") {
+            Some(OperationValue::PinnedRelation(value)) => value.view_id(),
+            _ => panic!()
+        }
     }
 
     /// Returns true if this membership is accepted.
     pub fn accepted(&self) -> &bool {
-        &self.accepted
+        match self.0.view().get("accepted") {
+            Some(OperationValue::Boolean(value)) => value,
+            _ => panic!()
+        }
     }
 }
 
-impl TryFrom<Document> for MembershipView {
+impl Validate for MembershipView {
     type Error = SystemSchemaError;
 
-    fn try_from(document: Document) -> Result<Self, Self::Error> {
-        if document.schema() != &SchemaId::KeyGroupMembership {
+    fn validate(&self) -> Result<(), Self::Error> {
+        if self.0.schema() != &SchemaId::KeyGroupMembership {
             return Err(SystemSchemaError::UnexpectedSchema(
                 SchemaId::KeyGroupMembership,
-                document.schema().clone(),
+                self.0.schema().clone(),
             ));
         }
-        let request = match document.view().get("request") {
-            Some(OperationValue::PinnedRelation(value)) => Ok(value.view_id()),
+
+        match self.0.view().get("request") {
+            Some(OperationValue::PinnedRelation(_)) => Ok(()),
             Some(op) => Err(SystemSchemaError::InvalidField(
                 "request".to_string(),
                 op.to_owned(),
@@ -114,20 +118,25 @@ impl TryFrom<Document> for MembershipView {
             None => Err(SystemSchemaError::MissingField("request".to_string())),
         }?;
 
-        let accepted = match document.view().get("accepted") {
-            Some(OperationValue::Boolean(value)) => Ok(value),
+        match self.0.view().get("accepted") {
+            Some(OperationValue::Boolean(_)) => Ok(()),
             Some(op) => Err(SystemSchemaError::InvalidField(
                 "accepted".to_string(),
                 op.to_owned(),
             )),
             None => Err(SystemSchemaError::MissingField("accepted".to_string())),
         }?;
+        Ok(())
+    }
+}
 
-        Ok(MembershipView {
-            view_id: document.view().id().clone(),
-            request: request.clone(),
-            accepted: accepted.to_owned(),
-        })
+impl TryFrom<Document> for MembershipView {
+    type Error = SystemSchemaError;
+
+    fn try_from(document: Document) -> Result<Self, Self::Error> {
+        let membership_view = Self(document);
+        membership_view.validate()?;
+        Ok(membership_view)
     }
 }
 
