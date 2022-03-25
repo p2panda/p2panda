@@ -20,7 +20,7 @@ use super::{Membership, MembershipRequestView, MembershipView, Owner};
 pub struct KeyGroup {
     id: DocumentId,
     name: String,
-    members: HashMap<Author, Membership>,
+    members: HashMap<Author, Vec<Membership>>,
 }
 
 impl KeyGroup {
@@ -58,9 +58,9 @@ impl KeyGroup {
                         })?;
 
                     debug!("Adding members of key group {}", sub_key_group.name());
-                    for (author, sub_membership) in sub_key_group.members() {
+                    for author in sub_key_group.members().keys() {
                         // Only add if a member is accepted within the sub key group.
-                        if sub_membership.accepted() {
+                        if sub_key_group.is_member(author) {
                             debug!("Adding {}", author.as_str());
                             member_pool.push((author, membership));
                         } else {
@@ -74,14 +74,13 @@ impl KeyGroup {
         // Deduplicate so we have one membership per public key. A membership with more rights
         // takes precedence here. At the moment that is just memberships that are accepted, vs not
         // accepted.
-        let mut member_map: HashMap<Author, Membership> = HashMap::new();
+        let mut member_map: HashMap<Author, Vec<Membership>> = HashMap::new();
         for (author, membership) in member_pool {
-            if let Some(value) = member_map.get(author) {
-                if value.accepted() {
-                    continue;
-                }
+            if let Some(previous_memberships) = member_map.get_mut(author) {
+                previous_memberships.push(membership.clone());
+            } else {
+                member_map.insert(author.clone(), vec![membership.clone()]);
             }
-            member_map.insert(author.clone(), membership.clone());
         }
 
         let key_group = KeyGroup {
@@ -155,20 +154,20 @@ impl KeyGroup {
     }
 
     /// Access the key group's members.
-    pub fn members(&self) -> &HashMap<Author, Membership> {
+    pub fn members(&self) -> &HashMap<Author, Vec<Membership>> {
         &self.members
     }
 
     /// Test whether an [`Author`] is a member.
     pub fn is_member(&self, author: &Author) -> bool {
         match self.members.get(author) {
-            Some(membership) => membership.accepted(),
+            Some(memberships) => memberships.iter().any(|membership| membership.accepted()),
             None => false,
         }
     }
 
     /// Get the membership for an [`Author`].
-    pub fn get(&self, author: &Author) -> Option<&Membership> {
+    pub fn get(&self, author: &Author) -> Option<&Vec<Membership>> {
         self.members.get(author)
     }
 

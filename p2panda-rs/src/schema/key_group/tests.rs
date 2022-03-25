@@ -143,19 +143,21 @@ fn key_group_management(
     .unwrap();
 
     // Rabbit is a member by way of the Strawberry Picking Gang
-    assert_eq!(
-        blueberry_picking_gang.get(&rabbit_author).unwrap().member(),
-        &Owner::KeyGroup(key_group.id().clone()),
-        "{:?}",
-        blueberry_picking_gang.get(&rabbit_author)
+    assert!(
+        blueberry_picking_gang
+            .get(&rabbit_author)
+            .unwrap()
+            .iter()
+            .any(|m| m.member() == &Owner::KeyGroup(key_group.id().clone()) && m.accepted()),
     );
 
     // Frog is not a member as part of the Strawberry Picking Gang because she added herself
     // directly to the group and her membership in the SPG is void.
-    assert_eq!(
-        blueberry_picking_gang.get(&frog_author).unwrap().member(),
-        &Owner::Author(frog_author.clone()),
-        "{:?}",
-        blueberry_picking_gang.get(&frog_author)
+    assert!(
+        blueberry_picking_gang
+            .get(&frog_author)
+            .unwrap()
+            .iter()
+            .any(|m| m.member() == &Owner::Author(frog_author.clone()) && m.accepted()),
     );
 }
