@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::fmt::Display;
 
 use log::debug;
 
@@ -25,61 +24,11 @@ pub struct KeyGroup {
 }
 
 impl KeyGroup {
-    /// Create a new key group from predecessor items.
-    ///
-    /// The `documents` parameter should contain documents for the key group itself and all
-    /// (request, response) pairs.
-    ///
-    /// The `member_key_groups` parameter should contain all [`KeyGroup`]s that are members.
-    pub fn new_from_documents(
-        key_group_id: DocumentId,
-        documents: &[Document],
-        member_key_groups: &[KeyGroup],
-    ) -> Result<KeyGroup, KeyGroupError> {
-        let mut key_group = None;
-        let mut requests = HashMap::new();
-        let mut responses = Vec::new();
-
-        for document in documents {
-            match document.schema() {
-                SchemaId::KeyGroupMembership => {
-                    responses.push(MembershipView::try_from(document.clone())?);
-                }
-                SchemaId::KeyGroupMembershipRequest => {
-                    let request = MembershipRequestView::try_from(document.clone())?;
-                    if request.key_group() == &key_group_id {
-                        requests.insert(request.view_id().clone(), request);
-                    }
-                }
-                _ => (),
-            }
-            if document.id() == &key_group_id {
-                key_group = Some(KeyGroupView::try_from(document.clone())?);
-            }
-        }
-        if key_group.is_none() {
-            return Err(KeyGroupError::MissingKeyGroupView);
-        }
-
-        let mut members: Vec<Membership> = Vec::new();
-        for response in responses {
-            // Remove requests for which we have a response
-            if let Some(request) = requests.remove(response.request()) {
-                members.push(Membership::new(request.clone(), Some(response.clone()))?);
-            };
-        }
-
-        for request in requests.values() {
-            members.push(Membership::new(request.clone(), None)?);
-        }
-
-        KeyGroup::new(&key_group.unwrap(), &members, member_key_groups)
-    }
 
     /// Create a key group from a key group view and a set of memberships.
     ///
     /// The members parameter must only contain memberships of the key group to be created.
-    /// The `member_key_groups` parameter must contain all key groups that have membership and may
+    /// The `member_key_groups` parameter must contain all key groups that have memberships and may
     /// contain additional unrelated key groups.
     pub fn new(
         key_group: &KeyGroupView,
@@ -147,6 +96,57 @@ impl KeyGroup {
         };
 
         Ok(key_group)
+    }
+
+    /// Create a new key group from predecessor documents.
+    ///
+    /// The `documents` parameter should contain documents for the key group itself and all
+    /// (request, response) pairs.
+    ///
+    /// The `member_key_groups` parameter should contain all [`KeyGroup`]s that are members.
+    pub fn new_from_documents(
+        key_group_id: DocumentId,
+        documents: &[Document],
+        member_key_groups: &[KeyGroup],
+    ) -> Result<KeyGroup, KeyGroupError> {
+        let mut key_group = None;
+        let mut requests = HashMap::new();
+        let mut responses = Vec::new();
+
+        for document in documents {
+            match document.schema() {
+                SchemaId::KeyGroupMembership => {
+                    responses.push(MembershipView::try_from(document.clone())?);
+                }
+                SchemaId::KeyGroupMembershipRequest => {
+                    let request = MembershipRequestView::try_from(document.clone())?;
+                    if request.key_group() == &key_group_id {
+                        requests.insert(request.view_id().clone(), request);
+                    }
+                }
+                _ => (),
+            }
+            if document.id() == &key_group_id {
+                key_group = Some(KeyGroupView::try_from(document.clone())?);
+            }
+        }
+        if key_group.is_none() {
+            return Err(KeyGroupError::MissingKeyGroupView);
+        }
+
+        let mut members: Vec<Membership> = Vec::new();
+        for response in responses {
+            // Remove requests for which we have a response
+            if let Some(request) = requests.remove(response.request()) {
+                members.push(Membership::new(request.clone(), Some(response.clone()))?);
+            };
+        }
+
+        for request in requests.values() {
+            members.push(Membership::new(request.clone(), None)?);
+        }
+
+        KeyGroup::new(&key_group.unwrap(), &members, member_key_groups)
     }
 
     /// Returns the key group's id.
