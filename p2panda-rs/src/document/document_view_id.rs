@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::fmt;
+use std::hash::{Hash as StdHash, Hasher};
 use std::str::FromStr;
 
 use serde::de::{SeqAccess, Visitor};
@@ -35,7 +36,7 @@ use crate::Validate;
 ///                         \
 ///                          \__ [UPDATE] (Hash: "eff..")
 /// ```
-#[derive(Debug, Hash, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct DocumentViewId(Vec<OperationId>);
 
 impl DocumentViewId {
@@ -64,7 +65,7 @@ impl DocumentViewId {
     ///
     /// Keep in mind that when you refer to document views with this hash value it will not be
     /// possible to recover the document view id from it.
-    pub fn hash(&self) -> Hash {
+    pub fn view_id_hash(&self) -> Hash {
         let graph_tip_bytes = self
             .sorted()
             .into_iter()
@@ -77,6 +78,14 @@ impl DocumentViewId {
 impl PartialEq for DocumentViewId {
     fn eq(&self, other: &Self) -> bool {
         self.sorted() == other.sorted()
+    }
+}
+
+impl StdHash for DocumentViewId {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for op_id in self.sorted().iter() {
+            op_id.hash(state)
+        }
     }
 }
 
@@ -199,6 +208,9 @@ impl FromStr for DocumentViewId {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash as StdHash, Hasher};
+
     use rstest::rstest;
 
     use crate::hash::Hash;
@@ -245,6 +257,16 @@ mod tests {
         let view_id_1 = DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]);
         let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);
         assert_eq!(view_id_1, view_id_2);
+
+        let mut hasher = DefaultHasher::new();
+        view_id_1.hash(&mut hasher);
+        let h1 = hasher.finish();
+
+        let mut hasher = DefaultHasher::new();
+        view_id_2.hash(&mut hasher);
+        let h2 = hasher.finish();
+
+        assert_eq!(h1, h2);
     }
 
     #[rstest]
@@ -323,9 +345,9 @@ mod tests {
         #[from(random_operation_id)] operation_id_2: OperationId,
     ) {
         let view_id_1 = DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]);
-        assert!(view_id_1.hash().validate().is_ok());
+        assert!(view_id_1.view_id_hash().validate().is_ok());
 
         let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);
-        assert_eq!(view_id_1.hash(), view_id_2.hash());
+        assert_eq!(view_id_1.view_id_hash(), view_id_2.view_id_hash());
     }
 }
