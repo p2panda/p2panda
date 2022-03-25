@@ -79,6 +79,12 @@ impl Validate for Relation {
     }
 }
 
+impl From<DocumentId> for Relation {
+    fn from(doc_id: DocumentId) -> Self {
+        Relation::new(doc_id)
+    }
+}
+
 /// Reference to the exact version of the document.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PinnedRelation(DocumentViewId);
@@ -110,6 +116,12 @@ impl IntoIterator for PinnedRelation {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
+    }
+}
+
+impl From<DocumentViewId> for PinnedRelation {
+    fn from(view_id: DocumentViewId) -> Self {
+        PinnedRelation::new(view_id)
     }
 }
 
