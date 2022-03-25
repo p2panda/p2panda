@@ -4,7 +4,7 @@ use std::convert::TryFrom;
 
 use crate::document::{Document, DocumentId, DocumentViewId};
 use crate::operation::OperationValue;
-use crate::schema::key_group::Owner;
+use crate::permissions::key_group::Owner;
 use crate::schema::system::SystemSchemaError;
 use crate::Validate;
 

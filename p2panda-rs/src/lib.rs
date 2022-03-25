@@ -72,6 +72,7 @@ pub mod graph;
 pub mod hash;
 pub mod identity;
 pub mod operation;
+pub mod permissions;
 pub mod schema;
 pub mod secret_group;
 pub mod test_utils;

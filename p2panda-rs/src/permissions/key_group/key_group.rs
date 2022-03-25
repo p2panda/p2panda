@@ -8,7 +8,7 @@ use log::debug;
 use crate::document::{Document, DocumentId, DocumentViewId};
 use crate::identity::Author;
 use crate::operation::{Operation, OperationFields, OperationValue, PinnedRelation, Relation};
-use crate::schema::key_group::{
+use crate::permissions::key_group::{
     KeyGroupError, KeyGroupView, Membership, MembershipRequestView, MembershipView, Owner,
 };
 use crate::schema::SchemaId;
@@ -247,7 +247,7 @@ mod tests {
     use crate::document::Document;
     use crate::hash::Hash;
     use crate::identity::{Author, KeyPair};
-    use crate::schema::key_group::Membership;
+    use crate::permissions::key_group::Membership;
     use crate::test_utils::fixtures::{document, key_group, key_pair, random_hash};
 
     use super::KeyGroup;

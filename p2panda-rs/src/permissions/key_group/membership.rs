@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::schema::key_group::error::KeyGroupError;
-use crate::schema::key_group::{MembershipRequestView, MembershipView, Owner};
+use crate::permissions::key_group::error::KeyGroupError;
+use crate::permissions::key_group::{MembershipRequestView, MembershipView, Owner};
 
 /// Memership in a key group.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -87,7 +87,7 @@ mod test {
     use crate::document::{Document, DocumentId, DocumentViewId};
     use crate::identity::{Author, KeyPair};
     use crate::operation::OperationValue;
-    use crate::schema::key_group::{KeyGroup, Membership, MembershipView};
+    use crate::permissions::key_group::{KeyGroup, Membership, MembershipView};
     use crate::schema::SchemaId;
     use crate::test_utils::constants::DEFAULT_HASH;
     use crate::test_utils::fixtures::{

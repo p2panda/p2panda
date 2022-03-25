@@ -5,7 +5,7 @@ use rstest::rstest;
 use crate::document::{DocumentId, DocumentViewId};
 use crate::identity::{Author, KeyPair};
 
-use crate::schema::key_group::Owner;
+use crate::permissions::key_group::Owner;
 use crate::test_utils::fixtures::random_key_pair;
 use crate::test_utils::mocks::{send_to_node, Client, Node};
 

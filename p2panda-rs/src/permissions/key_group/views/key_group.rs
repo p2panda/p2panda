@@ -4,7 +4,7 @@ use std::convert::TryFrom;
 
 use crate::document::{Document, DocumentId, DocumentViewId};
 use crate::operation::OperationValue;
-use crate::schema::key_group::error::KeyGroupError;
+use crate::permissions::key_group::error::KeyGroupError;
 use crate::schema::system::SystemSchemaError;
 use crate::Validate;
 
@@ -81,7 +81,7 @@ mod tests {
 
     use crate::identity::KeyPair;
     use crate::operation::OperationValue;
-    use crate::schema::key_group::{KeyGroup, KeyGroupView};
+    use crate::permissions::key_group::{KeyGroup, KeyGroupView};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{create_operation, document, fields, key_group, key_pair};
 

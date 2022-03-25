@@ -91,7 +91,7 @@ mod test {
     use crate::document::Document;
     use crate::identity::KeyPair;
     use crate::operation::OperationValue;
-    use crate::schema::key_group::MembershipView;
+    use crate::permissions::key_group::MembershipView;
     use crate::schema::SchemaId;
     use crate::test_utils::constants::DEFAULT_HASH;
     use crate::test_utils::fixtures::{

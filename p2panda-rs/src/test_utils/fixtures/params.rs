@@ -17,7 +17,7 @@ use crate::operation::AsOperation;
 use crate::operation::{
     Operation, OperationEncoded, OperationFields, OperationId, OperationValue, OperationWithMeta,
 };
-use crate::schema::key_group::{KeyGroup, KeyGroupView, Membership};
+use crate::permissions::key_group::{KeyGroup, KeyGroupView, Membership};
 use crate::schema::SchemaId;
 use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
 use crate::test_utils::fixtures::defaults;
