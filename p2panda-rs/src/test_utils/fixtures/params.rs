@@ -13,6 +13,7 @@ use crate::document::{Document, DocumentBuilder, DocumentId, DocumentViewId};
 use crate::entry::{sign_and_encode, Entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
+use crate::operation::AsOperation;
 use crate::operation::{
     Operation, OperationEncoded, OperationFields, OperationId, OperationValue, OperationWithMeta,
 };
@@ -246,17 +247,40 @@ pub fn document(
     ))]
     create_operation: Operation,
     #[default(random_key_pair())] key_pair: KeyPair,
+    #[default(false)] is_deleted: bool,
 ) -> Document {
-    let entry = entry(
+    let private_key = key_pair.private_key().to_owned();
+    let create_entry = entry(
         create_operation.clone(),
         SeqNum::new(1).unwrap(),
         None,
         None,
     );
-    let entry_signed = entry_signed_encoded(entry, key_pair);
-    let operation_encoded = operation_encoded(create_operation);
-    let op_with_meta = meta_operation(entry_signed, operation_encoded);
-    DocumentBuilder::new(vec![op_with_meta]).build().unwrap()
+    let entry_signed = entry_signed_encoded(
+        create_entry,
+        KeyPair::from_private_key(private_key).unwrap(),
+    );
+    let op_encoded = operation_encoded(create_operation.clone());
+    let mut ops = vec![meta_operation(entry_signed.clone(), op_encoded)];
+
+    if is_deleted {
+        let entry_id = entry_signed.hash();
+        let del_op = delete_operation(create_operation.schema(), vec![entry_id.clone().into()]);
+        let delete_entry = entry(
+            del_op.clone(),
+            SeqNum::new(2).unwrap(),
+            Some(entry_id),
+            None,
+        );
+        let entry_signed = entry_signed_encoded(
+            delete_entry,
+            KeyPair::from_private_key(private_key).unwrap(),
+        );
+        let operation_encoded = operation_encoded(del_op);
+        ops.push(meta_operation(entry_signed, operation_encoded));
+    }
+
+    DocumentBuilder::new(ops).build().unwrap()
 }
 
 /// Fixture which injects a key group with a public key member and a key group member, both accepted.
@@ -275,7 +299,7 @@ pub fn key_group(
     ])]
     member_key_groups: Vec<KeyGroup>,
 ) -> KeyGroup {
-    let kgv: KeyGroupView = document(KeyGroup::create(name), key_pair(private_key()))
+    let kgv: KeyGroupView = document(KeyGroup::create(name), key_pair(private_key()), false)
         .try_into()
         .unwrap();
 
