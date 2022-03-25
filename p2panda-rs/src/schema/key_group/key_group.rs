@@ -153,6 +153,11 @@ impl KeyGroup {
         &self.id
     }
 
+    /// Returns the key group's view id.
+    pub fn view_id(&self) -> &DocumentViewId {
+        &self.view_id
+    }
+
     /// Access the key group's name.
     pub fn name(&self) -> &str {
         &self.name
@@ -243,6 +248,7 @@ pub struct KeyGroupView(Document);
 
 #[allow(dead_code)]
 impl KeyGroupView {
+    /// The id the key group.
     pub fn id(&self) -> &DocumentId {
         self.0.id()
     }
@@ -296,5 +302,102 @@ impl Validate for KeyGroupView {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::convert::{TryFrom, TryInto};
+
+    use rstest::rstest;
+
+    use crate::document::Document;
+    use crate::hash::Hash;
+    use crate::identity::{Author, KeyPair};
+    use crate::operation::OperationValue;
+    use crate::schema::key_group::{KeyGroupView, Membership};
+    use crate::schema::SchemaId;
+    use crate::test_utils::fixtures::{
+        create_operation, document, fields, key_group, key_pair, random_hash,
+    };
+
+    use super::KeyGroup;
+
+    #[rstest]
+    fn basics(key_group: KeyGroup) {
+        assert_eq!(key_group.name(), "The Ants");
+        key_group.view_id();
+    }
+
+    #[rstest]
+    #[case(None, "missing field 'name'")]
+    #[case(
+        Some(OperationValue::Boolean(true)),
+        "invalid field 'name' with value Boolean(true)"
+    )]
+    #[case(Some(OperationValue::Text("".to_string())), "invalid field 'name' with value Text(\"\")")]
+    fn view_basics(
+        #[case] name: Option<OperationValue>,
+        key_pair: KeyPair,
+        #[case] expected_err: String,
+    ) {
+        let doc_fields = match name {
+            Some(value) => vec![("name", value)],
+            None => vec![("badoozle", OperationValue::Integer(0))],
+        };
+        let key_group_doc = document(
+            create_operation(SchemaId::KeyGroup, fields(doc_fields)),
+            key_pair,
+        );
+        let result = KeyGroupView::try_from(key_group_doc);
+        assert_eq!(format!("{}", result.unwrap_err()), expected);
+    }
+
+    #[rstest]
+    fn missing_member_group(
+        #[from(document)]
+        #[with(KeyGroup::create("Test"))]
+        key_group_doc: Document,
+        #[from(key_group)] member_key_group: KeyGroup,
+    ) {
+        let members = vec![Membership::new(&member_key_group.into(), Some(true))];
+        assert!(KeyGroup::new(&key_group_doc.try_into().unwrap(), &members, &[]).is_err())
+    }
+
+    #[rstest]
+    fn duplicate_memberships(
+        #[from(document)]
+        #[with(KeyGroup::create("Test"))]
+        key_group_doc: Document,
+        #[from(key_group)] member_key_group: KeyGroup,
+        key_pair: KeyPair,
+    ) {
+        let author = Author::from(key_pair);
+        let members = vec![
+            Membership::new(&author.clone().into(), Some(true)),
+            Membership::new(&member_key_group.clone().into(), Some(true)),
+        ];
+        let key_group = KeyGroup::new(
+            &key_group_doc.try_into().unwrap(),
+            &members,
+            &[member_key_group],
+        )
+        .unwrap();
+        assert_eq!(
+            key_group.get(&author).unwrap().len(),
+            2,
+            "{}",
+            author.as_str()
+        );
+        assert!(key_group.is_member(&author));
+    }
+
+    #[rstest]
+    fn missing_key_group_view(#[from(random_hash)] key_group_id: Hash) {
+        let result = KeyGroup::new_from_documents(key_group_id.into(), &[], &[]);
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "key group to be created not found among supplied documents"
+        )
     }
 }

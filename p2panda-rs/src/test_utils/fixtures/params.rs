@@ -4,18 +4,19 @@
 ///
 /// The fixtures can optionally be passed in with custom parameters which overrides the default
 /// values.
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 use rand::Rng;
 use rstest::fixture;
 
-use crate::document::{DocumentId, DocumentViewId};
+use crate::document::{Document, DocumentBuilder, DocumentId, DocumentViewId};
 use crate::entry::{sign_and_encode, Entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
-use crate::identity::KeyPair;
+use crate::identity::{Author, KeyPair};
 use crate::operation::{
     Operation, OperationEncoded, OperationFields, OperationId, OperationValue, OperationWithMeta,
 };
+use crate::schema::key_group::{KeyGroup, KeyGroupView, Membership};
 use crate::schema::SchemaId;
 use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
 use crate::test_utils::fixtures::defaults;
@@ -231,4 +232,52 @@ pub fn encoded_create_string(create_operation: Operation) -> String {
         .unwrap()
         .as_str()
         .to_owned()
+}
+
+/// Fixture which injects a document with a single create operation into a test method.
+///
+/// The defaults produce a default schema document that has a "name" field with "Shirokuma Cafe"
+/// value.
+#[fixture]
+pub fn document(
+    #[default(create_operation(
+        schema(DEFAULT_SCHEMA_HASH),
+        fields(vec![("name", OperationValue::Text("Shirokuma Cafe".to_string()))])
+    ))]
+    create_operation: Operation,
+    #[default(random_key_pair())] key_pair: KeyPair,
+) -> Document {
+    let entry = entry(
+        create_operation.clone(),
+        SeqNum::new(1).unwrap(),
+        None,
+        None,
+    );
+    let entry_signed = entry_signed_encoded(entry, key_pair);
+    let operation_encoded = operation_encoded(create_operation);
+    let op_with_meta = meta_operation(entry_signed, operation_encoded);
+    DocumentBuilder::new(vec![op_with_meta]).build().unwrap()
+}
+
+/// Fixture which injects a key group with a public key member and a key group member, both accepted.
+#[fixture]
+pub fn key_group(
+    #[default("The Ants")] name: &str,
+    #[default(vec![
+        Membership::new(&Author::from(key_pair(private_key())).into(), Some(true)),
+        Membership::new(&key_group("The worms", vec![], vec![]).into(), Some(true)
+    )])]
+    memberships: Vec<Membership>,
+    #[default(vec![
+        key_group("The worms", vec![
+            Membership::new(&Author::from(key_pair(private_key())).into(), Some(true))
+        ], vec![])
+    ])]
+    member_key_groups: Vec<KeyGroup>,
+) -> KeyGroup {
+    let kgv: KeyGroupView = document(KeyGroup::create(name), key_pair(private_key()))
+        .try_into()
+        .unwrap();
+
+    KeyGroup::new(&kgv, &memberships, &member_key_groups).unwrap()
 }

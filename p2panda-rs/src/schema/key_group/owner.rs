@@ -65,7 +65,9 @@ mod test {
     use crate::identity::KeyPair;
     use crate::operation::{OperationId, Relation};
     use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::{fields, random_key_pair, random_operation_id, schema};
+    use crate::test_utils::fixtures::{
+        fields, key_group, random_key_pair, random_operation_id, schema,
+    };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
     use crate::test_utils::utils::create_operation;
 
@@ -101,11 +103,7 @@ mod test {
     }
 
     #[rstest]
-    fn key_group_owner(
-        random_key_pair: KeyPair,
-        #[from(random_operation_id)] key_group_id: OperationId,
-        schema: SchemaId,
-    ) {
+    fn key_group_owner(random_key_pair: KeyPair, key_group: KeyGroup, schema: SchemaId) {
         let rabbit = Client::new("rabbit".to_string(), random_key_pair);
         let mut node = Node::new();
 
@@ -116,7 +114,7 @@ mod test {
                 schema,
                 fields(vec![(
                     "parent",
-                    OperationValue::Owner(Relation::new(DocumentId::new(key_group_id.clone()))),
+                    OperationValue::Owner(Relation::new(key_group.id().clone())),
                 )]),
             ),
         )
@@ -124,7 +122,7 @@ mod test {
 
         let doc = node.get_document(&rabbit_request_hash);
         let owner = Owner::for_document(&doc).unwrap();
-        assert_eq!(owner, Owner::KeyGroup(DocumentId::new(key_group_id)));
+        assert_eq!(owner, key_group.into());
     }
 
     #[rstest]
@@ -145,13 +143,11 @@ mod test {
                 fields(vec![
                     (
                         "parent",
-                        OperationValue::Owner(Relation::new(DocumentId::new(key_group_id.clone()))),
+                        OperationValue::Owner(Relation::new(DocumentId::new(key_group_id))),
                     ),
                     (
                         "grandparent",
-                        OperationValue::Owner(Relation::new(DocumentId::new(
-                            key_group_id_2.clone(),
-                        ))),
+                        OperationValue::Owner(Relation::new(DocumentId::new(key_group_id_2))),
                     ),
                 ]),
             ),

@@ -13,11 +13,11 @@ pub enum SystemSchemaError {
     Deleted(String),
 
     /// Passed field type does not match the expected type.
-    #[error("invalid field \"{0}\" with value {1:#?}")]
+    #[error("invalid field '{0}' with value {1:?}")]
     InvalidField(String, OperationValue),
 
     /// Missing expected field.
-    #[error("missing field \"{0}\"")]
+    #[error("missing field '{0}'")]
     MissingField(String),
 
     /// Invalid field type found.

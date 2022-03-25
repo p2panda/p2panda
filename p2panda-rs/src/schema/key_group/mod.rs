@@ -17,7 +17,7 @@ mod owner;
 mod tests;
 
 pub use error::KeyGroupError;
-pub use key_group::KeyGroup;
+pub use key_group::{KeyGroup, KeyGroupView};
 pub use membership::{Membership, MembershipView};
 pub use membership_request::MembershipRequestView;
 pub use owner::Owner;
