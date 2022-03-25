@@ -350,7 +350,7 @@ mod tests {
             key_pair,
         );
         let result = KeyGroupView::try_from(key_group_doc);
-        assert_eq!(format!("{}", result.unwrap_err()), expected);
+        assert_eq!(format!("{}", result.unwrap_err()), expected_err);
     }
 
     #[rstest]
