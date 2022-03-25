@@ -132,12 +132,15 @@ impl KeyGroup {
         for response in responses {
             // Remove requests for which we have a response
             if let Some(request) = requests.remove(response.request()) {
-                members.push(Membership::new(request.clone(), Some(response.clone()))?);
+                members.push(Membership::from_confirmation(
+                    request.clone(),
+                    Some(response.clone()),
+                )?);
             };
         }
 
         for request in requests.values() {
-            members.push(Membership::new(request.clone(), None)?);
+            members.push(Membership::from_confirmation(request.clone(), None)?);
         }
 
         KeyGroup::new(&key_group.unwrap(), &members, member_key_groups)
