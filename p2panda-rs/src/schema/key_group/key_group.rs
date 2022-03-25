@@ -355,6 +355,25 @@ mod tests {
     }
 
     #[rstest]
+    fn deleted_doc(key_pair: KeyPair) {
+        let key_group_doc = document(
+            create_operation(
+                SchemaId::KeyGroup,
+                fields(vec![("name", OperationValue::Text("Test".to_string()))]),
+            ),
+            key_pair,
+            true,
+        );
+        let result = KeyGroupView::try_from(key_group_doc);
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "unable to create view for deleted document \
+        DocumentId(OperationId(Hash(\"0020655926244370ace06086e934b54bd69a6e9ab38458356c6217a13238\
+        120d9621\")))"
+        );
+    }
+
+    #[rstest]
     fn missing_member_group(
         #[from(document)]
         #[with(KeyGroup::create("Test"))]
@@ -384,12 +403,7 @@ mod tests {
             &[member_key_group],
         )
         .unwrap();
-        assert_eq!(
-            key_group.get(&author).unwrap().len(),
-            2,
-            "{}",
-            author.as_str()
-        );
+        assert_eq!(key_group.get(&author).unwrap().len(), 2);
         assert!(key_group.is_member(&author));
     }
 

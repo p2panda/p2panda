@@ -119,4 +119,25 @@ mod test {
             None => assert!(result.is_ok()),
         };
     }
+
+    #[rstest]
+    fn deleted_doc(key_pair: KeyPair) {
+        let request_doc = document(
+            create_operation(
+                SchemaId::KeyGroupMembershipRequest,
+                fields(vec![(
+                    "key_group",
+                    OperationValue::Relation(DEFAULT_HASH.parse::<DocumentId>().unwrap().into()),
+                )]),
+            ),
+            key_pair,
+            true,
+        );
+        let result = MembershipRequestView::try_from(request_doc);
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "unable to create view for deleted document DocumentId(OperationId(Hash(\"0020e4a6f9e3\
+            4b267a1f536678cfd6ff49e10b61196a78f08858cc586df4b60e598b\")))"
+        );
+    }
 }
