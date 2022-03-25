@@ -24,7 +24,6 @@ pub struct KeyGroup {
 }
 
 impl KeyGroup {
-
     /// Create a key group from a key group view and a set of memberships.
     ///
     /// The members parameter must only contain memberships of the key group to be created.
@@ -35,10 +34,11 @@ impl KeyGroup {
         members: &[Membership],
         member_key_groups: &[KeyGroup],
     ) -> Result<KeyGroup, KeyGroupError> {
+        debug!("Building {}", key_group.name());
+
         // Collect all (author, membership) pairs from `members` parameter, including duplicate
         // author values.
         let mut member_pool = vec![];
-        debug!("Building {}", key_group.name());
         for membership in members {
             match membership.member() {
                 // Simple case: for single key memberships just add that key to the pool.
@@ -46,32 +46,27 @@ impl KeyGroup {
                     debug!("Adding author {:?}", value.as_str());
                     member_pool.push((value, membership));
                 }
+
                 // When a key group is a member, recursively add that key group's members to the
                 // pool, assigned to a shared `membership`
-                Owner::KeyGroup(value) => {
-                    match member_key_groups
+                Owner::KeyGroup(sub_key_group_id) => {
+                    let sub_key_group = member_key_groups
                         .iter()
-                        .find(|key_group| key_group.id() == value)
-                    {
-                        Some(sub_key_group) => {
-                            debug!("Adding members of key group {}", sub_key_group.name());
-                            for (author, sub_membership) in sub_key_group.members() {
-                                // Only add if a member is accepted within the sub key group.
-                                if sub_membership.accepted() {
-                                    debug!("Adding {}", author.as_str());
-                                    member_pool.push((author, membership));
-                                } else {
-                                    debug!("Skipping {}", author.as_str());
-                                }
-                            }
+                        .find(|key_group| key_group.id() == sub_key_group_id)
+                        .ok_or_else(|| {
+                            KeyGroupError::MissingMemberKeyGroup(format!("{:?}", sub_key_group_id))
+                        })?;
+
+                    debug!("Adding members of key group {}", sub_key_group.name());
+                    for (author, sub_membership) in sub_key_group.members() {
+                        // Only add if a member is accepted within the sub key group.
+                        if sub_membership.accepted() {
+                            debug!("Adding {}", author.as_str());
+                            member_pool.push((author, membership));
+                        } else {
+                            debug!("Skipping {}", author.as_str());
                         }
-                        None => {
-                            return Err(KeyGroupError::MissingMemberKeyGroup(format!(
-                                "{:?}",
-                                value
-                            )));
-                        }
-                    };
+                    }
                 }
             };
         }
