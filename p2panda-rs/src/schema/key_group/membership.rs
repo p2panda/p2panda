@@ -164,7 +164,7 @@ mod test {
 
     use crate::document::{Document, DocumentId, DocumentViewId};
     use crate::identity::{Author, KeyPair};
-    use crate::operation::{OperationId, OperationValue, PinnedRelation};
+    use crate::operation::OperationValue;
     use crate::schema::key_group::{KeyGroup, Membership, MembershipView};
     use crate::schema::SchemaId;
     use crate::test_utils::constants::DEFAULT_HASH;
@@ -193,7 +193,7 @@ mod test {
     #[case(
         ("request", OperationValue::PinnedRelation(document_view_id(vec![DEFAULT_HASH]).into())),
         ("accepted", OperationValue::Text("yes".to_string())),
-        Some("Invalid field 'accepted' with value Text(\"yes\")")
+        Some("invalid field 'accepted' with value Text(\"yes\")")
     )]
     #[case(
         ("request", OperationValue::PinnedRelation(document_view_id(vec![DEFAULT_HASH]).into())),
