@@ -282,7 +282,7 @@ impl Validate for KeyGroupView {
 
     fn validate(&self) -> Result<(), Self::Error> {
         if self.0.is_deleted() {
-            return Err(SystemSchemaError::Deleted(format!("{:?}", self.0)));
+            return Err(SystemSchemaError::Deleted(self.0.id().clone()));
         }
 
         let name = match self.0.view().get("name") {
@@ -348,6 +348,7 @@ mod tests {
         let key_group_doc = document(
             create_operation(SchemaId::KeyGroup, fields(doc_fields)),
             key_pair,
+            false,
         );
         let result = KeyGroupView::try_from(key_group_doc);
         assert_eq!(format!("{}", result.unwrap_err()), expected_err);

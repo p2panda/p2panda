@@ -2,6 +2,7 @@
 
 use thiserror::Error;
 
+use crate::document::DocumentId;
 use crate::operation::OperationValue;
 use crate::schema::SchemaId;
 
@@ -9,8 +10,8 @@ use crate::schema::SchemaId;
 #[derive(Error, Debug)]
 pub enum SystemSchemaError {
     /// A view can only be created for documents that have not been deleted.
-    #[error("unable to create view for deleted document {0}")]
-    Deleted(String),
+    #[error("unable to create view for deleted document {0:?}")]
+    Deleted(DocumentId),
 
     /// Passed field type does not match the expected type.
     #[error("invalid field '{0}' with value {1:?}")]

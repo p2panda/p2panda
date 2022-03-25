@@ -51,7 +51,7 @@ impl Validate for MembershipRequestView {
 
     fn validate(&self) -> Result<(), Self::Error> {
         if self.0.is_deleted() {
-            return Err(SystemSchemaError::Deleted(format!("{:?}", self.0)));
+            return Err(SystemSchemaError::Deleted(self.0.id().clone()));
         }
 
         match self.0.view().get("key_group") {
@@ -90,35 +90,33 @@ mod test {
     use rstest::rstest;
 
     use crate::identity::KeyPair;
-    use crate::operation::{OperationId, Relation};
-    use crate::test_utils::fixtures::{fields, random_key_pair, random_operation_id};
-    use crate::test_utils::mocks::{send_to_node, Client, Node};
+    use crate::schema::SchemaId;
+    use crate::test_utils::constants::DEFAULT_HASH;
+    use crate::test_utils::fixtures::{document, fields, key_pair};
     use crate::test_utils::utils::create_operation;
 
     use super::*;
 
     #[rstest]
+    #[case(vec![("key_group", OperationValue::Relation(DEFAULT_HASH.parse::<DocumentId>().unwrap().into()))], None)]
+    #[case(vec![("badoozle", OperationValue::Boolean(true))], Some("missing field 'key_group'"))]
+    #[case(vec![("key_group", OperationValue::Boolean(true))], Some("invalid field 'key_group' with value Boolean(true)"))]
     fn from_document(
-        random_key_pair: KeyPair,
-        #[from(random_operation_id)] key_group_id: OperationId,
+        #[case] doc_fields: Vec<(&str, OperationValue)>,
+        key_pair: KeyPair,
+        #[case] expected_err: Option<&str>,
     ) {
-        let rabbit = Client::new("rabbit".to_string(), random_key_pair);
-        let mut node = Node::new();
-
-        let (rabbit_request_hash, _) = send_to_node(
-            &mut node,
-            &rabbit,
-            &create_operation(
-                "key_group_membership_request_v1".parse().unwrap(),
-                fields(vec![(
-                    "key_group",
-                    OperationValue::Relation(Relation::new(DocumentId::new(key_group_id))),
-                )]),
-            ),
-        )
-        .unwrap();
-
-        let document = node.get_document(&rabbit_request_hash);
-        assert!(MembershipRequestView::new(&document).is_ok());
+        let doc = document(
+            create_operation(SchemaId::KeyGroupMembershipRequest, fields(doc_fields)),
+            key_pair,
+            false,
+        );
+        let result = MembershipRequestView::try_from(doc);
+        match expected_err {
+            Some(err_str) => {
+                assert_eq!(format!("{}", result.unwrap_err()), err_str)
+            }
+            None => assert!(result.is_ok()),
+        };
     }
 }

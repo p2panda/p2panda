@@ -115,7 +115,7 @@ impl Validate for MembershipView {
 
     fn validate(&self) -> Result<(), Self::Error> {
         if self.0.is_deleted() {
-            return Err(SystemSchemaError::Deleted(format!("{:?}", self.0)));
+            return Err(SystemSchemaError::Deleted(self.0.id().clone()));
         }
 
         if self.0.schema() != &SchemaId::KeyGroupMembership {
@@ -162,43 +162,101 @@ mod test {
 
     use rstest::rstest;
 
-    use crate::document::{DocumentId, DocumentViewId};
+    use crate::document::{Document, DocumentId, DocumentViewId};
     use crate::identity::{Author, KeyPair};
     use crate::operation::{OperationId, OperationValue, PinnedRelation};
     use crate::schema::key_group::{KeyGroup, Membership, MembershipView};
+    use crate::schema::SchemaId;
+    use crate::test_utils::constants::DEFAULT_HASH;
     use crate::test_utils::fixtures::{
-        create_operation, fields, random_key_pair, random_operation_id,
+        create_operation, document, document_id, document_view_id, fields, key_pair,
+        random_key_pair,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
 
     #[rstest]
-    fn view_from_document(
-        random_key_pair: KeyPair,
-        #[from(random_operation_id)] request_id: OperationId,
+    #[case(
+        ("request", OperationValue::PinnedRelation(document_view_id(vec![DEFAULT_HASH]).into())),
+        ("accepted", OperationValue::Boolean(true)),
+        None
+    )]
+    #[case(
+        ("request", OperationValue::Relation(document_id(DEFAULT_HASH).into())),
+        ("accepted", OperationValue::Boolean(true)),
+        Some("invalid field 'request' with value Relation(Relation(DocumentId(OperationId(Hash(\"0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543\")))))")
+    )]
+    #[case(
+        ("requesd", OperationValue::PinnedRelation(document_view_id(vec![DEFAULT_HASH]).into())),
+        ("accepted", OperationValue::Boolean(true)),
+        Some("missing field 'request'")
+    )]
+    #[case(
+        ("request", OperationValue::PinnedRelation(document_view_id(vec![DEFAULT_HASH]).into())),
+        ("accepted", OperationValue::Text("yes".to_string())),
+        Some("Invalid field 'accepted' with value Text(\"yes\")")
+    )]
+    #[case(
+        ("request", OperationValue::PinnedRelation(document_view_id(vec![DEFAULT_HASH]).into())),
+        ("acceptet", OperationValue::Boolean(true)),
+        Some("missing field 'accepted'")
+    )]
+    fn field_values(
+        #[case] request_field: (&str, OperationValue),
+        #[case] accepted_field: (&str, OperationValue),
+        key_pair: KeyPair,
+        #[case] expected_err: Option<&str>,
     ) {
-        let frog = Client::new("frog".to_string(), random_key_pair);
-        let mut node = Node::new();
+        let doc = document(
+            create_operation(
+                SchemaId::KeyGroupMembership,
+                fields(vec![request_field, accepted_field]),
+            ),
+            key_pair,
+            false,
+        );
+        let result = MembershipView::try_from(doc);
+        match expected_err {
+            Some(err_str) => {
+                assert_eq!(format!("{}", result.unwrap_err()), err_str)
+            }
+            None => assert!(result.is_ok(), "{:?}", result.unwrap_err()),
+        };
+    }
 
-        let (membership_doc_id, _) = send_to_node(
-            &mut node,
-            &frog,
-            &create_operation(
-                "key_group_membership_v1".parse().unwrap(),
+    #[rstest]
+    fn deleted_doc(key_pair: KeyPair) {
+        let doc = document(
+            create_operation(
+                SchemaId::KeyGroupMembership,
                 fields(vec![
                     (
                         "request",
-                        OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::from(
-                            request_id,
-                        ))),
+                        OperationValue::PinnedRelation(document_view_id(vec![DEFAULT_HASH]).into()),
                     ),
                     ("accepted", OperationValue::Boolean(true)),
                 ]),
             ),
+            key_pair,
+            true,
+        );
+        let result = MembershipView::try_from(doc);
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "unable to create view for deleted \
+        document DocumentId(OperationId(Hash(\"0020b068fde5cb5a738ee3ef2f6f54663d5236095839c844917\
+        22a2f6ca507118237\")))"
         )
-        .unwrap();
+    }
 
-        let document_view = node.get_document(&membership_doc_id);
-        assert!(MembershipView::try_from(document_view).is_ok());
+    #[rstest]
+    fn wrong_schema(document: Document) {
+        let result = MembershipView::try_from(document);
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "expected schema KeyGroupMembership got Application(PinnedRelation(DocumentViewId([Ope\
+                rationId(Hash(\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc7\
+                8b\"))])))"
+        )
     }
 
     #[rstest]
