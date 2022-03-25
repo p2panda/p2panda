@@ -270,9 +270,13 @@ impl TryFrom<Document> for KeyGroupView {
 }
 
 impl Validate for KeyGroupView {
-    type Error = KeyGroupError;
+    type Error = SystemSchemaError;
 
     fn validate(&self) -> Result<(), Self::Error> {
+        if self.0.is_deleted() {
+            return Err(SystemSchemaError::Deleted(format!("{:?}", self.0)));
+        }
+
         let name = match self.0.view().get("name") {
             Some(OperationValue::Text(value)) => Ok(value),
             Some(op) => Err(SystemSchemaError::InvalidField(
@@ -283,7 +287,10 @@ impl Validate for KeyGroupView {
         }?;
 
         if name.is_empty() {
-            return Err(KeyGroupError::InvalidName(name.clone()));
+            return Err(SystemSchemaError::InvalidField(
+                "name".to_string(),
+                self.0.view().get("name").unwrap().clone(),
+            ));
         }
 
         Ok(())

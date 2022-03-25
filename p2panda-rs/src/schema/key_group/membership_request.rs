@@ -50,6 +50,10 @@ impl Validate for MembershipRequestView {
     type Error = SystemSchemaError;
 
     fn validate(&self) -> Result<(), Self::Error> {
+        if self.0.is_deleted() {
+            return Err(SystemSchemaError::Deleted(format!("{:?}", self.0)));
+        }
+
         match self.0.view().get("key_group") {
             Some(OperationValue::Relation(_)) => Ok(()),
             Some(op) => Err(SystemSchemaError::InvalidField(

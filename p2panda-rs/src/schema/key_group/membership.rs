@@ -114,6 +114,10 @@ impl Validate for MembershipView {
     type Error = SystemSchemaError;
 
     fn validate(&self) -> Result<(), Self::Error> {
+        if self.0.is_deleted() {
+            return Err(SystemSchemaError::Deleted(format!("{:?}", self.0)));
+        }
+
         if self.0.schema() != &SchemaId::KeyGroupMembership {
             return Err(SystemSchemaError::UnexpectedSchema(
                 SchemaId::KeyGroupMembership,
@@ -258,7 +262,7 @@ mod test {
         assert!(membership.accepted());
 
         // She revokes her membership
-        let (frog_membership_update_id, _) = send_to_node(
+        send_to_node(
             &mut node,
             &frog,
             &KeyGroup::update_membership(
