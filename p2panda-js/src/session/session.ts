@@ -87,13 +87,7 @@ export class Session {
    * @returns Session
    */
   setSchema(val: SchemaId | string): Session {
-    if (typeof val === 'string') {
-      // Automatically convert to document view id when given only a hash
-      this._schema = [val];
-    } else {
-      this._schema = val;
-    }
-
+    this._schema = val;
     return this;
   }
 
