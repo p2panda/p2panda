@@ -33,7 +33,7 @@ impl SchemaId {
         match id {
             "schema_v1" => Ok(SchemaId::Schema),
             "schema_field_v1" => Ok(SchemaId::SchemaField),
-            application_schema_id => Ok(Self::parse_application_schema_str(application_schema_id)?),
+            application_schema_id => Self::parse_application_schema_str(application_schema_id),
         }
     }
 
@@ -47,6 +47,12 @@ impl SchemaId {
         let mut operation_ids = vec![];
         let mut remainder = id_str.to_string();
 
+        if id_str.find('_').is_none() {
+            return Err(SchemaIdError::InvalidApplicationSchemaId(
+                "expecting name and view id hashes separated by underscore".to_string(),
+            ));
+        }
+
         // Iteratively split at `_` from the right
         while let Some((left, right)) = remainder.rsplit_once('_') {
             // Catch trying to parse an unknown system schema
@@ -56,7 +62,10 @@ impl SchemaId {
 
             operation_ids.push(right.parse::<OperationId>()?);
 
-            // If the remainder is shorter than an entry hash we assume that it's the schema name.
+            // If the remainder is no longer than an entry hash we assume that it's the schema name.
+            // By breaking here we allow the schema name to contain underscores as well.
+            // The length of the remainder is determined by counting its characters as it can
+            // contain unicode characters.
             remainder = left.to_string();
             if remainder.chars().count() <= MAX_YAMF_HASH_SIZE * 2 {
                 break;
@@ -106,7 +115,7 @@ impl<'de> Visitor<'de> for SchemaIdVisitor {
     type Value = SchemaId;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("string or sequence of operation id strings")
+        formatter.write_str("schema id as string")
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
@@ -137,8 +146,12 @@ impl<'de> Deserialize<'de> for SchemaId {
 
 #[cfg(test)]
 mod test {
+    use rstest::rstest;
+
     use crate::document::DocumentViewId;
+    use crate::operation::OperationId;
     use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
+    use crate::test_utils::fixtures::random_operation_id;
 
     use super::SchemaId;
 
@@ -163,16 +176,21 @@ mod test {
         );
     }
 
-    #[test]
-    fn deserialize() {
+    #[rstest]
+    fn deserialize(
+        #[from(random_operation_id)] op_id_1: OperationId,
+        #[from(random_operation_id)] op_id_2: OperationId,
+    ) {
         let app_schema = SchemaId::new_application(
             "venue",
-            &DEFAULT_SCHEMA_HASH.parse::<DocumentViewId>().unwrap(),
+            &DocumentViewId::new(&[op_id_1.clone(), op_id_2.clone()]),
         );
         assert_eq!(
-            serde_json::from_str::<SchemaId>(
-                "\"venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\""
-            )
+            serde_json::from_str::<SchemaId>(&format!(
+                "\"venue_{}_{}\"",
+                op_id_1.as_hash().as_str(),
+                op_id_2.as_hash().as_str()
+            ))
             .unwrap(),
             app_schema
         );
@@ -188,40 +206,50 @@ mod test {
         );
     }
 
-    #[test]
-    fn invalid_deserialization() {
-        assert!(serde_json::from_str::<SchemaId>("[\"This is not a hash\"]").is_err());
-        assert!(serde_json::from_str::<SchemaId>("5").is_err());
-        assert!(serde_json::from_str::<SchemaId>(
-            "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
-        )
-        .is_err());
-
-        // Test invalid hash
-        let invalid_hash = serde_json::from_str::<SchemaId>(
-            "\"venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc7\"",
-        );
+    // Not a hash at all
+    #[rstest]
+    #[case(
+        "\"This is not a hash\"",
+        "invalid application schema id: expecting name and view id hashes separated by underscore at line 1 column 20"
+    )]
+    // An integer
+    #[case(
+        "5",
+        "invalid type: integer `5`, expected schema id as string at line 1 column 1"
+    )]
+    // Only an operation id, could be interpreted as document view id but still missing the name
+    #[case(
+        "\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"",
+        "invalid application schema id: expecting name and view id hashes separated by underscore at line 1 column 70"
+    )]
+    // Only the name is missing now
+    #[case(
+        "\"_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"",
+        "invalid application schema id: missing schema name at line 1 column 71"
+    )]
+    // This name is too long
+    #[case(
+        "\"this_name_is_way_too_long_it_cant_be_good_to_have_such_a_long_name_to_be_honest_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"",
+        "encountered invalid hash while parsing application schema id: invalid hex encoding in hash string at line 1 column 150"
+    )]
+    // This hash is malformed
+    #[case(
+        "\"venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc7\"",
+        "encountered invalid hash while parsing application schema id: invalid hash length 33 \
+    bytes, expected 34 bytes at line 1 column 74"
+    )]
+    // this looks like a system schema, but it is not
+    #[case(
+        "\"unknown_system_schema_name_v1\"",
+        "not a known system schema: unknown_system_schema_name_v1 at line 1 column 31"
+    )]
+    fn invalid_deserialization2(#[case] schema_id: &str, #[case] expected_err: &str) {
         assert_eq!(
-            format!("{}", invalid_hash.unwrap_err()),
-            "encountered invalid hash while parsing application schema id: invalid hash length 33 \
-            bytes, expected 34 bytes at line 1 column 74"
-        );
-
-        assert_eq!(
-            "not a known system schema: unknown_system_schema_name_v1 at line 1 column 31",
             format!(
                 "{}",
-                serde_json::from_str::<SchemaId>("\"unknown_system_schema_name_v1\"").unwrap_err()
-            )
-        );
-
-        // Test missing schema name
-        let missing_name = serde_json::from_str::<SchemaId>(
-            "\"_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"",
-        );
-        assert_eq!(
-            format!("{}", missing_name.unwrap_err()),
-            "invalid application schema id: missing schema name at line 1 column 71"
+                serde_json::from_str::<SchemaId>(schema_id).unwrap_err()
+            ),
+            expected_err
         );
     }
 
