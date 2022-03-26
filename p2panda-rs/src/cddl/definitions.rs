@@ -93,8 +93,11 @@ const CDDL_ANY_OPERATION: &str = r#"
 ; p2panda Operation Body v1
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-; application_schema_id = tstr .regexp "\w{3,68}_([0-9A-Za-z]{68})(_[0-9A-Za-z]{68})*"
-schema_id = "schema_v1" / "schema_field_v1" / tstr
+application_schema_id = tstr .regexp "[A-Za-z0-9_]{1,67}_([0-9A-Za-z]{68})(_[0-9A-Za-z]{68})*"
+
+system_schema_id = "schema_v1" / "schema_field_v1"
+
+schema_id =  system_schema_id / application_schema_id
 
 create_fields = fields
 
@@ -299,25 +302,25 @@ mod tests {
 
     #[test]
     fn invalid_operations() {
-        // assert!(validate_cbor(
-        //     &OPERATION_FORMAT,
-        //     &to_cbor(
-        //         cbor!({
-        //             "action" => "create",
-        //             // Hash invalid (64 instead of 68 characters)
-        //             "schema" => "menu_80f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f",
-        //             "version" => 1,
-        //             "fields" => {
-        //                 "food" => {
-        //                     "value" => "Pumkin",
-        //                     "type" => "str"
-        //                 }
-        //             }
-        //         })
-        //         .unwrap()
-        //     )
-        // )
-        // .is_err());
+        assert!(validate_cbor(
+            &OPERATION_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "create",
+                    // Hash invalid (64 instead of 68 characters)
+                    "schema" => "menu_80f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f",
+                    "version" => 1,
+                    "fields" => {
+                        "food" => {
+                            "value" => "Pumkin",
+                            "type" => "str"
+                        }
+                    }
+                })
+                .unwrap()
+            )
+        )
+        .is_err());
 
         assert!(validate_cbor(
             &OPERATION_FORMAT,
