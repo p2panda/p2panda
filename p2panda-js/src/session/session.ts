@@ -86,7 +86,7 @@ export class Session {
    * @param val schema id
    * @returns Session
    */
-  setSchema(val: SchemaId | string): Session {
+  setSchema(val: SchemaId): Session {
     this._schema = val;
     return this;
   }
