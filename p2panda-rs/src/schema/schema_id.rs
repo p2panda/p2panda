@@ -42,18 +42,20 @@ impl SchemaId {
         SchemaId::Application(name.to_string(), view_id.clone())
     }
 
-    /// Parse an application schema id from a string
+    /// Read an application schema id from a string.
+    ///
+    /// Parses the schema id by iteratively splitting sections from the right at `_` until the
+    /// remainder is shorter than an operation id. Each section is parsed as an operation id
+    /// and the last (leftmost) section is parsed as the schema's name.
     fn parse_application_schema_str(id_str: &str) -> Result<Self, SchemaIdError> {
-        let mut operation_ids = vec![];
-        let mut remainder = id_str.to_string();
-
         if id_str.find('_').is_none() {
             return Err(SchemaIdError::MalformedApplicationSchemaId(
                 "expecting name and view id hashes separated by underscore".to_string(),
             ));
         }
 
-        // Iteratively split at `_` from the right
+        let mut operation_ids = vec![];
+        let mut remainder = id_str;
         while let Some((left, right)) = remainder.rsplit_once('_') {
             // Catch trying to parse an unknown system schema
             if right.starts_with('v') && right.len() < MAX_YAMF_HASH_SIZE * 2 {
@@ -64,10 +66,8 @@ impl SchemaId {
 
             // If the remainder is no longer than an entry hash we assume that it's the schema name.
             // By breaking here we allow the schema name to contain underscores as well.
-            // The length of the remainder is determined by counting its characters as it can
-            // contain unicode characters.
-            remainder = left.to_string();
-            if remainder.chars().count() <= MAX_YAMF_HASH_SIZE * 2 {
+            remainder = left;
+            if remainder.len() < MAX_YAMF_HASH_SIZE * 2 {
                 break;
             }
         }
@@ -79,7 +79,7 @@ impl SchemaId {
         }
 
         Ok(SchemaId::Application(
-            remainder,
+            remainder.to_string(),
             DocumentViewId::new(&operation_ids),
         ))
     }
