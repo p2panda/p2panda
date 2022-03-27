@@ -7,11 +7,15 @@ use thiserror::Error;
 pub enum SchemaIdError {
     /// Invalid hash in schema id.
     #[error("encountered invalid hash while parsing application schema id: {0}")]
-    ParsingApplicationSchema(#[from] crate::hash::HashError),
+    HashError(#[from] crate::hash::HashError),
 
-    /// Invalid application schema id.
-    #[error("invalid application schema id: {0}")]
-    InvalidApplicationSchemaId(String),
+    /// Encountered a malformed schema id.
+    #[error("malformed application schema id: {0}")]
+    MalformedApplicationSchemaId(String),
+
+    /// Application schema ids must start with the schema's name.
+    #[error("application schema id is missing a name: {0}")]
+    MissingApplicationSchemaName(String),
 
     /// Invalid system schema id.
     #[error("not a known system schema: {0}")]

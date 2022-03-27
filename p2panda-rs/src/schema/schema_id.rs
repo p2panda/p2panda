@@ -48,7 +48,7 @@ impl SchemaId {
         let mut remainder = id_str.to_string();
 
         if id_str.find('_').is_none() {
-            return Err(SchemaIdError::InvalidApplicationSchemaId(
+            return Err(SchemaIdError::MalformedApplicationSchemaId(
                 "expecting name and view id hashes separated by underscore".to_string(),
             ));
         }
@@ -73,8 +73,8 @@ impl SchemaId {
         }
 
         if remainder.is_empty() {
-            return Err(SchemaIdError::InvalidApplicationSchemaId(
-                "missing schema name".to_string(),
+            return Err(SchemaIdError::MissingApplicationSchemaName(
+                id_str.to_string(),
             ));
         }
 
@@ -208,7 +208,8 @@ mod test {
     #[rstest]
     #[case(
         "\"This is not a hash\"",
-        "invalid application schema id: expecting name and view id hashes separated by underscore at line 1 column 20"
+        "malformed application schema id: expecting name and view id hashes separated by \
+        underscore at line 1 column 20"
     )]
     // An integer
     #[case(
@@ -218,17 +219,21 @@ mod test {
     // Only an operation id, could be interpreted as document view id but still missing the name
     #[case(
         "\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"",
-        "invalid application schema id: expecting name and view id hashes separated by underscore at line 1 column 70"
+        "malformed application schema id: expecting name and view id hashes separated by \
+        underscore at line 1 column 70"
     )]
     // Only the name is missing now
     #[case(
         "\"_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"",
-        "invalid application schema id: missing schema name at line 1 column 71"
+        "application schema id is missing a name: _0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c\
+        7b9ab46293111c48fc78b at line 1 column 71"
     )]
-    // This name is too long
+    // This name is too long, parser will fail trying to read its last section as an operation id
     #[case(
-        "\"this_name_is_way_too_long_it_cant_be_good_to_have_such_a_long_name_to_be_honest_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"",
-        "encountered invalid hash while parsing application schema id: invalid hex encoding in hash string at line 1 column 150"
+        "\"this_name_is_way_too_long_it_cant_be_good_to_have_such_a_long_name_to_be_honest_0020c65\
+        567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"",
+        "encountered invalid hash while parsing application schema id: invalid hex encoding in \
+        hash string at line 1 column 150"
     )]
     // This hash is malformed
     #[case(
