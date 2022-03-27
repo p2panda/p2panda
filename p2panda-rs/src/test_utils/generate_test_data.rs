@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use p2panda_rs::hash::Hash;
 /// Generate JSON formatted test data. This is run with the `cargo run --bin json-test-data`
 /// command. The output data can be used for testing a p2panda implementation. It is currently used
 /// in `p2panda-js`.
-use p2panda_rs::operation::OperationValue;
+use p2panda_rs::operation::{OperationId, OperationValue};
 use p2panda_rs::schema::SchemaId;
-use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 use p2panda_rs::test_utils::mocks::Client;
 use p2panda_rs::test_utils::mocks::{send_to_node, Node};
 use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
@@ -20,7 +20,8 @@ fn main() {
     // Instantiate one client called "panda"
     let panda = Client::new("panda".to_string(), new_key_pair());
 
-    let schema_id = SchemaId::new(&format!("venue_{}", DEFAULT_SCHEMA_HASH)).unwrap();
+    let default_schema_hash: OperationId = Hash::new_from_bytes(vec![3, 2, 1]).unwrap().into();
+    let schema_id = SchemaId::new_application("chat", &default_schema_hash.into());
 
     // Publish a CREATE operation
     let (entry1_hash, _) = send_to_node(
@@ -83,12 +84,13 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use p2panda_rs::hash::Hash;
     use p2panda_rs::schema::SchemaId;
     // Generate json formatted test data
     use serde_json::Value;
 
     use p2panda_rs::operation::{OperationId, OperationValue};
-    use p2panda_rs::test_utils::constants::{DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
+    use p2panda_rs::test_utils::constants::DEFAULT_PRIVATE_KEY;
     use p2panda_rs::test_utils::mocks::Client;
     use p2panda_rs::test_utils::mocks::{send_to_node, Node};
     use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
@@ -105,15 +107,15 @@ mod tests {
             keypair_from_private(DEFAULT_PRIVATE_KEY.into()),
         );
 
+        let default_schema_hash: OperationId = Hash::new_from_bytes(vec![3, 2, 1]).unwrap().into();
+        let schema_id = SchemaId::new_application("chat", &default_schema_hash.into());
+
         // Publish a CREATE operation
         send_to_node(
             &mut node,
             &panda,
             &create_operation(
-                SchemaId::new_application(
-                    "chat",
-                    &DEFAULT_SCHEMA_HASH.parse::<OperationId>().unwrap().into(),
-                ),
+                schema_id,
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Ohh, my first message!".to_string()),

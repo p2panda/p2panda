@@ -7,7 +7,7 @@ use crate::entry::{Entry, EntrySigned};
 use crate::identity::KeyPair;
 use crate::operation::{OperationEncoded, OperationValue};
 use crate::schema::SchemaId;
-use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
+use crate::test_utils::constants::TEST_SCHEMA_ID;
 use crate::test_utils::fixtures::{create_operation, entry, seq_num};
 use crate::test_utils::utils;
 
@@ -30,10 +30,7 @@ pub fn v0_3_0_fixture() -> Fixture {
             OperationValue::Text("for playing chess".to_string()),
         ),
     ]);
-    let operation = create_operation(
-        SchemaId::new(&format!("venue_{}", DEFAULT_SCHEMA_HASH)).unwrap(),
-        operation_fields,
-    );
+    let operation = create_operation(SchemaId::new(TEST_SCHEMA_ID).unwrap(), operation_fields);
     let key_pair = utils::keypair_from_private(
         "4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176".into(),
     );

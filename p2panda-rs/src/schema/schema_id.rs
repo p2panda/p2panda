@@ -84,7 +84,8 @@ impl SchemaId {
         ))
     }
 
-    fn as_str(&self) -> String {
+    /// Returns schema id as string slice.
+    pub fn as_str(&self) -> String {
         match self {
             SchemaId::Schema => "schema_v1".to_string(),
             SchemaId::SchemaField => "schema_field_v1".to_string(),
@@ -150,17 +151,14 @@ mod test {
 
     use crate::document::DocumentViewId;
     use crate::operation::OperationId;
-    use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
+    use crate::test_utils::constants::TEST_SCHEMA_ID;
     use crate::test_utils::fixtures::random_operation_id;
 
     use super::SchemaId;
 
     #[test]
     fn serialize() {
-        let app_schema = SchemaId::new_application(
-            "venue",
-            &DEFAULT_SCHEMA_HASH.parse::<DocumentViewId>().unwrap(),
-        );
+        let app_schema = SchemaId::new(TEST_SCHEMA_ID).unwrap();
         assert_eq!(
             serde_json::to_string(&app_schema).unwrap(),
             "\"venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\""

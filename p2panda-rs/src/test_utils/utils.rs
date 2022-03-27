@@ -9,7 +9,6 @@
 //! into `rstest` defined methods.
 use serde::Serialize;
 
-use crate::document::DocumentViewId;
 use crate::entry::{Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
@@ -17,7 +16,7 @@ use crate::operation::{
     Operation, OperationEncoded, OperationFields, OperationId, OperationValue, OperationWithMeta,
 };
 use crate::schema::SchemaId;
-use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
+use crate::test_utils::constants::TEST_SCHEMA_ID;
 
 /// A custom `Result` type to be able to dynamically propagate `Error` types.
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -47,25 +46,18 @@ pub fn any_operation(
     fields: Option<OperationFields>,
     previous_operations: Option<Vec<OperationId>>,
 ) -> Operation {
-    let schema_view: DocumentViewId = DEFAULT_SCHEMA_HASH.parse::<DocumentViewId>().unwrap();
+    let schema_id = SchemaId::new(TEST_SCHEMA_ID).unwrap();
     match fields {
         // It's a CREATE operation
         Some(fields) if previous_operations.is_none() => {
-            Operation::new_create(SchemaId::new_application("venue", &schema_view), fields).unwrap()
+            Operation::new_create(schema_id, fields).unwrap()
         }
         // It's an UPDATE operation
-        Some(fields) => Operation::new_update(
-            SchemaId::new_application("venue", &schema_view),
-            previous_operations.unwrap(),
-            fields,
-        )
-        .unwrap(),
+        Some(fields) => {
+            Operation::new_update(schema_id, previous_operations.unwrap(), fields).unwrap()
+        }
         // It's a DELETE operation
-        None => Operation::new_delete(
-            SchemaId::new_application("venue", &schema_view),
-            previous_operations.unwrap(),
-        )
-        .unwrap(),
+        None => Operation::new_delete(schema_id, previous_operations.unwrap()).unwrap(),
     }
 }
 
@@ -99,9 +91,9 @@ pub fn hash(hash_str: &str) -> Hash {
     Hash::new(hash_str).unwrap()
 }
 
-/// Generate an application schema based on a hash string.
-pub fn schema(hash_str: &str) -> SchemaId {
-    SchemaId::new(hash_str).unwrap()
+/// Generate an application schema based on a schema id string.
+pub fn schema(schema_id: &str) -> SchemaId {
+    SchemaId::new(schema_id).unwrap()
 }
 
 /// Generate an entry based on passed values.
