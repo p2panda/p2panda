@@ -93,7 +93,13 @@ const CDDL_ANY_OPERATION: &str = r#"
 ; p2panda Operation Body v1
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-application_schema_id = tstr .regexp "[A-Za-z0-9_]{1,67}_([0-9A-Za-z]{68})(_[0-9A-Za-z]{68})*"
+; Application schema ids consist of sections separated by an underscore.
+; The first section is the name, which has 1-64 characters, must start
+; with a letter and must contain only alphanumeric characters and
+; underscores. The remaining sections are the document view id of the
+; schema's `schema_v1` document, represented as alphabetically sorted
+; hex-encoded operation ids, separated by underscores.
+application_schema_id = tstr .regexp "[A-Za-z]{1}[A-Za-z0-9_]{0,63}_([0-9A-Za-z]{68})(_[0-9A-Za-z]{68})*"
 
 system_schema_id = "schema_v1" / "schema_field_v1"
 

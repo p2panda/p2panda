@@ -39,7 +39,7 @@ Highlights are marked with a pancake 🥞
 - Update mock node API [#286](https://github.com/p2panda/p2panda/issues/286) `rs`
 - Refactored graph module to be generic over graph node keys and other graph improvements [#289](https://github.com/p2panda/p2panda/issues/289) `rs`
 - Require sorted serialisation of document view ids [#284](https://github.com/p2panda/p2panda/pull/284) `rs`
-- Introduce string representation for application schema ids [#292](https://github.com/p2panda/p2panda/pull/292) `rs`
+- Introduce new application schema id format [#292](https://github.com/p2panda/p2panda/pull/292) `rs`
 
 ## Fixed
 
