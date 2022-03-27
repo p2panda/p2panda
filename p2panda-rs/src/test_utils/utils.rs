@@ -147,22 +147,3 @@ pub fn meta_operation(
 ) -> OperationWithMeta {
     OperationWithMeta::new(&entry_signed_encoded, &operation_encoded).unwrap()
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::test_utils::constants::DEFAULT_HASH;
-
-    use super::*;
-
-    #[test]
-    fn default_hash() {
-        let default_hash = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
-        assert_eq!(default_hash.as_str(), DEFAULT_HASH)
-    }
-
-    #[test]
-    fn default_schema() {
-        let default_schema_hash = Hash::new_from_bytes(vec![3, 2, 1]).unwrap();
-        assert_eq!(default_schema_hash.as_str(), DEFAULT_SCHEMA_HASH)
-    }
-}
