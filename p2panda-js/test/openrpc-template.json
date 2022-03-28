@@ -79,20 +79,18 @@
                 "pattern": "[0-9a-f]{68}"
             },
             "SchemaId": {
-              "oneOf": [
-                {
-                  "const": "schema_v1"
-                },
-                {
-                  "const": "schema_field_v1"
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Hash"
-                  }
-                }
-              ]
+                "oneOf": [
+                    {
+                        "const": "schema_v1"
+                    },
+                    {
+                        "const": "schema_field_v1"
+                    },
+                    {
+                        "type": "string",
+                        "pattern": "[A-Za-z]{1}[A-Za-z0-9_]{0,63}_([0-9A-Za-z]{68})(_[0-9A-Za-z]{68})*"
+                    }
+                ]
             },
             "EntryArgs": {
                 "type": "object",
