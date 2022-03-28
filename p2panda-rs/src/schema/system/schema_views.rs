@@ -166,7 +166,8 @@ mod tests {
     use crate::hash::Hash;
     use crate::operation::{OperationValue, PinnedRelationList};
     use crate::schema::system::SchemaFieldView;
-    use crate::test_utils::fixtures::{document_view_id, random_hash};
+    use crate::schema::SchemaId;
+    use crate::test_utils::fixtures::{document_view_id, random_hash, schema};
 
     use super::{FieldType, SchemaView};
 
@@ -198,7 +199,10 @@ mod tests {
     }
 
     #[rstest]
-    fn field_type_from_document_view(document_view_id: DocumentViewId) {
+    fn field_type_from_document_view(
+        document_view_id: DocumentViewId,
+        #[from(schema)] address_schema: SchemaId,
+    ) {
         // Create first schema field "is_accessible"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -284,13 +288,20 @@ mod tests {
         );
         relation_field.insert(
             "type".to_string(),
-            OperationValue::Text(FieldType::Relation.into()),
+            OperationValue::Text(
+                FieldType::Relation(address_schema.clone())
+                    .as_str()
+                    .to_string(),
+            ),
         );
 
         let document_view = DocumentView::new(document_view_id, relation_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
-        assert_eq!(field_view.unwrap().field_type(), &FieldType::Relation);
+        assert_eq!(
+            field_view.unwrap().field_type(),
+            &FieldType::Relation(address_schema)
+        );
     }
 
     #[rstest]

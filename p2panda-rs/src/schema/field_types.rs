@@ -35,19 +35,19 @@ pub enum FieldType {
 
 impl FieldType {
     /// Returns the string representation of this type.
-    pub fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> String {
         match self {
-            FieldType::Bool => "bool",
-            FieldType::Int => "int",
-            FieldType::Float => "float",
-            FieldType::String => "str",
-            FieldType::Relation(schema_id) => &format!("relation({})", schema_id.as_str()),
-            FieldType::RelationList(schema_id) => &format!("relation_list({})", schema_id.as_str()),
+            FieldType::Bool => "bool".to_string(),
+            FieldType::Int => "int".to_string(),
+            FieldType::Float => "float".to_string(),
+            FieldType::String => "str".to_string(),
+            FieldType::Relation(schema_id) => format!("relation({})", schema_id.as_str()),
+            FieldType::RelationList(schema_id) => format!("relation_list({})", schema_id.as_str()),
             FieldType::PinnedRelation(schema_id) => {
-                &format!("pinned_relation({})", schema_id.as_str())
+                format!("pinned_relation({})", schema_id.as_str())
             }
             FieldType::PinnedRelationList(schema_id) => {
-                &format!("pinned_relation_list({})", schema_id.as_str())
+                format!("pinned_relation_list({})", schema_id.as_str())
             }
         }
     }
@@ -61,8 +61,8 @@ impl FromStr for FieldType {
         let groups = re.captures(s).unwrap();
 
         match (
-            groups.get(1).map_or(None, |m| Some(m.as_str())),
-            groups.get(3).map_or(None, |m| Some(m.as_str())),
+            groups.get(1).map(|m| m.as_str()),
+            groups.get(3).map(|m| m.as_str()),
         ) {
             (Some("bool"), None) => Ok(FieldType::Bool),
             (Some("int"), None) => Ok(FieldType::Int),
@@ -87,7 +87,7 @@ impl FromStr for FieldType {
 
 impl From<FieldType> for String {
     fn from(field_type: FieldType) -> Self {
-        field_type.as_str().to_string()
+        field_type.as_str()
     }
 }
 
@@ -104,9 +104,15 @@ mod tests {
         assert_eq!(FieldType::Int.as_str(), "int");
         assert_eq!(FieldType::Float.as_str(), "float");
         assert_eq!(FieldType::String.as_str(), "str");
-        assert_eq!(FieldType::Relation(schema).as_str(), "relation");
-        assert_eq!(FieldType::RelationList(schema).as_str(), "relation_list");
-        assert_eq!(FieldType::PinnedRelation(schema).as_str(), "pinned_relation");
+        assert_eq!(FieldType::Relation(schema.clone()).as_str(), "relation");
+        assert_eq!(
+            FieldType::RelationList(schema.clone()).as_str(),
+            "relation_list"
+        );
+        assert_eq!(
+            FieldType::PinnedRelation(schema.clone()).as_str(),
+            "pinned_relation"
+        );
         assert_eq!(
             FieldType::PinnedRelationList(schema).as_str(),
             "pinned_relation_list"
@@ -118,10 +124,16 @@ mod tests {
         assert_eq!(FieldType::Int, "int".parse().unwrap());
         assert_eq!(FieldType::Float, "float".parse().unwrap());
         assert_eq!(FieldType::String, "str".parse().unwrap());
-        assert_eq!(FieldType::Relation(schema), "relation".parse().unwrap());
-        assert_eq!(FieldType::RelationList(schema), "relation_list".parse().unwrap());
         assert_eq!(
-            FieldType::PinnedRelation(schema),
+            FieldType::Relation(schema.clone()),
+            "relation".parse().unwrap()
+        );
+        assert_eq!(
+            FieldType::RelationList(schema.clone()),
+            "relation_list".parse().unwrap()
+        );
+        assert_eq!(
+            FieldType::PinnedRelation(schema.clone()),
             "pinned_relation".parse().unwrap()
         );
         assert_eq!(
@@ -139,11 +151,11 @@ mod tests {
         assert_eq!(type_float, "float".to_string());
         let type_string: String = FieldType::String.into();
         assert_eq!(type_string, "str".to_string());
-        let type_relation: String = FieldType::Relation(schema).into();
+        let type_relation: String = FieldType::Relation(schema.clone()).into();
         assert_eq!(type_relation, "relation".to_string());
-        let type_relation_list: String = FieldType::RelationList(schema).into();
+        let type_relation_list: String = FieldType::RelationList(schema.clone()).into();
         assert_eq!(type_relation_list, "relation_list".to_string());
-        let type_pinned_relation: String = FieldType::PinnedRelation(schema).into();
+        let type_pinned_relation: String = FieldType::PinnedRelation(schema.clone()).into();
         assert_eq!(type_pinned_relation, "pinned_relation".to_string());
         let type_pinned_relation_list: String = FieldType::PinnedRelationList(schema).into();
         assert_eq!(

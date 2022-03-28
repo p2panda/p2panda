@@ -133,9 +133,18 @@ mod tests {
         person.insert("age".to_string(), FieldType::Int);
         person.insert("height".to_string(), FieldType::Float);
         person.insert("is_cool".to_string(), FieldType::Bool);
-        person.insert("favorite_food".to_string(), FieldType::Relation(test_schema));
-        person.insert("top_ten_foods".to_string(), FieldType::RelationList(test_schema));
-        person.insert("one_specific_meal".to_string(), FieldType::PinnedRelation(test_schema));
+        person.insert(
+            "favorite_food".to_string(),
+            FieldType::Relation(test_schema.clone()),
+        );
+        person.insert(
+            "top_ten_foods".to_string(),
+            FieldType::RelationList(test_schema.clone()),
+        );
+        person.insert(
+            "one_specific_meal".to_string(),
+            FieldType::PinnedRelation(test_schema.clone()),
+        );
         person.insert(
             "top_ten_specific_meals".to_string(),
             FieldType::PinnedRelationList(test_schema),
