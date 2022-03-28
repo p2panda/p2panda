@@ -288,11 +288,7 @@ mod tests {
         );
         relation_field.insert(
             "type".to_string(),
-            OperationValue::Text(
-                FieldType::Relation(address_schema.clone())
-                    .as_str()
-                    .to_string(),
-            ),
+            OperationValue::Text(FieldType::Relation(address_schema.clone()).to_string()),
         );
 
         let document_view = DocumentView::new(document_view_id, relation_field);
