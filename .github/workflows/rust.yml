@@ -35,6 +35,9 @@ jobs:
         with:
           command: test
           args: --manifest-path ${{ env.cargo_manifest }}
+        # Ensure debug output is also tested
+        env:
+          RUST_LOG: debug
 
   rust-check:
     runs-on: ubuntu-latest
@@ -141,6 +144,9 @@ jobs:
         with:
           # Force cleaning via `--force-clean` flag to prevent buggy code coverage
           args: --manifest-path ${{ env.cargo_manifest }} --locked --force-clean
+        # Ensure debug output is also tested
+        env:
+          RUST_LOG: debug
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v2
