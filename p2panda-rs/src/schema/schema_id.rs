@@ -24,10 +24,10 @@ pub enum SchemaId {
     Application(String, DocumentViewId),
 
     /// A schema definition.
-    Schema,
+    SchemaDefinition,
 
     /// A schema definition field.
-    SchemaField,
+    SchemaFieldDefinition,
 }
 
 impl SchemaId {
@@ -37,8 +37,8 @@ impl SchemaId {
     /// inside.
     pub fn new(id: &str) -> Result<Self, SchemaIdError> {
         match id {
-            SCHEMA_DEFINITION_ID_STR => Ok(SchemaId::Schema),
-            SCHEMA_FIELD_DEFINITION_ID_STR => Ok(SchemaId::SchemaField),
+            SCHEMA_DEFINITION_ID_STR => Ok(SchemaId::SchemaDefinition),
+            SCHEMA_FIELD_DEFINITION_ID_STR => Ok(SchemaId::SchemaFieldDefinition),
             application_schema_id => Self::parse_application_schema_str(application_schema_id),
         }
     }
@@ -97,8 +97,8 @@ impl SchemaId {
     /// Returns schema id as string slice.
     pub fn as_str(&self) -> String {
         match self {
-            SchemaId::Schema => SCHEMA_DEFINITION_ID_STR.to_string(),
-            SchemaId::SchemaField => SCHEMA_FIELD_DEFINITION_ID_STR.to_string(),
+            SchemaId::SchemaDefinition => SCHEMA_DEFINITION_ID_STR.to_string(),
+            SchemaId::SchemaFieldDefinition => SCHEMA_FIELD_DEFINITION_ID_STR.to_string(),
             SchemaId::Application(name, view_id) => {
                 let mut schema_id = name.clone();
                 for op_id in view_id.sorted().into_iter() {
@@ -174,13 +174,13 @@ mod test {
             "\"venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\""
         );
 
-        let schema = SchemaId::Schema;
+        let schema = SchemaId::SchemaDefinition;
         assert_eq!(
             serde_json::to_string(&schema).unwrap(),
             "\"schema_definition_v1\""
         );
 
-        let schema_field = SchemaId::SchemaField;
+        let schema_field = SchemaId::SchemaFieldDefinition;
         assert_eq!(
             serde_json::to_string(&schema_field).unwrap(),
             "\"schema_field_definition_v1\""
@@ -205,12 +205,12 @@ mod test {
             .unwrap(),
             app_schema
         );
-        let schema = SchemaId::Schema;
+        let schema = SchemaId::SchemaDefinition;
         assert_eq!(
             serde_json::from_str::<SchemaId>("\"schema_definition_v1\"").unwrap(),
             schema
         );
-        let schema_field = SchemaId::SchemaField;
+        let schema_field = SchemaId::SchemaFieldDefinition;
         assert_eq!(
             serde_json::from_str::<SchemaId>("\"schema_field_definition_v1\"").unwrap(),
             schema_field
@@ -284,15 +284,15 @@ mod test {
         );
 
         let schema = SchemaId::new(SCHEMA_DEFINITION_ID_STR).unwrap();
-        assert_eq!(schema, SchemaId::Schema);
+        assert_eq!(schema, SchemaId::SchemaDefinition);
 
         let schema_field = SchemaId::new(SCHEMA_FIELD_DEFINITION_ID_STR).unwrap();
-        assert_eq!(schema_field, SchemaId::SchemaField);
+        assert_eq!(schema_field, SchemaId::SchemaFieldDefinition);
     }
 
     #[test]
     fn parse_schema_type() {
         let schema: SchemaId = SCHEMA_DEFINITION_ID_STR.parse().unwrap();
-        assert_eq!(schema, SchemaId::Schema);
+        assert_eq!(schema, SchemaId::SchemaDefinition);
     }
 }
