@@ -20,16 +20,19 @@ pub enum FieldType {
     /// Defines a text string field.
     String,
 
-    /// Defines a [`Relation`][`crate::operation::Relation`] field.
+    /// Defines a [`Relation`][`crate::operation::Relation`] field that references the given schema.
     Relation(SchemaId),
 
-    /// Defines a [`RelationList`][`crate::operation::RelationList`] field.
+    /// Defines a [`RelationList`][`crate::operation::RelationList`] field that references the
+    /// given schema.
     RelationList(SchemaId),
 
-    /// Defines a [`PinnedRelation`][`crate::operation::PinnedRelation`] field.
+    /// Defines a [`PinnedRelation`][`crate::operation::PinnedRelation`] field that references
+    /// the given schema.
     PinnedRelation(SchemaId),
 
-    /// Defines a [`PinnedRelationList`][`crate::operation::PinnedRelationList`] field.
+    /// Defines a [`PinnedRelationList`][`crate::operation::PinnedRelationList`] field that
+    /// references the given schema.
     PinnedRelationList(SchemaId),
 }
 
@@ -57,6 +60,8 @@ impl FromStr for FieldType {
     type Err = FieldTypeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Matches a field type, followed an optional group in paranetheses that contains the
+        // referenced schema for relation field types.
         let re = Regex::new(r"(\w+)(\((.+)\))?").unwrap();
         let groups = re.captures(s).unwrap();
 
