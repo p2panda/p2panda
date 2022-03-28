@@ -31,19 +31,19 @@ use crate::Validate;
 /// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
 /// use p2panda_rs::hash::Hash;
 /// use p2panda_rs::schema::SchemaId;
-/// # let schema_hash_str = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
+/// # let schema_id = "chat_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 ///
 /// // == FIRST ENTRY IN NEW LOG ==
 ///
-/// // Create schema hash
-/// let schema_hash = SchemaId::new(schema_hash_str)?;
+/// // Create schema id
+/// let schema_id = SchemaId::new(schema_id)?;
 ///
 /// // Create a OperationFields instance and add a text field string with the key "title"
 /// let mut fields = OperationFields::new();
 /// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
 ///
 /// // Create an operation containing the above fields
-/// let operation = Operation::new_create(schema_hash, fields)?;
+/// let operation = Operation::new_create(schema_id, fields)?;
 ///
 /// // Create the first Entry in a log
 /// let entry = Entry::new(
@@ -67,17 +67,17 @@ use crate::Validate;
 ///
 /// // == ENTRY IN EXISTING LOG ==
 /// # let backlink_hash_string = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
-/// # let schema_hash_string = "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
+/// # let schema_id = "chat_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 ///
 /// // Create schema
-/// let schema = SchemaId::new(schema_hash_string)?;
+/// let schema_id = SchemaId::new(schema_id)?;
 ///
 /// // Create a OperationFields instance and add a text field string with the key "title"
 /// let mut fields = OperationFields::new();
 /// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
 ///
 /// // Create an operation containing the above fields
-/// let operation = Operation::new_create(schema, fields)?;
+/// let operation = Operation::new_create(schema_id, fields)?;
 ///
 /// // Create log ID from u64
 /// let log_id = LogId::new(1);
@@ -214,18 +214,18 @@ mod tests {
     use crate::hash::Hash;
     use crate::operation::{Operation, OperationFields, OperationValue};
     use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::random_hash;
+    use crate::test_utils::fixtures::schema;
 
     use super::Entry;
 
     #[rstest]
-    fn validation(#[from(random_hash)] operation_id: Hash) {
+    fn validation(schema: SchemaId) {
         // Prepare sample values
         let mut fields = OperationFields::new();
         fields
             .add("test", OperationValue::Text("Hello".to_owned()))
             .unwrap();
-        let operation = Operation::new_create(SchemaId::from(operation_id), fields).unwrap();
+        let operation = Operation::new_create(schema, fields).unwrap();
         let backlink = Hash::new_from_bytes(vec![7, 8, 9]).unwrap();
 
         // The first entry in a log doesn't need and cannot have references to previous entries

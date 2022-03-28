@@ -6,7 +6,7 @@ use wasm_bindgen_test::*;
 
 use crate::document::DocumentViewId;
 use crate::hash::Hash;
-use crate::operation::{OperationEncoded, OperationFields, OperationValue, PinnedRelation};
+use crate::operation::{OperationEncoded, OperationFields, OperationValue};
 use crate::schema::SchemaId;
 use crate::test_utils::utils::create_operation;
 use crate::wasm::{decode_entry, sign_encode_entry, KeyPair, SignEncodeEntryResult};
@@ -16,9 +16,12 @@ wasm_bindgen_test_configure!(run_in_browser);
 #[wasm_bindgen_test]
 fn encodes_decodes_entries() {
     let key_pair = KeyPair::new();
-    let schema = SchemaId::Application(PinnedRelation::new(DocumentViewId::new(vec![
-        Hash::new_from_bytes(vec![1, 2, 3]).unwrap(),
-    ])));
+    let schema = SchemaId::Application(
+        "profile".to_string(),
+        "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+            .parse::<DocumentViewId>()
+            .unwrap(),
+    );
 
     let mut fields = OperationFields::new();
     fields

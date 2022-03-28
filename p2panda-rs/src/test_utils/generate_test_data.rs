@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use p2panda_rs::hash::Hash;
 /// Generate JSON formatted test data. This is run with the `cargo run --bin json-test-data`
 /// command. The output data can be used for testing a p2panda implementation. It is currently used
 /// in `p2panda-js`.
-use p2panda_rs::operation::OperationValue;
+use p2panda_rs::operation::{OperationId, OperationValue};
 use p2panda_rs::schema::SchemaId;
-use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 use p2panda_rs::test_utils::mocks::Client;
 use p2panda_rs::test_utils::mocks::{send_to_node, Node};
 use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
@@ -20,12 +20,15 @@ fn main() {
     // Instantiate one client called "panda"
     let panda = Client::new("panda".to_string(), new_key_pair());
 
+    let default_schema_hash: OperationId = Hash::new_from_bytes(vec![3, 2, 1]).unwrap().into();
+    let schema_id = SchemaId::new_application("chat", &default_schema_hash.into());
+
     // Publish a CREATE operation
     let (entry1_hash, _) = send_to_node(
         &mut node,
         &panda,
         &create_operation(
-            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            schema_id.clone(),
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("Ohh, my first message!".to_string()),
@@ -39,8 +42,8 @@ fn main() {
         &mut node,
         &panda,
         &update_operation(
-            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
-            vec![entry1_hash],
+            schema_id.clone(),
+            vec![entry1_hash.into()],
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("Which I now update.".to_string()),
@@ -54,8 +57,8 @@ fn main() {
         &mut node,
         &panda,
         &update_operation(
-            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
-            vec![entry2_hash],
+            schema_id.clone(),
+            vec![entry2_hash.into()],
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("And then update again.".to_string()),
@@ -68,10 +71,7 @@ fn main() {
     send_to_node(
         &mut node,
         &panda,
-        &delete_operation(
-            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
-            vec![entry3_hash],
-        ),
+        &delete_operation(schema_id, vec![entry3_hash.into()]),
     )
     .unwrap();
 
@@ -84,12 +84,13 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use p2panda_rs::hash::Hash;
     use p2panda_rs::schema::SchemaId;
     // Generate json formatted test data
     use serde_json::Value;
 
-    use p2panda_rs::operation::OperationValue;
-    use p2panda_rs::test_utils::constants::{DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
+    use p2panda_rs::operation::{OperationId, OperationValue};
+    use p2panda_rs::test_utils::constants::DEFAULT_PRIVATE_KEY;
     use p2panda_rs::test_utils::mocks::Client;
     use p2panda_rs::test_utils::mocks::{send_to_node, Node};
     use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
@@ -106,12 +107,15 @@ mod tests {
             keypair_from_private(DEFAULT_PRIVATE_KEY.into()),
         );
 
+        let default_schema_hash: OperationId = Hash::new_from_bytes(vec![3, 2, 1]).unwrap().into();
+        let schema_id = SchemaId::new_application("chat", &default_schema_hash.into());
+
         // Publish a CREATE operation
         send_to_node(
             &mut node,
             &panda,
             &create_operation(
-                SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
+                schema_id,
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Ohh, my first message!".to_string()),
@@ -129,10 +133,10 @@ mod tests {
                   "encodedEntries": [
                     {
                       "author": "2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96",
-                      "entryBytes": "002f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc9601019d0020343e90bcfd50d3953abc23342d2653ea96c892a0c6018bed8b1fa956af15b455e965dc629e99a8edf6788b9ae151e5024f22f2f1ca9b990deba401005778df59fb1e144ee6351b4a1ea78a37ab19772564d14e1ceb3ecaa62a5b73dd4e862e08",
-                      "entryHash": "0020a76d455b0b9779648550601b4616b46d52786acd5e3543d840112f1afd6f94d3",
-                      "payloadBytes": "a466616374696f6e6663726561746566736368656d6181784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a1676d657373616765a26474797065637374726576616c7565764f68682c206d79206669727374206d65737361676521",
-                      "payloadHash": "0020343e90bcfd50d3953abc23342d2653ea96c892a0c6018bed8b1fa956af15b455",
+                      "entryBytes": "002f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc960101a10020ef77234ca495937e15768e4226edd487128bcc43c9ea0cd390846c40864d5300035a2bb1bc87e679415a3fd1b71ee765db1c63da2eecb15032f092a658a912bdd7a308f2e3027b15d4018080d14a12a8eadaa3f13032e06b2a27295bd0b79509",
+                      "entryHash": "002065f74f6fd81eb1bae19eb0d8dce145faa6a56d7b4076d7fba4385410609b2bae",
+                      "payloadBytes": "a466616374696f6e6663726561746566736368656d617849636861745f30303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a1676d657373616765a26474797065637374726576616c7565764f68682c206d79206669727374206d65737361676521",
+                      "payloadHash": "0020ef77234ca495937e15768e4226edd487128bcc43c9ea0cd390846c40864d5300",
                       "logId": "1",
                       "seqNum": "1"
                     }
@@ -140,7 +144,7 @@ mod tests {
                   "decodedOperations": [
                     {
                       "action": "create",
-                      "schema": ["0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"],
+                      "schema": "chat_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
                       "version": 1,
                       "fields": {
                         "message": {
@@ -158,7 +162,7 @@ mod tests {
                       "logId": "1"
                     },
                     {
-                      "entryHashBacklink": "0020a76d455b0b9779648550601b4616b46d52786acd5e3543d840112f1afd6f94d3",
+                      "entryHashBacklink": "002065f74f6fd81eb1bae19eb0d8dce145faa6a56d7b4076d7fba4385410609b2bae",
                       "entryHashSkiplink": null,
                       "seqNum": "2",
                       "logId": "1"

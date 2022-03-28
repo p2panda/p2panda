@@ -195,9 +195,11 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::{DocumentId, DocumentViewId};
-    use crate::hash::Hash;
-    use crate::operation::{PinnedRelation, PinnedRelationList, Relation, RelationList};
-    use crate::test_utils::fixtures::{random_document_id, random_hash};
+
+    use crate::operation::{
+        OperationId, PinnedRelation, PinnedRelationList, Relation, RelationList,
+    };
+    use crate::test_utils::fixtures::{random_document_id, random_operation_id};
     use crate::Validate;
 
     use super::{OperationFields, OperationValue};
@@ -235,17 +237,17 @@ mod tests {
     #[rstest]
     #[allow(clippy::too_many_arguments)]
     fn encode_decode_relations(
-        #[from(random_hash)] hash_1: Hash,
-        #[from(random_hash)] hash_2: Hash,
-        #[from(random_hash)] hash_3: Hash,
-        #[from(random_hash)] hash_4: Hash,
-        #[from(random_hash)] hash_5: Hash,
-        #[from(random_hash)] hash_6: Hash,
-        #[from(random_hash)] hash_7: Hash,
-        #[from(random_hash)] hash_8: Hash,
+        #[from(random_operation_id)] operation_1: OperationId,
+        #[from(random_operation_id)] operation_2: OperationId,
+        #[from(random_operation_id)] operation_3: OperationId,
+        #[from(random_operation_id)] operation_4: OperationId,
+        #[from(random_operation_id)] operation_5: OperationId,
+        #[from(random_operation_id)] operation_6: OperationId,
+        #[from(random_operation_id)] operation_7: OperationId,
+        #[from(random_operation_id)] operation_8: OperationId,
     ) {
         // 1. Unpinned relation
-        let relation = OperationValue::Relation(Relation::new(DocumentId::new(hash_1)));
+        let relation = OperationValue::Relation(Relation::new(DocumentId::new(operation_1)));
         assert_eq!(
             relation,
             OperationValue::deserialize_str(&relation.serialize())
@@ -253,8 +255,9 @@ mod tests {
 
         // 2. Pinned relation
         let pinned_relation =
-            OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::new(vec![
-                hash_2, hash_3,
+            OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::new(&[
+                operation_2,
+                operation_3,
             ])));
         assert_eq!(
             pinned_relation,
@@ -263,8 +266,8 @@ mod tests {
 
         // 3. Unpinned relation list
         let relation_list = OperationValue::RelationList(RelationList::new(vec![
-            DocumentId::new(hash_4),
-            DocumentId::new(hash_5),
+            DocumentId::new(operation_4),
+            DocumentId::new(operation_5),
         ]));
         assert_eq!(
             relation_list,
@@ -274,8 +277,8 @@ mod tests {
         // 4. Pinned relation list
         let pinned_relation_list =
             OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
-                DocumentViewId::new(vec![hash_6, hash_7]),
-                DocumentViewId::new(vec![hash_8]),
+                DocumentViewId::new(&[operation_6, operation_7]),
+                DocumentViewId::new(&[operation_8]),
             ]));
         assert_eq!(
             pinned_relation_list,
@@ -287,14 +290,14 @@ mod tests {
     fn validation_ok(
         #[from(random_document_id)] document_1: DocumentId,
         #[from(random_document_id)] document_2: DocumentId,
-        #[from(random_hash)] operation_id_1: Hash,
-        #[from(random_hash)] operation_id_2: Hash,
+        #[from(random_operation_id)] operation_id_1: OperationId,
+        #[from(random_operation_id)] operation_id_2: OperationId,
     ) {
         let relation = Relation::new(document_1.clone());
         let value = OperationValue::Relation(relation);
         assert!(value.validate().is_ok());
 
-        let pinned_relation = PinnedRelation::new(DocumentViewId::new(vec![
+        let pinned_relation = PinnedRelation::new(DocumentViewId::new(&[
             operation_id_1.clone(),
             operation_id_2.clone(),
         ]));
@@ -306,8 +309,8 @@ mod tests {
         assert!(value.validate().is_ok());
 
         let pinned_relation_list = PinnedRelationList::new(vec![
-            DocumentViewId::new(vec![operation_id_1]),
-            DocumentViewId::new(vec![operation_id_2]),
+            DocumentViewId::from(operation_id_1),
+            DocumentViewId::from(operation_id_2),
         ]);
         let value = OperationValue::PinnedRelationList(pinned_relation_list);
         assert!(value.validate().is_ok());
@@ -361,17 +364,17 @@ mod tests {
 
     #[rstest]
     fn pinned_relation_lists(
-        #[from(random_hash)] operation_id_1: Hash,
-        #[from(random_hash)] operation_id_2: Hash,
-        #[from(random_hash)] operation_id_3: Hash,
-        #[from(random_hash)] operation_id_4: Hash,
-        #[from(random_hash)] operation_id_5: Hash,
-        #[from(random_hash)] operation_id_6: Hash,
+        #[from(random_operation_id)] operation_id_1: OperationId,
+        #[from(random_operation_id)] operation_id_2: OperationId,
+        #[from(random_operation_id)] operation_id_3: OperationId,
+        #[from(random_operation_id)] operation_id_4: OperationId,
+        #[from(random_operation_id)] operation_id_5: OperationId,
+        #[from(random_operation_id)] operation_id_6: OperationId,
     ) {
-        let document_view_id_1 = DocumentViewId::new(vec![operation_id_1, operation_id_2]);
-        let document_view_id_2 = DocumentViewId::new(vec![operation_id_3]);
+        let document_view_id_1 = DocumentViewId::new(&[operation_id_1, operation_id_2]);
+        let document_view_id_2 = DocumentViewId::new(&[operation_id_3]);
         let document_view_id_3 =
-            DocumentViewId::new(vec![operation_id_4, operation_id_5, operation_id_6]);
+            DocumentViewId::new(&[operation_id_4, operation_id_5, operation_id_6]);
 
         let relations = PinnedRelationList::new(vec![
             document_view_id_1,

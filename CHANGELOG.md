@@ -21,6 +21,8 @@ Highlights are marked with a pancake 🥞
 - `Schema` for representing application schema [#250](https://github.com/p2panda/p2panda/pull/250) `rs`
 - Performance benchmarks for entry and operation encoding/decoding [#254](https://github.com/p2panda/p2panda/pull/254) `rs`
 - Move `DocumentId` from `DocmentView` into `Document` [#255](https://github.com/p2panda/p2panda/pull/255) `rs`
+- Introduce `OperationId` to increase type safety around uses of `Hash` [#272](https://github.com/p2panda/p2panda/pull/272) `rs`
+- Implement document view id hash as a limited-size identifier for document views [#277](https://github.com/p2panda/p2panda/pull/277) `rs`
 
 ## Changed
 
@@ -32,10 +34,17 @@ Highlights are marked with a pancake 🥞
 - Turn schema field in operations into a pinned relation [#256](https://github.com/p2panda/p2panda/pull/256) `rs`
 - Implement `OperationValue` variants for all relation types [#260](https://github.com/p2panda/p2panda/pull/260) `rs` `js`
 - Support all `Relation` flavours in `cddl` module [#259](https://github.com/p2panda/p2panda/pull/259) `rs`
+- Impl `IntoIter` trait for `PinnedRelation`, `RelationList` and `DocumentViewId` [#266](https://github.com/p2panda/p2panda/pull/266) `rs`
+- Improve error reporting when adding operation fields [#262](https://github.com/p2panda/p2panda/issues/262)] `rs` `js`
+- Update mock node API [#286](https://github.com/p2panda/p2panda/issues/286) `rs`
+- Refactored graph module to be generic over graph node keys and other graph improvements [#289](https://github.com/p2panda/p2panda/issues/289) `rs`
+- Require sorted serialisation of document view ids [#284](https://github.com/p2panda/p2panda/pull/284) `rs`
+- Introduce new application schema id format [#292](https://github.com/p2panda/p2panda/pull/292) `rs`
 
 ## Fixed
 
 - Fix determination of field types in p2panda-js [#202](https://github.com/p2panda/p2panda/pull/202) `js`
+- Fix equality of document view ids by sorting before comparison [#284](https://github.com/p2panda/p2panda/pull/284) `js`
 
 ## Everything burrito
 
@@ -44,6 +53,7 @@ Highlights are marked with a pancake 🥞
 - Split up overly long `operation.rs` file [#232](https://github.com/p2panda/p2panda/pull/232) `rs`
 - Extend test coverage for `OperationFields` [#236](https://github.com/p2panda/p2panda/pull/236) `rs`
 - Further develop our best practices for writing documentation [#240](https://github.com/p2panda/p2panda/pull/240) `rs`
+- Test `debug` macro calls in Github CI [#288](https://github.com/p2panda/p2panda/pull/288) `rs`
 
 ## [0.3.0]
 

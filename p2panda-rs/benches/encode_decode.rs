@@ -27,10 +27,10 @@ fn run_encode(payload: &str, key_pair: &KeyPair) -> (EntrySigned, OperationEncod
         .unwrap();
 
     // This is a random schema id that doesn't correspond to an actually published schema.
-    let hash =
-        SchemaId::new("0020d3ce4e85222017ffcb4e5ee032716e2e391478379a29e25bc35d74dd614e4132")
+    let schema_id =
+        SchemaId::new("venue_0020d3ce4e85222017ffcb4e5ee032716e2e391478379a29e25bc35d74dd614e4132")
             .unwrap();
-    let operation = Operation::new_create(hash, fields).unwrap();
+    let operation = Operation::new_create(schema_id, fields).unwrap();
 
     let entry = Entry::new(
         &LogId::default(),

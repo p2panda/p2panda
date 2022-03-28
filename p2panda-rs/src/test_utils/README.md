@@ -70,7 +70,7 @@ let (panda_entry_1_hash, next_entry_args) = send_to_node(
     &mut node,
     &panda,
     &create_operation(
-        hash(DEFAULT_SCHEMA_HASH),
+        SchemaId::new(TEST_SCHEMA_ID).unwrap(),
         operation_fields(vec![(
             "cafe_name",
             OperationValue::Text("Panda Cafe".to_string()),
@@ -80,7 +80,7 @@ let (panda_entry_1_hash, next_entry_args) = send_to_node(
 .unwrap();
 
 // Panda publishes an update operation. This appends a new entry to the document log, the operation also refers to the previous
-// tip of the graph by it's hash id.
+// tip of the graph by it's operation id.
 //
 // PANDA  : [1] <--[2]
 // PENGUIN:
@@ -88,7 +88,7 @@ let (panda_entry_2_hash, next_entry_args) = send_to_node(
     &mut node,
     &panda,
     &update_operation(
-        hash(DEFAULT_SCHEMA_HASH),
+        SchemaId::new(TEST_SCHEMA_ID).unwrap(),
         vec![panda_entry_1_hash.clone()], // The previous tip of this document graph
         operation_fields(vec![(
             "cafe_name",
@@ -108,7 +108,7 @@ let (penguin_entry_1_hash, next_entry_args) = send_to_node(
     &mut node,
     &penguin,
     &update_operation(
-        hash(DEFAULT_SCHEMA_HASH),
+        SchemaId::new(TEST_SCHEMA_ID).unwrap(),
         vec![panda_entry_2_hash],
         operation_fields(vec![(
             "message",

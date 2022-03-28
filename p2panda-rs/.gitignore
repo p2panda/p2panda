@@ -2,3 +2,6 @@
 Cargo.lock
 pkg
 target
+
+# Used to configure system-specific paths to browser binaries for headless testing with wasm-pack
+/webdriver.json

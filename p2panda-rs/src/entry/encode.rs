@@ -28,11 +28,11 @@ use crate::operation::OperationEncoded;
 /// let key_pair = KeyPair::new();
 ///
 /// // Create operation
-/// let schema_hash =
-///     SchemaId::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
+/// let schema_id =
+///     SchemaId::new("venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
 /// let mut fields = OperationFields::new();
 /// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
-/// let operation = Operation::new_create(schema_hash, fields)?;
+/// let operation = Operation::new_create(schema_id, fields)?;
 ///
 /// // Create entry
 /// let entry = Entry::new(

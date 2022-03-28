@@ -19,10 +19,13 @@
 //! # use p2panda_rs::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 //! # use p2panda_rs::hash::Hash;
 //! # use p2panda_rs::identity::KeyPair;
-//! # use p2panda_rs::operation::{Operation, OperationFields, OperationValue, Relation};
+//! # use p2panda_rs::operation::{Operation, OperationFields, OperationValue, OperationId, Relation};
 //! # use p2panda_rs::schema::SchemaId;
-//! # use p2panda_rs::document::DocumentId;
-//! # let profile_schema: SchemaId = Hash::new_from_bytes(vec![1, 2, 3])?.into();
+//! # use p2panda_rs::document::{DocumentId, DocumentViewId};
+//! # let profile_schema_view_id = OperationId::from(
+//! #     Hash::new_from_bytes(vec![1, 2, 3])?
+//! # );
+//! # let profile_schema = SchemaId::new_application("profile", &profile_schema_view_id.into());
 //! // Generate new Ed25519 key pair
 //! let key_pair = KeyPair::new();
 //!

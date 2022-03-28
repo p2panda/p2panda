@@ -5,10 +5,9 @@ use std::convert::TryFrom;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
-use crate::hash::Hash;
 use crate::operation::{
-    Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationValue,
-    PinnedRelation, PinnedRelationList, Relation, RelationList,
+    Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationId,
+    OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
 use crate::schema::SchemaId;
 use crate::wasm::error::jserr;
@@ -32,10 +31,18 @@ impl OperationFields {
 
     /// Adds a field with a value and a given value type.
     ///
-    /// The type is defined by a simple string, similar to an enum. Since Rust enums can not (yet)
-    /// be exported via wasm-bindgen we have to do it like this. Possible type values are "str"
-    /// (String), "bool" (Boolean), "float" (Number), "relation" (String representing a hex-encoded
-    /// hash) and "int" (Number).
+    /// The type is defined by a simple string, similar to an enum. Possible type values are:
+    ///
+    /// - "bool" (Boolean)
+    /// - "float" (Number)
+    /// - "int" (Number)
+    /// - "str" (String)
+    /// - "relation" (hex-encoded document id)
+    /// - "relation_list" (array of hex-encoded document ids)
+    /// - "pinned_relation" (document view id, represented as an array
+    ///     of hex-encoded operation ids)
+    /// - "pinned_relation_list" (array of document view ids, represented as an array
+    ///     of arrays of hex-encoded operation ids)
     ///
     /// This method will throw an error when the field was already set, an invalid type value got
     /// passed or when the value does not reflect the given type.
@@ -69,26 +76,37 @@ impl OperationFields {
                 Ok(())
             }
             "relation" => {
-                let relation: Relation = jserr!(deserialize_from_js(value), "Invalid object");
+                let relation: Relation = jserr!(
+                    deserialize_from_js(value),
+                    "Expected an operation id value for field of type relation"
+                );
                 jserr!(relation.validate());
                 jserr!(self.0.add(name, OperationValue::Relation(relation)));
                 Ok(())
             }
             "relation_list" => {
-                let relations: RelationList = jserr!(deserialize_from_js(value), "Invalid array");
+                let relations: RelationList = jserr!(
+                    deserialize_from_js(value),
+                    "Expected an array of operation ids for field of type relation list"
+                );
                 jserr!(relations.validate());
                 jserr!(self.0.add(name, OperationValue::RelationList(relations)));
                 Ok(())
             }
             "pinned_relation" => {
-                let relation: PinnedRelation = jserr!(deserialize_from_js(value), "Invalid object");
+                let relation: PinnedRelation = jserr!(
+                    deserialize_from_js(value),
+                    "Expected an array of operation ids for field of type pinned relation list"
+                );
                 jserr!(relation.validate());
                 jserr!(self.0.add(name, OperationValue::PinnedRelation(relation)));
                 Ok(())
             }
             "pinned_relation_list" => {
-                let relations: PinnedRelationList =
-                    jserr!(deserialize_from_js(value), "Invalid array");
+                let relations: PinnedRelationList = jserr!(
+                    deserialize_from_js(value),
+                    "Expected a nested array of operation ids for field of type pinned relation list"
+                );
                 jserr!(relations.validate());
                 jserr!(self
                     .0
@@ -156,7 +174,10 @@ pub fn encode_create_operation(
     schema_id: JsValue,
     fields: OperationFields,
 ) -> Result<String, JsValue> {
-    let schema: SchemaId = jserr!(deserialize_from_js(schema_id), "Invalid schema id");
+    let schema: SchemaId = jserr!(
+        deserialize_from_js(schema_id.clone()),
+        format!("Invalid schema id: {:?}", schema_id)
+    );
     let operation = jserr!(Operation::new_create(schema, fields.0));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
@@ -177,10 +198,10 @@ pub fn encode_update_operation(
         "Can not deserialize array"
     );
 
-    // Create hashes from strings and collect wrapped in a result
-    let prev_op_result: Result<Vec<Hash>, _> = prev_op_strings
+    // Create operation ids from strings and collect wrapped in a result
+    let prev_op_result: Result<Vec<OperationId>, _> = prev_op_strings
         .iter()
-        .map(|prev_op| Hash::new(prev_op))
+        .map(|prev_op| prev_op.parse())
         .collect();
 
     let previous = jserr!(prev_op_result);
@@ -203,10 +224,10 @@ pub fn encode_delete_operation(
         "Can not deserialize array"
     );
 
-    // Create hashes from strings and collect wrapped in a result
-    let prev_op_result: Result<Vec<Hash>, _> = prev_op_strings
+    // Create operation ids from strings and collect wrapped in a result
+    let prev_op_result: Result<Vec<OperationId>, _> = prev_op_strings
         .iter()
-        .map(|prev_op| Hash::new(prev_op))
+        .map(|prev_op| prev_op.parse())
         .collect();
 
     let previous = jserr!(prev_op_result);

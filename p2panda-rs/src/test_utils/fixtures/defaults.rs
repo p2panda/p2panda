@@ -6,7 +6,7 @@ use crate::entry::Entry;
 use crate::hash::Hash;
 use crate::operation::{Operation, OperationFields, OperationValue, OperationWithMeta};
 use crate::schema::SchemaId;
-use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_SCHEMA_HASH};
+use crate::test_utils::constants::{DEFAULT_HASH, TEST_SCHEMA_ID};
 use crate::test_utils::fixtures;
 
 /// The default hash.
@@ -21,7 +21,7 @@ pub fn some_hash() -> Option<Hash> {
 
 /// The default schema.
 pub fn schema() -> SchemaId {
-    fixtures::schema(DEFAULT_SCHEMA_HASH)
+    fixtures::schema(TEST_SCHEMA_ID)
 }
 
 /// The default operation value.
@@ -36,14 +36,14 @@ pub fn fields() -> OperationFields {
 
 /// The default CREATE operation.
 pub fn create_operation() -> Operation {
-    fixtures::create_operation(fixtures::schema(DEFAULT_SCHEMA_HASH), fields())
+    fixtures::create_operation(fixtures::schema(TEST_SCHEMA_ID), fields())
 }
 
 /// The default UPDATE operation.
 pub fn update_operation() -> Operation {
     fixtures::update_operation(
-        fixtures::schema(DEFAULT_SCHEMA_HASH),
-        vec![fixtures::hash(DEFAULT_HASH)],
+        fixtures::schema(TEST_SCHEMA_ID),
+        vec![fixtures::operation_id(DEFAULT_HASH)],
         fields(),
     )
 }
@@ -51,8 +51,8 @@ pub fn update_operation() -> Operation {
 /// The default DELETE operation.
 pub fn delete_operation() -> Operation {
     fixtures::delete_operation(
-        fixtures::schema(DEFAULT_SCHEMA_HASH),
-        vec![fixtures::hash(DEFAULT_HASH)],
+        fixtures::schema(TEST_SCHEMA_ID),
+        vec![fixtures::operation_id(DEFAULT_HASH)],
     )
 }
 
