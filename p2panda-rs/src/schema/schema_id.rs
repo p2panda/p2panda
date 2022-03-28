@@ -57,7 +57,11 @@ impl SchemaId {
         let mut operation_ids = vec![];
         let mut remainder = id_str;
         while let Some((left, right)) = remainder.rsplit_once('_') {
-            // Catch trying to parse an unknown system schema
+            // While we're parsing application schema ids here, let's not forget the possibility
+            // that a system schema id is being thrown at this method. If that were to happen, the
+            // version identifier part (e.g. `v1`) would end up in `right` in this loop iteration.
+            // The following check let's us return a more helpful error in that situation than we
+            // we would've gotten if we'd try and parse that as an `OperationId` right below.
             if right.starts_with('v') && right.len() < MAX_YAMF_HASH_SIZE * 2 {
                 return Err(SchemaIdError::UnknownSystemSchema(id_str.to_string()));
             }
