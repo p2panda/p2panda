@@ -250,7 +250,7 @@ mod test {
         "\"unknown_system_schema_name_v1\"",
         "not a known system schema: unknown_system_schema_name_v1 at line 1 column 31"
     )]
-    fn invalid_deserialization2(#[case] schema_id: &str, #[case] expected_err: &str) {
+    fn invalid_deserialization(#[case] schema_id: &str, #[case] expected_err: &str) {
         assert_eq!(
             format!(
                 "{}",
