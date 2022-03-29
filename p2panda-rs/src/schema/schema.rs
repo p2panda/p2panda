@@ -4,9 +4,10 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 
 use crate::cddl::generate_cddl_definition;
-use crate::document::DocumentViewId;
 use crate::schema::system::{SchemaFieldView, SchemaView};
 use crate::schema::{FieldType, SchemaError};
+
+use super::SchemaId;
 
 /// The key of a schema field
 type FieldKey = String;
@@ -16,7 +17,7 @@ type FieldKey = String;
 /// It is constructed from a [`SchemaView`] and all related [`SchemaFieldView`]s.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Schema {
-    id: DocumentViewId,
+    id: SchemaId,
     name: String,
     description: String,
     fields: BTreeMap<FieldKey, FieldType>,
@@ -49,7 +50,7 @@ impl Schema {
         }
 
         Ok(Schema {
-            id: schema.view_id().to_owned(),
+            id: SchemaId::new_application(schema.name(), schema.view_id()),
             name: schema.name().to_owned(),
             description: schema.description().to_owned(),
             fields: fields_map,
@@ -65,7 +66,7 @@ impl Schema {
 
 impl Display for Schema {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<Schema {}_{}>", self.name, self.id)
+        write!(f, "<Schema {}>", self.id)
     }
 }
 
@@ -171,7 +172,7 @@ mod tests {
         assert_eq!(expected_cddl, schema.as_cddl());
 
         // Schema should have a string representation
-        assert!(format!("{}", schema).starts_with("<Schema venue_name_"));
+        assert_eq!(format!("{}", schema), "<Schema venue_name 496543>");
     }
 
     #[rstest]
@@ -233,30 +234,5 @@ mod tests {
             ]
         )
         .is_err());
-    }
-
-    #[test]
-    fn schema_display() {
-        let appl_schema =
-            SchemaId::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")
-                .unwrap();
-        assert_eq!(
-            appl_schema,
-            SchemaId::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")
-                .unwrap()
-        );
-
-        assert_eq!(
-            format!("{}", appl_schema),
-            "8fc78b"
-        );
-
-        let schema = Schema::new("schema_v1").unwrap();
-        assert_eq!(schema.id, SchemaId::Schema);
-        assert_eq!(format!("{}", schema), "schema_v1");
-
-        let schema_field = SchemaId::new("schema_field_v1").unwrap();
-        assert_eq!(schema_field, SchemaId::SchemaField);
-        assert_eq!(format!("{}", schema_field), "schema_field_v1");
     }
 }

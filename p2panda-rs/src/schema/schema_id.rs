@@ -166,7 +166,7 @@ mod test {
     use crate::document::DocumentViewId;
     use crate::operation::OperationId;
     use crate::test_utils::constants::TEST_SCHEMA_ID;
-    use crate::test_utils::fixtures::random_operation_id;
+    use crate::test_utils::fixtures::{random_operation_id, schema};
 
     use super::SchemaId;
 
@@ -284,7 +284,7 @@ mod test {
             .unwrap()
         );
 
-        assert_eq!(format!("{}", appl_schema), "8fc78b");
+        assert_eq!(format!("{}", appl_schema), "venue 8fc78b");
 
         let schema = SchemaId::new("schema_v1").unwrap();
         assert_eq!(schema, SchemaId::Schema);
@@ -299,5 +299,12 @@ mod test {
     fn parse_schema_type() {
         let schema: SchemaId = "schema_v1".parse().unwrap();
         assert_eq!(schema, SchemaId::Schema);
+    }
+
+    #[rstest]
+    fn display(schema: SchemaId) {
+        assert_eq!(format!("{}", schema), "venue 8fc78b");
+        assert_eq!(format!("{}", SchemaId::Schema), "schema_v1");
+        assert_eq!(format!("{}", SchemaId::SchemaField), "schema_field_v1");
     }
 }
