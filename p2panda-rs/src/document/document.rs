@@ -12,22 +12,22 @@ use crate::schema::SchemaId;
 /// Construct a graph from a list of operations.
 pub(super) fn build_graph(
     operations: &[OperationWithMeta],
-) -> Result<Graph<OperationWithMeta>, DocumentBuilderError> {
+) -> Result<Graph<OperationId, OperationWithMeta>, DocumentBuilderError> {
     let mut graph = Graph::new();
 
     // Add all operations to the graph.
     for operation in operations {
-        graph.add_node(operation.operation_id().as_str(), operation.clone());
+        graph.add_node(operation.operation_id(), operation.clone());
     }
 
     // Add links between operations in the graph.
     for operation in operations {
         if let Some(previous_operations) = operation.previous_operations() {
             for previous in previous_operations {
-                let success = graph.add_link(previous.as_str(), operation.operation_id().as_str());
+                let success = graph.add_link(&previous, operation.operation_id());
                 if !success {
                     return Err(DocumentBuilderError::InvalidOperationLink(
-                        operation.operation_id().as_str().into(),
+                        operation.operation_id().as_hash().as_str().into(),
                     ));
                 }
             }
@@ -266,7 +266,6 @@ mod tests {
     use crate::identity::KeyPair;
     use crate::operation::{Operation, OperationId, OperationValue, OperationWithMeta};
     use crate::schema::SchemaId;
-    use crate::test_utils::constants::DEFAULT_SCHEMA_HASH;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, fields, random_key_pair, schema, update_operation,
     };
@@ -459,8 +458,8 @@ mod tests {
         let expected_graph_tips: Vec<OperationId> = vec![penguin_entry_3_hash.clone().into()];
         let expected_op_order = vec![
             panda_1.clone(),
-            panda_2.clone(),
             penguin_1.clone(),
+            panda_2.clone(),
             penguin_2.clone(),
             penguin_3.clone(),
         ];
@@ -531,7 +530,7 @@ mod tests {
     }
 
     #[rstest]
-    fn doc_test() {
+    fn doc_test(schema: SchemaId) {
         let polar = Client::new(
             "polar".to_string(),
             KeyPair::from_private_key_str(
@@ -546,7 +545,7 @@ mod tests {
             )
             .unwrap(),
         );
-        let schema = SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap();
+
         let mut node = Node::new();
         let (polar_entry_1_hash, _) = send_to_node(
             &mut node,
@@ -580,7 +579,10 @@ mod tests {
             &update_operation(
                 schema.clone(),
                 vec![polar_entry_1_hash.clone().into()],
-                operation_fields(vec![("name", OperationValue::Text("🐼 Cafe!".to_string()))]),
+                operation_fields(vec![(
+                    "name",
+                    OperationValue::Text("🐼 Cafe!!".to_string()),
+                )]),
             ),
         )
         .unwrap();
@@ -695,7 +697,7 @@ mod tests {
         // Here we see that "🐼 Cafe!" won the conflict, meaning it was applied after "ʕ •ᴥ•ʔ Cafe!".
         assert_eq!(
             document_view.get("name").unwrap(),
-            &OperationValue::Text("🐼 Cafe!".into())
+            &OperationValue::Text("🐼 Cafe!!".into())
         );
         assert_eq!(
             document_view.get("owner").unwrap(),
@@ -732,7 +734,7 @@ mod tests {
 
         assert_eq!(
             document_view.get("name").unwrap(),
-            &OperationValue::Text("🐼 Cafe!".into())
+            &OperationValue::Text("🐼 Cafe!!".into())
         );
         assert_eq!(
             document_view.get("owner").unwrap(),

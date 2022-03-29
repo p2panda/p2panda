@@ -18,7 +18,7 @@
 //! # use p2panda_rs::operation::{OperationValue, OperationWithMeta};
 //! # use p2panda_rs::schema::SchemaId;
 //! # use p2panda_rs::test_utils::utils::{create_operation, delete_operation, update_operation, operation_fields};
-//! # use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
+//! # use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
 //! # use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 //! use p2panda_rs::document::DocumentBuilder;
 //! #
@@ -37,7 +37,7 @@
 //! #     .unwrap(),
 //! # );
 //! #
-//! # let schema = SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap();
+//! # let schema = SchemaId::new(TEST_SCHEMA_ID).unwrap();
 //! # let mut node = Node::new();
 //! #
 //! # let (polar_entry_1_hash, _) = send_to_node(
@@ -74,7 +74,7 @@
 //! #     &update_operation(
 //! #         schema.clone(),
 //! #         vec![polar_entry_1_hash.clone().into()],
-//! #         operation_fields(vec![("name", OperationValue::Text("🐼 Cafe!".to_string()))]),
+//! #         operation_fields(vec![("name", OperationValue::Text("🐼 Cafe!!".to_string()))]),
 //! #     ),
 //! # )
 //! # .unwrap();
@@ -174,7 +174,7 @@
 //! //                A
 //! //                |
 //! //                |                  +++++++++++++++++++++++++++
-//! //                -----------------  | name: "🐼 Cafe!"        |
+//! //                -----------------  | name: "🐼 Cafe!!"        |
 //! //                                   +++++++++++++++++++++++++++
 //! //
 //! // This can happen when the document is edited concurrently at different locations, before
@@ -185,16 +185,16 @@
 //!
 //! // We can build the document agan now with these 3 operations:
 //! //
-//! // UPDATE operation: {name: "🐼 Cafe!"}
+//! // UPDATE operation: {name: "🐼 Cafe!!"}
 //! operations.push(operation_3);
 //!
 //! let document = DocumentBuilder::new(operations.clone()).build().unwrap();
 //! let document_view = document.view();
 //!
-//! // Here we see that "🐼 Cafe!" won the conflict, meaning it was applied after "ʕ •ᴥ•ʔ Cafe!".
+//! // Here we see that "🐼 Cafe!!" won the conflict, meaning it was applied after "ʕ •ᴥ•ʔ Cafe!".
 //! assert_eq!(
 //!     document_view.get("name").unwrap(),
-//!     &OperationValue::Text("🐼 Cafe!".into())
+//!     &OperationValue::Text("🐼 Cafe!!".into())
 //! );
 //! assert_eq!(
 //!     document_view.get("owner").unwrap(),
@@ -219,7 +219,7 @@
 //! //                A                                                  | house-number: 102  |
 //! //                |                                                  ++++++++++++++++++++++
 //! //                |                  +++++++++++++++++++++++++++     /
-//! //                -----------------  | name: "🐼 Cafe!"        |<---/
+//! //                -----------------  | name: "🐼 Cafe!!"        |<---/
 //! //                                   +++++++++++++++++++++++++++
 //! //
 //!
@@ -231,7 +231,7 @@
 //!
 //! assert_eq!(
 //!     document_view.get("name").unwrap(),
-//!     &OperationValue::Text("🐼 Cafe!".into())
+//!     &OperationValue::Text("🐼 Cafe!!".into())
 //! );
 //! assert_eq!(
 //!     document_view.get("owner").unwrap(),
@@ -262,9 +262,9 @@ mod document_view;
 mod document_view_id;
 mod error;
 
-pub use document::DocumentBuilder;
 #[allow(unused_imports)]
 use document::{build_graph, reduce};
+pub use document::{Document, DocumentBuilder};
 pub use document_id::DocumentId;
 pub use document_view::DocumentView;
 pub use document_view_id::DocumentViewId;
