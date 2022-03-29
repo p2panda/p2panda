@@ -162,6 +162,7 @@ mod test {
             Membership::new(&frog_author.clone().into(), None)
         );
         assert!(!membership.accepted());
+        assert!(!membership.has_response());
 
         // She responds to the request
         let (frog_membership_doc_id, _) = send_to_node(
@@ -186,6 +187,7 @@ mod test {
             Membership::new(&frog_author.clone().into(), Some(true))
         );
         assert!(membership.accepted());
+        assert!(membership.has_response());
 
         // She revokes her membership
         send_to_node(
@@ -213,5 +215,6 @@ mod test {
             Membership::new(&frog_author.into(), Some(false))
         );
         assert!(!membership.accepted());
+        assert!(membership.has_response());
     }
 }
