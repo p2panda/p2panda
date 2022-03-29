@@ -4,9 +4,10 @@ use std::convert::TryInto;
 use std::fmt::Debug;
 
 use crate::document::DocumentId;
-use crate::entry::{Entry, EntrySigned, LogId};
+use crate::entry::{LogId, SeqNum};
+use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::OperationEncoded;
+use crate::operation::Operation;
 use crate::schema::SchemaId;
 use crate::storage_provider::models::{EntryWithOperation, Log};
 
@@ -22,14 +23,28 @@ pub trait AsStorageEntry:
     /// The error type returned by this traits' methods.
     type AsStorageEntryError: Debug;
 
-    /// Return the encoded entry.
-    fn entry_signed(&self) -> EntrySigned;
+    /// Returns the author of this entry.
+    fn author(&self) -> Author;
 
-    /// Returns the optional encoded operation.
-    fn operation_encoded(&self) -> Option<OperationEncoded>;
+    /// Returns the hash of this entry.
+    fn hash(&self) -> Hash;
 
-    /// Returns the decoded operation.
-    fn entry_decoded(&self) -> Entry;
+    /// Returns the bytes of the signed encoded entry.
+    fn entry_bytes(&self) -> Vec<u8>;
+
+    /// Returns hash of backlink entry when given.
+    fn backlink_hash(&self) -> Option<Hash>;
+
+    /// Returns hash of skiplink entry when given.
+    fn skiplink_hash(&self) -> Option<Hash>;
+
+    /// Returns the sequence number of this entry.
+    fn seq_num(&self) -> SeqNum;
+
+    /// Returns the log id of this entry.
+    fn log_id(&self) -> LogId;
+
+    fn operation(&self) -> Operation;
 }
 
 /// Trait to be implemented on a struct representing a stored log.

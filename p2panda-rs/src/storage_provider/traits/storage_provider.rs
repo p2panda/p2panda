@@ -66,20 +66,15 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
             // An entry was found which serves as the backlink for the upcoming entry
             Some(entry_backlink) => {
                 let entry_latest = entry_latest.unwrap();
-                let entry_hash_backlink = entry_backlink.entry_signed().hash();
+                let entry_hash_backlink = entry_backlink.hash();
                 // Determine skiplink ("lipmaa"-link) entry in this log
                 let entry_hash_skiplink = self.determine_skiplink(&entry_latest).await?;
 
                 Ok(Self::EntryArgsResponse::new(
-                    Some(entry_hash_backlink),
+                    Some(entry_hash_backlink.clone()),
                     entry_hash_skiplink,
-                    entry_latest
-                        .entry_decoded()
-                        .seq_num()
-                        .clone()
-                        .next()
-                        .unwrap(),
-                    *entry_latest.entry_decoded().log_id(),
+                    entry_latest.seq_num().clone().next().unwrap(),
+                    entry_latest.log_id(),
                 ))
             }
             // No entry was given yet, we can assume this is the beginning of the log
@@ -98,20 +93,14 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         params: &Self::PublishEntryRequest,
     ) -> Result<Self::PublishEntryResponse, Box<dyn std::error::Error>> {
         // Create an `EntryWithOperation` which also validates the encoded entry and operation.
-        let entry_with_operation =
-            EntryWithOperation::new(params.entry_signed(), params.operation_encoded())?;
-
-        // Decode author, entry and operation. This conversion validates the operation hash
-        let author = params.entry_signed().author();
-        let entry_encoded = params.entry_signed();
-        let entry = decode_entry(params.entry_signed(), Some(params.operation_encoded()))?;
-        let operation = Operation::from(params.operation_encoded());
+        let entry: StorageEntry =
+            EntryWithOperation::new(params.entry_signed(), params.operation_encoded())?.into();
 
         // Every operation refers to a document we need to determine. A document is identified by the
         // hash of its first `CREATE` operation, it is the root operation of every document graph
-        let document_id = if operation.is_create() {
+        let document_id = if entry.operation().is_create() {
             // This is easy: We just use the entry hash directly to determine the document id
-            DocumentId::new(entry_encoded.hash().into())
+            DocumentId::new(entry.hash().clone().into())
         } else {
             // For any other operations which followed after creation we need to either walk the operation
             // graph back to its `CREATE` operation or more easily look up the database since we keep track
@@ -127,18 +116,18 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
                 .backlink_hash()
                 .ok_or(PublishEntryError::OperationWithoutBacklink)?;
 
-            self.get_document_by_entry(backlink_entry_hash)
+            self.get_document_by_entry(&backlink_entry_hash)
                 .await?
                 .ok_or(PublishEntryError::DocumentMissing)?
         };
 
         // Determine expected log id for new entry
         let document_log_id = self
-            .find_document_log_id(&author, Some(&document_id))
+            .find_document_log_id(&entry.author(), Some(&document_id))
             .await?;
 
         // Check if provided log id matches expected log id
-        if &document_log_id != entry.log_id() {
+        if document_log_id != entry.log_id() {
             return Err(PublishEntryError::InvalidLogId(
                 entry.log_id().as_u64(),
                 document_log_id.as_u64(),
@@ -148,25 +137,33 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
         // Get related bamboo backlink and skiplink entries
         let entry_backlink_bytes = if !entry.seq_num().is_first() {
-            self.entry_at_seq_num(&author, entry.log_id(), &entry.seq_num_backlink().unwrap())
-                .await?
-                .map(|link| {
-                    let bytes = link.entry_signed().to_bytes();
-                    Some(bytes)
-                })
-                .ok_or(PublishEntryError::BacklinkMissing)
+            self.entry_at_seq_num(
+                &entry.author(),
+                &entry.log_id(),
+                &entry.seq_num().backlink_seq_num().unwrap(),
+            )
+            .await?
+            .map(|link| {
+                let bytes = link.entry_bytes().to_owned();
+                Some(bytes)
+            })
+            .ok_or(PublishEntryError::BacklinkMissing)
         } else {
             Ok(None)
         }?;
 
         let entry_skiplink_bytes = if !entry.seq_num().is_first() {
-            self.entry_at_seq_num(&author, entry.log_id(), &entry.seq_num_skiplink().unwrap())
-                .await?
-                .map(|link| {
-                    let bytes = link.entry_signed().to_bytes();
-                    Some(bytes)
-                })
-                .ok_or(PublishEntryError::SkiplinkMissing)
+            self.entry_at_seq_num(
+                &entry.author(),
+                &entry.log_id(),
+                &entry.seq_num().skiplink_seq_num().unwrap(),
+            )
+            .await?
+            .map(|link| {
+                let bytes = link.entry_bytes().to_owned();
+                Some(bytes)
+            })
+            .ok_or(PublishEntryError::SkiplinkMissing)
         } else {
             Ok(None)
         }?;
@@ -174,37 +171,41 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         // Verify bamboo entry integrity, including encoding, signature of the entry correct back-
         // and skiplinks
         bamboo_rs_core_ed25519_yasmf::verify(
-            &entry_encoded.to_bytes(),
+            &entry.entry_bytes(),
             Some(&params.operation_encoded().to_bytes()),
             entry_skiplink_bytes.as_deref(),
             entry_backlink_bytes.as_deref(),
         )?;
 
         // Register log in database when a new document is created
-        if operation.is_create() {
-            let log = Log::new(&author, &operation.schema(), &document_id, entry.log_id()).into();
+        if entry.operation().is_create() {
+            let log = Log::new(
+                &entry.author(),
+                &entry.operation().schema(),
+                &document_id,
+                &entry.log_id(),
+            )
+            .into();
 
             self.insert_log(log).await?;
         }
 
         // Finally insert Entry in database
-        self.insert_entry(entry_with_operation.into()).await?;
+        self.insert_entry(entry.clone()).await?;
 
         // Already return arguments for next entry creation
-        let entry_latest: StorageEntry = self.latest_entry(&author, entry.log_id()).await?.unwrap();
-        let entry_hash_skiplink = self.determine_skiplink(&entry_latest).await?;
-        let next_seq_num = entry_latest
-            .entry_decoded()
-            .seq_num()
-            .clone()
-            .next()
+        let entry_latest: StorageEntry = self
+            .latest_entry(&entry.author(), &entry.log_id())
+            .await?
             .unwrap();
+        let entry_hash_skiplink = self.determine_skiplink(&entry_latest).await?;
+        let next_seq_num = entry_latest.seq_num().clone().next().unwrap();
 
         Ok(Self::PublishEntryResponse::new(
-            Some(entry_encoded.hash()),
+            Some(entry.hash().clone()),
             entry_hash_skiplink,
             next_seq_num,
-            *entry.log_id(),
+            entry.log_id(),
         ))
     }
 }
@@ -282,8 +283,10 @@ pub mod tests {
 
         for entry in entries.clone() {
             // Publish each test entry in order
-            let publish_entry_request =
-                PublishEntryRequest(entry.entry_signed(), entry.operation_encoded().unwrap());
+            let publish_entry_request = PublishEntryRequest(
+                entry.entry_signed().clone(),
+                entry.operation_encoded().unwrap().clone(),
+            );
 
             let publish_entry_response = new_db.publish_entry(&publish_entry_request).await;
 
@@ -364,8 +367,10 @@ pub mod tests {
             assert_eq!(entry_args_response.unwrap(), expected_reponse);
 
             // Publish each test entry in order before next loop
-            let publish_entry_request =
-                PublishEntryRequest(entry.entry_signed(), entry.operation_encoded().unwrap());
+            let publish_entry_request = PublishEntryRequest(
+                entry.entry_signed().clone(),
+                entry.operation_encoded().unwrap().clone(),
+            );
 
             new_db.publish_entry(&publish_entry_request).await.unwrap();
         }
@@ -384,8 +389,8 @@ pub mod tests {
 
         // Entry request for valid first intry in log 1
         let publish_entry_request = PublishEntryRequest(
-            entries.get(0).unwrap().entry_signed(),
-            entries.get(0).unwrap().operation_encoded().unwrap(),
+            entries.get(0).unwrap().entry_signed().clone(),
+            entries.get(0).unwrap().operation_encoded().unwrap().clone(),
         );
 
         // Publish the first valid entry
@@ -442,8 +447,8 @@ pub mod tests {
         // Create request for publishing an entry which has a valid backlink and skiplink, but the
         // document it is associated with does not exist
         let publish_entry_with_non_existant_document = PublishEntryRequest(
-            entries.get(6).unwrap().entry_signed(),
-            entries.get(6).unwrap().operation_encoded().unwrap(),
+            entries.get(6).unwrap().entry_signed().clone(),
+            entries.get(6).unwrap().operation_encoded().unwrap().clone(),
         );
 
         let error_response = new_db
@@ -478,8 +483,8 @@ pub mod tests {
         };
 
         let publish_entry_request = PublishEntryRequest(
-            entries.get(7).unwrap().entry_signed(),
-            entries.get(7).unwrap().operation_encoded().unwrap(),
+            entries.get(7).unwrap().entry_signed().clone(),
+            entries.get(7).unwrap().operation_encoded().unwrap().clone(),
         );
 
         // Should error as an entry at seq num 8 should have a skiplink relation to the missing

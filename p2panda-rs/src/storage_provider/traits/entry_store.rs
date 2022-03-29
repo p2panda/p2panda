@@ -42,8 +42,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         &self,
         entry: &StorageEntry,
     ) -> Result<Option<Hash>, EntryStorageError> {
-        let decoded_entry = entry.entry_decoded();
-        let next_seq_num = decoded_entry.seq_num().clone().next().unwrap();
+        let next_seq_num = entry.seq_num().clone().next().unwrap();
 
         // Unwrap as we know that an skiplink exists as soon as previous entry is given
         let skiplink_seq_num = next_seq_num.skiplink_seq_num().unwrap();
@@ -51,17 +50,13 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         // Check if skiplink is required and return hash if so
         let entry_skiplink_hash = if is_lipmaa_required(next_seq_num.as_u64()) {
             let skiplink_entry = match self
-                .entry_at_seq_num(
-                    &entry.entry_signed().author(),
-                    decoded_entry.log_id(),
-                    &skiplink_seq_num,
-                )
+                .entry_at_seq_num(&entry.author(), &entry.log_id(), &skiplink_seq_num)
                 .await?
             {
                 Some(entry) => Ok(entry),
                 None => Err(EntryStorageError::SkiplinkMissing),
             }?;
-            Ok(Some(skiplink_entry.entry_signed().hash()))
+            Ok(Some(skiplink_entry.hash()))
         } else {
             Ok(None)
         }?;
@@ -82,6 +77,7 @@ pub mod tests {
     use crate::operation::{AsOperation, OperationEncoded};
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::EntryStorageError;
+    use crate::storage_provider::models::EntryWithOperation;
     use crate::storage_provider::traits::test_utils::{
         test_db, SimplestStorageProvider, StorageEntry, SKIPLINK_ENTRIES,
     };
@@ -167,17 +163,21 @@ pub mod tests {
             entries: Arc::new(Mutex::new(Vec::new())),
         };
 
-        let storage_entry = StorageEntry::new(entry_signed_encoded, operation_encoded);
-        let decoded_entry = storage_entry.entry_decoded();
+        let storage_entry: StorageEntry =
+            EntryWithOperation::new(&entry_signed_encoded, &operation_encoded)
+                .unwrap()
+                .into();
 
         // Insert an entry into the store.
         assert!(store.insert_entry(storage_entry.clone()).await.is_ok());
 
-        let author = storage_entry.entry_signed().author();
-
         // Get an entry at a specific seq number from an authors log.
         let entry_at_seq_num = store
-            .entry_at_seq_num(&author, decoded_entry.log_id(), decoded_entry.seq_num())
+            .entry_at_seq_num(
+                &storage_entry.author(),
+                &storage_entry.log_id(),
+                &storage_entry.seq_num(),
+            )
             .await;
 
         assert!(entry_at_seq_num.is_ok());
@@ -196,13 +196,14 @@ pub mod tests {
             entries: Arc::new(Mutex::new(Vec::new())),
         };
 
-        let storage_entry = StorageEntry::new(entry_signed_encoded, operation_encoded);
-
-        let author = storage_entry.entry_signed().author();
+        let storage_entry: StorageEntry =
+            EntryWithOperation::new(&entry_signed_encoded, &operation_encoded)
+                .unwrap()
+                .into();
 
         // Before an entry is inserted the latest entry should be none.
         assert!(store
-            .latest_entry(&author, &LogId::default())
+            .latest_entry(&storage_entry.author(), &LogId::default())
             .await
             .unwrap()
             .is_none());
@@ -212,7 +213,7 @@ pub mod tests {
 
         assert_eq!(
             store
-                .latest_entry(&author, &LogId::default())
+                .latest_entry(&storage_entry.author(), &LogId::default())
                 .await
                 .unwrap()
                 .unwrap(),
@@ -237,8 +238,14 @@ pub mod tests {
 
         let author_1_entry = sign_and_encode(&entry, &key_pair_1).unwrap();
         let author_2_entry = sign_and_encode(&entry, &key_pair_2).unwrap();
-        let author_1_entry = StorageEntry::new(author_1_entry, operation_encoded.clone());
-        let author_2_entry = StorageEntry::new(author_2_entry, operation_encoded);
+        let author_1_entry: StorageEntry =
+            EntryWithOperation::new(&author_1_entry, &operation_encoded)
+                .unwrap()
+                .into();
+        let author_2_entry: StorageEntry =
+            EntryWithOperation::new(&author_2_entry, &operation_encoded)
+                .unwrap()
+                .into();
 
         // Before an entry with this schema is inserted this method should return an empty array.
         assert!(store.by_schema(&schema).await.unwrap().is_empty());

@@ -125,11 +125,19 @@ impl TryInto<Log> for StorageLog {
 pub struct StorageEntry(String);
 
 impl StorageEntry {
-    pub fn new(entry_signed: EntrySigned, operation_encoded: OperationEncoded) -> Self {
-        // Concat all values
-        let log_string = format!("{}-{}", entry_signed.as_str(), operation_encoded.as_str());
+    pub fn entry_decoded(&self) -> Entry {
+        // Unwrapping as validation occurs in `EntryWithOperation`.
+        decode_entry(&self.entry_signed(), self.operation_encoded().as_ref()).unwrap()
+    }
 
-        Self(log_string)
+    pub fn entry_signed(&self) -> EntrySigned {
+        let params: Vec<&str> = self.0.split('-').collect();
+        EntrySigned::new(params[0]).unwrap()
+    }
+
+    pub fn operation_encoded(&self) -> Option<OperationEncoded> {
+        let params: Vec<&str> = self.0.split('-').collect();
+        Some(OperationEncoded::new(params[1]).unwrap())
     }
 }
 
@@ -137,29 +145,50 @@ impl StorageEntry {
 impl AsStorageEntry for StorageEntry {
     type AsStorageEntryError = EntryStorageError;
 
-    fn entry_signed(&self) -> EntrySigned {
-        let params: Vec<&str> = self.0.split('-').collect();
-        EntrySigned::new(params[0]).unwrap()
+    fn author(&self) -> Author {
+        self.entry_signed().author()
     }
 
-    fn operation_encoded(&self) -> Option<OperationEncoded> {
-        let params: Vec<&str> = self.0.split('-').collect();
-        Some(OperationEncoded::new(params[1]).unwrap())
+    fn hash(&self) -> Hash {
+        self.entry_signed().hash()
     }
 
-    fn entry_decoded(&self) -> Entry {
-        // Unwrapping as validation occurs in `EntryWithOperation`.
-        decode_entry(&self.entry_signed(), self.operation_encoded().as_ref()).unwrap()
+    fn entry_bytes(&self) -> Vec<u8> {
+        self.entry_signed().to_bytes()
+    }
+
+    fn backlink_hash(&self) -> Option<Hash> {
+        self.entry_decoded().backlink_hash().cloned()
+    }
+
+    fn skiplink_hash(&self) -> Option<Hash> {
+        self.entry_decoded().skiplink_hash().cloned()
+    }
+
+    fn seq_num(&self) -> SeqNum {
+        *self.entry_decoded().seq_num()
+    }
+
+    fn log_id(&self) -> LogId {
+        *self.entry_decoded().log_id()
+    }
+
+    fn operation(&self) -> Operation {
+        let operation_encoded = self.operation_encoded().unwrap();
+        Operation::from(&operation_encoded)
     }
 }
 
 /// Implement required `TryFrom` conversion trait.
 impl From<EntryWithOperation> for StorageEntry {
     fn from(entry: EntryWithOperation) -> Self {
-        StorageEntry::new(
-            entry.entry_signed().to_owned(),
-            entry.operation_encoded().to_owned(),
-        )
+        let entry_string = format!(
+            "{}-{}",
+            entry.entry_signed().as_str(),
+            entry.operation_encoded().as_str()
+        );
+
+        StorageEntry(entry_string)
     }
 }
 
@@ -288,7 +317,9 @@ pub fn test_db(
 
     let encoded_entry = sign_and_encode(&create_entry, &key_pair).unwrap();
     let encoded_operation = OperationEncoded::try_from(&create_operation).unwrap();
-    let storage_entry = StorageEntry::new(encoded_entry, encoded_operation);
+    let storage_entry: StorageEntry = EntryWithOperation::new(&encoded_entry, &encoded_operation)
+        .unwrap()
+        .into();
 
     db_entries.push(storage_entry);
 
@@ -317,7 +348,10 @@ pub fn test_db(
 
         let encoded_entry = sign_and_encode(&update_entry, &key_pair).unwrap();
         let encoded_operation = OperationEncoded::try_from(&update_operation).unwrap();
-        let storage_entry = StorageEntry::new(encoded_entry, encoded_operation);
+        let storage_entry: StorageEntry =
+            EntryWithOperation::new(&encoded_entry, &encoded_operation)
+                .unwrap()
+                .into();
 
         db_entries.push(storage_entry)
     }
