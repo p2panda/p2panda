@@ -85,7 +85,7 @@ mod test {
             &mut node,
             &rabbit,
             &create_operation(
-                "key_group_membership_request_v1".parse().unwrap(),
+                "key_group_request_v1".parse().unwrap(),
                 fields(vec![(
                     "key_group",
                     OperationValue::Relation(Relation::new(DocumentId::new(key_group_id))),

@@ -26,11 +26,11 @@ pub enum SchemaId {
     /// A key group.
     KeyGroup,
 
-    /// A key group membership response.
-    KeyGroupMembership,
-
     /// A key group membership request.
-    KeyGroupMembershipRequest,
+    KeyGroupRequest,
+
+    /// A key group membership response.
+    KeyGroupResponse,
 }
 
 impl SchemaId {
@@ -50,8 +50,8 @@ impl SchemaId {
             "schema_v1" => Some(SchemaId::Schema),
             "schema_field_v1" => Some(SchemaId::SchemaField),
             "key_group_v1" => Some(SchemaId::KeyGroup),
-            "key_group_membership_v1" => Some(SchemaId::KeyGroupMembership),
-            "key_group_membership_request_v1" => Some(SchemaId::KeyGroupMembershipRequest),
+            "key_group_request_v1" => Some(SchemaId::KeyGroupRequest),
+            "key_group_response_v1" => Some(SchemaId::KeyGroupResponse),
             _ => None,
         }
     }
@@ -113,8 +113,8 @@ impl SchemaId {
             SchemaId::Schema => "schema_v1".to_string(),
             SchemaId::SchemaField => "schema_field_v1".to_string(),
             SchemaId::KeyGroup => "key_group_v1".to_string(),
-            SchemaId::KeyGroupMembership => "key_group_membership_v1".to_string(),
-            SchemaId::KeyGroupMembershipRequest => "key_group_membership_request_v1".to_string(),
+            SchemaId::KeyGroupResponse => "key_group_response_v1".to_string(),
+            SchemaId::KeyGroupRequest => "key_group_request_v1".to_string(),
             SchemaId::Application(name, view_id) => {
                 let mut schema_id = name.clone();
                 for op_id in view_id.sorted().into_iter() {

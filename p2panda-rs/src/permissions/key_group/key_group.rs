@@ -109,10 +109,10 @@ impl KeyGroup {
 
         for document in documents {
             match document.schema() {
-                SchemaId::KeyGroupMembership => {
+                SchemaId::KeyGroupResponse => {
                     responses.push(MembershipView::try_from(document.clone())?);
                 }
-                SchemaId::KeyGroupMembershipRequest => {
+                SchemaId::KeyGroupRequest => {
                     let request = MembershipRequestView::try_from(document.clone())?;
                     if request.key_group() == &key_group_id {
                         requests.insert(request.view_id().clone(), request);
@@ -205,7 +205,7 @@ impl KeyGroup {
                 )
                 .unwrap();
         }
-        Operation::new_create(SchemaId::KeyGroupMembershipRequest, request_fields).unwrap()
+        Operation::new_create(SchemaId::KeyGroupRequest, request_fields).unwrap()
     }
 
     /// Make a new response for a membership request.
@@ -220,7 +220,7 @@ impl KeyGroup {
                 OperationValue::PinnedRelation(PinnedRelation::new(request_view_id.clone())),
             )
             .unwrap();
-        Operation::new_create(SchemaId::KeyGroupMembership, response_fields).unwrap()
+        Operation::new_create(SchemaId::KeyGroupResponse, response_fields).unwrap()
     }
 
     /// Update a membership given a previous response's view id.
@@ -230,7 +230,7 @@ impl KeyGroup {
             .add("accepted", OperationValue::Boolean(accepted))
             .unwrap();
         Operation::new_update(
-            SchemaId::KeyGroupMembership,
+            SchemaId::KeyGroupResponse,
             response_view_id.graph_tips().to_vec(),
             response_fields,
         )

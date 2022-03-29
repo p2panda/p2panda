@@ -105,7 +105,9 @@ mod test {
     #[case(
         ("request", OperationValue::Relation(document_id(DEFAULT_HASH).into())),
         ("accepted", OperationValue::Boolean(true)),
-        Some("invalid field 'request' with value Relation(Relation(DocumentId(OperationId(Hash(\"0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543\")))))")
+        Some("invalid field 'request' with value Relation(Relation(Docu\
+            mentId(OperationId(Hash(\"0020b177ec1bf26dfb3b7010d473e6d44\
+            713b29b765b99c6e60ecbfae742de496543\")))))")
     )]
     #[case(
         ("requesd", OperationValue::PinnedRelation(document_view_id(vec![DEFAULT_HASH]).into())),
@@ -130,7 +132,7 @@ mod test {
     ) {
         let doc = document(
             create_operation(
-                SchemaId::KeyGroupMembership,
+                SchemaId::KeyGroupResponse,
                 fields(vec![request_field, accepted_field]),
             ),
             key_pair,
@@ -149,7 +151,7 @@ mod test {
     fn deleted_doc(key_pair: KeyPair) {
         let doc = document(
             create_operation(
-                SchemaId::KeyGroupMembership,
+                SchemaId::KeyGroupResponse,
                 fields(vec![
                     (
                         "request",
@@ -164,9 +166,9 @@ mod test {
         let result = MembershipView::try_from(doc);
         assert_eq!(
             format!("{}", result.unwrap_err()),
-            "unable to create view for deleted \
-        document DocumentId(OperationId(Hash(\"0020b068fde5cb5a738ee3ef2f6f54663d5236095839c844917\
-        22a2f6ca507118237\")))"
+            "unable to create view for deleted document DocumentId(Oper\
+                ationId(Hash(\"00203d3e3644544c511a7e3f14d76cac93b58ba8\
+                7249e27f891ee4d605c03489d67f\")))"
         )
     }
 
@@ -175,9 +177,9 @@ mod test {
         let result = MembershipView::try_from(document);
         assert_eq!(
             format!("{}", result.unwrap_err()),
-            "expected schema KeyGroupMembership got Application(\"venue\", DocumentViewId([Operati\
-                onId(Hash(\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"\
-            ))]))"
+            "expected schema KeyGroupResponse got Application(\"venue\"\
+            , DocumentViewId([OperationId(Hash(\"0020c65567ae37efea293e\
+            34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"))]))"
         )
     }
 
