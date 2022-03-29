@@ -67,6 +67,7 @@ impl Hash {
     /// ## Example
     ///
     /// ```
+    /// # use p2panda_rs::hash::Hash;
     /// let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
     /// let hash: Hash = hash_str.parse().unwrap();
     /// assert_eq!(hash.short_str(), "6ec805");
