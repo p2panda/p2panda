@@ -38,6 +38,7 @@ pub enum FieldType {
 
 impl FieldType {
     /// Returns the string representation of this type.
+    #[allow(clippy::inherent_to_string)]
     pub fn to_string(&self) -> String {
         match self {
             FieldType::Bool => "bool".to_string(),
