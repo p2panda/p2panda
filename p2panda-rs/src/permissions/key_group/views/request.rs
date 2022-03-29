@@ -98,7 +98,7 @@ mod test {
     use crate::identity::KeyPair;
     use crate::schema::SchemaId;
     use crate::test_utils::constants::DEFAULT_HASH;
-    use crate::test_utils::fixtures::{document, fields, key_pair};
+    use crate::test_utils::fixtures::{document, fields, key_pair, random_document_id};
     use crate::test_utils::utils::create_operation;
 
     use super::*;
@@ -106,6 +106,10 @@ mod test {
     #[rstest]
     // Correct fields defined - this should pass
     #[case(vec![("key_group", OperationValue::Relation(DEFAULT_HASH.parse::<DocumentId>().unwrap().into()))], None)]
+    #[case(vec![
+        ("key_group", OperationValue::Relation(DEFAULT_HASH.parse::<DocumentId>().unwrap().into())),
+        ("member", OperationValue::Owner(random_document_id().into()))
+    ], None)]
     // No `key_group` field is defined
     #[case(vec![("badoozle", OperationValue::Boolean(true))], Some("missing field 'key_group'"))]
     // `key_group` is defined, but it has the wrong `OperationValue` assigned to it
