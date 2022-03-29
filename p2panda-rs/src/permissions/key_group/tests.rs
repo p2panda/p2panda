@@ -52,6 +52,7 @@ fn key_group_management(
         KeyGroup::new_from_documents(key_group_id.clone(), &node.get_documents(), &[]).unwrap();
 
     assert!(key_group.is_member(&frog_author));
+    assert!(!key_group.is_member(&rabbit_author));
     let expected_key_group_id = key_group_id.as_str().parse::<DocumentId>().unwrap();
     assert_eq!(key_group.id(), &expected_key_group_id);
 
