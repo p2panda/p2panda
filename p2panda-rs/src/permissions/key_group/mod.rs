@@ -22,4 +22,4 @@ pub use membership::Membership;
 pub use owner::Owner;
 pub use views::key_group::KeyGroupView;
 pub use views::request::MembershipRequestView;
-pub use views::response::MembershipView;
+pub use views::response::MembershipResponseView;

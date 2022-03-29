@@ -9,7 +9,7 @@ use crate::document::{Document, DocumentId, DocumentViewId};
 use crate::identity::Author;
 use crate::operation::{Operation, OperationFields, OperationValue, PinnedRelation, Relation};
 use crate::permissions::key_group::{
-    KeyGroupError, KeyGroupView, Membership, MembershipRequestView, MembershipView, Owner,
+    KeyGroupError, KeyGroupView, Membership, MembershipRequestView, MembershipResponseView, Owner,
 };
 use crate::schema::SchemaId;
 
@@ -110,7 +110,7 @@ impl KeyGroup {
         for document in documents {
             match document.schema() {
                 SchemaId::KeyGroupResponse => {
-                    responses.push(MembershipView::try_from(document.clone())?);
+                    responses.push(MembershipResponseView::try_from(document.clone())?);
                 }
                 SchemaId::KeyGroupRequest => {
                     let request = MembershipRequestView::try_from(document.clone())?;

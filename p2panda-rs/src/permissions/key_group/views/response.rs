@@ -10,10 +10,10 @@ use crate::Validate;
 
 /// Represents a membership document.
 #[derive(Clone, Debug)]
-pub struct MembershipView(Document);
+pub struct MembershipResponseView(Document);
 
 #[allow(dead_code)]
-impl MembershipView {
+impl MembershipResponseView {
     /// The id of this membership request view.
     pub fn view_id(&self) -> &DocumentViewId {
         self.0.view().id()
@@ -36,7 +36,7 @@ impl MembershipView {
     }
 }
 
-impl Validate for MembershipView {
+impl Validate for MembershipResponseView {
     type Error = SystemSchemaError;
 
     fn validate(&self) -> Result<(), Self::Error> {
@@ -72,7 +72,7 @@ impl Validate for MembershipView {
     }
 }
 
-impl TryFrom<Document> for MembershipView {
+impl TryFrom<Document> for MembershipResponseView {
     type Error = SystemSchemaError;
 
     fn try_from(document: Document) -> Result<Self, Self::Error> {
@@ -91,7 +91,7 @@ mod test {
     use crate::document::Document;
     use crate::identity::KeyPair;
     use crate::operation::OperationValue;
-    use crate::permissions::key_group::MembershipView;
+    use crate::permissions::key_group::MembershipResponseView;
     use crate::schema::SchemaId;
     use crate::test_utils::constants::DEFAULT_HASH;
     use crate::test_utils::fixtures::{
@@ -138,7 +138,7 @@ mod test {
             key_pair,
             false,
         );
-        let result = MembershipView::try_from(doc);
+        let result = MembershipResponseView::try_from(doc);
         match expected_err {
             Some(err_str) => {
                 assert_eq!(format!("{}", result.unwrap_err()), err_str)
@@ -163,7 +163,7 @@ mod test {
             key_pair,
             true,
         );
-        let result = MembershipView::try_from(doc);
+        let result = MembershipResponseView::try_from(doc);
         assert_eq!(
             format!("{}", result.unwrap_err()),
             "unable to create view for deleted document DocumentId(Oper\
@@ -174,7 +174,7 @@ mod test {
 
     #[rstest]
     fn wrong_schema(document: Document) {
-        let result = MembershipView::try_from(document);
+        let result = MembershipResponseView::try_from(document);
         assert_eq!(
             format!("{}", result.unwrap_err()),
             "expected schema KeyGroupResponse got Application(\"venue\", DocumentViewId([Operati\
