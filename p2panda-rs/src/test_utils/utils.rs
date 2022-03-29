@@ -156,3 +156,19 @@ pub fn document(create_operation: Operation) -> Document {
     let op_meta = OperationWithMeta::new(&entry_signed, &op_encoded).unwrap();
     DocumentBuilder::new(vec![op_meta]).build().unwrap()
 }
+
+#[cfg(test)]
+mod test {
+    use rstest::rstest;
+
+    use crate::operation::Operation;
+    use crate::test_utils::fixtures::create_operation;
+
+    use super::document;
+
+    #[rstest]
+    fn document_util(create_operation: Operation) {
+        let doc = document(create_operation);
+        assert!(doc.view().get("message").is_some());
+    }
+}
