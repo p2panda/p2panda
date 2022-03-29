@@ -10,13 +10,11 @@
 //! ```
 //! use p2panda_rs::operation::OperationValue;
 //! use p2panda_rs::schema::SchemaId;
-//! use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
+//! use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
 //! use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 //! use p2panda_rs::test_utils::utils::{
 //!     create_operation, delete_operation, schema, new_key_pair, operation_fields, update_operation,
 //! };
-//!
-//! # const CHAT_SCHEMA_HASH: &str = DEFAULT_SCHEMA_HASH;
 //!
 //! // Instantiate a new mock node
 //! let mut node = Node::new();
@@ -29,7 +27,7 @@
 //!     &mut node,
 //!     &panda,
 //!     &create_operation(
-//!         schema(DEFAULT_SCHEMA_HASH),
+//!         schema(TEST_SCHEMA_ID),
 //!         operation_fields(vec![(
 //!             "message",
 //!             OperationValue::Text("Ohh, my first message!".to_string()),
@@ -43,7 +41,7 @@
 //!     &mut node,
 //!     &panda,
 //!     &update_operation(
-//!         schema(DEFAULT_SCHEMA_HASH),
+//!         schema(TEST_SCHEMA_ID),
 //!         vec![document1_hash_id.clone().into()],
 //!         operation_fields(vec![(
 //!             "message",
@@ -58,7 +56,7 @@
 //!     &mut node,
 //!     &panda,
 //!     &delete_operation(
-//!         schema(DEFAULT_SCHEMA_HASH),
+//!         schema(TEST_SCHEMA_ID),
 //!         vec![entry2_hash.into()]
 //!     )
 //! )
@@ -69,7 +67,7 @@
 //!     &mut node,
 //!     &panda,
 //!     &create_operation(
-//!         schema(DEFAULT_SCHEMA_HASH),
+//!         schema(TEST_SCHEMA_ID),
 //!         operation_fields(vec![(
 //!             "message",
 //!             OperationValue::Text("Let's try that again.".to_string()),

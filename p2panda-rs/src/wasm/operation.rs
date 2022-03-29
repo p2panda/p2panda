@@ -185,7 +185,10 @@ pub fn encode_create_operation(
     schema_id: JsValue,
     fields: OperationFields,
 ) -> Result<String, JsValue> {
-    let schema: SchemaId = jserr!(deserialize_from_js(schema_id), "Invalid schema id");
+    let schema: SchemaId = jserr!(
+        deserialize_from_js(schema_id.clone()),
+        format!("Invalid schema id: {:?}", schema_id)
+    );
     let operation = jserr!(Operation::new_create(schema, fields.0));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())

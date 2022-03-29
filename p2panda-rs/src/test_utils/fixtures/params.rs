@@ -19,7 +19,7 @@ use crate::operation::{
 };
 use crate::permissions::key_group::{KeyGroup, KeyGroupView, Membership};
 use crate::schema::SchemaId;
-use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
+use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_PRIVATE_KEY, TEST_SCHEMA_ID};
 use crate::test_utils::fixtures::defaults;
 use crate::test_utils::utils;
 
@@ -49,11 +49,11 @@ pub fn seq_num(#[default(1)] n: u64) -> SeqNum {
     utils::seq_num(n)
 }
 
-/// Fixture which injects the default schema Hash into a test method. Default value can be
-/// overridden at testing time by passing in a custom schema hash string.
+/// Fixture which injects the default schema id into a test method. Default value can be
+/// overridden at testing time by passing in a custom schema id string.
 #[fixture]
-pub fn schema(#[default(DEFAULT_SCHEMA_HASH)] schema_str: &str) -> SchemaId {
-    SchemaId::new(schema_str).unwrap()
+pub fn schema(#[default(TEST_SCHEMA_ID)] schema_id: &str) -> SchemaId {
+    SchemaId::new(schema_id).unwrap()
 }
 
 /// Fixture which injects the default Hash into a test method. Default value can be overridden at

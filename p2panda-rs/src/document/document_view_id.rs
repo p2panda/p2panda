@@ -51,7 +51,7 @@ impl DocumentViewId {
     }
 
     /// Get sorted graph tips for this view id.
-    fn sorted(&self) -> Vec<OperationId> {
+    pub fn sorted(&self) -> Vec<OperationId> {
         let mut graph_tips = self.0.clone();
         graph_tips.sort();
         graph_tips
