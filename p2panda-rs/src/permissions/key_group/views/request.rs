@@ -30,6 +30,9 @@ impl MembershipRequestView {
     pub fn key_group(&self) -> &DocumentId {
         match self.0.view().get("key_group") {
             Some(OperationValue::Relation(relation)) => relation.document_id(),
+            // This code is unreachable as a `MembershipRequestView` can only be created via
+            // its constructor and the `TryFrom<Document>` impl, both of which check that this
+            // field exists
             _ => panic!(),
         }
     }
@@ -40,6 +43,9 @@ impl MembershipRequestView {
             Some(OperationValue::Owner(relation)) => {
                 Owner::KeyGroup(relation.document_id().clone())
             }
+            // This code is unreachable as a `MembershipRequestView` can only be created via
+            // its constructor and the `TryFrom<Document>` impl, both of which check that this
+            // field either contains `Some(OperationValue::Owner)` or `None`.
             Some(_) => panic!(),
             None => Owner::Author(self.0.author().clone()),
         }

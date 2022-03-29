@@ -47,6 +47,8 @@ impl KeyGroupView {
     pub fn name(&self) -> &str {
         match self.0.view().get("name") {
             Some(OperationValue::Text(value)) => value,
+            // This code is unreachable as a key group view can only be created via
+            // `TryFrom<Document>`, which validates that this field exists.
             _ => panic!(),
         }
     }

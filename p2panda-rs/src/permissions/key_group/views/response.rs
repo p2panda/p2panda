@@ -23,6 +23,8 @@ impl MembershipResponseView {
     pub fn request(&self) -> &DocumentViewId {
         match self.0.view().get("request") {
             Some(OperationValue::PinnedRelation(value)) => value.view_id(),
+            // This code is unreachable as a `MembershipResponseView` can only be created via
+            // its `TryFrom<Document>` impl, which checks that this field exists.
             _ => panic!(),
         }
     }
@@ -31,6 +33,8 @@ impl MembershipResponseView {
     pub fn accepted(&self) -> &bool {
         match self.0.view().get("accepted") {
             Some(OperationValue::Boolean(value)) => value,
+            // This code is unreachable as a `MembershipResponseView` can only be created via
+            // its `TryFrom<Document>` impl, which checks that this field exists.
             _ => panic!(),
         }
     }
