@@ -2,6 +2,8 @@
 
 use thiserror::Error;
 
+use crate::document::DocumentId;
+
 /// Error types for `Hash`.
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
@@ -33,4 +35,8 @@ pub enum KeyGroupError {
     /// Error from parsing system schema.
     #[error(transparent)]
     ParsingError(#[from] crate::schema::system::SystemSchemaError),
+
+    /// Key groups can't be members of themselves
+    #[error("can't make key group {0:?} a member of itself")]
+    RecursiveMembership(DocumentId),
 }

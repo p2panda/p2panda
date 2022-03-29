@@ -39,6 +39,15 @@ impl Membership {
         request: MembershipRequestView,
         response: Option<MembershipResponseView>,
     ) -> Result<Self, KeyGroupError> {
+        // Check that this is not a request to make key group a member of itself
+        if let Owner::KeyGroup(member_key_group_id) = request.member() {
+            if &member_key_group_id == request.key_group() {
+                return Err(KeyGroupError::RecursiveMembership(
+                    request.key_group().clone(),
+                ));
+            }
+        };
+
         match response {
             Some(response) => {
                 if response.request() != request.view_id() {
@@ -124,6 +133,28 @@ mod test {
         assert_eq!(
             format!("{}", result.unwrap_err()),
             "invalid membership: response doesn't reference supplied request"
+        );
+    }
+
+    #[rstest]
+    fn recursive_membership(#[from(random_document_id)] key_group_id: DocumentId) {
+        let request = document(create_operation(
+            SchemaId::KeyGroupRequest,
+            fields(vec![
+                (
+                    "key_group",
+                    OperationValue::Relation(key_group_id.clone().into()),
+                ),
+                ("member", OperationValue::Owner(key_group_id.clone().into())),
+            ]),
+        ));
+        let result = Membership::from_confirmation(request.try_into().unwrap(), None);
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            format!(
+                "can't make key group DocumentId(OperationId(Hash(\"{}\"))) a member of itself",
+                key_group_id.as_str()
+            )
         );
     }
 
