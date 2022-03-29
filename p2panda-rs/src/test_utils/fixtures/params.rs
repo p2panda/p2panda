@@ -242,7 +242,7 @@ pub fn encoded_create_string(create_operation: Operation) -> String {
 #[fixture]
 pub fn document(
     #[default(create_operation(
-        schema(DEFAULT_SCHEMA_HASH),
+        schema(TEST_SCHEMA_ID),
         fields(vec![("name", OperationValue::Text("Shirokuma Cafe".to_string()))])
     ))]
     create_operation: Operation,
