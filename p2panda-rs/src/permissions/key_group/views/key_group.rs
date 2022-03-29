@@ -10,7 +10,24 @@ use crate::Validate;
 
 /// Represents a root key group definition.
 ///
-/// Can be used to make a [`KeyGroup`].
+/// Can be used to make a [`KeyGroup`][`crate::permissions::key_group::KeyGroup`].
+///
+/// Create this from a `key_group_v1` document:
+///
+/// ```
+/// # use std::convert::TryFrom;
+/// # use p2panda_rs::operation::OperationValue;
+/// # use p2panda_rs::permissions::key_group::KeyGroupView;
+/// # use p2panda_rs::schema::SchemaId;
+/// # use p2panda_rs::test_utils::utils::{create_operation, document, operation_fields};
+/// # let key_group_doc = document(
+/// #     create_operation(SchemaId::KeyGroup, operation_fields(vec![
+/// #         ("name", OperationValue::Text("My key group!".to_string()))
+/// #     ])),
+/// # );
+/// let key_group_view = KeyGroupView::try_from(key_group_doc).unwrap();
+/// assert_eq!(key_group_view.name(), "My key group!");
+/// ```
 #[derive(Clone, Debug)]
 pub struct KeyGroupView(Document);
 

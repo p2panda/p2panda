@@ -7,9 +7,12 @@
 //! The primary reason we separate this from the main fixture logic is that these methods can be
 //! imported and used outside of testing modules, whereas the fixture macros can only be injected
 //! into `rstest` defined methods.
+use std::convert::TryFrom;
+
 use serde::Serialize;
 
-use crate::entry::{Entry, EntrySigned, LogId, SeqNum};
+use crate::document::{Document, DocumentBuilder};
+use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::{
@@ -137,4 +140,19 @@ pub fn meta_operation(
     operation_encoded: OperationEncoded,
 ) -> OperationWithMeta {
     OperationWithMeta::new(&entry_signed_encoded, &operation_encoded).unwrap()
+}
+
+/// Generate a document with a single create operation.
+pub fn document(create_operation: Operation) -> Document {
+    let create_entry = entry(
+        create_operation.clone(),
+        None,
+        None,
+        SeqNum::new(1).unwrap(),
+    );
+    let key_pair = new_key_pair();
+    let entry_signed = sign_and_encode(&create_entry, &key_pair).unwrap();
+    let op_encoded = OperationEncoded::try_from(&create_operation).unwrap();
+    let op_meta = OperationWithMeta::new(&entry_signed, &op_encoded).unwrap();
+    DocumentBuilder::new(vec![op_meta]).build().unwrap()
 }
