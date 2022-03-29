@@ -4,10 +4,9 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 
 use crate::cddl::generate_cddl_definition;
+use crate::document::DocumentViewId;
 use crate::schema::system::{SchemaFieldView, SchemaView};
-use crate::schema::{FieldType, SchemaError};
-
-use super::SchemaId;
+use crate::schema::{FieldType, SchemaError, SchemaId};
 
 /// The key of a schema field
 type FieldKey = String;
@@ -17,9 +16,13 @@ type FieldKey = String;
 /// It is constructed from a [`SchemaView`] and all related [`SchemaFieldView`]s.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Schema {
+    /// The application schema id for this schema.
     id: SchemaId,
-    name: String,
+
+    /// Describes the schema's intended use.
     description: String,
+
+    /// This schema's field definitions.
     fields: BTreeMap<FieldKey, FieldType>,
 }
 
@@ -51,7 +54,6 @@ impl Schema {
 
         Ok(Schema {
             id: SchemaId::new_application(schema.name(), schema.view_id()),
-            name: schema.name().to_owned(),
             description: schema.description().to_owned(),
             fields: fields_map,
         })
@@ -61,6 +63,46 @@ impl Schema {
     #[allow(unused)]
     pub fn as_cddl(&self) -> String {
         generate_cddl_definition(&self.fields)
+    }
+
+    /// Access the schema's [`SchemaId`].
+    #[allow(unused)]
+    pub fn id(&self) -> &SchemaId {
+        &self.id
+    }
+
+    /// Access the schema view id.
+    #[allow(unused)]
+    pub fn view_id(&self) -> &DocumentViewId {
+        if let SchemaId::Application(_, view_id) = &self.id {
+            return view_id;
+        }
+        // This statement is unreachable because it's not possible to construct a `Schema`
+        // that doesn't contain an application schema id.
+        panic!()
+    }
+
+    /// Access the schema name.
+    #[allow(unused)]
+    pub fn name(&self) -> &str {
+        if let SchemaId::Application(name, _) = &self.id {
+            return name;
+        }
+        // This statement is unreachable because it's not possible to construct a `Schema`
+        // that doesn't contain an application schema id.
+        panic!()
+    }
+
+    /// Access the schema description.
+    #[allow(unused)]
+    pub fn description(&self) -> &str {
+        &self.description
+    }
+
+    /// Access the schema fields.
+    #[allow(unused)]
+    pub fn fields(&self) -> &BTreeMap<FieldKey, FieldType> {
+        &self.fields
     }
 }
 
@@ -81,9 +123,10 @@ mod tests {
     use crate::operation::{OperationId, OperationValue, PinnedRelationList};
     use crate::schema::schema::Schema;
     use crate::schema::system::{SchemaFieldView, SchemaView};
+    use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{document_view_id, random_operation_id};
 
-    fn create_schema(fields: PinnedRelationList, view_id: DocumentViewId) -> SchemaView {
+    fn create_schema_view(fields: PinnedRelationList, view_id: DocumentViewId) -> SchemaView {
         let mut schema = BTreeMap::new();
         schema.insert(
             "name".to_string(),
@@ -133,7 +176,7 @@ mod tests {
             ]),
         ]);
 
-        let schema_view = create_schema(fields, schema_view_id);
+        let schema_view = create_schema_view(fields, schema_view_id);
 
         // Create first schema field "is_accessible"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -163,6 +206,20 @@ mod tests {
 
         let schema = result.unwrap();
 
+        // Test getters
+        let expected_view_id =
+            &"0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+                .parse::<DocumentViewId>()
+                .unwrap();
+        assert_eq!(
+            schema.id(),
+            &SchemaId::new_application("venue_name", expected_view_id)
+        );
+        assert_eq!(schema.name(), "venue_name");
+        assert_eq!(schema.view_id(), expected_view_id);
+        assert_eq!(schema.description(), "Describes a venue");
+        assert_eq!(schema.fields().len(), 2);
+
         let expected_cddl = "capacity = { type: \"int\", value: int, }\n".to_string()
             + "is_accessible = { type: \"bool\", value: bool, }\n"
             + "create-fields = { capacity, is_accessible }\n"
@@ -190,7 +247,7 @@ mod tests {
             DocumentViewId::from(relation_operation_id_2.clone()),
         ]);
 
-        let schema_view = create_schema(fields, schema_view_id);
+        let schema_view = create_schema_view(fields, schema_view_id);
 
         // Create first valid schema field "is_accessible"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
