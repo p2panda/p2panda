@@ -104,8 +104,11 @@ mod test {
     use super::*;
 
     #[rstest]
+    // Correct fields defined - this should pass
     #[case(vec![("key_group", OperationValue::Relation(DEFAULT_HASH.parse::<DocumentId>().unwrap().into()))], None)]
+    // No `key_group` field is defined
     #[case(vec![("badoozle", OperationValue::Boolean(true))], Some("missing field 'key_group'"))]
+    // `key_group` is defined, but it has the wrong `OperationValue` assigned to it
     #[case(vec![("key_group", OperationValue::Boolean(true))], Some("invalid field 'key_group' with value Boolean(true)"))]
     fn from_document(
         #[case] doc_fields: Vec<(&str, OperationValue)>,

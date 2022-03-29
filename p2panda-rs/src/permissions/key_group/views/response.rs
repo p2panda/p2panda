@@ -103,26 +103,31 @@ mod test {
     };
 
     #[rstest]
+    // Correct fields defined - this should pass
     #[case(
         ("request", OperationValue::PinnedRelation(document_view_id(vec![DEFAULT_HASH]).into())),
         ("accepted", OperationValue::Boolean(true)),
         None
     )]
+    // `request` field with wrong value type
     #[case(
         ("request", OperationValue::Relation(document_id(DEFAULT_HASH).into())),
         ("accepted", OperationValue::Boolean(true)),
         Some("invalid field 'request' with value Relation(Relation(DocumentId(OperationId(Hash(\"0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543\")))))")
     )]
+    // `request` field missing
     #[case(
         ("requesd", OperationValue::PinnedRelation(document_view_id(vec![DEFAULT_HASH]).into())),
         ("accepted", OperationValue::Boolean(true)),
         Some("missing field 'request'")
     )]
+    // `accepted` field with wrong value type
     #[case(
         ("request", OperationValue::PinnedRelation(document_view_id(vec![DEFAULT_HASH]).into())),
         ("accepted", OperationValue::Text("yes".to_string())),
         Some("invalid field 'accepted' with value Text(\"yes\")")
     )]
+    // `accepted` field missing
     #[case(
         ("request", OperationValue::PinnedRelation(document_view_id(vec![DEFAULT_HASH]).into())),
         ("acceptet", OperationValue::Boolean(true)),

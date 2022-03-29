@@ -111,23 +111,32 @@ mod tests {
     }
 
     #[rstest]
+    // Not providing a `name` field
     #[case(None, "missing field 'name'")]
+    // `name` field has a wrong type
     #[case(
         Some(OperationValue::Boolean(true)),
         "invalid field 'name' with value Boolean(true)"
     )]
+    // `name` field is empty
     #[case(Some(OperationValue::Text("".to_string())), "invalid field 'name' with value Text(\"\")")]
     fn view_basics(
         #[case] name: Option<OperationValue>,
         key_pair: KeyPair,
         #[case] expected_err: String,
     ) {
+        // Create fields from parametrized test values
         let doc_fields = match name {
-            Some(value) => vec![("name", value)],
-            None => vec![("badoozle", OperationValue::Integer(0))],
+            Some(value) => fields(vec![("name", value)]),
+            // If no value is provided for the `name` field, create some bogus field so that the
+            // `Operation` constructor doesn't trip when there are no fields defined.
+            None => fields(vec![(
+                "badoozle",
+                OperationValue::Text("kaboozle".to_string()),
+            )]),
         };
         let key_group_doc = document(
-            create_operation(SchemaId::KeyGroup, fields(doc_fields)),
+            create_operation(SchemaId::KeyGroup, doc_fields),
             key_pair,
             false,
         );
