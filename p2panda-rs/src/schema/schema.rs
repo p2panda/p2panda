@@ -64,7 +64,7 @@ impl Schema {
         generate_cddl_definition(&self.fields)
     }
 
-    /// Access the schema id.
+    /// Access the schema's [`SchemaId`].
     #[allow(unused)]
     pub fn id(&self) -> &SchemaId {
         &self.id
