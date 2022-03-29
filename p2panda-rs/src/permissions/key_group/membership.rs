@@ -86,9 +86,46 @@ mod test {
 
     use crate::document::{DocumentId, DocumentViewId};
     use crate::identity::{Author, KeyPair};
+    use crate::operation::{OperationId, OperationValue};
     use crate::permissions::key_group::{KeyGroup, Membership};
-    use crate::test_utils::fixtures::random_key_pair;
+    use crate::schema::SchemaId;
+    use crate::test_utils::fixtures::{
+        fields, random_document_id, random_key_pair, random_operation_id,
+    };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
+    use crate::test_utils::utils::{create_operation, document};
+
+    #[rstest]
+    fn invalid_request(random_document_id: DocumentId, random_operation_id: OperationId) {
+        let request = document(create_operation(
+            SchemaId::KeyGroupRequest,
+            fields(vec![(
+                "key_group",
+                OperationValue::Relation(random_document_id.into()),
+            )]),
+        ));
+        let response = document(create_operation(
+            SchemaId::KeyGroupResponse,
+            fields(vec![
+                (
+                    "request",
+                    // This doesn't reference the above request
+                    OperationValue::PinnedRelation(
+                        DocumentViewId::from(random_operation_id).into(),
+                    ),
+                ),
+                ("accepted", OperationValue::Boolean(true)),
+            ]),
+        ));
+        let result = Membership::from_confirmation(
+            request.try_into().unwrap(),
+            Some(response.try_into().unwrap()),
+        );
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "invalid membership: response doesn't reference supplied request"
+        );
+    }
 
     #[rstest]
     fn parse_membership(#[from(random_key_pair)] frog_key_pair: KeyPair) {
