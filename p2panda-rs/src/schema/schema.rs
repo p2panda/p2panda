@@ -18,7 +18,7 @@ pub struct Schema {
     /// The application schema id for this schema.
     id: SchemaId,
 
-    /// Describes the schemas indented use.
+    /// Describes the schema's intended use.
     description: String,
 
     /// This schema's field definitions.
