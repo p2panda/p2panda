@@ -44,6 +44,7 @@ pub trait AsStorageEntry:
     /// Returns the log id of this entry.
     fn log_id(&self) -> LogId;
 
+    /// Returns the operation contained on this entry.
     fn operation(&self) -> Operation;
 }
 

@@ -3,9 +3,9 @@
 use async_trait::async_trait;
 
 use crate::document::DocumentId;
-use crate::entry::{decode_entry, SeqNum};
+use crate::entry::SeqNum;
 use crate::hash::Hash;
-use crate::operation::{AsOperation, Operation};
+use crate::operation::AsOperation;
 use crate::storage_provider::errors::PublishEntryError;
 use crate::storage_provider::models::{EntryWithOperation, Log};
 use crate::storage_provider::traits::{
@@ -100,7 +100,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         // hash of its first `CREATE` operation, it is the root operation of every document graph
         let document_id = if entry.operation().is_create() {
             // This is easy: We just use the entry hash directly to determine the document id
-            DocumentId::new(entry.hash().clone().into())
+            DocumentId::new(entry.hash().into())
         } else {
             // For any other operations which followed after creation we need to either walk the operation
             // graph back to its `CREATE` operation or more easily look up the database since we keep track
@@ -144,7 +144,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
             )
             .await?
             .map(|link| {
-                let bytes = link.entry_bytes().to_owned();
+                let bytes = link.entry_bytes();
                 Some(bytes)
             })
             .ok_or(PublishEntryError::BacklinkMissing)
@@ -160,7 +160,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
             )
             .await?
             .map(|link| {
-                let bytes = link.entry_bytes().to_owned();
+                let bytes = link.entry_bytes();
                 Some(bytes)
             })
             .ok_or(PublishEntryError::SkiplinkMissing)
@@ -202,7 +202,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         let next_seq_num = entry_latest.seq_num().clone().next().unwrap();
 
         Ok(Self::PublishEntryResponse::new(
-            Some(entry.hash().clone()),
+            Some(entry.hash()),
             entry_hash_skiplink,
             next_seq_num,
             entry.log_id(),
@@ -228,7 +228,7 @@ pub mod tests {
         SimplestStorageProvider, StorageEntry, StorageLog,
     };
     use crate::storage_provider::traits::{
-        AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
+        AsEntryArgsResponse, AsPublishEntryResponse, AsStorageLog,
     };
     use crate::test_utils::fixtures::key_pair;
 
@@ -389,8 +389,8 @@ pub mod tests {
 
         // Entry request for valid first intry in log 1
         let publish_entry_request = PublishEntryRequest(
-            entries.get(0).unwrap().entry_signed().clone(),
-            entries.get(0).unwrap().operation_encoded().unwrap().clone(),
+            entries.get(0).unwrap().entry_signed(),
+            entries.get(0).unwrap().operation_encoded().unwrap(),
         );
 
         // Publish the first valid entry
@@ -447,8 +447,8 @@ pub mod tests {
         // Create request for publishing an entry which has a valid backlink and skiplink, but the
         // document it is associated with does not exist
         let publish_entry_with_non_existant_document = PublishEntryRequest(
-            entries.get(6).unwrap().entry_signed().clone(),
-            entries.get(6).unwrap().operation_encoded().unwrap().clone(),
+            entries.get(6).unwrap().entry_signed(),
+            entries.get(6).unwrap().operation_encoded().unwrap(),
         );
 
         let error_response = new_db
@@ -483,8 +483,8 @@ pub mod tests {
         };
 
         let publish_entry_request = PublishEntryRequest(
-            entries.get(7).unwrap().entry_signed().clone(),
-            entries.get(7).unwrap().operation_encoded().unwrap().clone(),
+            entries.get(7).unwrap().entry_signed(),
+            entries.get(7).unwrap().operation_encoded().unwrap(),
         );
 
         // Should error as an entry at seq num 8 should have a skiplink relation to the missing
