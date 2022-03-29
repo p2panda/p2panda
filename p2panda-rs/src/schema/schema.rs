@@ -92,13 +92,13 @@ impl Schema {
         panic!()
     }
 
-    /// Access the schema's description.
+    /// Access the schema description.
     #[allow(unused)]
     pub fn description(&self) -> &str {
         &self.description
     }
 
-    /// Access the schema's fields.
+    /// Access the schema fields.
     #[allow(unused)]
     pub fn fields(&self) -> &BTreeMap<FieldKey, FieldType> {
         &self.fields
