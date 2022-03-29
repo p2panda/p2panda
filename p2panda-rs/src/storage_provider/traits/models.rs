@@ -4,7 +4,7 @@ use std::convert::TryInto;
 use std::fmt::Debug;
 
 use crate::document::DocumentId;
-use crate::entry::{decode_entry, Entry, EntrySigned, LogId};
+use crate::entry::{Entry, EntrySigned, LogId};
 use crate::identity::Author;
 use crate::operation::OperationEncoded;
 use crate::schema::SchemaId;
@@ -29,10 +29,7 @@ pub trait AsStorageEntry:
     fn operation_encoded(&self) -> Option<OperationEncoded>;
 
     /// Returns the decoded operation.
-    fn entry_decoded(&self) -> Entry {
-        // Unwrapping as validation occurs in `EntryWithOperation`.
-        decode_entry(&self.entry_signed(), self.operation_encoded().as_ref()).unwrap()
-    }
+    fn entry_decoded(&self) -> Entry;
 }
 
 /// Trait to be implemented on a struct representing a stored log.

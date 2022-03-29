@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use rstest::{fixture, rstest};
 
 use crate::document::DocumentId;
-use crate::entry::{sign_and_encode, EntrySigned, LogId, SeqNum};
+use crate::entry::{decode_entry, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::{Operation, OperationEncoded};
@@ -145,6 +145,11 @@ impl AsStorageEntry for StorageEntry {
     fn operation_encoded(&self) -> Option<OperationEncoded> {
         let params: Vec<&str> = self.0.split('-').collect();
         Some(OperationEncoded::new(params[1]).unwrap())
+    }
+
+    fn entry_decoded(&self) -> Entry {
+        // Unwrapping as validation occurs in `EntryWithOperation`.
+        decode_entry(&self.entry_signed(), self.operation_encoded().as_ref()).unwrap()
     }
 }
 
