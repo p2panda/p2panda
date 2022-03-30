@@ -11,6 +11,12 @@ use crate::document::DocumentViewId;
 use crate::operation::OperationId;
 use crate::schema::error::SchemaIdError;
 
+/// Schema id for _schema definition_ schema
+pub(super) const SCHEMA_DEFINITION_ID_STR: &str = "schema_definition_v1";
+
+/// Schema id for _schema field definition_ schema
+pub(super) const SCHEMA_FIELD_DEFINITION_ID_STR: &str = "schema_field_definition_v1";
+
 /// Identifies the schema of an [`crate::operation::Operation`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SchemaId {
@@ -18,10 +24,10 @@ pub enum SchemaId {
     Application(String, DocumentViewId),
 
     /// A schema definition.
-    Schema,
+    SchemaDefinition,
 
     /// A schema definition field.
-    SchemaField,
+    SchemaFieldDefinition,
 }
 
 impl SchemaId {
@@ -31,8 +37,8 @@ impl SchemaId {
     /// inside.
     pub fn new(id: &str) -> Result<Self, SchemaIdError> {
         match id {
-            "schema_v1" => Ok(SchemaId::Schema),
-            "schema_field_v1" => Ok(SchemaId::SchemaField),
+            SCHEMA_DEFINITION_ID_STR => Ok(SchemaId::SchemaDefinition),
+            SCHEMA_FIELD_DEFINITION_ID_STR => Ok(SchemaId::SchemaFieldDefinition),
             application_schema_id => Self::parse_application_schema_str(application_schema_id),
         }
     }
@@ -91,8 +97,8 @@ impl SchemaId {
     /// Returns schema id as string slice.
     pub fn as_str(&self) -> String {
         match self {
-            SchemaId::Schema => "schema_v1".to_string(),
-            SchemaId::SchemaField => "schema_field_v1".to_string(),
+            SchemaId::SchemaDefinition => SCHEMA_DEFINITION_ID_STR.to_string(),
+            SchemaId::SchemaFieldDefinition => SCHEMA_FIELD_DEFINITION_ID_STR.to_string(),
             SchemaId::Application(name, view_id) => {
                 let mut schema_id = name.clone();
                 for op_id in view_id.sorted().into_iter() {
@@ -158,7 +164,7 @@ mod test {
     use crate::test_utils::constants::TEST_SCHEMA_ID;
     use crate::test_utils::fixtures::random_operation_id;
 
-    use super::SchemaId;
+    use super::{SchemaId, SCHEMA_DEFINITION_ID_STR, SCHEMA_FIELD_DEFINITION_ID_STR};
 
     #[test]
     fn serialize() {
@@ -168,13 +174,16 @@ mod test {
             "\"venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\""
         );
 
-        let schema = SchemaId::Schema;
-        assert_eq!(serde_json::to_string(&schema).unwrap(), "\"schema_v1\"");
+        let schema = SchemaId::SchemaDefinition;
+        assert_eq!(
+            serde_json::to_string(&schema).unwrap(),
+            "\"schema_definition_v1\""
+        );
 
-        let schema_field = SchemaId::SchemaField;
+        let schema_field = SchemaId::SchemaFieldDefinition;
         assert_eq!(
             serde_json::to_string(&schema_field).unwrap(),
-            "\"schema_field_v1\""
+            "\"schema_field_definition_v1\""
         );
     }
 
@@ -196,14 +205,14 @@ mod test {
             .unwrap(),
             app_schema
         );
-        let schema = SchemaId::Schema;
+        let schema = SchemaId::SchemaDefinition;
         assert_eq!(
-            serde_json::from_str::<SchemaId>("\"schema_v1\"").unwrap(),
+            serde_json::from_str::<SchemaId>("\"schema_definition_v1\"").unwrap(),
             schema
         );
-        let schema_field = SchemaId::SchemaField;
+        let schema_field = SchemaId::SchemaFieldDefinition;
         assert_eq!(
-            serde_json::from_str::<SchemaId>("\"schema_field_v1\"").unwrap(),
+            serde_json::from_str::<SchemaId>("\"schema_field_definition_v1\"").unwrap(),
             schema_field
         );
     }
@@ -274,16 +283,16 @@ mod test {
             .unwrap()
         );
 
-        let schema = SchemaId::new("schema_v1").unwrap();
-        assert_eq!(schema, SchemaId::Schema);
+        let schema = SchemaId::new(SCHEMA_DEFINITION_ID_STR).unwrap();
+        assert_eq!(schema, SchemaId::SchemaDefinition);
 
-        let schema_field = SchemaId::new("schema_field_v1").unwrap();
-        assert_eq!(schema_field, SchemaId::SchemaField);
+        let schema_field = SchemaId::new(SCHEMA_FIELD_DEFINITION_ID_STR).unwrap();
+        assert_eq!(schema_field, SchemaId::SchemaFieldDefinition);
     }
 
     #[test]
     fn parse_schema_type() {
-        let schema: SchemaId = "schema_v1".parse().unwrap();
-        assert_eq!(schema, SchemaId::Schema);
+        let schema: SchemaId = SCHEMA_DEFINITION_ID_STR.parse().unwrap();
+        assert_eq!(schema, SchemaId::SchemaDefinition);
     }
 }

@@ -81,10 +81,10 @@
             "SchemaId": {
                 "oneOf": [
                     {
-                        "const": "schema_v1"
+                        "const": "schema_definition_v1"
                     },
                     {
-                        "const": "schema_field_v1"
+                        "const": "schema_field_definition_v1"
                     },
                     {
                         "type": "string",
