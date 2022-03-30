@@ -72,24 +72,26 @@ impl Schema {
 
     /// Access the schema view id.
     #[allow(unused)]
-    pub fn view_id(&self) -> &DocumentViewId {
-        if let SchemaId::Application(_, view_id) = &self.id {
-            return view_id;
-        }
-        // This statement is unreachable because it's not possible to construct a `Schema`
-        // that doesn't contain an application schema id.
-        panic!()
+    pub fn view_id(&self) -> DocumentViewId {
+        let view_id = match self.id.clone() {
+            SchemaId::Application(_, view_id) => Some(view_id),
+            _ => None,
+        };
+        // Unwrap because it's not possible to construct a `Schema` that doesn't contain an
+        // application schema id.
+        view_id.unwrap()
     }
 
     /// Access the schema name.
     #[allow(unused)]
-    pub fn name(&self) -> &str {
-        if let SchemaId::Application(name, _) = &self.id {
-            return name;
-        }
-        // This statement is unreachable because it's not possible to construct a `Schema`
-        // that doesn't contain an application schema id.
-        panic!()
+    pub fn name(&self) -> String {
+        let name = match self.id.clone() {
+            SchemaId::Application(name, _) => Some(name),
+            _ => None,
+        };
+        // Unwrap because it's not possible to construct a `Schema` that doesn't contain an
+        // application schema id.
+        name.unwrap()
     }
 
     /// Access the schema description.
@@ -209,7 +211,7 @@ mod tests {
             &SchemaId::new_application("venue_name", expected_view_id)
         );
         assert_eq!(schema.name(), "venue_name");
-        assert_eq!(schema.view_id(), expected_view_id);
+        assert_eq!(&schema.view_id(), expected_view_id);
         assert_eq!(schema.description(), "Describes a venue");
         assert_eq!(schema.fields().len(), 2);
 
