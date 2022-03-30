@@ -118,6 +118,9 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
             self.get_document_by_entry(&backlink_entry_hash)
                 .await?
+                // @TODO this trips if the backlink is missing not necessarily the document
+                // needs revisiting when we use previous_operations to retrieve the correct
+                // document.
                 .ok_or_else(|| PublishEntryError::DocumentMissing(entry.hash()))?
         };
 
