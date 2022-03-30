@@ -436,12 +436,12 @@ pub mod tests {
             entries: Arc::new(Mutex::new(log_entries_without_document_root)),
         };
 
+        let entry = entries.get(6).unwrap();
+
         // Create request for publishing an entry which has a valid backlink and skiplink, but the
         // document it is associated with does not exist
-        let publish_entry_with_non_existant_document = PublishEntryRequest(
-            entries.get(6).unwrap().entry_signed(),
-            entries.get(6).unwrap().operation_encoded().unwrap(),
-        );
+        let publish_entry_with_non_existant_document =
+            PublishEntryRequest(entry.entry_signed(), entry.operation_encoded().unwrap());
 
         let error_response = new_db
             .publish_entry(&publish_entry_with_non_existant_document)
@@ -449,7 +449,10 @@ pub mod tests {
 
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
-            "Could not find document hash for entry in database"
+            format!(
+                "Could not find document hash for entry in database with id: {:?}",
+                entry.hash()
+            )
         )
     }
 
@@ -474,10 +477,10 @@ pub mod tests {
             entries: Arc::new(Mutex::new(log_entries_with_skiplink_missing)),
         };
 
-        let publish_entry_request = PublishEntryRequest(
-            entries.get(7).unwrap().entry_signed(),
-            entries.get(7).unwrap().operation_encoded().unwrap(),
-        );
+        let entry = entries.get(7).unwrap();
+
+        let publish_entry_request =
+            PublishEntryRequest(entry.entry_signed(), entry.operation_encoded().unwrap());
 
         // Should error as an entry at seq num 8 should have a skiplink relation to the missing
         // entry at seq num 4
@@ -485,7 +488,10 @@ pub mod tests {
 
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
-            "Could not find skiplink entry in database"
+            format!(
+                "Could not find skiplink entry in database with id: {:?}",
+                entry.hash()
+            )
         )
     }
 }
