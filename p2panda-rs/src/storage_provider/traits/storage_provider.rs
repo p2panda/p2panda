@@ -21,16 +21,16 @@ use crate::storage_provider::traits::{
 pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog>:
     EntryStore<StorageEntry> + LogStore<StorageLog>
 {
-    /// Params when making a request to `get_entry_args`.
+    /// Params when making a request to get the next entry args for an author and document.
     type EntryArgsRequest: AsEntryArgsRequest + Sync;
 
-    /// Response from a call to `get_entry_args`.
+    /// Response from a call to get next entry args for an author and document.
     type EntryArgsResponse: AsEntryArgsResponse;
 
-    /// Params when making a request to `publish_entry`.
+    /// Params when making a request to publish a new entry.
     type PublishEntryRequest: AsPublishEntryRequest + Sync;
 
-    /// Response from a call to `publish_entry`.
+    /// Response from a call to publish a new entry.
     type PublishEntryResponse: AsPublishEntryResponse;
 
     /// Returns the related document for any entry.
