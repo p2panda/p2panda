@@ -13,7 +13,7 @@ use crate::storage_provider::models::{EntryWithOperation, Log};
 
 /// Trait to be implemented on a struct representing a stored entry.
 ///
-/// Should be defined within a specific storage implementation on a data struct which represents an
+/// Storage implementations should implement this for a data structure that represents an
 /// entry as it is stored in the database. This trait defines methods for reading values from the
 /// entry and it's operation and ensures the required conversion (to and from `EntryWithOperation`)
 /// are present.
@@ -50,7 +50,7 @@ pub trait AsStorageEntry:
 
 /// Trait to be implemented on a struct representing a stored log.
 ///
-/// Should be defined within a specific storage implementation on a data struct which represents a
+/// Storage implementations should implement this for a data structure that represents a
 /// log as it is stored in the database. This trait defines methods for reading values from the
 /// log.
 pub trait AsStorageLog: Sized + Send + Sync + TryInto<Log> + From<Log> {
