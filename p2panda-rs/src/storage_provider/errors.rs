@@ -2,7 +2,7 @@
 
 //! Errors for `Storage` provider and associated traits.
 use crate::entry::{EntryError, EntrySignedError, LogIdError, SeqNumError};
-use crate::hash::HashError;
+use crate::hash::{Hash, HashError};
 use crate::identity::AuthorError;
 use crate::operation::{OperationEncodedError, OperationError};
 
@@ -70,21 +70,23 @@ pub enum EntryStorageError {
 #[derive(thiserror::Error, Debug)]
 #[allow(missing_copy_implementations, missing_docs)]
 pub enum PublishEntryError {
-    #[error("Could not find backlink entry in database")]
-    BacklinkMissing,
+    #[error("Could not find backlink entry in database with id: {0:?}")]
+    BacklinkMissing(Hash),
 
-    #[error("Could not find skiplink entry in database")]
-    SkiplinkMissing,
+    #[error("Could not find skiplink entry in database with id: {0:?}")]
+    SkiplinkMissing(Hash),
 
-    #[error("Could not find document hash for entry in database")]
-    DocumentMissing,
+    #[error("Could not find document for entry in database with id: {0:?}")]
+    DocumentMissing(Hash),
 
-    #[error("UPDATE or DELETE operation came with an entry without backlink")]
-    OperationWithoutBacklink,
+    #[error(
+        "UPDATE or DELETE operation with id: with id: {0:?} came with an entry without backlink"
+    )]
+    OperationWithoutBacklink(Hash),
 
     #[error("Requested log id {0} does not match expected log id {1}")]
     InvalidLogId(u64, u64),
 
-    #[error("Invalid Entry and Operation pair passed to `publish_entry()`")]
-    InvalidEntryWithOperation,
+    #[error("Invalid Entry and Operation pair with id {0:?}")]
+    InvalidEntryWithOperation(Hash),
 }

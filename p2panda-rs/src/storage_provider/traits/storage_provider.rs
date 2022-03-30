@@ -114,11 +114,11 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
             // update operations! See: https://github.com/p2panda/aquadoggo/issues/49
             let backlink_entry_hash = entry
                 .backlink_hash()
-                .ok_or(PublishEntryError::OperationWithoutBacklink)?;
+                .ok_or_else(|| PublishEntryError::OperationWithoutBacklink(entry.hash()))?;
 
             self.get_document_by_entry(&backlink_entry_hash)
                 .await?
-                .ok_or(PublishEntryError::DocumentMissing)?
+                .ok_or_else(|| PublishEntryError::DocumentMissing(entry.hash()))?
         };
 
         // Determine expected log id for new entry
@@ -147,7 +147,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
                 let bytes = link.entry_bytes();
                 Some(bytes)
             })
-            .ok_or(PublishEntryError::BacklinkMissing)
+            .ok_or_else(|| PublishEntryError::BacklinkMissing(entry.hash()))
         } else {
             Ok(None)
         }?;
@@ -163,7 +163,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
                 let bytes = link.entry_bytes();
                 Some(bytes)
             })
-            .ok_or(PublishEntryError::SkiplinkMissing)
+            .ok_or_else(|| PublishEntryError::SkiplinkMissing(entry.hash()))
         } else {
             Ok(None)
         }?;
