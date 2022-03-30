@@ -228,7 +228,7 @@ pub mod tests {
         SimplestStorageProvider, StorageEntry, StorageLog,
     };
     use crate::storage_provider::traits::{
-        AsEntryArgsResponse, AsPublishEntryResponse, AsStorageLog,
+        AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
     };
     use crate::test_utils::fixtures::key_pair;
 
@@ -250,9 +250,7 @@ pub mod tests {
         ) -> Result<Option<DocumentId>, Box<dyn std::error::Error>> {
             let entries = self.entries.lock().unwrap();
 
-            let entry = entries
-                .iter()
-                .find(|entry| entry.entry_signed().hash() == *entry_hash);
+            let entry = entries.iter().find(|entry| entry.hash() == *entry_hash);
 
             let entry = match entry {
                 Some(entry) => entry,
@@ -261,10 +259,9 @@ pub mod tests {
 
             let logs = self.logs.lock().unwrap();
 
-            let log = logs.iter().find(|log| {
-                log.log_id() == *entry.entry_decoded().log_id()
-                    && log.author() == entry.entry_signed().author()
-            });
+            let log = logs
+                .iter()
+                .find(|log| log.log_id() == entry.log_id() && log.author() == entry.author());
 
             Ok(Some(log.unwrap().document()))
         }
@@ -284,7 +281,7 @@ pub mod tests {
         for entry in entries.clone() {
             // Publish each test entry in order
             let publish_entry_request = PublishEntryRequest(
-                entry.entry_signed().clone(),
+                entry.entry_signed(),
                 entry.operation_encoded().unwrap().clone(),
             );
 
@@ -293,7 +290,7 @@ pub mod tests {
             // Response should be ok
             assert!(publish_entry_response.is_ok());
 
-            let mut seq_num = *entry.entry_decoded().seq_num();
+            let mut seq_num = entry.seq_num();
 
             // If this is the highest entry in the db then break here, the test is over
             if seq_num.as_u64() == entries.len() as u64 {
@@ -305,17 +302,11 @@ pub mod tests {
             let skiplink = entries
                 .get(next_seq_num.as_u64() as usize - 1)
                 .unwrap()
-                .entry_decoded()
-                .skiplink_hash()
-                .cloned();
-
+                .skiplink_hash();
             let backlink = entries
                 .get(next_seq_num.as_u64() as usize - 1)
                 .unwrap()
-                .entry_decoded()
-                .backlink_hash()
-                .cloned();
-
+                .backlink_hash();
             let expected_reponse =
                 PublishEntryResponse::new(backlink, skiplink, next_seq_num, LogId::default());
 
@@ -336,17 +327,17 @@ pub mod tests {
         let entries = test_db.entries.lock().unwrap().clone();
 
         for entry in entries.clone() {
-            let is_create = entry.entry_decoded().operation().unwrap().is_create();
+            let is_create = entry.operation().is_create();
 
             // Determine document id
             let document_id: Option<DocumentId> = match is_create {
                 true => None,
-                false => Some(entries.get(0).unwrap().entry_signed().hash().into()),
+                false => Some(entries.get(0).unwrap().hash().into()),
             };
 
             // Construct entry args request
             let entry_args_request = EntryArgsRequest {
-                author: entry.entry_signed().author().clone(),
+                author: entry.author(),
                 document: document_id,
             };
 
@@ -356,9 +347,9 @@ pub mod tests {
             assert!(entry_args_response.is_ok());
 
             // Calculate expected response
-            let seq_num = *entry.entry_decoded().seq_num();
-            let backlink = entry.entry_decoded().backlink_hash().cloned();
-            let skiplink = entry.entry_decoded().skiplink_hash().cloned();
+            let seq_num = entry.seq_num();
+            let backlink = entry.backlink_hash();
+            let skiplink = entry.skiplink_hash();
 
             let expected_reponse =
                 EntryArgsResponse::new(backlink, skiplink, seq_num, LogId::default());
@@ -368,7 +359,7 @@ pub mod tests {
 
             // Publish each test entry in order before next loop
             let publish_entry_request = PublishEntryRequest(
-                entry.entry_signed().clone(),
+                entry.entry_signed(),
                 entry.operation_encoded().unwrap().clone(),
             );
 
@@ -399,19 +390,17 @@ pub mod tests {
         // Create a new entry with an invalid log id
         let entry_with_wrong_log_id = Entry::new(
             &LogId::new(2), // This is wrong!!
-            entries.get(1).unwrap().entry_decoded().operation(),
-            entries.get(1).unwrap().entry_decoded().skiplink_hash(),
-            entries.get(1).unwrap().entry_decoded().backlink_hash(),
-            entries.get(1).unwrap().entry_decoded().seq_num(),
+            Some(&entries.get(1).unwrap().operation()),
+            entries.get(1).unwrap().skiplink_hash().as_ref(),
+            entries.get(1).unwrap().backlink_hash().as_ref(),
+            &entries.get(1).unwrap().seq_num(),
         )
         .unwrap();
 
         let signed_entry_with_wrong_log_id =
             sign_and_encode(&entry_with_wrong_log_id, &key_pair).unwrap();
-        let encoded_operation = OperationEncoded::try_from(
-            entries.get(1).unwrap().entry_decoded().operation().unwrap(),
-        )
-        .unwrap();
+        let encoded_operation =
+            OperationEncoded::try_from(&entries.get(1).unwrap().operation()).unwrap();
 
         // Create request and publish invalid entry
         let request_with_wrong_log_id =

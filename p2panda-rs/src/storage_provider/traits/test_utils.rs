@@ -125,7 +125,7 @@ impl TryInto<Log> for StorageLog {
 pub struct StorageEntry(String);
 
 impl StorageEntry {
-    pub fn entry_decoded(&self) -> Entry {
+    fn entry_decoded(&self) -> Entry {
         // Unwrapping as validation occurs in `EntryWithOperation`.
         decode_entry(&self.entry_signed(), self.operation_encoded().as_ref()).unwrap()
     }
@@ -374,14 +374,14 @@ async fn test_the_test_db(test_db: SimplestStorageProvider) {
         assert_eq!(expected_seq_num, *entry.entry_decoded().seq_num());
 
         let expected_log_id = LogId::default();
-        assert_eq!(expected_log_id, *entry.entry_decoded().log_id());
+        assert_eq!(expected_log_id, entry.log_id());
 
         let mut expected_backlink_hash = None;
 
         if seq_num != 1 {
             expected_backlink_hash = entries
                 .get(seq_num - 2)
-                .map(|backlink_entry| backlink_entry.entry_signed().hash());
+                .map(|backlink_entry| backlink_entry.hash());
         }
         assert_eq!(
             expected_backlink_hash,
@@ -403,13 +403,10 @@ async fn test_the_test_db(test_db: SimplestStorageProvider) {
                 .unwrap()
                 .clone();
 
-            expected_skiplink_hash = Some(skiplink_entry.entry_signed().hash());
+            expected_skiplink_hash = Some(skiplink_entry.hash());
         };
 
-        assert_eq!(
-            expected_skiplink_hash,
-            entry.entry_decoded().skiplink_hash().cloned()
-        );
+        assert_eq!(expected_skiplink_hash, entry.skiplink_hash());
     }
 }
 

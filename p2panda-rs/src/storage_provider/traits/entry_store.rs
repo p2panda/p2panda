@@ -105,11 +105,9 @@ pub mod tests {
             let entries = self.entries.lock().unwrap();
 
             let entry = entries.iter().find(|entry| {
-                let decoded_entry = entry.entry_decoded();
-
-                entry.entry_signed().author() == *author
-                    && decoded_entry.log_id() == log_id
-                    && decoded_entry.seq_num() == seq_num
+                entry.author() == *author
+                    && entry.log_id() == *log_id
+                    && entry.seq_num() == *seq_num
             });
 
             Ok(entry.cloned())
@@ -125,11 +123,8 @@ pub mod tests {
 
             let latest_entry = entries
                 .iter()
-                .filter(|entry| {
-                    entry.entry_signed().author() == *author
-                        && entry.entry_decoded().log_id() == log_id
-                })
-                .max_by_key(|entry| entry.entry_decoded().seq_num().as_u64());
+                .filter(|entry| entry.author() == *author && entry.log_id() == *log_id)
+                .max_by_key(|entry| entry.seq_num().as_u64());
 
             Ok(latest_entry.cloned())
         }
@@ -143,7 +138,7 @@ pub mod tests {
 
             let entries: Vec<StorageEntry> = entries
                 .iter()
-                .filter(|entry| entry.entry_decoded().operation().unwrap().schema() == *schema)
+                .filter(|entry| entry.operation().schema() == *schema)
                 .map(|e| e.to_owned())
                 .collect();
 
