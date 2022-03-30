@@ -12,7 +12,7 @@ pub trait AsEntryArgsRequest {
     /// Returns the Author parameter.
     fn author(&self) -> &Author;
 
-    /// Returns the document id Hash parameter.
+    /// Returns the document id parameter.
     fn document_id(&self) -> &Option<DocumentId>;
 
     /// Validates the `EntryArgument` parameters
