@@ -261,7 +261,7 @@ pub mod tests {
 
             let log = logs
                 .iter()
-                .find(|log| log.log_id() == entry.log_id() && log.author() == entry.author());
+                .find(|log| log.id() == entry.log_id() && log.author() == entry.author());
 
             Ok(Some(log.unwrap().document_id()))
         }

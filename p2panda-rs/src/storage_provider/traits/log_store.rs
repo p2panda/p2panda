@@ -90,7 +90,7 @@ pub mod tests {
                 .iter()
                 .find(|log| log.document_id() == *document_id && log.author() == *author);
 
-            let log_id = log.map(|log| log.log_id());
+            let log_id = log.map(|log| log.id());
             Ok(log_id)
         }
 

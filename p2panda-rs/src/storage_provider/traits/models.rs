@@ -57,11 +57,11 @@ pub trait AsStorageLog: Sized + Send + Sync + TryInto<Log> + From<Log> {
     /// Constructor method for structs.
     fn new(log: Log) -> Self;
 
+    /// Returns the LogId of this log.
+    fn id(&self) -> LogId;
+
     /// Returns the Author of this log.
     fn author(&self) -> Author;
-
-    /// Returns the LogId of this log.
-    fn log_id(&self) -> LogId;
 
     /// Returns the DocumentId of this log.
     fn document_id(&self) -> DocumentId;

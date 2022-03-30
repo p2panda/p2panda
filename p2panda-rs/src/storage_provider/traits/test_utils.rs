@@ -95,7 +95,7 @@ impl AsStorageLog for StorageLog {
         DocumentId::from_str(params[2]).unwrap()
     }
 
-    fn log_id(&self) -> LogId {
+    fn id(&self) -> LogId {
         let params: Vec<&str> = self.0.split('-').collect();
         LogId::from_str(params[3]).unwrap()
     }
@@ -113,7 +113,7 @@ impl TryInto<Log> for StorageLog {
     fn try_into(self) -> Result<Log, Self::Error> {
         Ok(Log {
             author: self.author(),
-            log_id: self.log_id(),
+            log_id: self.id(),
             document: self.document_id(),
             schema: self.schema_id(),
         })
