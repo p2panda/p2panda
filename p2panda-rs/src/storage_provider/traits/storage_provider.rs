@@ -263,7 +263,7 @@ pub mod tests {
                 .iter()
                 .find(|log| log.log_id() == entry.log_id() && log.author() == entry.author());
 
-            Ok(Some(log.unwrap().document()))
+            Ok(Some(log.unwrap().document_id()))
         }
     }
 

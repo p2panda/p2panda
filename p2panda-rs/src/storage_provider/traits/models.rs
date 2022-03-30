@@ -64,8 +64,8 @@ pub trait AsStorageLog: Sized + Send + Sync + TryInto<Log> + From<Log> {
     fn log_id(&self) -> LogId;
 
     /// Returns the DocumentId of this log.
-    fn document(&self) -> DocumentId;
+    fn document_id(&self) -> DocumentId;
 
     /// Returns the SchemaId of this log.
-    fn schema(&self) -> SchemaId;
+    fn schema_id(&self) -> SchemaId;
 }

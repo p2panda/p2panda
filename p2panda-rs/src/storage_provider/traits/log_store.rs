@@ -88,7 +88,7 @@ pub mod tests {
 
             let log = logs
                 .iter()
-                .find(|log| log.document() == *document_id && log.author() == *author);
+                .find(|log| log.document_id() == *document_id && log.author() == *author);
 
             let log_id = log.map(|log| log.log_id());
             Ok(log_id)

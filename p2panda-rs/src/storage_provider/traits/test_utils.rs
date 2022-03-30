@@ -85,12 +85,12 @@ impl AsStorageLog for StorageLog {
         Author::new(params[0]).unwrap()
     }
 
-    fn schema(&self) -> SchemaId {
+    fn schema_id(&self) -> SchemaId {
         let params: Vec<&str> = self.0.split('-').collect();
         SchemaId::from_str(params[1]).unwrap()
     }
 
-    fn document(&self) -> DocumentId {
+    fn document_id(&self) -> DocumentId {
         let params: Vec<&str> = self.0.split('-').collect();
         DocumentId::from_str(params[2]).unwrap()
     }
@@ -114,8 +114,8 @@ impl TryInto<Log> for StorageLog {
         Ok(Log {
             author: self.author(),
             log_id: self.log_id(),
-            document: self.document(),
-            schema: self.schema(),
+            document: self.document_id(),
+            schema: self.schema_id(),
         })
     }
 }
