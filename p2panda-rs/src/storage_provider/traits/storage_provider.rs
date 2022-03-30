@@ -55,7 +55,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         // Determine log_id for this document. If this is the very first operation in the document
         // graph, the `document` value is None and we will return the next free log id
         let log = self
-            .find_document_log_id(params.author(), params.document().as_ref())
+            .find_document_log_id(params.author(), params.document_id().as_ref())
             .await?;
 
         // Determine backlink and skiplink hashes for the next entry. To do this we need the latest

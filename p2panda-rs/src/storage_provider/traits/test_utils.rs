@@ -284,7 +284,7 @@ impl AsEntryArgsRequest for EntryArgsRequest {
     fn author(&self) -> &Author {
         &self.author
     }
-    fn document(&self) -> &Option<DocumentId> {
+    fn document_id(&self) -> &Option<DocumentId> {
         &self.document
     }
 }

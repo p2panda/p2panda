@@ -13,7 +13,7 @@ pub trait AsEntryArgsRequest {
     fn author(&self) -> &Author;
 
     /// Returns the document id Hash parameter.
-    fn document(&self) -> &Option<DocumentId>;
+    fn document_id(&self) -> &Option<DocumentId>;
 
     /// Validates the `EntryArgument` parameters
     fn validate(&self) -> Result<(), ValidationError> {
@@ -21,7 +21,7 @@ pub trait AsEntryArgsRequest {
         self.author().validate()?;
 
         // Validate `document` request parameter when it is set
-        match self.document() {
+        match self.document_id() {
             None => (),
             Some(doc) => {
                 doc.validate()?;
