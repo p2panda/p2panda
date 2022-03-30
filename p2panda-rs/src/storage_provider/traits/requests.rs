@@ -7,7 +7,7 @@ use crate::operation::OperationEncoded;
 use crate::storage_provider::ValidationError;
 use crate::Validate;
 
-/// Request body of `panda_getEntryArguments`.
+/// Params for a request to retrieve the next entry args for an author and document.
 pub trait AsEntryArgsRequest {
     /// Returns the Author parameter.
     fn author(&self) -> &Author;
@@ -31,7 +31,7 @@ pub trait AsEntryArgsRequest {
     }
 }
 
-/// Request body of `panda_publishEntry`.
+/// Params for a request to publish a new entry.
 pub trait AsPublishEntryRequest {
     /// Returns the EntrySigned parameter
     fn entry_signed(&self) -> &EntrySigned;
