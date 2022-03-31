@@ -59,7 +59,7 @@ pub fn generate_fields(fields: &BTreeMap<FieldName, FieldType>) -> String {
             cddl_str += "\n";
         };
         cddl_str += &format!("{name} = {{ ");
-        cddl_str += &format!("type: \"{}\", ", field_type.to_string());
+        cddl_str += &format!("type: \"{}\", ", field_type.serialise());
         cddl_str += &format!(
             "value: {}, ",
             CddlType::from(field_type.to_owned()).as_str()
