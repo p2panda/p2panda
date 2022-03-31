@@ -59,8 +59,8 @@ impl Author {
     /// assert_eq!(author.short_str(), "a5d982");
     /// ```
     pub fn short_str(&self) -> &str {
-        let offset = PUBLIC_KEY_LENGTH - 6;
-        &self.as_str()[offset..]
+        let offset = self.0.len() - 6;
+        &self.0[offset..]
     }
 }
 
