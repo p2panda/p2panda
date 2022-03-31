@@ -8,6 +8,16 @@ use crate::operation::OperationValue;
 use super::{FieldTypeError, SchemaId};
 
 /// Valid field types for publishing an application schema.
+///
+/// Implements conversion to `OperationValue`:
+///
+/// ```
+/// # use p2panda_rs::operation::{OperationFields, OperationValue};
+/// # use p2panda_rs::schema::FieldType;
+/// let mut field_definition = OperationFields::new();
+/// field_definition.add("name", OperationValue::Text("document_title".to_string()));
+/// field_definition.add("type", FieldType::String.into());
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 pub enum FieldType {
     /// Defines a boolean field.
@@ -68,7 +78,7 @@ impl FromStr for FieldType {
     type Err = FieldTypeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Matches a field type, followed an optional group in paranetheses that contains the
+        // Matches a field type name, followed by an optional group in parentheses that contains the
         // referenced schema for relation field types.
         let re = Regex::new(r"(\w+)(\((.+)\))?").unwrap();
         let groups = re.captures(s).unwrap();
