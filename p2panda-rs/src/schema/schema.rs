@@ -21,7 +21,7 @@ pub struct Schema {
     /// Describes the schema's intended use.
     description: String,
 
-    /// This schema's field definitions.
+    /// Maps all of the schema's field names to their respective types.
     fields: BTreeMap<FieldKey, FieldType>,
 }
 
@@ -203,15 +203,15 @@ mod tests {
 
         // Test getters
         let expected_view_id =
-            &"0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+            "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
                 .parse::<DocumentViewId>()
                 .unwrap();
         assert_eq!(
             schema.id(),
-            &SchemaId::new_application("venue_name", expected_view_id)
+            &SchemaId::new_application("venue_name", &expected_view_id)
         );
         assert_eq!(schema.name(), "venue_name");
-        assert_eq!(&schema.view_id(), expected_view_id);
+        assert_eq!(schema.view_id(), expected_view_id);
         assert_eq!(schema.description(), "Describes a venue");
         assert_eq!(schema.fields().len(), 2);
 
