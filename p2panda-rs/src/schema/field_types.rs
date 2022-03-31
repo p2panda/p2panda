@@ -3,6 +3,8 @@
 use regex::Regex;
 use std::str::FromStr;
 
+use crate::operation::OperationValue;
+
 use super::{FieldTypeError, SchemaId};
 
 /// Valid field types for publishing an application schema.
@@ -56,6 +58,12 @@ impl FieldType {
     }
 }
 
+impl From<FieldType> for OperationValue {
+    fn from(field_type: FieldType) -> OperationValue {
+        OperationValue::Text(field_type.serialise())
+    }
+}
+
 impl FromStr for FieldType {
     type Err = FieldTypeError;
 
@@ -92,11 +100,14 @@ impl FromStr for FieldType {
 
 #[cfg(test)]
 mod tests {
+    use crate::operation::OperationValue;
     use crate::schema::{FieldType, SchemaId};
+    use crate::Validate;
 
     #[test]
     fn serialises() {
         assert_eq!(FieldType::Bool.serialise(), "bool");
+        assert!(OperationValue::from(FieldType::Bool).validate().is_ok());
         assert_eq!(FieldType::Int.serialise(), "int");
         assert_eq!(FieldType::Float.serialise(), "float");
         assert_eq!(FieldType::String.serialise(), "str");
