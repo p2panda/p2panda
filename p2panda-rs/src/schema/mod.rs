@@ -10,4 +10,5 @@ pub mod system;
 
 pub use error::{FieldTypeError, SchemaError, SchemaIdError};
 pub use field_types::FieldType;
-pub use schema_id::SchemaId;
+pub use schema::Schema;
+pub use schema_id::{SchemaId, SchemaVersion};
