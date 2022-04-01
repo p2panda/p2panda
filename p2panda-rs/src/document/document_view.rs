@@ -126,6 +126,8 @@ mod tests {
 
         let document_view = DocumentView::new(document_view_id, view);
 
+        assert_eq!(format!("{}", document_view), "<DocumentView 496543>");
+
         assert_eq!(
             document_view.keys(),
             vec!["age", "height", "is_admin", "profile_picture", "username"]

@@ -128,5 +128,8 @@ mod tests {
         let author_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
         let author: Author = author_str.parse().unwrap();
         assert_eq!(author_str, author.as_str());
+
+        // Display impl
+        assert_eq!(format!("{}", author), "<Author a5d982>");
     }
 }

@@ -222,5 +222,8 @@ mod tests {
         // Using TryFrom<String>
         let hash_from_string = Hash::try_from(String::from(hash_str)).unwrap();
         assert_eq!(hash_str, hash_from_string.as_str());
+
+        // Display impl
+        assert_eq!(format!("{}", hash_from_string), "<Hash 496543>");
     }
 }
