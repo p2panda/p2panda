@@ -119,19 +119,10 @@ impl SchemaId {
             ));
         }
 
-        Ok(Self::Application(
+        Ok(SchemaId::Application(
             remainder.to_string(),
             DocumentViewId::new(&operation_ids),
         ))
-    }
-
-    /// Access the schema name.
-    pub fn name(&self) -> &str {
-        match self {
-            SchemaId::Application(name, _) => name,
-            SchemaId::SchemaDefinition(_) => SCHEMA_DEFINITION_NAME,
-            SchemaId::SchemaFieldDefinition(_) => SCHEMA_FIELD_DEFINITION_NAME,
-        }
     }
 
     /// Returns schema id as string slice.
@@ -151,6 +142,15 @@ impl SchemaId {
             SchemaId::SchemaFieldDefinition(version) => {
                 format!("{}_v{}", SCHEMA_FIELD_DEFINITION_NAME, version)
             }
+        }
+    }
+
+    /// Access the schema name.
+    pub fn name(&self) -> &str {
+        match self {
+            SchemaId::Application(name, _) => name,
+            SchemaId::SchemaDefinition(_) => SCHEMA_DEFINITION_NAME,
+            SchemaId::SchemaFieldDefinition(_) => SCHEMA_FIELD_DEFINITION_NAME,
         }
     }
 
