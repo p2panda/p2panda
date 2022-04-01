@@ -450,7 +450,7 @@ pub mod tests {
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
             format!(
-                "Could not find document hash for entry in database with id: {:?}",
+                "Could not find document for entry in database with id: {:?}",
                 entry.hash()
             )
         )
