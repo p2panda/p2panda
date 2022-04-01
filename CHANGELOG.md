@@ -41,6 +41,7 @@ Highlights are marked with a pancake 🥞
 - Require sorted serialisation of document view ids [#284](https://github.com/p2panda/p2panda/pull/284) `rs`
 - Introduce new application schema id format [#292](https://github.com/p2panda/p2panda/pull/292) `rs`
 - Update spelling of system schema ids [#294](https://github.com/p2panda/p2panda/pull/294) `rs`
+- Update `Schema` implementation to make use of new `SchemaId` [#296](https://github.com/p2panda/p2panda/pull/296) `rs`
 
 ## Fixed
 
