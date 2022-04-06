@@ -28,7 +28,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-test-bust-that-cache
+          key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run tests
         uses: actions-rs/cargo@v1
@@ -57,7 +57,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-check-bust-that-cache
+          key: ${{ runner.os }}-check-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Check project and dependencies
         uses: actions-rs/cargo@v1
@@ -84,7 +84,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-fmt-bust-that-cache
+          key: ${{ runner.os }}-fmt-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Check formatting
         uses: actions-rs/cargo@v1
@@ -111,7 +111,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-clippy-bust-that-cache
+          key: ${{ runner.os }}-clippy-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Check code with clippy
         uses: actions-rs/cargo@v1
@@ -137,7 +137,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-tarpaulin-bust-that-cache
+          key: ${{ runner.os }}-tarpaulin-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run cargo-tarpaulin
         uses: actions-rs/tarpaulin@v0.1
