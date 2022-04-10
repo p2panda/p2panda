@@ -51,28 +51,11 @@ pub struct StorageLog(String);
 /// Implement `AsStorageLog` trait for our `StorageLog` struct
 impl AsStorageLog for StorageLog {
     fn new(log: Log) -> Self {
-        // Convert SchemaId into a string
-        let schema_id = match log.schema().clone() {
-            SchemaId::Application(pinned_relation) => {
-                let mut id_str = "".to_string();
-                let mut relation_iter = pinned_relation.into_iter().peekable();
-                while let Some(hash) = relation_iter.next() {
-                    id_str += hash.as_str();
-                    if relation_iter.peek().is_some() {
-                        id_str += "_"
-                    }
-                }
-                id_str
-            }
-            SchemaId::Schema => "schema_v1".to_string(),
-            SchemaId::SchemaField => "schema_field_v1".to_string(),
-        };
-
         // Concat all values
         let log_string = format!(
             "{}-{}-{}-{}",
             log.author().as_str(),
-            schema_id,
+            log.schema().as_str(),
             log.document().as_str(),
             log.log_id().as_u64()
         );
