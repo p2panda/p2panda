@@ -93,7 +93,17 @@ const CDDL_ANY_OPERATION: &str = r#"
 ; p2panda Operation Body v1
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-schema_id = "schema_v1" / "schema_field_v1" / pinned_relation
+; Application schema ids consist of sections separated by an underscore.
+; The first section is the name, which has 1-64 characters, must start
+; with a letter and must contain only alphanumeric characters and
+; underscores. The remaining sections are the document view id of the
+; schema's `schema_definition_v1` document, represented as alphabetically
+; sorted hex-encoded operation ids, separated by underscores.
+application_schema_id = tstr .regexp "[A-Za-z]{1}[A-Za-z0-9_]{0,63}_([0-9A-Za-z]{68})(_[0-9A-Za-z]{68})*"
+
+system_schema_id = "schema_definition_v1" / "schema_field_definition_v1"
+
+schema_id =  system_schema_id / application_schema_id
 
 create_fields = fields
 
@@ -122,7 +132,7 @@ const CDDL_SCHEMA_V1: &str = r#"
 ; System Schema "Schema" v1
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-schema_id = "schema_v1"
+schema_id = "schema_definition_v1"
 
 create_fields = { name, description, fields }
 
@@ -153,7 +163,7 @@ const CDDL_SCHEMA_FIELD_V1: &str = r#"
 ; System Schema "Schema field" v1
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-schema_id = "schema_field_v1"
+schema_id = "schema_field_definition_v1"
 
 create_fields = { name, description, field_type }
 
@@ -189,12 +199,12 @@ lazy_static! {
         format!("{}{}", CDDL_HEADER, CDDL_ANY_OPERATION)
     };
 
-    /// CDDL definition of "schema_v1" system operations.
+    /// CDDL definition of "schema_definition_v1" system operations.
     pub static ref SCHEMA_V1_FORMAT: String = {
         format!("{}{}", CDDL_HEADER, CDDL_SCHEMA_V1)
     };
 
-    /// CDDL definition of "schema_field_v1" system operations.
+    /// CDDL definition of "schema_field_definition_v1" system operations.
     pub static ref SCHEMA_FIELD_V1_FORMAT: String = {
         format!("{}{}", CDDL_HEADER, CDDL_SCHEMA_FIELD_V1)
     };
@@ -227,7 +237,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "create",
-                    "schema" => ["0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457"],
+                    "schema" => "menu_0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
                     "version" => 1,
                     "fields" => {
                         "national_dish" => {
@@ -261,7 +271,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "update",
-                    "schema" => ["00208432597826bef4ac1c3cb56ba4c79c1b2b656dadbb808d8af46c62dcef6f987d"],
+                    "schema" => "menu_00208432597826bef4ac1c3cb56ba4c79c1b2b656dadbb808d8af46c62dcef6f987d",
                     "version" => 1,
                     "previous_operations" => [
                         "00208f7492d6eb01360a886dac93da88982029484d8c04a0bd2ac0607101b80a6634",
@@ -284,7 +294,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "delete",
-                    "schema" => ["002094734a821e9987876a30e6040191baea92702ce3e18342032fde6e54b0f63fd0"],
+                    "schema" => "menu_002094734a821e9987876a30e6040191baea92702ce3e18342032fde6e54b0f63fd0",
                     "version" => 1,
                     "previous_operations" => [
                         "00203ea9940af9e5a191a81a49a118ee049283c3f62e879b33f879e154abad3e682f",
@@ -304,7 +314,7 @@ mod tests {
                 cbor!({
                     "action" => "create",
                     // Hash invalid (64 instead of 68 characters)
-                    "schema" => ["80f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457"],
+                    "schema" => "menu_80f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f",
                     "version" => 1,
                     "fields" => {
                         "food" => {
@@ -324,7 +334,7 @@ mod tests {
                 cbor!({
                     // Fields missing in UPDATE operation
                     "action" => "update",
-                    "schema" => ["002080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457"],
+                    "schema" => "menu_80f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
                     "version" => 1,
                     "previous_operations" => [
                         "002062b773e62f48cdbbfd3e24956cffd3a9ccb0a844917f1cb726f17405b5e9e2ca",
@@ -342,7 +352,7 @@ mod tests {
                 cbor!({
                     // Previous operations missing in DELETE operation
                     "action" => "delete",
-                    "schema" => ["002080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457"],
+                    "schema" => "menu_80f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
                     "version" => 1,
                 })
                 .unwrap()
@@ -355,7 +365,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "create",
-                    "schema" => ["002080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457"],
+                    "schema" => "menu_80f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
                     "version" => 1,
                     "fields" => {
                         "size" => {
@@ -424,13 +434,13 @@ mod tests {
     }
 
     #[test]
-    fn valid_schema_v1() {
+    fn valid_schema_definition_v1() {
         assert!(validate_cbor(
             &SCHEMA_V1_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "create",
-                    "schema" => "schema_v1",
+                    "schema" => "schema_definition_v1",
                     "version" => 1,
                     "fields" => {
                         "name" => {
@@ -464,7 +474,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "update",
-                    "schema" => "schema_v1",
+                    "schema" => "schema_definition_v1",
                     "version" => 1,
                     "previous_operations" => [
                         "00207134365ce71dca6bd7c31d04bfb3244b29897ab538906216fc8ff3d6189410ad",
@@ -486,7 +496,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "delete",
-                    "schema" => "schema_v1",
+                    "schema" => "schema_definition_v1",
                     "version" => 1,
                     "previous_operations" => [
                         "00203ea9940af9e5a191a81a49a118ee049283c3f62e879b33f879e154abad3e682f",
@@ -499,13 +509,13 @@ mod tests {
     }
 
     #[test]
-    fn invalid_schema_v1() {
+    fn invalid_schema_definition_v1() {
         assert!(validate_cbor(
             &SCHEMA_V1_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "create",
-                    "schema" => "schema_v1",
+                    "schema" => "schema_definition_v1",
                     "version" => 1,
                     "fields" => {
                         "name" => {
@@ -529,7 +539,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "create",
-                    "schema" => "schema_v1",
+                    "schema" => "schema_definition_v1",
                     "version" => 1,
                     "fields" => {
                         "name" => {
@@ -564,7 +574,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "update",
-                    "schema" => "schema_v1",
+                    "schema" => "schema_definition_v1",
                     "version" => 1,
                     "previous_operations" => [
                         "00207134365ce71dca6bd7c31d04bfb3244b29897ab538906216fc8ff3d6189410ad",
@@ -584,13 +594,13 @@ mod tests {
     }
 
     #[test]
-    fn valid_schema_field_v1() {
+    fn valid_schema_field_definition_v1() {
         assert!(validate_cbor(
             &SCHEMA_FIELD_V1_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "create",
-                    "schema" => "schema_field_v1",
+                    "schema" => "schema_field_definition_v1",
                     "version" => 1,
                     "fields" => {
                         "name" => {
@@ -617,7 +627,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "update",
-                    "schema" => "schema_field_v1",
+                    "schema" => "schema_field_definition_v1",
                     "version" => 1,
                     "previous_operations" => [
                         "00208a5cbba0facc96f22fe3c283e05706c74801282bb7ba315fb5c77caa44689846",
@@ -652,7 +662,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "delete",
-                    "schema" => "schema_field_v1",
+                    "schema" => "schema_field_definition_v1",
                     "version" => 1,
                     "previous_operations" => [
                         "002066f3cec300b76993da433f80c0c32104678e483fa24d59625d0e3994c09115e2",
@@ -665,13 +675,13 @@ mod tests {
     }
 
     #[test]
-    fn invalid_schema_field_v1() {
+    fn invalid_schema_field_definition_v1() {
         assert!(validate_cbor(
             &SCHEMA_FIELD_V1_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "create",
-                    "schema" => "schema_field_v1",
+                    "schema" => "schema_field_definition_v1",
                     "version" => 1,
                     "fields" => {
                         "name" => {
@@ -695,7 +705,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "update",
-                    "schema" => "schema_field_v1",
+                    "schema" => "schema_field_definition_v1",
                     "version" => 1,
                     "previous_operations" => [
                         "00209caa5f232debd2835e35a673d5eb148ea803a272c6ca004cd86cbe4a834718d5",

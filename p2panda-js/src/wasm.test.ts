@@ -4,6 +4,7 @@ import wasm from '~/wasm';
 
 const TEST_HASH =
   '0020ddc99aca776df0ca9d1b5871ba39d4edacc752a0a3426b12c3958971b6c847ac';
+const TEST_SCHEMA = `test_${TEST_HASH}`;
 
 describe('WebAssembly interface', () => {
   describe('KeyPair', () => {
@@ -155,7 +156,7 @@ describe('WebAssembly interface', () => {
       fields.add('description', 'str', 'Hello, Panda');
       expect(fields.get('description')).toBe('Hello, Panda');
 
-      const operationEncoded = encodeCreateOperation([TEST_HASH], fields);
+      const operationEncoded = encodeCreateOperation(TEST_SCHEMA, fields);
 
       // Sign and encode entry
       const { entryEncoded, entryHash } = signEncodeEntry(
@@ -175,7 +176,7 @@ describe('WebAssembly interface', () => {
       expect(decodedEntry.entryHashBacklink).toBeUndefined();
       expect(decodedEntry.entryHashSkiplink).toBeUndefined();
       expect(decodedEntry.operation.action).toBe('create');
-      expect(decodedEntry.operation.schema).toEqual([TEST_HASH]);
+      expect(decodedEntry.operation.schema).toEqual(TEST_SCHEMA);
 
       // Test operation fields map
       const { fields: operationFields } = decodedEntry.operation;
@@ -215,7 +216,7 @@ describe('WebAssembly interface', () => {
       fields.add('large_f64', 'float', LARGE_F64);
       fields.add('large_f64_negative', 'float', LARGE_F64_NEGATIVE);
 
-      const operationEncoded = encodeCreateOperation([TEST_HASH], fields);
+      const operationEncoded = encodeCreateOperation(TEST_SCHEMA, fields);
 
       // Sign and encode entry with a very high `log_id` value
       const { entryEncoded } = signEncodeEntry(

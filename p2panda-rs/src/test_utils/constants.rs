@@ -7,10 +7,9 @@
 pub const DEFAULT_HASH: &str =
     "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 
-/// The default schema hash string, used in all operation fixtures when no custom schema hash is
-/// defined.
-pub const DEFAULT_SCHEMA_HASH: &str =
-    "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
+/// Unpublished test schema id, used in all operation fixtures that don't define their own schema.
+pub const TEST_SCHEMA_ID: &str =
+    "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 
 /// The default private key string, used for creating authors and public keys in fixtures.
 pub const DEFAULT_PRIVATE_KEY: &str =
@@ -24,6 +23,8 @@ pub const DEFAULT_SEQ_NUM: u64 = 1;
 mod tests {
     use super::*;
     use crate::hash::Hash;
+    use crate::operation::OperationId;
+    use crate::schema::SchemaId;
 
     #[test]
     fn default_hash() {
@@ -33,7 +34,8 @@ mod tests {
 
     #[test]
     fn default_schema() {
-        let default_schema_hash = Hash::new_from_bytes(vec![3, 2, 1]).unwrap();
-        assert_eq!(default_schema_hash.as_str(), DEFAULT_SCHEMA_HASH)
+        let venue_schema_hash: OperationId = Hash::new_from_bytes(vec![3, 2, 1]).unwrap().into();
+        let schema = SchemaId::new_application("venue", &venue_schema_hash.into());
+        assert_eq!(schema.as_str(), TEST_SCHEMA_ID)
     }
 }
