@@ -16,7 +16,22 @@ use crate::storage_provider::traits::{
 /// Trait which handles all high level storage queries and insertions.
 ///
 /// This trait should be implemented on the root storage provider struct. It's definitions make up
-/// the the higher level methods a p2panda client needs for interacting with data storage.
+/// the the high level methods a p2panda client needs when interacting with data storage. It will
+/// be used for storing entries (`publish_entry`), getting required entry arguments when creating
+/// entries (`get_entry_args`) and retrieving a document id by entry hash (`get_document_by_entry`).
+/// Methods defined on `StorageEntry` and `StorageLog` for lower level access to their respective
+/// data structures will also be available.
+///
+/// The methods defined here are the minimum required for a working storage backend,
+/// additional custom methods can be added per implementation.
+///
+/// For example: if I wanted to use a SQLite backend, then I would first implement [`StorageLog`]
+/// and [`StorageEntry`] traits with all their required methods defined (they are required traits
+/// containing lower level accessors and setters for the respective data structures). With these
+/// traits defined [`StorageProvider`] is almost complete as it contains default definitions for
+/// most of it's methods (`get_entry_args` and `publish_entry` are defined below). The only one
+/// which needs defining is `get_document_by_entry`. It is also possible to over-ride the default
+/// definitions for any of the trait methods.
 #[async_trait]
 pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog>:
     EntryStore<StorageEntry> + LogStore<StorageLog>
