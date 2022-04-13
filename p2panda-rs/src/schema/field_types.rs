@@ -103,17 +103,17 @@ impl FromStr for FieldType {
 
         match (name, parameter) {
             (Some("relation"), Some(schema_id)) => {
-                Ok(FieldType::Relation(SchemaId::new(schema_id).unwrap()))
+                Ok(FieldType::Relation(SchemaId::new(schema_id)?))
             }
             (Some("relation_list"), Some(schema_id)) => {
-                Ok(FieldType::RelationList(SchemaId::new(schema_id).unwrap()))
+                Ok(FieldType::RelationList(SchemaId::new(schema_id)?))
             }
             (Some("pinned_relation"), Some(schema_id)) => {
-                Ok(FieldType::PinnedRelation(SchemaId::new(schema_id).unwrap()))
+                Ok(FieldType::PinnedRelation(SchemaId::new(schema_id)?))
             }
-            (Some("pinned_relation_list"), Some(schema_id)) => Ok(FieldType::PinnedRelationList(
-                SchemaId::new(schema_id).unwrap(),
-            )),
+            (Some("pinned_relation_list"), Some(schema_id)) => {
+                Ok(FieldType::PinnedRelationList(SchemaId::new(schema_id)?))
+            }
             _ => Err(FieldTypeError::InvalidFieldType(s.into())),
         }
     }
@@ -175,6 +175,13 @@ mod tests {
             "pinned_relation_list(schema_field_definition_v1)"
                 .parse()
                 .unwrap()
+        );
+
+        let invalid = "relation(no_no_no)".parse::<FieldType>();
+        assert_eq!(
+            invalid.unwrap_err().to_string(),
+            "encountered invalid hash while parsing application schema id: invalid hex encoding \
+            in hash string"
         );
     }
 
