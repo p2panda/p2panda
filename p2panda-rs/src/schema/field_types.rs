@@ -122,20 +122,20 @@ mod tests {
         assert_eq!(FieldType::Float.serialise(), "float");
         assert_eq!(FieldType::String.serialise(), "str");
         assert_eq!(
-            FieldType::Relation(SchemaId::SchemaField).serialise(),
-            "relation(schema_field_v1)"
+            FieldType::Relation(SchemaId::SchemaFieldDefinition(1)).serialise(),
+            "relation(schema_field_definition_v1)"
         );
         assert_eq!(
-            FieldType::RelationList(SchemaId::SchemaField).serialise(),
-            "relation_list(schema_field_v1)"
+            FieldType::RelationList(SchemaId::SchemaFieldDefinition(1)).serialise(),
+            "relation_list(schema_field_definition_v1)"
         );
         assert_eq!(
-            FieldType::PinnedRelation(SchemaId::SchemaField).serialise(),
-            "pinned_relation(schema_field_v1)"
+            FieldType::PinnedRelation(SchemaId::SchemaFieldDefinition(1)).serialise(),
+            "pinned_relation(schema_field_definition_v1)"
         );
         assert_eq!(
-            FieldType::PinnedRelationList(SchemaId::SchemaField).serialise(),
-            "pinned_relation_list(schema_field_v1)"
+            FieldType::PinnedRelationList(SchemaId::SchemaFieldDefinition(1)).serialise(),
+            "pinned_relation_list(schema_field_definition_v1)"
         );
     }
 
@@ -146,20 +146,20 @@ mod tests {
         assert_eq!(FieldType::Float, "float".parse().unwrap());
         assert_eq!(FieldType::String, "str".parse().unwrap());
         assert_eq!(
-            FieldType::Relation(SchemaId::SchemaField),
-            "relation(schema_field_v1)".parse().unwrap()
+            FieldType::Relation(SchemaId::SchemaFieldDefinition(1)),
+            "relation(schema_field_definition_v1)".parse().unwrap()
         );
         assert_eq!(
-            FieldType::RelationList(SchemaId::SchemaField),
-            "relation_list(schema_field_v1)".parse().unwrap()
+            FieldType::RelationList(SchemaId::SchemaFieldDefinition(1)),
+            "relation_list(schema_field_definition_v1)".parse().unwrap()
         );
         assert_eq!(
-            FieldType::PinnedRelation(SchemaId::SchemaField),
-            "pinned_relation(schema_field_v1)".parse().unwrap()
+            FieldType::PinnedRelation(SchemaId::SchemaFieldDefinition(1)),
+            "pinned_relation(schema_field_definition_v1)".parse().unwrap()
         );
         assert_eq!(
-            FieldType::PinnedRelationList(SchemaId::SchemaField),
-            "pinned_relation_list(schema_field_v1)".parse().unwrap()
+            FieldType::PinnedRelationList(SchemaId::SchemaFieldDefinition(1)),
+            "pinned_relation_list(schema_field_definition_v1)".parse().unwrap()
         );
     }
 

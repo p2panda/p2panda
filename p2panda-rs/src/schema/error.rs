@@ -10,8 +10,8 @@ pub enum SchemaIdError {
     HashError(#[from] crate::hash::HashError),
 
     /// Encountered a malformed schema id.
-    #[error("malformed application schema id: {0}")]
-    MalformedApplicationSchemaId(String),
+    #[error("malformed schema id: {0}")]
+    MalformedSchemaId(String),
 
     /// Application schema ids must start with the schema's name.
     #[error("application schema id is missing a name: {0}")]
