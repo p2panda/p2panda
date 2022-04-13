@@ -85,7 +85,7 @@ impl fmt::Display for Hash {
 }
 
 /// Converts YASMF hash from `yasmf-hash` crate to p2panda `Hash` instance.
-impl<T: core::borrow::Borrow<[u8]>> TryFrom<YasmfHash<T>> for Hash {
+impl<T: core::borrow::Borrow<[u8]> + Clone> TryFrom<YasmfHash<T>> for Hash {
     type Error = HashError;
 
     fn try_from(yasmf_hash: YasmfHash<T>) -> Result<Self, Self::Error> {

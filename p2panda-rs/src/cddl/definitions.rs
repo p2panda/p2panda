@@ -97,11 +97,11 @@ const CDDL_ANY_OPERATION: &str = r#"
 ; The first section is the name, which has 1-64 characters, must start
 ; with a letter and must contain only alphanumeric characters and
 ; underscores. The remaining sections are the document view id of the
-; schema's `schema_v1` document, represented as alphabetically sorted
-; hex-encoded operation ids, separated by underscores.
+; schema's `schema_definition_v1` document, represented as alphabetically
+; sorted hex-encoded operation ids, separated by underscores.
 application_schema_id = tstr .regexp "[A-Za-z]{1}[A-Za-z0-9_]{0,63}_([0-9A-Za-z]{68})(_[0-9A-Za-z]{68})*"
 
-system_schema_id = "schema_v1" / "schema_field_v1"
+system_schema_id = "schema_definition_v1" / "schema_field_definition_v1"
 
 schema_id =  system_schema_id / application_schema_id
 
@@ -132,7 +132,7 @@ const CDDL_SCHEMA_V1: &str = r#"
 ; System Schema "Schema" v1
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-schema_id = "schema_v1"
+schema_id = "schema_definition_v1"
 
 create_fields = { name, description, fields }
 
@@ -163,7 +163,7 @@ const CDDL_SCHEMA_FIELD_V1: &str = r#"
 ; System Schema "Schema field" v1
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-schema_id = "schema_field_v1"
+schema_id = "schema_field_definition_v1"
 
 create_fields = { name, description, field_type }
 
@@ -199,12 +199,12 @@ lazy_static! {
         format!("{}{}", CDDL_HEADER, CDDL_ANY_OPERATION)
     };
 
-    /// CDDL definition of "schema_v1" system operations.
+    /// CDDL definition of "schema_definition_v1" system operations.
     pub static ref SCHEMA_V1_FORMAT: String = {
         format!("{}{}", CDDL_HEADER, CDDL_SCHEMA_V1)
     };
 
-    /// CDDL definition of "schema_field_v1" system operations.
+    /// CDDL definition of "schema_field_definition_v1" system operations.
     pub static ref SCHEMA_FIELD_V1_FORMAT: String = {
         format!("{}{}", CDDL_HEADER, CDDL_SCHEMA_FIELD_V1)
     };
@@ -434,13 +434,13 @@ mod tests {
     }
 
     #[test]
-    fn valid_schema_v1() {
+    fn valid_schema_definition_v1() {
         assert!(validate_cbor(
             &SCHEMA_V1_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "create",
-                    "schema" => "schema_v1",
+                    "schema" => "schema_definition_v1",
                     "version" => 1,
                     "fields" => {
                         "name" => {
@@ -474,7 +474,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "update",
-                    "schema" => "schema_v1",
+                    "schema" => "schema_definition_v1",
                     "version" => 1,
                     "previous_operations" => [
                         "00207134365ce71dca6bd7c31d04bfb3244b29897ab538906216fc8ff3d6189410ad",
@@ -496,7 +496,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "delete",
-                    "schema" => "schema_v1",
+                    "schema" => "schema_definition_v1",
                     "version" => 1,
                     "previous_operations" => [
                         "00203ea9940af9e5a191a81a49a118ee049283c3f62e879b33f879e154abad3e682f",
@@ -509,13 +509,13 @@ mod tests {
     }
 
     #[test]
-    fn invalid_schema_v1() {
+    fn invalid_schema_definition_v1() {
         assert!(validate_cbor(
             &SCHEMA_V1_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "create",
-                    "schema" => "schema_v1",
+                    "schema" => "schema_definition_v1",
                     "version" => 1,
                     "fields" => {
                         "name" => {
@@ -539,7 +539,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "create",
-                    "schema" => "schema_v1",
+                    "schema" => "schema_definition_v1",
                     "version" => 1,
                     "fields" => {
                         "name" => {
@@ -574,7 +574,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "update",
-                    "schema" => "schema_v1",
+                    "schema" => "schema_definition_v1",
                     "version" => 1,
                     "previous_operations" => [
                         "00207134365ce71dca6bd7c31d04bfb3244b29897ab538906216fc8ff3d6189410ad",
@@ -594,13 +594,13 @@ mod tests {
     }
 
     #[test]
-    fn valid_schema_field_v1() {
+    fn valid_schema_field_definition_v1() {
         assert!(validate_cbor(
             &SCHEMA_FIELD_V1_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "create",
-                    "schema" => "schema_field_v1",
+                    "schema" => "schema_field_definition_v1",
                     "version" => 1,
                     "fields" => {
                         "name" => {
@@ -627,7 +627,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "update",
-                    "schema" => "schema_field_v1",
+                    "schema" => "schema_field_definition_v1",
                     "version" => 1,
                     "previous_operations" => [
                         "00208a5cbba0facc96f22fe3c283e05706c74801282bb7ba315fb5c77caa44689846",
@@ -662,7 +662,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "delete",
-                    "schema" => "schema_field_v1",
+                    "schema" => "schema_field_definition_v1",
                     "version" => 1,
                     "previous_operations" => [
                         "002066f3cec300b76993da433f80c0c32104678e483fa24d59625d0e3994c09115e2",
@@ -675,13 +675,13 @@ mod tests {
     }
 
     #[test]
-    fn invalid_schema_field_v1() {
+    fn invalid_schema_field_definition_v1() {
         assert!(validate_cbor(
             &SCHEMA_FIELD_V1_FORMAT,
             &to_cbor(
                 cbor!({
                     "action" => "create",
-                    "schema" => "schema_field_v1",
+                    "schema" => "schema_field_definition_v1",
                     "version" => 1,
                     "fields" => {
                         "name" => {
@@ -705,7 +705,7 @@ mod tests {
             &to_cbor(
                 cbor!({
                     "action" => "update",
-                    "schema" => "schema_field_v1",
+                    "schema" => "schema_field_definition_v1",
                     "version" => 1,
                     "previous_operations" => [
                         "00209caa5f232debd2835e35a673d5eb148ea803a272c6ca004cd86cbe4a834718d5",
