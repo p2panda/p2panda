@@ -22,7 +22,11 @@ Highlights are marked with a pancake 🥞
 - Performance benchmarks for entry and operation encoding/decoding [#254](https://github.com/p2panda/p2panda/pull/254) `rs`
 - Move `DocumentId` from `DocmentView` into `Document` [#255](https://github.com/p2panda/p2panda/pull/255) `rs`
 - Introduce `OperationId` to increase type safety around uses of `Hash` [#272](https://github.com/p2panda/p2panda/pull/272) `rs`
+<<<<<<< HEAD
 - `StorageProvider` and associated traits for implementing storage solutions [#274](https://github.com/p2panda/p2panda/pull/274) `rs` 🥞
+=======
+- Implement `Display` trait for various structs [#281](https://github.com/p2panda/p2panda/pull/281) `rs`
+>>>>>>> main
 - Implement document view id hash as a limited-size identifier for document views [#277](https://github.com/p2panda/p2panda/pull/277) `rs`
 
 ## Changed
@@ -43,6 +47,7 @@ Highlights are marked with a pancake 🥞
 - Introduce new application schema id format [#292](https://github.com/p2panda/p2panda/pull/292) `rs`
 - Update spelling of system schema ids [#294](https://github.com/p2panda/p2panda/pull/294) `rs`
 - Update `Schema` implementation to make use of new `SchemaId` [#296](https://github.com/p2panda/p2panda/pull/296) `rs`
+- Require schema field definitions to specify a specific schema [#269](https://github.com/p2panda/p2panda/pull/269) `rs` 🥞
 
 ## Fixed
 

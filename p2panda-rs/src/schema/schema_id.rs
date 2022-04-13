@@ -164,6 +164,15 @@ impl SchemaId {
     }
 }
 
+impl fmt::Display for SchemaId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SchemaId::Application(name, view_id) => write!(f, "{} {}", name, view_id),
+            system_schema => write!(f, "{}", system_schema.as_str()),
+        }
+    }
+}
+
 impl FromStr for SchemaId {
     type Err = SchemaIdError;
 
@@ -215,7 +224,7 @@ mod test {
     use crate::document::DocumentViewId;
     use crate::operation::OperationId;
     use crate::test_utils::constants::TEST_SCHEMA_ID;
-    use crate::test_utils::fixtures::random_operation_id;
+    use crate::test_utils::fixtures::{random_operation_id, schema};
 
     use super::SchemaId;
 
@@ -340,16 +349,33 @@ mod test {
             .unwrap()
         );
 
+        assert_eq!(format!("{}", appl_schema), "venue 8fc78b");
+
         let schema = SchemaId::new("schema_definition_v50").unwrap();
         assert_eq!(schema, SchemaId::SchemaDefinition(50));
+        assert_eq!(format!("{}", schema), "schema_definition_v50");
 
         let schema_field = SchemaId::new("schema_field_definition_v1").unwrap();
         assert_eq!(schema_field, SchemaId::SchemaFieldDefinition(1));
+        assert_eq!(format!("{}", schema_field), "schema_field_definition_v1");
     }
 
     #[test]
     fn parse_schema_type() {
         let schema: SchemaId = "schema_definition_v1".parse().unwrap();
         assert_eq!(schema, SchemaId::SchemaDefinition(1));
+    }
+
+    #[rstest]
+    fn display(schema: SchemaId) {
+        assert_eq!(format!("{}", schema), "venue 8fc78b");
+        assert_eq!(
+            format!("{}", SchemaId::SchemaDefinition(1)),
+            "schema_definition_v1"
+        );
+        assert_eq!(
+            format!("{}", SchemaId::SchemaFieldDefinition(1)),
+            "schema_field_definition_v1"
+        );
     }
 }

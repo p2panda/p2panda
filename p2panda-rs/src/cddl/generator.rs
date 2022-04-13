@@ -41,10 +41,10 @@ impl From<FieldType> for CddlType {
             FieldType::Int => CddlType::Int,
             FieldType::Float => CddlType::Float,
             FieldType::String => CddlType::Tstr,
-            FieldType::Relation => CddlType::Relation,
-            FieldType::RelationList => CddlType::RelationList,
-            FieldType::PinnedRelation => CddlType::PinnedRelation,
-            FieldType::PinnedRelationList => CddlType::PinnedRelationList,
+            FieldType::Relation(_) => CddlType::Relation,
+            FieldType::RelationList(_) => CddlType::RelationList,
+            FieldType::PinnedRelation(_) => CddlType::PinnedRelation,
+            FieldType::PinnedRelationList(_) => CddlType::PinnedRelationList,
         }
     }
 }
@@ -59,7 +59,7 @@ pub fn generate_fields(fields: &BTreeMap<FieldName, FieldType>) -> String {
             cddl_str += "\n";
         };
         cddl_str += &format!("{name} = {{ ");
-        cddl_str += &format!("type: \"{}\", ", field_type.as_str());
+        cddl_str += &format!("type: \"{}\", ", field_type.serialise());
         cddl_str += &format!(
             "value: {}, ",
             CddlType::from(field_type.to_owned()).as_str()
@@ -122,21 +122,32 @@ mod tests {
             generator::{generate_create_fields, generate_fields, generate_update_fields},
         },
         schema::FieldType,
+        test_utils::fixtures::defaults::schema,
     };
 
     fn person() -> BTreeMap<String, FieldType> {
         let mut person = BTreeMap::new();
+        let test_schema = schema();
 
         person.insert("name".to_string(), FieldType::String);
         person.insert("age".to_string(), FieldType::Int);
         person.insert("height".to_string(), FieldType::Float);
         person.insert("is_cool".to_string(), FieldType::Bool);
-        person.insert("favorite_food".to_string(), FieldType::Relation);
-        person.insert("top_ten_foods".to_string(), FieldType::RelationList);
-        person.insert("one_specific_meal".to_string(), FieldType::PinnedRelation);
+        person.insert(
+            "favorite_food".to_string(),
+            FieldType::Relation(test_schema.clone()),
+        );
+        person.insert(
+            "top_ten_foods".to_string(),
+            FieldType::RelationList(test_schema.clone()),
+        );
+        person.insert(
+            "one_specific_meal".to_string(),
+            FieldType::PinnedRelation(test_schema.clone()),
+        );
         person.insert(
             "top_ten_specific_meals".to_string(),
-            FieldType::PinnedRelationList,
+            FieldType::PinnedRelationList(test_schema),
         );
 
         person
@@ -145,13 +156,13 @@ mod tests {
     #[test]
     pub fn generate_cddl_fields() {
         let expected_fields_cddl = "age = { type: \"int\", value: int, }\n\
-           favorite_food = { type: \"relation\", value: tstr .regexp \"[0-9a-f]{68}\", }\n\
+           favorite_food = { type: \"relation(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)\", value: tstr .regexp \"[0-9a-f]{68}\", }\n\
            height = { type: \"float\", value: float, }\n\
            is_cool = { type: \"bool\", value: bool, }\n\
            name = { type: \"str\", value: tstr, }\n\
-           one_specific_meal = { type: \"pinned_relation\", value: [+ tstr .regexp \"[0-9a-f]{68}\"], }\n\
-           top_ten_foods = { type: \"relation_list\", value: [* tstr .regexp \"[0-9a-f]{68}\"], }\n\
-           top_ten_specific_meals = { type: \"pinned_relation_list\", value: [* [+ tstr .regexp \"[0-9a-f]{68}\"]], }";
+           one_specific_meal = { type: \"pinned_relation(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)\", value: [+ tstr .regexp \"[0-9a-f]{68}\"], }\n\
+           top_ten_foods = { type: \"relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)\", value: [* tstr .regexp \"[0-9a-f]{68}\"], }\n\
+           top_ten_specific_meals = { type: \"pinned_relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)\", value: [* [+ tstr .regexp \"[0-9a-f]{68}\"]], }";
 
         let fields_cddl = generate_fields(&person());
 
@@ -188,13 +199,13 @@ mod tests {
     #[test]
     pub fn generates_cddl_definition() {
         let expected_cddl = "age = { type: \"int\", value: int, }\n\
-           favorite_food = { type: \"relation\", value: tstr .regexp \"[0-9a-f]{68}\", }\n\
+           favorite_food = { type: \"relation(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)\", value: tstr .regexp \"[0-9a-f]{68}\", }\n\
            height = { type: \"float\", value: float, }\n\
            is_cool = { type: \"bool\", value: bool, }\n\
            name = { type: \"str\", value: tstr, }\n\
-           one_specific_meal = { type: \"pinned_relation\", value: [+ tstr .regexp \"[0-9a-f]{68}\"], }\n\
-           top_ten_foods = { type: \"relation_list\", value: [* tstr .regexp \"[0-9a-f]{68}\"], }\n\
-           top_ten_specific_meals = { type: \"pinned_relation_list\", value: [* [+ tstr .regexp \"[0-9a-f]{68}\"]], }\n\
+           one_specific_meal = { type: \"pinned_relation(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)\", value: [+ tstr .regexp \"[0-9a-f]{68}\"], }\n\
+           top_ten_foods = { type: \"relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)\", value: [* tstr .regexp \"[0-9a-f]{68}\"], }\n\
+           top_ten_specific_meals = { type: \"pinned_relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)\", value: [* [+ tstr .regexp \"[0-9a-f]{68}\"]], }\n\
            create-fields = { age, favorite_food, height, is_cool, name, one_specific_meal, top_ten_foods, top_ten_specific_meals }\n\
            update-fields = { + ( age // favorite_food // height // is_cool // name // one_specific_meal // top_ten_foods // top_ten_specific_meals ) }";
 

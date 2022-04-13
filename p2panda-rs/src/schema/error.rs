@@ -36,4 +36,8 @@ pub enum FieldTypeError {
     /// Invalid field type found.
     #[error("invalid field type '{0}'")]
     InvalidFieldType(String),
+
+    /// Schema ids referenced by relation field types need to be valid.
+    #[error(transparent)]
+    RelationSchemaReference(#[from] SchemaIdError),
 }

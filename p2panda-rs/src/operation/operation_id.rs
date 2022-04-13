@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::fmt::Display;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -52,6 +53,12 @@ impl FromStr for OperationId {
     }
 }
 
+impl Display for OperationId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<Operation {}>", self.as_hash().short_str())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -68,6 +75,9 @@ mod tests {
         let operation_id: OperationId = hash_str.parse().unwrap();
         assert_eq!(operation_id, OperationId::new(Hash::new(hash_str).unwrap()));
         assert_eq!(operation_id.as_str(), hash_str);
+
+        // Display impl
+        assert_eq!(format!("{}", operation_id), "<Operation 6ec805>");
 
         // Converts any `Hash` to `OperationId`
         let operation_id = OperationId::from(hash.clone());
