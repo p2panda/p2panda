@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use lazy_static::lazy_static;
 use regex::Regex;
 use std::str::FromStr;
 
@@ -78,19 +79,29 @@ impl FromStr for FieldType {
     type Err = FieldTypeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Match non-parametric field types on their plain text name
+        let text_match = match s {
+            "bool" => Ok(FieldType::Bool),
+            "int" => Ok(FieldType::Int),
+            "float" => Ok(FieldType::Float),
+            "str" => Ok(FieldType::String),
+            _ => Err(FieldTypeError::InvalidFieldType(s.into())),
+        };
+
+        if text_match.is_ok() {
+            return text_match;
+        }
+
         // Matches a field type name, followed by an optional group in parentheses that contains the
         // referenced schema for relation field types.
-        let re = Regex::new(r"(\w+)(\((.+)\))?").unwrap();
-        let groups = re.captures(s).unwrap();
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r"(\w+)(\((.+)\))?").unwrap();
+        }
+        let groups = RE.captures(s).unwrap();
+        let name = groups.get(1).map(|m| m.as_str());
+        let parameter = groups.get(3).map(|m| m.as_str());
 
-        match (
-            groups.get(1).map(|m| m.as_str()),
-            groups.get(3).map(|m| m.as_str()),
-        ) {
-            (Some("bool"), None) => Ok(FieldType::Bool),
-            (Some("int"), None) => Ok(FieldType::Int),
-            (Some("float"), None) => Ok(FieldType::Float),
-            (Some("str"), None) => Ok(FieldType::String),
+        match (name, parameter) {
             (Some("relation"), Some(schema_id)) => {
                 Ok(FieldType::Relation(SchemaId::new(schema_id).unwrap()))
             }
@@ -155,11 +166,15 @@ mod tests {
         );
         assert_eq!(
             FieldType::PinnedRelation(SchemaId::SchemaFieldDefinition(1)),
-            "pinned_relation(schema_field_definition_v1)".parse().unwrap()
+            "pinned_relation(schema_field_definition_v1)"
+                .parse()
+                .unwrap()
         );
         assert_eq!(
             FieldType::PinnedRelationList(SchemaId::SchemaFieldDefinition(1)),
-            "pinned_relation_list(schema_field_definition_v1)".parse().unwrap()
+            "pinned_relation_list(schema_field_definition_v1)"
+                .parse()
+                .unwrap()
         );
     }
 
