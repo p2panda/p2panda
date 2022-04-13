@@ -168,7 +168,7 @@ impl fmt::Display for SchemaId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SchemaId::Application(name, view_id) => write!(f, "{} {}", name, view_id),
-            system_schema => write!(f, "{}", system_schema.as_str())
+            system_schema => write!(f, "{}", system_schema.as_str()),
         }
     }
 }
@@ -369,7 +369,13 @@ mod test {
     #[rstest]
     fn display(schema: SchemaId) {
         assert_eq!(format!("{}", schema), "venue 8fc78b");
-        assert_eq!(format!("{}", SchemaId::SchemaDefinition(1)), "schema_definition_v1");
-        assert_eq!(format!("{}", SchemaId::SchemaFieldDefinition(1)), "schema_field_definition_v1");
+        assert_eq!(
+            format!("{}", SchemaId::SchemaDefinition(1)),
+            "schema_definition_v1"
+        );
+        assert_eq!(
+            format!("{}", SchemaId::SchemaFieldDefinition(1)),
+            "schema_field_definition_v1"
+        );
     }
 }
