@@ -77,7 +77,7 @@ mod tests {
         assert_eq!(operation_id.as_str(), hash_str);
 
         // Display impl
-        assert_eq!(format!("{}", operation_id), "<Operation a5d982>");
+        assert_eq!(format!("{}", operation_id), "<Operation 6ec805>");
 
         // Converts any `Hash` to `OperationId`
         let operation_id = OperationId::from(hash.clone());
