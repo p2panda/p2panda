@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::str::FromStr;
+
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::str::FromStr;
 
 use crate::operation::OperationValue;
 
@@ -33,15 +34,16 @@ pub enum FieldType {
     /// Defines a text string field.
     String,
 
-    /// Defines a [`Relation`][`crate::operation::Relation`] field that references the given schema.
+    /// Defines a [`Relation`][`crate::operation::Relation`] field that references the given
+    /// schema.
     Relation(SchemaId),
 
     /// Defines a [`RelationList`][`crate::operation::RelationList`] field that references the
     /// given schema.
     RelationList(SchemaId),
 
-    /// Defines a [`PinnedRelation`][`crate::operation::PinnedRelation`] field that references
-    /// the given schema.
+    /// Defines a [`PinnedRelation`][`crate::operation::PinnedRelation`] field that references the
+    /// given schema.
     PinnedRelation(SchemaId),
 
     /// Defines a [`PinnedRelationList`][`crate::operation::PinnedRelationList`] field that
@@ -92,8 +94,8 @@ impl FromStr for FieldType {
             return text_match;
         }
 
-        // Matches a field type name, followed by an optional group in parentheses that contains the
-        // referenced schema for relation field types.
+        // Matches a field type name, followed by an optional group in parentheses that contains
+        // the referenced schema for relation field types
         lazy_static! {
             static ref RE: Regex = Regex::new(r"(\w+)(\((.+)\))?").unwrap();
         }
