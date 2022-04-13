@@ -49,6 +49,7 @@ Highlights are marked with a pancake 🥞
 
 - Fix determination of field types in p2panda-js [#202](https://github.com/p2panda/p2panda/pull/202) `js`
 - Fix equality of document view ids by sorting before comparison [#284](https://github.com/p2panda/p2panda/pull/284) `js`
+- Pin all versions in `Cargo.toml` to avoid unexpected crate updates [#299](https://github.com/p2panda/p2panda/pull/299)
 
 ## Everything burrito
 
