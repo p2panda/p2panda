@@ -2,10 +2,25 @@
 
 use std::str::FromStr;
 
-use super::FieldTypeError;
+use lazy_static::lazy_static;
+use regex::Regex;
+
+use crate::operation::OperationValue;
+
+use super::{FieldTypeError, SchemaId};
 
 /// Valid field types for publishing an application schema.
-#[derive(Clone, Debug, Copy, PartialEq)]
+///
+/// Implements conversion to `OperationValue`:
+///
+/// ```
+/// # use p2panda_rs::operation::{OperationFields, OperationValue};
+/// # use p2panda_rs::schema::FieldType;
+/// let mut field_definition = OperationFields::new();
+/// field_definition.add("name", OperationValue::Text("document_title".to_string()));
+/// field_definition.add("type", FieldType::String.into());
+/// ```
+#[derive(Clone, Debug, PartialEq)]
 pub enum FieldType {
     /// Defines a boolean field.
     Bool,
@@ -19,32 +34,46 @@ pub enum FieldType {
     /// Defines a text string field.
     String,
 
-    /// Defines a [`Relation`][`crate::operation::Relation`] field.
-    Relation,
+    /// Defines a [`Relation`][`crate::operation::Relation`] field that references the given
+    /// schema.
+    Relation(SchemaId),
 
-    /// Defines a [`RelationList`][`crate::operation::RelationList`] field.
-    RelationList,
+    /// Defines a [`RelationList`][`crate::operation::RelationList`] field that references the
+    /// given schema.
+    RelationList(SchemaId),
 
-    /// Defines a [`PinnedRelation`][`crate::operation::PinnedRelation`] field.
-    PinnedRelation,
+    /// Defines a [`PinnedRelation`][`crate::operation::PinnedRelation`] field that references the
+    /// given schema.
+    PinnedRelation(SchemaId),
 
-    /// Defines a [`PinnedRelationList`][`crate::operation::PinnedRelationList`] field.
-    PinnedRelationList,
+    /// Defines a [`PinnedRelationList`][`crate::operation::PinnedRelationList`] field that
+    /// references the given schema.
+    PinnedRelationList(SchemaId),
 }
 
 impl FieldType {
-    /// Returns the string representation of this type.
-    pub fn as_str(&self) -> &str {
+    /// Serialises this field type to text.
+    pub fn serialise(&self) -> String {
         match self {
-            FieldType::Bool => "bool",
-            FieldType::Int => "int",
-            FieldType::Float => "float",
-            FieldType::String => "str",
-            FieldType::Relation => "relation",
-            FieldType::RelationList => "relation_list",
-            FieldType::PinnedRelation => "pinned_relation",
-            FieldType::PinnedRelationList => "pinned_relation_list",
+            FieldType::Bool => "bool".to_string(),
+            FieldType::Int => "int".to_string(),
+            FieldType::Float => "float".to_string(),
+            FieldType::String => "str".to_string(),
+            FieldType::Relation(schema_id) => format!("relation({})", schema_id.as_str()),
+            FieldType::RelationList(schema_id) => format!("relation_list({})", schema_id.as_str()),
+            FieldType::PinnedRelation(schema_id) => {
+                format!("pinned_relation({})", schema_id.as_str())
+            }
+            FieldType::PinnedRelationList(schema_id) => {
+                format!("pinned_relation_list({})", schema_id.as_str())
+            }
         }
+    }
+}
+
+impl From<FieldType> for OperationValue {
+    fn from(field_type: FieldType) -> OperationValue {
+        OperationValue::Text(field_type.serialise())
     }
 }
 
@@ -52,82 +81,109 @@ impl FromStr for FieldType {
     type Err = FieldTypeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
+        // Match non-parametric field types on their plain text name
+        let text_match = match s {
             "bool" => Ok(FieldType::Bool),
             "int" => Ok(FieldType::Int),
             "float" => Ok(FieldType::Float),
             "str" => Ok(FieldType::String),
-            "relation" => Ok(FieldType::Relation),
-            "relation_list" => Ok(FieldType::RelationList),
-            "pinned_relation" => Ok(FieldType::PinnedRelation),
-            "pinned_relation_list" => Ok(FieldType::PinnedRelationList),
-            type_str => Err(FieldTypeError::InvalidFieldType(type_str.into())),
-        }
-    }
-}
+            _ => Err(FieldTypeError::InvalidFieldType(s.into())),
+        };
 
-impl From<FieldType> for String {
-    fn from(field_type: FieldType) -> Self {
-        field_type.as_str().to_string()
+        if text_match.is_ok() {
+            return text_match;
+        }
+
+        // Matches a field type name, followed by an optional group in parentheses that contains
+        // the referenced schema for relation field types
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r"(\w+)(\((.+)\))?").unwrap();
+        }
+        let groups = RE.captures(s).unwrap();
+        let name = groups.get(1).map(|m| m.as_str());
+        let parameter = groups.get(3).map(|m| m.as_str());
+
+        match (name, parameter) {
+            (Some("relation"), Some(schema_id)) => {
+                Ok(FieldType::Relation(SchemaId::new(schema_id)?))
+            }
+            (Some("relation_list"), Some(schema_id)) => {
+                Ok(FieldType::RelationList(SchemaId::new(schema_id)?))
+            }
+            (Some("pinned_relation"), Some(schema_id)) => {
+                Ok(FieldType::PinnedRelation(SchemaId::new(schema_id)?))
+            }
+            (Some("pinned_relation_list"), Some(schema_id)) => {
+                Ok(FieldType::PinnedRelationList(SchemaId::new(schema_id)?))
+            }
+            _ => Err(FieldTypeError::InvalidFieldType(s.into())),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-
-    use crate::schema::FieldType;
+    use crate::operation::OperationValue;
+    use crate::schema::{FieldType, SchemaId};
+    use crate::Validate;
 
     #[test]
     fn serialises() {
-        assert_eq!(FieldType::Bool.as_str(), "bool");
-        assert_eq!(FieldType::Int.as_str(), "int");
-        assert_eq!(FieldType::Float.as_str(), "float");
-        assert_eq!(FieldType::String.as_str(), "str");
-        assert_eq!(FieldType::Relation.as_str(), "relation");
-        assert_eq!(FieldType::RelationList.as_str(), "relation_list");
-        assert_eq!(FieldType::PinnedRelation.as_str(), "pinned_relation");
+        assert_eq!(FieldType::Bool.serialise(), "bool");
+        assert!(OperationValue::from(FieldType::Bool).validate().is_ok());
+        assert_eq!(FieldType::Int.serialise(), "int");
+        assert_eq!(FieldType::Float.serialise(), "float");
+        assert_eq!(FieldType::String.serialise(), "str");
         assert_eq!(
-            FieldType::PinnedRelationList.as_str(),
-            "pinned_relation_list"
+            FieldType::Relation(SchemaId::SchemaFieldDefinition(1)).serialise(),
+            "relation(schema_field_definition_v1)"
+        );
+        assert_eq!(
+            FieldType::RelationList(SchemaId::SchemaFieldDefinition(1)).serialise(),
+            "relation_list(schema_field_definition_v1)"
+        );
+        assert_eq!(
+            FieldType::PinnedRelation(SchemaId::SchemaFieldDefinition(1)).serialise(),
+            "pinned_relation(schema_field_definition_v1)"
+        );
+        assert_eq!(
+            FieldType::PinnedRelationList(SchemaId::SchemaFieldDefinition(1)).serialise(),
+            "pinned_relation_list(schema_field_definition_v1)"
         );
     }
+
     #[test]
     fn deserialises() {
         assert_eq!(FieldType::Bool, "bool".parse().unwrap());
         assert_eq!(FieldType::Int, "int".parse().unwrap());
         assert_eq!(FieldType::Float, "float".parse().unwrap());
         assert_eq!(FieldType::String, "str".parse().unwrap());
-        assert_eq!(FieldType::Relation, "relation".parse().unwrap());
-        assert_eq!(FieldType::RelationList, "relation_list".parse().unwrap());
         assert_eq!(
-            FieldType::PinnedRelation,
-            "pinned_relation".parse().unwrap()
+            FieldType::Relation(SchemaId::SchemaFieldDefinition(1)),
+            "relation(schema_field_definition_v1)".parse().unwrap()
         );
         assert_eq!(
-            FieldType::PinnedRelationList,
-            "pinned_relation_list".parse().unwrap()
+            FieldType::RelationList(SchemaId::SchemaFieldDefinition(1)),
+            "relation_list(schema_field_definition_v1)".parse().unwrap()
         );
-    }
-    #[test]
-    fn into_string() {
-        let bool_type: String = FieldType::Bool.into();
-        assert_eq!(bool_type, "bool".to_string());
-        let int_type: String = FieldType::Int.into();
-        assert_eq!(int_type, "int".to_string());
-        let type_float: String = FieldType::Float.into();
-        assert_eq!(type_float, "float".to_string());
-        let type_string: String = FieldType::String.into();
-        assert_eq!(type_string, "str".to_string());
-        let type_relation: String = FieldType::Relation.into();
-        assert_eq!(type_relation, "relation".to_string());
-        let type_relation_list: String = FieldType::RelationList.into();
-        assert_eq!(type_relation_list, "relation_list".to_string());
-        let type_pinned_relation: String = FieldType::PinnedRelation.into();
-        assert_eq!(type_pinned_relation, "pinned_relation".to_string());
-        let type_pinned_relation_list: String = FieldType::PinnedRelationList.into();
         assert_eq!(
-            type_pinned_relation_list,
-            "pinned_relation_list".to_string()
+            FieldType::PinnedRelation(SchemaId::SchemaFieldDefinition(1)),
+            "pinned_relation(schema_field_definition_v1)"
+                .parse()
+                .unwrap()
+        );
+        assert_eq!(
+            FieldType::PinnedRelationList(SchemaId::SchemaFieldDefinition(1)),
+            "pinned_relation_list(schema_field_definition_v1)"
+                .parse()
+                .unwrap()
+        );
+
+        let invalid = "relation(no_no_no)".parse::<FieldType>();
+        assert_eq!(
+            invalid.unwrap_err().to_string(),
+            "encountered invalid hash while parsing application schema id: invalid hex encoding \
+            in hash string"
         );
     }
 
