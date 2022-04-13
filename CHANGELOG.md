@@ -42,6 +42,7 @@ Highlights are marked with a pancake 🥞
 - Introduce new application schema id format [#292](https://github.com/p2panda/p2panda/pull/292) `rs`
 - Update spelling of system schema ids [#294](https://github.com/p2panda/p2panda/pull/294) `rs`
 - Update `Schema` implementation to make use of new `SchemaId` [#296](https://github.com/p2panda/p2panda/pull/296) `rs`
+- Require schema field definitions to specify a specific schema [#269](https://github.com/p2panda/p2panda/pull/269) `rs` 🥞
 
 ## Fixed
 
