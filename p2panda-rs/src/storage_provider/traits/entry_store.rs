@@ -77,7 +77,6 @@ pub mod tests {
     use crate::operation::{AsOperation, OperationEncoded};
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::EntryStorageError;
-    use crate::storage_provider::models::EntryWithOperation;
     use crate::storage_provider::traits::test_utils::{
         test_db, SimplestStorageProvider, StorageEntry, SKIPLINK_ENTRIES,
     };
@@ -158,10 +157,7 @@ pub mod tests {
             entries: Arc::new(Mutex::new(Vec::new())),
         };
 
-        let storage_entry: StorageEntry =
-            EntryWithOperation::new(&entry_signed_encoded, &operation_encoded)
-                .unwrap()
-                .into();
+        let storage_entry = StorageEntry::new(&entry_signed_encoded, &operation_encoded).unwrap();
 
         // Insert an entry into the store.
         assert!(store.insert_entry(storage_entry.clone()).await.is_ok());
@@ -191,10 +187,7 @@ pub mod tests {
             entries: Arc::new(Mutex::new(Vec::new())),
         };
 
-        let storage_entry: StorageEntry =
-            EntryWithOperation::new(&entry_signed_encoded, &operation_encoded)
-                .unwrap()
-                .into();
+        let storage_entry = StorageEntry::new(&entry_signed_encoded, &operation_encoded).unwrap();
 
         // Before an entry is inserted the latest entry should be none.
         assert!(store
@@ -233,14 +226,8 @@ pub mod tests {
 
         let author_1_entry = sign_and_encode(&entry, &key_pair_1).unwrap();
         let author_2_entry = sign_and_encode(&entry, &key_pair_2).unwrap();
-        let author_1_entry: StorageEntry =
-            EntryWithOperation::new(&author_1_entry, &operation_encoded)
-                .unwrap()
-                .into();
-        let author_2_entry: StorageEntry =
-            EntryWithOperation::new(&author_2_entry, &operation_encoded)
-                .unwrap()
-                .into();
+        let author_1_entry = StorageEntry::new(&author_1_entry, &operation_encoded).unwrap();
+        let author_2_entry = StorageEntry::new(&author_2_entry, &operation_encoded).unwrap();
 
         // Before an entry with this schema is inserted this method should return an empty array.
         assert!(store.by_schema(&schema).await.unwrap().is_empty());

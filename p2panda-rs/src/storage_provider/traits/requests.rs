@@ -4,35 +4,19 @@ use crate::document::DocumentId;
 use crate::entry::EntrySigned;
 use crate::identity::Author;
 use crate::operation::OperationEncoded;
-use crate::storage_provider::ValidationError;
 use crate::Validate;
 
 /// A request to retrieve the next entry args for an author and document.
-pub trait AsEntryArgsRequest {
+pub trait AsEntryArgsRequest: Validate {
     /// Returns the Author parameter.
     fn author(&self) -> &Author;
 
     /// Returns the document id parameter.
     fn document_id(&self) -> &Option<DocumentId>;
-
-    /// Validates the `EntryArgument` parameters
-    fn validate(&self) -> Result<(), ValidationError> {
-        // Validate `author` request parameter
-        self.author().validate()?;
-
-        // Validate `document` request parameter when it is set
-        match self.document_id() {
-            None => (),
-            Some(doc) => {
-                doc.validate()?;
-            }
-        };
-        Ok(())
-    }
 }
 
 /// A request to publish a new entry.
-pub trait AsPublishEntryRequest {
+pub trait AsPublishEntryRequest: Validate {
     /// Returns the EntrySigned parameter
     fn entry_signed(&self) -> &EntrySigned;
 
@@ -51,8 +35,8 @@ mod tests {
     use crate::document::DocumentId;
     use crate::identity::{Author, KeyPair};
     use crate::storage_provider::traits::test_utils::EntryArgsRequest;
-    use crate::storage_provider::traits::AsEntryArgsRequest;
     use crate::test_utils::fixtures::{document_id, key_pair};
+    use crate::Validate;
 
     #[rstest]
     fn validates(key_pair: KeyPair, document_id: DocumentId) {

@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryInto;
-use std::fmt::Debug;
-
 use crate::document::DocumentId;
-use crate::entry::{LogId, SeqNum};
+use crate::entry::{EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::Operation;
+use crate::operation::{Operation, OperationEncoded};
 use crate::schema::SchemaId;
-use crate::storage_provider::models::{EntryWithOperation, Log};
+use crate::Validate;
 
 /// Trait to be implemented on a struct representing a stored entry.
 ///
@@ -17,11 +14,15 @@ use crate::storage_provider::models::{EntryWithOperation, Log};
 /// entry as it is stored in the database. This trait defines methods for reading values from the
 /// entry and it's operation and ensures the required conversion (to and from `EntryWithOperation`)
 /// are present.
-pub trait AsStorageEntry:
-    Sized + Clone + Send + Sync + TryInto<EntryWithOperation> + From<EntryWithOperation>
-{
+pub trait AsStorageEntry: Sized + Clone + Send + Sync + Validate {
     /// The error type returned by this traits' methods.
-    type AsStorageEntryError: Debug;
+    type AsStorageEntryError: 'static + std::error::Error;
+
+    /// Construct an instance of the struct implementing `AsStorageEntry`
+    fn new(
+        entry: &EntrySigned,
+        operation: &OperationEncoded,
+    ) -> Result<Self, Self::AsStorageEntryError>;
 
     /// Returns the author of this entry.
     fn author(&self) -> Author;
@@ -53,9 +54,9 @@ pub trait AsStorageEntry:
 /// Storage implementations should implement this for a data structure that represents a
 /// log as it is stored in the database. This trait defines methods for reading values from the
 /// log.
-pub trait AsStorageLog: Sized + Send + Sync + TryInto<Log> + From<Log> {
+pub trait AsStorageLog: Sized + Send + Sync {
     /// Constructor method for structs.
-    fn new(log: Log) -> Self;
+    fn new(author: &Author, schema: &SchemaId, document: &DocumentId, log_id: &LogId) -> Self;
 
     /// Returns the LogId of this log.
     fn id(&self) -> LogId;

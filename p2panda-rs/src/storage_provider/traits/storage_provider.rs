@@ -7,11 +7,11 @@ use crate::entry::SeqNum;
 use crate::hash::Hash;
 use crate::operation::AsOperation;
 use crate::storage_provider::errors::PublishEntryError;
-use crate::storage_provider::models::{EntryWithOperation, Log};
 use crate::storage_provider::traits::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
     AsStorageEntry, AsStorageLog, EntryStore, LogStore,
 };
+use crate::Validate;
 
 /// Trait which handles all high level storage queries and insertions.
 ///
@@ -65,7 +65,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         params: &Self::EntryArgsRequest,
     ) -> Result<Self::EntryArgsResponse, Box<dyn std::error::Error>> {
         // Validate the entry args request parameters.
-        params.validate()?;
+        params.validate().map_err(|error| format!("{:?}", error))?;
 
         // Determine log_id for this document. If this is the very first operation in the document
         // graph, the `document` value is None and we will return the next free log id
@@ -108,8 +108,8 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         params: &Self::PublishEntryRequest,
     ) -> Result<Self::PublishEntryResponse, Box<dyn std::error::Error>> {
         // Create an `EntryWithOperation` which also validates the encoded entry and operation.
-        let entry: StorageEntry =
-            EntryWithOperation::new(params.entry_signed(), params.operation_encoded())?.into();
+        let entry = StorageEntry::new(params.entry_signed(), params.operation_encoded())?;
+        entry.validate().map_err(|error| format!("{:?}", error))?;
 
         // Every operation refers to a document we need to determine. A document is identified by the
         // hash of its first `CREATE` operation, it is the root operation of every document graph
@@ -197,13 +197,12 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
         // Register log in database when a new document is created
         if entry.operation().is_create() {
-            let log = Log::new(
+            let log = StorageLog::new(
                 &entry.author(),
                 &entry.operation().schema(),
                 &document_id,
                 &entry.log_id(),
-            )
-            .into();
+            );
 
             self.insert_log(log).await?;
         }
