@@ -90,7 +90,7 @@ pub struct StorageEntry(String);
 
 impl StorageEntry {
     fn entry_decoded(&self) -> Entry {
-        // Unwrapping as validation occurs in `EntryWithOperation`.
+        // Unwrapping as validation occurs in constructor.
         decode_entry(&self.entry_signed(), self.operation_encoded().as_ref()).unwrap()
     }
 
@@ -115,6 +115,7 @@ impl AsStorageEntry for StorageEntry {
     ) -> Result<Self, Self::AsStorageEntryError> {
         let entry_string = format!("{}-{}", entry.as_str(), operation.as_str());
         let storage_entry = Self(entry_string);
+        storage_entry.validate()?;
         Ok(storage_entry)
     }
 

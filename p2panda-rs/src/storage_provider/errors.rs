@@ -67,7 +67,7 @@ pub enum EntryStorageError {
 
     /// Error returned from validating p2panda-rs `EntrySigned` data types.
     #[error(transparent)]
-    EntrySignedValidation(#[from] EntrySignedError),
+    ValidationError(#[from] ValidationError),
 }
 
 /// Errors which can occur when publishing a new entry.

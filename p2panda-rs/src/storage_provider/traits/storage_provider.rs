@@ -107,8 +107,9 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         &self,
         params: &Self::PublishEntryRequest,
     ) -> Result<Self::PublishEntryResponse, Box<dyn std::error::Error>> {
-        // Create an `EntryWithOperation` which also validates the encoded entry and operation.
+        // Create a storage entry.
         let entry = StorageEntry::new(params.entry_signed(), params.operation_encoded())?;
+        // Validate the entry (this also maybe happened in the above constructor)
         entry.validate().map_err(|error| format!("{:?}", error))?;
 
         // Every operation refers to a document we need to determine. A document is identified by the
