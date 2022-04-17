@@ -64,6 +64,10 @@ pub enum EntryStorageError {
     /// Error which originates in `determine_skiplink` if the skiplink is missing.
     #[error("Could not find skiplink entry in database")]
     SkiplinkMissing,
+
+    /// Error returned from validating p2panda-rs `EntrySigned` data types.
+    #[error(transparent)]
+    EntrySignedValidation(#[from] EntrySignedError),
 }
 
 /// Errors which can occur when publishing a new entry.

@@ -59,9 +59,9 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
             Ok(Some(skiplink_entry.hash()))
         } else {
             Ok(None)
-        }?;
+        };
 
-        Ok(entry_skiplink_hash)
+        entry_skiplink_hash
     }
 }
 
