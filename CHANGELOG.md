@@ -96,6 +96,7 @@ Not released yet, due to unpublished dependencies: :package: `p2panda-rs`
 - Changes to `mocks` module in `test_utils` [#181](https://github.com/p2panda/p2panda/pull/181) `rs`
 - Implement logging for mock node in `test_utils` [#192](https://github.com/p2panda/p2panda/pull/192) `rs`
 - Support `u64` and `i64` integers, remove `sqlx` [#177](https://github.com/p2panda/p2panda/pull/177) `rs` `js`
+- Generate CBOR encoded test data [300](https://github.com/p2panda/p2panda/pull/300) `rs`
 
 ### Campfires and boiling pots to sit around
 
