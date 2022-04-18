@@ -21,7 +21,7 @@ demangle-name-section = true
 dwarf-debug-info = false
 
 [[bin]]
-name = "json-test-data"
+name = "cbor-test-data"
 path = "src/test_utils/generate_test_data.rs"
 
 [lib]
@@ -31,7 +31,9 @@ crate-type = ["cdylib", "rlib"]
 aquamarine = "^0.1.11"
 arrayvec = "^0.5.2"
 bamboo-rs-core-ed25519-yasmf = "^0.1.1"
-cddl-cat = { version = "^0.6.1", default-features = false, features = ["serde_cbor"] }
+cddl-cat = { version = "^0.6.1", default-features = false, features = [
+  "serde_cbor",
+] }
 ciborium = "^0.2.0"
 ed25519 = "^1.3.0"
 ed25519-dalek = "^1.0.1"
@@ -41,10 +43,12 @@ log = "^0.4"
 regex = "^1.5.5"
 serde = { version = "^1.0.136", features = ["derive"] }
 serde-wasm-bindgen = "^0.4.2"
-serde_json = "^1.0.79"
 serde_repr = "^0.1.7"
 thiserror = "^1.0.30"
-tls_codec = { version = "^0.2.0-pre.3", features = [ "derive", "serde_serialize", ] }
+tls_codec = { version = "^0.2.0-pre.3", features = [
+  "derive",
+  "serde_serialize",
+] }
 yasmf-hash = "^0.1.1"
 
 # @TODO: Use `openmls` crate as soon as changes got merged into `main` in
@@ -84,6 +88,7 @@ pretty_env_logger = "0.4"
 rstest = "0.12.0"
 rstest_reuse = "0.1.3"
 wasm-bindgen-test = "0.3.30"
+serde_json = "^1.0.79"
 
 [[bench]]
 name = "graph"
