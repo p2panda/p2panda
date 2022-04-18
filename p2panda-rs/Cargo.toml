@@ -28,7 +28,6 @@ path = "src/test_utils/generate_test_data.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-aquamarine = "^0.1.11"
 arrayvec = "^0.5.2"
 bamboo-rs-core-ed25519-yasmf = "^0.1.1"
 cddl-cat = { version = "^0.6.1", default-features = false, features = [
