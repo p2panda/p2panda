@@ -6,13 +6,6 @@ use crate::hash::{Hash, HashError};
 use crate::identity::AuthorError;
 use crate::operation::{OperationEncodedError, OperationError};
 
-#[derive(thiserror::Error, Debug)]
-pub enum StorageProviderError {
-    /// Error returned from validation happening in storage traits.
-    #[error(transparent)]
-    ValidationError(#[from] ValidationError),
-}
-
 /// Data validation errors which can occur in the storage traits.
 #[derive(thiserror::Error, Debug)]
 pub enum ValidationError {
