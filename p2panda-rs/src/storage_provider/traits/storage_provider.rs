@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use crate::document::DocumentId;
 use crate::entry::SeqNum;
 use crate::hash::Hash;
-use crate::operation::AsOperation;
+use crate::operation::{AsOperation, Operation};
 use crate::storage_provider::errors::PublishEntryError;
 use crate::storage_provider::traits::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
@@ -125,21 +125,18 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
             // graph back to its `CREATE` operation or more easily look up the database since we keep track
             // of all log ids and documents there.
             //
-            // We can determine the used document hash by looking at what we know about the previous
-            // entry in this author's log.
-            //
-            // @TODO: This currently looks at the backlink, in the future we want to use
-            // "previousOperation", since in a multi-writer setting there might be no backlink for
-            // update operations! See: https://github.com/p2panda/aquadoggo/issues/49
-            let backlink_entry_hash = entry
-                .backlink_hash()
-                .ok_or_else(|| PublishEntryError::OperationWithoutBacklink(entry.hash()))?;
+            // We can determine the used document hash by looking at this operations' previous_operations.
+            let operation = Operation::from(params.operation_encoded());
 
-            self.get_document_by_entry(&backlink_entry_hash)
+            operation.validate()?;
+
+            // Unwrap here as we validated in the previous line which would error if previous_operations wasn't present
+            // and didn't contain at least one operation_id.
+            let previous_operations = operation.previous_operations().unwrap();
+            let previous_operation_id = previous_operations.get(0).unwrap();
+
+            self.get_document_by_entry(previous_operation_id.as_hash())
                 .await?
-                // @TODO this trips if the backlink is missing not necessarily the document
-                // needs revisiting when we use previous_operations to retrieve the correct
-                // document.
                 .ok_or_else(|| PublishEntryError::DocumentMissing(entry.hash()))?
         };
 
@@ -243,7 +240,8 @@ pub mod tests {
     use crate::entry::{sign_and_encode, Entry, LogId};
     use crate::hash::Hash;
     use crate::identity::KeyPair;
-    use crate::operation::{AsOperation, OperationEncoded};
+    use crate::operation::{AsOperation, OperationEncoded, OperationFields, OperationId};
+    use crate::schema::SchemaId;
     use crate::storage_provider::traits::test_utils::{
         test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
         SimplestStorageProvider, StorageEntry, StorageLog,
@@ -251,7 +249,9 @@ pub mod tests {
     use crate::storage_provider::traits::{
         AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
     };
-    use crate::test_utils::fixtures::key_pair;
+    use crate::test_utils::fixtures::{
+        entry, fields, key_pair, operation_id, schema, update_operation,
+    };
 
     use super::StorageProvider;
 
@@ -438,44 +438,6 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn document_does_not_exist(test_db: SimplestStorageProvider) {
-        let entries = test_db.entries.lock().unwrap().clone();
-
-        // Init database with one document missing it's CREATE entry
-        let log_entries_without_document_root = vec![
-            entries.get(1).unwrap().clone(),
-            entries.get(2).unwrap().clone(),
-            entries.get(3).unwrap().clone(),
-            entries.get(4).unwrap().clone(),
-        ];
-
-        let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(log_entries_without_document_root)),
-        };
-
-        let entry = entries.get(6).unwrap();
-
-        // Create request for publishing an entry which has a valid backlink and skiplink, but the
-        // document it is associated with does not exist
-        let publish_entry_with_non_existant_document =
-            PublishEntryRequest(entry.entry_signed(), entry.operation_encoded().unwrap());
-
-        let error_response = new_db
-            .publish_entry(&publish_entry_with_non_existant_document)
-            .await;
-
-        assert_eq!(
-            format!("{}", error_response.unwrap_err()),
-            format!(
-                "Could not find document for entry in database with id: {:?}",
-                entry.hash()
-            )
-        )
-    }
-
-    #[rstest]
-    #[async_std::test]
     async fn skiplink_does_not_exist(test_db: SimplestStorageProvider) {
         let entries = test_db.entries.lock().unwrap().clone();
         let logs = test_db.logs.lock().unwrap().clone();
@@ -509,6 +471,62 @@ pub mod tests {
             format!(
                 "Could not find skiplink entry in database with id: {:?}",
                 entry.hash()
+            )
+        )
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn prev_op_does_not_exist(
+        test_db: SimplestStorageProvider,
+        schema: SchemaId,
+        fields: OperationFields,
+        #[from(operation_id)] invalid_prev_op: OperationId,
+        key_pair: KeyPair,
+    ) {
+        let entries = test_db.entries.lock().unwrap().clone();
+        let logs = test_db.logs.lock().unwrap().clone();
+
+        // Init database with 3 valid entries
+        let three_valid_entries = vec![
+            entries.get(0).unwrap().clone(),
+            entries.get(1).unwrap().clone(),
+            entries.get(2).unwrap().clone(),
+        ];
+
+        let new_db = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(logs)),
+            entries: Arc::new(Mutex::new(three_valid_entries)),
+        };
+
+        // Get the valid next entry
+        let next_entry = entries.get(3).unwrap();
+
+        // Recreate this entry and replace previous_operations to contain invalid OperationId
+        let update_operation_with_invalid_previous_operations =
+            update_operation(schema.clone(), vec![invalid_prev_op], fields.clone());
+
+        let update_entry = entry(
+            update_operation_with_invalid_previous_operations.clone(),
+            next_entry.seq_num(),
+            next_entry.backlink_hash(),
+            next_entry.skiplink_hash(),
+        );
+
+        let encoded_entry = sign_and_encode(&update_entry, &key_pair).unwrap();
+        let encoded_operation =
+            OperationEncoded::try_from(&update_operation_with_invalid_previous_operations).unwrap();
+
+        // Publish this entry (which contains an invalid previous_operation)
+        let publish_entry_request = PublishEntryRequest(encoded_entry.clone(), encoded_operation);
+
+        let error_response = new_db.publish_entry(&publish_entry_request).await;
+
+        assert_eq!(
+            format!("{}", error_response.unwrap_err()),
+            format!(
+                "Could not find document for entry in database with id: {:?}",
+                encoded_entry.hash()
             )
         )
     }
