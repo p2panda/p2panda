@@ -82,7 +82,7 @@ pub mod wasm;
 /// Trait used by p2panda structs to validate arguments.
 pub trait Validate {
     /// Validation error type.
-    type Error: std::fmt::Debug;
+    type Error: std::fmt::Debug + std::error::Error + 'static;
 
     /// Validates p2panda data type instance.
     fn validate(&self) -> Result<(), Self::Error>;
