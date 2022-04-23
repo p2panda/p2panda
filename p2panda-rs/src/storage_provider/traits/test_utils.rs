@@ -10,7 +10,7 @@ use crate::document::DocumentId;
 use crate::entry::{decode_entry, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
-use crate::operation::{Operation, OperationEncoded};
+use crate::operation::{Operation, OperationEncoded, OperationFields};
 use crate::schema::SchemaId;
 use crate::storage_provider::errors::{EntryStorageError, ValidationError};
 use crate::storage_provider::traits::{
@@ -18,7 +18,7 @@ use crate::storage_provider::traits::{
     AsStorageEntry, AsStorageLog,
 };
 use crate::test_utils::fixtures::{
-    create_operation, document_id, entry, random_key_pair, schema, update_operation,
+    create_operation, document_id, entry, fields, random_key_pair, schema, update_operation,
 };
 use crate::Validate;
 
@@ -281,7 +281,7 @@ pub const SKIPLINK_ENTRIES: [u64; 2] = [4, 8];
 pub fn test_db(
     #[from(random_key_pair)] key_pair: KeyPair,
     create_operation: Operation,
-    update_operation: Operation,
+    fields: OperationFields,
     schema: SchemaId,
     document_id: DocumentId,
 ) -> SimplestStorageProvider {
@@ -311,7 +311,7 @@ pub fn test_db(
 
     db_entries.push(storage_entry);
 
-    // Create 9 more entries containing UPDATE operations with valid back- and skip- links
+    // Create 9 more entries containing UPDATE operations with valid back- and skip- links and previous_operations
     for seq_num in 2..10 {
         let seq_num = SeqNum::new(seq_num).unwrap();
         let mut skiplink = None;
@@ -331,6 +331,16 @@ pub fn test_db(
                     .hash(),
             );
         };
+
+        let update_operation = update_operation(
+            schema.clone(),
+            vec![db_entries
+                .get(seq_num.as_u64() as usize - 2)
+                .unwrap()
+                .hash()
+                .into()],
+            fields.clone(),
+        );
 
         let update_entry = entry(update_operation.clone(), seq_num, Some(backlink), skiplink);
 
