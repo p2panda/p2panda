@@ -16,7 +16,7 @@ use crate::Validate;
 /// Trait which handles all high level storage queries and insertions.
 ///
 /// This trait should be implemented on the root storage provider struct. It's definitions make up
-/// the the high level methods a p2panda client needs when interacting with data storage. It will
+/// the high level methods a p2panda client needs when interacting with data storage. It will
 /// be used for storing entries (`publish_entry`), getting required entry arguments when creating
 /// entries (`get_entry_args`) and retrieving a document id by entry hash (`get_document_by_entry`).
 /// Methods defined on `StorageEntry` and `StorageLog` for lower level access to their respective
@@ -53,6 +53,9 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
     /// Every entry is part of a document and, through that, associated with a specific log id used
     /// by this document and author. This method returns that document id by looking up the log
     /// that the entry was stored in.
+    ///
+    /// If the passed entry cannot be found, or it's associated document doesn't exist yet, `None`
+    /// is returned.
     async fn get_document_by_entry(
         &self,
         entry_hash: &Hash,
