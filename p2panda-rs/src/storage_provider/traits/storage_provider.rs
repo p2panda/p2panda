@@ -240,7 +240,9 @@ pub mod tests {
     use crate::entry::{sign_and_encode, Entry, LogId};
     use crate::hash::Hash;
     use crate::identity::KeyPair;
-    use crate::operation::{AsOperation, OperationEncoded, OperationFields, OperationId};
+    use crate::operation::{
+        AsOperation, OperationEncoded, OperationFields, OperationId, OperationValue,
+    };
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::test_utils::{
         test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
@@ -528,6 +530,51 @@ pub mod tests {
                 "Could not find document for entry in database with id: {}",
                 encoded_entry.hash()
             )
+        )
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn invalid_entry_op_pair(test_db: SimplestStorageProvider, schema: SchemaId) {
+        let entries = test_db.entries.lock().unwrap().clone();
+        let logs = test_db.logs.lock().unwrap().clone();
+
+        // Init database with 3 valid entries
+        let three_valid_entries = vec![
+            entries.get(0).unwrap().clone(),
+            entries.get(1).unwrap().clone(),
+            entries.get(2).unwrap().clone(),
+        ];
+
+        let new_db = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(logs)),
+            entries: Arc::new(Mutex::new(three_valid_entries)),
+        };
+
+        // Get the valid next entry
+        let next_entry = entries.get(3).unwrap();
+
+        // Create a new operation which does not match the one contained in the entry hash
+        let mismatched_operation = update_operation(
+            schema.clone(),
+            vec![next_entry.operation_encoded().unwrap().hash().into()],
+            fields(vec![(
+                "poopy",
+                OperationValue::Text("This is the WRONG operation :-(".to_string()),
+            )]),
+        );
+
+        let encoded_operation = OperationEncoded::try_from(&mismatched_operation).unwrap();
+
+        // Publish this entry with an mismatching operation
+        let publish_entry_request =
+            PublishEntryRequest(next_entry.entry_signed(), encoded_operation);
+
+        let error_response = new_db.publish_entry(&publish_entry_request).await;
+
+        assert_eq!(
+            format!("{}", error_response.unwrap_err()),
+            "operation needs to match payload hash of encoded entry"
         )
     }
 }
