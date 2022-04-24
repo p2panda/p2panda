@@ -83,7 +83,7 @@ pub enum PublishEntryError {
     SkiplinkMissing(Hash),
 
     /// Error returned when an entry is recieved and it's document can't be found.
-    #[error("Could not find document for entry in database with id: {0:?}")]
+    #[error("Could not find document for entry in database with id: {0}")]
     DocumentMissing(Hash),
 
     /// Error returned when an entry is received and it's operation is missing previous_operations.
