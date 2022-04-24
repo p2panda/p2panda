@@ -469,7 +469,7 @@ pub mod tests {
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
             format!(
-                "Could not find skiplink entry in database with id: {:?}",
+                "Could not find skiplink entry in database with id: {}",
                 entry.hash()
             )
         )
