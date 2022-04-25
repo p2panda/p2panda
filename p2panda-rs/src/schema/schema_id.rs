@@ -219,14 +219,10 @@ impl<'de> Deserialize<'de> for SchemaId {
 
 #[cfg(test)]
 mod test {
-    use ciborium::cbor;
-    use ciborium::value::Value;
     use rstest::rstest;
 
-    use crate::document::DocumentViewId;
-    use crate::operation::OperationId;
     use crate::test_utils::constants::TEST_SCHEMA_ID;
-    use crate::test_utils::fixtures::{random_operation_id, schema};
+    use crate::test_utils::fixtures::schema;
 
     use super::SchemaId;
 
