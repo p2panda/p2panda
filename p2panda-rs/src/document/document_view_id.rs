@@ -335,13 +335,6 @@ mod tests {
         );
 
         assert_eq!(result.unwrap_err().to_string(), expected_result.to_string());
-
-        let result_int = serde_json::from_str::<DocumentViewId>("5");
-        let expected_err = "invalid type: integer `5`, expected sequence of operation id strings at line 1 column 1";
-        assert_eq!(
-            result_int.unwrap_err().to_string(),
-            expected_err.to_string()
-        );
     }
 
     #[rstest]

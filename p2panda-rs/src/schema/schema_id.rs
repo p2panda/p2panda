@@ -221,116 +221,84 @@ impl<'de> Deserialize<'de> for SchemaId {
 mod test {
     use rstest::rstest;
 
-    use crate::document::DocumentViewId;
-    use crate::operation::OperationId;
     use crate::test_utils::constants::TEST_SCHEMA_ID;
-    use crate::test_utils::fixtures::{random_operation_id, schema};
+    use crate::test_utils::fixtures::schema;
 
     use super::SchemaId;
 
-    #[test]
-    fn serialize() {
-        let app_schema = SchemaId::new(TEST_SCHEMA_ID).unwrap();
-        assert_eq!(
-            serde_json::to_string(&app_schema).unwrap(),
-            "\"venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\""
-        );
+    #[rstest]
+    #[case(
+        SchemaId::new(TEST_SCHEMA_ID).unwrap(),
+        "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+    )]
+    #[case(SchemaId::SchemaDefinition(1), "schema_definition_v1")]
+    #[case(SchemaId::SchemaFieldDefinition(1), "schema_field_definition_v1")]
+    fn serialize(#[case] schema_id: SchemaId, #[case] expected_schema_id_string: &str) {
+        let mut cbor_bytes = Vec::new();
+        let mut expected_cbor_bytes = Vec::new();
 
-        let schema = SchemaId::SchemaDefinition(1);
-        assert_eq!(
-            serde_json::to_string(&schema).unwrap(),
-            "\"schema_definition_v1\""
-        );
+        ciborium::ser::into_writer(&schema_id, &mut cbor_bytes).unwrap();
+        ciborium::ser::into_writer(expected_schema_id_string, &mut expected_cbor_bytes).unwrap();
 
-        let schema_field = SchemaId::SchemaFieldDefinition(1);
-        assert_eq!(
-            serde_json::to_string(&schema_field).unwrap(),
-            "\"schema_field_definition_v1\""
-        );
+        assert_eq!(cbor_bytes, expected_cbor_bytes);
     }
 
     #[rstest]
-    fn deserialize(
-        #[from(random_operation_id)] op_id_1: OperationId,
-        #[from(random_operation_id)] op_id_2: OperationId,
-    ) {
-        let app_schema = SchemaId::new_application(
-            "venue",
-            &DocumentViewId::new(&[op_id_1.clone(), op_id_2.clone()]),
-        );
-        assert_eq!(
-            serde_json::from_str::<SchemaId>(&format!(
-                "\"venue_{}_{}\"",
-                op_id_1.as_hash().as_str(),
-                op_id_2.as_hash().as_str()
-            ))
-            .unwrap(),
-            app_schema
-        );
-        let schema = SchemaId::SchemaDefinition(1);
-        assert_eq!(
-            serde_json::from_str::<SchemaId>("\"schema_definition_v1\"").unwrap(),
-            schema
-        );
-        let schema_field = SchemaId::SchemaFieldDefinition(1);
-        assert_eq!(
-            serde_json::from_str::<SchemaId>("\"schema_field_definition_v1\"").unwrap(),
-            schema_field
-        );
+    #[case(
+        SchemaId::new_application("venue", &"0020ce6f2c08e56836d6c3eb4080d6cc948dba138cba328c28059f45ebe459901771".parse().unwrap()
+        ),
+        "venue_0020ce6f2c08e56836d6c3eb4080d6cc948dba138cba328c28059f45ebe459901771"
+    )]
+    #[case(SchemaId::SchemaDefinition(1), "schema_definition_v1")]
+    #[case(SchemaId::SchemaFieldDefinition(1), "schema_field_definition_v1")]
+    fn deserialize(#[case] schema_id: SchemaId, #[case] expected_schema_id_string: &str) {
+        let parsed_app_schema: SchemaId = expected_schema_id_string.parse().unwrap();
+        assert_eq!(schema_id, parsed_app_schema);
     }
 
     // Not a hash at all
     #[rstest]
     #[case(
-        "\"This is not a hash\"",
-        "malformed schema id: doesn't contain an underscore at line 1 column 20"
-    )]
-    // An integer
-    #[case(
-        "5",
-        "invalid type: integer `5`, expected schema id as string at line 1 column 1"
+        "This is not a hash",
+        "malformed schema id: doesn't contain an underscore"
     )]
     // Only an operation id, could be interpreted as document view id but still missing the name
     #[case(
-        "\"0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"",
-        "malformed schema id: doesn't contain an underscore at line 1 column 70"
+        "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
+        "malformed schema id: doesn't contain an underscore"
     )]
     // Only the name is missing now
     #[case(
-        "\"_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"",
+        "_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
         "application schema id is missing a name: _0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c\
-        7b9ab46293111c48fc78b at line 1 column 71"
+        7b9ab46293111c48fc78b"
     )]
     // This name is too long, parser will fail trying to read its last section as an operation id
     #[case(
-        "\"this_name_is_way_too_long_it_cant_be_good_to_have_such_a_long_name_to_be_honest_0020c65\
-        567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b\"",
+        "this_name_is_way_too_long_it_cant_be_good_to_have_such_a_long_name_to_be_honest_0020c65\
+        567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
         "encountered invalid hash while parsing application schema id: invalid hex encoding in \
-        hash string at line 1 column 150"
+        hash string"
     )]
     // This hash is malformed
     #[case(
-        "\"venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc7\"",
+        "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc7",
         "encountered invalid hash while parsing application schema id: invalid hash length 33 \
-        bytes, expected 34 bytes at line 1 column 74"
+        bytes, expected 34 bytes"
     )]
     // this looks like a system schema, but it is not
     #[case(
-        "\"unknown_system_schema_name_v1\"",
-        "not a known system schema: unknown_system_schema_name at line 1 column 31"
+        "unknown_system_schema_name_v1",
+        "not a known system schema: unknown_system_schema_name"
     )]
     // malformed system schema version number
     #[case(
-        "\"schema_definition_v1.5\"",
-        "malformed schema id: couldn't parse system schema version from 'schema_definition_v1.5' \
-        at line 1 column 24"
+        "schema_definition_v1.5",
+        "malformed schema id: couldn't parse system schema version from 'schema_definition_v1.5'"
     )]
-    fn invalid_deserialization(#[case] schema_id: &str, #[case] expected_err: &str) {
+    fn invalid_deserialization(#[case] schema_id_str: &str, #[case] expected_err: &str) {
         assert_eq!(
-            format!(
-                "{}",
-                serde_json::from_str::<SchemaId>(schema_id).unwrap_err()
-            ),
+            format!("{}", schema_id_str.parse::<SchemaId>().unwrap_err()),
             expected_err
         );
     }

@@ -137,12 +137,12 @@ RUST_LOG=p2panda_rs=debug cargo test
 
 ```bash
 # Generate JSON formatted test data
-cargo run --bin json-test-data
+cargo run --bin cbor-test-data
 ```
 
 ### Format
 
-Test data is generated as a JSON document formatted as summerised below (to see full output, run command mentioned above).
+Test data is generated as CBOR encoded as a hex string. Below is a summary of the data in JSON format (to see actual output, run command mentioned above).
 
 ```js
 {

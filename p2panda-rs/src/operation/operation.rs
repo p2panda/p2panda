@@ -69,7 +69,6 @@ impl<'de> Deserialize<'de> for OperationAction {
     }
 }
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Operations describe data mutations of "documents" in the p2panda network. Authors send
 /// operations to CREATE, UPDATE or DELETE documents.
 ///
@@ -84,41 +83,6 @@ impl<'de> Deserialize<'de> for OperationAction {
 /// operation ids which identify the known branch tips at the time of publication. These allow
 /// us to build the graph and retain knowledge of the graph state at the time the specific
 /// operation was published.
-///
-/// ## Examples
-///
-/// All of the examples are valid operation graphs. Operations which refer to more than one
-/// previous operation help to reconcile branches. However, if other, unknown branches exist when
-/// the graph is resolved, the materialisation process will still resolves the graph to a single
-/// value.
-///
-/// 1)
-/// ```mermaid
-/// flowchart LR
-///     A --- B --- C --- D;
-///     B --- E --- F;
-/// ```
-///
-/// 2)
-/// ```mermaid
-/// flowchart LR
-///     B --- C --- D --- F;
-///     A --- B --- E --- F;
-/// ```
-///
-/// 3)
-/// ```mermaid
-/// flowchart LR
-///     A --- B --- C;
-///     A --- D --- E --- J;
-///     B --- F --- G --- H --- I --- J;
-/// ```
-///
-/// 4)
-/// ```mermaid
-/// flowchart LR
-///     A --- B --- C --- D --- E;
-/// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Operation {
     /// Describes if this operation creates, updates or deletes data.
