@@ -55,6 +55,22 @@ impl Validate for OperationValue {
     }
 }
 
+impl OperationValue {
+    /// Return the field type for this operation value as a string
+    pub fn field_type(&self) -> &str {
+        match self {
+            OperationValue::Boolean(_) => "bool",
+            OperationValue::Integer(_) => "int",
+            OperationValue::Float(_) => "float",
+            OperationValue::Text(_) => "str",
+            OperationValue::Relation(_) => "relation",
+            OperationValue::RelationList(_) => "relation_list",
+            OperationValue::PinnedRelation(_) => "pinned_relation",
+            OperationValue::PinnedRelationList(_) => "pinned_relation_list",
+        }
+    }
+}
+
 #[cfg(test)]
 // Methods only used for testing of (invalid) operation values.
 impl OperationValue {
@@ -85,6 +101,38 @@ mod tests {
     use crate::Validate;
 
     use super::OperationValue;
+
+    #[rstest]
+    #[allow(clippy::too_many_arguments)]
+    fn all_field_types(#[from(random_operation_id)] operation_id: OperationId) {
+        let bool = OperationValue::Boolean(true);
+        assert_eq!(bool.field_type(), "bool");
+        let int = OperationValue::Integer(1);
+        assert_eq!(int.field_type(), "int");
+        let float = OperationValue::Float(0.1);
+        assert_eq!(float.field_type(), "float");
+        let text = OperationValue::Text("Hello".to_string());
+        assert_eq!(text.field_type(), "str");
+        let relation =
+            OperationValue::Relation(Relation::new(DocumentId::new(operation_id.clone())));
+        assert_eq!(relation.field_type(), "relation");
+
+        let pinned_relation =
+            OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::new(&[
+                operation_id.clone(),
+            ])));
+        assert_eq!(pinned_relation.field_type(), "pinned_relation");
+
+        let relation_list = OperationValue::RelationList(RelationList::new(vec![DocumentId::new(
+            operation_id.clone(),
+        )]));
+        assert_eq!(relation_list.field_type(), "relation_list");
+
+        let pinned_relation_list = OperationValue::PinnedRelationList(PinnedRelationList::new(
+            vec![DocumentViewId::new(&[operation_id])],
+        ));
+        assert_eq!(pinned_relation_list.field_type(), "pinned_relation_list");
+    }
 
     #[rstest]
     #[allow(clippy::too_many_arguments)]
