@@ -226,9 +226,10 @@ pub trait AsOperation {
         self.fields().is_some()
     }
 
-    /// Returns true if previous_operations contains a value.
+    /// Returns true if previous_operations contains an vec which itself contains
+    /// at least one item.
     fn has_previous_operations(&self) -> bool {
-        self.previous_operations().is_some()
+        self.previous_operations().is_some() && !self.previous_operations().unwrap().is_empty()
     }
 
     /// Returns true when instance is CREATE operation.
@@ -402,6 +403,17 @@ mod tests {
 
         assert!(invalid_update_operation_2.validate().is_err());
 
+        let invalid_update_operation_3 = Operation {
+            action: OperationAction::Update,
+            version: OperationVersion::Default,
+            schema: schema.clone(),
+            // UPDATE operations must contain previous_operations containing at least one operation_id
+            previous_operations: Some(vec![]), // Error
+            fields: None,
+        };
+
+        assert!(invalid_update_operation_3.validate().is_err());
+
         let invalid_delete_operation_1 = Operation {
             action: OperationAction::Delete,
             version: OperationVersion::Default,
@@ -416,13 +428,24 @@ mod tests {
         let invalid_delete_operation_2 = Operation {
             action: OperationAction::Delete,
             version: OperationVersion::Default,
-            schema,
+            schema: schema.clone(),
             previous_operations: Some(vec![prev_op_id]),
             // DELETE operations must not contain fields
             fields: Some(fields), // Error
         };
 
-        assert!(invalid_delete_operation_2.validate().is_err())
+        assert!(invalid_delete_operation_2.validate().is_err());
+
+        let invalid_delete_operation_3 = Operation {
+            action: OperationAction::Update,
+            version: OperationVersion::Default,
+            schema,
+            // DELETE operations must contain previous_operations containing at least one operation_id
+            previous_operations: Some(vec![]), // Error
+            fields: None,
+        };
+
+        assert!(invalid_delete_operation_3.validate().is_err());
     }
 
     #[rstest]
