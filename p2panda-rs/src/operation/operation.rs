@@ -40,6 +40,18 @@ pub enum OperationAction {
     Delete,
 }
 
+impl OperationAction {
+    /// Returns the operation action as a string.
+    #[allow(unused)]
+    fn as_str(&self) -> &str {
+        match self {
+            OperationAction::Create => "create",
+            OperationAction::Update => "update",
+            OperationAction::Delete => "delete",
+        }
+    }
+}
+
 impl Serialize for OperationAction {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -332,6 +344,13 @@ mod tests {
     use crate::Validate;
 
     use super::{AsOperation, Operation, OperationAction, OperationFields, OperationVersion};
+
+    #[test]
+    fn stringify_action() {
+        assert_eq!(OperationAction::Create.as_str(), "create");
+        assert_eq!(OperationAction::Update.as_str(), "update");
+        assert_eq!(OperationAction::Delete.as_str(), "delete");
+    }
 
     #[rstest]
     fn operation_validation(
