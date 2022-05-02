@@ -35,7 +35,7 @@ use crate::Validate;
 ///                         \
 ///                          \__ [UPDATE] (Hash: "eff..")
 /// ```
-#[derive(Clone, Debug, Eq)]
+#[derive(Clone, Hash, Debug, Eq)]
 pub struct DocumentViewId(Vec<OperationId>);
 
 impl DocumentViewId {
