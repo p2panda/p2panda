@@ -56,6 +56,16 @@ impl DocumentViewId {
         graph_tips
     }
 
+    /// Get a string representation of all graph tips in this view id.
+    pub fn as_str(&self) -> String {
+        let mut id_str = "".to_string();
+        for (i, operation_id) in self.sorted().iter().enumerate() {
+            let separator = if i == 0 { "" } else { "_" };
+            id_str += format!("{}{}", separator, operation_id.as_hash().as_str()).as_str();
+        }
+        id_str
+    }
+
     /// Returns a hash over the sorted graph tips constituting this view id.
     ///
     /// Use this as a unique identifier for a document if you need a value with a limited size. The
@@ -249,7 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn string_representation() {
+    fn debug_representation() {
         let document_view_id = DEFAULT_HASH.parse::<DocumentViewId>().unwrap();
 
         assert_eq!(format!("{}", document_view_id), "496543");
@@ -262,6 +272,25 @@ mod tests {
             .unwrap();
         let view_id_unmerged = DocumentViewId::new(&[operation_1, operation_2]);
         assert_eq!(format!("{}", view_id_unmerged), "496543_f16e79");
+    }
+
+    #[test]
+    fn string_representation() {
+        let document_view_id = DEFAULT_HASH.parse::<DocumentViewId>().unwrap();
+
+        assert_eq!(
+            document_view_id.as_str(),
+            "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+        );
+
+        let operation_1 = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+            .parse::<OperationId>()
+            .unwrap();
+        let operation_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
+            .parse::<OperationId>()
+            .unwrap();
+        let document_view_id = DocumentViewId::new(&[operation_1, operation_2]);
+        assert_eq!(document_view_id.as_str(), "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79");
     }
 
     #[rstest]
