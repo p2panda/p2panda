@@ -38,7 +38,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         let expected_backlink = self
             .entry_at_seq_num(&entry.author(), &entry.log_id(), &backlink_seq_num)
             .await?
-            .ok_or(EntryStorageError::ExpectedBacklinkMissing(entry.hash()))?;
+            .ok_or_else(|| EntryStorageError::ExpectedBacklinkMissing(entry.hash()))?;
 
         // compare the expected backlink hash and the stated backlink hash
         if expected_backlink.hash() != entry.backlink_hash().unwrap() {
@@ -67,7 +67,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
                 let expected_skiplink_entry = self
                     .entry_at_seq_num(&entry.author(), &entry.log_id(), &seq_num)
                     .await?
-                    .ok_or(EntryStorageError::ExpectedSkiplinkMissing(entry.hash()))?;
+                    .ok_or_else(|| EntryStorageError::ExpectedSkiplinkMissing(entry.hash()))?;
                 Some(expected_skiplink_entry)
             }
             // Or if there is no skiplink for entries at this sequence number return None
