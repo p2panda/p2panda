@@ -438,6 +438,7 @@ pub mod tests {
         };
 
         let entry = entries.get(7).unwrap();
+        let skiplink_entry = entries.get(3).unwrap();
 
         let publish_entry_request =
             PublishEntryRequest(entry.entry_signed(), entry.operation_encoded().unwrap());
@@ -450,7 +451,7 @@ pub mod tests {
             format!("{}", error_response.unwrap_err()),
             format!(
                 "Could not find skiplink entry in database with id: {}",
-                entry.hash()
+                skiplink_entry.hash()
             )
         )
     }
