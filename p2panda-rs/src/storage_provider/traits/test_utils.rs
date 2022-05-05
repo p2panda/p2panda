@@ -275,7 +275,7 @@ impl Validate for EntryArgsRequest {
     }
 }
 
-pub const SKIPLINK_ENTRIES: [u64; 2] = [4, 8];
+pub const SKIPLINK_ENTRIES: [u64; 5] = [4, 8, 12, 13, 17];
 
 #[fixture]
 pub fn test_db(
@@ -311,8 +311,8 @@ pub fn test_db(
 
     db_entries.push(storage_entry);
 
-    // Create 9 more entries containing UPDATE operations with valid back- and skip- links and previous_operations
-    for seq_num in 2..11 {
+    // Create more entries containing UPDATE operations with valid back- and skip- links and previous_operations
+    for seq_num in 2..17 {
         let seq_num = SeqNum::new(seq_num).unwrap();
         let mut skiplink = None;
         let backlink = db_entries

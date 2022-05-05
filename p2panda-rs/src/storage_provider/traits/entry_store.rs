@@ -29,15 +29,22 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         &self,
         entry: &StorageEntry,
     ) -> Result<Option<StorageEntry>, EntryStorageError> {
-        let backlink: Option<StorageEntry> = match entry.backlink_hash() {
-            Some(backlink_hash) => Some(
-                self.get_entry_by_hash(&backlink_hash)
-                    .await?
-                    .ok_or(EntryStorageError::BacklinkMissing(backlink_hash))?,
-            ),
-            None => None,
+        if entry.seq_num().is_first() {
+            return Ok(None);
         };
-        Ok(backlink)
+
+        // Unwrap as we know this isn't the first sequence number because of the above condition
+        let backlink_seq_num = SeqNum::new(entry.seq_num().as_u64() - 1).unwrap();
+        let expected_backlink = self
+            .entry_at_seq_num(&entry.author(), &entry.log_id(), &backlink_seq_num)
+            .await?
+            .ok_or(EntryStorageError::ExpectedBacklinkMissing(entry.hash()))?;
+
+        // compare the expected backlink hash and the stated backlink hash
+        if expected_backlink.hash() != entry.backlink_hash().unwrap() {
+            return Err(EntryStorageError::InvalidBacklinkPassed(entry.hash()));
+        }
+        Ok(Some(expected_backlink))
     }
 
     /// Get the skiplink of a passed entry.
@@ -48,15 +55,30 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         &self,
         entry: &StorageEntry,
     ) -> Result<Option<StorageEntry>, EntryStorageError> {
-        let skiplink: Option<StorageEntry> = match entry.skiplink_hash() {
-            Some(skiplink_hash) => Some(
-                self.get_entry_by_hash(&skiplink_hash)
+        // If a skiplink isn't required and it wasn't provided, return already now
+        if !is_lipmaa_required(entry.seq_num().as_u64()) && entry.skiplink_hash().is_none() {
+            return Ok(None);
+        };
+
+        // Derive the expected skiplink seq number from this entries sequence number
+        let expected_skiplink = match entry.seq_num().skiplink_seq_num() {
+            // Retrieve the expected skiplink from the database
+            Some(seq_num) => {
+                let expected_skiplink_entry = self
+                    .entry_at_seq_num(&entry.author(), &entry.log_id(), &seq_num)
                     .await?
-                    .ok_or(EntryStorageError::SkiplinkMissing(skiplink_hash))?,
-            ),
+                    .ok_or(EntryStorageError::ExpectedSkiplinkMissing(entry.hash()))?;
+                Some(expected_skiplink_entry)
+            }
+            // Or if there is no skiplink for entries at this sequence number return None
             None => None,
         };
-        Ok(skiplink)
+
+        // compare the expected skiplink hash and the stated skiplink hash
+        if expected_skiplink.clone().map(|entry| entry.hash()) != entry.skiplink_hash() {
+            return Err(EntryStorageError::InvalidSkiplinkPassed(entry.hash()));
+        }
+        Ok(expected_skiplink)
     }
 
     /// Insert an entry into storage.
@@ -129,7 +151,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
                 .await?
             {
                 Some(entry) => Ok(entry),
-                None => Err(EntryStorageError::ExpectedSkiplinkMissing),
+                None => Err(EntryStorageError::ExpectedNextSkiplinkMissing),
             }?;
             Ok(Some(skiplink_entry.hash()))
         } else {
@@ -442,7 +464,7 @@ pub mod tests {
             .get_next_n_entries_after_seq(&author, &log_id, &SeqNum::new(1).unwrap(), 1000)
             .await
             .unwrap();
-        assert_eq!(end_of_log_reached.unwrap().len(), 10);
+        assert_eq!(end_of_log_reached.unwrap().len(), 16);
 
         let first_entry_not_found = test_db
             .get_next_n_entries_after_seq(&author, &log_id, &SeqNum::new(10000).unwrap(), 1)

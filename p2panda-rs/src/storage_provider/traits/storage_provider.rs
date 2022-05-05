@@ -318,6 +318,112 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
+    async fn rejects_invalid_backlink(key_pair: KeyPair, test_db: SimplestStorageProvider) {
+        let new_db = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(Mutex::new(Vec::new())),
+        };
+
+        let entries = test_db.entries.lock().unwrap().clone();
+
+        // Publish 3 entries to the new database
+        for index in 0..3 {
+            let entry = entries.get(index).unwrap();
+            let publish_entry_request = PublishEntryRequest(
+                entry.entry_signed(),
+                entry.operation_encoded().unwrap().clone(),
+            );
+
+            new_db.publish_entry(&publish_entry_request).await.unwrap();
+        }
+
+        // Retrieve the forth entry
+        let entry_four = entries.get(3).unwrap();
+
+        // Reconstruct it with an invalid backlink
+        let entry_with_invalid_backlink = Entry::new(
+            &entry_four.log_id(),
+            Some(&entry_four.operation()),
+            entry_four.skiplink_hash().as_ref(),
+            Some(&entries.get(0).unwrap().hash()),
+            &entry_four.seq_num(),
+        )
+        .unwrap();
+
+        let entry_signed = sign_and_encode(&entry_with_invalid_backlink, &key_pair).unwrap();
+
+        let publish_entry_request = PublishEntryRequest(
+            entry_signed.clone(),
+            entry_four.operation_encoded().unwrap(),
+        );
+
+        let error_response = new_db.publish_entry(&publish_entry_request).await;
+
+        println!("{:#?}", error_response);
+        assert_eq!(
+            format!("{}", error_response.unwrap_err()),
+            format!(
+                "Passed backlink did not match expected backlink for entry with id: {}",
+                entry_signed.hash()
+            )
+        )
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn rejects_invalid_skiplink(key_pair: KeyPair, test_db: SimplestStorageProvider) {
+        let new_db = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(Mutex::new(Vec::new())),
+        };
+
+        let entries = test_db.entries.lock().unwrap().clone();
+
+        // Publish 3 entries to the new database
+        for index in 0..3 {
+            let entry = entries.get(index).unwrap();
+            let publish_entry_request = PublishEntryRequest(
+                entry.entry_signed(),
+                entry.operation_encoded().unwrap().clone(),
+            );
+
+            new_db.publish_entry(&publish_entry_request).await.unwrap();
+        }
+
+        // Retrieve the forth entry
+        let entry_four = entries.get(3).unwrap();
+
+        // Reconstruct it with an invalid skiplink
+        let entry_with_invalid_backlink = Entry::new(
+            &entry_four.log_id(),
+            Some(&entry_four.operation()),
+            Some(&entries.get(2).unwrap().hash()),
+            entry_four.backlink_hash().as_ref(),
+            &entry_four.seq_num(),
+        )
+        .unwrap();
+
+        let entry_signed = sign_and_encode(&entry_with_invalid_backlink, &key_pair).unwrap();
+
+        let publish_entry_request = PublishEntryRequest(
+            entry_signed.clone(),
+            entry_four.operation_encoded().unwrap(),
+        );
+
+        let error_response = new_db.publish_entry(&publish_entry_request).await;
+
+        println!("{:#?}", error_response);
+        assert_eq!(
+            format!("{}", error_response.unwrap_err()),
+            format!(
+                "Passed skiplink did not match expected skiplink for entry with id: {}",
+                entry_signed.hash()
+            )
+        )
+    }
+
+    #[rstest]
+    #[async_std::test]
     async fn gets_entry_args(test_db: SimplestStorageProvider) {
         // Instantiate a new store
         let new_db = SimplestStorageProvider {
@@ -438,7 +544,6 @@ pub mod tests {
         };
 
         let entry = entries.get(7).unwrap();
-        let skiplink_entry = entries.get(3).unwrap();
 
         let publish_entry_request =
             PublishEntryRequest(entry.entry_signed(), entry.operation_encoded().unwrap());
@@ -450,8 +555,8 @@ pub mod tests {
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
             format!(
-                "Could not find skiplink entry in database with id: {}",
-                skiplink_entry.hash()
+                "Could not find expected skiplink in database for entry with id: {}",
+                entry.hash()
             )
         )
     }
