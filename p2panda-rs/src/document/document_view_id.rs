@@ -207,13 +207,20 @@ impl From<Hash> for DocumentViewId {
 
 /// Convenience method converting a hash string into a document view id.
 ///
-/// Converts a hash string into a `DocumentViewId`, assuming that this document view only consists
-/// of one graph tip hash.
+/// Converts a string formatted document view id into a `DocumentViewId`. Expects
+/// multi-hash ids to be hash strings seperated by an `_` character.
 impl FromStr for DocumentViewId {
     type Err = HashError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::new(&[Hash::new(s)?.into()]))
+        let mut operations: Vec<OperationId> = Vec::new();
+        s.rsplit('_')
+            .try_for_each::<_, Result<(), Self::Err>>(|hash_str| {
+                let hash = Hash::new(hash_str)?;
+                operations.push(hash.into());
+                Ok(())
+            })?;
+        Ok(Self::new(&operations))
     }
 }
 
@@ -291,6 +298,7 @@ mod tests {
             .unwrap();
         let document_view_id = DocumentViewId::new(&[operation_1, operation_2]);
         assert_eq!(document_view_id.as_str(), "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79");
+        assert_eq!("0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79".parse::<DocumentViewId>().unwrap(), document_view_id);
     }
 
     #[rstest]
