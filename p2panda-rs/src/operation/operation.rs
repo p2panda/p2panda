@@ -43,7 +43,7 @@ pub enum OperationAction {
 impl OperationAction {
     /// Returns the operation action as a string.
     #[allow(unused)]
-    fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         match self {
             OperationAction::Create => "create",
             OperationAction::Update => "update",
