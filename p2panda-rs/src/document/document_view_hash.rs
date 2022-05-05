@@ -14,6 +14,24 @@ use crate::hash::Hash;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DocumentViewHash(Hash);
 
+impl DocumentViewHash {
+    /// Creates a new instance of `DocumentViewHash`.
+    pub fn new(hash: Hash) -> Self {
+        Self(hash)
+    }
+
+    /// Returns the string representation of the document view hash.
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl From<Hash> for DocumentViewHash {
+    fn from(hash: Hash) -> Self {
+        Self::new(hash)
+    }
+}
+
 impl From<&DocumentViewId> for DocumentViewHash {
     fn from(document_view_id: &DocumentViewId) -> Self {
         let graph_tip_bytes = document_view_id
@@ -23,7 +41,7 @@ impl From<&DocumentViewId> for DocumentViewHash {
             .collect();
 
         // Unwrap here as the content should be validated at this point
-        Self(Hash::new_from_bytes(graph_tip_bytes).unwrap())
+        Self::new(Hash::new_from_bytes(graph_tip_bytes).unwrap())
     }
 }
 
@@ -32,13 +50,14 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::DocumentViewId;
+    use crate::hash::Hash;
     use crate::operation::OperationId;
-    use crate::test_utils::fixtures::random_operation_id;
+    use crate::test_utils::fixtures::{random_hash, random_operation_id};
 
     use super::DocumentViewHash;
 
     #[rstest]
-    fn document_view_hash(
+    fn equality_after_conversion(
         #[from(random_operation_id)] operation_id_1: OperationId,
         #[from(random_operation_id)] operation_id_2: OperationId,
     ) {
@@ -47,5 +66,11 @@ mod tests {
         let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);
         let view_hash_2 = DocumentViewHash::from(&view_id_2);
         assert_eq!(view_hash_1, view_hash_2);
+    }
+
+    #[rstest]
+    fn str_representation(#[from(random_hash)] hash: Hash) {
+        let document_view_hash = DocumentViewHash::new(hash.clone());
+        assert_eq!(hash.as_str(), document_view_hash.as_str());
     }
 }
