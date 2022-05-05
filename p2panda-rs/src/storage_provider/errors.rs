@@ -61,9 +61,17 @@ pub enum EntryStorageError {
     #[error("Error occured during `EntryStorage` request in storage provider: {0}")]
     Custom(String),
 
-    /// Error which originates in `determine_skiplink` if the skiplink is missing.
-    #[error("Could not find skiplink entry in database")]
-    SkiplinkMissing,
+    /// Error which occurs if an entries' stated skiplink is missing from the database.
+    #[error("Could not find skiplink entry in database with id: {0}")]
+    SkiplinkMissing(Hash),
+
+    /// Error which occurs if entries' stated backlink is missing from the database.
+    #[error("Could not find backlink entry in database with id: {0}")]
+    BacklinkMissing(Hash),
+
+    /// Error which originates in `determine_skiplink` if the expected skiplink is missing.
+    #[error("Could not find expected skiplink entry in database")]
+    ExpectedSkiplinkMissing,
 
     /// Error returned from validating p2panda-rs `EntrySigned` data types.
     #[error(transparent)]
@@ -73,15 +81,6 @@ pub enum EntryStorageError {
 /// Errors which can occur when publishing a new entry.
 #[derive(thiserror::Error, Debug)]
 pub enum PublishEntryError {
-    /// Error returned when an entry is recieved without a backlink.
-    #[error("Could not find backlink entry in database with id: {0}")]
-    BacklinkMissing(Hash),
-
-    /// Error returned when an entry with seq_num which requires a skiplink
-    /// is recieved without one.
-    #[error("Could not find skiplink entry in database with id: {0}")]
-    SkiplinkMissing(Hash),
-
     /// Error returned when an entry is recieved and it's document can't be found.
     #[error("Could not find document for entry in database with id: {0}")]
     DocumentMissing(Hash),

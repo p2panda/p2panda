@@ -155,37 +155,15 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         }
 
         // Get related bamboo backlink and skiplink entries
-        let entry_backlink_bytes = if !entry.seq_num().is_first() {
-            self.entry_at_seq_num(
-                &entry.author(),
-                &entry.log_id(),
-                &entry.seq_num().backlink_seq_num().unwrap(),
-            )
+        let entry_backlink_bytes = self
+            .try_get_backlink(&entry)
             .await?
-            .map(|link| {
-                let bytes = link.entry_bytes();
-                Some(bytes)
-            })
-            .ok_or_else(|| PublishEntryError::BacklinkMissing(entry.hash()))
-        } else {
-            Ok(None)
-        }?;
+            .map(|link| link.entry_bytes());
 
-        let entry_skiplink_bytes = if !entry.seq_num().is_first() {
-            self.entry_at_seq_num(
-                &entry.author(),
-                &entry.log_id(),
-                &entry.seq_num().skiplink_seq_num().unwrap(),
-            )
+        let entry_skiplink_bytes = self
+            .try_get_skiplink(&entry)
             .await?
-            .map(|link| {
-                let bytes = link.entry_bytes();
-                Some(bytes)
-            })
-            .ok_or_else(|| PublishEntryError::SkiplinkMissing(entry.hash()))
-        } else {
-            Ok(None)
-        }?;
+            .map(|link| link.entry_bytes());
 
         // Verify bamboo entry integrity, including encoding, signature of the entry correct back-
         // and skiplinks

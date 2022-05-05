@@ -15,6 +15,50 @@ use crate::storage_provider::traits::AsStorageEntry;
 /// the required methods for inserting and querying entries from storage.
 #[async_trait]
 pub trait EntryStore<StorageEntry: AsStorageEntry> {
+    /// Get an entry by it's hash.
+    async fn get_entry_by_hash(
+        &self,
+        hash: &Hash,
+    ) -> Result<Option<StorageEntry>, EntryStorageError>;
+
+    /// Get the backlink of a passed entry.
+    ///
+    /// Returns None if the entry has no backlink (it is a create), errors when a backlink
+    /// was present but could not be found in the db.
+    async fn try_get_backlink(
+        &self,
+        entry: &StorageEntry,
+    ) -> Result<Option<StorageEntry>, EntryStorageError> {
+        let backlink: Option<StorageEntry> = match entry.backlink_hash() {
+            Some(backlink_hash) => Some(
+                self.get_entry_by_hash(&backlink_hash)
+                    .await?
+                    .ok_or(EntryStorageError::BacklinkMissing(backlink_hash))?,
+            ),
+            None => None,
+        };
+        Ok(backlink)
+    }
+
+    /// Get the skiplink of a passed entry.
+    ///
+    /// Returns None if the passed entry has no skiplink, errors if a skiplink was present but could
+    /// not be found in the db.
+    async fn try_get_skiplink(
+        &self,
+        entry: &StorageEntry,
+    ) -> Result<Option<StorageEntry>, EntryStorageError> {
+        let skiplink: Option<StorageEntry> = match entry.skiplink_hash() {
+            Some(skiplink_hash) => Some(
+                self.get_entry_by_hash(&skiplink_hash)
+                    .await?
+                    .ok_or(EntryStorageError::SkiplinkMissing(skiplink_hash))?,
+            ),
+            None => None,
+        };
+        Ok(skiplink)
+    }
+
     /// Insert an entry into storage.
     async fn insert_entry(&self, value: StorageEntry) -> Result<bool, EntryStorageError>;
 
@@ -54,7 +98,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
                 .await?
             {
                 Some(entry) => Ok(entry),
-                None => Err(EntryStorageError::SkiplinkMissing),
+                None => Err(EntryStorageError::ExpectedSkiplinkMissing),
             }?;
             Ok(Some(skiplink_entry.hash()))
         } else {
@@ -73,6 +117,7 @@ pub mod tests {
     use rstest::rstest;
 
     use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
+    use crate::hash::Hash;
     use crate::identity::{Author, KeyPair};
     use crate::operation::{AsOperation, OperationEncoded};
     use crate::schema::SchemaId;
@@ -92,6 +137,18 @@ pub mod tests {
         async fn insert_entry(&self, entry: StorageEntry) -> Result<bool, EntryStorageError> {
             self.db_insert_entry(entry);
             Ok(true)
+        }
+
+        /// Get an entry by it's hash id.
+        async fn get_entry_by_hash(
+            &self,
+            hash: &Hash,
+        ) -> Result<Option<StorageEntry>, EntryStorageError> {
+            let entries = self.entries.lock().unwrap();
+
+            let entry = entries.iter().find(|entry| entry.hash() == *hash);
+
+            Ok(entry.cloned())
         }
 
         /// Returns entry at sequence position within an author's log.
@@ -241,6 +298,59 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
+    async fn get_entry_by_hash(test_db: SimplestStorageProvider) {
+        let entries = test_db.entries.lock().unwrap().clone();
+
+        assert_eq!(
+            entries.get(0).cloned(),
+            test_db.get_entry_by_hash(&entries[0].hash()).await.unwrap()
+        );
+        assert_eq!(
+            entries.get(1).cloned(),
+            test_db.get_entry_by_hash(&entries[1].hash()).await.unwrap()
+        );
+        assert_eq!(
+            entries.get(2).cloned(),
+            test_db.get_entry_by_hash(&entries[2].hash()).await.unwrap()
+        );
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn try_get_backlink(test_db: SimplestStorageProvider) {
+        let entries = test_db.entries.lock().unwrap().clone();
+
+        assert_eq!(
+            entries.get(0).cloned(),
+            test_db.try_get_backlink(&entries[1]).await.unwrap()
+        );
+        assert_eq!(
+            entries.get(1).cloned(),
+            test_db.try_get_backlink(&entries[2]).await.unwrap()
+        );
+        assert_eq!(
+            entries.get(2).cloned(),
+            test_db.try_get_backlink(&entries[3]).await.unwrap()
+        );
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn try_get_skiplink(test_db: SimplestStorageProvider) {
+        let entries = test_db.entries.lock().unwrap().clone();
+
+        assert_eq!(
+            entries.get(0).cloned(),
+            test_db.try_get_skiplink(&entries[3]).await.unwrap()
+        );
+        assert_eq!(
+            entries.get(3).cloned(),
+            test_db.try_get_skiplink(&entries[7]).await.unwrap()
+        );
+    }
+
+    #[rstest]
+    #[async_std::test]
     async fn can_determine_skiplink(test_db: SimplestStorageProvider) {
         let entries = test_db.entries.lock().unwrap().clone();
         for seq_num in 1..10 {
@@ -278,7 +388,7 @@ pub mod tests {
 
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
-            "Could not find skiplink entry in database"
+            "Could not find expected skiplink entry in database"
         )
     }
 }
