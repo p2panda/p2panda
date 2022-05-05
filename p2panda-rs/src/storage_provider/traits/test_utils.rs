@@ -18,7 +18,7 @@ use crate::storage_provider::traits::{
     AsStorageEntry, AsStorageLog,
 };
 use crate::test_utils::fixtures::{
-    create_operation, document_id, entry, fields, random_key_pair, schema, update_operation,
+    create_operation, document_id, entry, fields, key_pair, schema, update_operation,
 };
 use crate::Validate;
 
@@ -279,7 +279,7 @@ pub const SKIPLINK_ENTRIES: [u64; 2] = [4, 8];
 
 #[fixture]
 pub fn test_db(
-    #[from(random_key_pair)] key_pair: KeyPair,
+    key_pair: KeyPair,
     create_operation: Operation,
     fields: OperationFields,
     schema: SchemaId,
@@ -312,7 +312,7 @@ pub fn test_db(
     db_entries.push(storage_entry);
 
     // Create 9 more entries containing UPDATE operations with valid back- and skip- links and previous_operations
-    for seq_num in 2..10 {
+    for seq_num in 2..11 {
         let seq_num = SeqNum::new(seq_num).unwrap();
         let mut skiplink = None;
         let backlink = db_entries

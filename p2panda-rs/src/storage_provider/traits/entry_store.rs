@@ -80,6 +80,37 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// Return vector of all entries of a given schema.
     async fn by_schema(&self, schema: &SchemaId) -> Result<Vec<StorageEntry>, EntryStorageError>;
 
+    /// Get all entries of a log from a specified sequence number up to passed max number of entries.
+    ///
+    /// Returns a vector of entries the length of which will not be greater than the max number
+    /// passed into the method. Fewer may be returned if the end of the log is reached. Returns None if no
+    /// entry was found at the first requested seq_num.
+    async fn get_next_n_entries_after_seq(
+        &self,
+        author: &Author,
+        log_id: &LogId,
+        seq_num: &SeqNum,
+        max_number_of_entries: usize,
+    ) -> Result<Option<Vec<StorageEntry>>, EntryStorageError> {
+        let mut entries: Vec<StorageEntry> = Vec::new();
+        let mut seq_num = *seq_num;
+
+        while entries.len() < max_number_of_entries {
+            match self.entry_at_seq_num(author, log_id, &seq_num).await? {
+                Some(next_entry) => entries.push(next_entry),
+                // If the first requested seq num can't be found then we return with a None value.
+                None if entries.is_empty() => return Ok(None),
+                None => break,
+            };
+
+            match seq_num.next() {
+                Some(next_seq_num) => seq_num = next_seq_num,
+                None => break,
+            };
+        }
+        Ok(Some(entries))
+    }
+
     /// Determine skiplink entry hash ("lipmaa"-link) for entry in this log, return `None` when no
     /// skiplink is required for the next entry.
     async fn determine_skiplink(
@@ -111,6 +142,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 
 #[cfg(test)]
 pub mod tests {
+    use std::convert::TryFrom;
     use std::sync::{Arc, Mutex};
 
     use async_trait::async_trait;
@@ -127,7 +159,7 @@ pub mod tests {
     };
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
     use crate::test_utils::fixtures::{
-        entry, entry_signed_encoded, operation_encoded, random_key_pair, schema,
+        entry, entry_signed_encoded, key_pair, operation_encoded, random_key_pair, schema,
     };
 
     /// Implement `EntryStore` trait on `SimplestStorageProvider`
@@ -390,5 +422,32 @@ pub mod tests {
             format!("{}", error_response.unwrap_err()),
             "Could not find expected skiplink entry in database"
         )
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn get_n_entries(key_pair: KeyPair, test_db: SimplestStorageProvider) {
+        // test db contains 10 entries.
+
+        let author = Author::try_from(*key_pair.public_key()).unwrap();
+        let log_id = LogId::default();
+
+        let five_entries = test_db
+            .get_next_n_entries_after_seq(&author, &log_id, &SeqNum::new(1).unwrap(), 5)
+            .await
+            .unwrap();
+        assert_eq!(five_entries.unwrap().len(), 5);
+
+        let end_of_log_reached = test_db
+            .get_next_n_entries_after_seq(&author, &log_id, &SeqNum::new(1).unwrap(), 1000)
+            .await
+            .unwrap();
+        assert_eq!(end_of_log_reached.unwrap().len(), 10);
+
+        let first_entry_not_found = test_db
+            .get_next_n_entries_after_seq(&author, &log_id, &SeqNum::new(10000).unwrap(), 1)
+            .await
+            .unwrap();
+        assert!(first_entry_not_found.is_none());
     }
 }
