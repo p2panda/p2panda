@@ -120,6 +120,9 @@ pub struct RelationList(Vec<DocumentId>);
 impl RelationList {
     /// Returns a new list of relations.
     pub fn new(relations: Vec<DocumentId>) -> Self {
+        let mut relations = relations;
+        relations.sort_by_key(|a| a.as_str().to_string());
+
         Self(relations)
     }
 
@@ -158,6 +161,9 @@ pub struct PinnedRelationList(Vec<DocumentViewId>);
 impl PinnedRelationList {
     /// Returns a new list of pinned relations.
     pub fn new(relations: Vec<DocumentViewId>) -> Self {
+        let mut relations = relations;
+        relations.sort_by_key(|a| a.as_str());
+
         Self(relations)
     }
 
