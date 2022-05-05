@@ -14,8 +14,8 @@ use crate::hash::Hash;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DocumentViewHash(Hash);
 
-impl From<DocumentViewId> for DocumentViewHash {
-    fn from(document_view_id: DocumentViewId) -> Self {
+impl From<&DocumentViewId> for DocumentViewHash {
+    fn from(document_view_id: &DocumentViewId) -> Self {
         let graph_tip_bytes = document_view_id
             .sorted()
             .into_iter()
@@ -43,9 +43,9 @@ mod tests {
         #[from(random_operation_id)] operation_id_2: OperationId,
     ) {
         let view_id_1 = DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]);
-        let view_hash_1 = DocumentViewHash::from(view_id_1);
+        let view_hash_1 = DocumentViewHash::from(&view_id_1);
         let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);
-        let view_hash_2 = DocumentViewHash::from(view_id_2);
+        let view_hash_2 = DocumentViewHash::from(&view_id_2);
         assert_eq!(view_hash_1, view_hash_2);
     }
 }
