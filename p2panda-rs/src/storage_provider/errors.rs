@@ -65,18 +65,20 @@ pub enum EntryStorageError {
     #[error("Could not find expected backlink in database for entry with id: {0}")]
     ExpectedBacklinkMissing(Hash),
 
-    /// Error which occurs if entries' stated backlink does not match the expected one
+    /// Error which occurs if entries' encoded backlink hash does not match the expected one
     /// present in the database.
-    #[error("Passed backlink did not match expected backlink for entry with id: {0}")]
+    #[error(
+        "The backlink hash encoded in the entry: {0} did not match the expected backlink hash"
+    )]
     InvalidBacklinkPassed(Hash),
 
     /// Error which occurs if entries' expected skiplink is missing from the database.
     #[error("Could not find expected skiplink in database for entry with id: {0}")]
     ExpectedSkiplinkMissing(Hash),
 
-    /// Error which occurs if entries' stated skiplink does not match the expected one
+    /// Error which occurs if entries' encoded skiplink hash does not match the expected one
     /// present in the database.
-    #[error("Passed skiplink did not match expected skiplink for entry with id: {0}")]
+    #[error("The skiplink hash encoded in the entry: {0} did not match the expected lipmaa hash")]
     InvalidSkiplinkPassed(Hash),
 
     /// Error which originates in `determine_skiplink` if the expected skiplink is missing.

@@ -363,7 +363,7 @@ pub mod tests {
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
             format!(
-                "Passed backlink did not match expected backlink for entry with id: {}",
+                "The backlink hash encoded in the entry: {} did not match the expected backlink hash",
                 entry_signed.hash()
             )
         )
@@ -416,7 +416,7 @@ pub mod tests {
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
             format!(
-                "Passed skiplink did not match expected skiplink for entry with id: {}",
+                "The skiplink hash encoded in the entry: {} did not match the expected lipmaa hash",
                 entry_signed.hash()
             )
         )
