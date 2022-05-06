@@ -21,10 +21,18 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         hash: &Hash,
     ) -> Result<Option<StorageEntry>, EntryStorageError>;
 
-    /// Get the backlink of a passed entry.
+    /// Retrieve and verify the backlink of a passed entry.
     ///
-    /// Returns None if the entry has no backlink (it is a create), errors when a backlink
-    /// was present but could not be found in the db.
+    /// Fetches the expected backlink for the passed entry (based on SeqNum, Author & LogId), if
+    /// it is found it verifies its hash against the backlink entry hash encoded in the passed
+    /// entry.
+    ///
+    /// If either the expected backlink is not found in storage, or it doesn't match the one encoded in
+    /// the passed entry, then an error is returned. If the passed entry doesn't require a backlink
+    /// (it is at sequence number 1) then `None` is returned.
+    ///
+    /// If the backlink is retrieved and validated against the encoded entries backlink successfully
+    /// the backlink entry is returned.
     async fn try_get_backlink(
         &self,
         entry: &StorageEntry,
@@ -47,10 +55,18 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         Ok(Some(expected_backlink))
     }
 
-    /// Get the skiplink of a passed entry.
+    /// Retrieve and verify the skiplink of a passed entry.
     ///
-    /// Returns None if the passed entry has no skiplink, errors if a skiplink was present but could
-    /// not be found in the db.
+    /// Fetches the expected skiplink for the passed entry (based on SeqNum, Author & LogId), if
+    /// it is found it verifies its hash against the skiplink entry hash encoded in the passed
+    /// entry.
+    ///
+    /// If either the expected skiplink is not found in storage, or it doesn't match the oneencoded in
+    /// the passed entry, then an error is returned. If no skiplink is required for an entry at this
+    /// seq num, and it wasn't encoded with one, then `None` is returned.
+    ///  
+    /// If the skiplink is retrieved and validated against the encoded entries skiplink successfully
+    /// the skiplink entry is returned.
     async fn try_get_skiplink(
         &self,
         entry: &StorageEntry,
