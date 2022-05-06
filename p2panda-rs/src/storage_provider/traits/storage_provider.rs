@@ -32,7 +32,6 @@ use crate::Validate;
 /// most of it's methods (`get_entry_args` and `publish_entry` are defined below). The only one
 /// which needs defining is `get_document_by_entry`. It is also possible to over-ride the default
 /// definitions for any of the trait methods.
-#[automock]
 #[async_trait]
 pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog>:
     EntryStore<StorageEntry> + LogStore<StorageLog>

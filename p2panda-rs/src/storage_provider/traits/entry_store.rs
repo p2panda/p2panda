@@ -8,11 +8,13 @@ use crate::identity::Author;
 use crate::schema::SchemaId;
 use crate::storage_provider::errors::EntryStorageError;
 use crate::storage_provider::traits::AsStorageEntry;
+use mockall::automock;
 
 /// Trait which handles all storage actions relating to `Entry`.
 ///
 /// This trait should be implemented on the root storage provider struct. It's definitions make up
 /// the required methods for inserting and querying entries from storage.
+#[automock]
 #[async_trait]
 pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// Insert an entry into storage.
