@@ -317,11 +317,9 @@ pub mod tests {
                     Some(entry) => entry,
                     None => {
                         if seq_num == initial_seq_num {
-                            return Err(EntryStorageError::Custom(
-                                "Initial entry for requested cert pool not found".into(),
-                            ));
+                            return Err(EntryStorageError::InitialCertPoolEntryMissing);
                         } else {
-                            return Err(EntryStorageError::Custom("Entry required for requested certificate pool missing at seq num: xx".into()));
+                            return Err(EntryStorageError::CertPoolEntryMissing(seq_num.as_u64()));
                         }
                     }
                 };
