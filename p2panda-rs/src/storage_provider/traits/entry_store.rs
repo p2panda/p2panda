@@ -128,25 +128,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         log_id: &LogId,
         seq_num: &SeqNum,
         max_number_of_entries: usize,
-    ) -> Result<Option<Vec<StorageEntry>>, EntryStorageError> {
-        let mut entries: Vec<StorageEntry> = Vec::new();
-        let mut seq_num = *seq_num;
-
-        while entries.len() < max_number_of_entries {
-            match self.entry_at_seq_num(author, log_id, &seq_num).await? {
-                Some(next_entry) => entries.push(next_entry),
-                // If the first requested seq num can't be found then we return with a None value.
-                None if entries.is_empty() => return Ok(None),
-                None => break,
-            };
-
-            match seq_num.next() {
-                Some(next_seq_num) => seq_num = next_seq_num,
-                None => break,
-            };
-        }
-        Ok(Some(entries))
-    }
+    ) -> Result<Option<Vec<StorageEntry>>, EntryStorageError>;
 
     /// Determine skiplink entry hash ("lipmaa"-link) for the entry following the one passed, return
     /// `None` when no skiplink is required for the next entry.
@@ -252,6 +234,32 @@ pub mod tests {
                 .max_by_key(|entry| entry.seq_num().as_u64());
 
             Ok(latest_entry.cloned())
+        }
+
+        async fn get_next_n_entries_after_seq(
+            &self,
+            author: &Author,
+            log_id: &LogId,
+            seq_num: &SeqNum,
+            max_number_of_entries: usize,
+        ) -> Result<Option<Vec<StorageEntry>>, EntryStorageError> {
+            let mut entries: Vec<StorageEntry> = Vec::new();
+            let mut seq_num = *seq_num;
+
+            while entries.len() < max_number_of_entries {
+                match self.entry_at_seq_num(author, log_id, &seq_num).await? {
+                    Some(next_entry) => entries.push(next_entry),
+                    // If the first requested seq num can't be found then we return with a None value.
+                    None if entries.is_empty() => return Ok(None),
+                    None => break,
+                };
+
+                match seq_num.next() {
+                    Some(next_seq_num) => seq_num = next_seq_num,
+                    None => break,
+                };
+            }
+            Ok(Some(entries))
         }
 
         /// Return vector of all entries of a given schema
