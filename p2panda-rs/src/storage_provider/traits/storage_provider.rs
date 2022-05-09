@@ -86,7 +86,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
                 let entry_latest = entry_latest.unwrap();
                 let entry_hash_backlink = entry_backlink.hash();
                 // Determine skiplink ("lipmaa"-link) entry in this log
-                let entry_hash_skiplink = self.determine_skiplink(&entry_latest).await?;
+                let entry_hash_skiplink = self.determine_next_skiplink(&entry_latest).await?;
 
                 Ok(Self::EntryArgsResponse::new(
                     Some(entry_hash_backlink.clone()),
@@ -194,7 +194,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
             .latest_entry(&entry.author(), &entry.log_id())
             .await?
             .unwrap();
-        let entry_hash_skiplink = self.determine_skiplink(&entry_latest).await?;
+        let entry_hash_skiplink = self.determine_next_skiplink(&entry_latest).await?;
         let next_seq_num = entry_latest.seq_num().clone().next().unwrap();
 
         Ok(Self::PublishEntryResponse::new(

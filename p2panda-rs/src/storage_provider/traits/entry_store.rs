@@ -148,9 +148,9 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         Ok(Some(entries))
     }
 
-    /// Determine skiplink entry hash ("lipmaa"-link) for entry in this log, return `None` when no
-    /// skiplink is required for the next entry.
-    async fn determine_skiplink(
+    /// Determine skiplink entry hash ("lipmaa"-link) for the entry following the one passed, return
+    /// `None` when no skiplink is required for the next entry.
+    async fn determine_next_skiplink(
         &self,
         entry: &StorageEntry,
     ) -> Result<Option<Hash>, EntryStorageError> {
@@ -420,11 +420,11 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn can_determine_skiplink(test_db: SimplestStorageProvider) {
+    async fn can_determine_next_skiplink(test_db: SimplestStorageProvider) {
         let entries = test_db.entries.lock().unwrap().clone();
         for seq_num in 1..10 {
             let current_entry = entries.get(seq_num - 1).unwrap();
-            let next_entry_skiplink = test_db.determine_skiplink(current_entry).await;
+            let next_entry_skiplink = test_db.determine_next_skiplink(current_entry).await;
             assert!(next_entry_skiplink.is_ok());
             if SKIPLINK_ENTRIES.contains(&((seq_num + 1) as u64)) {
                 assert!(next_entry_skiplink.unwrap().is_some());
@@ -453,7 +453,9 @@ pub mod tests {
             entries: Arc::new(Mutex::new(log_entries_with_skiplink_missing)),
         };
 
-        let error_response = new_db.determine_skiplink(entries.get(6).unwrap()).await;
+        let error_response = new_db
+            .determine_next_skiplink(entries.get(6).unwrap())
+            .await;
 
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
