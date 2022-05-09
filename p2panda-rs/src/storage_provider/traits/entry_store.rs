@@ -15,16 +15,35 @@ use crate::storage_provider::traits::AsStorageEntry;
 /// the required methods for inserting and querying entries from storage.
 #[async_trait]
 pub trait EntryStore<StorageEntry: AsStorageEntry> {
+    /// Insert an entry into storage.
+    async fn insert_entry(&self, value: StorageEntry) -> Result<bool, EntryStorageError>;
+
+    /// Returns entry at sequence position within an author's log.
+    async fn entry_at_seq_num(
+        &self,
+        author: &Author,
+        log_id: &LogId,
+        seq_num: &SeqNum,
+    ) -> Result<Option<StorageEntry>, EntryStorageError>;
+
     /// Get an entry by it's hash.
     async fn get_entry_by_hash(
         &self,
         hash: &Hash,
     ) -> Result<Option<StorageEntry>, EntryStorageError>;
 
-    /// Get the backlink of a passed entry.
+    /// Retrieve and verify the backlink of a passed entry.
     ///
-    /// Returns None if the entry has no backlink (it is a create), errors when a backlink
-    /// was present but could not be found in the db.
+    /// Fetches the expected backlink for the passed entry (based on SeqNum, Author & LogId), if
+    /// it is found it verifies its hash against the backlink entry hash encoded in the passed
+    /// entry.
+    ///
+    /// If either the expected backlink is not found in storage, or it doesn't match the one encoded in
+    /// the passed entry, then an error is returned. If the passed entry doesn't require a backlink
+    /// (it is at sequence number 1) then `None` is returned.
+    ///
+    /// If the backlink is retrieved and validated against the encoded entries backlink successfully
+    /// the backlink entry is returned.
     async fn try_get_backlink(
         &self,
         entry: &StorageEntry,
@@ -47,10 +66,18 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         Ok(Some(expected_backlink))
     }
 
-    /// Get the skiplink of a passed entry.
+    /// Retrieve and verify the skiplink of a passed entry.
     ///
-    /// Returns None if the passed entry has no skiplink, errors if a skiplink was present but could
-    /// not be found in the db.
+    /// Fetches the expected skiplink for the passed entry (based on SeqNum, Author & LogId), if
+    /// it is found it verifies its hash against the skiplink entry hash encoded in the passed
+    /// entry.
+    ///
+    /// If either the expected skiplink is not found in storage, or it doesn't match the oneencoded in
+    /// the passed entry, then an error is returned. If no skiplink is required for an entry at this
+    /// seq num, and it wasn't encoded with one, then `None` is returned.
+    ///  
+    /// If the skiplink is retrieved and validated against the encoded entries skiplink successfully
+    /// the skiplink entry is returned.
     async fn try_get_skiplink(
         &self,
         entry: &StorageEntry,
@@ -80,18 +107,6 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         }
         Ok(expected_skiplink)
     }
-
-    /// Insert an entry into storage.
-    async fn insert_entry(&self, value: StorageEntry) -> Result<bool, EntryStorageError>;
-
-    /// Returns entry at sequence position within an author's log.
-    async fn entry_at_seq_num(
-        &self,
-        author: &Author,
-        log_id: &LogId,
-        seq_num: &SeqNum,
-    ) -> Result<Option<StorageEntry>, EntryStorageError>;
-
     /// Returns the latest Bamboo entry of an author's log.
     async fn latest_entry(
         &self,
@@ -113,29 +128,11 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         log_id: &LogId,
         seq_num: &SeqNum,
         max_number_of_entries: usize,
-    ) -> Result<Option<Vec<StorageEntry>>, EntryStorageError> {
-        let mut entries: Vec<StorageEntry> = Vec::new();
-        let mut seq_num = *seq_num;
+    ) -> Result<Option<Vec<StorageEntry>>, EntryStorageError>;
 
-        while entries.len() < max_number_of_entries {
-            match self.entry_at_seq_num(author, log_id, &seq_num).await? {
-                Some(next_entry) => entries.push(next_entry),
-                // If the first requested seq num can't be found then we return with a None value.
-                None if entries.is_empty() => return Ok(None),
-                None => break,
-            };
-
-            match seq_num.next() {
-                Some(next_seq_num) => seq_num = next_seq_num,
-                None => break,
-            };
-        }
-        Ok(Some(entries))
-    }
-
-    /// Determine skiplink entry hash ("lipmaa"-link) for entry in this log, return `None` when no
-    /// skiplink is required for the next entry.
-    async fn determine_skiplink(
+    /// Determine skiplink entry hash ("lipmaa"-link) for the entry following the one passed, return
+    /// `None` when no skiplink is required for the next entry.
+    async fn determine_next_skiplink(
         &self,
         entry: &StorageEntry,
     ) -> Result<Option<Hash>, EntryStorageError> {
@@ -160,6 +157,13 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 
         entry_skiplink_hash
     }
+
+    async fn get_all_lipmaa_entries_for_entry(
+        &self,
+        author_id: Author,
+        log_id: LogId,
+        seq_num: SeqNum,
+    ) -> Result<Vec<StorageEntry>, EntryStorageError>;
 }
 
 #[cfg(test)]
@@ -168,6 +172,7 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
 
     use async_trait::async_trait;
+    use bamboo_rs_core_ed25519_yasmf::lipmaa;
     use rstest::rstest;
 
     use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
@@ -183,6 +188,18 @@ pub mod tests {
     use crate::test_utils::fixtures::{
         entry, entry_signed_encoded, key_pair, operation_encoded, random_key_pair, schema,
     };
+
+    // Remove once https://github.com/pietgeursen/lipmaa-link/pull/3 merged in lipma-link
+    pub fn get_lipmaa_links_back_to_root(mut n: u64) -> Vec<u64> {
+        let mut path = Vec::new();
+
+        while n > 0 {
+            n = lipmaa(n);
+            path.push(n);
+        }
+
+        path
+    }
 
     /// Implement `EntryStore` trait on `SimplestStorageProvider`
     #[async_trait]
@@ -239,6 +256,32 @@ pub mod tests {
             Ok(latest_entry.cloned())
         }
 
+        async fn get_next_n_entries_after_seq(
+            &self,
+            author: &Author,
+            log_id: &LogId,
+            seq_num: &SeqNum,
+            max_number_of_entries: usize,
+        ) -> Result<Option<Vec<StorageEntry>>, EntryStorageError> {
+            let mut entries: Vec<StorageEntry> = Vec::new();
+            let mut seq_num = *seq_num;
+
+            while entries.len() < max_number_of_entries {
+                match self.entry_at_seq_num(author, log_id, &seq_num).await? {
+                    Some(next_entry) => entries.push(next_entry),
+                    // If the first requested seq num can't be found then we return with a None value.
+                    None if entries.is_empty() => return Ok(None),
+                    None => break,
+                };
+
+                match seq_num.next() {
+                    Some(next_seq_num) => seq_num = next_seq_num,
+                    None => break,
+                };
+            }
+            Ok(Some(entries))
+        }
+
         /// Return vector of all entries of a given schema
         async fn by_schema(
             &self,
@@ -253,6 +296,37 @@ pub mod tests {
                 .collect();
 
             Ok(entries)
+        }
+
+        async fn get_all_lipmaa_entries_for_entry(
+            &self,
+            author: Author,
+            log_id: LogId,
+            initial_seq_num: SeqNum,
+        ) -> Result<Vec<StorageEntry>, EntryStorageError> {
+            let seq_num = initial_seq_num.as_u64();
+            let cert_pool_seq_nums: Vec<SeqNum> = get_lipmaa_links_back_to_root(seq_num)
+                .iter()
+                // Unwrapiing as we know this is a valid sequence number
+                .map(|seq_num| SeqNum::new(*seq_num).unwrap())
+                .collect();
+            let mut cert_pool: Vec<StorageEntry> = Vec::new();
+
+            for seq_num in cert_pool_seq_nums {
+                let entry = match self.entry_at_seq_num(&author, &log_id, &seq_num).await? {
+                    Some(entry) => entry,
+                    None => {
+                        if seq_num == initial_seq_num {
+                            return Err(EntryStorageError::InitialCertPoolEntryMissing);
+                        } else {
+                            return Err(EntryStorageError::CertPoolEntryMissing(seq_num.as_u64()));
+                        }
+                    }
+                };
+                cert_pool.push(entry);
+            }
+
+            Ok(cert_pool)
         }
     }
 
@@ -405,11 +479,11 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn can_determine_skiplink(test_db: SimplestStorageProvider) {
+    async fn can_determine_next_skiplink(test_db: SimplestStorageProvider) {
         let entries = test_db.entries.lock().unwrap().clone();
         for seq_num in 1..10 {
             let current_entry = entries.get(seq_num - 1).unwrap();
-            let next_entry_skiplink = test_db.determine_skiplink(current_entry).await;
+            let next_entry_skiplink = test_db.determine_next_skiplink(current_entry).await;
             assert!(next_entry_skiplink.is_ok());
             if SKIPLINK_ENTRIES.contains(&((seq_num + 1) as u64)) {
                 assert!(next_entry_skiplink.unwrap().is_some());
@@ -438,7 +512,9 @@ pub mod tests {
             entries: Arc::new(Mutex::new(log_entries_with_skiplink_missing)),
         };
 
-        let error_response = new_db.determine_skiplink(entries.get(6).unwrap()).await;
+        let error_response = new_db
+            .determine_next_skiplink(entries.get(6).unwrap())
+            .await;
 
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
