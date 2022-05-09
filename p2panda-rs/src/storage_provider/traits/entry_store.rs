@@ -160,9 +160,9 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 
     async fn get_all_lipmaa_entries_for_entry(
         &self,
-        author_id: Author,
-        log_id: LogId,
-        seq_num: SeqNum,
+        author_id: &Author,
+        log_id: &LogId,
+        seq_num: &SeqNum,
     ) -> Result<Vec<StorageEntry>, EntryStorageError>;
 }
 
@@ -300,9 +300,9 @@ pub mod tests {
 
         async fn get_all_lipmaa_entries_for_entry(
             &self,
-            author: Author,
-            log_id: LogId,
-            initial_seq_num: SeqNum,
+            author: &Author,
+            log_id: &LogId,
+            initial_seq_num: &SeqNum,
         ) -> Result<Vec<StorageEntry>, EntryStorageError> {
             let seq_num = initial_seq_num.as_u64();
             let cert_pool_seq_nums: Vec<SeqNum> = get_lipmaa_links_back_to_root(seq_num)
@@ -313,7 +313,7 @@ pub mod tests {
             let mut cert_pool: Vec<StorageEntry> = Vec::new();
 
             for seq_num in cert_pool_seq_nums {
-                let entry = match self.entry_at_seq_num(&author, &log_id, &seq_num).await? {
+                let entry = match self.entry_at_seq_num(author, log_id, &seq_num).await? {
                     Some(entry) => Ok(entry),
                     None => Err(EntryStorageError::CertPoolEntryMissing(seq_num.as_u64())),
                 }?;
