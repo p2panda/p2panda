@@ -15,6 +15,17 @@ use crate::storage_provider::traits::AsStorageEntry;
 /// the required methods for inserting and querying entries from storage.
 #[async_trait]
 pub trait EntryStore<StorageEntry: AsStorageEntry> {
+    /// Insert an entry into storage.
+    async fn insert_entry(&self, value: StorageEntry) -> Result<bool, EntryStorageError>;
+
+    /// Returns entry at sequence position within an author's log.
+    async fn entry_at_seq_num(
+        &self,
+        author: &Author,
+        log_id: &LogId,
+        seq_num: &SeqNum,
+    ) -> Result<Option<StorageEntry>, EntryStorageError>;
+
     /// Get an entry by it's hash.
     async fn get_entry_by_hash(
         &self,
@@ -96,18 +107,6 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         }
         Ok(expected_skiplink)
     }
-
-    /// Insert an entry into storage.
-    async fn insert_entry(&self, value: StorageEntry) -> Result<bool, EntryStorageError>;
-
-    /// Returns entry at sequence position within an author's log.
-    async fn entry_at_seq_num(
-        &self,
-        author: &Author,
-        log_id: &LogId,
-        seq_num: &SeqNum,
-    ) -> Result<Option<StorageEntry>, EntryStorageError>;
-
     /// Returns the latest Bamboo entry of an author's log.
     async fn latest_entry(
         &self,
