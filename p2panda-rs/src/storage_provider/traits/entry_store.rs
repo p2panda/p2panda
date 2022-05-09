@@ -157,6 +157,13 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 
         entry_skiplink_hash
     }
+
+    async fn get_all_lipmaa_entries_for_entry(
+        &self,
+        author_id: Author,
+        log_id: LogId,
+        seq_num: SeqNum,
+    ) -> Result<Vec<StorageEntry>, EntryStorageError>;
 }
 
 #[cfg(test)]
@@ -165,6 +172,7 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
 
     use async_trait::async_trait;
+    use bamboo_rs_core_ed25519_yasmf::lipmaa;
     use rstest::rstest;
 
     use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
@@ -180,6 +188,18 @@ pub mod tests {
     use crate::test_utils::fixtures::{
         entry, entry_signed_encoded, key_pair, operation_encoded, random_key_pair, schema,
     };
+
+    // Remove once https://github.com/pietgeursen/lipmaa-link/pull/3 merged in lipma-link
+    pub fn get_lipmaa_links_back_to_root(mut n: u64) -> Vec<u64> {
+        let mut path = Vec::new();
+
+        while n > 0 {
+            n = lipmaa(n);
+            path.push(n);
+        }
+
+        path
+    }
 
     /// Implement `EntryStore` trait on `SimplestStorageProvider`
     #[async_trait]
@@ -276,6 +296,39 @@ pub mod tests {
                 .collect();
 
             Ok(entries)
+        }
+
+        async fn get_all_lipmaa_entries_for_entry(
+            &self,
+            author: Author,
+            log_id: LogId,
+            initial_seq_num: SeqNum,
+        ) -> Result<Vec<StorageEntry>, EntryStorageError> {
+            let seq_num = initial_seq_num.as_u64();
+            let cert_pool_seq_nums: Vec<SeqNum> = get_lipmaa_links_back_to_root(seq_num)
+                .iter()
+                // Unwrapiing as we know this is a valid sequence number
+                .map(|seq_num| SeqNum::new(*seq_num).unwrap())
+                .collect();
+            let mut cert_pool: Vec<StorageEntry> = Vec::new();
+
+            for seq_num in cert_pool_seq_nums {
+                let entry = match self.entry_at_seq_num(&author, &log_id, &seq_num).await? {
+                    Some(entry) => entry,
+                    None => {
+                        if seq_num == initial_seq_num {
+                            return Err(EntryStorageError::Custom(
+                                "Initial entry for requested cert pool not found".into(),
+                            ));
+                        } else {
+                            return Err(EntryStorageError::Custom("Entry required for requested certificate pool missing at seq num: xx".into()));
+                        }
+                    }
+                };
+                cert_pool.push(entry);
+            }
+
+            Ok(cert_pool)
         }
     }
 
