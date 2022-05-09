@@ -158,6 +158,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         entry_skiplink_hash
     }
 
+    /// Get all entries which make up the certificate pool for the given entry.
     async fn get_all_lipmaa_entries_for_entry(
         &self,
         author_id: &Author,
