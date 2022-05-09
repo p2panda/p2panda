@@ -314,15 +314,9 @@ pub mod tests {
 
             for seq_num in cert_pool_seq_nums {
                 let entry = match self.entry_at_seq_num(&author, &log_id, &seq_num).await? {
-                    Some(entry) => entry,
-                    None => {
-                        if seq_num == initial_seq_num {
-                            return Err(EntryStorageError::InitialCertPoolEntryMissing);
-                        } else {
-                            return Err(EntryStorageError::CertPoolEntryMissing(seq_num.as_u64()));
-                        }
-                    }
-                };
+                    Some(entry) => Ok(entry),
+                    None => Err(EntryStorageError::CertPoolEntryMissing(seq_num.as_u64())),
+                }?;
                 cert_pool.push(entry);
             }
 
