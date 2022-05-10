@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
+use mockall::automock;
 
 use crate::entry::LogId;
 use crate::entry::SeqNum;
@@ -8,7 +9,6 @@ use crate::identity::Author;
 use crate::schema::SchemaId;
 use crate::storage_provider::errors::EntryStorageError;
 use crate::storage_provider::traits::AsStorageEntry;
-use mockall::automock;
 
 /// Trait which handles all storage actions relating to `Entry`.
 ///
