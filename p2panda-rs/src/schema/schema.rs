@@ -5,9 +5,7 @@ use std::fmt::Display;
 
 use crate::cddl::generate_cddl_definition;
 use crate::schema::system::{SchemaFieldView, SchemaView};
-use crate::schema::{FieldType, SchemaError, SchemaId};
-
-use super::schema_id::SchemaVersion;
+use crate::schema::{FieldType, SchemaError, SchemaId, SchemaVersion};
 
 /// The key of a schema field
 type FieldKey = String;

@@ -2,15 +2,14 @@
 
 use std::fmt::Display;
 
-use crate::document::{DocumentBuilderError, DocumentId, DocumentView, DocumentViewId};
+use crate::document::{
+    DocumentBuilderError, DocumentId, DocumentView, DocumentViewFields, DocumentViewId,
+    DocumentViewValue,
+};
 use crate::graph::Graph;
 use crate::identity::Author;
 use crate::operation::{AsOperation, OperationId, OperationWithMeta};
 use crate::schema::SchemaId;
-
-use crate::document::document_view_fields::DocumentViewFields;
-
-use super::document_view_fields::DocumentViewValue;
 
 /// Construct a graph from a list of operations.
 pub(super) fn build_graph(
