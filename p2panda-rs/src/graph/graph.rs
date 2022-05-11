@@ -64,10 +64,11 @@ where
 
 /// An internal struct which represents a node in the graph and contains generic data.
 #[derive(Debug, PartialEq, Clone)]
-pub struct Node<
+pub struct Node<K, V>
+where
     K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
     V: PartialEq + Clone + Debug,
-> {
+{
     key: K,
     data: V,
     previous: Vec<K>,
@@ -92,11 +93,10 @@ impl<V: PartialEq + Clone + Debug> GraphData<V> {
     }
 }
 
-impl<
-        'a,
-        K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
-        V: PartialEq + Clone + Debug,
-    > Node<K, V>
+impl<'a, K, V> Node<K, V>
+where
+    K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
+    V: PartialEq + Clone + Debug,
 {
     /// Returns true if this node is the root of this graph.
     fn is_root(&self) -> bool {
@@ -133,11 +133,10 @@ impl<
     }
 }
 
-impl<
-        'a,
-        K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
-        V: PartialEq + Clone + Debug,
-    > Graph<K, V>
+impl<'a, K, V> Graph<K, V>
+where
+    K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
+    V: PartialEq + Clone + Debug,
 {
     /// Instantiate a new empty graph.
     pub fn new() -> Self {
@@ -238,7 +237,7 @@ impl<
         Some(next_nodes)
     }
 
-    /// Sorts the graph topologically and returns the sorted
+    /// Sorts the graph topologically and returns the result.
     pub fn walk_from(&'a self, key: &K) -> Result<GraphData<V>, GraphError> {
         let root_node = match self.get_node(key) {
             Some(node) => Ok(node),
@@ -336,11 +335,10 @@ impl<
     }
 }
 
-impl<
-        'a,
-        K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
-        V: PartialEq + Clone + Debug,
-    > Default for Graph<K, V>
+impl<'a, K, V> Default for Graph<K, V>
+where
+    K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
+    V: PartialEq + Clone + Debug,
 {
     fn default() -> Self {
         Self::new()

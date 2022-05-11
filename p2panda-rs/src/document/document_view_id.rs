@@ -65,23 +65,6 @@ impl DocumentViewId {
         }
         id_str
     }
-
-    /// Returns a hash over the sorted graph tips constituting this view id.
-    ///
-    /// Use this as a unique identifier for a document if you need a value with a limited size. The
-    /// document view id itself grows with the number of graph tips that the document has, which
-    /// may not be desirable for an identifier.
-    ///
-    /// Keep in mind that when you refer to document views with this hash value it will not be
-    /// possible to recover the document view id from it.
-    pub fn hash(&self) -> Hash {
-        let graph_tip_bytes = self
-            .sorted()
-            .into_iter()
-            .flat_map(|graph_tip| graph_tip.as_hash().to_bytes())
-            .collect();
-        Hash::new_from_bytes(graph_tip_bytes).unwrap()
-    }
 }
 
 impl fmt::Display for DocumentViewId {
@@ -91,6 +74,12 @@ impl fmt::Display for DocumentViewId {
             write!(f, "{}{}", separator, operation_id.as_hash().short_str())?;
         }
         Ok(())
+    }
+}
+
+impl std::hash::Hash for DocumentViewId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.sorted().hash(state);
     }
 }
 
@@ -207,8 +196,8 @@ impl From<Hash> for DocumentViewId {
 
 /// Convenience method converting a hash string into a document view id.
 ///
-/// Converts a string formatted document view id into a `DocumentViewId`. Expects
-/// multi-hash ids to be hash strings seperated by an `_` character.
+/// Converts a string formatted document view id into a `DocumentViewId`. Expects multi-hash ids to
+/// be hash strings seperated by an `_` character.
 impl FromStr for DocumentViewId {
     type Err = HashError;
 
@@ -226,6 +215,9 @@ impl FromStr for DocumentViewId {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::Hash as StdHash;
+
     use rstest::rstest;
 
     use crate::hash::Hash;
@@ -268,7 +260,6 @@ mod tests {
     #[test]
     fn debug_representation() {
         let document_view_id = DEFAULT_HASH.parse::<DocumentViewId>().unwrap();
-
         assert_eq!(format!("{}", document_view_id), "496543");
 
         let operation_1 = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
@@ -309,6 +300,17 @@ mod tests {
         let view_id_1 = DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]);
         let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);
         assert_eq!(view_id_1, view_id_2);
+    }
+
+    #[rstest]
+    fn hash_equality(
+        #[from(random_operation_id)] operation_id_1: OperationId,
+        #[from(random_operation_id)] operation_id_2: OperationId,
+    ) {
+        let mut hasher = DefaultHasher::default();
+        let view_id_1 = DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]);
+        let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);
+        assert_eq!(view_id_1.hash(&mut hasher), view_id_2.hash(&mut hasher));
     }
 
     #[rstest]
@@ -372,17 +374,5 @@ mod tests {
         );
 
         assert_eq!(result.unwrap_err().to_string(), expected_result.to_string());
-    }
-
-    #[rstest]
-    fn document_view_hash(
-        #[from(random_operation_id)] operation_id_1: OperationId,
-        #[from(random_operation_id)] operation_id_2: OperationId,
-    ) {
-        let view_id_1 = DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]);
-        assert!(view_id_1.hash().validate().is_ok());
-
-        let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);
-        assert_eq!(view_id_1.hash(), view_id_2.hash());
     }
 }
