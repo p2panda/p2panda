@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use async_trait::async_trait;
+use mockall::automock;
 
 use crate::document::DocumentId;
 use crate::entry::LogId;
@@ -12,6 +13,7 @@ use crate::storage_provider::traits::AsStorageLog;
 ///
 /// This trait should be implemented on the root storage provider struct. It's definitions
 /// make up the required methods for inserting and querying logs from storage.
+#[automock]
 #[async_trait]
 pub trait LogStore<StorageLog: AsStorageLog> {
     /// Insert a log into storage.
@@ -31,10 +33,10 @@ pub trait LogStore<StorageLog: AsStorageLog> {
     ///
     /// If no log has been previously registered for this document it
     /// automatically returns the next unused log_id.
-    async fn find_document_log_id(
+    async fn find_document_log_id<'a>(
         &self,
         author: &Author,
-        document_id: Option<&DocumentId>,
+        document_id: Option<&'a DocumentId>,
     ) -> Result<LogId, LogStorageError> {
         // Determine log_id for this document when a hash was given
         let document_log_id = match document_id {
