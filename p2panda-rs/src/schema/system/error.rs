@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-use crate::{document::DocumentViewValue, operation::OperationValue};
+use crate::document::DocumentViewValue;
 
 /// Custom error types for system schema views.
 #[derive(Error, Debug)]

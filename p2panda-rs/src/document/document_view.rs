@@ -2,13 +2,10 @@
 
 //! Types and methods for deriving and maintaining materialised documents.
 use std::collections::btree_map::Iter as BTreeMapIter;
-use std::collections::BTreeMap;
 use std::fmt::Display;
 
 use crate::document::DocumentViewId;
-use crate::operation::OperationValue;
-
-use super::document_view_fields::{DocumentViewFields, DocumentViewValue};
+use crate::document::{DocumentViewFields, DocumentViewValue};
 
 type FieldKey = String;
 
@@ -82,7 +79,7 @@ mod tests {
     use crate::document::document_view_fields::DocumentViewValue;
     use crate::document::{reduce, DocumentId};
     use crate::identity::Author;
-    use crate::operation::{Operation, OperationId, OperationValue, OperationWithMeta, Relation};
+    use crate::operation::{OperationId, OperationValue, OperationWithMeta, Relation};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         create_operation, document_id, document_view_id, fields, public_key, random_operation_id,

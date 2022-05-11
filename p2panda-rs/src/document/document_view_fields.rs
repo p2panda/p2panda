@@ -11,17 +11,25 @@ pub struct DocumentViewFields(BTreeMap<String, DocumentViewValue>);
 
 /// An enum encapsulating the current value of a document fiew field as well as the id of
 /// the operation it came from.
+///
+/// The two variants are used for when the value is set, or if the document view has been deleted.
+/// In the case of a deleted document, we still want to know which operation performed this delete,
+/// therefore we wrap the operation id still.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DocumentViewValue {
+    /// The value of this field and it's corresponding operation id.
     Value(OperationId, OperationValue),
+
+    /// The operation id of a field on a deleted document.
     Deleted(OperationId),
 }
 
 impl DocumentViewValue {
+    /// Get the OperationId of this value.
     pub fn id(&self) -> &OperationId {
         match self {
-            DocumentViewValue::Value(id, _) => &id,
-            DocumentViewValue::Deleted(id) => &id,
+            DocumentViewValue::Value(id, _) => id,
+            DocumentViewValue::Deleted(id) => id,
         }
     }
 }
@@ -64,5 +72,11 @@ impl DocumentViewFields {
     /// Returns an iterator of existing document view fields.
     pub fn iter(&self) -> Iter<String, DocumentViewValue> {
         self.0.iter()
+    }
+}
+
+impl Default for DocumentViewFields {
+    fn default() -> Self {
+        Self::new()
     }
 }

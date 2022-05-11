@@ -40,7 +40,6 @@ pub(super) fn build_graph(
     Ok(graph)
 }
 
-type FieldKey = String;
 type IsEdited = bool;
 type IsDeleted = bool;
 

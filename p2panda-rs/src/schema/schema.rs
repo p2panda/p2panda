@@ -105,10 +105,9 @@ impl Display for Schema {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
     use std::convert::TryInto;
 
-    use rstest::{fixture, rstest};
+    use rstest::rstest;
 
     use crate::document::{DocumentView, DocumentViewFields, DocumentViewId, DocumentViewValue};
     use crate::operation::{OperationId, OperationValue, PinnedRelationList};
