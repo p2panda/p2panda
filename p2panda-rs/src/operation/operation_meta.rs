@@ -65,6 +65,21 @@ impl OperationWithMeta {
     }
 }
 
+#[cfg(test)]
+impl OperationWithMeta {
+    pub fn new_test_operation(
+        id: &OperationId,
+        public_key: &Author,
+        operation: &Operation,
+    ) -> Self {
+        Self {
+            operation_id: id.clone(),
+            public_key: public_key.clone(),
+            operation: operation.clone(),
+        }
+    }
+}
+
 impl AsOperation for OperationWithMeta {
     /// Returns action type of operation.
     fn action(&self) -> OperationAction {
