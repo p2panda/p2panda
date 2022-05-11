@@ -25,7 +25,7 @@ Highlights are marked with a pancake 🥞
 - `StorageProvider` and associated traits for implementing storage solutions [#274](https://github.com/p2panda/p2panda/pull/274) `rs` 🥞
 - Implement `Display` trait for various structs [#281](https://github.com/p2panda/p2panda/pull/281) `rs`
 - Implement document view id hash as a limited-size identifier for document views [#277](https://github.com/p2panda/p2panda/pull/277) `rs`
-- Additional methods on `EntryStore` needed for replication [130](https://github.com/p2panda/p2panda/pull/310) `rs`
+- Additional methods on `EntryStore` needed for replication [310](https://github.com/p2panda/p2panda/pull/310) `rs`
 
 ## Changed
 
