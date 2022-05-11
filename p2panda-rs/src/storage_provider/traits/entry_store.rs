@@ -450,8 +450,14 @@ pub mod tests {
     ) {
         let entries = test_db.entries.lock().unwrap().clone();
 
+        let backlink = if seq_num < 2 {
+            None
+        } else {
+            entries.get(seq_num - 2).cloned()
+        };
+
         assert_eq!(
-            entries.get(seq_num - 2).cloned(),
+            backlink,
             test_db
                 .try_get_backlink(&entries[seq_num - 1])
                 .await
