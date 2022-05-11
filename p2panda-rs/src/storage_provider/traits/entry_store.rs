@@ -191,13 +191,13 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
 
     use async_trait::async_trait;
-    use bamboo_rs_core_ed25519_yasmf::lipmaa;
+    use lipmaa_link::get_lipmaa_links_back_to;
     use rstest::rstest;
 
     use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
     use crate::hash::Hash;
     use crate::identity::{Author, KeyPair};
-    use crate::operation::{AsOperation, OperationEncoded};
+    use crate::operation::{AsOperation, Operation, OperationEncoded};
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::EntryStorageError;
     use crate::storage_provider::traits::test_utils::{
@@ -207,18 +207,6 @@ pub mod tests {
     use crate::test_utils::fixtures::{
         entry, entry_signed_encoded, key_pair, operation_encoded, random_key_pair, schema,
     };
-
-    // Remove once https://github.com/pietgeursen/lipmaa-link/pull/3 merged in lipma-link
-    pub fn get_lipmaa_links_back_to_root(mut n: u64) -> Vec<u64> {
-        let mut path = Vec::new();
-
-        while n > 0 {
-            n = lipmaa(n);
-            path.push(n);
-        }
-
-        path
-    }
 
     /// Implement `EntryStore` trait on `SimplestStorageProvider`
     #[async_trait]
@@ -322,7 +310,7 @@ pub mod tests {
             initial_seq_num: &SeqNum,
         ) -> Result<Vec<StorageEntry>, EntryStorageError> {
             let seq_num = initial_seq_num.as_u64();
-            let cert_pool_seq_nums: Vec<SeqNum> = get_lipmaa_links_back_to_root(seq_num)
+            let cert_pool_seq_nums: Vec<SeqNum> = get_lipmaa_links_back_to(seq_num, 1)
                 .iter()
                 // Unwrapping as we know this is a valid sequence number
                 .map(|seq_num| SeqNum::new(*seq_num).unwrap())
@@ -454,9 +442,12 @@ pub mod tests {
         );
     }
 
-    #[rstest(case::seq_num_1(1), case::seq_num_2(2), case::seq_num_3(3))]
+    #[rstest]
     #[async_std::test]
-    async fn try_get_backlink(#[case] seq_num: usize, test_db: SimplestStorageProvider) {
+    async fn try_get_backlink(
+        #[values[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 ,15 ,16]] seq_num: usize,
+        test_db: SimplestStorageProvider,
+    ) {
         let entries = test_db.entries.lock().unwrap().clone();
 
         assert_eq!(
@@ -468,26 +459,179 @@ pub mod tests {
         );
     }
 
-    #[rstest(
-        case::seq_num_4(4, 1),
-        case::seq_num_8(8, 4),
-        case::seq_num_12(12, 8),
-        case::seq_num_13(13, 4)
-    )]
+    #[rstest]
     #[async_std::test]
-    async fn try_get_skiplink(
-        #[case] seq_num: usize,
-        #[case] expected_skiplink_seq_num: usize,
+    async fn try_get_backlink_entry_missing(test_db: SimplestStorageProvider) {
+        let entries = test_db.entries.lock().unwrap().clone();
+
+        // Get the entry with seq number 2
+        let entry_at_seq_num_two = entries.get(1).unwrap();
+
+        {
+            // Remove the entry at seq_num 1, which is the expected backlink for the above seq num 2 entry
+            test_db.entries.lock().unwrap().remove(0);
+        }
+        assert_eq!(
+            test_db
+                .try_get_backlink(entry_at_seq_num_two)
+                .await
+                .unwrap_err()
+                .to_string(),
+            format!(
+                "Could not find expected backlink in database for entry with id: {}",
+                entry_at_seq_num_two.hash()
+            )
+        );
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn try_get_backlink_invalid_skiplink(
+        key_pair: KeyPair,
+        operation_encoded: OperationEncoded,
         test_db: SimplestStorageProvider,
     ) {
         let entries = test_db.entries.lock().unwrap().clone();
 
+        // Get the entry with seq number 4
+        let entry_at_seq_num_four = entries.get(3).unwrap();
+
+        // Reconstruct it with an invalid backlink
+        let entry_at_seq_num_four_with_wrong_backlink = Entry::new(
+            &entry_at_seq_num_four.log_id(),
+            Some(&Operation::from(&operation_encoded)),
+            entry_at_seq_num_four.skiplink_hash().as_ref(),
+            Some(&Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
+            &entry_at_seq_num_four.seq_num(),
+        )
+        .unwrap();
+
+        let entry_at_seq_num_four_with_wrong_backlink =
+            sign_and_encode(&entry_at_seq_num_four_with_wrong_backlink, &key_pair).unwrap();
+
+        let entry_at_seq_num_four_with_wrong_backlink = StorageEntry::new(
+            &entry_at_seq_num_four_with_wrong_backlink,
+            &operation_encoded,
+        )
+        .unwrap();
+
         assert_eq!(
-            entries.get(expected_skiplink_seq_num - 1).cloned(),
+            test_db
+                .try_get_backlink(&entry_at_seq_num_four_with_wrong_backlink)
+                .await
+                .unwrap_err()
+                .to_string(),
+            format!(
+                "The backlink hash encoded in the entry: {} did not match the expected backlink hash",
+                entry_at_seq_num_four_with_wrong_backlink.hash()
+            )
+        );
+    }
+
+    #[rstest(
+        case(1, None),
+        case(2, None),
+        case(3, None),
+        case(4, Some(1)),
+        case(5, None),
+        case(6, None),
+        case(7, None),
+        case(8, Some(4)),
+        case(9, None),
+        case(10, None),
+        case(11, None),
+        case(12, Some(8)),
+        case(13, Some(4)),
+        case(14, None),
+        case(15, None),
+        case(16, None)
+    )]
+    #[async_std::test]
+    async fn try_get_skiplink(
+        #[case] seq_num: usize,
+        #[case] expected_skiplink_seq_num: Option<usize>,
+        test_db: SimplestStorageProvider,
+    ) {
+        let entries = test_db.entries.lock().unwrap().clone();
+
+        let expected_skiplink =
+            expected_skiplink_seq_num.map(|seq_num| entries.get(seq_num - 1).cloned().unwrap());
+
+        assert_eq!(
+            expected_skiplink,
             test_db
                 .try_get_skiplink(&entries[seq_num - 1])
                 .await
                 .unwrap()
+        );
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn try_get_skiplink_entry_missing(test_db: SimplestStorageProvider) {
+        let entries = test_db.entries.lock().unwrap().clone();
+
+        // Get the entry with seq number 4
+        let entry_at_seq_num_four = entries.get(3).unwrap();
+
+        {
+            // Remove the entry at seq_num 1, which is the expected skiplink for the above seq num 4 entry
+            test_db.entries.lock().unwrap().remove(0);
+        }
+        assert_eq!(
+            test_db
+                .try_get_skiplink(entry_at_seq_num_four)
+                .await
+                .unwrap_err()
+                .to_string(),
+            format!(
+                "Could not find expected skiplink in database for entry with id: {}",
+                entry_at_seq_num_four.hash()
+            )
+        );
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn try_get_skiplink_invalid_skiplink(
+        key_pair: KeyPair,
+        operation_encoded: OperationEncoded,
+        test_db: SimplestStorageProvider,
+    ) {
+        let entries = test_db.entries.lock().unwrap().clone();
+
+        // Get the entry with seq number 4
+        let entry_at_seq_num_four = entries.get(3).unwrap();
+
+        // Reconstruct it with an invalid skiplink
+        let entry_at_seq_num_four_with_wrong_skiplink = Entry::new(
+            &entry_at_seq_num_four.log_id(),
+            Some(&Operation::from(&operation_encoded)),
+            Some(&Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
+            entry_at_seq_num_four.backlink_hash().as_ref(),
+            &entry_at_seq_num_four.seq_num(),
+        )
+        .unwrap();
+
+        let entry_at_seq_num_four_with_wrong_skiplink =
+            sign_and_encode(&entry_at_seq_num_four_with_wrong_skiplink, &key_pair).unwrap();
+
+        let entry_at_seq_num_four_with_wrong_skiplink = StorageEntry::new(
+            &entry_at_seq_num_four_with_wrong_skiplink,
+            &operation_encoded,
+        )
+        .unwrap();
+
+        assert_eq!(
+            test_db
+                .try_get_skiplink(&entry_at_seq_num_four_with_wrong_skiplink)
+                .await
+                .unwrap_err()
+                .to_string(),
+            format!(
+                "The skiplink hash encoded in the entry: {} did not match the expected lipmaa hash",
+                entry_at_seq_num_four_with_wrong_skiplink.hash()
+            )
         );
     }
 
@@ -577,6 +721,6 @@ pub mod tests {
             .map(|entry| entry.seq_num().as_u64())
             .collect();
 
-        assert_eq!(seq_nums, vec![1, 3]);
+        assert_eq!(seq_nums, vec![15, 14, 13, 4, 1]);
     }
 }
