@@ -216,7 +216,7 @@ impl FromStr for DocumentViewId {
 #[cfg(test)]
 mod tests {
     use std::collections::hash_map::DefaultHasher;
-    use std::hash::Hash as StdHash;
+    use std::hash::{Hash as StdHash, Hasher};
 
     use rstest::rstest;
 
@@ -307,10 +307,13 @@ mod tests {
         #[from(random_operation_id)] operation_id_1: OperationId,
         #[from(random_operation_id)] operation_id_2: OperationId,
     ) {
-        let mut hasher = DefaultHasher::default();
+        let mut hasher_1 = DefaultHasher::default();
+        let mut hasher_2 = DefaultHasher::default();
         let view_id_1 = DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]);
         let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);
-        assert_eq!(view_id_1.hash(&mut hasher), view_id_2.hash(&mut hasher));
+        view_id_1.hash(&mut hasher_1);
+        view_id_2.hash(&mut hasher_2);
+        assert_eq!(hasher_1.finish(), hasher_2.finish());
     }
 
     #[rstest]

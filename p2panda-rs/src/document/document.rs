@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::BTreeMap;
 use std::fmt::Display;
 
-use crate::document::{DocumentBuilderError, DocumentId, DocumentView, DocumentViewId};
+use crate::document::{
+    DocumentBuilderError, DocumentId, DocumentView, DocumentViewFields, DocumentViewId,
+    DocumentViewValue,
+};
 use crate::graph::Graph;
 use crate::identity::Author;
-use crate::operation::{AsOperation, OperationId, OperationValue, OperationWithMeta};
+use crate::operation::{AsOperation, OperationId, OperationWithMeta};
 use crate::schema::SchemaId;
 
 /// Construct a graph from a list of operations.
@@ -37,32 +39,39 @@ pub(super) fn build_graph(
     Ok(graph)
 }
 
-type FieldKey = String;
 type IsEdited = bool;
 type IsDeleted = bool;
 
 /// Reduce a list of operations into a single view.
-pub(super) fn reduce<T: AsOperation>(
-    ordered_operations: &[T],
-) -> (BTreeMap<FieldKey, OperationValue>, IsEdited, IsDeleted) {
+pub(super) fn reduce(
+    ordered_operations: &[OperationWithMeta],
+) -> (DocumentViewFields, IsEdited, IsDeleted) {
     let is_edited = ordered_operations.len() > 1;
     let mut is_deleted = false;
 
-    let mut view = BTreeMap::new();
+    let mut document_view_fields = DocumentViewFields::new();
 
     for operation in ordered_operations {
         if operation.is_delete() {
-            is_deleted = true
+            is_deleted = true;
+            for (key, _) in document_view_fields.clone().iter() {
+                document_view_fields.insert(
+                    key,
+                    DocumentViewValue::Deleted(operation.operation_id().to_owned()),
+                );
+            }
         }
 
         if let Some(fields) = operation.fields() {
             for (key, value) in fields.iter() {
-                view.insert(key.to_string(), value.to_owned());
+                let document_view_value =
+                    DocumentViewValue::Value(operation.operation_id().to_owned(), value.to_owned());
+                document_view_fields.insert(key, document_view_value);
             }
         }
     }
 
-    (view, is_edited, is_deleted)
+    (document_view_fields, is_edited, is_deleted)
 }
 
 #[derive(Debug, Clone, Default)]
@@ -258,16 +267,16 @@ impl DocumentBuilder {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
     use rstest::rstest;
 
+    use crate::document::document_view_fields::{DocumentViewFields, DocumentViewValue};
     use crate::document::DocumentId;
     use crate::identity::KeyPair;
-    use crate::operation::{Operation, OperationId, OperationValue, OperationWithMeta};
+    use crate::operation::{OperationId, OperationValue, OperationWithMeta};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, fields, random_key_pair, schema, update_operation,
+        create_operation, create_operation_with_meta, delete_operation, delete_operation_with_meta,
+        fields, random_key_pair, schema, update_operation, update_operation_with_meta,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
     use crate::test_utils::utils::operation_fields;
@@ -276,14 +285,17 @@ mod tests {
 
     #[rstest]
     fn reduces_operations(
-        create_operation: Operation,
-        update_operation: Operation,
-        delete_operation: Operation,
+        #[from(create_operation_with_meta)] create_operation: OperationWithMeta,
+        #[from(update_operation_with_meta)] update_operation: OperationWithMeta,
+        #[from(delete_operation_with_meta)] delete_operation: OperationWithMeta,
     ) {
         let (reduced_create, is_edited, is_deleted) = reduce(&[create_operation.clone()]);
         assert_eq!(
-            reduced_create.get("message").unwrap(),
-            &OperationValue::Text("Hello!".to_string())
+            *reduced_create.get("message").unwrap(),
+            DocumentViewValue::Value(
+                create_operation.operation_id().to_owned(),
+                OperationValue::Text("Hello!".to_string())
+            )
         );
         assert!(!is_edited);
         assert!(!is_deleted);
@@ -291,18 +303,21 @@ mod tests {
         let (reduced_update, is_edited, is_deleted) =
             reduce(&[create_operation.clone(), update_operation.clone()]);
         assert_eq!(
-            reduced_update.get("message").unwrap(),
-            &OperationValue::Text("Updated, hello!".to_string())
+            *reduced_update.get("message").unwrap(),
+            DocumentViewValue::Value(
+                update_operation.operation_id().to_owned(),
+                OperationValue::Text("Updated, hello!".to_string())
+            )
         );
         assert!(is_edited);
         assert!(!is_deleted);
 
         let (reduced_delete, is_edited, is_deleted) =
-            reduce(&[create_operation, update_operation, delete_operation]);
+            reduce(&[create_operation, update_operation, delete_operation.clone()]);
         // The value remains the same, but the deleted flag is true now.
         assert_eq!(
-            reduced_delete.get("message").unwrap(),
-            &OperationValue::Text("Updated, hello!".to_string())
+            *reduced_delete.get("message").unwrap(),
+            DocumentViewValue::Deleted(delete_operation.operation_id().to_owned())
         );
         assert!(is_edited);
         assert!(is_deleted);
@@ -450,10 +465,13 @@ mod tests {
 
         assert!(document.is_ok());
 
-        let mut exp_result = BTreeMap::new();
+        let mut exp_result = DocumentViewFields::new();
         exp_result.insert(
-            "name".to_string(),
-            OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
+            "name",
+            DocumentViewValue::Value(
+                penguin_3.operation_id().to_owned(),
+                OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
+            ),
         );
         let expected_graph_tips: Vec<OperationId> = vec![penguin_entry_3_hash.clone().into()];
         let expected_op_order = vec![
@@ -624,9 +642,9 @@ mod tests {
         // Here we have a collection of 2 operations
         let mut operations = vec![
             // CREATE operation: {name: "Polar Bear Cafe", owner: "Polar Bear", house-number: 12}
-            operation_1,
+            operation_1.clone(),
             // UPDATE operation: {name: "ʕ •ᴥ•ʔ Cafe!", owner: "しろくま"}
-            operation_2,
+            operation_2.clone(),
         ];
 
         // These two operations were both published by the same author and they form a simple
@@ -652,20 +670,32 @@ mod tests {
         // This process already builds, sorts and reduces the document. We can now
         // access the derived view to check it's values.
 
+        let mut expected_fields = DocumentViewFields::new();
+        expected_fields.insert(
+            "name",
+            DocumentViewValue::Value(
+                operation_2.operation_id().to_owned(),
+                OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into()),
+            ),
+        );
+        expected_fields.insert(
+            "owner",
+            DocumentViewValue::Value(
+                operation_2.operation_id().to_owned(),
+                OperationValue::Text("しろくま".into()),
+            ),
+        );
+        expected_fields.insert(
+            "house-number",
+            DocumentViewValue::Value(
+                operation_1.operation_id().to_owned(),
+                OperationValue::Integer(12),
+            ),
+        );
+
         let document_view = document.view();
 
-        assert_eq!(
-            document_view.get("name").unwrap(),
-            &OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into())
-        );
-        assert_eq!(
-            document_view.get("owner").unwrap(),
-            &OperationValue::Text("しろくま".into())
-        );
-        assert_eq!(
-            document_view.get("house-number").unwrap(),
-            &OperationValue::Integer(12)
-        );
+        assert_eq!(document_view.fields(), &expected_fields);
 
         // If another operation arrives, from a different author, which has a causal relation
         // to the original operation, then we have a new branch in the graph, it might look like
@@ -691,24 +721,21 @@ mod tests {
         // We can build the document agan now with these 3 operations:
         //
         // UPDATE operation: {name: "🐼 Cafe!"}
-        operations.push(operation_3);
+        operations.push(operation_3.clone());
 
         let document = DocumentBuilder::new(operations.clone()).build().unwrap();
         let document_view = document.view();
 
         // Here we see that "🐼 Cafe!" won the conflict, meaning it was applied after "ʕ •ᴥ•ʔ Cafe!".
-        assert_eq!(
-            document_view.get("name").unwrap(),
-            &OperationValue::Text("🐼 Cafe!!".into())
+        expected_fields.insert(
+            "name",
+            DocumentViewValue::Value(
+                operation_3.operation_id().to_owned(),
+                OperationValue::Text("🐼 Cafe!!".into()),
+            ),
         );
-        assert_eq!(
-            document_view.get("owner").unwrap(),
-            &OperationValue::Text("しろくま".into())
-        );
-        assert_eq!(
-            document_view.get("house-number").unwrap(),
-            &OperationValue::Integer(12)
-        );
+
+        assert_eq!(document_view.fields(), &expected_fields);
 
         // Now our first author publishes a 4th operation after having seen the full collection
         // of operations. This results in two links to previous operations being formed. Effectively
@@ -729,31 +756,41 @@ mod tests {
         //
 
         // UPDATE operation: { house-number: 102 }
-        operations.push(operation_4);
+        operations.push(operation_4.clone());
 
         let document = DocumentBuilder::new(operations.clone()).build().unwrap();
-        let document_view = document.view();
 
-        assert_eq!(
-            document_view.get("name").unwrap(),
-            &OperationValue::Text("🐼 Cafe!!".into())
+        expected_fields.insert(
+            "house-number",
+            DocumentViewValue::Value(
+                operation_4.operation_id().to_owned(),
+                OperationValue::Integer(102),
+            ),
         );
-        assert_eq!(
-            document_view.get("owner").unwrap(),
-            &OperationValue::Text("しろくま".into())
-        );
-        assert_eq!(
-            document_view.get("house-number").unwrap(),
-            &OperationValue::Integer(102)
-        );
+
+        assert_eq!(document.view().fields(), &expected_fields);
 
         // Finally, we want to delete the document, for this we publish a DELETE operation.
 
         // DELETE operation: {}
-        operations.push(operation_5);
+        operations.push(operation_5.clone());
 
         let document = DocumentBuilder::new(operations.clone()).build().unwrap();
 
+        expected_fields.insert(
+            "name",
+            DocumentViewValue::Deleted(operation_5.operation_id().to_owned()),
+        );
+        expected_fields.insert(
+            "owner",
+            DocumentViewValue::Deleted(operation_5.operation_id().to_owned()),
+        );
+        expected_fields.insert(
+            "house-number",
+            DocumentViewValue::Deleted(operation_5.operation_id().to_owned()),
+        );
+
+        assert_eq!(document.view().fields(), &expected_fields);
         assert!(document.is_deleted());
     }
 

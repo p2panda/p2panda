@@ -511,6 +511,7 @@ impl Node {
 mod tests {
     use rstest::rstest;
 
+    use crate::document::DocumentViewValue;
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::operation::OperationValue;
@@ -703,11 +704,14 @@ mod tests {
 
         // We can query the node for the current document state.
         let document = node.get_document(&panda_entry_1_hash);
-
+        let operation_value = match document.view().get("message") {
+            Some(DocumentViewValue::Value(_, value)) => value,
+            _ => panic!(),
+        };
         // It was last updated by Penguin, this writes over previous values.
         assert_eq!(
-            *document.view().get("message").unwrap(),
-            OperationValue::Text("And again. [Penguin]".to_string())
+            operation_value,
+            &OperationValue::Text("And again. [Penguin]".to_string())
         );
         // There should only be one document in the database.
         assert_eq!(node.get_documents().len(), 1);
@@ -839,8 +843,12 @@ mod tests {
         .unwrap();
 
         let document = node.get_document(&panda_entry_1_hash);
+        let operation_value = match document.view().get("cafe_name") {
+            Some(DocumentViewValue::Value(_, value)) => value,
+            _ => panic!(),
+        };
         assert_eq!(
-            *document.view().get("cafe_name").unwrap(),
+            *operation_value,
             OperationValue::Text("Polar Pear Cafe".to_string())
         );
 
@@ -862,9 +870,13 @@ mod tests {
         .unwrap();
 
         let document = node.get_document(&panda_entry_1_hash);
+        let operation_value = match document.view().get("cafe_name") {
+            Some(DocumentViewValue::Value(_, value)) => value,
+            _ => panic!(),
+        };
         assert_eq!(
-            *document.view().get("cafe_name").unwrap(),
-            OperationValue::Text("Polar Bear Cafe".to_string())
+            operation_value,
+            &OperationValue::Text("Polar Bear Cafe".to_string())
         );
 
         // Penguin publishes an UPDATE operation, but they haven't seen Panda's most recent entry [2]
@@ -888,9 +900,13 @@ mod tests {
         .unwrap();
 
         let document = node.get_document(&panda_entry_1_hash);
+        let operation_value = match document.view().get("cafe_name") {
+            Some(DocumentViewValue::Value(_, value)) => value,
+            _ => panic!(),
+        };
         assert_eq!(
-            *document.view().get("address").unwrap(),
-            OperationValue::Text("1, Polar Bear rd, Panda Town".to_string())
+            operation_value,
+            &OperationValue::Text("Polar Bear Cafe".to_string())
         );
 
         // Penguin publishes another UPDATE operation, this time they have replicated all entries
@@ -914,9 +930,14 @@ mod tests {
         .unwrap();
 
         let document = node.get_document(&panda_entry_1_hash);
+
+        let operation_value = match document.view().get("cafe_name") {
+            Some(DocumentViewValue::Value(_, value)) => value,
+            _ => panic!(),
+        };
         assert_eq!(
-            *document.view().get("cafe_name").unwrap(),
-            OperationValue::Text("Polar Bear Café".to_string())
+            operation_value,
+            &OperationValue::Text("Polar Bear Café".to_string())
         );
 
         // As more operations are published, the graph could look like this:
