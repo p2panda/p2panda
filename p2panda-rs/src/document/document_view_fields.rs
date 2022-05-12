@@ -3,7 +3,9 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
-use crate::operation::{OperationId, OperationValue};
+use crate::operation::{
+    AsOperation, Operation, OperationFields, OperationId, OperationValue, OperationWithMeta,
+};
 
 /// A key value map of field keys to DocumentViewValues.
 #[derive(Clone, Debug, PartialEq)]
@@ -38,6 +40,17 @@ impl DocumentViewFields {
     /// Creates a new fields instance to add data to.
     pub fn new() -> Self {
         Self(BTreeMap::new())
+    }
+
+    /// Creates a new populated fields instance from existing OperationFields and OperationId.
+    pub fn new_from_operation_fields(&self, fields: &OperationFields, id: &OperationId) -> Self {
+        let mut document_view_fields = DocumentViewFields::new();
+
+        for (name, value) in fields.iter() {
+            document_view_fields.insert(name, DocumentViewValue::Value(id.clone(), value.clone()));
+        }
+
+        document_view_fields
     }
 
     /// Insert a new field to this instance.
@@ -78,5 +91,22 @@ impl DocumentViewFields {
 impl Default for DocumentViewFields {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl From<OperationWithMeta> for DocumentViewFields {
+    fn from(operation: OperationWithMeta) -> Self {
+        let mut document_view_fields = DocumentViewFields::new();
+
+        if let Some(fields) = operation.fields() {
+            for (name, value) in fields.iter() {
+                document_view_fields.insert(
+                    name,
+                    DocumentViewValue::Value(operation.operation_id().clone(), value.clone()),
+                );
+            }
+        }
+
+        document_view_fields
     }
 }
