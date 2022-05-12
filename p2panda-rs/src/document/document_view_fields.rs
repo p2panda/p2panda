@@ -43,7 +43,7 @@ impl DocumentViewFields {
     }
 
     /// Creates a new populated fields instance from existing OperationFields and OperationId.
-    pub fn new_from_operation_fields(&self, fields: &OperationFields, id: &OperationId) -> Self {
+    pub fn new_from_operation_fields(id: &OperationId, fields: &OperationFields) -> Self {
         let mut document_view_fields = DocumentViewFields::new();
 
         for (name, value) in fields.iter() {
