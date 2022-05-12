@@ -345,7 +345,7 @@ mod tests {
         relation_field.insert(
             "type",
             DocumentViewValue::Value(
-                operation_id.clone(),
+                operation_id,
                 FieldType::Relation(address_schema.clone()).into(),
             ),
         );

@@ -4,7 +4,7 @@ use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
 use crate::operation::{
-    AsOperation, Operation, OperationFields, OperationId, OperationValue, OperationWithMeta,
+    AsOperation, OperationFields, OperationId, OperationValue, OperationWithMeta,
 };
 
 /// A key value map of field keys to DocumentViewValues.

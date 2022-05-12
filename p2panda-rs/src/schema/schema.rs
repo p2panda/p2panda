@@ -291,7 +291,7 @@ mod tests {
             "capacity",
             "int",
             invalid_document_view_id,
-            field_operation_id.clone(),
+            field_operation_id,
         );
 
         // Passing field with invalid DocumentViewId should fail
