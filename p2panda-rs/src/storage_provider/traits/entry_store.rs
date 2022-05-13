@@ -19,7 +19,7 @@ use crate::storage_provider::traits::AsStorageEntry;
 pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// Insert an entry into storage.
     ///
-    /// Returns `true` if insertion was succesful, returns `false` if no error occured but an
+    /// Returns `true` if insertion was successful, returns `false` if no error occured but an
     /// unexpected number of insertions happened. Errors if a fatal storage error occured.
     async fn insert_entry(&self, value: StorageEntry) -> Result<bool, EntryStorageError>;
 
@@ -81,12 +81,12 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// it is found it verifies its hash against the skiplink entry hash encoded in the passed
     /// entry.
     ///
-    /// If either the expected skiplink is not found in storage, or it doesn't match the oneencoded in
-    /// the passed entry, then an error is returned. If no skiplink is required for an entry at this
-    /// seq num, and it wasn't encoded with one, then `None` is returned.
-    ///  
-    /// If the skiplink is retrieved and validated against the encoded entries skiplink successfully
-    /// the skiplink entry is returned.
+    /// If either the expected skiplink is not found in storage, or it doesn't match the one
+    /// encoded in the passed entry, then an error is returned. If no skiplink is required for an
+    /// entry at this seq num, and it wasn't encoded with one, then `None` is returned.
+    ///
+    /// If the skiplink is retrieved and validated against the encoded entries skiplink
+    /// successfully the skiplink entry is returned.
     async fn try_get_skiplink(
         &self,
         entry: &StorageEntry,
