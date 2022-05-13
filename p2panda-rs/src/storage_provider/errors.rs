@@ -85,7 +85,7 @@ pub enum EntryStorageError {
     #[error("Could not find expected skiplink entry in database")]
     ExpectedNextSkiplinkMissing,
 
-    /// Error which originates in `get_all_lipmaa_entries_for_entry` if an entry in
+    /// Error which originates in `get_all_skiplink_entries_for_entry` if an entry in
     /// the requested cert pool is missing.
     #[error("Entry required for requested certificate pool missing at seq num: {0}")]
     CertPoolEntryMissing(u64),

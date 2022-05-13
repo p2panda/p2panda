@@ -138,7 +138,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     ///
     /// Returns a vector of entries the length of which will not be greater than the max number
     /// passed into the method. Fewer may be returned if the end of the log is reached.
-    async fn get_next_n_entries_after_seq(
+    async fn get_paginated_log_entries(
         &self,
         author: &Author,
         log_id: &LogId,
@@ -179,7 +179,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// Returns a result containing vector of entries wrapped in an option. If no entry
     /// could be found at this author - log - seq number location then an error is
     /// returned.
-    async fn get_all_lipmaa_entries_for_entry(
+    async fn get_all_skiplink_entries_for_entry(
         &self,
         author_id: &Author,
         log_id: &LogId,
@@ -265,8 +265,8 @@ pub mod tests {
             Ok(latest_entry.cloned())
         }
 
-        /// Returns next n entries in an authors log.
-        async fn get_next_n_entries_after_seq(
+        /// Returns the given range of log entries.
+        async fn get_paginated_log_entries(
             &self,
             author: &Author,
             log_id: &LogId,
@@ -305,7 +305,7 @@ pub mod tests {
             Ok(entries)
         }
 
-        async fn get_all_lipmaa_entries_for_entry(
+        async fn get_all_skiplink_entries_for_entry(
             &self,
             author: &Author,
             log_id: &LogId,
@@ -695,19 +695,19 @@ pub mod tests {
         let log_id = LogId::default();
 
         let five_entries = test_db
-            .get_next_n_entries_after_seq(&author, &log_id, &SeqNum::new(1).unwrap(), 5)
+            .get_paginated_log_entries(&author, &log_id, &SeqNum::new(1).unwrap(), 5)
             .await
             .unwrap();
         assert_eq!(five_entries.len(), 5);
 
         let end_of_log_reached = test_db
-            .get_next_n_entries_after_seq(&author, &log_id, &SeqNum::new(1).unwrap(), 1000)
+            .get_paginated_log_entries(&author, &log_id, &SeqNum::new(1).unwrap(), 1000)
             .await
             .unwrap();
         assert_eq!(end_of_log_reached.len(), 16);
 
         let first_entry_not_found = test_db
-            .get_next_n_entries_after_seq(&author, &log_id, &SeqNum::new(10000).unwrap(), 1)
+            .get_paginated_log_entries(&author, &log_id, &SeqNum::new(10000).unwrap(), 1)
             .await
             .unwrap();
         assert!(first_entry_not_found.is_empty());
@@ -720,7 +720,7 @@ pub mod tests {
         let log_id = LogId::default();
 
         let cert_pool = test_db
-            .get_all_lipmaa_entries_for_entry(&author, &log_id, &SeqNum::new(16).unwrap())
+            .get_all_skiplink_entries_for_entry(&author, &log_id, &SeqNum::new(16).unwrap())
             .await
             .unwrap();
 
