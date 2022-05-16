@@ -30,6 +30,25 @@ pub struct OperationWithMeta {
 impl OperationWithMeta {
     /// Returns a new `OperationWithMeta` instance.
     pub fn new(
+        public_key: &Author,
+        operation_id: &OperationId,
+        operation: &Operation,
+    ) -> Result<Self, OperationWithMetaError> {
+        let operation_with_meta = Self {
+            public_key: public_key.clone(),
+            operation_id: operation_id.clone(),
+            operation: operation.clone(),
+        };
+
+        operation_with_meta.validate()?;
+
+        Ok(operation_with_meta)
+    }
+
+    /// Returns a new `OperationWithMeta` instance constructed from an `EntrySigned`
+    /// and an `OperationEncoded`. This constructor method validates that the passed
+    /// operation matches the one oncoded in the passed signed entry.
+    pub fn new_from_entry(
         entry_encoded: &EntrySigned,
         operation_encoded: &OperationEncoded,
     ) -> Result<Self, OperationWithMetaError> {
@@ -127,17 +146,19 @@ mod tests {
     use rstest_reuse::apply;
 
     use crate::entry::EntrySigned;
-    use crate::operation::{AsOperation, OperationEncoded, OperationValue};
+    use crate::identity::Author;
+    use crate::operation::{
+        AsOperation, Operation, OperationEncoded, OperationId, OperationValue, OperationWithMeta,
+    };
     use crate::test_utils::fixtures::defaults::schema;
     use crate::test_utils::fixtures::templates::{
         all_meta_operation_types, implements_as_operation,
     };
     use crate::test_utils::fixtures::{
-        create_operation, defaults, entry_signed_encoded, fields, operation_encoded,
+        create_operation, defaults, entry_signed_encoded, fields, operation_encoded, operation_id,
+        public_key,
     };
     use crate::Validate;
-
-    use super::OperationWithMeta;
 
     #[rstest]
     #[should_panic]
@@ -147,8 +168,30 @@ mod tests {
         entry_signed_encoded: EntrySigned,
         #[case] operation_encoded: OperationEncoded,
     ) {
-        let operation_with_meta = OperationWithMeta::new(&entry_signed_encoded, &operation_encoded);
+        let operation_with_meta =
+            OperationWithMeta::new_from_entry(&entry_signed_encoded, &operation_encoded);
         assert!(operation_with_meta.is_ok())
+    }
+
+    #[rstest]
+    fn new_operation_not_from_entry(
+        public_key: Author,
+        operation_id: OperationId,
+        #[from(create_operation)] operation: Operation,
+    ) {
+        let operation_with_meta = OperationWithMeta::new(&public_key, &operation_id, &operation);
+        assert!(operation_with_meta.is_ok());
+        let operation_with_meta = operation_with_meta.unwrap();
+        assert_eq!(operation_with_meta.fields(), operation.fields());
+        assert_eq!(operation_with_meta.action(), operation.action());
+        assert_eq!(operation_with_meta.version(), operation.version());
+        assert_eq!(operation_with_meta.schema(), operation.schema());
+        assert_eq!(
+            operation_with_meta.previous_operations(),
+            operation.previous_operations()
+        );
+        assert_eq!(operation_with_meta.public_key(), &public_key);
+        assert_eq!(operation_with_meta.operation_id(), &operation_id);
     }
 
     #[apply(all_meta_operation_types)]

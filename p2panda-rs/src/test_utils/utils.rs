@@ -137,5 +137,5 @@ pub fn meta_operation(
     entry_signed_encoded: EntrySigned,
     operation_encoded: OperationEncoded,
 ) -> OperationWithMeta {
-    OperationWithMeta::new(&entry_signed_encoded, &operation_encoded).unwrap()
+    OperationWithMeta::new_from_entry(&entry_signed_encoded, &operation_encoded).unwrap()
 }

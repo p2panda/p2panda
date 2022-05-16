@@ -433,20 +433,35 @@ mod tests {
         .unwrap();
 
         let entry_1 = node.get_entry(&panda_entry_1_hash);
-        let panda_1 =
-            OperationWithMeta::new(&entry_1.entry_encoded(), &entry_1.operation_encoded()).unwrap();
+        let panda_1 = OperationWithMeta::new_from_entry(
+            &entry_1.entry_encoded(),
+            &entry_1.operation_encoded(),
+        )
+        .unwrap();
         let entry_2 = node.get_entry(&panda_entry_2_hash);
-        let panda_2 =
-            OperationWithMeta::new(&entry_2.entry_encoded(), &entry_2.operation_encoded()).unwrap();
+        let panda_2 = OperationWithMeta::new_from_entry(
+            &entry_2.entry_encoded(),
+            &entry_2.operation_encoded(),
+        )
+        .unwrap();
         let entry_3 = node.get_entry(&penguin_entry_1_hash);
-        let penguin_1 =
-            OperationWithMeta::new(&entry_3.entry_encoded(), &entry_3.operation_encoded()).unwrap();
+        let penguin_1 = OperationWithMeta::new_from_entry(
+            &entry_3.entry_encoded(),
+            &entry_3.operation_encoded(),
+        )
+        .unwrap();
         let entry_4 = node.get_entry(&penguin_entry_2_hash);
-        let penguin_2 =
-            OperationWithMeta::new(&entry_4.entry_encoded(), &entry_4.operation_encoded()).unwrap();
+        let penguin_2 = OperationWithMeta::new_from_entry(
+            &entry_4.entry_encoded(),
+            &entry_4.operation_encoded(),
+        )
+        .unwrap();
         let entry_5 = node.get_entry(&penguin_entry_3_hash);
-        let penguin_3 =
-            OperationWithMeta::new(&entry_5.entry_encoded(), &entry_5.operation_encoded()).unwrap();
+        let penguin_3 = OperationWithMeta::new_from_entry(
+            &entry_5.entry_encoded(),
+            &entry_5.operation_encoded(),
+        )
+        .unwrap();
 
         let operations = vec![
             panda_1.clone(),
@@ -625,20 +640,35 @@ mod tests {
         )
         .unwrap();
         let entry_1 = node.get_entry(&polar_entry_1_hash);
-        let operation_1 =
-            OperationWithMeta::new(&entry_1.entry_encoded(), &entry_1.operation_encoded()).unwrap();
+        let operation_1 = OperationWithMeta::new_from_entry(
+            &entry_1.entry_encoded(),
+            &entry_1.operation_encoded(),
+        )
+        .unwrap();
         let entry_2 = node.get_entry(&polar_entry_2_hash);
-        let operation_2 =
-            OperationWithMeta::new(&entry_2.entry_encoded(), &entry_2.operation_encoded()).unwrap();
+        let operation_2 = OperationWithMeta::new_from_entry(
+            &entry_2.entry_encoded(),
+            &entry_2.operation_encoded(),
+        )
+        .unwrap();
         let entry_3 = node.get_entry(&panda_entry_1_hash);
-        let operation_3 =
-            OperationWithMeta::new(&entry_3.entry_encoded(), &entry_3.operation_encoded()).unwrap();
+        let operation_3 = OperationWithMeta::new_from_entry(
+            &entry_3.entry_encoded(),
+            &entry_3.operation_encoded(),
+        )
+        .unwrap();
         let entry_4 = node.get_entry(&polar_entry_3_hash);
-        let operation_4 =
-            OperationWithMeta::new(&entry_4.entry_encoded(), &entry_4.operation_encoded()).unwrap();
+        let operation_4 = OperationWithMeta::new_from_entry(
+            &entry_4.entry_encoded(),
+            &entry_4.operation_encoded(),
+        )
+        .unwrap();
         let entry_5 = node.get_entry(&polar_entry_4_hash);
-        let operation_5 =
-            OperationWithMeta::new(&entry_5.entry_encoded(), &entry_5.operation_encoded()).unwrap();
+        let operation_5 = OperationWithMeta::new_from_entry(
+            &entry_5.entry_encoded(),
+            &entry_5.operation_encoded(),
+        )
+        .unwrap();
 
         // Here we have a collection of 2 operations
         let mut operations = vec![
@@ -828,7 +858,7 @@ mod tests {
         // Only retrieve the update operation.
         let only_the_update_operation = &node.all_entries()[1];
 
-        let operations = vec![OperationWithMeta::new(
+        let operations = vec![OperationWithMeta::new_from_entry(
             &only_the_update_operation.entry_encoded(),
             &only_the_update_operation.operation_encoded(),
         )
@@ -870,7 +900,11 @@ mod tests {
             .all_entries()
             .into_iter()
             .map(|entry| {
-                OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap()
+                OperationWithMeta::new_from_entry(
+                    &entry.entry_encoded(),
+                    &entry.operation_encoded(),
+                )
+                .unwrap()
             })
             .collect();
 
