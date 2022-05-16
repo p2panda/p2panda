@@ -511,7 +511,6 @@ impl Node {
 mod tests {
     use rstest::rstest;
 
-    use crate::document::DocumentViewValue;
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::operation::OperationValue;
@@ -704,13 +703,10 @@ mod tests {
 
         // We can query the node for the current document state.
         let document = node.get_document(&panda_entry_1_hash);
-        let operation_value = match document.view().get("message") {
-            Some(DocumentViewValue::Value(_, value)) => value,
-            _ => panic!(),
-        };
+        let document_view_value = document.view().unwrap().get("message").unwrap();
         // It was last updated by Penguin, this writes over previous values.
         assert_eq!(
-            operation_value,
+            document_view_value.value(),
             &OperationValue::Text("And again. [Penguin]".to_string())
         );
         // There should only be one document in the database.
@@ -843,13 +839,10 @@ mod tests {
         .unwrap();
 
         let document = node.get_document(&panda_entry_1_hash);
-        let operation_value = match document.view().get("cafe_name") {
-            Some(DocumentViewValue::Value(_, value)) => value,
-            _ => panic!(),
-        };
+        let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
-            *operation_value,
-            OperationValue::Text("Polar Pear Cafe".to_string())
+            document_view_value.value(),
+            &OperationValue::Text("Polar Pear Cafe".to_string())
         );
 
         // Publish an UPDATE operation
@@ -870,12 +863,9 @@ mod tests {
         .unwrap();
 
         let document = node.get_document(&panda_entry_1_hash);
-        let operation_value = match document.view().get("cafe_name") {
-            Some(DocumentViewValue::Value(_, value)) => value,
-            _ => panic!(),
-        };
+        let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
-            operation_value,
+            document_view_value.value(),
             &OperationValue::Text("Polar Bear Cafe".to_string())
         );
 
@@ -900,12 +890,9 @@ mod tests {
         .unwrap();
 
         let document = node.get_document(&panda_entry_1_hash);
-        let operation_value = match document.view().get("cafe_name") {
-            Some(DocumentViewValue::Value(_, value)) => value,
-            _ => panic!(),
-        };
+        let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
-            operation_value,
+            document_view_value.value(),
             &OperationValue::Text("Polar Bear Cafe".to_string())
         );
 
@@ -931,12 +918,9 @@ mod tests {
 
         let document = node.get_document(&panda_entry_1_hash);
 
-        let operation_value = match document.view().get("cafe_name") {
-            Some(DocumentViewValue::Value(_, value)) => value,
-            _ => panic!(),
-        };
+        let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
-            operation_value,
+            document_view_value.value(),
             &OperationValue::Text("Polar Bear Café".to_string())
         );
 

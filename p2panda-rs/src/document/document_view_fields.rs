@@ -18,21 +18,27 @@ pub struct DocumentViewFields(BTreeMap<String, DocumentViewValue>);
 /// In the case of a deleted document, we still want to know which operation performed this delete,
 /// therefore we wrap the operation id still.
 #[derive(Clone, Debug, PartialEq)]
-pub enum DocumentViewValue {
-    /// The value of this field and it's corresponding operation id.
-    Value(OperationId, OperationValue),
-
-    /// The operation id of a field on a deleted document.
-    Deleted(OperationId),
+pub struct DocumentViewValue {
+    operation_id: OperationId,
+    value: OperationValue,
 }
 
 impl DocumentViewValue {
-    /// Get the OperationId of this value.
-    pub fn id(&self) -> &OperationId {
-        match self {
-            DocumentViewValue::Value(id, _) => id,
-            DocumentViewValue::Deleted(id) => id,
+    /// Returns a `DocumentViewValue` constructed from an `OperationId` and `OperationValue`
+    pub fn new(operation_id: &OperationId, value: &OperationValue) -> Self {
+        Self {
+            operation_id: operation_id.clone(),
+            value: value.clone(),
         }
+    }
+    /// Get the OperationId of this document value.
+    pub fn id(&self) -> &OperationId {
+        &self.operation_id
+    }
+
+    /// Get the OperationValue of this document value.
+    pub fn value(&self) -> &OperationValue {
+        &self.value
     }
 }
 
@@ -47,7 +53,7 @@ impl DocumentViewFields {
         let mut document_view_fields = DocumentViewFields::new();
 
         for (name, value) in fields.iter() {
-            document_view_fields.insert(name, DocumentViewValue::Value(id.clone(), value.clone()));
+            document_view_fields.insert(name, DocumentViewValue::new(id, value));
         }
 
         document_view_fields
@@ -102,7 +108,7 @@ impl From<OperationWithMeta> for DocumentViewFields {
             for (name, value) in fields.iter() {
                 document_view_fields.insert(
                     name,
-                    DocumentViewValue::Value(operation.operation_id().clone(), value.clone()),
+                    DocumentViewValue::new(operation.operation_id(), value),
                 );
             }
         }

@@ -130,7 +130,6 @@
 //! // update graph which looks like this:
 //! //
 //! //   ++++++++++++++++++++++++++++    ++++++++++++++++++++++++++++
-//!
 //! //   | name : "Polar Bear Cafe" |    | name : "ʕ •ᴥ•ʔ Cafe!"    |
 //! //   | owner: "Polar Bear"      |<---| owner: "しろくま"　　　　　 |
 //! //   | house-number: 12         |    ++++++++++++++++++++++++++++
@@ -153,27 +152,27 @@
 //! let mut expected_fields = DocumentViewFields::new();
 //! expected_fields.insert(
 //!     "name",
-//!     DocumentViewValue::Value(
-//!         operation_2.operation_id().to_owned(),
-//!         OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into()),
+//!     DocumentViewValue::new(
+//!         operation_2.operation_id(),
+//!         &OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into()),
 //!     ),
 //! );
 //! expected_fields.insert(
 //!     "owner",
-//!     DocumentViewValue::Value(
-//!         operation_2.operation_id().to_owned(),
-//!         OperationValue::Text("しろくま".into()),
+//!     DocumentViewValue::new(
+//!         operation_2.operation_id(),
+//!         &OperationValue::Text("しろくま".into()),
 //!     ),
 //! );
 //! expected_fields.insert(
 //!     "house-number",
-//!     DocumentViewValue::Value(
-//!         operation_1.operation_id().to_owned(),
-//!         OperationValue::Integer(12),
+//!     DocumentViewValue::new(
+//!         operation_1.operation_id(),
+//!         &OperationValue::Integer(12),
 //!     ),
 //! );
 //!
-//! let document_view = document.view();
+//! let document_view = document.view().unwrap();
 //!
 //! assert_eq!(document_view.fields(), &expected_fields);
 //!
@@ -204,14 +203,14 @@
 //! operations.push(operation_3.clone());
 //!
 //! let document = DocumentBuilder::new(operations.clone()).build().unwrap();
-//! let document_view = document.view();
+//! let document_view = document.view().unwrap();
 //!
 //! // Here we see that "🐼 Cafe!" won the conflict, meaning it was applied after "ʕ •ᴥ•ʔ Cafe!".
 //! expected_fields.insert(
 //!     "name",
-//!     DocumentViewValue::Value(
-//!         operation_3.operation_id().to_owned(),
-//!         OperationValue::Text("🐼 Cafe!!".into()),
+//!     DocumentViewValue::new(
+//!         operation_3.operation_id(),
+//!         &OperationValue::Text("🐼 Cafe!!".into()),
 //!     ),
 //! );
 //!
@@ -242,13 +241,13 @@
 //!
 //! expected_fields.insert(
 //!     "house-number",
-//!     DocumentViewValue::Value(
-//!         operation_4.operation_id().to_owned(),
-//!         OperationValue::Integer(102),
+//!     DocumentViewValue::new(
+//!         operation_4.operation_id(),
+//!         &OperationValue::Integer(102),
 //!     ),
 //! );
 //!
-//! assert_eq!(document.view().fields(), &expected_fields);
+//! assert_eq!(document.view().unwrap().fields(), &expected_fields);
 //!
 //! // Finally, we want to delete the document, for this we publish a DELETE operation.
 //!
@@ -257,20 +256,7 @@
 //!
 //! let document = DocumentBuilder::new(operations.clone()).build().unwrap();
 //!
-//! expected_fields.insert(
-//!     "name",
-//!     DocumentViewValue::Deleted(operation_5.operation_id().to_owned()),
-//! );
-//! expected_fields.insert(
-//!     "owner",
-//!     DocumentViewValue::Deleted(operation_5.operation_id().to_owned()),
-//! );
-//! expected_fields.insert(
-//!     "house-number",
-//!     DocumentViewValue::Deleted(operation_5.operation_id().to_owned()),
-//! );
-//!
-//! assert_eq!(document.view().fields(), &expected_fields);
+//! assert!(document.view().is_none());
 //! assert!(document.is_deleted());
 //!
 //! # Ok(())

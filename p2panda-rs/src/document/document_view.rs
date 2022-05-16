@@ -27,8 +27,11 @@ impl DocumentView {
     ///
     /// Requires the DocumentViewId and field values to be calculated seperately and
     /// then passed in during construction.
-    pub fn new(id: DocumentViewId, fields: DocumentViewFields) -> Self {
-        Self { id, fields }
+    pub fn new(id: &DocumentViewId, fields: &DocumentViewFields) -> Self {
+        Self {
+            id: id.clone(),
+            fields: fields.clone(),
+        }
     }
 
     /// Get the id of this document view.
@@ -140,7 +143,7 @@ mod tests {
         // Reduce a single CREATE `Operation`
         let (view, is_edited, is_deleted) = reduce(&[test_create_operation.clone()]);
 
-        let document_view = DocumentView::new(document_view_id, view);
+        let document_view = DocumentView::new(&document_view_id, &view.unwrap());
 
         assert_eq!(format!("{}", document_view), "<DocumentView 496543>");
 
@@ -152,37 +155,37 @@ mod tests {
         assert_eq!(document_view.len(), 5);
         assert_eq!(
             document_view.get("username").unwrap(),
-            &DocumentViewValue::Value(
-                test_create_operation.operation_id().to_owned(),
-                OperationValue::Text("bubu".to_owned()),
+            &DocumentViewValue::new(
+                test_create_operation.operation_id(),
+                &OperationValue::Text("bubu".to_owned()),
             )
         );
         assert_eq!(
             document_view.get("height").unwrap(),
-            &DocumentViewValue::Value(
-                test_create_operation.operation_id().to_owned(),
-                OperationValue::Float(3.5)
+            &DocumentViewValue::new(
+                test_create_operation.operation_id(),
+                &OperationValue::Float(3.5)
             ),
         );
         assert_eq!(
             document_view.get("age").unwrap(),
-            &DocumentViewValue::Value(
-                test_create_operation.operation_id().to_owned(),
-                OperationValue::Integer(28)
+            &DocumentViewValue::new(
+                test_create_operation.operation_id(),
+                &OperationValue::Integer(28)
             ),
         );
         assert_eq!(
             document_view.get("is_admin").unwrap(),
-            &DocumentViewValue::Value(
-                test_create_operation.operation_id().to_owned(),
-                OperationValue::Boolean(false)
+            &DocumentViewValue::new(
+                test_create_operation.operation_id(),
+                &OperationValue::Boolean(false)
             ),
         );
         assert_eq!(
             document_view.get("profile_picture").unwrap(),
-            &DocumentViewValue::Value(
-                test_create_operation.operation_id().to_owned(),
-                OperationValue::Relation(expected_relation)
+            &DocumentViewValue::new(
+                test_create_operation.operation_id(),
+                &OperationValue::Relation(expected_relation)
             ),
         );
         assert!(!is_edited);
@@ -199,41 +202,41 @@ mod tests {
         let (view, is_edited, is_deleted) =
             reduce(&[test_create_operation.clone(), test_update_operation.clone()]);
 
-        let document_view = DocumentView::new(document_view_id, view);
+        let document_view = DocumentView::new(&document_view_id, &view.unwrap());
 
         assert_eq!(
             document_view.get("username").unwrap(),
-            &DocumentViewValue::Value(
-                test_create_operation.operation_id().to_owned(),
-                OperationValue::Text("bubu".to_owned()),
+            &DocumentViewValue::new(
+                test_create_operation.operation_id(),
+                &OperationValue::Text("bubu".to_owned()),
             )
         );
         assert_eq!(
             document_view.get("height").unwrap(),
-            &DocumentViewValue::Value(
-                test_create_operation.operation_id().to_owned(),
-                OperationValue::Float(3.5)
+            &DocumentViewValue::new(
+                test_create_operation.operation_id(),
+                &OperationValue::Float(3.5)
             ),
         );
         assert_eq!(
             document_view.get("age").unwrap(),
-            &DocumentViewValue::Value(
-                test_update_operation.operation_id().to_owned(),
-                OperationValue::Integer(29)
+            &DocumentViewValue::new(
+                test_update_operation.operation_id(),
+                &OperationValue::Integer(29)
             ),
         );
         assert_eq!(
             document_view.get("is_admin").unwrap(),
-            &DocumentViewValue::Value(
-                test_update_operation.operation_id().to_owned(),
-                OperationValue::Boolean(true)
+            &DocumentViewValue::new(
+                test_update_operation.operation_id(),
+                &OperationValue::Boolean(true)
             )
         );
         assert_eq!(
             document_view.get("profile_picture").unwrap(),
-            &DocumentViewValue::Value(
-                test_create_operation.operation_id().to_owned(),
-                OperationValue::Relation(Relation::new(relation_id))
+            &DocumentViewValue::new(
+                test_create_operation.operation_id(),
+                &OperationValue::Relation(Relation::new(relation_id))
             )
         );
         assert!(is_edited);

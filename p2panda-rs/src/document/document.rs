@@ -45,33 +45,24 @@ type IsDeleted = bool;
 /// Reduce a list of operations into a single view.
 pub(super) fn reduce(
     ordered_operations: &[OperationWithMeta],
-) -> (DocumentViewFields, IsEdited, IsDeleted) {
+) -> (Option<DocumentViewFields>, IsEdited, IsDeleted) {
     let is_edited = ordered_operations.len() > 1;
-    let mut is_deleted = false;
 
     let mut document_view_fields = DocumentViewFields::new();
 
     for operation in ordered_operations {
         if operation.is_delete() {
-            is_deleted = true;
-            for (key, _) in document_view_fields.clone().iter() {
-                document_view_fields.insert(
-                    key,
-                    DocumentViewValue::Deleted(operation.operation_id().to_owned()),
-                );
-            }
+            return (None, true, true);
         }
 
         if let Some(fields) = operation.fields() {
             for (key, value) in fields.iter() {
-                let document_view_value =
-                    DocumentViewValue::Value(operation.operation_id().to_owned(), value.to_owned());
+                let document_view_value = DocumentViewValue::new(operation.operation_id(), value);
                 document_view_fields.insert(key, document_view_value);
             }
         }
     }
-
-    (document_view_fields, is_edited, is_deleted)
+    (Some(document_view_fields), is_edited, false)
 }
 
 #[derive(Debug, Clone, Default)]
@@ -90,9 +81,10 @@ pub struct DocumentMeta {
 #[derive(Debug, Clone)]
 pub struct Document {
     id: DocumentId,
+    view_id: DocumentViewId,
     author: Author,
     schema: SchemaId,
-    view: DocumentView,
+    view: Option<DocumentView>,
     meta: DocumentMeta,
 }
 
@@ -104,7 +96,7 @@ impl Document {
 
     /// Get the document view id.
     pub fn view_id(&self) -> &DocumentViewId {
-        self.view.id()
+        &self.view_id
     }
 
     /// Get the document author.
@@ -118,8 +110,8 @@ impl Document {
     }
 
     /// Get the view of this document.
-    pub fn view(&self) -> &DocumentView {
-        &self.view
+    pub fn view(&self) -> Option<&DocumentView> {
+        self.view.as_ref()
     }
 
     /// Get the operations contained in this document.
@@ -253,10 +245,16 @@ impl DocumentBuilder {
         let document_view_id = DocumentViewId::new(&graph_tips);
 
         // Construct the document view, from the reduced values and the document view id
-        let document_view = DocumentView::new(document_view_id, view);
+        let document_view = if is_deleted {
+            None
+        } else {
+            // Unwrap as documents which aren't deleted will have a view
+            Some(DocumentView::new(&document_view_id, &view.unwrap()))
+        };
 
         Ok(Document {
             id: document_id,
+            view_id: document_view_id,
             schema,
             author,
             view: document_view,
@@ -291,10 +289,10 @@ mod tests {
     ) {
         let (reduced_create, is_edited, is_deleted) = reduce(&[create_operation.clone()]);
         assert_eq!(
-            *reduced_create.get("message").unwrap(),
-            DocumentViewValue::Value(
-                create_operation.operation_id().to_owned(),
-                OperationValue::Text("Hello!".to_string())
+            *reduced_create.unwrap().get("message").unwrap(),
+            DocumentViewValue::new(
+                create_operation.operation_id(),
+                &OperationValue::Text("Hello!".to_string())
             )
         );
         assert!(!is_edited);
@@ -303,22 +301,19 @@ mod tests {
         let (reduced_update, is_edited, is_deleted) =
             reduce(&[create_operation.clone(), update_operation.clone()]);
         assert_eq!(
-            *reduced_update.get("message").unwrap(),
-            DocumentViewValue::Value(
-                update_operation.operation_id().to_owned(),
-                OperationValue::Text("Updated, hello!".to_string())
+            *reduced_update.unwrap().get("message").unwrap(),
+            DocumentViewValue::new(
+                update_operation.operation_id(),
+                &OperationValue::Text("Updated, hello!".to_string())
             )
         );
         assert!(is_edited);
         assert!(!is_deleted);
 
         let (reduced_delete, is_edited, is_deleted) =
-            reduce(&[create_operation, update_operation, delete_operation.clone()]);
+            reduce(&[create_operation, update_operation, delete_operation]);
         // The value remains the same, but the deleted flag is true now.
-        assert_eq!(
-            *reduced_delete.get("message").unwrap(),
-            DocumentViewValue::Deleted(delete_operation.operation_id().to_owned())
-        );
+        assert!(reduced_delete.is_none());
         assert!(is_edited);
         assert!(is_deleted);
     }
@@ -468,9 +463,9 @@ mod tests {
         let mut exp_result = DocumentViewFields::new();
         exp_result.insert(
             "name",
-            DocumentViewValue::Value(
-                penguin_3.operation_id().to_owned(),
-                OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
+            DocumentViewValue::new(
+                penguin_3.operation_id(),
+                &OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
             ),
         );
         let expected_graph_tips: Vec<OperationId> = vec![penguin_entry_3_hash.clone().into()];
@@ -485,7 +480,7 @@ mod tests {
         // Document should resolve to expected value
 
         let document = document.unwrap();
-        assert_eq!(document.view().get("name"), exp_result.get("name"));
+        assert_eq!(document.view().unwrap().get("name"), exp_result.get("name"));
         assert!(document.is_edited());
         assert!(!document.is_deleted());
         assert_eq!(document.operations(), &expected_op_order);
@@ -522,8 +517,14 @@ mod tests {
                 .build()
                 .unwrap();
 
-        assert_eq!(replica_1.view().get("name"), replica_2.view().get("name"));
-        assert_eq!(replica_1.view().get("name"), replica_3.view().get("name"));
+        assert_eq!(
+            replica_1.view().unwrap().get("name"),
+            replica_2.view().unwrap().get("name")
+        );
+        assert_eq!(
+            replica_1.view().unwrap().get("name"),
+            replica_3.view().unwrap().get("name")
+        );
         assert_eq!(
             replica_1.id(),
             &DocumentId::new(panda_entry_1_hash.clone().into())
@@ -673,27 +674,24 @@ mod tests {
         let mut expected_fields = DocumentViewFields::new();
         expected_fields.insert(
             "name",
-            DocumentViewValue::Value(
-                operation_2.operation_id().to_owned(),
-                OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into()),
+            DocumentViewValue::new(
+                operation_2.operation_id(),
+                &OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into()),
             ),
         );
         expected_fields.insert(
             "owner",
-            DocumentViewValue::Value(
-                operation_2.operation_id().to_owned(),
-                OperationValue::Text("しろくま".into()),
+            DocumentViewValue::new(
+                operation_2.operation_id(),
+                &OperationValue::Text("しろくま".into()),
             ),
         );
         expected_fields.insert(
             "house-number",
-            DocumentViewValue::Value(
-                operation_1.operation_id().to_owned(),
-                OperationValue::Integer(12),
-            ),
+            DocumentViewValue::new(operation_1.operation_id(), &OperationValue::Integer(12)),
         );
 
-        let document_view = document.view();
+        let document_view = document.view().unwrap();
 
         assert_eq!(document_view.fields(), &expected_fields);
 
@@ -729,13 +727,13 @@ mod tests {
         // Here we see that "🐼 Cafe!" won the conflict, meaning it was applied after "ʕ •ᴥ•ʔ Cafe!".
         expected_fields.insert(
             "name",
-            DocumentViewValue::Value(
-                operation_3.operation_id().to_owned(),
-                OperationValue::Text("🐼 Cafe!!".into()),
+            DocumentViewValue::new(
+                operation_3.operation_id(),
+                &OperationValue::Text("🐼 Cafe!!".into()),
             ),
         );
 
-        assert_eq!(document_view.fields(), &expected_fields);
+        assert_eq!(document_view.unwrap().fields(), &expected_fields);
 
         // Now our first author publishes a 4th operation after having seen the full collection
         // of operations. This results in two links to previous operations being formed. Effectively
@@ -762,35 +760,32 @@ mod tests {
 
         expected_fields.insert(
             "house-number",
-            DocumentViewValue::Value(
-                operation_4.operation_id().to_owned(),
-                OperationValue::Integer(102),
-            ),
+            DocumentViewValue::new(operation_4.operation_id(), &OperationValue::Integer(102)),
         );
 
-        assert_eq!(document.view().fields(), &expected_fields);
+        assert_eq!(document.view().unwrap().fields(), &expected_fields);
 
         // Finally, we want to delete the document, for this we publish a DELETE operation.
 
         // DELETE operation: {}
-        operations.push(operation_5.clone());
+        operations.push(operation_5);
 
         let document = DocumentBuilder::new(operations.clone()).build().unwrap();
 
-        expected_fields.insert(
-            "name",
-            DocumentViewValue::Deleted(operation_5.operation_id().to_owned()),
-        );
-        expected_fields.insert(
-            "owner",
-            DocumentViewValue::Deleted(operation_5.operation_id().to_owned()),
-        );
-        expected_fields.insert(
-            "house-number",
-            DocumentViewValue::Deleted(operation_5.operation_id().to_owned()),
-        );
+        // expected_fields.insert(
+        //     "name",
+        //     DocumentViewValue::Deleted(operation_5.operation_id().to_owned()),
+        // );
+        // expected_fields.insert(
+        //     "owner",
+        //     DocumentViewValue::Deleted(operation_5.operation_id().to_owned()),
+        // );
+        // expected_fields.insert(
+        //     "house-number",
+        //     DocumentViewValue::Deleted(operation_5.operation_id().to_owned()),
+        // );
 
-        assert_eq!(document.view().fields(), &expected_fields);
+        assert!(document.view().is_none());
         assert!(document.is_deleted());
     }
 
@@ -879,9 +874,10 @@ mod tests {
             })
             .collect();
 
-        assert!(DocumentBuilder::new(operations)
-            .build()
-            .unwrap()
-            .is_deleted());
+        let document = DocumentBuilder::new(operations).build().unwrap();
+
+        assert!(document.is_deleted());
+
+        assert!(document.view().is_none());
     }
 }
