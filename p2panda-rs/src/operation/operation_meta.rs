@@ -126,12 +126,13 @@ impl Validate for OperationWithMeta {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::convert::TryFrom;
 
     use rstest::rstest;
     use rstest_reuse::apply;
 
     use crate::entry::EntrySigned;
-    use crate::identity::Author;
+    use crate::identity::{Author, KeyPair};
     use crate::operation::{
         AsOperation, Operation, OperationEncoded, OperationId, OperationValue, OperationWithMeta,
     };
@@ -140,8 +141,8 @@ mod tests {
         all_meta_operation_types, implements_as_operation,
     };
     use crate::test_utils::fixtures::{
-        create_operation, defaults, entry_signed_encoded, fields, operation_encoded, operation_id,
-        public_key,
+        create_operation, defaults, entry_signed_encoded, fields, key_pair, operation_encoded,
+        operation_id,
     };
     use crate::Validate;
 
@@ -160,11 +161,12 @@ mod tests {
 
     #[rstest]
     fn new_operation_not_from_entry(
-        public_key: Author,
+        key_pair: KeyPair,
         operation_id: OperationId,
         #[from(create_operation)] operation: Operation,
     ) {
-        let operation_with_meta = OperationWithMeta::new(&public_key, &operation_id, &operation);
+        let author = Author::try_from(*key_pair.public_key()).unwrap();
+        let operation_with_meta = OperationWithMeta::new(&author, &operation_id, &operation);
         assert!(operation_with_meta.is_ok());
         let operation_with_meta = operation_with_meta.unwrap();
         assert_eq!(operation_with_meta.fields(), operation.fields());
@@ -175,7 +177,7 @@ mod tests {
             operation_with_meta.previous_operations(),
             operation.previous_operations()
         );
-        assert_eq!(operation_with_meta.public_key(), &public_key);
+        assert_eq!(operation_with_meta.public_key(), &author);
         assert_eq!(operation_with_meta.operation_id(), &operation_id);
     }
 
