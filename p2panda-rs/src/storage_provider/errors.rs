@@ -78,7 +78,7 @@ pub enum EntryStorageError {
 
     /// Error which occurs if entries' encoded skiplink hash does not match the expected one
     /// present in the database.
-    #[error("The skiplink hash encoded in the entry: {0} did not match the expected lipmaa hash")]
+    #[error("The skiplink hash encoded in the entry: {0} did not match the known hash of the skiplink target")]
     InvalidSkiplinkPassed(Hash),
 
     /// Error which originates in `determine_skiplink` if the expected skiplink is missing.

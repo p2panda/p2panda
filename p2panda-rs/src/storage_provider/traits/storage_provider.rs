@@ -416,7 +416,7 @@ pub mod tests {
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
             format!(
-                "The skiplink hash encoded in the entry: {} did not match the expected lipmaa hash",
+                "The skiplink hash encoded in the entry: {} did not match the known hash of the skiplink target",
                 entry_signed.hash()
             )
         )

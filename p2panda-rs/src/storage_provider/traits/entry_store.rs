@@ -636,7 +636,7 @@ pub mod tests {
                 .unwrap_err()
                 .to_string(),
             format!(
-                "The skiplink hash encoded in the entry: {} did not match the expected lipmaa hash",
+                "The skiplink hash encoded in the entry: {} did not match the known hash of the skiplink target",
                 entry_at_seq_num_four_with_wrong_skiplink.hash()
             )
         );
