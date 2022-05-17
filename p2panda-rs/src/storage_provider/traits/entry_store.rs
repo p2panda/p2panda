@@ -19,8 +19,7 @@ use crate::storage_provider::traits::AsStorageEntry;
 pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// Insert an entry into storage.
     ///
-    /// Returns `true` if insertion was successful, returns `false` if no error occured but an
-    /// unexpected number of insertions happened. Errors if a fatal storage error occured.
+    /// Returns an error if a fatal storage error occured.
     async fn insert_entry(&self, value: StorageEntry) -> Result<(), EntryStorageError>;
 
     /// Get an entry at sequence position within an author's log.
