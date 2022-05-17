@@ -772,19 +772,6 @@ mod tests {
 
         let document = DocumentBuilder::new(operations.clone()).build().unwrap();
 
-        // expected_fields.insert(
-        //     "name",
-        //     DocumentViewValue::Deleted(operation_5.operation_id().to_owned()),
-        // );
-        // expected_fields.insert(
-        //     "owner",
-        //     DocumentViewValue::Deleted(operation_5.operation_id().to_owned()),
-        // );
-        // expected_fields.insert(
-        //     "house-number",
-        //     DocumentViewValue::Deleted(operation_5.operation_id().to_owned()),
-        // );
-
         assert!(document.view().is_none());
         assert!(document.is_deleted());
     }
