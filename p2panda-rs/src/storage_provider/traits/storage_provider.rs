@@ -78,7 +78,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
         // Determine backlink and skiplink hashes for the next entry. To do this we need the latest
         // entry in this log
-        let entry_latest = self.latest_entry(params.author(), &log).await?;
+        let entry_latest = self.get_latest_entry(params.author(), &log).await?;
 
         match entry_latest.clone() {
             // An entry was found which serves as the backlink for the upcoming entry
@@ -156,7 +156,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
         // Get related bamboo backlink and skiplink entries
         let entry_backlink_bytes = if !entry.seq_num().is_first() {
-            self.entry_at_seq_num(
+            self.get_entry_at_seq_num(
                 &entry.author(),
                 &entry.log_id(),
                 &entry.seq_num().backlink_seq_num().unwrap(),
@@ -172,7 +172,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         }?;
 
         let entry_skiplink_bytes = if !entry.seq_num().is_first() {
-            self.entry_at_seq_num(
+            self.get_entry_at_seq_num(
                 &entry.author(),
                 &entry.log_id(),
                 &entry.seq_num().skiplink_seq_num().unwrap(),
@@ -213,7 +213,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
         // Already return arguments for next entry creation
         let entry_latest: StorageEntry = self
-            .latest_entry(&entry.author(), &entry.log_id())
+            .get_latest_entry(&entry.author(), &entry.log_id())
             .await?
             .unwrap();
         let entry_hash_skiplink = self.determine_skiplink(&entry_latest).await?;
