@@ -75,6 +75,7 @@ impl Display for DocumentView {
         write!(f, "<DocumentView {}>", self.id)
     }
 }
+
 #[cfg(test)]
 mod tests {
     use rstest::{fixture, rstest};

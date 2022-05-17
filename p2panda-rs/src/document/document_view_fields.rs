@@ -116,3 +116,51 @@ impl From<OperationWithMeta> for DocumentViewFields {
         document_view_fields
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use crate::document::{DocumentViewFields, DocumentViewValue};
+    use crate::operation::{AsOperation, OperationId, OperationValue, OperationWithMeta};
+    use crate::test_utils::fixtures::{create_operation_with_meta, random_operation_id};
+
+    #[rstest]
+    fn construct_fields(#[from(random_operation_id)] value_id: OperationId) {
+        let mut fields = DocumentViewFields::new();
+        fields.insert(
+            "name",
+            DocumentViewValue::new(&value_id, &OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into())),
+        );
+        fields.insert(
+            "owner",
+            DocumentViewValue::new(&value_id, &OperationValue::Text("しろくま".into())),
+        );
+        fields.insert(
+            "house-number",
+            DocumentViewValue::new(&value_id, &OperationValue::Integer(12)),
+        );
+
+        assert_eq!(fields.len(), 3);
+        assert!(!fields.is_empty());
+        assert_eq!(
+            fields.get("name").unwrap(),
+            &DocumentViewValue::new(&value_id, &OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into()))
+        );
+        assert_eq!(
+            fields.get("owner").unwrap(),
+            &DocumentViewValue::new(&value_id, &OperationValue::Text("しろくま".into()))
+        );
+        assert_eq!(
+            fields.get("house-number").unwrap(),
+            &DocumentViewValue::new(&value_id, &OperationValue::Integer(12))
+        );
+    }
+
+    #[rstest]
+    fn from_meta_operation(create_operation_with_meta: OperationWithMeta) {
+        let document_view_fields = DocumentViewFields::from(create_operation_with_meta.clone());
+        let operation_fields = create_operation_with_meta.operation().fields().unwrap();
+        assert_eq!(document_view_fields.len(), operation_fields.len());
+    }
+}
