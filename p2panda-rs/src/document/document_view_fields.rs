@@ -7,16 +7,7 @@ use crate::operation::{
     AsOperation, OperationFields, OperationId, OperationValue, OperationWithMeta,
 };
 
-/// A key value map of field keys to DocumentViewValues.
-#[derive(Clone, Debug, PartialEq)]
-pub struct DocumentViewFields(BTreeMap<String, DocumentViewValue>);
-
-/// An enum encapsulating the current value of a document fiew field as well as the id of
-/// the operation it came from.
-///
-/// The two variants are used for when the value is set, or if the document view has been deleted.
-/// In the case of a deleted document, we still want to know which operation performed this delete,
-/// therefore we wrap the operation id still.
+/// The current value of a document fiew field as well as the id of the operation it came from.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DocumentViewValue {
     operation_id: OperationId,
@@ -42,6 +33,9 @@ impl DocumentViewValue {
     }
 }
 
+/// A key value map of field keys to DocumentViewValues.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DocumentViewFields(BTreeMap<String, DocumentViewValue>);
 impl DocumentViewFields {
     /// Creates a new fields instance to add data to.
     pub fn new() -> Self {
