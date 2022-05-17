@@ -21,7 +21,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     ///
     /// Returns `true` if insertion was successful, returns `false` if no error occured but an
     /// unexpected number of insertions happened. Errors if a fatal storage error occured.
-    async fn insert_entry(&self, value: StorageEntry) -> Result<bool, EntryStorageError>;
+    async fn insert_entry(&self, value: StorageEntry) -> Result<(), EntryStorageError>;
 
     /// Get an entry at sequence position within an author's log.
     ///
@@ -214,9 +214,9 @@ pub mod tests {
     #[async_trait]
     impl EntryStore<StorageEntry> for SimplestStorageProvider {
         /// Insert an entry into storage.
-        async fn insert_entry(&self, entry: StorageEntry) -> Result<bool, EntryStorageError> {
+        async fn insert_entry(&self, entry: StorageEntry) -> Result<(), EntryStorageError> {
             self.db_insert_entry(entry);
-            Ok(true)
+            Ok(())
         }
 
         /// Get an entry by it's hash id.
