@@ -28,6 +28,7 @@ Highlights are marked with a pancake 🥞
 - Implement `Display` trait for various structs [#281](https://github.com/p2panda/p2panda/pull/281) `rs`
 - Implement document view id hash as a limited-size identifier for document views [#277](https://github.com/p2panda/p2panda/pull/277) `rs`
 - Introduce `DocumentViewHash`, implement `Hash` for `DocumentViewId` [#313](https://github.com/p2panda/p2panda/pull/313) `rs`
+- Introduce `DocumentViewFields` & `DocumentViewValue` and other `Document` additions [#319](https://github.com/p2panda/p2panda/pull/319) `rs`
 
 ## Changed
 
