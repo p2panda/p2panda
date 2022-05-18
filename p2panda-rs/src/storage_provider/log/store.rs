@@ -66,7 +66,7 @@ pub mod tests {
     use crate::identity::{Author, KeyPair};
     use crate::schema::SchemaId;
     use crate::storage_provider::log::{AsStorageLog, LogStorageError, LogStore};
-    use crate::storage_provider::test_utils::{SimplestStorageProvider, StorageLog};
+    use crate::storage_provider::test_provider::{SimplestStorageProvider, StorageLog};
     use crate::test_utils::fixtures::{document_id, key_pair, schema};
 
     /// Implement the `LogStore` trait on SimplestStorageProvider

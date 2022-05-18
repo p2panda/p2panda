@@ -224,13 +224,13 @@ pub mod tests {
     use crate::schema::SchemaId;
     use crate::storage_provider::entry::AsStorageEntry;
     use crate::storage_provider::log::AsStorageLog;
-    use crate::storage_provider::test_utils::{
-        test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
+    use crate::storage_provider::test_provider::{
+        EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
         SimplestStorageProvider, StorageEntry, StorageLog,
     };
     use crate::storage_provider::{AsEntryArgsResponse, AsPublishEntryResponse};
     use crate::test_utils::fixtures::{
-        entry, fields, key_pair, operation_id, schema, update_operation,
+        entry, fields, key_pair, operation_id, schema, test_db, update_operation,
     };
 
     use super::StorageProvider;
