@@ -14,5 +14,6 @@ mod test_provider;
 pub use errors::ValidationError;
 pub use requests::{AsEntryArgsRequest, AsPublishEntryRequest};
 pub use responses::{AsEntryArgsResponse, AsPublishEntryResponse};
+pub use storage_provider::StorageProvider;
 #[cfg(test)]
 pub use test_provider::{SimplestStorageProvider, StorageEntry, StorageLog};

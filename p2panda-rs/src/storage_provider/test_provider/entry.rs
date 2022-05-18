@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use async_trait::async_trait;
+
 use crate::entry::{decode_entry, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{Operation, OperationEncoded};
-use crate::storage_provider::entry::{AsStorageEntry, EntryStorageError};
+use crate::operation::{AsOperation, Operation, OperationEncoded};
+use crate::schema::SchemaId;
+use crate::storage_provider::entry::{AsStorageEntry, EntryStorageError, EntryStore};
 use crate::storage_provider::errors::ValidationError;
+use crate::storage_provider::test_provider::SimplestStorageProvider;
 use crate::Validate;
 
 /// A struct which represents an entry and operation pair in storage as a concatenated string.
@@ -87,5 +91,171 @@ impl Validate for StorageEntry {
         }
         decode_entry(&self.entry_signed(), self.operation_encoded().as_ref())?;
         Ok(())
+    }
+}
+
+/// Implement `EntryStore` trait on `SimplestStorageProvider`
+#[async_trait]
+impl EntryStore<StorageEntry> for SimplestStorageProvider {
+    /// Insert an entry into storage.
+    async fn insert_entry(&self, entry: StorageEntry) -> Result<bool, EntryStorageError> {
+        self.db_insert_entry(entry);
+        Ok(true)
+    }
+
+    /// Returns entry at sequence position within an author's log.
+    async fn entry_at_seq_num(
+        &self,
+        author: &Author,
+        log_id: &LogId,
+        seq_num: &SeqNum,
+    ) -> Result<Option<StorageEntry>, EntryStorageError> {
+        let entries = self.entries.lock().unwrap();
+
+        let entry = entries.iter().find(|entry| {
+            entry.author() == *author && entry.log_id() == *log_id && entry.seq_num() == *seq_num
+        });
+
+        Ok(entry.cloned())
+    }
+
+    /// Returns the latest Bamboo entry of an author's log.
+    async fn latest_entry(
+        &self,
+        author: &Author,
+        log_id: &LogId,
+    ) -> Result<Option<StorageEntry>, EntryStorageError> {
+        let entries = self.entries.lock().unwrap();
+
+        let latest_entry = entries
+            .iter()
+            .filter(|entry| entry.author() == *author && entry.log_id() == *log_id)
+            .max_by_key(|entry| entry.seq_num().as_u64());
+
+        Ok(latest_entry.cloned())
+    }
+
+    /// Return vector of all entries of a given schema
+    async fn by_schema(&self, schema: &SchemaId) -> Result<Vec<StorageEntry>, EntryStorageError> {
+        let entries = self.entries.lock().unwrap();
+
+        let entries: Vec<StorageEntry> = entries
+            .iter()
+            .filter(|entry| entry.operation().schema() == *schema)
+            .map(|e| e.to_owned())
+            .collect();
+
+        Ok(entries)
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use rstest::rstest;
+
+    use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId};
+    use crate::identity::KeyPair;
+    use crate::operation::OperationEncoded;
+    use crate::schema::SchemaId;
+    use crate::storage_provider::entry::{AsStorageEntry, EntryStore};
+    use crate::storage_provider::test_provider::{SimplestStorageProvider, StorageEntry};
+    use crate::test_utils::fixtures::{
+        entry, entry_signed_encoded, operation_encoded, random_key_pair, schema,
+    };
+
+    #[rstest]
+    #[async_std::test]
+    async fn insert_get_entry(
+        entry_signed_encoded: EntrySigned,
+        operation_encoded: OperationEncoded,
+    ) {
+        // Instantiate a new store.
+        let store = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(Mutex::new(Vec::new())),
+        };
+
+        let storage_entry = StorageEntry::new(&entry_signed_encoded, &operation_encoded).unwrap();
+
+        // Insert an entry into the store.
+        assert!(store.insert_entry(storage_entry.clone()).await.is_ok());
+
+        // Get an entry at a specific seq number from an authors log.
+        let entry_at_seq_num = store
+            .entry_at_seq_num(
+                &storage_entry.author(),
+                &storage_entry.log_id(),
+                &storage_entry.seq_num(),
+            )
+            .await;
+
+        assert!(entry_at_seq_num.is_ok());
+        assert_eq!(entry_at_seq_num.unwrap().unwrap(), storage_entry)
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn get_latest_entry(
+        entry_signed_encoded: EntrySigned,
+        operation_encoded: OperationEncoded,
+    ) {
+        // Instantiate a new store.
+        let store = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(Mutex::new(Vec::new())),
+        };
+
+        let storage_entry = StorageEntry::new(&entry_signed_encoded, &operation_encoded).unwrap();
+
+        // Before an entry is inserted the latest entry should be none.
+        assert!(store
+            .latest_entry(&storage_entry.author(), &LogId::default())
+            .await
+            .unwrap()
+            .is_none());
+
+        // Insert an entry into the store.
+        assert!(store.insert_entry(storage_entry.clone()).await.is_ok());
+
+        assert_eq!(
+            store
+                .latest_entry(&storage_entry.author(), &LogId::default())
+                .await
+                .unwrap()
+                .unwrap(),
+            storage_entry
+        );
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn get_by_schema(
+        #[from(random_key_pair)] key_pair_1: KeyPair,
+        #[from(random_key_pair)] key_pair_2: KeyPair,
+        entry: Entry,
+        operation_encoded: OperationEncoded,
+        schema: SchemaId,
+    ) {
+        // Instantiate a new store.
+        let store = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(Mutex::new(Vec::new())),
+        };
+
+        let author_1_entry = sign_and_encode(&entry, &key_pair_1).unwrap();
+        let author_2_entry = sign_and_encode(&entry, &key_pair_2).unwrap();
+        let author_1_entry = StorageEntry::new(&author_1_entry, &operation_encoded).unwrap();
+        let author_2_entry = StorageEntry::new(&author_2_entry, &operation_encoded).unwrap();
+
+        // Before an entry with this schema is inserted this method should return an empty array.
+        assert!(store.by_schema(&schema).await.unwrap().is_empty());
+
+        // Insert two entries into the store.
+        store.insert_entry(author_1_entry).await.unwrap();
+        store.insert_entry(author_2_entry).await.unwrap();
+
+        assert_eq!(store.by_schema(&schema).await.unwrap().len(), 2);
     }
 }

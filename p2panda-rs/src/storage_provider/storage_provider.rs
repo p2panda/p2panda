@@ -209,24 +209,21 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
 #[cfg(test)]
 pub mod tests {
-    use async_trait::async_trait;
     use rstest::rstest;
     use std::convert::TryFrom;
     use std::sync::{Arc, Mutex};
 
     use crate::document::DocumentId;
     use crate::entry::{sign_and_encode, Entry, LogId};
-    use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::{
         AsOperation, OperationEncoded, OperationFields, OperationId, OperationValue,
     };
     use crate::schema::SchemaId;
     use crate::storage_provider::entry::AsStorageEntry;
-    use crate::storage_provider::log::AsStorageLog;
     use crate::storage_provider::test_provider::{
         EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
-        SimplestStorageProvider, StorageEntry, StorageLog,
+        SimplestStorageProvider,
     };
     use crate::storage_provider::{AsEntryArgsResponse, AsPublishEntryResponse};
     use crate::test_utils::fixtures::{
@@ -234,39 +231,6 @@ pub mod tests {
     };
 
     use super::StorageProvider;
-
-    #[async_trait]
-    impl StorageProvider<StorageEntry, StorageLog> for SimplestStorageProvider {
-        type EntryArgsRequest = EntryArgsRequest;
-
-        type EntryArgsResponse = EntryArgsResponse;
-
-        type PublishEntryRequest = PublishEntryRequest;
-
-        type PublishEntryResponse = PublishEntryResponse;
-
-        async fn get_document_by_entry(
-            &self,
-            entry_hash: &Hash,
-        ) -> Result<Option<DocumentId>, Box<dyn std::error::Error>> {
-            let entries = self.entries.lock().unwrap();
-
-            let entry = entries.iter().find(|entry| entry.hash() == *entry_hash);
-
-            let entry = match entry {
-                Some(entry) => entry,
-                None => return Ok(None),
-            };
-
-            let logs = self.logs.lock().unwrap();
-
-            let log = logs
-                .iter()
-                .find(|log| log.id() == entry.log_id() && log.author() == entry.author());
-
-            Ok(Some(log.unwrap().document_id()))
-        }
-    }
 
     #[rstest]
     #[async_std::test]
