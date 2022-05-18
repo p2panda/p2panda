@@ -3,31 +3,8 @@
 use async_trait::async_trait;
 
 use crate::document::DocumentId;
-use crate::identity::Author;
-use crate::operation::{OperationAction, OperationFields, OperationId};
-use crate::schema::SchemaId;
-use crate::storage_provider::errors::OperationStorageError;
-
-pub type PreviousOperations = Vec<OperationId>;
-
-pub trait AsStorageOperation: Sized + Clone + Send + Sync {
-    /// The error type returned by this traits' methods.
-    type AsStorageOperationError: 'static + std::error::Error;
-
-    fn action(&self) -> OperationAction;
-
-    fn author(&self) -> Author;
-
-    fn document_id(&self) -> DocumentId;
-
-    fn fields(&self) -> Option<OperationFields>;
-
-    fn id(&self) -> OperationId;
-
-    fn previous_operations(&self) -> PreviousOperations;
-
-    fn schema_id(&self) -> SchemaId;
-}
+use crate::operation::OperationId;
+use crate::storage_provider::operation::{AsStorageOperation, OperationStorageError};
 
 #[async_trait]
 pub trait OperationStore<StorageOperation: AsStorageOperation> {

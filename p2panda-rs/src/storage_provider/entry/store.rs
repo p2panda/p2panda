@@ -7,8 +7,7 @@ use crate::entry::SeqNum;
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::schema::SchemaId;
-use crate::storage_provider::errors::EntryStorageError;
-use crate::storage_provider::traits::AsStorageEntry;
+use crate::storage_provider::entry::{AsStorageEntry, EntryStorageError};
 
 /// Trait which handles all storage actions relating to `Entry`.
 ///
@@ -200,11 +199,10 @@ pub mod tests {
     use crate::identity::{Author, KeyPair};
     use crate::operation::{AsOperation, Operation, OperationEncoded};
     use crate::schema::SchemaId;
-    use crate::storage_provider::errors::EntryStorageError;
-    use crate::storage_provider::traits::test_utils::{
+    use crate::storage_provider::entry::{AsStorageEntry, EntryStorageError, EntryStore};
+    use crate::storage_provider::test_utils::{
         test_db, SimplestStorageProvider, StorageEntry, SKIPLINK_ENTRIES,
     };
-    use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
     use crate::test_utils::fixtures::{
         entry, entry_signed_encoded, key_pair, operation_encoded, random_key_pair, schema,
     };

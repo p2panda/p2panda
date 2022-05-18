@@ -6,10 +6,11 @@ use crate::document::DocumentId;
 use crate::entry::SeqNum;
 use crate::hash::Hash;
 use crate::operation::{AsOperation, Operation};
+use crate::storage_provider::entry::{AsStorageEntry, EntryStore};
 use crate::storage_provider::errors::PublishEntryError;
-use crate::storage_provider::traits::{
+use crate::storage_provider::log::{AsStorageLog, LogStore};
+use crate::storage_provider::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
-    AsStorageEntry, AsStorageLog, EntryStore, LogStore,
 };
 use crate::Validate;
 
@@ -208,11 +209,10 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
 #[cfg(test)]
 pub mod tests {
-    use std::convert::TryFrom;
-    use std::sync::{Arc, Mutex};
-
     use async_trait::async_trait;
     use rstest::rstest;
+    use std::convert::TryFrom;
+    use std::sync::{Arc, Mutex};
 
     use crate::document::DocumentId;
     use crate::entry::{sign_and_encode, Entry, LogId};
@@ -222,13 +222,13 @@ pub mod tests {
         AsOperation, OperationEncoded, OperationFields, OperationId, OperationValue,
     };
     use crate::schema::SchemaId;
-    use crate::storage_provider::traits::test_utils::{
+    use crate::storage_provider::entry::AsStorageEntry;
+    use crate::storage_provider::log::AsStorageLog;
+    use crate::storage_provider::test_utils::{
         test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
         SimplestStorageProvider, StorageEntry, StorageLog,
     };
-    use crate::storage_provider::traits::{
-        AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
-    };
+    use crate::storage_provider::{AsEntryArgsResponse, AsPublishEntryResponse};
     use crate::test_utils::fixtures::{
         entry, fields, key_pair, operation_id, schema, update_operation,
     };

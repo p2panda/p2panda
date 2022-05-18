@@ -6,8 +6,7 @@ use mockall::automock;
 use crate::document::DocumentId;
 use crate::entry::LogId;
 use crate::identity::Author;
-use crate::storage_provider::errors::LogStorageError;
-use crate::storage_provider::traits::AsStorageLog;
+use crate::storage_provider::log::{AsStorageLog, LogStorageError};
 
 /// Trait which handles all storage actions relating to `StorageLog`s.
 ///
@@ -66,9 +65,8 @@ pub mod tests {
     use crate::entry::LogId;
     use crate::identity::{Author, KeyPair};
     use crate::schema::SchemaId;
-    use crate::storage_provider::errors::LogStorageError;
-    use crate::storage_provider::traits::test_utils::{SimplestStorageProvider, StorageLog};
-    use crate::storage_provider::traits::{AsStorageLog, LogStore};
+    use crate::storage_provider::log::{AsStorageLog, LogStorageError, LogStore};
+    use crate::storage_provider::test_utils::{SimplestStorageProvider, StorageLog};
     use crate::test_utils::fixtures::{document_id, key_pair, schema};
 
     /// Implement the `LogStore` trait on SimplestStorageProvider

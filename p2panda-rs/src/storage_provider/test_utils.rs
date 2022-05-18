@@ -12,10 +12,11 @@ use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::{Operation, OperationEncoded, OperationFields};
 use crate::schema::SchemaId;
-use crate::storage_provider::errors::{EntryStorageError, ValidationError};
-use crate::storage_provider::traits::{
+use crate::storage_provider::entry::{AsStorageEntry, EntryStorageError};
+use crate::storage_provider::errors::ValidationError;
+use crate::storage_provider::log::AsStorageLog;
+use crate::storage_provider::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
-    AsStorageEntry, AsStorageLog,
 };
 use crate::test_utils::fixtures::{
     create_operation, document_id, entry, fields, key_pair, schema, update_operation,
