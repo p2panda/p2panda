@@ -178,7 +178,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// Returns a result containing vector of entries wrapped in an option. If no entry
     /// could be found at this author - log - seq number location then an error is
     /// returned.
-    async fn get_all_skiplink_entries_for_entry(
+    async fn get_certificate_pool(
         &self,
         author_id: &Author,
         log_id: &LogId,
@@ -304,7 +304,7 @@ pub mod tests {
             Ok(entries)
         }
 
-        async fn get_all_skiplink_entries_for_entry(
+        async fn get_certificate_pool(
             &self,
             author: &Author,
             log_id: &LogId,
@@ -719,7 +719,7 @@ pub mod tests {
         let log_id = LogId::default();
 
         let cert_pool = test_db
-            .get_all_skiplink_entries_for_entry(&author, &log_id, &SeqNum::new(16).unwrap())
+            .get_certificate_pool(&author, &log_id, &SeqNum::new(16).unwrap())
             .await
             .unwrap();
 
