@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
+use std::fmt::Display;
 
 use crate::cddl::generate_cddl_definition;
-use crate::document::DocumentViewId;
+use crate::hash::Hash;
 use crate::schema::system::{SchemaFieldView, SchemaView};
-use crate::schema::{FieldType, SchemaError};
+use crate::schema::{FieldType, SchemaError, SchemaId};
+
+use super::schema_id::SchemaVersion;
 
 /// The key of a schema field
 type FieldKey = String;
@@ -13,11 +17,15 @@ type FieldKey = String;
 /// A struct representing a materialised schema.
 ///
 /// It is constructed from a [`SchemaView`] and all related [`SchemaFieldView`]s.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Schema {
-    id: DocumentViewId,
-    name: String,
+    /// The application schema id for this schema.
+    id: SchemaId,
+
+    /// Describes the schema's intended use.
     description: String,
+
+    /// Maps all of the schema's field names to their respective types.
     fields: BTreeMap<FieldKey, FieldType>,
 }
 
@@ -48,8 +56,7 @@ impl Schema {
         }
 
         Ok(Schema {
-            id: schema.view_id().to_owned(),
-            name: schema.name().to_owned(),
+            id: SchemaId::new_application(schema.name(), schema.view_id()),
             description: schema.description().to_owned(),
             fields: fields_map,
         })
@@ -61,6 +68,12 @@ impl Schema {
         generate_cddl_definition(&self.fields)
     }
 
+    /// Access the schema's [`SchemaId`].
+    #[allow(unused)]
+    pub fn id(&self) -> &SchemaId {
+        &self.id
+    }
+
     /// Returns a unique string identifier for this schema.
     ///
     /// This identifier can only be used when it is not necessary to reconstruct this schema's
@@ -69,7 +82,42 @@ impl Schema {
     /// It has the format "<schema name>__<hashed schema document view graph tips>".
     #[allow(unused)]
     pub fn hash_id(&self) -> String {
-        format!("{}__{}", self.name, self.id.hash().as_str())
+        let version_str: &str = match self.id.version() {
+            // Unwrap because we don't expect hashing a validated view id to fail.
+            SchemaVersion::Application(view_id) => Hash::new(&view_id.as_str()).unwrap().as_str(),
+            SchemaVersion::System(version) => &version.to_string(),
+        };
+        format!("{}__{}", self.name(), version_str)
+    }
+
+    /// Access the schema version.
+    #[allow(unused)]
+    pub fn version(&self) -> SchemaVersion {
+        self.id.version()
+    }
+
+    /// Access the schema name.
+    #[allow(unused)]
+    pub fn name(&self) -> &str {
+        self.id.name()
+    }
+
+    /// Access the schema description.
+    #[allow(unused)]
+    pub fn description(&self) -> &str {
+        &self.description
+    }
+
+    /// Access the schema fields.
+    #[allow(unused)]
+    pub fn fields(&self) -> &BTreeMap<FieldKey, FieldType> {
+        &self.fields
+    }
+}
+
+impl Display for Schema {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<Schema {}>", self.id)
     }
 }
 
@@ -82,11 +130,11 @@ mod tests {
 
     use crate::document::{DocumentView, DocumentViewId};
     use crate::operation::{OperationId, OperationValue, PinnedRelationList};
-    use crate::schema::schema::Schema;
     use crate::schema::system::{SchemaFieldView, SchemaView};
+    use crate::schema::{Schema, SchemaId, SchemaVersion};
     use crate::test_utils::fixtures::{document_view_id, random_operation_id};
 
-    fn create_schema(fields: PinnedRelationList, view_id: DocumentViewId) -> SchemaView {
+    fn create_schema_view(fields: PinnedRelationList, view_id: DocumentViewId) -> SchemaView {
         let mut schema = BTreeMap::new();
         schema.insert(
             "name".to_string(),
@@ -136,7 +184,7 @@ mod tests {
             ]),
         ]);
 
-        let schema_view = create_schema(fields, schema_view_id);
+        let schema_view = create_schema_view(fields, schema_view_id);
 
         // Create first schema field "is_accessible"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -166,6 +214,23 @@ mod tests {
 
         let schema = result.unwrap();
 
+        // Test getters
+        let expected_view_id =
+            "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+                .parse::<DocumentViewId>()
+                .unwrap();
+        assert_eq!(
+            schema.id(),
+            &SchemaId::new_application("venue_name", &expected_view_id)
+        );
+        assert_eq!(schema.name(), "venue_name");
+        assert_eq!(
+            schema.version(),
+            SchemaVersion::Application(expected_view_id)
+        );
+        assert_eq!(schema.description(), "Describes a venue");
+        assert_eq!(schema.fields().len(), 2);
+
         let expected_cddl = "capacity = { type: \"int\", value: int, }\n".to_string()
             + "is_accessible = { type: \"bool\", value: bool, }\n"
             + "create-fields = { capacity, is_accessible }\n"
@@ -176,6 +241,9 @@ mod tests {
 
         // Schema should have a hash id
         assert!(schema.hash_id().starts_with("venue_name__0020"));
+
+        // Schema should have a string representation
+        assert_eq!(format!("{}", schema), "<Schema venue_name 496543>");
     }
 
     #[rstest]
@@ -193,7 +261,7 @@ mod tests {
             DocumentViewId::from(relation_operation_id_2.clone()),
         ]);
 
-        let schema_view = create_schema(fields, schema_view_id);
+        let schema_view = create_schema_view(fields, schema_view_id);
 
         // Create first valid schema field "is_accessible"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

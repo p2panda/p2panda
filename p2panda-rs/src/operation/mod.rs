@@ -11,6 +11,7 @@ mod operation_encoded;
 mod operation_fields;
 mod operation_id;
 mod operation_meta;
+mod operation_value;
 mod relation;
 
 pub use error::{
@@ -18,7 +19,8 @@ pub use error::{
 };
 pub use operation::{AsOperation, Operation, OperationAction, OperationVersion};
 pub use operation_encoded::OperationEncoded;
-pub use operation_fields::{OperationFields, OperationValue};
+pub use operation_fields::OperationFields;
 pub use operation_id::OperationId;
 pub use operation_meta::OperationWithMeta;
+pub use operation_value::OperationValue;
 pub use relation::{PinnedRelation, PinnedRelationList, Relation, RelationList};

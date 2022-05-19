@@ -150,7 +150,7 @@ impl TryFrom<DocumentView> for SchemaFieldView {
         Ok(Self {
             id: document_view.id().clone(),
             name: name.to_string(),
-            field_type: field_type.to_owned(),
+            field_type,
         })
     }
 }
@@ -163,42 +163,44 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::{DocumentView, DocumentViewId};
-    use crate::hash::Hash;
-    use crate::operation::{OperationValue, PinnedRelationList};
+    use crate::operation::{OperationId, OperationValue, PinnedRelationList};
     use crate::schema::system::SchemaFieldView;
-    use crate::test_utils::fixtures::{document_view_id, random_hash};
+    use crate::schema::SchemaId;
+    use crate::test_utils::fixtures::{document_view_id, random_operation_id, schema};
 
     use super::{FieldType, SchemaView};
 
     #[rstest]
     fn from_document_view(
-        #[from(random_hash)] relation_operation_id: Hash,
-        #[from(random_hash)] view_id: Hash,
+        random_operation_id: OperationId,
+        #[from(random_operation_id)] view_id: OperationId,
     ) {
-        let mut bool_field = BTreeMap::new();
-        bool_field.insert(
+        let mut venue_schema = BTreeMap::new();
+        venue_schema.insert(
             "name".to_string(),
             OperationValue::Text("venue_name".to_string()),
         );
-        bool_field.insert(
+        venue_schema.insert(
             "description".to_string(),
             OperationValue::Text("Describes a venue".to_string()),
         );
-        bool_field.insert(
+        let field_view_id = DocumentViewId::new(&[random_operation_id]);
+        venue_schema.insert(
             "fields".to_string(),
-            OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
-                relation_operation_id.into(),
-            ])),
+            OperationValue::PinnedRelationList(PinnedRelationList::new(vec![field_view_id])),
         );
 
         let document_view_id = DocumentViewId::from(view_id);
-        let document_view = DocumentView::new(document_view_id, bool_field);
+        let document_view = DocumentView::new(document_view_id, venue_schema);
 
         assert!(SchemaView::try_from(document_view).is_ok());
     }
 
     #[rstest]
-    fn field_type_from_document_view(document_view_id: DocumentViewId) {
+    fn field_type_from_document_view(
+        document_view_id: DocumentViewId,
+        #[from(schema)] address_schema: SchemaId,
+    ) {
         // Create first schema field "is_accessible"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -207,10 +209,7 @@ mod tests {
             "name".to_string(),
             OperationValue::Text("is_accessible".to_string()),
         );
-        bool_field.insert(
-            "type".to_string(),
-            OperationValue::Text(FieldType::Bool.into()),
-        );
+        bool_field.insert("type".to_string(), FieldType::Bool.into());
 
         let document_view = DocumentView::new(document_view_id.clone(), bool_field);
         let field_view = SchemaFieldView::try_from(document_view);
@@ -228,10 +227,7 @@ mod tests {
             "name".to_string(),
             OperationValue::Text("capacity".to_string()),
         );
-        capacity_field.insert(
-            "type".to_string(),
-            OperationValue::Text(FieldType::Int.into()),
-        );
+        capacity_field.insert("type".to_string(), FieldType::Int.into());
 
         let document_view = DocumentView::new(document_view_id.clone(), capacity_field);
         let field_view = SchemaFieldView::try_from(document_view);
@@ -246,10 +242,7 @@ mod tests {
             "name".to_string(),
             OperationValue::Text("ticket_price".to_string()),
         );
-        float_field.insert(
-            "type".to_string(),
-            OperationValue::Text(FieldType::Float.into()),
-        );
+        float_field.insert("type".to_string(), FieldType::Float.into());
 
         let document_view = DocumentView::new(document_view_id.clone(), float_field);
         let field_view = SchemaFieldView::try_from(document_view);
@@ -264,10 +257,7 @@ mod tests {
             "name".to_string(),
             OperationValue::Text("venue_name".to_string()),
         );
-        str_field.insert(
-            "type".to_string(),
-            OperationValue::Text(FieldType::String.into()),
-        );
+        str_field.insert("type".to_string(), FieldType::String.into());
 
         let document_view = DocumentView::new(document_view_id.clone(), str_field);
         let field_view = SchemaFieldView::try_from(document_view);
@@ -284,13 +274,16 @@ mod tests {
         );
         relation_field.insert(
             "type".to_string(),
-            OperationValue::Text(FieldType::Relation.into()),
+            FieldType::Relation(address_schema.clone()).into(),
         );
 
         let document_view = DocumentView::new(document_view_id, relation_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
-        assert_eq!(field_view.unwrap().field_type(), &FieldType::Relation);
+        assert_eq!(
+            field_view.unwrap().field_type(),
+            &FieldType::Relation(address_schema)
+        );
     }
 
     #[rstest]

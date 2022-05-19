@@ -40,6 +40,18 @@ pub enum OperationAction {
     Delete,
 }
 
+impl OperationAction {
+    /// Returns the operation action as a string.
+    #[allow(unused)]
+    pub fn as_str(&self) -> &str {
+        match self {
+            OperationAction::Create => "create",
+            OperationAction::Update => "update",
+            OperationAction::Delete => "delete",
+        }
+    }
+}
+
 impl Serialize for OperationAction {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -69,7 +81,6 @@ impl<'de> Deserialize<'de> for OperationAction {
     }
 }
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Operations describe data mutations of "documents" in the p2panda network. Authors send
 /// operations to CREATE, UPDATE or DELETE documents.
 ///
@@ -84,41 +95,6 @@ impl<'de> Deserialize<'de> for OperationAction {
 /// operation ids which identify the known branch tips at the time of publication. These allow
 /// us to build the graph and retain knowledge of the graph state at the time the specific
 /// operation was published.
-///
-/// ## Examples
-///
-/// All of the examples are valid operation graphs. Operations which refer to more than one
-/// previous operation help to reconcile branches. However, if other, unknown branches exist when
-/// the graph is resolved, the materialisation process will still resolves the graph to a single
-/// value.
-///
-/// 1)
-/// ```mermaid
-/// flowchart LR
-///     A --- B --- C --- D;
-///     B --- E --- F;
-/// ```
-///
-/// 2)
-/// ```mermaid
-/// flowchart LR
-///     B --- C --- D --- F;
-///     A --- B --- E --- F;
-/// ```
-///
-/// 3)
-/// ```mermaid
-/// flowchart LR
-///     A --- B --- C;
-///     A --- D --- E --- J;
-///     B --- F --- G --- H --- I --- J;
-/// ```
-///
-/// 4)
-/// ```mermaid
-/// flowchart LR
-///     A --- B --- C --- D --- E;
-/// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Operation {
     /// Describes if this operation creates, updates or deletes data.
@@ -151,7 +127,7 @@ impl Operation {
     /// use p2panda_rs::operation::{AsOperation, Operation, OperationFields, OperationValue};
     /// use p2panda_rs::schema::SchemaId;
     ///
-    /// let msg_schema = SchemaId::new("0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
+    /// let msg_schema = SchemaId::new("zoo_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
     /// let mut msg_fields = OperationFields::new();
     ///
     /// msg_fields
@@ -250,9 +226,10 @@ pub trait AsOperation {
         self.fields().is_some()
     }
 
-    /// Returns true if previous_operations contains a value.
+    /// Returns true if previous_operations contains an vec which itself contains
+    /// at least one item.
     fn has_previous_operations(&self) -> bool {
-        self.previous_operations().is_some()
+        self.previous_operations().is_some() && !self.previous_operations().unwrap().is_empty()
     }
 
     /// Returns true when instance is CREATE operation.
@@ -369,6 +346,13 @@ mod tests {
 
     use super::{AsOperation, Operation, OperationAction, OperationFields, OperationVersion};
 
+    #[test]
+    fn stringify_action() {
+        assert_eq!(OperationAction::Create.as_str(), "create");
+        assert_eq!(OperationAction::Update.as_str(), "update");
+        assert_eq!(OperationAction::Delete.as_str(), "delete");
+    }
+
     #[rstest]
     fn operation_validation(
         fields: OperationFields,
@@ -419,6 +403,17 @@ mod tests {
 
         assert!(invalid_update_operation_2.validate().is_err());
 
+        let invalid_update_operation_3 = Operation {
+            action: OperationAction::Update,
+            version: OperationVersion::Default,
+            schema: schema.clone(),
+            // UPDATE operations must contain previous_operations containing at least one operation_id
+            previous_operations: Some(vec![]), // Error
+            fields: None,
+        };
+
+        assert!(invalid_update_operation_3.validate().is_err());
+
         let invalid_delete_operation_1 = Operation {
             action: OperationAction::Delete,
             version: OperationVersion::Default,
@@ -433,13 +428,24 @@ mod tests {
         let invalid_delete_operation_2 = Operation {
             action: OperationAction::Delete,
             version: OperationVersion::Default,
-            schema,
+            schema: schema.clone(),
             previous_operations: Some(vec![prev_op_id]),
             // DELETE operations must not contain fields
             fields: Some(fields), // Error
         };
 
-        assert!(invalid_delete_operation_2.validate().is_err())
+        assert!(invalid_delete_operation_2.validate().is_err());
+
+        let invalid_delete_operation_3 = Operation {
+            action: OperationAction::Update,
+            version: OperationVersion::Default,
+            schema,
+            // DELETE operations must contain previous_operations containing at least one operation_id
+            previous_operations: Some(vec![]), // Error
+            fields: None,
+        };
+
+        assert!(invalid_delete_operation_3.validate().is_err());
     }
 
     #[rstest]

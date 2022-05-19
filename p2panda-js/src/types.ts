@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-export type SchemaId = 'schema_v1' | 'schema_field_v1' | string[];
+export type SchemaId =
+  | 'schema_definition_v1'
+  | 'schema_field_definition_v1'
+  | string;
 
 /**
  * Arguments for publishing the next entry.
@@ -149,7 +152,7 @@ export type OperationValueText = {
 /**
  * An operation value of `relation` type.
  */
- export type OperationValueRelation = {
+export type OperationValueRelation = {
   value: Relation;
   type: 'relation';
 };

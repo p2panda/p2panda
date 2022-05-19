@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::fmt::Display;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,12 @@ impl DocumentId {
     /// Returns the string representation of the document id.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+}
+
+impl Display for DocumentId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.as_hash().short_str())
     }
 }
 

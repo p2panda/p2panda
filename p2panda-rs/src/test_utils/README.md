@@ -70,7 +70,7 @@ let (panda_entry_1_hash, next_entry_args) = send_to_node(
     &mut node,
     &panda,
     &create_operation(
-        hash(DEFAULT_SCHEMA_HASH),
+        SchemaId::new(TEST_SCHEMA_ID).unwrap(),
         operation_fields(vec![(
             "cafe_name",
             OperationValue::Text("Panda Cafe".to_string()),
@@ -88,7 +88,7 @@ let (panda_entry_2_hash, next_entry_args) = send_to_node(
     &mut node,
     &panda,
     &update_operation(
-        hash(DEFAULT_SCHEMA_HASH),
+        SchemaId::new(TEST_SCHEMA_ID).unwrap(),
         vec![panda_entry_1_hash.clone()], // The previous tip of this document graph
         operation_fields(vec![(
             "cafe_name",
@@ -108,7 +108,7 @@ let (penguin_entry_1_hash, next_entry_args) = send_to_node(
     &mut node,
     &penguin,
     &update_operation(
-        hash(DEFAULT_SCHEMA_HASH),
+        SchemaId::new(TEST_SCHEMA_ID).unwrap(),
         vec![panda_entry_2_hash],
         operation_fields(vec![(
             "message",
@@ -137,12 +137,12 @@ RUST_LOG=p2panda_rs=debug cargo test
 
 ```bash
 # Generate JSON formatted test data
-cargo run --bin json-test-data
+cargo run --bin cbor-test-data
 ```
 
 ### Format
 
-Test data is generated as a JSON document formatted as summerised below (to see full output, run command mentioned above).
+Test data is generated as CBOR encoded as a hex string. Below is a summary of the data in JSON format (to see actual output, run command mentioned above).
 
 ```js
 {

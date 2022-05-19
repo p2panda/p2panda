@@ -3,6 +3,7 @@
 //! Types and methods for deriving and maintaining materialised documents.
 use std::collections::btree_map::Iter as BTreeMapIter;
 use std::collections::BTreeMap;
+use std::fmt::Display;
 
 use crate::document::DocumentViewId;
 use crate::operation::OperationValue;
@@ -59,6 +60,12 @@ impl DocumentView {
     /// Returns true if the instance is empty, otherwise false.
     pub fn is_empty(&self) -> bool {
         self.view.is_empty()
+    }
+}
+
+impl Display for DocumentView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<DocumentView {}>", self.id)
     }
 }
 #[cfg(test)]
@@ -118,6 +125,8 @@ mod tests {
         let (view, is_edited, is_deleted) = reduce(&[test_create_operation]);
 
         let document_view = DocumentView::new(document_view_id, view);
+
+        assert_eq!(format!("{}", document_view), "<DocumentView 496543>");
 
         assert_eq!(
             document_view.keys(),

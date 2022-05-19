@@ -5,9 +5,25 @@ use thiserror::Error;
 /// Custom errors related to `SchemaId`.
 #[derive(Error, Debug)]
 pub enum SchemaIdError {
-    /// Handle errors from validating operation id hashes
+    /// Handle errors from validating operation id hashes.
     #[error(transparent)]
     DocumentViewIdError(#[from] crate::document::DocumentViewIdError),
+
+    /// Invalid hash in schema id.
+    #[error("encountered invalid hash while parsing application schema id: {0}")]
+    HashError(#[from] crate::hash::HashError),
+
+    /// Encountered a malformed schema id.
+    #[error("malformed schema id: {0}")]
+    MalformedSchemaId(String),
+
+    /// Application schema ids must start with the schema's name.
+    #[error("application schema id is missing a name: {0}")]
+    MissingApplicationSchemaName(String),
+
+    /// Invalid system schema id.
+    #[error("not a known system schema: {0}")]
+    UnknownSystemSchema(String),
 }
 
 /// Custom errors related to `Schema`.
@@ -24,4 +40,8 @@ pub enum FieldTypeError {
     /// Invalid field type found.
     #[error("invalid field type '{0}'")]
     InvalidFieldType(String),
+
+    /// Schema ids referenced by relation field types need to be valid.
+    #[error(transparent)]
+    RelationSchemaReference(#[from] SchemaIdError),
 }

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
+use std::fmt::Display;
 use std::hash::Hash as StdHash;
+use std::str::FromStr;
 
 use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
 use serde::{Deserialize, Serialize};
@@ -45,6 +47,27 @@ impl Author {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
+
+    /// Return a shortened six character representation.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # use p2panda_rs::identity::Author;
+    /// let pub_key = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
+    /// let author = pub_key.parse::<Author>().unwrap();
+    /// assert_eq!(author.short_str(), "a5d982");
+    /// ```
+    pub fn short_str(&self) -> &str {
+        let offset = self.0.len() - 6;
+        &self.0[offset..]
+    }
+}
+
+impl Display for Author {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<Author {}>", self.short_str())
+    }
 }
 
 /// Convert Ed25519 `PublicKey` to `Author` instance.
@@ -58,11 +81,11 @@ impl TryFrom<PublicKey> for Author {
 
 /// Convert any hex-encoded string representation of an Ed25519 public key into an `Author`
 /// instance.
-impl TryFrom<&str> for Author {
-    type Error = AuthorError;
+impl FromStr for Author {
+    type Err = AuthorError;
 
-    fn try_from(str: &str) -> Result<Self, Self::Error> {
-        Self::new(str)
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::new(s)
     }
 }
 
@@ -89,8 +112,6 @@ impl Validate for Author {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryFrom;
-
     use super::Author;
 
     #[test]
@@ -105,7 +126,10 @@ mod tests {
     #[test]
     fn string_conversion() {
         let author_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
-        let author = Author::try_from(author_str).unwrap();
+        let author: Author = author_str.parse().unwrap();
         assert_eq!(author_str, author.as_str());
+
+        // Display impl
+        assert_eq!(format!("{}", author), "<Author a5d982>");
     }
 }

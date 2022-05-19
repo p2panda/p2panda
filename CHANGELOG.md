@@ -9,6 +9,8 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+- Add `mockall` crate and create mocks for `EntryStore` and `LogStore` [#314](https://github.com/p2panda/p2panda/pull/314).
+
 ## Added
 
 - `Document` for sorting and reducing a graph of `Operations` [#169](https://github.com/p2panda/p2panda/pull/169) `rs` 🥞
@@ -22,7 +24,11 @@ Highlights are marked with a pancake 🥞
 - Performance benchmarks for entry and operation encoding/decoding [#254](https://github.com/p2panda/p2panda/pull/254) `rs`
 - Move `DocumentId` from `DocmentView` into `Document` [#255](https://github.com/p2panda/p2panda/pull/255) `rs`
 - Introduce `OperationId` to increase type safety around uses of `Hash` [#272](https://github.com/p2panda/p2panda/pull/272) `rs`
+- `StorageProvider` and associated traits for implementing storage solutions [#274](https://github.com/p2panda/p2panda/pull/274) `rs` 🥞
+- Implement `Display` trait for various structs [#281](https://github.com/p2panda/p2panda/pull/281) `rs`
 - Implement document view id hash as a limited-size identifier for document views [#277](https://github.com/p2panda/p2panda/pull/277) `rs`
+- Additional methods on `EntryStore` needed for replication [310](https://github.com/p2panda/p2panda/pull/310) `rs`
+- Introduce `DocumentViewHash`, implement `Hash` for `DocumentViewId` [#313](https://github.com/p2panda/p2panda/pull/313) `rs`
 - Implement schema hash id as a unique identifier for schemas `rs` [#282](https://github.com/p2panda/p2panda/pull/282) `rs`
 
 ## Changed
@@ -37,10 +43,21 @@ Highlights are marked with a pancake 🥞
 - Support all `Relation` flavours in `cddl` module [#259](https://github.com/p2panda/p2panda/pull/259) `rs`
 - Impl `IntoIter` trait for `PinnedRelation`, `RelationList` and `DocumentViewId` [#266](https://github.com/p2panda/p2panda/pull/266) `rs`
 - Improve error reporting when adding operation fields [#262](https://github.com/p2panda/p2panda/issues/262)] `rs` `js`
+- Update mock node API [#286](https://github.com/p2panda/p2panda/issues/286) `rs`
+- Refactored graph module to be generic over graph node keys and other graph improvements [#289](https://github.com/p2panda/p2panda/issues/289) `rs`
+- Require sorted serialisation of document view ids [#284](https://github.com/p2panda/p2panda/pull/284) `rs`
+- Introduce new application schema id format [#292](https://github.com/p2panda/p2panda/pull/292) `rs`
+- Update spelling of system schema ids [#294](https://github.com/p2panda/p2panda/pull/294) `rs`
+- Update `Schema` implementation to make use of new `SchemaId` [#296](https://github.com/p2panda/p2panda/pull/296) `rs`
+- Require schema field definitions to specify a specific schema [#269](https://github.com/p2panda/p2panda/pull/269) `rs` 🥞
+- Methods for getting string representations of `OperationValue` field type and `OperationAction` [#303](https://github.com/p2panda/p2panda/pull/303) `rs`
+- Minor method renaming in `EntryStore` [323](https://github.com/p2panda/p2panda/pull/323) `rs`
 
 ## Fixed
 
 - Fix determination of field types in p2panda-js [#202](https://github.com/p2panda/p2panda/pull/202) `js`
+- Fix equality of document view ids by sorting before comparison [#284](https://github.com/p2panda/p2panda/pull/284) `js`
+- Pin all versions in `Cargo.toml` to avoid unexpected crate updates [#299](https://github.com/p2panda/p2panda/pull/299) `rs`
 
 ## Everything burrito
 
@@ -49,6 +66,7 @@ Highlights are marked with a pancake 🥞
 - Split up overly long `operation.rs` file [#232](https://github.com/p2panda/p2panda/pull/232) `rs`
 - Extend test coverage for `OperationFields` [#236](https://github.com/p2panda/p2panda/pull/236) `rs`
 - Further develop our best practices for writing documentation [#240](https://github.com/p2panda/p2panda/pull/240) `rs`
+- Test `debug` macro calls in Github CI [#288](https://github.com/p2panda/p2panda/pull/288) `rs`
 
 ## [0.3.0]
 
@@ -86,6 +104,7 @@ Not released yet, due to unpublished dependencies: :package: `p2panda-rs`
 - Changes to `mocks` module in `test_utils` [#181](https://github.com/p2panda/p2panda/pull/181) `rs`
 - Implement logging for mock node in `test_utils` [#192](https://github.com/p2panda/p2panda/pull/192) `rs`
 - Support `u64` and `i64` integers, remove `sqlx` [#177](https://github.com/p2panda/p2panda/pull/177) `rs` `js`
+- Generate CBOR encoded test data [300](https://github.com/p2panda/p2panda/pull/300) `rs`
 
 ### Campfires and boiling pots to sit around
 

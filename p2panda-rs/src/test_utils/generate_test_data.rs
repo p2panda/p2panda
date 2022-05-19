@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-/// Generate JSON formatted test data. This is run with the `cargo run --bin json-test-data`
+use p2panda_rs::hash::Hash;
+/// Generate CBOR encoded test data. This is run with the `cargo run --bin cbor-test-data`
 /// command. The output data can be used for testing a p2panda implementation. It is currently used
 /// in `p2panda-js`.
-use p2panda_rs::operation::OperationValue;
+use p2panda_rs::operation::{OperationId, OperationValue};
 use p2panda_rs::schema::SchemaId;
-use p2panda_rs::test_utils::constants::DEFAULT_SCHEMA_HASH;
 use p2panda_rs::test_utils::mocks::Client;
 use p2panda_rs::test_utils::mocks::{send_to_node, Node};
 use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
@@ -20,12 +20,15 @@ fn main() {
     // Instantiate one client called "panda"
     let panda = Client::new("panda".to_string(), new_key_pair());
 
+    let default_schema_hash: OperationId = Hash::new_from_bytes(vec![3, 2, 1]).unwrap().into();
+    let schema_id = SchemaId::new_application("chat", &default_schema_hash.into());
+
     // Publish a CREATE operation
     let (entry1_hash, _) = send_to_node(
         &mut node,
         &panda,
         &create_operation(
-            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            schema_id.clone(),
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("Ohh, my first message!".to_string()),
@@ -39,7 +42,7 @@ fn main() {
         &mut node,
         &panda,
         &update_operation(
-            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            schema_id.clone(),
             vec![entry1_hash.into()],
             operation_fields(vec![(
                 "message",
@@ -54,7 +57,7 @@ fn main() {
         &mut node,
         &panda,
         &update_operation(
-            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
+            schema_id.clone(),
             vec![entry2_hash.into()],
             operation_fields(vec![(
                 "message",
@@ -68,10 +71,7 @@ fn main() {
     send_to_node(
         &mut node,
         &panda,
-        &delete_operation(
-            SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
-            vec![entry3_hash.into()],
-        ),
+        &delete_operation(schema_id, vec![entry3_hash.into()]),
     )
     .unwrap();
 
@@ -79,17 +79,18 @@ fn main() {
     // `p2panda-js`
     let formatted_data = generate_test_data(&mut node, vec![panda]);
 
-    println!("{}", serde_json::to_string_pretty(&formatted_data).unwrap());
+    let mut cbor = vec![];
+    ciborium::ser::into_writer(&formatted_data, &mut cbor).unwrap();
+    println!("{}", hex::encode(cbor));
 }
 
 #[cfg(test)]
 mod tests {
+    use p2panda_rs::hash::Hash;
     use p2panda_rs::schema::SchemaId;
-    // Generate json formatted test data
-    use serde_json::Value;
 
-    use p2panda_rs::operation::OperationValue;
-    use p2panda_rs::test_utils::constants::{DEFAULT_PRIVATE_KEY, DEFAULT_SCHEMA_HASH};
+    use p2panda_rs::operation::{OperationId, OperationValue};
+    use p2panda_rs::test_utils::constants::DEFAULT_PRIVATE_KEY;
     use p2panda_rs::test_utils::mocks::Client;
     use p2panda_rs::test_utils::mocks::{send_to_node, Node};
     use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
@@ -106,12 +107,15 @@ mod tests {
             keypair_from_private(DEFAULT_PRIVATE_KEY.into()),
         );
 
+        let default_schema_hash: OperationId = Hash::new_from_bytes(vec![3, 2, 1]).unwrap().into();
+        let schema_id = SchemaId::new_application("chat", &default_schema_hash.into());
+
         // Publish a CREATE operation
         send_to_node(
             &mut node,
             &panda,
             &create_operation(
-                SchemaId::new(DEFAULT_SCHEMA_HASH).unwrap(),
+                schema_id,
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Ohh, my first message!".to_string()),
@@ -120,68 +124,17 @@ mod tests {
         )
         .unwrap();
 
-        const TEST_DATA: &str = r#"{
-            "panda": {
-              "publicKey": "2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96",
-              "privateKey": "eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e2",
-              "logs": [
-                {
-                  "encodedEntries": [
-                    {
-                      "author": "2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96",
-                      "entryBytes": "002f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc9601019d0020343e90bcfd50d3953abc23342d2653ea96c892a0c6018bed8b1fa956af15b455e965dc629e99a8edf6788b9ae151e5024f22f2f1ca9b990deba401005778df59fb1e144ee6351b4a1ea78a37ab19772564d14e1ceb3ecaa62a5b73dd4e862e08",
-                      "entryHash": "0020a76d455b0b9779648550601b4616b46d52786acd5e3543d840112f1afd6f94d3",
-                      "payloadBytes": "a466616374696f6e6663726561746566736368656d6181784430303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a1676d657373616765a26474797065637374726576616c7565764f68682c206d79206669727374206d65737361676521",
-                      "payloadHash": "0020343e90bcfd50d3953abc23342d2653ea96c892a0c6018bed8b1fa956af15b455",
-                      "logId": "1",
-                      "seqNum": "1"
-                    }
-                  ],
-                  "decodedOperations": [
-                    {
-                      "action": "create",
-                      "schema": ["0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"],
-                      "version": 1,
-                      "fields": {
-                        "message": {
-                          "type": "str",
-                          "value": "Ohh, my first message!"
-                        }
-                      }
-                    }
-                  ],
-                  "nextEntryArgs": [
-                    {
-                      "entryHashBacklink": null,
-                      "entryHashSkiplink": null,
-                      "seqNum": "1",
-                      "logId": "1"
-                    },
-                    {
-                      "entryHashBacklink": "0020a76d455b0b9779648550601b4616b46d52786acd5e3543d840112f1afd6f94d3",
-                      "entryHashSkiplink": null,
-                      "seqNum": "2",
-                      "logId": "1"
-                    }
-                  ]
-                }
-              ]
-            }
-          }"#;
+        const TEST_DATA: &str = "A16570616E6461A3697075626C69634B65797840326638653530633265646536643933366563633331343431383766663163323733383038313835636662633566663364333734386431666637333533666339366A707269766174654B6579784065623835326665666137303339303165343266313763646332616135303739343766333932613732313031623263316136643330303233616631346637356532646C6F677381A36E656E636F646564456E747269657381A766617574686F727840326638653530633265646536643933366563633331343431383766663163323733383038313835636662633566663364333734386431666637333533666339366A656E747279427974657379010C3030326638653530633265646536643933366563633331343431383766663163323733383038313835636662633566663364333734386431666637333533666339363031303161313030323065663737323334636134393539333765313537363865343232366564643438373132386263633433633965613063643339303834366334303836346435333030303335613262623162633837653637393431356133666431623731656537363564623163363364613265656362313530333266303932613635386139313262646437613330386632653330323762313564343031383038306431346131326138656164616133663133303332653036623261323732393562643062373935303969656E74727948617368784430303230363566373466366664383165623162616531396562306438646365313435666161366135366437623430373664376662613433383534313036303962326261656C7061796C6F61644279746573790142613436363631363337343639366636653636363337323635363137343635363637333633363836353664363137383439363336383631373435663330333033323330363333363335333533363337363136353333333736353636363536313332333933333635333333343631333936333337363433313333363633383636333236323636333233333634363236343633333336323335363333373632333936313632333433363332333933333331333133313633333433383636363333373338363236373736363537323733363936663665303136363636363936353663363437336131363736643635373337333631363736356132363437343739373036353633373337343732363537363631366337353635373634663638363832633230366437393230363636393732373337343230366436353733373336313637363532316B7061796C6F61644861736878443030323065663737323334636134393539333765313537363865343232366564643438373132386263633433633965613063643339303834366334303836346435333030656C6F6749646131667365714E756D6131716465636F6465644F7065726174696F6E7381A466616374696F6E6663726561746566736368656D617849636861745F30303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696F6E01666669656C6473A1676D657373616765A26474797065637374726576616C7565764F68682C206D79206669727374206D657373616765216D6E657874456E7472794172677382A471656E747279486173684261636B6C696E6BF671656E74727948617368536B69706C696E6BF6667365714E756D6131656C6F6749646131A471656E747279486173684261636B6C696E6B7844303032303635663734663666643831656231626165313965623064386463653134356661613661353664376234303736643766626134333835343130363039623262616571656E74727948617368536B69706C696E6BF6667365714E756D6132656C6F6749646131";
 
         // Generate test data
         let generated_test_data = generate_test_data(&mut node, vec![panda]);
 
-        // Convert to json string
-        let generated_test_data_str = serde_json::to_string(&generated_test_data).unwrap();
-
-        // Convert both strings into json objects for comparison
-        let generated_test_data_json: Value =
-            serde_json::from_str(&generated_test_data_str).unwrap();
-        let fixture_test_data_json: Value = serde_json::from_str(TEST_DATA).unwrap();
+        // Encode as CBOR
+        let mut cbor = vec![];
+        ciborium::ser::into_writer(&generated_test_data, &mut cbor).unwrap();
 
         // Both should be equal
-        assert_eq!(generated_test_data_json, fixture_test_data_json);
+        assert_eq!(TEST_DATA, hex::encode_upper(cbor));
     }
 
     #[test]

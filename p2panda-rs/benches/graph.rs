@@ -13,7 +13,7 @@ use p2panda_rs::graph::Graph;
 const DEFAULT_DENSITY: f32 = 0.1;
 const DEFAULT_SIZE: u64 = 100;
 
-fn generate_random_p2panda_dag(size: u64, density: f32) -> Graph<u64> {
+fn generate_random_p2panda_dag(size: u64, density: f32) -> Graph<String, u64> {
     use rand::distributions::{Bernoulli, Distribution};
     assert!(0.0 < density && density <= 1.0);
     let mut rng = rand::thread_rng();

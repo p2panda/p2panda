@@ -88,6 +88,11 @@ impl PinnedRelation {
     pub fn new(document_view_id: DocumentViewId) -> Self {
         Self(document_view_id)
     }
+
+    /// Returns the pinned relation's document view id.
+    pub fn view_id(&self) -> &DocumentViewId {
+        &self.0
+    }
 }
 
 impl Validate for PinnedRelation {
@@ -115,6 +120,9 @@ pub struct RelationList(Vec<DocumentId>);
 impl RelationList {
     /// Returns a new list of relations.
     pub fn new(relations: Vec<DocumentId>) -> Self {
+        let mut relations = relations;
+        relations.sort_by_key(|a| a.as_str().to_string());
+
         Self(relations)
     }
 
@@ -153,6 +161,9 @@ pub struct PinnedRelationList(Vec<DocumentViewId>);
 impl PinnedRelationList {
     /// Returns a new list of pinned relations.
     pub fn new(relations: Vec<DocumentViewId>) -> Self {
+        let mut relations = relations;
+        relations.sort_by_key(|a| a.as_str());
+
         Self(relations)
     }
 

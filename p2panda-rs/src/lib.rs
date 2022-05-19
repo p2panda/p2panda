@@ -25,7 +25,7 @@
 //! # let profile_schema_view_id = OperationId::from(
 //! #     Hash::new_from_bytes(vec![1, 2, 3])?
 //! # );
-//! # let profile_schema: SchemaId = profile_schema_view_id.into();
+//! # let profile_schema = SchemaId::new_application("profile", &profile_schema_view_id.into());
 //! // Generate new Ed25519 key pair
 //! let key_pair = KeyPair::new();
 //!
@@ -74,6 +74,7 @@ pub mod identity;
 pub mod operation;
 pub mod schema;
 pub mod secret_group;
+pub mod storage_provider;
 pub mod test_utils;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
@@ -81,7 +82,7 @@ pub mod wasm;
 /// Trait used by p2panda structs to validate arguments.
 pub trait Validate {
     /// Validation error type.
-    type Error;
+    type Error: std::fmt::Debug + std::error::Error + 'static;
 
     /// Validates p2panda data type instance.
     fn validate(&self) -> Result<(), Self::Error>;
