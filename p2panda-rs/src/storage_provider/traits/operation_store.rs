@@ -7,7 +7,7 @@ use crate::operation::OperationId;
 use crate::storage_provider::errors::OperationStorageError;
 use crate::storage_provider::traits::AsStorageOperation;
 
-/// Trait which handles all storage actions relating to `Operation`'s.
+/// Trait which handles all storage actions relating to `Operation`s.
 ///
 /// This trait should be implemented on the root storage provider struct. It's definitions make up
 /// the required methods for inserting and querying operations from storage.
@@ -43,7 +43,7 @@ pub trait OperationStore<StorageOperation: AsStorageOperation> {
     /// Get all operations which are part of a specific document.
     ///
     /// Returns a result containing a vector of operations. If no document
-    /// was found then an empty vecotr is returned. Errors if a fatal storage
+    /// was found then an empty vector is returned. Errors if a fatal storage
     /// error occured.
     async fn get_operations_by_document_id(
         &self,
