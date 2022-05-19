@@ -78,7 +78,8 @@ impl Schema {
     /// This identifier can only be used when it is not necessary to reconstruct this schema's
     /// document from it.
     ///
-    /// It has the format "<schema name>__<hashed schema document view>".
+    /// It has the format "<schema name>__<hashed schema document view>" for application schemas
+    /// and "<schema_name>__<version>" for system schemas.
     #[allow(unused)]
     pub fn hash_id(&self) -> String {
         match self.id.version() {
@@ -136,7 +137,7 @@ mod tests {
     use crate::document::{DocumentView, DocumentViewId};
     use crate::operation::{OperationId, OperationValue, PinnedRelationList};
     use crate::schema::system::{SchemaFieldView, SchemaView};
-    use crate::schema::{Schema, SchemaId, SchemaVersion};
+    use crate::schema::{FieldType, Schema, SchemaId, SchemaVersion};
     use crate::test_utils::fixtures::{document_view_id, random_operation_id};
 
     fn create_schema_view(fields: PinnedRelationList, view_id: DocumentViewId) -> SchemaView {
@@ -244,11 +245,34 @@ mod tests {
         // Schema should return correct cddl string
         assert_eq!(expected_cddl, schema.as_cddl());
 
-        // Schema should have a hash id
-        assert!(schema.hash_id().starts_with("venue_name__0020"));
-
         // Schema should have a string representation
         assert_eq!(format!("{}", schema), "<Schema venue_name 496543>");
+    }
+
+    #[rstest]
+    fn hash_id(#[from(document_view_id)] application_schema_view_id: DocumentViewId) {
+        // Validate application schema format
+        let mut schema_fields = BTreeMap::new();
+        schema_fields.insert("is_real".to_string(), FieldType::Bool);
+        let application_schema = Schema {
+            id: SchemaId::Application("event".to_string(), application_schema_view_id),
+            description: "test".to_string(),
+            fields: schema_fields.clone(),
+        };
+        let application_schema_hash_id = application_schema.hash_id();
+        assert_eq!(
+            "event__0020fc76e3a452648023d5e169369116be1526f6d3fc2b7742ed1af2b55f11bca7fb",
+            application_schema_hash_id
+        );
+
+        // Validate system schema format
+        let system_schema = Schema {
+            id: SchemaId::SchemaDefinition(1),
+            description: "test".to_string(),
+            fields: schema_fields,
+        };
+        let system_schema_hash_id = system_schema.hash_id();
+        assert_eq!("schema_definition__1", system_schema_hash_id);
     }
 
     #[rstest]
