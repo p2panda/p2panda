@@ -27,7 +27,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// Returns a result containing an entry wrapped in an option. If no entry could
     /// be found at this author - log - seq number location then None is returned.
     /// Errors when a fatal storage error occurs.
-    async fn entry_at_seq_num(
+    async fn get_entry_at_seq_num(
         &self,
         author: &Author,
         log_id: &LogId,
@@ -63,7 +63,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         // Unwrap as we know this isn't the first sequence number because of the above condition
         let backlink_seq_num = SeqNum::new(entry.seq_num().as_u64() - 1).unwrap();
         let expected_backlink = self
-            .entry_at_seq_num(&entry.author(), &entry.log_id(), &backlink_seq_num)
+            .get_entry_at_seq_num(&entry.author(), &entry.log_id(), &backlink_seq_num)
             .await?
             .ok_or_else(|| EntryStorageError::ExpectedBacklinkMissing(entry.hash()))?;
 
@@ -100,7 +100,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
             // Retrieve the expected skiplink from the database
             Some(seq_num) => {
                 let expected_skiplink_entry = self
-                    .entry_at_seq_num(&entry.author(), &entry.log_id(), &seq_num)
+                    .get_entry_at_seq_num(&entry.author(), &entry.log_id(), &seq_num)
                     .await?
                     .ok_or_else(|| EntryStorageError::ExpectedSkiplinkMissing(entry.hash()))?;
                 Some(expected_skiplink_entry)
@@ -120,7 +120,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// Returns a result containing an entry wrapped in an option. If no log was
     /// could be found at this author - log location then None is returned.
     /// Errors when a fatal storage error occurs.
-    async fn latest_entry(
+    async fn get_latest_entry(
         &self,
         author: &Author,
         log_id: &LogId,
@@ -131,7 +131,10 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// Returns a result containing vector of entries wrapped in an option.
     /// If no schema with this id could be found then None is returned.
     /// Errors when a fatal storage error occurs.
-    async fn by_schema(&self, schema: &SchemaId) -> Result<Vec<StorageEntry>, EntryStorageError>;
+    async fn get_entries_by_schema(
+        &self,
+        schema: &SchemaId,
+    ) -> Result<Vec<StorageEntry>, EntryStorageError>;
 
     /// Get all entries of a log from a specified sequence number up to passed max number of entries.
     ///
@@ -159,7 +162,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         // Check if skiplink is required and return hash if so
         let entry_skiplink_hash = if is_lipmaa_required(next_seq_num.as_u64()) {
             let skiplink_entry = match self
-                .entry_at_seq_num(&entry.author(), &entry.log_id(), &skiplink_seq_num)
+                .get_entry_at_seq_num(&entry.author(), &entry.log_id(), &skiplink_seq_num)
                 .await?
             {
                 Some(entry) => Ok(entry),
@@ -231,7 +234,7 @@ pub mod tests {
         }
 
         /// Returns entry at sequence position within an author's log.
-        async fn entry_at_seq_num(
+        async fn get_entry_at_seq_num(
             &self,
             author: &Author,
             log_id: &LogId,
@@ -249,7 +252,7 @@ pub mod tests {
         }
 
         /// Returns the latest Bamboo entry of an author's log.
-        async fn latest_entry(
+        async fn get_latest_entry(
             &self,
             author: &Author,
             log_id: &LogId,
@@ -276,7 +279,7 @@ pub mod tests {
             let mut seq_num = *seq_num;
 
             while entries.len() < max_number_of_entries {
-                match self.entry_at_seq_num(author, log_id, &seq_num).await? {
+                match self.get_entry_at_seq_num(author, log_id, &seq_num).await? {
                     Some(next_entry) => entries.push(next_entry),
                     None => break,
                 };
@@ -289,7 +292,7 @@ pub mod tests {
         }
 
         /// Return vector of all entries of a given schema
-        async fn by_schema(
+        async fn get_entries_by_schema(
             &self,
             schema: &SchemaId,
         ) -> Result<Vec<StorageEntry>, EntryStorageError> {
@@ -319,7 +322,7 @@ pub mod tests {
             let mut cert_pool: Vec<StorageEntry> = Vec::new();
 
             for seq_num in cert_pool_seq_nums {
-                let entry = match self.entry_at_seq_num(author, log_id, &seq_num).await? {
+                let entry = match self.get_entry_at_seq_num(author, log_id, &seq_num).await? {
                     Some(entry) => Ok(entry),
                     None => Err(EntryStorageError::CertPoolEntryMissing(seq_num.as_u64())),
                 }?;
@@ -349,7 +352,7 @@ pub mod tests {
 
         // Get an entry at a specific seq number from an authors log.
         let entry_at_seq_num = store
-            .entry_at_seq_num(
+            .get_entry_at_seq_num(
                 &storage_entry.author(),
                 &storage_entry.log_id(),
                 &storage_entry.seq_num(),
@@ -376,7 +379,7 @@ pub mod tests {
 
         // Before an entry is inserted the latest entry should be none.
         assert!(store
-            .latest_entry(&storage_entry.author(), &LogId::default())
+            .get_latest_entry(&storage_entry.author(), &LogId::default())
             .await
             .unwrap()
             .is_none());
@@ -386,7 +389,7 @@ pub mod tests {
 
         assert_eq!(
             store
-                .latest_entry(&storage_entry.author(), &LogId::default())
+                .get_latest_entry(&storage_entry.author(), &LogId::default())
                 .await
                 .unwrap()
                 .unwrap(),
@@ -415,13 +418,17 @@ pub mod tests {
         let author_2_entry = StorageEntry::new(&author_2_entry, &operation_encoded).unwrap();
 
         // Before an entry with this schema is inserted this method should return an empty array.
-        assert!(store.by_schema(&schema).await.unwrap().is_empty());
+        assert!(store
+            .get_entries_by_schema(&schema)
+            .await
+            .unwrap()
+            .is_empty());
 
         // Insert two entries into the store.
         store.insert_entry(author_1_entry).await.unwrap();
         store.insert_entry(author_2_entry).await.unwrap();
 
-        assert_eq!(store.by_schema(&schema).await.unwrap().len(), 2);
+        assert_eq!(store.get_entries_by_schema(&schema).await.unwrap().len(), 2);
     }
 
     #[rstest]
