@@ -78,7 +78,7 @@ pub enum EntryStorageError {
 
     /// Error which occurs if entries' encoded skiplink hash does not match the expected one
     /// present in the database.
-    #[error("The skiplink hash encoded in the entry: {0} did not match the expected lipmaa hash")]
+    #[error("The skiplink hash encoded in the entry: {0} did not match the known hash of the skiplink target")]
     InvalidSkiplinkPassed(Hash),
 
     /// Error which originates in `determine_skiplink` if the expected skiplink is missing.
@@ -113,4 +113,20 @@ pub enum PublishEntryError {
     /// Error returned when an entry is received which contains a mismatching operation.
     #[error("Invalid Entry and Operation pair with id {0}")]
     InvalidEntryWithOperation(Hash),
+}
+
+/// `OperationStore` errors.
+#[derive(thiserror::Error, Debug)]
+pub enum OperationStorageError {
+    /// Catch all error which implementers can use for passing their own errors up the chain.
+    #[error("Error occured in OperationStore: {0}")]
+    Custom(String),
+
+    /// A fatal error occured when performing a storage query.
+    #[error("A fatal error occured in OperationStore: {0}")]
+    FatalStorageError(String),
+
+    /// Error which originates in `insert_operation()` when the insertion fails.
+    #[error("Error occured when inserting an operation with id {0:?} into storage")]
+    InsertionError(OperationId),
 }

@@ -4,6 +4,7 @@
 mod entry_store;
 mod log_store;
 mod models;
+mod operation_store;
 mod requests;
 mod responses;
 mod storage_provider;

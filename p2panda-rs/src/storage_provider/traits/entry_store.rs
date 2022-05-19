@@ -19,8 +19,7 @@ use crate::storage_provider::traits::AsStorageEntry;
 pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// Insert an entry into storage.
     ///
-    /// Returns `true` if insertion was successful, returns `false` if no error occured but an
-    /// unexpected number of insertions happened. Errors if a fatal storage error occured.
+    /// Returns an error if a fatal storage error occured.
     async fn insert_entry(&self, value: StorageEntry) -> Result<(), EntryStorageError>;
 
     /// Get an entry at sequence position within an author's log.
@@ -182,7 +181,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// Returns a result containing vector of entries wrapped in an option. If no entry
     /// could be found at this author - log - seq number location then an error is
     /// returned.
-    async fn get_all_skiplink_entries_for_entry(
+    async fn get_certificate_pool(
         &self,
         author_id: &Author,
         log_id: &LogId,
@@ -308,7 +307,7 @@ pub mod tests {
             Ok(entries)
         }
 
-        async fn get_all_skiplink_entries_for_entry(
+        async fn get_certificate_pool(
             &self,
             author: &Author,
             log_id: &LogId,
@@ -644,7 +643,7 @@ pub mod tests {
                 .unwrap_err()
                 .to_string(),
             format!(
-                "The skiplink hash encoded in the entry: {} did not match the expected lipmaa hash",
+                "The skiplink hash encoded in the entry: {} did not match the known hash of the skiplink target",
                 entry_at_seq_num_four_with_wrong_skiplink.hash()
             )
         );
@@ -727,7 +726,7 @@ pub mod tests {
         let log_id = LogId::default();
 
         let cert_pool = test_db
-            .get_all_skiplink_entries_for_entry(&author, &log_id, &SeqNum::new(16).unwrap())
+            .get_certificate_pool(&author, &log_id, &SeqNum::new(16).unwrap())
             .await
             .unwrap();
 
