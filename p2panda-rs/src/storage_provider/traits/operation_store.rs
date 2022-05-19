@@ -7,6 +7,10 @@ use crate::operation::OperationId;
 use crate::storage_provider::errors::OperationStorageError;
 use crate::storage_provider::traits::AsStorageOperation;
 
+/// Trait which handles all storage actions relating to `Operation`'s.
+///
+/// This trait should be implemented on the root storage provider struct. It's definitions make up
+/// the required methods for inserting and querying operations from storage.
 #[async_trait]
 pub trait OperationStore<StorageOperation: AsStorageOperation> {
     /// Insert an operation into the db.
