@@ -29,6 +29,7 @@ Highlights are marked with a pancake 🥞
 - Implement document view id hash as a limited-size identifier for document views [#277](https://github.com/p2panda/p2panda/pull/277) `rs`
 - Additional methods on `EntryStore` needed for replication [310](https://github.com/p2panda/p2panda/pull/310) `rs`
 - Introduce `DocumentViewHash`, implement `Hash` for `DocumentViewId` [#313](https://github.com/p2panda/p2panda/pull/313) `rs`
+- Storage traits for `Operation` [326](https://github.com/p2panda/p2panda/pull/326) `rs`
 
 ## Changed
 
