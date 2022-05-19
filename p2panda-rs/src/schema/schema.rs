@@ -79,7 +79,8 @@ impl Schema {
     /// document from it.
     ///
     /// It has the format "<schema name>__<hashed schema document view>" for application schemas
-    /// and "<schema_name>__<version>" for system schemas.
+    /// and "<schema_name>__<version>" for system schemas (note that this has two underscores,
+    /// while schema id has only one).
     #[allow(unused)]
     pub fn hash_id(&self) -> String {
         match self.id.version() {
