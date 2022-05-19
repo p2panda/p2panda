@@ -190,16 +190,14 @@ pub mod tests {
     use std::convert::TryFrom;
     use std::sync::{Arc, Mutex};
 
-    use async_trait::async_trait;
-    use lipmaa_link::get_lipmaa_links_back_to;
     use rstest::rstest;
 
     use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
     use crate::hash::Hash;
     use crate::identity::{Author, KeyPair};
-    use crate::operation::{AsOperation, Operation, OperationEncoded};
+    use crate::operation::{Operation, OperationEncoded};
     use crate::schema::SchemaId;
-    use crate::storage_provider::entry::{AsStorageEntry, EntryStorageError, EntryStore};
+    use crate::storage_provider::entry::{AsStorageEntry, EntryStore};
     use crate::storage_provider::test_provider::{SimplestStorageProvider, StorageEntry};
     use crate::test_utils::fixtures::{
         entry, entry_signed_encoded, key_pair, operation_encoded, random_key_pair, schema, test_db,
