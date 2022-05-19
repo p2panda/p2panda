@@ -4,7 +4,9 @@ use crate::document::DocumentId;
 use crate::entry::{EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{Operation, OperationEncoded};
+use crate::operation::{
+    Operation, OperationAction, OperationEncoded, OperationFields, OperationId,
+};
 use crate::schema::SchemaId;
 use crate::Validate;
 
@@ -69,5 +71,24 @@ pub trait AsStorageLog: Sized + Send + Sync {
     fn document_id(&self) -> DocumentId;
 
     /// Returns the SchemaId of this log.
+    fn schema_id(&self) -> SchemaId;
+}
+
+pub trait AsStorageOperation: Sized + Clone + Send + Sync {
+    /// The error type returned by this traits' methods.
+    type AsStorageOperationError: 'static + std::error::Error;
+
+    fn action(&self) -> OperationAction;
+
+    fn author(&self) -> Author;
+
+    fn document_id(&self) -> DocumentId;
+
+    fn fields(&self) -> Option<OperationFields>;
+
+    fn id(&self) -> OperationId;
+
+    fn previous_operations(&self) -> Vec<OperationId>;
+
     fn schema_id(&self) -> SchemaId;
 }
