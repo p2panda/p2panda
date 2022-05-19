@@ -13,7 +13,9 @@ use crate::Validate;
 /// Storage implementations should implement this for a data structure that represents an
 /// entry as it is stored in the database. This trait defines methods for reading values from the
 /// entry and it's operation.
-pub trait AsStorageEntry: Sized + Clone + Send + Sync + Validate {
+pub trait AsStorageEntry:
+    Sized + Clone + Send + Sync + Validate + PartialEq + std::fmt::Debug
+{
     /// The error type returned by this traits' methods.
     type AsStorageEntryError: 'static + std::error::Error;
 
