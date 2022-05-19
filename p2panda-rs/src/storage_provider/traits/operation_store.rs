@@ -8,8 +8,6 @@ use crate::operation::{OperationAction, OperationFields, OperationId};
 use crate::schema::SchemaId;
 use crate::storage_provider::errors::OperationStorageError;
 
-pub type PreviousOperations = Vec<OperationId>;
-
 pub trait AsStorageOperation: Sized + Clone + Send + Sync {
     /// The error type returned by this traits' methods.
     type AsStorageOperationError: 'static + std::error::Error;
@@ -24,7 +22,7 @@ pub trait AsStorageOperation: Sized + Clone + Send + Sync {
 
     fn id(&self) -> OperationId;
 
-    fn previous_operations(&self) -> PreviousOperations;
+    fn previous_operations(&self) -> Vec<OperationId>;
 
     fn schema_id(&self) -> SchemaId;
 }
