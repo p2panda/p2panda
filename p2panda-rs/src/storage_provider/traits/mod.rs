@@ -13,7 +13,8 @@ mod test_utils;
 
 pub use entry_store::EntryStore;
 pub use log_store::LogStore;
-pub use models::{AsStorageEntry, AsStorageLog};
+pub use models::{AsStorageEntry, AsStorageLog, AsStorageOperation};
+pub use operation_store::OperationStore;
 pub use requests::{AsEntryArgsRequest, AsPublishEntryRequest};
 pub use responses::{AsEntryArgsResponse, AsPublishEntryResponse};
 pub use storage_provider::StorageProvider;
