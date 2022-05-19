@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
 use std::fmt::Display;
 
 use crate::cddl::generate_cddl_definition;
-use crate::hash::Hash;
+use crate::document::DocumentViewHash;
 use crate::schema::system::{SchemaFieldView, SchemaView};
 use crate::schema::{FieldType, SchemaError, SchemaId};
 
@@ -79,15 +78,21 @@ impl Schema {
     /// This identifier can only be used when it is not necessary to reconstruct this schema's
     /// document from it.
     ///
-    /// It has the format "<schema name>__<hashed schema document view graph tips>".
+    /// It has the format "<schema name>__<hashed schema document view>".
     #[allow(unused)]
     pub fn hash_id(&self) -> String {
-        let version_str: &str = match self.id.version() {
-            // Unwrap because we don't expect hashing a validated view id to fail.
-            SchemaVersion::Application(view_id) => Hash::new(&view_id.as_str()).unwrap().as_str(),
-            SchemaVersion::System(version) => &version.to_string(),
-        };
-        format!("{}__{}", self.name(), version_str)
+        match self.id.version() {
+            SchemaVersion::Application(view_id) => {
+                format!(
+                    "{}__{}",
+                    self.name(),
+                    DocumentViewHash::from(&view_id).as_str()
+                )
+            }
+            SchemaVersion::System(version) => {
+                format!("{}__{}", self.name(), &version.to_string())
+            }
+        }
     }
 
     /// Access the schema version.
