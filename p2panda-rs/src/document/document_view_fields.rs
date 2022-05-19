@@ -157,4 +157,14 @@ mod tests {
         let operation_fields = create_operation_with_meta.operation().fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
+
+    #[rstest]
+    fn new_from_operation_fields(create_operation_with_meta: OperationWithMeta) {
+        let document_view_fields = DocumentViewFields::new_from_operation_fields(
+            create_operation_with_meta.operation_id(),
+            &create_operation_with_meta.operation().fields().unwrap(),
+        );
+        let operation_fields = create_operation_with_meta.operation().fields().unwrap();
+        assert_eq!(document_view_fields.len(), operation_fields.len());
+    }
 }
