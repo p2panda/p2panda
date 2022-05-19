@@ -29,6 +29,9 @@ pub struct OperationWithMeta {
 
 impl OperationWithMeta {
     /// Returns a new `OperationWithMeta` instance.
+    ///
+    /// Use `OperationWithMeta::new_from_entry()` instead if you want to validate that the operation
+    /// was signed by this public key.
     pub fn new(
         public_key: &Author,
         operation_id: &OperationId,
@@ -46,15 +49,15 @@ impl OperationWithMeta {
     }
 
     /// Returns a new `OperationWithMeta` instance constructed from an `EntrySigned`
-    /// and an `OperationEncoded`. This constructor method validates that the passed
-    /// operation matches the one oncoded in the passed signed entry.
+    /// and an `OperationEncoded`. This constructor validates that the passed operation matches the
+    /// one oncoded in the passed signed entry.
     pub fn new_from_entry(
         entry_encoded: &EntrySigned,
         operation_encoded: &OperationEncoded,
     ) -> Result<Self, OperationWithMetaError> {
         let operation = Operation::from(operation_encoded);
 
-        // This validates that the entry and operation are correctly matching
+        // This validates that the entry and operation are correctly matching.
         decode_entry(entry_encoded, Some(operation_encoded))?;
 
         let operation_with_meta = Self {
