@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use async_trait::async_trait;
+use lipmaa_link::get_lipmaa_links_back_to;
 
 use crate::entry::{decode_entry, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
@@ -98,9 +99,21 @@ impl Validate for StorageEntry {
 #[async_trait]
 impl EntryStore<StorageEntry> for SimplestStorageProvider {
     /// Insert an entry into storage.
-    async fn insert_entry(&self, entry: StorageEntry) -> Result<bool, EntryStorageError> {
+    async fn insert_entry(&self, entry: StorageEntry) -> Result<(), EntryStorageError> {
         self.db_insert_entry(entry);
-        Ok(true)
+        Ok(())
+    }
+
+    /// Get an entry by it's hash id.
+    async fn get_entry_by_hash(
+        &self,
+        hash: &Hash,
+    ) -> Result<Option<StorageEntry>, EntryStorageError> {
+        let entries = self.entries.lock().unwrap();
+
+        let entry = entries.iter().find(|entry| entry.hash() == *hash);
+
+        Ok(entry.cloned())
     }
 
     /// Returns entry at sequence position within an author's log.
@@ -135,6 +148,30 @@ impl EntryStore<StorageEntry> for SimplestStorageProvider {
         Ok(latest_entry.cloned())
     }
 
+    /// Returns the given range of log entries.
+    async fn get_paginated_log_entries(
+        &self,
+        author: &Author,
+        log_id: &LogId,
+        seq_num: &SeqNum,
+        max_number_of_entries: usize,
+    ) -> Result<Vec<StorageEntry>, EntryStorageError> {
+        let mut entries: Vec<StorageEntry> = Vec::new();
+        let mut seq_num = *seq_num;
+
+        while entries.len() < max_number_of_entries {
+            match self.entry_at_seq_num(author, log_id, &seq_num).await? {
+                Some(next_entry) => entries.push(next_entry),
+                None => break,
+            };
+            match seq_num.next() {
+                Some(next_seq_num) => seq_num = next_seq_num,
+                None => break,
+            };
+        }
+        Ok(entries)
+    }
+
     /// Return vector of all entries of a given schema
     async fn by_schema(&self, schema: &SchemaId) -> Result<Vec<StorageEntry>, EntryStorageError> {
         let entries = self.entries.lock().unwrap();
@@ -146,6 +183,31 @@ impl EntryStore<StorageEntry> for SimplestStorageProvider {
             .collect();
 
         Ok(entries)
+    }
+
+    async fn get_certificate_pool(
+        &self,
+        author: &Author,
+        log_id: &LogId,
+        initial_seq_num: &SeqNum,
+    ) -> Result<Vec<StorageEntry>, EntryStorageError> {
+        let seq_num = initial_seq_num.as_u64();
+        let cert_pool_seq_nums: Vec<SeqNum> = get_lipmaa_links_back_to(seq_num, 1)
+            .iter()
+            // Unwrapping as we know this is a valid sequence number
+            .map(|seq_num| SeqNum::new(*seq_num).unwrap())
+            .collect();
+        let mut cert_pool: Vec<StorageEntry> = Vec::new();
+
+        for seq_num in cert_pool_seq_nums {
+            let entry = match self.entry_at_seq_num(author, log_id, &seq_num).await? {
+                Some(entry) => Ok(entry),
+                None => Err(EntryStorageError::CertPoolEntryMissing(seq_num.as_u64())),
+            }?;
+            cert_pool.push(entry);
+        }
+
+        Ok(cert_pool)
     }
 }
 

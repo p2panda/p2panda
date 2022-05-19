@@ -209,9 +209,10 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
 #[cfg(test)]
 pub mod tests {
-    use rstest::rstest;
     use std::convert::TryFrom;
     use std::sync::{Arc, Mutex};
+
+    use rstest::rstest;
 
     use crate::document::DocumentId;
     use crate::entry::{sign_and_encode, Entry, LogId};
@@ -225,12 +226,10 @@ pub mod tests {
         EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
         SimplestStorageProvider,
     };
-    use crate::storage_provider::{AsEntryArgsResponse, AsPublishEntryResponse};
+    use crate::storage_provider::{AsEntryArgsResponse, AsPublishEntryResponse, StorageProvider};
     use crate::test_utils::fixtures::{
         entry, fields, key_pair, operation_id, schema, test_db, update_operation,
     };
-
-    use super::StorageProvider;
 
     #[rstest]
     #[async_std::test]

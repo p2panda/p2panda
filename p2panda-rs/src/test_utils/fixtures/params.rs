@@ -237,11 +237,11 @@ pub fn encoded_create_string(create_operation: Operation) -> String {
         .to_owned()
 }
 
-pub const SKIPLINK_ENTRIES: [u64; 2] = [4, 8];
+pub const SKIPLINK_ENTRIES: [u64; 5] = [4, 8, 12, 13, 17];
 
 #[fixture]
 pub fn test_db(
-    #[from(random_key_pair)] key_pair: KeyPair,
+    key_pair: KeyPair,
     create_operation: Operation,
     fields: OperationFields,
     schema: SchemaId,
@@ -273,8 +273,8 @@ pub fn test_db(
 
     db_entries.push(storage_entry);
 
-    // Create 9 more entries containing UPDATE operations with valid back- and skip- links and previous_operations
-    for seq_num in 2..10 {
+    // Create more entries containing UPDATE operations with valid back- and skip- links and previous_operations
+    for seq_num in 2..17 {
         let seq_num = SeqNum::new(seq_num).unwrap();
         let mut skiplink = None;
         let backlink = db_entries
