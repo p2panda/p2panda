@@ -84,9 +84,9 @@ pub struct DocumentMeta {
 /// A replicatable data type designed to handle concurrent updates in a way where all replicas
 /// eventually resolve to the same deterministic value.
 ///
-/// `Document`s are immutable and contain a resolved document view as well as metadata relating
-/// to the specific document instance. These can be accessed through getter methods. To create
-/// documents you should use `DocumentBuilder`.
+/// `Document`s contain a fixed set of sorted operations along with their resolved document view
+/// and metadata. Documents are constructed by passing an unsorted collection of operations to
+/// the `DocumentBuilder`.
 #[derive(Debug, Clone)]
 pub struct Document {
     id: DocumentId,
