@@ -43,16 +43,25 @@ type IsEdited = bool;
 type IsDeleted = bool;
 
 /// Reduce a list of operations into a single view.
+///
+/// Returns the reduced fields of a document view along with the `IsEdited and `IsDeleted boolean flags.
+/// If the document contains a delete operation, then no view is returned and the `IsDeleted` flag
+/// is set to true. If the document contains one or more update operations, then the reduced view is
+/// returned and the `IsEdited` flag is set to true.
 pub(super) fn reduce(
     ordered_operations: &[OperationWithMeta],
 ) -> (Option<DocumentViewFields>, IsEdited, IsDeleted) {
-    let is_edited = ordered_operations.len() > 1;
+    let mut is_edited = false;
 
     let mut document_view_fields = DocumentViewFields::new();
 
     for operation in ordered_operations {
         if operation.is_delete() {
             return (None, true, true);
+        }
+
+        if operation.is_update() {
+            is_edited = true
         }
 
         if let Some(fields) = operation.fields() {
