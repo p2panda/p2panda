@@ -220,7 +220,7 @@ pub fn delete_operation(
     utils::delete_operation(schema, previous_operations)
 }
 
-/// Fixture which injects a CREATE OperationWithMeta into a test method.
+/// Fixture which injects a CREATE `OperationWithMeta` into a test method.
 #[fixture]
 pub fn create_operation_with_meta(
     create_operation: Operation,
@@ -240,7 +240,7 @@ pub fn update_operation_with_meta(
     OperationWithMeta::new_test_operation(&operation_id, &public_key, &update_operation)
 }
 
-/// Fixture which injects an DELETE OperationWithMeta into a test method.
+/// Fixture which injects a DELETE `OperationWithMeta` into a test method.
 #[fixture]
 pub fn delete_operation_with_meta(
     delete_operation: Operation,
@@ -258,7 +258,7 @@ pub fn encoded_create_string(create_operation: Operation) -> String {
         .to_owned()
 }
 
-/// Fixture which injects the default CREATE OperationWithMeta into a test method.
+/// Fixture which injects the default CREATE `OperationWithMeta` into a test method.
 #[fixture]
 pub fn meta_operation(
     entry_signed_encoded: EntrySigned,

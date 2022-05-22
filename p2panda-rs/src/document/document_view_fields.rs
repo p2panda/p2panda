@@ -33,9 +33,10 @@ impl DocumentViewValue {
     }
 }
 
-/// A key value map of field keys to DocumentViewValues.
+/// A key value map of field keys to `DocumentViewValues`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DocumentViewFields(BTreeMap<String, DocumentViewValue>);
+
 impl DocumentViewFields {
     /// Creates a new fields instance to add data to.
     pub fn new() -> Self {
