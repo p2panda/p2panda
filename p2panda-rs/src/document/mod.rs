@@ -102,19 +102,19 @@
 //! #
 //! # let entry_1 = node.get_entry(&polar_entry_1_hash);
 //! # let operation_1 =
-//! #     OperationWithMeta::new(&entry_1.entry_encoded(), &entry_1.operation_encoded()).unwrap();
+//! #     OperationWithMeta::new_from_entry(&entry_1.entry_encoded(), &entry_1.operation_encoded()).unwrap();
 //! # let entry_2 = node.get_entry(&polar_entry_2_hash);
 //! # let operation_2 =
-//! #     OperationWithMeta::new(&entry_2.entry_encoded(), &entry_2.operation_encoded()).unwrap();
+//! #     OperationWithMeta::new_from_entry(&entry_2.entry_encoded(), &entry_2.operation_encoded()).unwrap();
 //! # let entry_3 = node.get_entry(&panda_entry_1_hash);
 //! # let operation_3 =
-//! #     OperationWithMeta::new(&entry_3.entry_encoded(), &entry_3.operation_encoded()).unwrap();
+//! #     OperationWithMeta::new_from_entry(&entry_3.entry_encoded(), &entry_3.operation_encoded()).unwrap();
 //! # let entry_4 = node.get_entry(&polar_entry_3_hash);
 //! # let operation_4 =
-//! #     OperationWithMeta::new(&entry_4.entry_encoded(), &entry_4.operation_encoded()).unwrap();
+//! #     OperationWithMeta::new_from_entry(&entry_4.entry_encoded(), &entry_4.operation_encoded()).unwrap();
 //! # let entry_5 = node.get_entry(&polar_entry_4_hash);
 //! # let operation_5 =
-//! #     OperationWithMeta::new(&entry_5.entry_encoded(), &entry_5.operation_encoded()).unwrap();
+//! #     OperationWithMeta::new_from_entry(&entry_5.entry_encoded(), &entry_5.operation_encoded()).unwrap();
 //! #
 //! //== Operation creation is hidden for brevity, see the operation module docs for details ==//
 //!

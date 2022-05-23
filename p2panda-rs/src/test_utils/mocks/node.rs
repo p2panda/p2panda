@@ -486,7 +486,11 @@ impl Node {
         let operations = entries
             .iter()
             .map(|entry| {
-                OperationWithMeta::new(&entry.entry_encoded(), &entry.operation_encoded()).unwrap()
+                OperationWithMeta::new_from_entry(
+                    &entry.entry_encoded(),
+                    &entry.operation_encoded(),
+                )
+                .unwrap()
             })
             .collect();
         DocumentBuilder::new(operations).build().unwrap()
