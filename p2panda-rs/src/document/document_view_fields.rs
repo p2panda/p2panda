@@ -15,13 +15,14 @@ pub struct DocumentViewValue {
 }
 
 impl DocumentViewValue {
-    /// Returns a `DocumentViewValue` constructed from an `OperationId` and `OperationValue`
+    /// Returns a `DocumentViewValue` constructed from an `OperationId` and `OperationValue`.
     pub fn new(operation_id: &OperationId, value: &OperationValue) -> Self {
         Self {
             operation_id: operation_id.clone(),
             value: value.clone(),
         }
     }
+
     /// Get the OperationId of this document value.
     pub fn id(&self) -> &OperationId {
         &self.operation_id
