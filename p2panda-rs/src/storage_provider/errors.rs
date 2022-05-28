@@ -126,7 +126,7 @@ pub enum OperationStorageError {
     #[error("A fatal error occured in OperationStore: {0}")]
     FatalStorageError(String),
 
-    /// Error which originates in `insert_operation()` when the insertion fails.
+    /// Error returned when insertion of an operation is not possible due to database constraints.
     #[error("Error occured when inserting an operation with id {0:?} into storage")]
     InsertionError(OperationId),
 }
