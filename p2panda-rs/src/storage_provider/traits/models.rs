@@ -76,7 +76,8 @@ pub trait AsStorageLog: Sized + Send + Sync {
 
 /// Trait to be implemented on a struct representing a stored operation.
 ///
-/// Includes values form an operation, it's author, it's id, and the id of it's document.
+/// Contains the values of an operation as well as it's author, it's id, and the id of
+/// it's document.
 ///
 /// Storage implementations should implement this for a data structure that represents an
 /// operation as it is stored in the database. This trait defines methods for reading
