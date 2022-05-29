@@ -51,6 +51,8 @@ Highlights are marked with a pancake 🥞
 - Update `Schema` implementation to make use of new `SchemaId` [#296](https://github.com/p2panda/p2panda/pull/296) `rs`
 - Require schema field definitions to specify a specific schema [#269](https://github.com/p2panda/p2panda/pull/269) `rs` 🥞
 - Methods for getting string representations of `OperationValue` field type and `OperationAction` [#303](https://github.com/p2panda/p2panda/pull/303) `rs`
+- Additional constructor method for `OperationWithMeta` [322](https://github.com/p2panda/p2panda/pull/322) `rs`
+- Minor method renaming in `EntryStore` [323](https://github.com/p2panda/p2panda/pull/323) `rs`
 
 ## Fixed
 
