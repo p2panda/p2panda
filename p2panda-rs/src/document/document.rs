@@ -44,10 +44,10 @@ type IsDeleted = bool;
 
 /// Reduce a list of operations into a single view.
 ///
-/// Returns the reduced fields of a document view along with the `IsEdited and `IsDeleted boolean flags.
-/// If the document contains a delete operation, then no view is returned and the `IsDeleted` flag
-/// is set to true. If the document contains one or more update operations, then the reduced view is
-/// returned and the `IsEdited` flag is set to true.
+/// Returns the reduced fields of a document view along with the `edited` and `deleted` boolean
+/// flags. If the document contains a DELETE operation, then no view is returned and the `deleted`
+/// flag is set to true. If the document contains one or more UPDATE operations, then the reduced
+/// view is returned and the `edited` flag is set to true.
 pub(super) fn reduce(
     ordered_operations: &[OperationWithMeta],
 ) -> (Option<DocumentViewFields>, IsEdited, IsDeleted) {
@@ -71,13 +71,14 @@ pub(super) fn reduce(
             }
         }
     }
+
     (Some(document_view_fields), is_edited, false)
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct DocumentMeta {
-    deleted: bool,
-    edited: bool,
+    deleted: IsDeleted,
+    edited: IsEdited,
     operations: Vec<OperationWithMeta>,
 }
 
@@ -129,12 +130,12 @@ impl Document {
     }
 
     /// Returns true if this document has applied an UPDATE operation.
-    pub fn is_edited(&self) -> bool {
+    pub fn is_edited(&self) -> IsEdited {
         self.meta.edited
     }
 
     /// Returns true if this document has processed a DELETE operation.
-    pub fn is_deleted(&self) -> bool {
+    pub fn is_deleted(&self) -> IsDeleted {
         self.meta.deleted
     }
 }
