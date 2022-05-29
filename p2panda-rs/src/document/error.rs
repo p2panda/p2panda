@@ -2,6 +2,8 @@
 
 use thiserror::Error;
 
+use crate::operation::OperationId;
+
 /// Error types for methods of `DocumentBuilder` struct.
 #[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
@@ -24,7 +26,7 @@ pub enum DocumentBuilderError {
 
     /// An operation with invalid id or previous operations was added to the document.
     #[error("Operation {0} cannot be connected to the document graph")]
-    InvalidOperationLink(String),
+    InvalidOperationLink(OperationId),
 
     /// Handle errors when sorting the graph.
     #[error(transparent)]

@@ -29,7 +29,7 @@ pub(super) fn build_graph(
                 let success = graph.add_link(&previous, operation.operation_id());
                 if !success {
                     return Err(DocumentBuilderError::InvalidOperationLink(
-                        operation.operation_id().as_hash().as_str().into(),
+                        operation.operation_id().to_owned(),
                     ));
                 }
             }
@@ -275,16 +275,20 @@ impl DocumentBuilder {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
+
     use rstest::rstest;
 
     use crate::document::document_view_fields::{DocumentViewFields, DocumentViewValue};
     use crate::document::DocumentId;
+    use crate::entry::Entry;
     use crate::identity::KeyPair;
-    use crate::operation::{OperationId, OperationValue, OperationWithMeta};
+    use crate::operation::{OperationEncoded, OperationId, OperationValue, OperationWithMeta};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         create_operation, create_operation_with_meta, delete_operation, delete_operation_with_meta,
-        fields, random_key_pair, schema, update_operation, update_operation_with_meta,
+        fields, random_key_pair, random_operation_id, schema, update_operation,
+        update_operation_with_meta,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
     use crate::test_utils::utils::operation_fields;
@@ -432,7 +436,7 @@ mod tests {
             &mut node,
             &penguin,
             &update_operation(
-                schema,
+                schema.clone(),
                 vec![penguin_entry_2_hash.clone().into()],
                 fields(vec![(
                     "name",
@@ -508,6 +512,8 @@ mod tests {
         assert_eq!(document.view().unwrap().get("name"), exp_result.get("name"));
         assert!(document.is_edited());
         assert!(!document.is_deleted());
+        assert_eq!(document.author(), &panda.author());
+        assert_eq!(document.schema(), &schema);
         assert_eq!(document.operations(), &expected_op_order);
         assert_eq!(document.view_id().graph_tips(), expected_graph_tips);
         assert_eq!(
@@ -570,6 +576,267 @@ mod tests {
         assert_eq!(
             replica_3.view_id().graph_tips(),
             &[penguin_entry_3_hash.into()]
+        );
+    }
+
+    #[rstest]
+    fn must_have_create_operation(schema: SchemaId, #[from(random_key_pair)] key_pair_1: KeyPair) {
+        let panda = Client::new("panda".to_string(), key_pair_1);
+        let mut node = Node::new();
+
+        // Panda publishes a create operation.
+        // This instantiates a new document.
+        let (panda_entry_1_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &create_operation(
+                schema.clone(),
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Panda Cafe".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        // Panda publishes an update operation.
+        // It contains the id of the previous operation in it's `previous_operations` array
+        send_to_node(
+            &mut node,
+            &panda,
+            &update_operation(
+                schema,
+                vec![panda_entry_1_hash.into()],
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Panda Cafe!".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        // Only retrieve the update operation.
+        let only_the_update_operation = &node.all_entries()[1];
+
+        let operations = vec![OperationWithMeta::new_from_entry(
+            &only_the_update_operation.entry_encoded(),
+            &only_the_update_operation.operation_encoded(),
+        )
+        .unwrap()];
+
+        assert_eq!(
+            DocumentBuilder::new(operations)
+                .build()
+                .unwrap_err()
+                .to_string(),
+            "Every document must contain one create operation".to_string()
+        );
+    }
+
+    #[rstest]
+    fn incorrect_previous_operations(
+        schema: SchemaId,
+        #[from(random_key_pair)] key_pair_1: KeyPair,
+        #[from(random_operation_id)] incorrect_previous_operation: OperationId,
+    ) {
+        let panda = Client::new("panda".to_string(), key_pair_1);
+        let mut node = Node::new();
+
+        // Panda publishes a create operation.
+        // This instantiates a new document.
+        let (panda_entry_1_hash, next_entry_args) = send_to_node(
+            &mut node,
+            &panda,
+            &create_operation(
+                schema.clone(),
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Panda Cafe".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        // Construct an update operation with non-existant previous operations
+        let operation_with_wrong_prev_ops = update_operation(
+            schema,
+            vec![incorrect_previous_operation],
+            fields(vec![(
+                "name",
+                OperationValue::Text("Panda Cafe!".to_string()),
+            )]),
+        );
+
+        let entry_one = node.get_entry(&panda_entry_1_hash);
+
+        let operation_one = OperationWithMeta::new_from_entry(
+            &entry_one.entry_encoded(),
+            &entry_one.operation_encoded(),
+        )
+        .unwrap();
+
+        let entry_two =
+            panda.signed_encoded_entry(operation_with_wrong_prev_ops.clone(), next_entry_args);
+
+        let operation_two = OperationWithMeta::new_from_entry(
+            &entry_two,
+            &OperationEncoded::try_from(&operation_with_wrong_prev_ops).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            DocumentBuilder::new(vec![operation_one, operation_two.clone()])
+                .build()
+                .unwrap_err()
+                .to_string(),
+            format!(
+                "Operation {} cannot be connected to the document graph",
+                operation_two.operation_id()
+            )
+        );
+    }
+
+    #[rstest]
+    fn operation_schemas_not_matching(
+        schema: SchemaId,
+        #[from(random_key_pair)] key_pair_1: KeyPair,
+    ) {
+        let panda = Client::new("panda".to_string(), key_pair_1);
+        let mut node = Node::new();
+
+        // Panda publishes a create operation.
+        // This instantiates a new document.
+        let (panda_entry_1_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &create_operation(
+                schema,
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Panda Cafe".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        // Panda publishes an update operation but with the wrong schema.
+        let (_panda_entry_2_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &update_operation(
+                SchemaId::new("schema_definition_v1").unwrap(),
+                vec![panda_entry_1_hash.into()],
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Panda Cafe!".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let operations: Vec<OperationWithMeta> = node
+            .all_entries()
+            .into_iter()
+            .map(|entry| {
+                OperationWithMeta::new_from_entry(
+                    &entry.entry_encoded(),
+                    &entry.operation_encoded(),
+                )
+                .unwrap()
+            })
+            .collect();
+
+        assert_eq!(
+            DocumentBuilder::new(operations)
+                .build()
+                .unwrap_err()
+                .to_string(),
+            "All operations in a document must follow the same schema".to_string()
+        );
+    }
+
+    #[rstest]
+    fn is_deleted(schema: SchemaId, #[from(random_key_pair)] key_pair_1: KeyPair) {
+        let panda = Client::new("panda".to_string(), key_pair_1);
+        let mut node = Node::new();
+
+        // Panda publishes a create operation.
+        // This instantiates a new document.
+        let (panda_entry_1_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &create_operation(
+                schema.clone(),
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Panda Cafe".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        // Panda publishes an delete operation.
+        // It contains the id of the previous operation in it's `previous_operations` array.
+        send_to_node(
+            &mut node,
+            &panda,
+            &delete_operation(schema, vec![panda_entry_1_hash.into()]),
+        )
+        .unwrap();
+
+        let operations: Vec<OperationWithMeta> = node
+            .all_entries()
+            .into_iter()
+            .map(|entry| {
+                OperationWithMeta::new_from_entry(
+                    &entry.entry_encoded(),
+                    &entry.operation_encoded(),
+                )
+                .unwrap()
+            })
+            .collect();
+
+        let document = DocumentBuilder::new(operations).build().unwrap();
+
+        assert!(document.is_deleted());
+
+        assert!(document.view().is_none());
+    }
+
+    #[rstest]
+    fn more_than_one_create(schema: SchemaId, #[from(random_key_pair)] key_pair_1: KeyPair) {
+        let panda = Client::new("panda".to_string(), key_pair_1);
+        let mut node = Node::new();
+
+        // Panda publishes a create operation.
+        // This instantiates a new document.
+        let (_panda_entry_1_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &create_operation(
+                schema,
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Panda Cafe".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let published_create_operation = &node.all_entries()[0];
+
+        let create_op_with_meta = OperationWithMeta::new_from_entry(
+            &published_create_operation.entry_encoded(),
+            &published_create_operation.operation_encoded(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            DocumentBuilder::new(vec![create_op_with_meta.clone(), create_op_with_meta])
+                .build()
+                .unwrap_err()
+                .to_string(),
+            "Multiple create operations found".to_string()
         );
     }
 
@@ -814,101 +1081,5 @@ mod tests {
 
         assert!(document.view().is_none());
         assert!(document.is_deleted());
-    }
-
-    #[rstest]
-    fn must_have_create_operation(schema: SchemaId, #[from(random_key_pair)] key_pair_1: KeyPair) {
-        let panda = Client::new("panda".to_string(), key_pair_1);
-        let mut node = Node::new();
-
-        // Panda publishes a create operation.
-        // This instantiates a new document.
-        let (panda_entry_1_hash, _) = send_to_node(
-            &mut node,
-            &panda,
-            &create_operation(
-                schema.clone(),
-                fields(vec![(
-                    "name",
-                    OperationValue::Text("Panda Cafe".to_string()),
-                )]),
-            ),
-        )
-        .unwrap();
-
-        // Panda publishes an update operation.
-        // It contains the id of the previous operation in it's `previous_operations` array
-        send_to_node(
-            &mut node,
-            &panda,
-            &update_operation(
-                schema,
-                vec![panda_entry_1_hash.into()],
-                fields(vec![(
-                    "name",
-                    OperationValue::Text("Panda Cafe!".to_string()),
-                )]),
-            ),
-        )
-        .unwrap();
-
-        // Only retrieve the update operation.
-        let only_the_update_operation = &node.all_entries()[1];
-
-        let operations = vec![OperationWithMeta::new_from_entry(
-            &only_the_update_operation.entry_encoded(),
-            &only_the_update_operation.operation_encoded(),
-        )
-        .unwrap()];
-
-        assert!(DocumentBuilder::new(operations).build().is_err());
-    }
-
-    #[rstest]
-    fn is_deleted(schema: SchemaId, #[from(random_key_pair)] key_pair_1: KeyPair) {
-        let panda = Client::new("panda".to_string(), key_pair_1);
-        let mut node = Node::new();
-
-        // Panda publishes a create operation.
-        // This instantiates a new document.
-        let (panda_entry_1_hash, _) = send_to_node(
-            &mut node,
-            &panda,
-            &create_operation(
-                schema.clone(),
-                fields(vec![(
-                    "name",
-                    OperationValue::Text("Panda Cafe".to_string()),
-                )]),
-            ),
-        )
-        .unwrap();
-
-        // Panda publishes an delete operation.
-        // It contains the id of the previous operation in it's `previous_operations` array.
-        send_to_node(
-            &mut node,
-            &panda,
-            &delete_operation(schema, vec![panda_entry_1_hash.into()]),
-        )
-        .unwrap();
-
-        let operations: Vec<OperationWithMeta> = node
-            .all_entries()
-            .into_iter()
-            .map(|entry| {
-                OperationWithMeta::new_from_entry(
-                    &entry.entry_encoded(),
-                    &entry.operation_encoded(),
-                )
-                .unwrap()
-            })
-            .collect();
-
-        let document = DocumentBuilder::new(operations).build().unwrap();
-
-        assert!(document.is_deleted());
-
-        assert!(document.view().is_none());
     }
 }
