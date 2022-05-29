@@ -78,7 +78,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
         // Determine backlink and skiplink hashes for the next entry. To do this we need the latest
         // entry in this log
-        let entry_latest = self.latest_entry(params.author(), &log).await?;
+        let entry_latest = self.get_latest_entry(params.author(), &log).await?;
 
         match entry_latest.clone() {
             // An entry was found which serves as the backlink for the upcoming entry
@@ -86,7 +86,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
                 let entry_latest = entry_latest.unwrap();
                 let entry_hash_backlink = entry_backlink.hash();
                 // Determine skiplink ("lipmaa"-link) entry in this log
-                let entry_hash_skiplink = self.determine_skiplink(&entry_latest).await?;
+                let entry_hash_skiplink = self.determine_next_skiplink(&entry_latest).await?;
 
                 Ok(Self::EntryArgsResponse::new(
                     Some(entry_hash_backlink.clone()),
@@ -155,37 +155,15 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         }
 
         // Get related bamboo backlink and skiplink entries
-        let entry_backlink_bytes = if !entry.seq_num().is_first() {
-            self.entry_at_seq_num(
-                &entry.author(),
-                &entry.log_id(),
-                &entry.seq_num().backlink_seq_num().unwrap(),
-            )
+        let entry_backlink_bytes = self
+            .try_get_backlink(&entry)
             .await?
-            .map(|link| {
-                let bytes = link.entry_bytes();
-                Some(bytes)
-            })
-            .ok_or_else(|| PublishEntryError::BacklinkMissing(entry.hash()))
-        } else {
-            Ok(None)
-        }?;
+            .map(|link| link.entry_bytes());
 
-        let entry_skiplink_bytes = if !entry.seq_num().is_first() {
-            self.entry_at_seq_num(
-                &entry.author(),
-                &entry.log_id(),
-                &entry.seq_num().skiplink_seq_num().unwrap(),
-            )
+        let entry_skiplink_bytes = self
+            .try_get_skiplink(&entry)
             .await?
-            .map(|link| {
-                let bytes = link.entry_bytes();
-                Some(bytes)
-            })
-            .ok_or_else(|| PublishEntryError::SkiplinkMissing(entry.hash()))
-        } else {
-            Ok(None)
-        }?;
+            .map(|link| link.entry_bytes());
 
         // Verify bamboo entry integrity, including encoding, signature of the entry correct back-
         // and skiplinks
@@ -213,10 +191,10 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
         // Already return arguments for next entry creation
         let entry_latest: StorageEntry = self
-            .latest_entry(&entry.author(), &entry.log_id())
+            .get_latest_entry(&entry.author(), &entry.log_id())
             .await?
             .unwrap();
-        let entry_hash_skiplink = self.determine_skiplink(&entry_latest).await?;
+        let entry_hash_skiplink = self.determine_next_skiplink(&entry_latest).await?;
         let next_seq_num = entry_latest.seq_num().clone().next().unwrap();
 
         Ok(Self::PublishEntryResponse::new(
@@ -336,6 +314,112 @@ pub mod tests {
             // Response and expected response should match
             assert_eq!(publish_entry_response.unwrap(), expected_reponse);
         }
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn rejects_invalid_backlink(key_pair: KeyPair, test_db: SimplestStorageProvider) {
+        let new_db = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(Mutex::new(Vec::new())),
+        };
+
+        let entries = test_db.entries.lock().unwrap().clone();
+
+        // Publish 3 entries to the new database
+        for index in 0..3 {
+            let entry = entries.get(index).unwrap();
+            let publish_entry_request = PublishEntryRequest(
+                entry.entry_signed(),
+                entry.operation_encoded().unwrap().clone(),
+            );
+
+            new_db.publish_entry(&publish_entry_request).await.unwrap();
+        }
+
+        // Retrieve the forth entry
+        let entry_four = entries.get(3).unwrap();
+
+        // Reconstruct it with an invalid backlink
+        let entry_with_invalid_backlink = Entry::new(
+            &entry_four.log_id(),
+            Some(&entry_four.operation()),
+            entry_four.skiplink_hash().as_ref(),
+            Some(&entries.get(0).unwrap().hash()),
+            &entry_four.seq_num(),
+        )
+        .unwrap();
+
+        let entry_signed = sign_and_encode(&entry_with_invalid_backlink, &key_pair).unwrap();
+
+        let publish_entry_request = PublishEntryRequest(
+            entry_signed.clone(),
+            entry_four.operation_encoded().unwrap(),
+        );
+
+        let error_response = new_db.publish_entry(&publish_entry_request).await;
+
+        println!("{:#?}", error_response);
+        assert_eq!(
+            format!("{}", error_response.unwrap_err()),
+            format!(
+                "The backlink hash encoded in the entry: {} did not match the expected backlink hash",
+                entry_signed.hash()
+            )
+        )
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn rejects_invalid_skiplink(key_pair: KeyPair, test_db: SimplestStorageProvider) {
+        let new_db = SimplestStorageProvider {
+            logs: Arc::new(Mutex::new(Vec::new())),
+            entries: Arc::new(Mutex::new(Vec::new())),
+        };
+
+        let entries = test_db.entries.lock().unwrap().clone();
+
+        // Publish 3 entries to the new database
+        for index in 0..3 {
+            let entry = entries.get(index).unwrap();
+            let publish_entry_request = PublishEntryRequest(
+                entry.entry_signed(),
+                entry.operation_encoded().unwrap().clone(),
+            );
+
+            new_db.publish_entry(&publish_entry_request).await.unwrap();
+        }
+
+        // Retrieve the forth entry
+        let entry_four = entries.get(3).unwrap();
+
+        // Reconstruct it with an invalid skiplink
+        let entry_with_invalid_backlink = Entry::new(
+            &entry_four.log_id(),
+            Some(&entry_four.operation()),
+            Some(&entries.get(2).unwrap().hash()),
+            entry_four.backlink_hash().as_ref(),
+            &entry_four.seq_num(),
+        )
+        .unwrap();
+
+        let entry_signed = sign_and_encode(&entry_with_invalid_backlink, &key_pair).unwrap();
+
+        let publish_entry_request = PublishEntryRequest(
+            entry_signed.clone(),
+            entry_four.operation_encoded().unwrap(),
+        );
+
+        let error_response = new_db.publish_entry(&publish_entry_request).await;
+
+        println!("{:#?}", error_response);
+        assert_eq!(
+            format!("{}", error_response.unwrap_err()),
+            format!(
+                "The skiplink hash encoded in the entry: {} did not match the known hash of the skiplink target",
+                entry_signed.hash()
+            )
+        )
     }
 
     #[rstest]
@@ -471,7 +555,7 @@ pub mod tests {
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
             format!(
-                "Could not find skiplink entry in database with id: {}",
+                "Could not find expected skiplink in database for entry with id: {}",
                 entry.hash()
             )
         )
