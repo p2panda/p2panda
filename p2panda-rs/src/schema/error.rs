@@ -5,6 +5,10 @@ use thiserror::Error;
 /// Custom errors related to `SchemaId`.
 #[derive(Error, Debug)]
 pub enum SchemaIdError {
+    /// Handle errors from validating operation id hashes.
+    #[error(transparent)]
+    DocumentViewIdError(#[from] crate::document::DocumentViewIdError),
+
     /// Invalid hash in schema id.
     #[error("encountered invalid hash while parsing application schema id: {0}")]
     HashError(#[from] crate::hash::HashError),
