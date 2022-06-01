@@ -237,16 +237,27 @@ where
         Some(next_nodes)
     }
 
-    /// Sorts the graph topologically and returns the result.
-    pub fn walk_from(&'a self, key: &K) -> Result<GraphData<V>, GraphError> {
-        self.walk_from_to(key, None)
-    }
-
+    /// Walk from a given node to an optionally given array of nodes.
+    ///
+    /// If any of the passed nodes are not included in the requested graph, or a cycle is detected
+    /// an error is returned.
     pub fn walk_from_to(&'a self, from: &K, to: Option<&[&K]>) -> Result<GraphData<V>, GraphError> {
         let root_node = match self.get_node(from) {
             Some(node) => Ok(node),
             None => Err(GraphError::NodeNotFound),
         }?;
+
+        let to_nodes: Vec<&Node<K, V>> = to
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|key| self.get_node(key))
+            .collect();
+
+        // Any nodes included in `to_nodes` should exist in the graph.
+        if to_nodes.len() != to.unwrap_or_default().len() {
+            return Err(GraphError::InvalidToNodesPassed);
+        }
+
         let mut queue = vec![root_node];
         let mut sorted_nodes = vec![];
         let mut graph_data = GraphData {
@@ -264,8 +275,17 @@ where
             sorted_nodes.push(current_node);
             graph_data.sorted.push(current_node.data());
 
+            // If this is a tip node and `to` nodes were passed, this node should be in the to_nodes
+            // array.
+            if to.is_some() && current_node.is_tip() {
+                match to_nodes.iter().find(|node| node == &&current_node) {
+                    Some(_) => Ok(()),
+                    None => Err(GraphError::InvalidToNodesPassed),
+                }?;
+            }
+
             // If the current node is a tip node, or it is included in the `to` array, push it's data to the graph_tips.
-            if current_node.is_tip() || to.unwrap_or_default().contains(&current_node.key()) {
+            if current_node.is_tip() || to_nodes.contains(&current_node) {
                 graph_data.graph_tips.push(current_node.data());
                 continue;
             }
@@ -324,9 +344,18 @@ where
                     sorted_nodes.len()
                 );
 
+                // If this is a tip node and `to` nodes were passed, this node should be in the to_nodes
+                // array.
+                if to.is_some() && next_node.is_tip() {
+                    match to_nodes.iter().find(|node| node == &&next_node) {
+                        Some(_) => Ok(()),
+                        None => Err(GraphError::InvalidToNodesPassed),
+                    }?;
+                }
+
                 // If the next_node is tip, or it is included in the `to` array, push it to the graph tips list and break
                 // out of this walking loop.
-                if next_node.is_tip() || to.unwrap_or_default().contains(&next_node.key()) {
+                if next_node.is_tip() || to_nodes.contains(&next_node) {
                     graph_data.graph_tips.push(next_node.data());
                     break;
                 }
@@ -335,13 +364,24 @@ where
                 current_node = next_node;
             }
         }
+
+        if to_nodes.iter().map(|node| node.data()).collect::<Vec<V>>() != graph_data.graph_tips {
+            return Err(GraphError::InvalidToNodesPassed);
+        }
+
         Ok(graph_data)
     }
 
     /// Sort the entire graph, starting from the root node.
     pub fn sort(&'a self) -> Result<GraphData<V>, GraphError> {
         let root_node = self.root_node_key()?;
-        self.walk_from(root_node)
+        self.walk_from_to(root_node, None)
+    }
+
+    /// Sort the entire graph, starting from the root node, ending at a given set of nodes.
+    pub fn sort_to(&'a self, to: &[&K]) -> Result<GraphData<V>, GraphError> {
+        let root_node = self.root_node_key()?;
+        self.walk_from_to(root_node, Some(to))
     }
 }
 
@@ -391,7 +431,7 @@ mod test {
             graph_tips: vec!['F'],
         };
 
-        let graph_data = graph.walk_from(&'a').unwrap();
+        let graph_data = graph.walk_from_to(&'a', None).unwrap();
 
         assert_eq!(graph_data.sorted(), expected.sorted());
         assert_eq!(
@@ -411,7 +451,7 @@ mod test {
             graph_tips: vec!['F'],
         };
 
-        let graph_data = graph.walk_from(&'a').unwrap();
+        let graph_data = graph.walk_from_to(&'a', None).unwrap();
 
         assert_eq!(graph_data.sorted(), expected.sorted());
         assert_eq!(
@@ -434,7 +474,7 @@ mod test {
             graph_tips: vec!['F'],
         };
 
-        let graph_data = graph.walk_from(&'a').unwrap();
+        let graph_data = graph.walk_from_to(&'a', None).unwrap();
 
         assert_eq!(graph_data.sorted(), expected.sorted());
         assert_eq!(
@@ -463,7 +503,7 @@ mod test {
         graph.add_link(&'c', &'d');
         graph.add_link(&'d', &'b');
 
-        assert!(graph.walk_from(&'a').is_err())
+        assert!(graph.walk_from_to(&'a', None).is_err())
     }
 
     #[test]
@@ -480,7 +520,7 @@ mod test {
         graph.add_link(&'d', &'b');
         graph.add_link(&'e', &'b'); // 'e' doesn't exist in the graph.
 
-        assert!(graph.walk_from(&'a').is_err())
+        assert!(graph.walk_from_to(&'a', None).is_err())
     }
 
     #[test]
@@ -504,6 +544,44 @@ mod test {
         let result = graph.walk_from_to(&'a', Some(&[&'c']));
 
         assert_eq!(result.unwrap().sorted(), [1, 2, 3]);
+    }
+
+    #[test]
+    fn invalid_to_array() {
+        let mut graph = Graph::new();
+        graph.add_node(&'a', 1);
+        graph.add_node(&'b', 2);
+        graph.add_node(&'c', 3);
+        graph.add_node(&'d', 4);
+        graph.add_node(&'e', 5);
+
+        graph.add_link(&'a', &'b');
+        graph.add_link(&'b', &'c');
+        graph.add_link(&'c', &'d');
+        graph.add_link(&'c', &'e');
+
+        let expected_err = "Invalid to nodes array passed";
+        assert_eq!(
+            graph
+                .walk_from_to(&'a', Some(&[&'d', &'f']))
+                .unwrap_err()
+                .to_string(),
+            expected_err
+        );
+        assert_eq!(
+            graph
+                .walk_from_to(&'a', Some(&[&'d']))
+                .unwrap_err()
+                .to_string(),
+            expected_err
+        );
+        assert_eq!(
+            graph
+                .walk_from_to(&'a', Some(&[&'g']))
+                .unwrap_err()
+                .to_string(),
+            expected_err
+        );
     }
 
     #[test]
@@ -537,7 +615,7 @@ mod test {
         graph.add_link(&'k', &'f');
 
         assert_eq!(
-            graph.walk_from(&'a').unwrap().sorted(),
+            graph.walk_from_to(&'a', None).unwrap().sorted(),
             [
                 "Wake Up".to_string(),
                 "Make Coffee".to_string(),

@@ -25,4 +25,8 @@ pub enum GraphError {
     /// Requested node not found in graph.
     #[error("Node not found in graph")]
     NodeNotFound,
+
+    /// Passed to nodes array is invalid.
+    #[error("Invalid to nodes array passed")]
+    InvalidToNodesPassed,
 }

@@ -98,7 +98,7 @@
 //! //
 //!
 //! assert_eq!(
-//!     graph.walk_from(&'a')?.sorted(),
+//!     graph.walk_from_to(&'a', None)?.sorted(),
 //!     [
 //!         "Wake Up".to_string(),
 //!         "Make Coffee".to_string(),
