@@ -260,11 +260,11 @@ where
             if sorted_nodes.len() > self.0.len() {
                 return Err(GraphError::CycleDetected);
             }
-            // Push this node to the sorted stack...
+            // Push the current node to the sorted stack...
             sorted_nodes.push(current_node);
             graph_data.sorted.push(current_node.data());
 
-            // If this is a tip node, or it is included in the `to` array, push it's data to the graph_tips.
+            // If the current node is a tip node, or it is included in the `to` array, push it's data to the graph_tips.
             if current_node.is_tip() || to.unwrap_or_default().contains(&current_node.key()) {
                 graph_data.graph_tips.push(current_node.data());
                 continue;
@@ -276,22 +276,20 @@ where
                 sorted_nodes.len()
             );
 
-            // ...and then walk the graph starting from this node.
+            // Now we start walking from the current node through the graph. First of all getting
+            // any children nodes connected to the current node.
             while let Some(mut next_nodes) = self.next(&sorted_nodes, current_node) {
-                // Pop off the next node we will visit.
-                //
-                // Nodes returned by `next()` have always been added by `add_link()`, which ensures
-                // that these keys all have corresponding nodes in the graph so we can unwrap.
+                // We know next_nodes contains at keast one node so we can unwrap here.
                 let next_node = next_nodes.pop().unwrap();
                 debug!("visiting: {:?}", next_node.key());
 
-                // Push all other nodes connected to this one to the queue, we will visit these later.
+                // Push all other child nodes connected to this one to the queue, we will visit these later.
                 while let Some(node_to_be_queued) = next_nodes.pop() {
                     queue.push(node_to_be_queued);
                     debug!("{:?}: pushed to queue", node_to_be_queued.key());
                 }
 
-                // If it's a merge node, check it's dependencies have all been visited.
+                // If the next_node is a merge node, check it's dependencies have all been visited.
                 if next_node.is_merge() {
                     if self.dependencies_visited(&sorted_nodes, next_node) {
                         // If they have been, push this node to the queue and exit this loop.
@@ -316,7 +314,7 @@ where
                     );
                     break;
                 }
-                // If it wasn't a merge node, push it to the sorted stack and keep walking.
+                // The next_node wasn't a merge node, push it to the sorted stack and keep walking.
                 sorted_nodes.push(next_node);
                 graph_data.sorted.push(next_node.data());
 
@@ -326,13 +324,14 @@ where
                     sorted_nodes.len()
                 );
 
-                // If it is a tip, or it is included in the `to` array, push it to the graph tips list and break
+                // If the next_node is tip, or it is included in the `to` array, push it to the graph tips list and break
                 // out of this walking loop.
                 if next_node.is_tip() || to.unwrap_or_default().contains(&next_node.key()) {
                     graph_data.graph_tips.push(next_node.data());
                     break;
                 }
 
+                // Set current_node to the next_node we just visited and continue the loop.
                 current_node = next_node;
             }
         }
