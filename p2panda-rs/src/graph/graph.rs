@@ -239,7 +239,11 @@ where
 
     /// Sorts the graph topologically and returns the result.
     pub fn walk_from(&'a self, key: &K) -> Result<GraphData<V>, GraphError> {
-        let root_node = match self.get_node(key) {
+        self.walk_from_to(key, None)
+    }
+
+    pub fn walk_from_to(&'a self, from: &K, to: Option<&[&K]>) -> Result<GraphData<V>, GraphError> {
+        let root_node = match self.get_node(from) {
             Some(node) => Ok(node),
             None => Err(GraphError::NodeNotFound),
         }?;
@@ -259,9 +263,13 @@ where
             // Push this node to the sorted stack...
             sorted_nodes.push(current_node);
             graph_data.sorted.push(current_node.data());
-            if current_node.is_tip() {
-                graph_data.graph_tips.push(current_node.data())
+
+            // If this is a tip node, or it is included in the `to` array, push it's data to the graph_tips.
+            if current_node.is_tip() || to.unwrap_or_default().contains(&current_node.key()) {
+                graph_data.graph_tips.push(current_node.data());
+                continue;
             }
+
             debug!(
                 "{:?}: sorted to position {}",
                 current_node.key(),
@@ -312,16 +320,19 @@ where
                 sorted_nodes.push(next_node);
                 graph_data.sorted.push(next_node.data());
 
-                // If it is a tip, push it to the graph tips list.
-                if next_node.is_tip() {
-                    graph_data.graph_tips.push(next_node.data());
-                }
-
                 debug!(
                     "{:?}: sorted to position {}",
                     next_node.key(),
                     sorted_nodes.len()
                 );
+
+                // If it is a tip, or it is included in the `to` array, push it to the graph tips list and break
+                // out of this walking loop.
+                if next_node.is_tip() || to.unwrap_or_default().contains(&next_node.key()) {
+                    graph_data.graph_tips.push(next_node.data());
+                    break;
+                }
+
                 current_node = next_node;
             }
         }
@@ -471,6 +482,29 @@ mod test {
         graph.add_link(&'e', &'b'); // 'e' doesn't exist in the graph.
 
         assert!(graph.walk_from(&'a').is_err())
+    }
+
+    #[test]
+    fn can_walk_from_to() {
+        let mut graph = Graph::new();
+        graph.add_node(&'a', 1);
+        graph.add_node(&'b', 2);
+        graph.add_node(&'c', 3);
+        graph.add_node(&'d', 4);
+        graph.add_node(&'e', 5);
+
+        graph.add_link(&'a', &'b');
+        graph.add_link(&'b', &'c');
+        graph.add_link(&'c', &'d');
+        graph.add_link(&'c', &'e');
+
+        let result = graph.walk_from_to(&'a', Some(&[&'d', &'e']));
+
+        assert_eq!(result.unwrap().sorted(), [1, 2, 3, 4, 5]);
+
+        let result = graph.walk_from_to(&'a', Some(&[&'c']));
+
+        assert_eq!(result.unwrap().sorted(), [1, 2, 3]);
     }
 
     #[test]
