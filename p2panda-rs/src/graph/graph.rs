@@ -365,7 +365,10 @@ where
             }
         }
 
-        if to_nodes.iter().map(|node| node.data()).collect::<Vec<V>>() != graph_data.graph_tips {
+        if to.is_some()
+            && (to_nodes.iter().map(|node| node.data()).collect::<Vec<V>>()
+                != graph_data.graph_tips)
+        {
             return Err(GraphError::InvalidToNodesPassed);
         }
 
