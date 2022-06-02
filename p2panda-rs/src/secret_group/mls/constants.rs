@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::ciphersuite::CiphersuiteName;
+use openmls_traits::types::Ciphersuite;
 
 /// MLS ciphersuite used by p2panda.
 ///
 /// A ciphersuite is a combination of a protocol version and the set of cryptographic algorithms
 /// that should be used.
 ///
-/// * MLS: The string "MLS" followed by the major and minor version, e.g. "MLS10"
+/// * MLS: The string "MLS"
 /// * LVL: The security level
 /// * KEM: The KEM algorithm used for HPKE in TreeKEM group operations
 /// * AEAD: The AEAD algorithm used for HPKE and message protection
 /// * HASH: The hash algorithm used for HPKE and the MLS transcript hash
 /// * SIG: The Signature algorithm used for message authentication
-pub const MLS_CIPHERSUITE_NAME: CiphersuiteName =
-    CiphersuiteName::MLS10_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
+pub const MLS_CIPHERSUITE_NAME: Ciphersuite =
+    Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
 
 /// The padding mechanism is used to improve protection against traffic analysis. The final size of
 /// the ciphertext will be a multiple of the given padding.

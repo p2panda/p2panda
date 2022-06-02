@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::ciphersuite::Ciphersuite;
 use openmls::prelude::{
     Credential, CredentialBundle, Extension, KeyPackage, KeyPackageBundle, LifetimeExtension,
     SignatureKeypair,
@@ -26,9 +25,6 @@ impl MlsMember {
         provider: &impl OpenMlsCryptoProvider,
         key_pair: &KeyPair,
     ) -> Result<Self, MlsError> {
-        // Unwrap here since we can be sure this ciphersuite exists
-        let ciphersuite = Ciphersuite::new(MLS_CIPHERSUITE_NAME).unwrap();
-
         // Credential identities are p2panda public keys!
         let public_key = key_pair.public_key().to_bytes();
 
@@ -40,7 +36,7 @@ impl MlsMember {
                 let full_key = [private_key, public_key].concat();
 
                 let signature_key_pair = SignatureKeypair::from_bytes(
-                    ciphersuite.signature_scheme(),
+                    MLS_CIPHERSUITE_NAME.into(),
                     full_key.to_vec(),
                     public_key.to_vec(),
                 );
