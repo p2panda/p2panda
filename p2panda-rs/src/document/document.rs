@@ -173,18 +173,32 @@ impl Display for Document {
 /// ```
 #[derive(Debug, Clone)]
 pub struct DocumentBuilder {
+    /// All the operations present in this document.
     operations: Vec<OperationWithMeta>,
+
+    /// The specific document view we want to materialise. If not set, then all operations
+    /// will be included.
+    view_id: Option<DocumentViewId>,
 }
 
 impl DocumentBuilder {
     /// Instantiate a new `DocumentBuilder` from a collection of operations.
     pub fn new(operations: Vec<OperationWithMeta>) -> DocumentBuilder {
-        Self { operations }
+        Self {
+            operations,
+            view_id: None,
+        }
     }
 
     /// Get all operations for this document.
     pub fn operations(&self) -> Vec<OperationWithMeta> {
         self.operations.clone()
+    }
+
+    /// Set the view id we want to materialise.
+    pub fn set_view_id(&mut self, id: DocumentViewId) -> &Self {
+        self.view_id = Some(id);
+        self
     }
 
     /// Validates the set of operations and builds the document.
@@ -230,8 +244,16 @@ impl DocumentBuilder {
 
         let document_id = DocumentId::new(create_operation.operation_id().clone());
 
-        // Build the graph  and then sort the operations into a linear order
-        let graph = build_graph(&self.operations)?;
+        // Build the graph.
+        let mut graph = build_graph(&self.operations)?;
+
+        // If a specific document view was requested then trim the graph to that point.
+        match &self.view_id {
+            Some(id) => graph = graph.trim(&id.sorted())?,
+            None => (),
+        };
+
+        // Topologically sort the operations in the graph.
         let sorted_graph_data = graph.sort()?;
 
         // These are the current graph tips, to be added to the document view id
@@ -280,7 +302,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::document_view_fields::{DocumentViewFields, DocumentViewValue};
-    use crate::document::DocumentId;
+    use crate::document::{DocumentId, DocumentViewId};
     use crate::identity::KeyPair;
     use crate::operation::{OperationEncoded, OperationId, OperationValue, OperationWithMeta};
     use crate::schema::SchemaId;
@@ -1080,5 +1102,131 @@ mod tests {
 
         assert!(document.view().is_none());
         assert!(document.is_deleted());
+    }
+
+    #[rstest]
+    fn builds_specific_document_view(schema: SchemaId) {
+        let panda = Client::new(
+            "panda".to_string(),
+            KeyPair::from_private_key_str(
+                "ddcafe34db2625af34c8ba3cf35d46e23283d908c9848c8b43d1f5d0fde779ea",
+            )
+            .unwrap(),
+        );
+
+        let mut node = Node::new();
+
+        let (panda_entry_1_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &create_operation(
+                schema.clone(),
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Panda Cafe".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let (panda_entry_2_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &update_operation(
+                schema.clone(),
+                vec![panda_entry_1_hash.clone().into()],
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Panda Cafe!".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let (panda_entry_3_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &update_operation(
+                schema,
+                vec![panda_entry_1_hash.clone().into()],
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Panda Cafe!!!!!!".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        // DOCUMENT: [panda_1]<--[penguin_1]
+        //                    \----[panda_2]
+
+        let operations: Vec<OperationWithMeta> = node
+            .all_entries()
+            .into_iter()
+            .map(|entry| {
+                OperationWithMeta::new_from_entry(
+                    &entry.entry_encoded(),
+                    &entry.operation_encoded(),
+                )
+                .unwrap()
+            })
+            .collect();
+
+        let mut document_builder = DocumentBuilder::new(operations);
+
+        assert_eq!(
+            document_builder
+                .set_view_id(panda_entry_1_hash.into())
+                .build()
+                .unwrap()
+                .view()
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .value(),
+            &OperationValue::Text("Panda Cafe".to_string())
+        );
+
+        assert_eq!(
+            document_builder
+                .set_view_id(panda_entry_2_hash.clone().into())
+                .build()
+                .unwrap()
+                .view()
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .value(),
+            &OperationValue::Text("Panda Cafe!".to_string())
+        );
+
+        assert_eq!(
+            document_builder
+                .set_view_id(panda_entry_3_hash.clone().into())
+                .build()
+                .unwrap()
+                .view()
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .value(),
+            &OperationValue::Text("Panda Cafe!!!!!!".to_string())
+        );
+
+        assert_eq!(
+            document_builder
+                .set_view_id(DocumentViewId::new(&[
+                    panda_entry_2_hash.into(),
+                    panda_entry_3_hash.into()
+                ]))
+                .build()
+                .unwrap()
+                .view()
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .value(),
+            &OperationValue::Text("Panda Cafe!".to_string())
+        );
     }
 }
