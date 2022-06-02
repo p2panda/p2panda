@@ -25,4 +25,8 @@ pub enum GraphError {
     /// Requested node not found in graph.
     #[error("Node not found in graph")]
     NodeNotFound,
+
+    /// Requested trim nodes not found in graph.
+    #[error("Requested trim nodes not found in graph")]
+    InvalidTrimNodes,
 }
