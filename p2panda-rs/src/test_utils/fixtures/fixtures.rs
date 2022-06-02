@@ -36,11 +36,10 @@ pub fn v0_3_0_fixture() -> Fixture {
     );
 
     // Comment out to regenerate fixture:
-     use std::convert::TryFrom;
-    let entry_signed_encoded = crate::entry::sign_and_encode(
-        &entry(operation.clone(), seq_num(1), None, None),
-        &key_pair,
-    ).unwrap();
+    use std::convert::TryFrom;
+    let entry_signed_encoded =
+        crate::entry::sign_and_encode(&entry(operation.clone(), seq_num(1), None, None), &key_pair)
+            .unwrap();
     println!("{:?}", entry_signed_encoded.as_str());
     println!("{:?}", OperationEncoded::try_from(&operation).unwrap());
 

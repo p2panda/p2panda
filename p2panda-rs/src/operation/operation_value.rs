@@ -231,8 +231,7 @@ mod tests {
         // {
         //  "relation": "This is not a hash"
         // }
-        let invalid_hash =
-            "A16872656C6174696F6E7254686973206973206E6F7420612068617368";
+        let invalid_hash = "A16872656C6174696F6E7254686973206973206E6F7420612068617368";
         let value: OperationValue = OperationValue::deserialize_str(invalid_hash);
         assert!(value.validate().is_err());
     }
