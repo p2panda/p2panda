@@ -15,23 +15,19 @@ const REQUEST: Fields = {
 const RESPONSE: FieldsTagged = new Map();
 
 RESPONSE.set('channel', {
-  value: '5',
-  type: 'int',
+  int: '5',
 });
 
 RESPONSE.set('operation', {
-  value: 'chin chin',
-  type: 'str',
+  str: 'chin chin',
 });
 
 RESPONSE.set('serious', {
-  value: false,
-  type: 'bool',
+  bool: false,
 });
 
 RESPONSE.set('temperature', {
-  value: 19.5,
-  type: 'float',
+  float: 19.5,
 });
 
 const LARGE_NUMBER_REQUEST: Fields = {
@@ -41,8 +37,7 @@ const LARGE_NUMBER_REQUEST: Fields = {
 const LARGE_NUMBER_RESPONSE: FieldsTagged = new Map();
 
 LARGE_NUMBER_RESPONSE.set('largeNumber', {
-  value: '894328732428428423810',
-  type: 'int',
+  int: '894328732428428423810',
 });
 
 describe('Utils', () => {

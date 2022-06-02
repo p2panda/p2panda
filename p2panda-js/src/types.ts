@@ -120,8 +120,7 @@ export type OperationValue =
  * An operation value of `boolean` type.
  */
 export type OperationValueBool = {
-  value: boolean;
-  type: 'bool';
+  bool: boolean;
 };
 
 /**
@@ -129,55 +128,48 @@ export type OperationValueBool = {
  */
 export type OperationValueInt = {
   // Internally stored as a string to give support for very large numbers
-  value: string;
-  type: 'int';
+  int: string;
 };
 
 /**
  * An operation value of `float` type.
  */
 export type OperationValueFloat = {
-  value: number;
-  type: 'float';
+  float: number;
 };
 
 /**
  * An operation value of `string` type.
  */
 export type OperationValueText = {
-  value: string;
-  type: 'str';
+  str: string;
 };
 
 /**
  * An operation value of `relation` type.
  */
 export type OperationValueRelation = {
-  value: Relation;
-  type: 'relation';
+  relation: Relation;
 };
 
 /**
  * An operation value of `relation_list` type.
  */
 export type OperationValueRelationList = {
-  value: Relation[];
-  type: 'relation_list';
+  relation_list: Relation[];
 };
 /**
  * An operation value of `pinned_relation` type.
  */
 export type OperationValuePinnedRelation = {
-  value: PinnedRelation;
-  type: 'pinned_relation';
+  pinned_relation: PinnedRelation;
 };
 
 /**
  * An operation value of `pinned_relation_list` type.
  */
 export type OperationValuePinnedRelationList = {
-  value: PinnedRelation[];
-  type: 'pinned_relation_list';
+  pinned_relation_list: PinnedRelation[];
 };
 
 /**

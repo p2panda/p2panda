@@ -49,7 +49,7 @@ export const marshallRequestFields = (fields: Fields): FieldsTagged => {
 
     switch (getFieldType(fields, key)) {
       case 'str':
-        map.set(key, { value: value as string, type: 'str' });
+        map.set(key, { str: value as string });
         break;
       case 'int':
         // "int" can be a BigInt instance or "number" which again can be a
@@ -57,23 +57,21 @@ export const marshallRequestFields = (fields: Fields): FieldsTagged => {
         if (typeof value === 'number' && value.toString().includes('.')) {
           // This is a float number
           map.set(key, {
-            value: value as number,
-            type: 'float',
+            float: value as number,
           });
         } else if (typeof value === 'bigint') {
           // Convert bigints into strings and store as "int"
-          map.set(key, { value: value.toString(), type: 'int' });
+          map.set(key, { int: value.toString() });
         } else {
           // This is a regular integer, convert it to string and store as "int"
           map.set(key, {
-            value: (value as number).toString(),
-            type: 'int',
+            int: (value as number).toString(),
           });
         }
 
         break;
       case 'bool':
-        map.set(key, { value: value as boolean, type: 'bool' });
+        map.set(key, { bool: value as boolean });
         break;
       case null:
         // Skip fields that have no value
@@ -91,7 +89,11 @@ export const marshallResponseFields = (fieldsTagged: FieldsTagged): Fields => {
   const fields: Fields = {};
 
   for (const [key, fieldValue] of fieldsTagged.entries()) {
-    const { type, value } = fieldValue;
+    const type = Object.keys(fieldValue).pop();
+    if (type == null) {
+      throw new Error(`Missing value for field '${key}'`);
+    }
+    const value = fieldValue[type as keyof typeof fieldValue];
 
     // Convert smaller integers to 'number', keep large ones as strings
     if (type === 'int' && BigInt(value as string) <= Number.MAX_SAFE_INTEGER) {

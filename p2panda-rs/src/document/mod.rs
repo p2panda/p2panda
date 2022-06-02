@@ -144,7 +144,7 @@
 //! assert!(document.is_ok());
 //!
 //! let document = document.unwrap();
-//! assert_eq!(format!("{}", document), "<Document f21e48>");
+//! assert_eq!(format!("{}", document), "<Document 52cc67>");
 //!
 //! // This process already builds, sorts and reduces the document. We can now
 //! // access the derived view to check it's values.

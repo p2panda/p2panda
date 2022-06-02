@@ -48,43 +48,35 @@ operation_body = (
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 value_text = (
-    type: "str",
-    value: tstr,
+    str: tstr,
 )
 
 value_integer = (
-    type: "int",
-    value: int,
+    int: int,
 )
 
 value_float = (
-    type: "float",
-    value: float,
+    float: float,
 )
 
 value_boolean = (
-    type: "bool",
-    value: bool,
+    bool: bool,
 )
 
 value_relation = (
-    type: "relation",
-    value: relation,
+    relation: relation,
 )
 
 value_relation_list = (
-    type: "relation_list",
-    value: relation_list,
+    relation_list: relation_list,
 )
 
 value_pinned_relation = (
-    type: "pinned_relation",
-    value: pinned_relation,
+    pinned_relation: pinned_relation,
 )
 
 value_pinned_relation_list = (
-    type: "pinned_relation_list",
-    value: pinned_relation_list,
+    pinned_relation_list: pinned_relation_list,
 )
 "#;
 
@@ -152,8 +144,7 @@ description = (
 
 fields = (
     fields: {
-        type: "relation_list",
-        value: pinned_relation_list,
+        relation_list: pinned_relation_list,
     },
 )
 "#;
@@ -183,8 +174,7 @@ description = (
 
 field_type = (
     field_type: {
-        type: "str",
-        value: "str" / "int" / "float" / "bool" / "relation" /
+        str: "str" / "int" / "float" / "bool" / "relation" /
             "relation_list" / "pinned_relation" / "pinned_relation_list",
     }
 )
@@ -241,24 +231,19 @@ mod tests {
                     "version" => 1,
                     "fields" => {
                         "national_dish" => {
-                            "value" => "Pumpkin",
-                            "type" => "str"
+                            "str" => "Pumpkin",
                         },
                         "country" => {
-                            "value" => "0020f407359f54a9dbfabba3c5d8cab5fe4e99867dbc81ca1a29588c3bd478712644",
-                            "type" => "relation"
+                            "relation" => "0020f407359f54a9dbfabba3c5d8cab5fe4e99867dbc81ca1a29588c3bd478712644",
                         },
                         "vegan_friendly" => {
-                            "value" => true,
-                            "type" => "bool"
+                            "bool" => true,
                         },
                         "yummyness" => {
-                            "value" => 8,
-                            "type" => "int"
+                            "int" => 8,
                         },
                         "yumsimumsiness" => {
-                            "value" => 7.2,
-                            "type" => "float"
+                            "float" => 7.2,
                         },
                     },
                 })
@@ -279,8 +264,7 @@ mod tests {
                     ],
                     "fields" => {
                         "national_dish" => {
-                            "value" => "Almonds",
-                            "type" => "str"
+                            "str" => "Almonds",
                         },
                     },
                 })
@@ -318,8 +302,7 @@ mod tests {
                     "version" => 1,
                     "fields" => {
                         "food" => {
-                            "value" => "Pumkin",
-                            "type" => "str"
+                            "str" => "Pumkin",
                         }
                     }
                 })
@@ -370,8 +353,7 @@ mod tests {
                     "fields" => {
                         "size" => {
                             // Value and type do not match
-                            "value" => "This is not a number",
-                            "type" => "int",
+                            "int" => "This is not a number",
                         },
                     },
                 })
@@ -444,15 +426,13 @@ mod tests {
                     "version" => 1,
                     "fields" => {
                         "name" => {
-                            "value" => "Locations",
-                            "type" => "str"
+                            "str" => "Locations",
                         },
                         "description" => {
-                            "value" => "Holds information about places",
-                            "type" => "str"
+                            "str" => "Holds information about places",
                         },
                         "fields" => {
-                            "value" => [
+                            "relation_list" => [
                                 [
                                     "0020c039b78e3f9a84370e23642d911d2648f9db0b9150e43c853de863936bdefe5d",
                                     "0020981f3763e1cefab859c315157b79179188f8187da4d53eea3fb8a571a3b5c0a6",
@@ -461,7 +441,6 @@ mod tests {
                                     "00206a98fffb0b1424ada1ed241b32da8287852d6b4eb37a1b381892c4fbd800e9e8",
                                 ],
                             ],
-                            "type" => "relation_list"
                         },
                     },
                 })
@@ -481,8 +460,7 @@ mod tests {
                     ],
                     "fields" => {
                         "name" => {
-                            "value" => "Telephones",
-                            "type" => "str"
+                            "str" => "Telephones",
                         },
                     },
                 })
@@ -519,12 +497,10 @@ mod tests {
                     "version" => 1,
                     "fields" => {
                         "name" => {
-                            "value" => "Locations",
-                            "type" => "str"
+                            "str" => "Locations",
                         },
                         "description" => {
-                            "value" => "Holds information about places",
-                            "type" => "str"
+                            "str" => "Holds information about places",
                         },
                         // "fields" missing
                     },
@@ -543,25 +519,21 @@ mod tests {
                     "version" => 1,
                     "fields" => {
                         "name" => {
-                            "value" => "Locations",
-                            "type" => "str"
+                            "str" => "Locations",
                         },
                         "description" => {
-                            "value" => "Holds information about places",
-                            "type" => "str"
+                            "str" => "Holds information about places",
                         },
                         // "field_type" is an unknown field
                         "field_type" => {
-                            "value" => "What am I doing here?",
-                            "type" => "str"
+                            "str" => "What am I doing here?",
                         },
                         "fields" => {
-                            "value" => [
+                            "relation_list" => [
                                 [
                                     "00206de69fe88aa24e0929bad2fc9808a0ce2aad8e6d8fb914f4a9178995a56b3435"
                                 ]
-                            ],
-                            "type" => "relation_list"
+                            ]
                         },
                     },
                 })
@@ -582,8 +554,7 @@ mod tests {
                     "fields" => {
                         "name" => {
                             // "name" is not an integer
-                            "value" => 12,
-                            "type" => "int"
+                            "int" => 12,
                         },
                     },
                 })
@@ -604,16 +575,13 @@ mod tests {
                     "version" => 1,
                     "fields" => {
                         "name" => {
-                            "value" => "Size",
-                            "type" => "str"
+                            "str" => "Size",
                         },
                         "description" => {
-                            "value" => "In centimeters",
-                            "type" => "str"
+                            "str" => "In centimeters",
                         },
                         "field_type" => {
-                            "value" => "float",
-                            "type" => "str"
+                            "str" => "float",
                         },
                     },
                 })
@@ -635,20 +603,16 @@ mod tests {
                     ],
                     "fields" => {
                         "field_type" => {
-                            "value" => "relation",
-                            "type" => "str"
+                            "str" => "relation",
                         },
                         "field_type" => {
-                            "value" => "relation_list",
-                            "type" => "str"
+                            "str" => "relation_list",
                         },
                         "field_type" => {
-                            "value" => "pinned_relation",
-                            "type" => "str"
+                            "str" => "pinned_relation",
                         },
                         "field_type" => {
-                            "value" => "pinned_relation_list",
-                            "type" => "str"
+                            "str" => "pinned_relation_list",
                         },
                     },
                 })
@@ -685,13 +649,11 @@ mod tests {
                     "version" => 1,
                     "fields" => {
                         "name" => {
-                            "value" => "Size",
-                            "type" => "str"
+                            "str" => "Size",
                         },
                         // "description" field missing
                         "field_type" => {
-                            "value" => "float",
-                            "type" => "str"
+                            "str" => "float",
                         },
                     },
                 })
@@ -713,8 +675,7 @@ mod tests {
                     "fields" => {
                         "field_type" => {
                             // Unknown field type
-                            "value" => "beaver_nest",
-                            "type" => "str"
+                            "str" => "beaver_nest",
                         },
                     },
                 })

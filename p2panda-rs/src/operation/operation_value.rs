@@ -220,21 +220,19 @@ mod tests {
         // "relation_list" operation value with invalid hash:
         //
         // {
-        //  "type": "relation_list",
-        //  "value": ["This is not a hash"]
+        //  "relation_list": ["This is not a hash"]
         // }
-        let invalid_hash = "A264747970656D72656C6174696F6E5F6C6973746576616C7565817254686973206973206E6F7420612068617368";
+        let invalid_hash = "A16D72656C6174696F6E5F6C697374817254686973206973206E6F7420612068617368";
         let value: OperationValue = OperationValue::deserialize_str(invalid_hash);
         assert!(value.validate().is_err());
 
         // "relation" operation value with invalid hash:
         //
         // {
-        //  "type": "relation",
-        //  "value": "This is not a hash"
+        //  "relation": "This is not a hash"
         // }
         let invalid_hash =
-            "A264747970656872656C6174696F6E6576616C75657254686973206973206E6F7420612068617368";
+            "A16872656C6174696F6E7254686973206973206E6F7420612068617368";
         let value: OperationValue = OperationValue::deserialize_str(invalid_hash);
         assert!(value.validate().is_err());
     }

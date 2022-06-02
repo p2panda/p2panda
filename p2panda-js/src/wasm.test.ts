@@ -180,8 +180,7 @@ describe('WebAssembly interface', () => {
 
       // Test operation fields map
       const { fields: operationFields } = decodedEntry.operation;
-      expect(operationFields.get('description').value).toBe('Hello, Panda');
-      expect(operationFields.get('description').type).toBe('str');
+      expect(operationFields.get('description').str).toBe('Hello, Panda');
 
       // Test decoding entry without operation
       expect(() => decodeEntry(entryEncoded)).not.toThrow();
@@ -233,12 +232,12 @@ describe('WebAssembly interface', () => {
       expect(decodedEntry.logId).toEqual(BigInt(LARGE_LOG_ID));
 
       const { fields: operationFields } = decodedEntry.operation;
-      expect(operationFields.get('large_i64').value).toEqual(BigInt(LARGE_I64));
-      expect(operationFields.get('large_i64_negative').value).toEqual(
+      expect(operationFields.get('large_i64').int).toEqual(BigInt(LARGE_I64));
+      expect(operationFields.get('large_i64_negative').int).toEqual(
         BigInt(LARGE_I64_NEGATIVE),
       );
-      expect(operationFields.get('large_f64').value).toEqual(LARGE_F64);
-      expect(operationFields.get('large_f64_negative').value).toEqual(
+      expect(operationFields.get('large_f64').float).toEqual(LARGE_F64);
+      expect(operationFields.get('large_f64_negative').float).toEqual(
         LARGE_F64_NEGATIVE,
       );
     });

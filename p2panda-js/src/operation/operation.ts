@@ -19,7 +19,11 @@ export const getOperationFields = async (
 
   const operationFields = new OperationFields();
   for (const [key, fieldValue] of fields.entries()) {
-    const { type, value } = fieldValue;
+    const type = Object.keys(fieldValue).pop();
+    if (type == null) {
+      throw new Error(`Missing value for field '${key}'`);
+    }
+    const value = fieldValue[type as keyof typeof fieldValue];
     operationFields.add(key, type, value);
   }
 
