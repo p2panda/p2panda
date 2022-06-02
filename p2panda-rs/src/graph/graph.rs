@@ -240,35 +240,16 @@ where
         Some(next_nodes)
     }
 
-    fn previous(
-        &'a self,
-        sorted: &[&Node<K, V>],
-        node: &Node<K, V>,
-    ) -> Option<Vec<&'a Node<K, V>>> {
-        let mut previous_nodes: Vec<&'a Node<K, V>> = Vec::new();
-
-        for node_key in node.previous() {
-            let node = self.get_node(node_key).unwrap();
-            if !sorted
-                .iter()
-                .any(|sorted_node| sorted_node.key() == node.key())
-            {
-                previous_nodes.push(node)
-            }
-        }
-
-        if previous_nodes.is_empty() {
-            return None;
-        };
-        previous_nodes.sort_by_key(|node_a| node_a.key());
-        previous_nodes.reverse();
-        Some(previous_nodes)
-    }
-
-    pub fn trim(&'a mut self, new_tips: &[K]) -> Result<Graph<K, V>, GraphError> {
+    /// Returns a new graph instance which has had all nodes removed which aren't causally linked
+    /// to the passed nodes.
+    ///
+    /// Data contained in the returned nodes is unchanged, but the nodes' `next` arrays are edited
+    /// to reflect the new graph connections. The returned graph can be sorted in order to arrive
+    /// at a linear ordering of nodes.  
+    pub fn trim(&'a mut self, tip_nodes: &[K]) -> Result<Graph<K, V>, GraphError> {
         let mut graph_tips = vec![];
 
-        for key in new_tips {
+        for key in tip_nodes {
             let mut node = match self.get_node(key) {
                 Some(node) => node.to_owned(),
                 None => return Err(GraphError::InvalidTrimNodes),
