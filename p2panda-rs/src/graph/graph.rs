@@ -264,16 +264,16 @@ where
         let mut next_graph_nodes: HashMap<K, Node<K, V>> = HashMap::new();
 
         while let Some(mut current_node) = queue.pop() {
-            if next_graph_nodes.len() > self.0.len() {
-                return Err(GraphError::CycleDetected);
-            }
-
             // Push the current node to the graph nodes array.
             next_graph_nodes.insert(current_node.key().to_owned(), current_node.clone());
 
             // We now start traversing the graph backwards from this point until we reach the root
             // or a merge node.
             while !current_node.previous().is_empty() {
+                if queue.len() > self.0.len() {
+                    return Err(GraphError::CycleDetected);
+                }
+
                 // Collect parent nodes from the graph by their key.
                 let mut parent_nodes: Vec<&Node<K, V>> = current_node
                     .previous()
@@ -669,8 +669,9 @@ mod test {
         let result = graph.trim(&['a', 'b', 'c', 'j']).unwrap().sort();
         assert_eq!(result.unwrap().sorted(), ['A', 'B', 'C', 'I', 'J']);
     }
+
     #[test]
-    fn invalid_to_array() {
+    fn invalid_trim_node_keys() {
         let mut graph = Graph::new();
         graph.add_node(&'a', 1);
         graph.add_node(&'b', 2);
@@ -689,6 +690,24 @@ mod test {
             expected_err
         );
         assert_eq!(graph.trim(&['g']).unwrap_err().to_string(), expected_err);
+    }
+
+    #[test]
+    fn trim_can_detect_cycle() {
+        let mut graph = Graph::new();
+
+        graph.add_node(&'a', 1);
+        graph.add_node(&'b', 2);
+        graph.add_node(&'c', 3);
+        graph.add_node(&'d', 4);
+
+        graph.add_link(&'a', &'b');
+        graph.add_link(&'b', &'c');
+        graph.add_link(&'c', &'d');
+        graph.add_link(&'d', &'b');
+
+        let expected_err = "Cycle detected";
+        assert_eq!(graph.trim(&['d']).unwrap_err().to_string(), expected_err);
     }
 
     #[test]
