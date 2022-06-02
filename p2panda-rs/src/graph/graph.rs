@@ -237,6 +237,93 @@ where
         Some(next_nodes)
     }
 
+    fn previous(
+        &'a self,
+        sorted: &[&Node<K, V>],
+        node: &Node<K, V>,
+    ) -> Option<Vec<&'a Node<K, V>>> {
+        let mut previous_nodes: Vec<&'a Node<K, V>> = Vec::new();
+
+        for node_key in node.previous() {
+            let node = self.get_node(node_key).unwrap();
+            if !sorted.contains(&node) {
+                previous_nodes.push(node)
+            }
+        }
+
+        if previous_nodes.is_empty() {
+            return None;
+        };
+        previous_nodes.sort_by_key(|node_a| node_a.key());
+        previous_nodes.reverse();
+        Some(previous_nodes)
+    }
+
+    pub fn trim_graph(&'a self, new_tips: &[K]) -> Result<Graph<K, V>, GraphError> {
+        let mut queue = Vec::new();
+
+        for key in new_tips {
+            match self.get_node(key) {
+                Some(node) => queue.push(node),
+                None => return Err(GraphError::NodeNotFound),
+            }
+        }
+
+        let mut collected_nodes = vec![];
+
+        // Pop from the queue while it has items.
+        while let Some(mut current_node) = queue.pop() {
+            // If the sorted stack is bigger than the number of existing nodes we have a cycle.
+            if collected_nodes.len() > self.0.len() {
+                return Err(GraphError::CycleDetected);
+            }
+            // Push the current node to the sorted stack...
+            collected_nodes.push(current_node);
+
+            debug!(
+                "{:?}: sorted to position {}",
+                current_node.key(),
+                collected_nodes.len()
+            );
+
+            // Now we start walking from the current node back through the graph. First of all getting
+            // any parent nodes connected to the current node.
+            while let Some(mut previous_nodes) = self.previous(&collected_nodes, current_node) {
+                // We know previous_node contains at least one node so we can unwrap here.
+                let previous_node = previous_nodes.pop().unwrap();
+                debug!("visiting: {:?}", previous_node.key());
+
+                // Push all other parent nodes connected to this one to the queue, we will visit these later.
+                while let Some(node_to_be_queued) = previous_nodes.pop() {
+                    queue.push(node_to_be_queued);
+                    debug!("{:?}: pushed to queue", node_to_be_queued.key());
+                }
+
+                collected_nodes.push(previous_node);
+
+                debug!(
+                    "{:?}: sorted to position {}",
+                    previous_node.key(),
+                    collected_nodes.len()
+                );
+
+                // Set current_node to the previous_node we just visited and continue the loop.
+                current_node = previous_node;
+            }
+
+            if current_node != self.root_node().unwrap() {
+                return Err(GraphError::NoRootNode);
+            }
+        }
+
+        let nodes: HashMap<K, Node<K, V>> = collected_nodes
+            .into_iter()
+            .map(|node| (node.key().to_owned(), node.to_owned()))
+            .collect();
+
+        Ok(Graph(nodes))
+    }
+
     /// Sorts the graph topologically and returns the result.
     pub fn walk_from(&'a self, key: &K) -> Result<GraphData<V>, GraphError> {
         let root_node = match self.get_node(key) {
