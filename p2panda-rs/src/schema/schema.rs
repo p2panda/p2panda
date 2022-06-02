@@ -128,6 +128,7 @@ impl Display for Schema {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use std::convert::TryInto;
 
     use rstest::rstest;

@@ -281,7 +281,6 @@ mod tests {
 
     use crate::document::document_view_fields::{DocumentViewFields, DocumentViewValue};
     use crate::document::DocumentId;
-    use crate::entry::Entry;
     use crate::identity::KeyPair;
     use crate::operation::{OperationEncoded, OperationId, OperationValue, OperationWithMeta};
     use crate::schema::SchemaId;
