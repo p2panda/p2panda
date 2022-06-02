@@ -12,7 +12,7 @@ use rstest::fixture;
 use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::{sign_and_encode, Entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
-use crate::identity::KeyPair;
+use crate::identity::{Author, KeyPair};
 use crate::operation::{
     Operation, OperationEncoded, OperationFields, OperationId, OperationValue, OperationWithMeta,
 };
@@ -25,6 +25,13 @@ use crate::test_utils::utils;
 #[fixture]
 pub fn private_key() -> String {
     DEFAULT_PRIVATE_KEY.into()
+}
+
+/// Fixture which injects the default author into a test method.
+#[fixture]
+pub fn public_key() -> Author {
+    let key_pair = KeyPair::from_private_key_str(DEFAULT_PRIVATE_KEY).unwrap();
+    Author::try_from(key_pair.public_key().to_owned()).unwrap()
 }
 
 /// Fixture which injects the default KeyPair into a test method. Default value can be overridden
@@ -213,16 +220,34 @@ pub fn delete_operation(
     utils::delete_operation(schema, previous_operations)
 }
 
-/// Fixture which injects the default CREATE OperationWithMeta into a test method.
-///
-/// Default value can be overridden at testing time by passing in custom schema hash and operation
-/// fields.
+/// Fixture which injects a CREATE `OperationWithMeta` into a test method.
 #[fixture]
-pub fn meta_operation(
-    entry_signed_encoded: EntrySigned,
-    operation_encoded: OperationEncoded,
+pub fn create_operation_with_meta(
+    create_operation: Operation,
+    public_key: Author,
+    #[from(random_operation_id)] operation_id: OperationId,
 ) -> OperationWithMeta {
-    utils::meta_operation(entry_signed_encoded, operation_encoded)
+    OperationWithMeta::new_test_operation(&operation_id, &public_key, &create_operation)
+}
+
+/// Fixture which injects an UPDATE OperationWithMeta into a test method.
+#[fixture]
+pub fn update_operation_with_meta(
+    update_operation: Operation,
+    public_key: Author,
+    #[from(random_operation_id)] operation_id: OperationId,
+) -> OperationWithMeta {
+    OperationWithMeta::new_test_operation(&operation_id, &public_key, &update_operation)
+}
+
+/// Fixture which injects a DELETE `OperationWithMeta` into a test method.
+#[fixture]
+pub fn delete_operation_with_meta(
+    delete_operation: Operation,
+    public_key: Author,
+    #[from(random_operation_id)] operation_id: OperationId,
+) -> OperationWithMeta {
+    OperationWithMeta::new_test_operation(&operation_id, &public_key, &delete_operation)
 }
 
 #[fixture]
@@ -231,4 +256,13 @@ pub fn encoded_create_string(create_operation: Operation) -> String {
         .unwrap()
         .as_str()
         .to_owned()
+}
+
+/// Fixture which injects the default CREATE `OperationWithMeta` into a test method.
+#[fixture]
+pub fn meta_operation(
+    entry_signed_encoded: EntrySigned,
+    operation_encoded: OperationEncoded,
+) -> OperationWithMeta {
+    utils::meta_operation(entry_signed_encoded, operation_encoded)
 }

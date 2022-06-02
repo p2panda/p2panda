@@ -707,11 +707,11 @@ mod tests {
 
         // We can query the node for the current document state.
         let document = node.get_document(&panda_entry_1_hash);
-
+        let document_view_value = document.view().unwrap().get("message").unwrap();
         // It was last updated by Penguin, this writes over previous values.
         assert_eq!(
-            *document.view().get("message").unwrap(),
-            OperationValue::Text("And again. [Penguin]".to_string())
+            document_view_value.value(),
+            &OperationValue::Text("And again. [Penguin]".to_string())
         );
         // There should only be one document in the database.
         assert_eq!(node.get_documents().len(), 1);
@@ -843,9 +843,10 @@ mod tests {
         .unwrap();
 
         let document = node.get_document(&panda_entry_1_hash);
+        let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
-            *document.view().get("cafe_name").unwrap(),
-            OperationValue::Text("Polar Pear Cafe".to_string())
+            document_view_value.value(),
+            &OperationValue::Text("Polar Pear Cafe".to_string())
         );
 
         // Publish an UPDATE operation
@@ -866,9 +867,10 @@ mod tests {
         .unwrap();
 
         let document = node.get_document(&panda_entry_1_hash);
+        let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
-            *document.view().get("cafe_name").unwrap(),
-            OperationValue::Text("Polar Bear Cafe".to_string())
+            document_view_value.value(),
+            &OperationValue::Text("Polar Bear Cafe".to_string())
         );
 
         // Penguin publishes an UPDATE operation, but they haven't seen Panda's most recent entry [2]
@@ -892,9 +894,10 @@ mod tests {
         .unwrap();
 
         let document = node.get_document(&panda_entry_1_hash);
+        let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
-            *document.view().get("address").unwrap(),
-            OperationValue::Text("1, Polar Bear rd, Panda Town".to_string())
+            document_view_value.value(),
+            &OperationValue::Text("Polar Bear Cafe".to_string())
         );
 
         // Penguin publishes another UPDATE operation, this time they have replicated all entries
@@ -918,9 +921,11 @@ mod tests {
         .unwrap();
 
         let document = node.get_document(&panda_entry_1_hash);
+
+        let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
-            *document.view().get("cafe_name").unwrap(),
-            OperationValue::Text("Polar Bear Café".to_string())
+            document_view_value.value(),
+            &OperationValue::Text("Polar Bear Café".to_string())
         );
 
         // As more operations are published, the graph could look like this:
