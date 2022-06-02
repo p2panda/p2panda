@@ -6,9 +6,11 @@ use std::str::FromStr;
 use serde::de::{SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::hash::{Hash, HashError};
+use crate::hash::Hash;
 use crate::operation::OperationId;
 use crate::Validate;
+
+use super::error::DocumentViewIdError;
 
 /// The identifier of a document view.
 ///
@@ -90,7 +92,7 @@ impl PartialEq for DocumentViewId {
 }
 
 impl Validate for DocumentViewId {
-    type Error = HashError;
+    type Error = DocumentViewIdError;
 
     /// Checks that constituting operation ids are sorted and represent valid hashes.
     fn validate(&self) -> Result<(), Self::Error> {
@@ -199,7 +201,7 @@ impl From<Hash> for DocumentViewId {
 /// Converts a string formatted document view id into a `DocumentViewId`. Expects multi-hash ids to
 /// be hash strings seperated by an `_` character.
 impl FromStr for DocumentViewId {
-    type Err = HashError;
+    type Err = DocumentViewIdError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut operations: Vec<OperationId> = Vec::new();

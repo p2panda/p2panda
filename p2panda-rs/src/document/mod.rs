@@ -280,4 +280,4 @@ pub use document_view::DocumentView;
 pub use document_view_fields::{DocumentViewFields, DocumentViewValue};
 pub use document_view_hash::DocumentViewHash;
 pub use document_view_id::DocumentViewId;
-pub use error::{DocumentBuilderError, DocumentError, DocumentViewError};
+pub use error::{DocumentBuilderError, DocumentError, DocumentViewError, DocumentViewIdError};
