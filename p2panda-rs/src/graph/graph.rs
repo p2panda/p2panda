@@ -250,11 +250,10 @@ where
         let mut graph_tips = vec![];
 
         for key in tip_nodes {
-            let mut node = match self.get_node(key) {
+            let node = match self.get_node(key) {
                 Some(node) => node.to_owned(),
                 None => return Err(GraphError::InvalidTrimNodes),
             };
-            node.next = vec![];
             graph_tips.push(node)
         }
 
@@ -300,6 +299,28 @@ where
                 current_node = parent_nodes.pop().unwrap();
             }
         }
+
+        // We need to edit the `next` field of every passed tip node so that they only contain nodes
+        // which exist in the graph.
+        let next_graph_nodes = next_graph_nodes
+            .clone()
+            .iter_mut()
+            .map(|(key, node)| {
+                let tips = node
+                    .next
+                    .iter()
+                    .filter_map(|next_node| {
+                        next_graph_nodes
+                            .get(next_node)
+                            .map(|node| node.key().to_owned())
+                    })
+                    .collect();
+
+                node.next = tips;
+
+                (key.to_owned(), node.to_owned())
+            })
+            .collect();
 
         Ok(Graph(next_graph_nodes))
     }
@@ -541,7 +562,7 @@ mod test {
     }
 
     #[test]
-    fn can_walk_from_to() {
+    fn can_trim_graph() {
         let mut graph = Graph::new();
         graph.add_node(&'a', 1);
         graph.add_node(&'b', 2);
@@ -555,22 +576,79 @@ mod test {
         graph.add_link(&'c', &'e');
 
         let result = graph.trim(&['d', 'e']).unwrap().sort();
-
         assert_eq!(result.unwrap().sorted(), [1, 2, 3, 4, 5]);
 
         let result = graph.trim(&['c']).unwrap().sort();
-
         assert_eq!(result.unwrap().sorted(), [1, 2, 3]);
 
         let result = graph.trim(&['e']).unwrap().sort();
-
         assert_eq!(result.unwrap().sorted(), [1, 2, 3, 5]);
 
         let result = graph.trim(&['d']).unwrap().sort();
-
         assert_eq!(result.unwrap().sorted(), [1, 2, 3, 4]);
     }
 
+    #[test]
+    fn can_trim_more_complex_graph() {
+        let mut graph = Graph::new();
+        graph.add_node(&'a', 'A');
+        graph.add_node(&'b', 'B');
+        graph.add_node(&'c', 'C');
+        graph.add_node(&'d', 'D');
+        graph.add_node(&'e', 'E');
+        graph.add_node(&'f', 'F');
+        graph.add_node(&'g', 'G');
+        graph.add_node(&'h', 'H');
+        graph.add_node(&'i', 'I');
+        graph.add_node(&'j', 'J');
+        graph.add_node(&'k', 'K');
+
+        graph.add_link(&'a', &'b');
+        graph.add_link(&'b', &'c');
+        graph.add_link(&'c', &'d');
+        graph.add_link(&'d', &'e');
+        graph.add_link(&'e', &'f');
+
+        graph.add_link(&'a', &'g');
+        graph.add_link(&'g', &'h');
+        graph.add_link(&'h', &'d');
+
+        graph.add_link(&'c', &'i');
+        graph.add_link(&'i', &'j');
+        graph.add_link(&'j', &'k');
+        graph.add_link(&'k', &'f');
+
+        //             /--[I]<--[J]<--[K]<--\
+        //  /--[B]<--[C]--\                  \
+        // [A]<--[G]<-----[H]<--[D]<--[E]<---[F]
+        //
+
+        let result = graph.trim(&['k']).unwrap().sort();
+        assert_eq!(result.unwrap().sorted(), ['A', 'B', 'C', 'I', 'J', 'K']);
+
+        let result = graph.trim(&['k', 'e']).unwrap().sort();
+        assert_eq!(
+            result.unwrap().sorted(),
+            ['A', 'B', 'C', 'I', 'J', 'K', 'G', 'H', 'D', 'E']
+        );
+
+        let result = graph.trim(&['f']).unwrap().sort();
+        assert_eq!(
+            result.unwrap().sorted(),
+            ['A', 'B', 'C', 'I', 'J', 'K', 'G', 'H', 'D', 'E', 'F']
+        );
+
+        let result = graph.trim(&['k', 'g']).unwrap().sort();
+        assert_eq!(
+            result.unwrap().sorted(),
+            ['A', 'B', 'C', 'I', 'J', 'K', 'G']
+        );
+
+        // This is a weird case, many "tips" are passed, but they all exist in the same branch. It is valid though
+        // and we process it correctly.
+        let result = graph.trim(&['a', 'b', 'c', 'j']).unwrap().sort();
+        assert_eq!(result.unwrap().sorted(), ['A', 'B', 'C', 'I', 'J']);
+    }
     #[test]
     fn invalid_to_array() {
         let mut graph = Graph::new();
