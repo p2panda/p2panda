@@ -40,7 +40,7 @@ lazy_static = "^1.4.0"
 lipmaa-link = "^0.2.2"
 log = "^0.4"
 mockall = "0.11.0"
-openmls = "^0.4.0"
+openmls = { version = "^0.4.0", features = ["crypto-subtle"] }
 openmls_memory_keystore = "^0.1.0"
 openmls_rust_crypto = "^0.1.0"
 openmls_traits = "^0.1.0"
