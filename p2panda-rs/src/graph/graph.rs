@@ -247,8 +247,8 @@ where
     /// to reflect the new graph connections. The returned graph can be sorted in order to arrive
     /// at a linear ordering of nodes.  
     pub fn trim(&'a mut self, tip_nodes: &[K]) -> Result<Graph<K, V>, GraphError> {
+        // Instantiate the passed graph tips and make sure they exist in the graph.
         let mut graph_tips = vec![];
-
         for key in tip_nodes {
             let node = match self.get_node(key) {
                 Some(node) => node.to_owned(),
@@ -257,6 +257,7 @@ where
             graph_tips.push(node)
         }
 
+        // The queue initially contains all the passed graph tips.
         let mut queue: Vec<&Node<K, V>> = graph_tips.iter().collect();
         let mut next_graph_nodes: HashMap<K, Node<K, V>> = HashMap::new();
 
@@ -265,37 +266,54 @@ where
                 return Err(GraphError::CycleDetected);
             }
 
+            // Push the current node to the graph nodes array.
             next_graph_nodes.insert(current_node.key().to_owned(), current_node.clone());
 
+            // We now start traversing the graph backwards from this point until we reach the root
+            // or a merge node.
             while !current_node.previous().is_empty() {
+                // Collect parent nodes from the graph by their key.
                 let mut parent_nodes: Vec<&Node<K, V>> = current_node
                     .previous()
                     .iter()
-                    .filter_map(|key| self.get_node(key))
+                    // Unwrap as all nodes parents should exist in the graph.
+                    .map(|key| self.get_node(key).unwrap())
                     .collect();
 
                 for parent_node in parent_nodes.clone() {
+                    // If a parent node has already been visited, we retrieve it, if not we set it's
+                    // `next` field to an empty vec. This is done because we don't want to include any
+                    // links to nodes which will be removed.
                     let mut parent_node_mut = match next_graph_nodes.get(parent_node.key()) {
                         Some(node) => node.to_owned(),
                         None => {
+                            // If it hasn't we set it's `next` field to an empty
                             let mut parent_node = parent_node.clone();
                             parent_node.next = vec![];
-                            parent_node.to_owned()
+                            parent_node
                         }
                     };
+
+                    // Push the current node's key to the `next` field of the parent_node unless
+                    // it is already included.
                     if !parent_node_mut.next.contains(current_node.key()) {
                         parent_node_mut.next.push(current_node.key().to_owned());
                     }
+
+                    // Insert the parent_node into the next_graph_nodes.
                     next_graph_nodes.insert(parent_node.key().to_owned(), parent_node_mut.clone());
                 }
 
-                if parent_nodes.len() > 1 {
+                // If this is a merge node push all parent nodes back into the queue
+                // and break out of the loop.
+                if current_node.is_merge() {
                     for parent_node in parent_nodes {
                         queue.push(parent_node);
                     }
                     break;
                 }
 
+                // Pop and unwrap as we know there is exactly one node in the parent nodes.
                 current_node = parent_nodes.pop().unwrap();
             }
         }
