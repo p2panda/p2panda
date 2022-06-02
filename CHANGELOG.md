@@ -30,6 +30,7 @@ Highlights are marked with a pancake 🥞
 - Additional methods on `EntryStore` needed for replication [310](https://github.com/p2panda/p2panda/pull/310) `rs`
 - Introduce `DocumentViewHash`, implement `Hash` for `DocumentViewId` [#313](https://github.com/p2panda/p2panda/pull/313) `rs`
 - Implement schema hash id as a unique identifier for schemas `rs` [#282](https://github.com/p2panda/p2panda/pull/282) `rs`
+- `Graph` method for selecting sub-section of graph [#335](https://github.com/p2panda/p2panda/pull/335) `rs`
 
 ## Changed
 
