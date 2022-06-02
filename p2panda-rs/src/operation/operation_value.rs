@@ -8,7 +8,6 @@ use crate::Validate;
 
 /// Enum of possible data types which can be added to the operations fields as values.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", content = "value")]
 pub enum OperationValue {
     /// Boolean value.
     #[serde(rename = "bool")]
