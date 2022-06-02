@@ -2,8 +2,8 @@
 
 use thiserror::Error;
 
-use crate::operation::OperationId;
 use crate::hash::HashError;
+use crate::operation::OperationId;
 
 /// Error types for methods of `DocumentBuilder` struct.
 #[allow(missing_copy_implementations)]
