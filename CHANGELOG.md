@@ -56,6 +56,7 @@ Highlights are marked with a pancake 🥞
 - Methods for getting string representations of `OperationValue` field type and `OperationAction` [#303](https://github.com/p2panda/p2panda/pull/303) `rs`
 - Additional constructor method for `OperationWithMeta` [322](https://github.com/p2panda/p2panda/pull/322) `rs`
 - Minor method renaming in `EntryStore` [323](https://github.com/p2panda/p2panda/pull/323) `rs`
+- Move private module doc strings into public places [#339](https://github.com/p2panda/p2panda/pull/339) `rs`
 
 ## Fixed
 
