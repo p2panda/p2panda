@@ -44,6 +44,15 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! This module also provides lower-level methods to maintain MLS (Messaging Layer Security) group
+//! state for secure group messaging in p2panda as well as Structs and methods to handle p2panda
+//! Long Term Secrets.
+//!
+//! Long Term Secrets contain symmetric AEAD keys which are used to en- & decrypt data over longer
+//! periods of time, spanning over multiple MLS group epochs.
+//!
+//! See: <https://openmls.tech> for more information.
 mod codec;
 mod commit;
 mod error;
