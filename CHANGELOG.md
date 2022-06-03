@@ -32,6 +32,7 @@ Highlights are marked with a pancake 🥞
 - Introduce `DocumentViewFields` & `DocumentViewValue` and other `Document` additions [#319](https://github.com/p2panda/p2panda/pull/319) `rs`
 - Storage traits for `Operation` [#326](https://github.com/p2panda/p2panda/pull/326) `rs`
 - Implement schema hash id as a unique identifier for schemas `rs` [#282](https://github.com/p2panda/p2panda/pull/282) `rs`
+- `Graph` method for selecting sub-section of graph [#335](https://github.com/p2panda/p2panda/pull/335) `rs`
 
 ## Changed
 
