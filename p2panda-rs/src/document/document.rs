@@ -175,19 +175,12 @@ impl Display for Document {
 pub struct DocumentBuilder {
     /// All the operations present in this document.
     operations: Vec<OperationWithMeta>,
-
-    /// The specific document view we want to materialise. If not set, then all operations
-    /// will be included.
-    view_id: Option<DocumentViewId>,
 }
 
 impl DocumentBuilder {
     /// Instantiate a new `DocumentBuilder` from a collection of operations.
     pub fn new(operations: Vec<OperationWithMeta>) -> DocumentBuilder {
-        Self {
-            operations,
-            view_id: None,
-        }
+        Self { operations }
     }
 
     /// Get all operations for this document.
@@ -195,15 +188,9 @@ impl DocumentBuilder {
         self.operations.clone()
     }
 
-    /// Set the view id we want to materialise.
-    pub fn set_view_id(&mut self, id: DocumentViewId) -> &Self {
-        self.view_id = Some(id);
-        self
-    }
-
-    /// Validates the set of operations and builds the document.
+    /// Validates all contained operations and builds the document.
     ///
-    /// The returned document also contains the latest resolved [document view][`DocumentView`].
+    /// The returned document contains the latest resolved [document view][`DocumentView`].
     ///
     /// Validation checks the following:
     /// - There is exactly one `CREATE` operation.
@@ -211,6 +198,23 @@ impl DocumentBuilder {
     /// - All operations follow the same schema.
     /// - No cycles exist in the graph.
     pub fn build(&self) -> Result<Document, DocumentBuilderError> {
+        self.build_to_view_id(None)
+    }
+
+    /// Validates all contained operations and builds the document up to the
+    /// requested [`DocumentViewId`].
+    ///
+    /// The returned document contains the requested [document view][`DocumentView`].
+    ///
+    /// Validation checks the following:
+    /// - There is exactly one `CREATE` operation.
+    /// - All operations are causally connected to the root operation.
+    /// - All operations follow the same schema.
+    /// - No cycles exist in the graph.
+    pub fn build_to_view_id(
+        &self,
+        document_view_id: Option<DocumentViewId>,
+    ) -> Result<Document, DocumentBuilderError> {
         // Find CREATE operation
         let mut collect_create_operation: Vec<OperationWithMeta> = self
             .operations()
@@ -248,7 +252,7 @@ impl DocumentBuilder {
         let mut graph = build_graph(&self.operations)?;
 
         // If a specific document view was requested then trim the graph to that point.
-        match &self.view_id {
+        match document_view_id {
             Some(id) => graph = graph.trim(&id.sorted())?,
             None => (),
         };
@@ -1172,12 +1176,11 @@ mod tests {
             })
             .collect();
 
-        let mut document_builder = DocumentBuilder::new(operations);
+        let document_builder = DocumentBuilder::new(operations);
 
         assert_eq!(
             document_builder
-                .set_view_id(panda_entry_1_hash.into())
-                .build()
+                .build_to_view_id(Some(panda_entry_1_hash.into()))
                 .unwrap()
                 .view()
                 .unwrap()
@@ -1189,8 +1192,7 @@ mod tests {
 
         assert_eq!(
             document_builder
-                .set_view_id(panda_entry_2_hash.clone().into())
-                .build()
+                .build_to_view_id(Some(panda_entry_2_hash.clone().into()))
                 .unwrap()
                 .view()
                 .unwrap()
@@ -1202,8 +1204,7 @@ mod tests {
 
         assert_eq!(
             document_builder
-                .set_view_id(panda_entry_3_hash.clone().into())
-                .build()
+                .build_to_view_id(Some(panda_entry_3_hash.clone().into()))
                 .unwrap()
                 .view()
                 .unwrap()
@@ -1215,11 +1216,10 @@ mod tests {
 
         assert_eq!(
             document_builder
-                .set_view_id(DocumentViewId::new(&[
+                .build_to_view_id(Some(DocumentViewId::new(&[
                     panda_entry_2_hash.into(),
                     panda_entry_3_hash.into()
-                ]))
-                .build()
+                ])))
                 .unwrap()
                 .view()
                 .unwrap()
