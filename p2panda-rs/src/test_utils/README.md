@@ -89,7 +89,7 @@ let (panda_entry_2_hash, next_entry_args) = send_to_node(
     &panda,
     &update_operation(
         SchemaId::new(TEST_SCHEMA_ID).unwrap(),
-        vec![panda_entry_1_hash.clone()], // The previous tip of this document graph
+        panda_entry_1_hash.clone().into(), // The previous tip of this document graph
         operation_fields(vec![(
             "cafe_name",
             OperationValue::Text("Panda Cafe!!".to_string()),
@@ -109,7 +109,7 @@ let (penguin_entry_1_hash, next_entry_args) = send_to_node(
     &penguin,
     &update_operation(
         SchemaId::new(TEST_SCHEMA_ID).unwrap(),
-        vec![panda_entry_2_hash],
+        panda_entry_2_hash.into(),
         operation_fields(vec![(
             "message",
             OperationValue::Text("Penguin Cafe".to_string()),

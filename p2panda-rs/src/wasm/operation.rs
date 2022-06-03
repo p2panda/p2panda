@@ -5,6 +5,7 @@ use std::convert::TryFrom;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
+use crate::document::DocumentViewId;
 use crate::operation::{
     Operation, OperationEncoded, OperationFields as OperationFieldsNonWasm, OperationId,
     OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
@@ -204,7 +205,8 @@ pub fn encode_update_operation(
         .map(|prev_op| prev_op.parse())
         .collect();
 
-    let previous = jserr!(prev_op_result);
+    let previous_ops = jserr!(prev_op_result);
+    let previous = jserr!(DocumentViewId::new(&previous_ops));
     let operation = jserr!(Operation::new_update(schema, previous, fields.0));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
@@ -230,7 +232,8 @@ pub fn encode_delete_operation(
         .map(|prev_op| prev_op.parse())
         .collect();
 
-    let previous = jserr!(prev_op_result);
+    let previous_ops = jserr!(prev_op_result);
+    let previous = jserr!(DocumentViewId::new(&previous_ops));
     let operation = jserr!(Operation::new_delete(schema, previous));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
     Ok(operation_encoded.as_str().to_owned())
