@@ -334,11 +334,11 @@ pub fn test_db(
 
         let update_operation = update_operation(
             schema.clone(),
-            vec![db_entries
+            db_entries
                 .get(seq_num.as_u64() as usize - 2)
                 .unwrap()
                 .hash()
-                .into()],
+                .into(),
             fields.clone(),
         );
 
