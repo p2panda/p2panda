@@ -1,52 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Relation types describe references to other documents.
-//!
-//! Similar to SQL relationships, documents refer to one another by their _document id_. This module
-//! provides types used in operations to refer to one (`Relation`) or many documents
-//! (`RelationList`).
-//!
-//! This is an example of a simple `Relation` where a _Comment_ Document refers to a _Blog Post_
-//! Document:
-//!
-//! ```text
-//! Document: [Blog-Post "Monday evening"]
-//!     ^
-//!     |
-//! Document: [Comment "This was great!"]
-//! ```
-//!
-//! ## Pinned relations
-//!
-//! Relations can optionally be _pinned_ to a specific, immutable version of a document or many
-//! documents when necessary (`PinnedRelation` or `PinnedRelationList`).
-//!
-//! When the blog post from the example above changes its contents from _Monday evening_ to
-//! _Tuesday morning_ the comment would automatically refer to the new version as the comment
-//! refers to the document as a whole, including all future changes.
-//!
-//! Since the comment was probably meant to be referring to Monday when it was created, we have to
-//! _pin_ it to the exact version of the blog post in order to preserve this meaning. A
-//! `PinnedRelation` achieves this by referring to the blog post's _document view id_:
-//!
-//! ```text
-//!                    Document-View                              Document-View
-//!                         |                                           |
-//! Document: [Blog-Post "Monday evening"] -- UPDATE -- > [Blog-Post "Tuesday morning"]
-//!                   ^
-//!                   |
-//!      _____________|  Pinned Relation (we will stay in the "past")
-//!     |
-//!     |
-//! Document: [Comment "This was great!"]
-//! ```
-//!
-//! Document view ids contain the operation ids of the document graph tips, which is all the
-//! information we need to reliably recreate the document at this certain point in time.
-//!
-//! Pinned relations give us immutability and the option to restore a historical state across
-//! documents. However, most cases will probably only need unpinned relations: For example when
-//! referring to a user-profile you probably want to always get the _latest_ version.
 use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentId, DocumentViewId, DocumentViewIdError};
@@ -56,6 +9,22 @@ use crate::Validate;
 use super::OperationId;
 
 /// Field type representing references to other documents.
+///
+/// Relation types describe references to other documents.
+///
+/// Similar to SQL relationships, documents refer to one another by their _document id_. This module
+/// provides types used in operations to refer to one (`Relation`) or many documents
+/// (`RelationList`).
+///
+/// This is an example of a simple `Relation` where a _Comment_ Document refers to a _Blog Post_
+/// Document:
+///
+/// ```text
+/// Document: [Blog-Post "Monday evening"]
+///     ^
+///     |
+/// Document: [Comment "This was great!"]
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Relation(DocumentId);
 
@@ -80,6 +49,36 @@ impl Validate for Relation {
 }
 
 /// Reference to the exact version of the document.
+///
+/// `PinnedRelation` _pin_ a relation to a specific, immutable version of a document or many
+/// documents when necessary (`PinnedRelation` or `PinnedRelationList`).
+///
+/// When the blog post from the `Relation` example changes its contents from _Monday evening_ to
+/// _Tuesday morning_ the comment would automatically refer to the new version as the comment
+/// refers to the document as a whole, including all future changes.
+///
+/// Since the comment was probably meant to be referring to Monday when it was created, we have to
+/// _pin_ it to the exact version of the blog post in order to preserve this meaning. A
+/// `PinnedRelation` achieves this by referring to the blog post's _document view id_:
+///
+/// ```text
+///                    Document-View                              Document-View
+///                         |                                           |
+/// Document: [Blog-Post "Monday evening"] -- UPDATE -- > [Blog-Post "Tuesday morning"]
+///                   ^
+///                   |
+///      _____________|  Pinned Relation (we will stay in the "past")
+///     |
+///     |
+/// Document: [Comment "This was great!"]
+/// ```
+///
+/// Document view ids contain the operation ids of the document graph tips, which is all the
+/// information we need to reliably recreate the document at this certain point in time.
+///
+/// Pinned relations give us immutability and the option to restore a historical state across
+/// documents. However, most cases will probably only need unpinned relations: For example when
+/// referring to a user-profile you probably want to always get the _latest_ version.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PinnedRelation(DocumentViewId);
 
