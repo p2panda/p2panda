@@ -75,4 +75,8 @@ pub enum DocumentViewIdError {
     /// Handle errors from validating operation id hashes
     #[error(transparent)]
     InvalidOperationId(#[from] HashError),
+
+    /// Document view ids must contain at least one operation ids
+    #[error("Expected one or more operation ids")]
+    ZeroOperationIds,
 }

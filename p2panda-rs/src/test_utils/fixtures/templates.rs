@@ -67,7 +67,7 @@ fn many_valid_entries(#[case] entry: Entry) {}
         crate::test_utils::fixtures::random_operation_id(),
         crate::test_utils::fixtures::random_operation_id(),
         crate::test_utils::fixtures::random_operation_id()
-        ]))
+        ]).unwrap())
     )
 )]
 #[case::delete_operation_many_previous(crate::test_utils::utils::any_operation(
@@ -77,7 +77,7 @@ fn many_valid_entries(#[case] entry: Entry) {}
         crate::test_utils::fixtures::random_operation_id(),
         crate::test_utils::fixtures::random_operation_id(),
         crate::test_utils::fixtures::random_operation_id()
-        ]))
+        ]).unwrap())
     )
 )]
 fn many_valid_operations(#[case] operation: Operation) {}

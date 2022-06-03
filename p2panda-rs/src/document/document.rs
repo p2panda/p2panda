@@ -252,7 +252,7 @@ impl DocumentBuilder {
         };
 
         // Construct the document view id
-        let document_view_id = DocumentViewId::new(&graph_tips);
+        let document_view_id = DocumentViewId::new(&graph_tips).unwrap();
 
         // Construct the document view, from the reduced values and the document view id
         let document_view = if is_deleted {
@@ -418,7 +418,8 @@ mod tests {
                 DocumentViewId::new(&[
                     penguin_entry_1_hash.clone().into(),
                     panda_entry_2_hash.clone().into(),
-                ]),
+                ])
+                .unwrap(),
                 fields(vec![(
                     "name",
                     OperationValue::Text("Polar Bear Cafe".to_string()),
@@ -904,7 +905,8 @@ mod tests {
                 DocumentViewId::new(&[
                     panda_entry_1_hash.clone().into(),
                     polar_entry_2_hash.clone().into(),
-                ]),
+                ])
+                .unwrap(),
                 operation_fields(vec![("house-number", OperationValue::Integer(102))]),
             ),
         )

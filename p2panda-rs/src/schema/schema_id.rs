@@ -121,7 +121,7 @@ impl SchemaId {
 
         Ok(SchemaId::Application(
             remainder.to_string(),
-            DocumentViewId::new(&operation_ids),
+            DocumentViewId::new(&operation_ids).unwrap(),
         ))
     }
 

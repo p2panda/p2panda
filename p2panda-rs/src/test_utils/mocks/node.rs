@@ -905,7 +905,8 @@ mod tests {
             &penguin,
             &update_operation(
                 schema,
-                DocumentViewId::new(&[penguin_entry_1_hash.into(), panda_entry_2_hash.into()]),
+                DocumentViewId::new(&[penguin_entry_1_hash.into(), panda_entry_2_hash.into()])
+                    .unwrap(),
                 operation_fields(vec![(
                     "cafe_name",
                     OperationValue::Text("Polar Bear Café".to_string()),

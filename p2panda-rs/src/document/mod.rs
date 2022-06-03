@@ -84,7 +84,7 @@
 //! #     &polar,
 //! #     &update_operation(
 //! #         schema.clone(),
-//! #         DocumentViewId::new(&[panda_entry_1_hash.clone().into(), polar_entry_2_hash.clone().into()]),
+//! #         DocumentViewId::new(&[panda_entry_1_hash.clone().into(), polar_entry_2_hash.clone().into()]).unwrap(),
 //! #         operation_fields(vec![("house-number", OperationValue::Integer(102))]),
 //! #     ),
 //! # )

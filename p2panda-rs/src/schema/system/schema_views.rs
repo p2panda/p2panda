@@ -218,7 +218,7 @@ mod tests {
             DocumentViewValue::new(
                 &operation_id,
                 &OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
-                    DocumentViewId::new(&[relation]),
+                    DocumentViewId::new(&[relation]).unwrap(),
                 ])),
             ),
         );

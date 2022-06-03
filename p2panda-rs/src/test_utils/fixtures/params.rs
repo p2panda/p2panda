@@ -83,7 +83,7 @@ pub fn document_view_id(#[default(vec![DEFAULT_HASH])] hash_str_vec: Vec<&str>) 
         .into_iter()
         .map(|hash| hash.parse::<OperationId>().unwrap())
         .collect();
-    DocumentViewId::new(&hashes)
+    DocumentViewId::new(&hashes).unwrap()
 }
 
 /// Fixture which injects the default `OperationId` into a test method. Default value can be
@@ -115,7 +115,7 @@ pub fn random_document_id() -> DocumentId {
 /// Fixture which injects a random document view id into a test method.
 #[fixture]
 pub fn random_document_view_id() -> DocumentViewId {
-    DocumentViewId::new(&[random_hash().into(), random_hash().into()])
+    DocumentViewId::new(&[random_hash().into(), random_hash().into()]).unwrap()
 }
 
 /// Fixture which injects the default OperationFields value into a test method.

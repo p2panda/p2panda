@@ -229,10 +229,9 @@ mod tests {
 
     #[rstest]
     fn iterates(#[from(random_hash)] hash_1: Hash, #[from(random_hash)] hash_2: Hash) {
-        let pinned_relation = PinnedRelation::new(DocumentViewId::new(&[
-            hash_1.clone().into(),
-            hash_2.clone().into(),
-        ]));
+        let pinned_relation = PinnedRelation::new(
+            DocumentViewId::new(&[hash_1.clone().into(), hash_2.clone().into()]).unwrap(),
+        );
 
         for hash in pinned_relation {
             assert!(hash.validate().is_ok());
