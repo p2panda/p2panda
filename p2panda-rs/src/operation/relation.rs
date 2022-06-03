@@ -252,4 +252,24 @@ mod tests {
             }
         }
     }
+
+    #[rstest]
+    fn list_equality(
+        #[from(random_document_id)] document_1: DocumentId,
+        #[from(random_document_id)] document_2: DocumentId,
+        #[from(random_hash)] operation_id_1: Hash,
+        #[from(random_hash)] operation_id_2: Hash,
+    ) {
+        let relation_list = RelationList::new(vec![document_1.clone(), document_2.clone()]);
+        let relation_list_different_order = RelationList::new(vec![document_2, document_1]);
+        assert_ne!(relation_list, relation_list_different_order);
+
+        let pinned_relation_list = PinnedRelationList::new(vec![
+            operation_id_1.clone().into(),
+            operation_id_2.clone().into(),
+        ]);
+        let pinned_relation_list_different_order =
+            PinnedRelationList::new(vec![operation_id_2.into(), operation_id_1.into()]);
+        assert_ne!(pinned_relation_list, pinned_relation_list_different_order);
+    }
 }
