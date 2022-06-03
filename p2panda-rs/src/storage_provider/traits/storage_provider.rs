@@ -59,14 +59,14 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
     async fn get_document_by_entry(
         &self,
         entry_hash: &Hash,
-    ) -> Result<Option<DocumentId>, Box<dyn std::error::Error>>;
+    ) -> Result<Option<DocumentId>, Box<dyn std::error::Error + Send + Sync>>;
 
     /// Returns required data (backlink and skiplink entry hashes, last sequence number and the
     /// document's log_id) to encode a new bamboo entry.
     async fn get_entry_args(
         &self,
         params: &Self::EntryArgsRequest,
-    ) -> Result<Self::EntryArgsResponse, Box<dyn std::error::Error>> {
+    ) -> Result<Self::EntryArgsResponse, Box<dyn std::error::Error + Send + Sync>> {
         // Validate the entry args request parameters.
         params.validate()?;
 
@@ -109,7 +109,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
     async fn publish_entry(
         &self,
         params: &Self::PublishEntryRequest,
-    ) -> Result<Self::PublishEntryResponse, Box<dyn std::error::Error>> {
+    ) -> Result<Self::PublishEntryResponse, Box<dyn std::error::Error + Send + Sync>> {
         // Create a storage entry.
         let entry = StorageEntry::new(params.entry_signed(), params.operation_encoded())?;
         // Validate the entry (this also maybe happened in the above constructor)
@@ -250,7 +250,7 @@ pub mod tests {
         async fn get_document_by_entry(
             &self,
             entry_hash: &Hash,
-        ) -> Result<Option<DocumentId>, Box<dyn std::error::Error>> {
+        ) -> Result<Option<DocumentId>, Box<dyn std::error::Error + Sync + Send>> {
             let entries = self.entries.lock().unwrap();
 
             let entry = entries.iter().find(|entry| entry.hash() == *entry_hash);
