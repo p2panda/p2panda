@@ -19,7 +19,7 @@ pub trait AsStorageEntry:
     Sized + Clone + Send + Sync + Validate + PartialEq + std::fmt::Debug
 {
     /// The error type returned by this traits' methods.
-    type AsStorageEntryError: 'static + std::error::Error;
+    type AsStorageEntryError: 'static + std::error::Error + Send + Sync;
 
     /// Construct an instance of the struct implementing `AsStorageEntry`
     fn new(
