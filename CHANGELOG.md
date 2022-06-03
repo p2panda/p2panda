@@ -56,7 +56,7 @@ Highlights are marked with a pancake 🥞
 - Methods for getting string representations of `OperationValue` field type and `OperationAction` [#303](https://github.com/p2panda/p2panda/pull/303) `rs`
 - Additional constructor method for `OperationWithMeta` [322](https://github.com/p2panda/p2panda/pull/322) `rs`
 - Minor method renaming in `EntryStore` [323](https://github.com/p2panda/p2panda/pull/323) `rs`
-- Require storage provider errors to be thread-safe [#324](https://github.com/p2panda/p2panda/pull/324)
+- Require storage provider errors to be thread-safe [#340](https://github.com/p2panda/p2panda/pull/340)
 
 ## Fixed
 
