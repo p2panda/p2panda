@@ -7,6 +7,9 @@ use crate::schema::SchemaId;
 use crate::storage_provider::errors::DocumentStorageError;
 
 /// Storage traits for documents and document views.
+///
+/// This trait should be implemented on the root storage provider struct. It's definitions make up
+/// the required methods for inserting into and querying documents and document views from storage.
 #[async_trait]
 pub trait DocumentStore {
     /// Insert document view into storage.
