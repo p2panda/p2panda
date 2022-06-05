@@ -97,10 +97,8 @@
 //! ```
 pub mod defaults;
 #[allow(clippy::module_inception)]
-mod fixtures;
 mod new_fixtures;
 pub mod templates;
 mod tests;
 
-pub use fixtures::*;
 pub use new_fixtures::*;
