@@ -6,11 +6,9 @@
 /// values.
 use std::convert::TryFrom;
 
-use rand::Rng;
 use rstest::fixture;
 
 use crate::document::{DocumentId, DocumentViewId};
-use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::OperationId;
 use crate::schema::SchemaId;
@@ -51,13 +49,6 @@ pub fn schema(#[default(TEST_SCHEMA_ID)] schema_id: &str) -> SchemaId {
     SchemaId::new(schema_id).unwrap()
 }
 
-/// Fixture which injects the default Hash into a test method. Default value can be overridden at
-/// testing time by passing in a custom hash string.
-#[fixture]
-pub fn hash(#[default(DEFAULT_HASH)] hash_str: &str) -> Hash {
-    utils::hash(hash_str)
-}
-
 /// Fixture which injects the default `DocumentId` into a test method. Default value can be overridden at
 /// testing time by passing in a custom hash string.
 #[fixture]
@@ -76,24 +67,8 @@ pub fn document_view_id(#[default(vec![DEFAULT_HASH])] hash_str_vec: Vec<&str>) 
     DocumentViewId::new(&hashes).unwrap()
 }
 
-/// Fixture which injects a random hash into a test method.
-#[fixture]
-pub fn random_hash() -> Hash {
-    let random_data = rand::thread_rng().gen::<[u8; 32]>().to_vec();
-    Hash::new_from_bytes(random_data).unwrap()
-}
-
 /// Fixture which injects a random document id.
 #[fixture]
 pub fn random_document_id() -> DocumentId {
     DocumentId::new(random_hash().into())
-}
-
-/// Fixture which injects the default Hash into a test method as an Option.
-///
-/// Default value can be overridden at testing time by passing in custom hash string.
-#[fixture]
-pub fn some_hash(#[default(DEFAULT_HASH)] str: &str) -> Option<Hash> {
-    let hash = Hash::new(str);
-    Some(hash.unwrap())
 }

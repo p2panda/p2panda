@@ -43,11 +43,6 @@ pub fn keypair_from_private(private_key: String) -> KeyPair {
     KeyPair::from_private_key_str(&private_key).unwrap()
 }
 
-/// Generate a hash based on a hash string.
-pub fn hash(hash_str: &str) -> Hash {
-    Hash::new(hash_str).unwrap()
-}
-
 /// Generate an application schema based on a schema id string.
 pub fn schema(schema_id: &str) -> SchemaId {
     SchemaId::new(schema_id).unwrap()
