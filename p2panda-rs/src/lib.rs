@@ -62,7 +62,7 @@
 // This must be imported here at the root of the crate in order for the `rstest` fixture macros to
 // work as expected.
 #![allow(clippy::single_component_path_imports)]
-#[cfg(any(feature = "fixtures", test))]
+#[cfg(any(feature = "testing", test))]
 use rstest_reuse;
 
 pub mod cddl;

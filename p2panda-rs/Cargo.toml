@@ -29,7 +29,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 # Defines a feature named `webp` that does not enable any other features.
-fixtures = ["dep:rstest", "dep:rstest_reuse"]
+testing = ["dep:rstest", "dep:rstest_reuse"]
 
 [dependencies]
 arrayvec = "^0.5.2"
