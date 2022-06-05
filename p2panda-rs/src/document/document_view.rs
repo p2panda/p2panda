@@ -82,67 +82,23 @@ mod tests {
 
     use crate::document::document_view_fields::DocumentViewValue;
     use crate::document::{reduce, DocumentId};
-    use crate::identity::Author;
-    use crate::operation::{OperationId, OperationValue, OperationWithMeta, Relation};
-    use crate::schema::SchemaId;
+    use crate::operation::{OperationValue, OperationWithMeta, Relation};
+    use crate::test_utils::constants::DEFAULT_HASH;
     use crate::test_utils::fixtures::{
-        create_operation, document_id, document_view_id, operation_fields, public_key,
-        random_document_view_id, random_operation_id, schema, update_operation,
+        document_id, document_view_id, operation_fields, operation_with_meta,
     };
 
     use super::{DocumentView, DocumentViewId};
 
-    #[fixture]
-    fn test_create_operation(
-        schema: SchemaId,
-        #[from(random_operation_id)] operation_id: OperationId,
-        document_id: DocumentId,
-        public_key: Author,
-    ) -> OperationWithMeta {
-        let relation = Relation::new(document_id);
-
-        let operation = create_operation(
-            schema,
-            operation_fields(vec![
-                ("username", OperationValue::Text("bubu".to_owned())),
-                ("height", OperationValue::Float(3.5)),
-                ("age", OperationValue::Integer(28)),
-                ("is_admin", OperationValue::Boolean(false)),
-                ("profile_picture", OperationValue::Relation(relation)),
-            ]),
-        );
-
-        OperationWithMeta::new_test_operation(&operation_id, &public_key, &operation)
-    }
-
-    #[fixture]
-    fn test_update_operation(
-        #[from(random_operation_id)] operation_id: OperationId,
-        #[from(random_document_view_id)] prev_operations: DocumentViewId,
-        schema: SchemaId,
-        public_key: Author,
-    ) -> OperationWithMeta {
-        let operation = update_operation(
-            schema,
-            prev_operations,
-            operation_fields(vec![
-                ("age", OperationValue::Integer(29)),
-                ("is_admin", OperationValue::Boolean(true)),
-            ]),
-        );
-        OperationWithMeta::new_test_operation(&operation_id, &public_key, &operation)
-    }
-
     #[rstest]
     fn from_single_create_op(
-        test_create_operation: OperationWithMeta,
+        operation_with_meta: OperationWithMeta,
         document_view_id: DocumentViewId,
-        #[from(document_id)] relation_id: DocumentId,
     ) {
-        let expected_relation = Relation::new(relation_id);
+        let expected_relation = Relation::new(DEFAULT_HASH.parse().unwrap());
 
         // Reduce a single CREATE `Operation`
-        let (view, is_edited, is_deleted) = reduce(&[test_create_operation.clone()]);
+        let (view, is_edited, is_deleted) = reduce(&[operation_with_meta.clone()]);
 
         let document_view = DocumentView::new(&document_view_id, &view.unwrap());
 
@@ -150,42 +106,49 @@ mod tests {
 
         assert_eq!(
             document_view.keys(),
-            vec!["age", "height", "is_admin", "profile_picture", "username"]
+            vec![
+                "age",
+                "height",
+                "is_admin",
+                "my_friends",
+                "profile_picture",
+                "username"
+            ]
         );
         assert!(!document_view.is_empty());
         assert_eq!(document_view.len(), 5);
         assert_eq!(
             document_view.get("username").unwrap(),
             &DocumentViewValue::new(
-                test_create_operation.operation_id(),
+                operation_with_meta.operation_id(),
                 &OperationValue::Text("bubu".to_owned()),
             )
         );
         assert_eq!(
             document_view.get("height").unwrap(),
             &DocumentViewValue::new(
-                test_create_operation.operation_id(),
+                operation_with_meta.operation_id(),
                 &OperationValue::Float(3.5)
             ),
         );
         assert_eq!(
             document_view.get("age").unwrap(),
             &DocumentViewValue::new(
-                test_create_operation.operation_id(),
+                operation_with_meta.operation_id(),
                 &OperationValue::Integer(28)
             ),
         );
         assert_eq!(
             document_view.get("is_admin").unwrap(),
             &DocumentViewValue::new(
-                test_create_operation.operation_id(),
+                operation_with_meta.operation_id(),
                 &OperationValue::Boolean(false)
             ),
         );
         assert_eq!(
             document_view.get("profile_picture").unwrap(),
             &DocumentViewValue::new(
-                test_create_operation.operation_id(),
+                operation_with_meta.operation_id(),
                 &OperationValue::Relation(expected_relation)
             ),
         );
@@ -195,48 +158,55 @@ mod tests {
 
     #[rstest]
     fn with_update_op(
-        test_create_operation: OperationWithMeta,
-        test_update_operation: OperationWithMeta,
+        #[from(operation_with_meta)] create_operation: OperationWithMeta,
+        #[from(operation_with_meta)]
+        #[with(Some(operation_fields(vec![
+            ("username", OperationValue::Text("yahoo".to_owned())),
+            ("height", OperationValue::Float(100.23)),
+            ("age", OperationValue::Integer(12)),
+            ("is_admin", OperationValue::Boolean(true)),
+        ])), Some(DEFAULT_HASH.parse().unwrap()))]
+        update_operation: OperationWithMeta,
         document_view_id: DocumentViewId,
         #[from(document_id)] relation_id: DocumentId,
     ) {
         let (view, is_edited, is_deleted) =
-            reduce(&[test_create_operation.clone(), test_update_operation.clone()]);
+            reduce(&[create_operation.clone(), update_operation.clone()]);
 
         let document_view = DocumentView::new(&document_view_id, &view.unwrap());
 
         assert_eq!(
             document_view.get("username").unwrap(),
             &DocumentViewValue::new(
-                test_create_operation.operation_id(),
-                &OperationValue::Text("bubu".to_owned()),
+                update_operation.operation_id(),
+                &OperationValue::Text("yahoo".to_owned()),
             )
         );
         assert_eq!(
             document_view.get("height").unwrap(),
             &DocumentViewValue::new(
-                test_create_operation.operation_id(),
-                &OperationValue::Float(3.5)
+                update_operation.operation_id(),
+                &OperationValue::Float(100.23)
             ),
         );
         assert_eq!(
             document_view.get("age").unwrap(),
             &DocumentViewValue::new(
-                test_update_operation.operation_id(),
-                &OperationValue::Integer(29)
+                update_operation.operation_id(),
+                &OperationValue::Integer(12)
             ),
         );
         assert_eq!(
             document_view.get("is_admin").unwrap(),
             &DocumentViewValue::new(
-                test_update_operation.operation_id(),
+                update_operation.operation_id(),
                 &OperationValue::Boolean(true)
             )
         );
         assert_eq!(
             document_view.get("profile_picture").unwrap(),
             &DocumentViewValue::new(
-                test_create_operation.operation_id(),
+                create_operation.operation_id(),
                 &OperationValue::Relation(Relation::new(relation_id))
             )
         );

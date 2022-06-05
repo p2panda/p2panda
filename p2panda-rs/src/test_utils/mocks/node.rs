@@ -514,7 +514,7 @@ mod tests {
     use crate::operation::OperationValue;
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        create_operation, key_pair, operation_fields, private_key, schema, update_operation,
+        create_operation, key_pair, private_key, schema, update_operation,
     };
     use crate::test_utils::mocks::client::Client;
     use crate::test_utils::utils::NextEntryArgs;
@@ -551,13 +551,10 @@ mod tests {
         let (panda_entry_1_hash, next_entry_args) = send_to_node(
             &mut node,
             &panda,
-            &create_operation(
-                schema.clone(),
-                operation_fields(vec![(
-                    "message",
-                    OperationValue::Text("Ohh, my first message! [Panda]".to_string()),
-                )]),
-            ),
+            &create_operation(&[(
+                "message",
+                OperationValue::Text("Ohh, my first message! [Panda]".to_string()),
+            )]),
         )
         .unwrap();
 
@@ -587,12 +584,11 @@ mod tests {
             &mut node,
             &panda,
             &update_operation(
-                schema.clone(),
-                panda_entry_1_hash.clone().into(),
-                operation_fields(vec![(
+                &[(
                     "message",
                     OperationValue::Text("Which I now update. [Panda]".to_string()),
-                )]),
+                )],
+                &panda_entry_1_hash.clone().into(),
             ),
         )
         .unwrap();
@@ -639,12 +635,11 @@ mod tests {
             &mut node,
             &penguin,
             &update_operation(
-                schema.clone(),
-                panda_entry_2_hash.into(),
-                operation_fields(vec![(
+                &[(
                     "message",
                     OperationValue::Text("My turn to update. [Penguin]".to_string()),
-                )]),
+                )],
+                &panda_entry_2_hash.into(),
             ),
         )
         .unwrap();
@@ -673,12 +668,11 @@ mod tests {
             &mut node,
             &penguin,
             &update_operation(
-                schema.clone(),
-                penguin_entry_1_hash.into(),
-                operation_fields(vec![(
+                &[(
                     "message",
                     OperationValue::Text("And again. [Penguin]".to_string()),
-                )]),
+                )],
+                &penguin_entry_1_hash.into(),
             ),
         )
         .unwrap();
@@ -717,13 +711,10 @@ mod tests {
         let (panda_entry_1_hash, next_entry_args) = send_to_node(
             &mut node,
             &panda,
-            &create_operation(
-                schema,
-                operation_fields(vec![(
-                    "message",
-                    OperationValue::Text("Ohh, my first message in a new document!".to_string()),
-                )]),
-            ),
+            &create_operation(&[(
+                "message",
+                OperationValue::Text("Ohh, my first message in a new document!".to_string()),
+            )]),
         )
         .unwrap();
 
@@ -755,13 +746,10 @@ mod tests {
         let (entry1_hash, _) = send_to_node(
             &mut node,
             &panda,
-            &create_operation(
-                schema.clone(),
-                operation_fields(vec![(
-                    "message",
-                    OperationValue::Text("Ohh, my first message!".to_string()),
-                )]),
-            ),
+            &create_operation(&[(
+                "message",
+                OperationValue::Text("Ohh, my first message!".to_string()),
+            )]),
         )
         .unwrap();
 
@@ -770,12 +758,11 @@ mod tests {
             &mut node,
             &panda,
             &update_operation(
-                schema,
-                entry1_hash.clone().into(),
-                operation_fields(vec![(
+                &[(
                     "message",
                     OperationValue::Text("Which I now update.".to_string()),
-                )]),
+                )],
+                &entry1_hash.clone().into(),
             ),
         )
         .unwrap();
@@ -818,19 +805,16 @@ mod tests {
         let (panda_entry_1_hash, _) = send_to_node(
             &mut node,
             &panda,
-            &create_operation(
-                schema.clone(),
-                operation_fields(vec![
-                    (
-                        "cafe_name",
-                        OperationValue::Text("Polar Pear Cafe".to_string()),
-                    ),
-                    (
-                        "address",
-                        OperationValue::Text("1, Polar Bear Rise, Panda Town".to_string()),
-                    ),
-                ]),
-            ),
+            &create_operation(&[
+                (
+                    "cafe_name",
+                    OperationValue::Text("Polar Pear Cafe".to_string()),
+                ),
+                (
+                    "address",
+                    OperationValue::Text("1, Polar Bear Rise, Panda Town".to_string()),
+                ),
+            ]),
         )
         .unwrap();
 
@@ -848,12 +832,11 @@ mod tests {
             &mut node,
             &panda,
             &update_operation(
-                schema.clone(),
-                panda_entry_1_hash.clone().into(),
-                operation_fields(vec![(
+                &[(
                     "cafe_name",
                     OperationValue::Text("Polar Bear Cafe".to_string()),
-                )]),
+                )],
+                &panda_entry_1_hash.clone().into(),
             ),
         )
         .unwrap();
@@ -875,12 +858,11 @@ mod tests {
             &mut node,
             &penguin,
             &update_operation(
-                schema.clone(),
-                panda_entry_1_hash.clone().into(),
-                operation_fields(vec![(
+                &[(
                     "address",
                     OperationValue::Text("1, Polar Bear rd, Panda Town".to_string()),
-                )]),
+                )],
+                &panda_entry_1_hash.clone().into(),
             ),
         )
         .unwrap();
@@ -902,13 +884,12 @@ mod tests {
             &mut node,
             &penguin,
             &update_operation(
-                schema,
-                DocumentViewId::new(&[penguin_entry_1_hash.into(), panda_entry_2_hash.into()])
-                    .unwrap(),
-                operation_fields(vec![(
+                &[(
                     "cafe_name",
                     OperationValue::Text("Polar Bear Café".to_string()),
-                )]),
+                )],
+                &DocumentViewId::new(&[penguin_entry_1_hash.into(), panda_entry_2_hash.into()])
+                    .unwrap(),
             ),
         )
         .unwrap();

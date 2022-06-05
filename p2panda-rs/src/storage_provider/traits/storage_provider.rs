@@ -596,7 +596,7 @@ pub mod tests {
         let update_operation_with_invalid_previous_operations = operation(
             Some(operation_fields.clone()),
             Some(invalid_prev_op.into()),
-            schema.clone(),
+            None,
         );
 
         let update_entry = entry(
@@ -653,7 +653,7 @@ pub mod tests {
                 OperationValue::Text("This is the WRONG operation :-(".to_string()),
             )])),
             Some(next_entry.operation_encoded().unwrap().hash().into()),
-            schema.clone(),
+            None,
         );
 
         let encoded_operation = OperationEncoded::try_from(&mismatched_operation).unwrap();

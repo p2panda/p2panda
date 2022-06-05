@@ -6,7 +6,8 @@ use p2panda_rs::operation::{OperationId, OperationValue};
 use p2panda_rs::schema::SchemaId;
 use p2panda_rs::test_utils::constants::DEFAULT_PRIVATE_KEY;
 use p2panda_rs::test_utils::fixtures::{
-    create_operation, delete_operation, operation_fields, random_key_pair, update_operation,
+    create_operation, delete_operation, operation, operation_fields, random_key_pair,
+    update_operation,
 };
 use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
@@ -31,12 +32,13 @@ fn main() {
     let (entry1_hash, _) = send_to_node(
         &mut node,
         &panda,
-        &create_operation(
-            schema_id.clone(),
-            operation_fields(vec![(
+        &operation(
+            Some(operation_fields(vec![(
                 "message",
                 OperationValue::Text("Ohh, my first message!".to_string()),
-            )]),
+            )])),
+            None,
+            Some(schema_id.clone()),
         ),
     )
     .unwrap();
@@ -45,13 +47,13 @@ fn main() {
     let (entry2_hash, _) = send_to_node(
         &mut node,
         &panda,
-        &update_operation(
-            schema_id.clone(),
-            entry1_hash.into(),
-            operation_fields(vec![(
+        &operation(
+            Some(operation_fields(vec![(
                 "message",
                 OperationValue::Text("Which I now update.".to_string()),
-            )]),
+            )])),
+            Some(entry1_hash.into()),
+            Some(schema_id.clone()),
         ),
     )
     .unwrap();
@@ -60,13 +62,13 @@ fn main() {
     let (entry3_hash, _) = send_to_node(
         &mut node,
         &panda,
-        &update_operation(
-            schema_id.clone(),
-            entry2_hash.into(),
-            operation_fields(vec![(
+        &operation(
+            Some(operation_fields(vec![(
                 "message",
                 OperationValue::Text("And then update again.".to_string()),
-            )]),
+            )])),
+            Some(entry2_hash.into()),
+            Some(schema_id.clone()),
         ),
     )
     .unwrap();
@@ -75,7 +77,7 @@ fn main() {
     send_to_node(
         &mut node,
         &panda,
-        &delete_operation(schema_id, entry3_hash.into()),
+        &operation(None, Some(entry3_hash.into()), Some(schema_id.clone())),
     )
     .unwrap();
 
@@ -96,7 +98,7 @@ mod tests {
 
     use p2panda_rs::operation::{OperationId, OperationValue};
     use p2panda_rs::test_utils::constants::DEFAULT_PRIVATE_KEY;
-    use p2panda_rs::test_utils::fixtures::{create_operation, operation_fields};
+    use p2panda_rs::test_utils::fixtures::{operation, operation_fields};
     use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
     use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
 
@@ -118,12 +120,13 @@ mod tests {
         send_to_node(
             &mut node,
             &panda,
-            &create_operation(
-                schema_id,
-                operation_fields(vec![(
+            &operation(
+                Some(operation_fields(vec![(
                     "message",
                     OperationValue::Text("Ohh, my first message!".to_string()),
-                )]),
+                )])),
+                None,
+                Some(schema_id),
             ),
         )
         .unwrap();

@@ -13,25 +13,17 @@ pub fn fields() -> OperationFields {
 
 /// The default CREATE operation.
 pub fn create_operation() -> Operation {
-    fixtures::operation(Some(fields()), None, TEST_SCHEMA_ID.parse().unwrap())
+    fixtures::operation(Some(fields()), None, None)
 }
 
 /// The default UPDATE operation.
 pub fn update_operation() -> Operation {
-    fixtures::operation(
-        Some(fields()),
-        Some(DEFAULT_HASH.parse().unwrap()),
-        TEST_SCHEMA_ID.parse().unwrap(),
-    )
+    fixtures::operation(Some(fields()), Some(DEFAULT_HASH.parse().unwrap()), None)
 }
 
 /// The default DELETE operation.
 pub fn delete_operation() -> Operation {
-    fixtures::operation(
-        None,
-        Some(DEFAULT_HASH.parse().unwrap()),
-        TEST_SCHEMA_ID.parse().unwrap(),
-    )
+    fixtures::operation(None, Some(DEFAULT_HASH.parse().unwrap()), None)
 }
 
 /// The default CREATE meta-operation.
@@ -48,7 +40,7 @@ pub fn create_meta_operation() -> OperationWithMeta {
             ),
             fixtures::key_pair(&fixtures::private_key()),
         ),
-        fixtures::operation_encoded(Some(fields()), None, TEST_SCHEMA_ID.parse().unwrap()),
+        fixtures::operation_encoded(Some(fields()), None, None),
     )
 }
 
@@ -66,11 +58,7 @@ pub fn update_meta_operation() -> OperationWithMeta {
             ),
             fixtures::key_pair(&fixtures::private_key()),
         ),
-        fixtures::operation_encoded(
-            Some(fields()),
-            Some(DEFAULT_HASH.parse().unwrap()),
-            TEST_SCHEMA_ID.parse().unwrap(),
-        ),
+        fixtures::operation_encoded(Some(fields()), Some(DEFAULT_HASH.parse().unwrap()), None),
     )
 }
 
@@ -88,11 +76,7 @@ pub fn delete_meta_operation() -> OperationWithMeta {
             ),
             fixtures::key_pair(&fixtures::private_key()),
         ),
-        fixtures::operation_encoded(
-            None,
-            Some(DEFAULT_HASH.parse().unwrap()),
-            TEST_SCHEMA_ID.parse().unwrap(),
-        ),
+        fixtures::operation_encoded(None, Some(DEFAULT_HASH.parse().unwrap()), None),
     )
 }
 

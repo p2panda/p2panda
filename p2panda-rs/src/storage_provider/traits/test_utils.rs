@@ -342,7 +342,7 @@ pub fn test_db(
                     .hash()
                     .into(),
             ),
-            schema.clone(),
+            Some(schema.clone()),
         );
 
         let update_entry = entry(
