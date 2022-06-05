@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use rstest::fixture;
 
 use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};

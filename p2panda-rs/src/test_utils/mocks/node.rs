@@ -514,16 +514,16 @@ mod tests {
     use crate::operation::OperationValue;
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        create_operation, operation_fields, private_key, schema, update_operation,
+        create_operation, key_pair, operation_fields, private_key, schema, update_operation,
     };
     use crate::test_utils::mocks::client::Client;
-    use crate::test_utils::utils::{keypair_from_private, NextEntryArgs};
+    use crate::test_utils::utils::NextEntryArgs;
 
     use super::{send_to_node, Node};
 
     #[rstest]
     fn publishing_entries(schema: SchemaId, private_key: String) {
-        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
+        let panda = Client::new("panda".to_string(), key_pair(&private_key));
         let mut node = Node::new();
 
         // This is an empty node which has no author logs.
@@ -748,7 +748,7 @@ mod tests {
 
     #[rstest]
     fn next_entry_args_at_specific_seq_num(schema: SchemaId, private_key: String) {
-        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
+        let panda = Client::new("panda".to_string(), key_pair(&private_key));
         let mut node = Node::new();
 
         // Publish a CREATE operation
@@ -805,12 +805,10 @@ mod tests {
 
     #[rstest]
     fn concurrent_updates(schema: SchemaId, private_key: String) {
-        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
+        let panda = Client::new("panda".to_string(), key_pair(&private_key));
         let penguin = Client::new(
             "penguin".to_string(),
-            keypair_from_private(
-                "eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e3".to_string(),
-            ),
+            key_pair("eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e3"),
         );
         let mut node = Node::new();
 

@@ -63,7 +63,7 @@ pub fn create_meta_operation() -> OperationWithMeta {
                 None,
                 fixtures::log_id(1),
             ),
-            fixtures::key_pair(fixtures::private_key()),
+            fixtures::key_pair(&fixtures::private_key()),
         ),
         fixtures::operation_encoded(operation),
     )
@@ -81,7 +81,7 @@ pub fn update_meta_operation() -> OperationWithMeta {
                 None,
                 fixtures::log_id(1),
             ),
-            fixtures::key_pair(fixtures::private_key()),
+            fixtures::key_pair(&fixtures::private_key()),
         ),
         fixtures::operation_encoded(operation),
     )
@@ -99,7 +99,7 @@ pub fn delete_meta_operation() -> OperationWithMeta {
                 None,
                 fixtures::log_id(1),
             ),
-            fixtures::key_pair(fixtures::private_key()),
+            fixtures::key_pair(&fixtures::private_key()),
         ),
         fixtures::operation_encoded(operation),
     )

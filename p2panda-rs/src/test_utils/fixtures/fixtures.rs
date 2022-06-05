@@ -8,8 +8,9 @@ use crate::identity::KeyPair;
 use crate::operation::{OperationEncoded, OperationValue};
 use crate::schema::SchemaId;
 use crate::test_utils::constants::TEST_SCHEMA_ID;
-use crate::test_utils::fixtures::{create_operation, entry, log_id, operation_fields, seq_num};
-use crate::test_utils::utils;
+use crate::test_utils::fixtures::{
+    create_operation, entry, key_pair, log_id, operation_fields, seq_num,
+};
 
 /// Fixture struct which contains versioned p2panda data for testing.
 #[derive(Debug)]
@@ -31,14 +32,12 @@ pub fn v0_3_0_fixture() -> Fixture {
         ),
     ]);
     let operation = create_operation(SchemaId::new(TEST_SCHEMA_ID).unwrap(), operation_fields);
-    let key_pair = utils::keypair_from_private(
-        "4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176".into(),
-    );
+    let key_pair = key_pair("4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176");
 
     // Comment out to regenerate fixture:
     /* use std::convert::TryFrom;
     let entry_signed_encoded = crate::entry::sign_and_encode(
-        &entry(operation.clone(), seq_num(1), None, None),
+        &entry(operation.clone(), seq_num(1), None, None, log_id(1)),
         &key_pair,
     ).unwrap();
     println!("{:?}", entry_signed_encoded.as_str());

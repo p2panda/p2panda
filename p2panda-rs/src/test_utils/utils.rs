@@ -11,7 +11,6 @@ use serde::Serialize;
 
 use crate::entry::{LogId, SeqNum};
 use crate::hash::Hash;
-use crate::identity::KeyPair;
 use crate::schema::SchemaId;
 
 /// A custom `Result` type to be able to dynamically propagate `Error` types.
@@ -31,16 +30,6 @@ pub struct NextEntryArgs {
 
     /// The log id of this log.
     pub log_id: LogId,
-}
-
-/// Generate a new key pair, not based on the default private key.
-pub fn new_key_pair() -> KeyPair {
-    KeyPair::new()
-}
-
-/// Generate a key pair from a private key.
-pub fn keypair_from_private(private_key: String) -> KeyPair {
-    KeyPair::from_private_key_str(&private_key).unwrap()
 }
 
 /// Generate an application schema based on a schema id string.

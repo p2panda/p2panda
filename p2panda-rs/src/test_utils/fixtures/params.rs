@@ -4,43 +4,13 @@
 ///
 /// The fixtures can optionally be passed in with custom parameters which overrides the default
 /// values.
-use std::convert::TryFrom;
-
 use rstest::fixture;
 
 use crate::document::{DocumentId, DocumentViewId};
-use crate::identity::{Author, KeyPair};
 use crate::operation::OperationId;
 use crate::schema::SchemaId;
-use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_PRIVATE_KEY, TEST_SCHEMA_ID};
+use crate::test_utils::constants::{DEFAULT_HASH, TEST_SCHEMA_ID};
 use crate::test_utils::fixtures::*;
-use crate::test_utils::utils;
-
-/// Fixture which injects the default private key string into a test method.
-#[fixture]
-pub fn private_key() -> String {
-    DEFAULT_PRIVATE_KEY.into()
-}
-
-/// Fixture which injects the default author into a test method.
-#[fixture]
-pub fn public_key() -> Author {
-    let key_pair = KeyPair::from_private_key_str(DEFAULT_PRIVATE_KEY).unwrap();
-    Author::try_from(key_pair.public_key().to_owned()).unwrap()
-}
-
-/// Fixture which injects the default KeyPair into a test method. Default value can be overridden
-/// at testing time by passing in a custom private key string.
-#[fixture]
-pub fn key_pair(#[default(DEFAULT_PRIVATE_KEY.into())] private_key: String) -> KeyPair {
-    utils::keypair_from_private(private_key)
-}
-
-/// Fixture which injects a random KeyPair into a test method.
-#[fixture]
-pub fn random_key_pair() -> KeyPair {
-    utils::new_key_pair()
-}
 
 /// Fixture which injects the default schema id into a test method. Default value can be
 /// overridden at testing time by passing in a custom schema id string.
