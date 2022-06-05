@@ -11,7 +11,6 @@ use serde::Serialize;
 
 use crate::entry::{LogId, SeqNum};
 use crate::hash::Hash;
-use crate::schema::SchemaId;
 
 /// A custom `Result` type to be able to dynamically propagate `Error` types.
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -30,9 +29,4 @@ pub struct NextEntryArgs {
 
     /// The log id of this log.
     pub log_id: LogId,
-}
-
-/// Generate an application schema based on a schema id string.
-pub fn schema(schema_id: &str) -> SchemaId {
-    SchemaId::new(schema_id).unwrap()
 }
