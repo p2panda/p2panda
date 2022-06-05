@@ -32,6 +32,15 @@ pub fn operation_value() -> OperationValue {
     OperationValue::Text("Hello!".to_string())
 }
 
+#[fixture]
+pub fn random_previous_operations(#[default(1)] num: u32) -> Vec<OperationId> {
+    let mut previous_operations = Vec::new();
+    for _ in 0..num {
+        previous_operations.push(random_hash().into())
+    }
+    previous_operations
+}
+
 /// Fixture which injects the default testing OperationFields value into a test method.
 ///
 /// Default value can be overridden at testing time by passing in a custom vector of key-value
@@ -86,6 +95,68 @@ pub fn operation(
     }
 }
 
+/// Fixture which injects a test `OperationWithMeta` into a test method.
+#[fixture]
+pub fn operation_with_meta(
+    #[from(some_fields)] fields: Option<OperationFields>,
+    #[default(None)] previous_operations: Option<Vec<OperationId>>,
+    public_key: Author,
+    schema: SchemaId,
+    #[from(random_operation_id)] operation_id: OperationId,
+) -> OperationWithMeta {
+    OperationWithMeta::new_test_operation(
+        &operation_id,
+        &public_key,
+        &operation(fields, previous_operations, schema),
+    )
+}
+
+#[fixture]
+pub fn encoded_create_string(operation: Operation) -> String {
+    OperationEncoded::try_from(&operation)
+        .unwrap()
+        .as_str()
+        .to_owned()
+}
+
+/// Fixture which injects the default CREATE `OperationWithMeta` into a test method.
+#[fixture]
+pub fn meta_operation(
+    entry_signed_encoded: EntrySigned,
+    operation_encoded: OperationEncoded,
+) -> OperationWithMeta {
+    OperationWithMeta::new_from_entry(&entry_signed_encoded, &operation_encoded).unwrap()
+}
+
+#[fixture]
+pub fn operation_encoded(
+    #[from(some_fields)] fields: Option<OperationFields>,
+    #[default(None)] previous_operations: Option<Vec<OperationId>>,
+    schema: SchemaId,
+) -> OperationEncoded {
+    OperationEncoded::try_from(&operation(fields, previous_operations, schema)).unwrap()
+}
+
+/// Invalid YASMF hash in `document` with correct length but unknown hash format identifier.
+#[fixture]
+pub fn operation_encoded_invalid_relation_fields() -> OperationEncoded {
+    // {
+    //   "action": "create",
+    //   "schema": "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
+    //   "version": 1,
+    //   "fields": {
+    //     "locations": {
+    //       "type": "relation",
+    //       "value": "83e2043738f2b5cdcd3b6cb0fbb82fe125905d0f75e16488a38d395ff5f9d5ea82b5"
+    //     }
+    //   }
+    // }
+    OperationEncoded::new("A466616374696F6E6663726561746566736368656D61784A76656E75655F30303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696F6E01666669656C6473A1696C6F636174696F6E73A264747970656872656C6174696F6E6576616C756578443833653230343337333866326235636463643362366362306662623832666531323539303564306637356531363438386133386433393566663566396435656138326235").unwrap()
+}
+
+/// TODO: Remove these after merging https://github.com/p2panda/p2panda/pull/342
+/// (I'm scared of too many conflicts....)
+
 /// Fixture which injects the default CREATE Operation into a test method.
 ///
 /// Default value can be overridden at testing time by passing in custom schema hash and operation
@@ -122,73 +193,4 @@ pub fn delete_operation(
     #[default(vec![operation_id(constants::DEFAULT_HASH)])] previous_operations: Vec<OperationId>,
 ) -> Operation {
     Operation::new_delete(schema, previous_operations).unwrap()
-}
-
-/// Fixture which injects a CREATE `OperationWithMeta` into a test method.
-#[fixture]
-pub fn create_operation_with_meta(
-    create_operation: Operation,
-    public_key: Author,
-    #[from(random_operation_id)] operation_id: OperationId,
-) -> OperationWithMeta {
-    OperationWithMeta::new_test_operation(&operation_id, &public_key, &create_operation)
-}
-
-/// Fixture which injects an UPDATE OperationWithMeta into a test method.
-#[fixture]
-pub fn update_operation_with_meta(
-    update_operation: Operation,
-    public_key: Author,
-    #[from(random_operation_id)] operation_id: OperationId,
-) -> OperationWithMeta {
-    OperationWithMeta::new_test_operation(&operation_id, &public_key, &update_operation)
-}
-
-/// Fixture which injects a DELETE `OperationWithMeta` into a test method.
-#[fixture]
-pub fn delete_operation_with_meta(
-    delete_operation: Operation,
-    public_key: Author,
-    #[from(random_operation_id)] operation_id: OperationId,
-) -> OperationWithMeta {
-    OperationWithMeta::new_test_operation(&operation_id, &public_key, &delete_operation)
-}
-
-#[fixture]
-pub fn encoded_create_string(create_operation: Operation) -> String {
-    OperationEncoded::try_from(&create_operation)
-        .unwrap()
-        .as_str()
-        .to_owned()
-}
-
-/// Fixture which injects the default CREATE `OperationWithMeta` into a test method.
-#[fixture]
-pub fn meta_operation(
-    entry_signed_encoded: EntrySigned,
-    operation_encoded: OperationEncoded,
-) -> OperationWithMeta {
-    OperationWithMeta::new_from_entry(&entry_signed_encoded, &operation_encoded).unwrap()
-}
-
-#[fixture]
-pub fn operation_encoded(operation: Operation) -> OperationEncoded {
-    OperationEncoded::try_from(&operation).unwrap()
-}
-
-/// Invalid YASMF hash in `document` with correct length but unknown hash format identifier.
-#[fixture]
-pub fn operation_encoded_invalid_relation_fields() -> OperationEncoded {
-    // {
-    //   "action": "create",
-    //   "schema": "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
-    //   "version": 1,
-    //   "fields": {
-    //     "locations": {
-    //       "type": "relation",
-    //       "value": "83e2043738f2b5cdcd3b6cb0fbb82fe125905d0f75e16488a38d395ff5f9d5ea82b5"
-    //     }
-    //   }
-    // }
-    OperationEncoded::new("A466616374696F6E6663726561746566736368656D61784A76656E75655F30303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696F6E01666669656C6473A1696C6F636174696F6E73A264747970656872656C6174696F6E6576616C756578443833653230343337333866326235636463643362366362306662623832666531323539303564306637356531363438386133386433393566663566396435656138326235").unwrap()
 }

@@ -20,7 +20,7 @@ pub fn create_operation() -> Operation {
 pub fn update_operation() -> Operation {
     fixtures::operation(
         Some(fields()),
-        Some(vec![fixtures::operation_id(DEFAULT_HASH)]),
+        Some(vec![DEFAULT_HASH.parse().unwrap()]),
         TEST_SCHEMA_ID.parse().unwrap(),
     )
 }
@@ -29,7 +29,7 @@ pub fn update_operation() -> Operation {
 pub fn delete_operation() -> Operation {
     fixtures::operation(
         None,
-        Some(vec![fixtures::operation_id(DEFAULT_HASH)]),
+        Some(vec![DEFAULT_HASH.parse().unwrap()]),
         TEST_SCHEMA_ID.parse().unwrap(),
     )
 }
@@ -48,7 +48,7 @@ pub fn create_meta_operation() -> OperationWithMeta {
             ),
             fixtures::key_pair(&fixtures::private_key()),
         ),
-        fixtures::operation_encoded(operation),
+        fixtures::operation_encoded(Some(fields()), None, TEST_SCHEMA_ID.parse().unwrap()),
     )
 }
 
@@ -60,13 +60,17 @@ pub fn update_meta_operation() -> OperationWithMeta {
             fixtures::entry(
                 operation.clone(),
                 fixtures::seq_num(2),
-                fixtures::some_hash(DEFAULT_HASH),
+                Some(DEFAULT_HASH.parse().unwrap()),
                 None,
                 fixtures::log_id(1),
             ),
             fixtures::key_pair(&fixtures::private_key()),
         ),
-        fixtures::operation_encoded(operation),
+        fixtures::operation_encoded(
+            Some(fields()),
+            Some(vec![DEFAULT_HASH.parse().unwrap()]),
+            TEST_SCHEMA_ID.parse().unwrap(),
+        ),
     )
 }
 
@@ -78,13 +82,17 @@ pub fn delete_meta_operation() -> OperationWithMeta {
             fixtures::entry(
                 operation.clone(),
                 fixtures::seq_num(2),
-                fixtures::some_hash(DEFAULT_HASH),
+                Some(DEFAULT_HASH.parse().unwrap()),
                 None,
                 fixtures::log_id(1),
             ),
             fixtures::key_pair(&fixtures::private_key()),
         ),
-        fixtures::operation_encoded(operation),
+        fixtures::operation_encoded(
+            None,
+            Some(vec![DEFAULT_HASH.parse().unwrap()]),
+            TEST_SCHEMA_ID.parse().unwrap(),
+        ),
     )
 }
 
@@ -104,7 +112,7 @@ pub fn entry_with_backlink() -> Entry {
     fixtures::entry(
         create_operation(),
         fixtures::seq_num(2),
-        fixtures::some_hash(DEFAULT_HASH),
+        Some(DEFAULT_HASH.parse().unwrap()),
         None,
         fixtures::log_id(1),
     )
@@ -115,8 +123,8 @@ pub fn entry_with_backlink_and_skiplink() -> Entry {
     fixtures::entry(
         create_operation(),
         fixtures::seq_num(13),
-        fixtures::some_hash(DEFAULT_HASH),
-        fixtures::some_hash(DEFAULT_HASH),
+        Some(DEFAULT_HASH.parse().unwrap()),
+        Some(DEFAULT_HASH.parse().unwrap()),
         fixtures::log_id(1),
     )
 }
@@ -126,8 +134,8 @@ pub fn entry_with_only_a_skiplink() -> Entry {
     fixtures::entry(
         create_operation(),
         fixtures::seq_num(13),
-        fixtures::some_hash(DEFAULT_HASH),
-        fixtures::some_hash(DEFAULT_HASH),
+        None,
+        Some(DEFAULT_HASH.parse().unwrap()),
         fixtures::log_id(1),
     )
 }
