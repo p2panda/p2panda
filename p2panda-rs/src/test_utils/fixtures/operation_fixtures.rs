@@ -62,35 +62,27 @@ pub fn some_fields(
 ///
 /// Default value can be overridden at testing time by passing in custom operation fields and
 /// document id.
-#[fixture]
-pub fn operation(
-    #[from(some_fields)] fields: Option<OperationFields>,
-    #[default(None)] previous_operations: Option<Vec<OperationId>>,
-) -> Operation {
-    any_operation(fields, previous_operations)
-}
-
-/// A helper method for easily generating an operation of any type (CREATE, UPDATE or DELETE).
 ///
 /// If a value for `fields` is provided, this is a CREATE operation. If values for both `fields`
 /// and `document_id` are provided, this is an UPDATE operation. If no value for `fields` is
 /// provided, this is a DELETE operation.
-pub fn any_operation(
-    fields: Option<OperationFields>,
-    previous_operations: Option<Vec<OperationId>>,
+#[fixture]
+pub fn operation(
+    #[from(some_fields)] fields: Option<OperationFields>,
+    #[default(None)] previous_operations: Option<Vec<OperationId>>,
+    schema: SchemaId,
 ) -> Operation {
-    let schema_id = SchemaId::new(constants::TEST_SCHEMA_ID).unwrap();
     match fields {
         // It's a CREATE operation
         Some(fields) if previous_operations.is_none() => {
-            Operation::new_create(schema_id, fields).unwrap()
+            Operation::new_create(schema, fields).unwrap()
         }
         // It's an UPDATE operation
         Some(fields) => {
-            Operation::new_update(schema_id, previous_operations.unwrap(), fields).unwrap()
+            Operation::new_update(schema, previous_operations.unwrap(), fields).unwrap()
         }
         // It's a DELETE operation
-        None => Operation::new_delete(schema_id, previous_operations.unwrap()).unwrap(),
+        None => Operation::new_delete(schema, previous_operations.unwrap()).unwrap(),
     }
 }
 

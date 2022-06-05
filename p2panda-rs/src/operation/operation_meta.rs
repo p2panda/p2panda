@@ -155,9 +155,10 @@ mod tests {
     use crate::operation::{
         AsOperation, Operation, OperationEncoded, OperationId, OperationValue, OperationWithMeta,
     };
+    use crate::test_utils::constants::TEST_SCHEMA_ID;
     use crate::test_utils::fixtures::{
         create_operation, entry_signed_encoded, key_pair, operation_encoded, operation_fields,
-        operation_id,
+        operation_id, schema,
     };
     use crate::test_utils::templates::{
         all_meta_operation_types, defaults, implements_as_operation,
@@ -166,7 +167,7 @@ mod tests {
 
     #[rstest]
     #[should_panic]
-    #[case(operation_encoded(create_operation(defaults::schema(), operation_fields(vec![("message", OperationValue::Text("Not the right message".to_string()))]))))]
+    #[case(operation_encoded(create_operation(schema(TEST_SCHEMA_ID), operation_fields(vec![("message", OperationValue::Text("Not the right message".to_string()))]))))]
     #[case(operation_encoded(defaults::create_operation()))]
     fn create_operation_with_meta(
         entry_signed_encoded: EntrySigned,

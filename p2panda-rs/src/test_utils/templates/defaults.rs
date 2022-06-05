@@ -3,26 +3,9 @@
 //! Methods for generating some useful default values without any passed parameters. These are used
 //! when composing test templates where default fixtures can't be injected in the usual way.
 use crate::entry::Entry;
-use crate::hash::Hash;
 use crate::operation::{Operation, OperationFields, OperationWithMeta};
-use crate::schema::SchemaId;
 use crate::test_utils::constants::{default_fields, DEFAULT_HASH, TEST_SCHEMA_ID};
 use crate::test_utils::fixtures;
-
-/// The default hash.
-pub fn hash() -> Hash {
-    fixtures::hash(DEFAULT_HASH)
-}
-
-/// The default hash as an option.
-pub fn some_hash() -> Option<Hash> {
-    fixtures::some_hash(DEFAULT_HASH)
-}
-
-/// The default schema.
-pub fn schema() -> SchemaId {
-    fixtures::schema(TEST_SCHEMA_ID)
-}
 
 pub fn fields() -> OperationFields {
     fixtures::operation_fields(default_fields())
@@ -30,7 +13,7 @@ pub fn fields() -> OperationFields {
 
 /// The default CREATE operation.
 pub fn create_operation() -> Operation {
-    fixtures::operation(Some(fields()), None)
+    fixtures::operation(Some(fields()), None, TEST_SCHEMA_ID.parse().unwrap())
 }
 
 /// The default UPDATE operation.
@@ -38,12 +21,17 @@ pub fn update_operation() -> Operation {
     fixtures::operation(
         Some(fields()),
         Some(vec![fixtures::operation_id(DEFAULT_HASH)]),
+        TEST_SCHEMA_ID.parse().unwrap(),
     )
 }
 
 /// The default DELETE operation.
 pub fn delete_operation() -> Operation {
-    fixtures::operation(None, Some(vec![fixtures::operation_id(DEFAULT_HASH)]))
+    fixtures::operation(
+        None,
+        Some(vec![fixtures::operation_id(DEFAULT_HASH)]),
+        TEST_SCHEMA_ID.parse().unwrap(),
+    )
 }
 
 /// The default CREATE meta-operation.
@@ -72,7 +60,7 @@ pub fn update_meta_operation() -> OperationWithMeta {
             fixtures::entry(
                 operation.clone(),
                 fixtures::seq_num(2),
-                some_hash(),
+                fixtures::some_hash(DEFAULT_HASH),
                 None,
                 fixtures::log_id(1),
             ),
@@ -90,7 +78,7 @@ pub fn delete_meta_operation() -> OperationWithMeta {
             fixtures::entry(
                 operation.clone(),
                 fixtures::seq_num(2),
-                some_hash(),
+                fixtures::some_hash(DEFAULT_HASH),
                 None,
                 fixtures::log_id(1),
             ),
@@ -116,7 +104,7 @@ pub fn entry_with_backlink() -> Entry {
     fixtures::entry(
         create_operation(),
         fixtures::seq_num(2),
-        some_hash(),
+        fixtures::some_hash(DEFAULT_HASH),
         None,
         fixtures::log_id(1),
     )
@@ -127,8 +115,8 @@ pub fn entry_with_backlink_and_skiplink() -> Entry {
     fixtures::entry(
         create_operation(),
         fixtures::seq_num(13),
-        some_hash(),
-        some_hash(),
+        fixtures::some_hash(DEFAULT_HASH),
+        fixtures::some_hash(DEFAULT_HASH),
         fixtures::log_id(1),
     )
 }
@@ -138,8 +126,8 @@ pub fn entry_with_only_a_skiplink() -> Entry {
     fixtures::entry(
         create_operation(),
         fixtures::seq_num(13),
-        some_hash(),
-        some_hash(),
+        fixtures::some_hash(DEFAULT_HASH),
+        fixtures::some_hash(DEFAULT_HASH),
         fixtures::log_id(1),
     )
 }

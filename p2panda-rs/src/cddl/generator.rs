@@ -121,13 +121,13 @@ mod tests {
             generate_cddl_definition,
             generator::{generate_create_fields, generate_fields, generate_update_fields},
         },
-        schema::FieldType,
-        test_utils::templates::defaults::schema,
+        schema::{FieldType, SchemaId},
+        test_utils::constants::TEST_SCHEMA_ID,
     };
 
     fn person() -> BTreeMap<String, FieldType> {
         let mut person = BTreeMap::new();
-        let test_schema = schema();
+        let test_schema: SchemaId = TEST_SCHEMA_ID.parse().unwrap();
 
         person.insert("name".to_string(), FieldType::String);
         person.insert("age".to_string(), FieldType::Int);

@@ -8,13 +8,15 @@ use rstest_reuse::template;
 #[allow(unused_qualifications)]
 #[case(crate::test_utils::fixtures::operation(
     Some(crate::test_utils::templates::defaults::fields()),
-    None
+    None,
+    crate::test_utils::constants::TEST_SCHEMA_ID.parse().unwrap(),
 ))]
 #[allow(unused_qualifications)]
 #[case::update_operation(
     crate::test_utils::fixtures::operation(
         Some(crate::test_utils::templates::defaults::fields()),
         Some(vec![crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()]),
+        crate::test_utils::constants::TEST_SCHEMA_ID.parse().unwrap(),
     )
 )]
 #[allow(unused_qualifications)]
@@ -22,6 +24,7 @@ use rstest_reuse::template;
     crate::test_utils::fixtures::operation(
         None,
         Some(vec![crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()]),
+        crate::test_utils::constants::TEST_SCHEMA_ID.parse().unwrap()
     )
 )]
 #[allow(unused_qualifications)]
@@ -32,8 +35,10 @@ use rstest_reuse::template;
             crate::test_utils::fixtures::random_operation_id(),
             crate::test_utils::fixtures::random_operation_id(),
             crate::test_utils::fixtures::random_operation_id()
-            ])
+            ]),
+        crate::test_utils::constants::TEST_SCHEMA_ID.parse().unwrap()
         )
+
 )]
 #[allow(unused_qualifications)]
 #[case::delete_operation_many_previous(crate::test_utils::fixtures::operation(
@@ -42,7 +47,8 @@ use rstest_reuse::template;
         crate::test_utils::fixtures::random_operation_id(),
         crate::test_utils::fixtures::random_operation_id(),
         crate::test_utils::fixtures::random_operation_id()
-        ])
+        ]),
+        crate::test_utils::constants::TEST_SCHEMA_ID.parse().unwrap()
     )
 )]
 fn many_valid_operations(#[case] operation: Operation) {}
