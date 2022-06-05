@@ -76,8 +76,8 @@ mod tests {
     use crate::operation::{AsOperation, Operation, OperationValue, Relation, RelationList};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        encoded_create_string, operation_encoded_invalid_relation_fields, operation_fields,
-        random_document_id, random_operation_id, schema, update_operation, Fixture,
+        encoded_create_string, operation, operation_encoded_invalid_relation_fields,
+        operation_fields, random_document_id, random_operation_id, schema, Fixture,
     };
     use crate::test_utils::templates::version_fixtures;
     use crate::Validate;
@@ -122,13 +122,9 @@ mod tests {
         #[from(random_document_id)] picture_document: DocumentId,
         #[from(random_document_id)] friend_document_1: DocumentId,
         #[from(random_document_id)] friend_document_2: DocumentId,
+        #[from(operation)]
         #[with(
-            // Schema hash
-            schema.clone(),
-            // Previous operations
-            random_document_view_id(),
-            // Operation fields
-            operation_fields(vec![
+            Some(operation_fields(vec![
               ("username", OperationValue::Text("bubu".to_owned())),
               ("age", OperationValue::Integer(28)),
               ("height", OperationValue::Float(3.5)),
@@ -138,7 +134,8 @@ mod tests {
                   friend_document_1.clone(),
                   friend_document_2.clone(),
               ]))),
-            ])
+            ])),
+            Some(vec![random_operation_id()]),
         )]
         update_operation: Operation,
     ) {

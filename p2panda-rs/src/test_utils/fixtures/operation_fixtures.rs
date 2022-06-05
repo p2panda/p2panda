@@ -95,6 +95,47 @@ pub fn operation(
     }
 }
 
+/// TODO: Remove create_operation, update_operation, delete_operation after merging https://github.com/p2panda/p2panda/pull/342
+/// (I'm scared of too many conflicts....)
+
+/// Fixture which injects the default CREATE Operation into a test method.
+///
+/// Default value can be overridden at testing time by passing in custom schema hash and operation
+/// fields.
+#[fixture]
+pub fn create_operation(
+    schema: SchemaId,
+    #[from(operation_fields)] fields: OperationFields,
+) -> Operation {
+    Operation::new_create(schema, fields).unwrap()
+}
+
+/// Fixture which injects the default UPDATE Operation into a test method.
+///
+/// Default value can be overridden at testing time by passing in custom schema hash, document id
+/// hash and operation fields.
+#[fixture]
+pub fn update_operation(
+    schema: SchemaId,
+    #[default(vec![operation_id(constants::DEFAULT_HASH)])] previous_operations: Vec<OperationId>,
+    #[default(operation_fields(vec![("message", OperationValue::Text("Updated, hello!".to_string()))]))]
+    fields: OperationFields,
+) -> Operation {
+    Operation::new_update(schema, previous_operations, fields).unwrap()
+}
+
+/// Fixture which injects the default DELETE Operation into a test method.
+///
+/// Default value can be overridden at testing time by passing in custom schema hash and document
+/// id hash.
+#[fixture]
+pub fn delete_operation(
+    schema: SchemaId,
+    #[default(vec![operation_id(constants::DEFAULT_HASH)])] previous_operations: Vec<OperationId>,
+) -> Operation {
+    Operation::new_delete(schema, previous_operations).unwrap()
+}
+
 /// Fixture which injects a test `OperationWithMeta` into a test method.
 #[fixture]
 pub fn operation_with_meta(
@@ -152,45 +193,4 @@ pub fn operation_encoded_invalid_relation_fields() -> OperationEncoded {
     //   }
     // }
     OperationEncoded::new("A466616374696F6E6663726561746566736368656D61784A76656E75655F30303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696F6E01666669656C6473A1696C6F636174696F6E73A264747970656872656C6174696F6E6576616C756578443833653230343337333866326235636463643362366362306662623832666531323539303564306637356531363438386133386433393566663566396435656138326235").unwrap()
-}
-
-/// TODO: Remove these after merging https://github.com/p2panda/p2panda/pull/342
-/// (I'm scared of too many conflicts....)
-
-/// Fixture which injects the default CREATE Operation into a test method.
-///
-/// Default value can be overridden at testing time by passing in custom schema hash and operation
-/// fields.
-#[fixture]
-pub fn create_operation(
-    schema: SchemaId,
-    #[from(operation_fields)] fields: OperationFields,
-) -> Operation {
-    Operation::new_create(schema, fields).unwrap()
-}
-
-/// Fixture which injects the default UPDATE Operation into a test method.
-///
-/// Default value can be overridden at testing time by passing in custom schema hash, document id
-/// hash and operation fields.
-#[fixture]
-pub fn update_operation(
-    schema: SchemaId,
-    #[default(vec![operation_id(constants::DEFAULT_HASH)])] previous_operations: Vec<OperationId>,
-    #[default(operation_fields(vec![("message", OperationValue::Text("Updated, hello!".to_string()))]))]
-    fields: OperationFields,
-) -> Operation {
-    Operation::new_update(schema, previous_operations, fields).unwrap()
-}
-
-/// Fixture which injects the default DELETE Operation into a test method.
-///
-/// Default value can be overridden at testing time by passing in custom schema hash and document
-/// id hash.
-#[fixture]
-pub fn delete_operation(
-    schema: SchemaId,
-    #[default(vec![operation_id(constants::DEFAULT_HASH)])] previous_operations: Vec<OperationId>,
-) -> Operation {
-    Operation::new_delete(schema, previous_operations).unwrap()
 }

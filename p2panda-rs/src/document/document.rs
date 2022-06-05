@@ -311,9 +311,8 @@ mod tests {
     use crate::operation::{OperationEncoded, OperationId, OperationValue, OperationWithMeta};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        create_operation, create_operation_with_meta, delete_operation, delete_operation_with_meta,
-        operation_fields, random_key_pair, random_operation_id, schema, update_operation,
-        update_operation_with_meta,
+        create_operation, delete_operation, operation_fields, operation_with_meta, random_key_pair,
+        random_operation_id, random_previous_operations, schema, update_operation,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
 
@@ -321,17 +320,20 @@ mod tests {
 
     #[rstest]
     fn reduces_operations(
-        #[from(create_operation_with_meta)] create_operation: OperationWithMeta,
-        #[from(update_operation_with_meta)] update_operation: OperationWithMeta,
-        #[from(delete_operation_with_meta)] delete_operation: OperationWithMeta,
+        #[from(operation_with_meta)] create_operation: OperationWithMeta,
+        #[from(operation_with_meta)]
+        #[with(
+            Some(operation_fields(vec![("username", OperationValue::Text("Yahooo!".into()))])), Some(random_previous_operations(1)))
+        ]
+        update_operation: OperationWithMeta,
+        #[from(operation_with_meta)]
+        #[with(None, Some(random_previous_operations(1)))]
+        delete_operation: OperationWithMeta,
     ) {
         let (reduced_create, is_edited, is_deleted) = reduce(&[create_operation.clone()]);
         assert_eq!(
-            *reduced_create.unwrap().get("message").unwrap(),
-            DocumentViewValue::new(
-                create_operation.operation_id(),
-                &OperationValue::Text("Hello!".to_string())
-            )
+            *reduced_create.unwrap().get("username").unwrap().value(),
+            OperationValue::Text("bubu".to_string())
         );
         assert!(!is_edited);
         assert!(!is_deleted);
@@ -339,11 +341,8 @@ mod tests {
         let (reduced_update, is_edited, is_deleted) =
             reduce(&[create_operation.clone(), update_operation.clone()]);
         assert_eq!(
-            *reduced_update.unwrap().get("message").unwrap(),
-            DocumentViewValue::new(
-                update_operation.operation_id(),
-                &OperationValue::Text("Updated, hello!".to_string())
-            )
+            *reduced_update.unwrap().get("username").unwrap().value(),
+            OperationValue::Text("Yahooo!".to_string())
         );
         assert!(is_edited);
         assert!(!is_deleted);

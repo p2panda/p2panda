@@ -232,7 +232,7 @@ pub mod tests {
         AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
     };
     use crate::test_utils::fixtures::{
-        entry, key_pair, operation_fields, operation_id, schema, update_operation,
+        entry, key_pair, operation, operation_fields, operation_id, schema,
     };
 
     use super::StorageProvider;
@@ -591,10 +591,10 @@ pub mod tests {
         let next_entry = entries.get(3).unwrap();
 
         // Recreate this entry and replace previous_operations to contain invalid OperationId
-        let update_operation_with_invalid_previous_operations = update_operation(
+        let update_operation_with_invalid_previous_operations = operation(
+            Some(operation_fields.clone()),
+            Some(vec![invalid_prev_op]),
             schema.clone(),
-            vec![invalid_prev_op],
-            operation_fields.clone(),
         );
 
         let update_entry = entry(
@@ -645,13 +645,13 @@ pub mod tests {
         let next_entry = entries.get(3).unwrap();
 
         // Create a new operation which does not match the one contained in the entry hash
-        let mismatched_operation = update_operation(
-            schema.clone(),
-            vec![next_entry.operation_encoded().unwrap().hash().into()],
-            operation_fields(vec![(
+        let mismatched_operation = operation(
+            Some(operation_fields(vec![(
                 "poopy",
                 OperationValue::Text("This is the WRONG operation :-(".to_string()),
-            )]),
+            )])),
+            Some(vec![next_entry.operation_encoded().unwrap().hash().into()]),
+            schema.clone(),
         );
 
         let encoded_operation = OperationEncoded::try_from(&mismatched_operation).unwrap();

@@ -119,7 +119,7 @@ mod tests {
 
     use crate::document::{DocumentViewFields, DocumentViewValue};
     use crate::operation::{AsOperation, OperationId, OperationValue, OperationWithMeta};
-    use crate::test_utils::fixtures::{create_operation_with_meta, random_operation_id};
+    use crate::test_utils::fixtures::{operation_with_meta, random_operation_id};
 
     #[rstest]
     fn construct_fields(#[from(random_operation_id)] value_id: OperationId) {
@@ -154,19 +154,19 @@ mod tests {
     }
 
     #[rstest]
-    fn from_meta_operation(create_operation_with_meta: OperationWithMeta) {
-        let document_view_fields = DocumentViewFields::from(create_operation_with_meta.clone());
-        let operation_fields = create_operation_with_meta.operation().fields().unwrap();
+    fn from_meta_operation(operation_with_meta: OperationWithMeta) {
+        let document_view_fields = DocumentViewFields::from(operation_with_meta.clone());
+        let operation_fields = operation_with_meta.operation().fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
 
     #[rstest]
-    fn new_from_operation_fields(create_operation_with_meta: OperationWithMeta) {
+    fn new_from_operation_fields(operation_with_meta: OperationWithMeta) {
         let document_view_fields = DocumentViewFields::new_from_operation_fields(
-            create_operation_with_meta.operation_id(),
-            &create_operation_with_meta.operation().fields().unwrap(),
+            operation_with_meta.operation_id(),
+            &operation_with_meta.operation().fields().unwrap(),
         );
-        let operation_fields = create_operation_with_meta.operation().fields().unwrap();
+        let operation_fields = operation_with_meta.operation().fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
 }

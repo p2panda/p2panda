@@ -9,5 +9,4 @@ pub mod fixtures;
 pub mod mocks;
 pub mod templates;
 pub mod test_data;
-mod tests;
 pub mod utils;
