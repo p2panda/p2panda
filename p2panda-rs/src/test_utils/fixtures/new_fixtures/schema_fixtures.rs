@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-/// General purpose fixtures which can be injected into rstest methods as parameters.
-///
-/// The fixtures can optionally be passed in with custom parameters which overrides the default
-/// values.
 use rstest::fixture;
 
 use crate::schema::SchemaId;
