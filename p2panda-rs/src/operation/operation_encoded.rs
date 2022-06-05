@@ -77,8 +77,8 @@ mod tests {
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::templates::version_fixtures;
     use crate::test_utils::fixtures::{
-        encoded_create_string, fields, operation_encoded_invalid_relation_fields,
-        random_document_id, random_document_view_id, schema, update_operation, Fixture,
+        encoded_create_string, operation_encoded_invalid_relation_fields, operation_fields,
+        random_document_id, random_operation_id, schema, update_operation, Fixture,
     };
     use crate::Validate;
 
@@ -128,7 +128,7 @@ mod tests {
             // Previous operations
             random_document_view_id(),
             // Operation fields
-            fields(vec![
+            operation_fields(vec![
               ("username", OperationValue::Text("bubu".to_owned())),
               ("age", OperationValue::Integer(28)),
               ("height", OperationValue::Float(3.5)),

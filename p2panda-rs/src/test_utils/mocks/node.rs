@@ -12,15 +12,15 @@
 //! use p2panda_rs::schema::SchemaId;
 //! use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
 //! use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
-//! use p2panda_rs::test_utils::utils::{
-//!     create_operation, delete_operation, schema, new_key_pair, operation_fields, update_operation,
+//! use p2panda_rs::test_utils::fixtures::{
+//!     create_operation, delete_operation, schema, random_key_pair, operation_fields, update_operation,
 //! };
 //!
 //! // Instantiate a new mock node
 //! let mut node = Node::new();
 //!
 //! // Instantiate one client named "panda"
-//! let panda = Client::new("panda".to_string(), new_key_pair());
+//! let panda = Client::new("panda".to_string(), random_key_pair());
 //!
 //! // Panda creates a new chat document by publishing a CREATE operation
 //! let (document1_hash_id, _) = send_to_node(
@@ -513,11 +513,11 @@ mod tests {
     use crate::identity::KeyPair;
     use crate::operation::OperationValue;
     use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::{private_key, schema};
-    use crate::test_utils::mocks::client::Client;
-    use crate::test_utils::utils::{
-        create_operation, keypair_from_private, operation_fields, update_operation, NextEntryArgs,
+    use crate::test_utils::fixtures::{
+        create_operation, operation_fields, private_key, schema, update_operation,
     };
+    use crate::test_utils::mocks::client::Client;
+    use crate::test_utils::utils::{keypair_from_private, NextEntryArgs};
 
     use super::{send_to_node, Node};
 

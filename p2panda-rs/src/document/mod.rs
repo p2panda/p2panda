@@ -17,7 +17,7 @@
 //! # use p2panda_rs::identity::KeyPair;
 //! # use p2panda_rs::operation::{OperationValue, OperationWithMeta};
 //! # use p2panda_rs::schema::SchemaId;
-//! # use p2panda_rs::test_utils::utils::{create_operation, delete_operation, update_operation, operation_fields};
+//! # use p2panda_rs::test_utils::fixtures::{create_operation, delete_operation, update_operation, operation_fields};
 //! # use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
 //! # use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 //! use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewFields, DocumentViewId};

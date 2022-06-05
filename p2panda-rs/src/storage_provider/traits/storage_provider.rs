@@ -232,7 +232,7 @@ pub mod tests {
         AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
     };
     use crate::test_utils::fixtures::{
-        document_view_id, entry, fields, key_pair, schema, update_operation,
+        entry, key_pair, operation_fields, operation_id, schema, update_operation,
     };
 
     use super::StorageProvider;
@@ -568,8 +568,8 @@ pub mod tests {
     async fn prev_op_does_not_exist(
         test_db: SimplestStorageProvider,
         schema: SchemaId,
-        fields: OperationFields,
-        #[from(document_view_id)] invalid_prev_op: DocumentViewId,
+        operation_fields: OperationFields,
+        #[from(operation_id)] invalid_prev_op: OperationId,
         key_pair: KeyPair,
     ) {
         let entries = test_db.entries.lock().unwrap().clone();
@@ -591,8 +591,11 @@ pub mod tests {
         let next_entry = entries.get(3).unwrap();
 
         // Recreate this entry and replace previous_operations to contain invalid OperationId
-        let update_operation_with_invalid_previous_operations =
-            update_operation(schema.clone(), invalid_prev_op, fields.clone());
+        let update_operation_with_invalid_previous_operations = update_operation(
+            schema.clone(),
+            vec![invalid_prev_op],
+            operation_fields.clone(),
+        );
 
         let update_entry = entry(
             update_operation_with_invalid_previous_operations.clone(),
@@ -644,8 +647,8 @@ pub mod tests {
         // Create a new operation which does not match the one contained in the entry hash
         let mismatched_operation = update_operation(
             schema.clone(),
-            next_entry.operation_encoded().unwrap().hash().into(),
-            fields(vec![(
+            vec![next_entry.operation_encoded().unwrap().hash().into()],
+            operation_fields(vec![(
                 "poopy",
                 OperationValue::Text("This is the WRONG operation :-(".to_string()),
             )]),

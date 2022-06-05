@@ -14,19 +14,19 @@ use rstest_reuse::template;
 #[should_panic]
 #[case::wrong_operation(
     crate::test_utils::fixtures::create_operation(crate::schema::SchemaId::new(TEST_SCHEMA_ID).unwrap(),
-    crate::test_utils::utils::operation_fields(vec![("message", crate::operation::OperationValue::Text("Boo!".to_string()))])))
+    crate::test_utils::fixtures::operation_fields(vec![("message", crate::operation::OperationValue::Text("Boo!".to_string()))])))
 ]
 #[allow(unused_qualifications)]
 #[should_panic]
 #[case::wrong_operation(
     crate::test_utils::fixtures::create_operation(crate::schema::SchemaId::new(TEST_SCHEMA_ID).unwrap(),
-    crate::test_utils::utils::operation_fields(vec![("date", crate::operation::OperationValue::Text("2021-05-02T20:06:45.430Z".to_string()))])))
+    crate::test_utils::fixtures::operation_fields(vec![("date", crate::operation::OperationValue::Text("2021-05-02T20:06:45.430Z".to_string()))])))
 ]
 #[allow(unused_qualifications)]
 #[should_panic]
 #[case::wrong_operation(
     crate::test_utils::fixtures::create_operation(crate::schema::SchemaId::new(TEST_SCHEMA_ID).unwrap(),
-    crate::test_utils::utils::operation_fields(vec![
+    crate::test_utils::fixtures::operation_fields(vec![
         ("message", crate::operation::OperationValue::Text("Hello!".to_string())),
         ("date", crate::operation::OperationValue::Text("2021-05-02T20:06:45.430Z".to_string()))
     ])))
@@ -61,7 +61,7 @@ fn many_valid_entries(#[case] entry: Entry) {}
 #[allow(unused_qualifications)]
 #[case::delete_operation(crate::test_utils::fixtures::defaults::delete_operation())]
 #[allow(unused_qualifications)]
-#[case::update_operation_many_previous(crate::test_utils::utils::any_operation(
+#[case::update_operation_many_previous(crate::test_utils::fixtures::any_operation(
     Some(crate::test_utils::fixtures::defaults::fields()),
     Some(DocumentViewId::new(&[
         crate::test_utils::fixtures::random_operation_id(),
@@ -70,7 +70,7 @@ fn many_valid_entries(#[case] entry: Entry) {}
         ]).unwrap())
     )
 )]
-#[case::delete_operation_many_previous(crate::test_utils::utils::any_operation(
+#[case::delete_operation_many_previous(crate::test_utils::fixtures::any_operation(
     None,
     #[allow(unused_qualifications)]
     Some(DocumentViewId::new(&[

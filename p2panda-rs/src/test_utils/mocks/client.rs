@@ -16,15 +16,15 @@
 //! use p2panda_rs::operation::{OperationEncoded, OperationValue};
 //! use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
 //! use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
-//! use p2panda_rs::test_utils::utils::{
-//!     create_operation, schema, new_key_pair, operation_fields, update_operation,
+//! use p2panda_rs::test_utils::fixtures::{
+//!     create_operation, schema, random_key_pair, operation_fields, update_operation,
 //! };
 //!
 //! // Instantiate a new mock node
 //! let mut node = Node::new();
 //!
 //! // Instantiate one client named "panda"
-//! let panda = Client::new("panda".to_string(), new_key_pair());
+//! let panda = Client::new("panda".to_string(), random_key_pair());
 //!
 //! // Create a new operation to publish
 //! let operation = create_operation(

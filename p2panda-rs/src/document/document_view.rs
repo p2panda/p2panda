@@ -86,8 +86,8 @@ mod tests {
     use crate::operation::{OperationId, OperationValue, OperationWithMeta, Relation};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        create_operation, document_id, document_view_id, fields, public_key,
-        random_document_view_id, random_operation_id, schema, update_operation,
+        create_operation, document_id, document_view_id, operation_fields, public_key,
+        random_operation_id, schema, update_operation,
     };
 
     use super::{DocumentView, DocumentViewId};
@@ -103,7 +103,7 @@ mod tests {
 
         let operation = create_operation(
             schema,
-            fields(vec![
+            operation_fields(vec![
                 ("username", OperationValue::Text("bubu".to_owned())),
                 ("height", OperationValue::Float(3.5)),
                 ("age", OperationValue::Integer(28)),
@@ -124,8 +124,8 @@ mod tests {
     ) -> OperationWithMeta {
         let operation = update_operation(
             schema,
-            prev_operations,
-            fields(vec![
+            vec![prev_op_id],
+            operation_fields(vec![
                 ("age", OperationValue::Integer(29)),
                 ("is_admin", OperationValue::Boolean(true)),
             ]),

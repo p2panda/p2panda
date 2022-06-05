@@ -1,24 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use p2panda_rs::hash::Hash;
+use p2panda_rs::identity::KeyPair;
+use p2panda_rs::operation::{OperationId, OperationValue};
+use p2panda_rs::schema::SchemaId;
+use p2panda_rs::test_utils::constants::DEFAULT_PRIVATE_KEY;
+use p2panda_rs::test_utils::fixtures::{
+    create_operation, delete_operation, operation_fields, random_key_pair, update_operation,
+};
+use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
+use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
+
 /// Generate CBOR encoded test data. This is run with the `cargo run --bin cbor-test-data`
 /// command. The output data can be used for testing a p2panda implementation. It is currently used
 /// in `p2panda-js`.
-use p2panda_rs::operation::{OperationId, OperationValue};
-use p2panda_rs::schema::SchemaId;
-use p2panda_rs::test_utils::mocks::Client;
-use p2panda_rs::test_utils::mocks::{send_to_node, Node};
-use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
-use p2panda_rs::test_utils::utils::{
-    create_operation, delete_operation, new_key_pair, operation_fields, update_operation,
-};
-
 fn main() {
     // Instantiate mock node
     let mut node = Node::new();
 
     // Instantiate one client called "panda"
-    let panda = Client::new("panda".to_string(), new_key_pair());
+    let panda = Client::new(
+        "panda".to_string(),
+        KeyPair::from_private_key_str(DEFAULT_PRIVATE_KEY).unwrap(),
+    );
 
     let default_schema_hash: OperationId = Hash::new_from_bytes(vec![3, 2, 1]).unwrap().into();
     let schema_id = SchemaId::new_application("chat", &default_schema_hash.into());
@@ -87,14 +91,14 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use p2panda_rs::hash::Hash;
+    use p2panda_rs::identity::KeyPair;
     use p2panda_rs::schema::SchemaId;
 
     use p2panda_rs::operation::{OperationId, OperationValue};
     use p2panda_rs::test_utils::constants::DEFAULT_PRIVATE_KEY;
-    use p2panda_rs::test_utils::mocks::Client;
-    use p2panda_rs::test_utils::mocks::{send_to_node, Node};
+    use p2panda_rs::test_utils::fixtures::{create_operation, operation_fields};
+    use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
     use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
-    use p2panda_rs::test_utils::utils::{create_operation, keypair_from_private, operation_fields};
 
     #[test]
     fn test_data() {
@@ -104,7 +108,7 @@ mod tests {
         // Instantiate one client called "panda"
         let panda = Client::new(
             "panda".to_string(),
-            keypair_from_private(DEFAULT_PRIVATE_KEY.into()),
+            KeyPair::from_private_key_str(DEFAULT_PRIVATE_KEY).unwrap(),
         );
 
         let default_schema_hash: OperationId = Hash::new_from_bytes(vec![3, 2, 1]).unwrap().into();

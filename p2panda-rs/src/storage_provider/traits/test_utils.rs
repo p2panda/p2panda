@@ -18,7 +18,7 @@ use crate::storage_provider::traits::{
     AsStorageEntry, AsStorageLog,
 };
 use crate::test_utils::fixtures::{
-    create_operation, document_id, entry, fields, key_pair, schema, update_operation,
+    create_operation, document_id, entry, key_pair, operation_fields, schema, update_operation,
 };
 use crate::Validate;
 
@@ -281,7 +281,7 @@ pub const SKIPLINK_ENTRIES: [u64; 5] = [4, 8, 12, 13, 17];
 pub fn test_db(
     key_pair: KeyPair,
     create_operation: Operation,
-    fields: OperationFields,
+    operation_fields: OperationFields,
     schema: SchemaId,
     document_id: DocumentId,
 ) -> SimplestStorageProvider {
@@ -339,8 +339,8 @@ pub fn test_db(
                 .get(seq_num.as_u64() as usize - 2)
                 .unwrap()
                 .hash()
-                .into(),
-            fields.clone(),
+                .into()],
+            operation_fields.clone(),
         );
 
         let update_entry = entry(

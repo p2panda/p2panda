@@ -4,7 +4,7 @@
 //! when composing test templates where default fixtures can't be injected in the usual way.
 use crate::entry::Entry;
 use crate::hash::Hash;
-use crate::operation::{Operation, OperationFields, OperationValue, OperationWithMeta};
+use crate::operation::{Operation, OperationFields, OperationWithMeta};
 use crate::schema::SchemaId;
 use crate::test_utils::constants::{DEFAULT_HASH, TEST_SCHEMA_ID};
 use crate::test_utils::fixtures;
@@ -24,14 +24,9 @@ pub fn schema() -> SchemaId {
     fixtures::schema(TEST_SCHEMA_ID)
 }
 
-/// The default operation value.
-pub fn operation_value() -> OperationValue {
-    OperationValue::Text("Hello!".to_string())
-}
-
 /// The default operation fields.
 pub fn fields() -> OperationFields {
-    fixtures::fields(vec![("message", operation_value())])
+    fixtures::operation_fields(vec![("message", fixtures::operation_value())])
 }
 
 /// The default CREATE operation.

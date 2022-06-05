@@ -8,7 +8,7 @@ use crate::identity::KeyPair;
 use crate::operation::{OperationEncoded, OperationValue};
 use crate::schema::SchemaId;
 use crate::test_utils::constants::TEST_SCHEMA_ID;
-use crate::test_utils::fixtures::{create_operation, entry, log_id, seq_num};
+use crate::test_utils::fixtures::{create_operation, entry, log_id, operation_fields, seq_num};
 use crate::test_utils::utils;
 
 /// Fixture struct which contains versioned p2panda data for testing.
@@ -23,7 +23,7 @@ pub struct Fixture {
 /// Fixture which injects p2panda testing data from p2panda version `0.3.0`.
 #[fixture]
 pub fn v0_3_0_fixture() -> Fixture {
-    let operation_fields = utils::operation_fields(vec![
+    let operation_fields = operation_fields(vec![
         ("name", OperationValue::Text("chess".to_string())),
         (
             "description",

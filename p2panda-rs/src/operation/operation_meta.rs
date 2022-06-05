@@ -88,7 +88,7 @@ impl OperationWithMeta {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(feature = "testing", test))]
 impl OperationWithMeta {
     pub fn new_test_operation(
         id: &OperationId,
@@ -160,14 +160,14 @@ mod tests {
         all_meta_operation_types, implements_as_operation,
     };
     use crate::test_utils::fixtures::{
-        create_operation, defaults, entry_signed_encoded, fields, key_pair, operation_encoded,
-        operation_id,
+        create_operation, defaults, entry_signed_encoded, key_pair, operation_encoded,
+        operation_fields, operation_id,
     };
     use crate::Validate;
 
     #[rstest]
     #[should_panic]
-    #[case(operation_encoded(create_operation(schema(), fields(vec![("message", OperationValue::Text("Not the right message".to_string()))]))))]
+    #[case(operation_encoded(create_operation(schema(), operation_fields(vec![("message", OperationValue::Text("Not the right message".to_string()))]))))]
     #[case(operation_encoded(defaults::create_operation()))]
     fn create_operation_with_meta(
         entry_signed_encoded: EntrySigned,

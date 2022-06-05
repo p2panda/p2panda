@@ -21,7 +21,7 @@ use crate::test_utils::fixtures::templates::{
 // Import dependencies for the templates module
 use crate::schema::SchemaId;
 use crate::test_utils::constants::TEST_SCHEMA_ID;
-use crate::test_utils::utils::operation_fields;
+use crate::test_utils::fixtures::operation_fields;
 
 // In this test `entry` and `key_pair` are injected directly into the test, they were imported from
 // the fixtures module above.
