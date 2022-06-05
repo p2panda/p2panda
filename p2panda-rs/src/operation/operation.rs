@@ -341,10 +341,10 @@ mod tests {
     use crate::document::{DocumentId, DocumentViewId};
     use crate::operation::{OperationEncoded, OperationValue, Relation};
     use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::templates::many_valid_operations;
     use crate::test_utils::fixtures::{
         operation_fields, random_document_id, random_operation_id, schema,
     };
+    use crate::test_utils::templates::many_valid_operations;
     use crate::Validate;
 
     use super::{AsOperation, Operation, OperationAction, OperationFields, OperationVersion};

@@ -13,9 +13,10 @@ use crate::entry::{sign_and_encode, Entry};
 use crate::identity::KeyPair;
 use crate::operation::{Operation, OperationEncoded, OperationValue};
 // Import the fixtures we will be using
-use crate::test_utils::fixtures::{create_operation, defaults, entry, key_pair, Fixture};
+use crate::test_utils::fixtures::{create_operation, entry, key_pair, Fixture};
 // Import the templates we want to run tests against
-use crate::test_utils::fixtures::templates::{
+use crate::test_utils::defaults;
+use crate::test_utils::templates::{
     many_valid_entries, non_default_operation_values_panic, version_fixtures,
 };
 // Import dependencies for the templates module

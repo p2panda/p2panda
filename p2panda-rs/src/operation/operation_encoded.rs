@@ -75,11 +75,11 @@ mod tests {
     use crate::document::DocumentId;
     use crate::operation::{AsOperation, Operation, OperationValue, Relation, RelationList};
     use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::templates::version_fixtures;
     use crate::test_utils::fixtures::{
         encoded_create_string, operation_encoded_invalid_relation_fields, operation_fields,
         random_document_id, random_operation_id, schema, update_operation, Fixture,
     };
+    use crate::test_utils::templates::version_fixtures;
     use crate::Validate;
 
     use super::OperationEncoded;

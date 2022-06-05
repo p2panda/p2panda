@@ -5,7 +5,10 @@
 //! It includes fixtures and templates which can be injected into tests, mock node and client
 //! implementations, methods for generating test data (used in `p2panda-js`).
 pub mod constants;
+pub mod defaults;
 pub mod fixtures;
 pub mod mocks;
+pub mod templates;
 pub mod test_data;
+mod tests;
 pub mod utils;

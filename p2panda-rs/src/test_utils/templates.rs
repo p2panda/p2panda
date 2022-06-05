@@ -42,12 +42,12 @@ fn non_default_operation_values_panic(
 #[template]
 #[rstest]
 #[allow(unused_qualifications)]
-#[case::first_entry(crate::test_utils::fixtures::defaults::first_entry())]
+#[case::first_entry(crate::test_utils::defaults::first_entry())]
 #[allow(unused_qualifications)]
-#[case::entry_with_backlink(crate::test_utils::fixtures::defaults::entry_with_backlink())]
+#[case::entry_with_backlink(crate::test_utils::defaults::entry_with_backlink())]
 #[allow(unused_qualifications)]
 #[case::entry_with_backlink_and_skiplink(
-    crate::test_utils::fixtures::defaults::entry_with_backlink_and_skiplink()
+    crate::test_utils::defaults::entry_with_backlink_and_skiplink()
 )]
 fn many_valid_entries(#[case] entry: Entry) {}
 
@@ -55,11 +55,11 @@ fn many_valid_entries(#[case] entry: Entry) {}
 #[template]
 #[rstest]
 #[allow(unused_qualifications)]
-#[case::create_operation(crate::test_utils::fixtures::defaults::create_operation())]
+#[case::create_operation(crate::test_utils::defaults::create_operation())]
 #[allow(unused_qualifications)]
-#[case::update_operation(crate::test_utils::fixtures::defaults::update_operation())]
+#[case::update_operation(crate::test_utils::defaults::update_operation())]
 #[allow(unused_qualifications)]
-#[case::delete_operation(crate::test_utils::fixtures::defaults::delete_operation())]
+#[case::delete_operation(crate::test_utils::defaults::delete_operation())]
 #[allow(unused_qualifications)]
 #[case::update_operation_many_previous(crate::test_utils::fixtures::any_operation(
     Some(crate::test_utils::fixtures::defaults::fields()),
@@ -86,28 +86,28 @@ fn many_valid_operations(#[case] operation: Operation) {}
 #[template]
 #[rstest]
 #[allow(unused_qualifications)]
-#[case::create_meta_operation(crate::test_utils::fixtures::defaults::create_meta_operation())]
+#[case::create_meta_operation(crate::test_utils::defaults::create_meta_operation())]
 #[allow(unused_qualifications)]
-#[case::update_meta_operation(crate::test_utils::fixtures::defaults::update_meta_operation())]
+#[case::update_meta_operation(crate::test_utils::defaults::update_meta_operation())]
 #[allow(unused_qualifications)]
-#[case::delete_meta_operation(crate::test_utils::fixtures::defaults::delete_meta_operation())]
+#[case::delete_meta_operation(crate::test_utils::defaults::delete_meta_operation())]
 fn all_meta_operation_types(#[case] operation_with_meta: impl OperationWithMeta) {}
 
 /// This template contains examples of all structs which implement the `AsOperation` trait.
 #[template]
 #[rstest]
 #[allow(unused_qualifications)]
-#[case::create_meta_operation(crate::test_utils::fixtures::defaults::create_meta_operation())]
+#[case::create_meta_operation(crate::test_utils::defaults::create_meta_operation())]
 #[allow(unused_qualifications)]
-#[case::update_meta_operation(crate::test_utils::fixtures::defaults::update_meta_operation())]
+#[case::update_meta_operation(crate::test_utils::defaults::update_meta_operation())]
 #[allow(unused_qualifications)]
-#[case::delete_meta_operation(crate::test_utils::fixtures::defaults::delete_meta_operation())]
+#[case::delete_meta_operation(crate::test_utils::defaults::delete_meta_operation())]
 #[allow(unused_qualifications)]
-#[case::create_operation(crate::test_utils::fixtures::defaults::create_operation())]
+#[case::create_operation(crate::test_utils::defaults::create_operation())]
 #[allow(unused_qualifications)]
-#[case::update_operation(crate::test_utils::fixtures::defaults::update_operation())]
+#[case::update_operation(crate::test_utils::defaults::update_operation())]
 #[allow(unused_qualifications)]
-#[case::delete_operation(crate::test_utils::fixtures::defaults::delete_operation())]
+#[case::delete_operation(crate::test_utils::defaults::delete_operation())]
 fn implements_as_operation(#[case] operation: impl AsOperation) {}
 
 /// Template which will contain many version fixtures in the future.
