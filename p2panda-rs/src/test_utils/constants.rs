@@ -2,6 +2,8 @@
 
 //! Constants used across the test_utils module for default values.
 
+use crate::operation::OperationValue;
+
 /// The default hash string, used when a hash is needed for testing, it's the default hash in
 /// fixtures when a custom value isn't specified.
 pub const DEFAULT_HASH: &str =
@@ -18,6 +20,32 @@ pub const DEFAULT_PRIVATE_KEY: &str =
 /// The default sequence number, used when an entry is created in a fixture and no custom values
 /// are provided.
 pub const DEFAULT_SEQ_NUM: u64 = 1;
+
+pub fn default_fields() -> Vec<(&'static str, OperationValue)> {
+    [
+        ("username", OperationValue::Text("bubu".to_owned())),
+        ("age", OperationValue::Integer(28)),
+        ("height", OperationValue::Float(3.5)),
+        ("is_admin", OperationValue::Boolean(false)),
+        (
+            "profile_picture",
+            OperationValue::Relation(crate::operation::Relation::new(
+                "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+                    .parse()
+                    .unwrap(),
+            )),
+        ),
+        (
+            "my_friends",
+            OperationValue::RelationList(crate::operation::RelationList::new(vec![
+                "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+                    .parse()
+                    .unwrap(),
+            ])),
+        ),
+    ]
+    .to_vec()
+}
 
 #[cfg(test)]
 mod tests {

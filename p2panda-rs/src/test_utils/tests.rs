@@ -15,10 +15,7 @@ use crate::operation::{Operation, OperationEncoded, OperationValue};
 // Import the fixtures we will be using
 use crate::test_utils::fixtures::{create_operation, entry, key_pair, Fixture};
 // Import the templates we want to run tests against
-use crate::test_utils::defaults;
-use crate::test_utils::templates::{
-    many_valid_entries, non_default_operation_values_panic, version_fixtures,
-};
+use crate::test_utils::templates::{defaults, many_valid_entries, version_fixtures};
 // Import dependencies for the templates module
 use crate::schema::SchemaId;
 use crate::test_utils::constants::TEST_SCHEMA_ID;
@@ -41,23 +38,6 @@ fn encode_entry(entry: Entry, key_pair: KeyPair) {
 #[should_panic] // panic macro flag
 #[case::non_default_operation(create_operation(SchemaId::new(TEST_SCHEMA_ID).unwrap(), operation_fields(vec![("message", OperationValue::Text("Boo!".to_string()))])))]
 fn operation_validation(entry: Entry, #[case] operation: Operation, key_pair: KeyPair) {
-    let encoded_operation = OperationEncoded::try_from(&operation).unwrap();
-    let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
-    assert!(signed_encoded_entry
-        .validate_operation(&encoded_operation)
-        .is_ok());
-}
-
-// This test is similar to the one seen above, but now uses a template to run the test against many
-// non default operation values. These are defined in `fixtures/templates.rs`. We also set a custom
-// case which should pass.
-#[apply(non_default_operation_values_panic)]
-#[case(defaults::create_operation())]
-fn operation_validation_with_templates(
-    entry: Entry,
-    #[case] operation: Operation,
-    key_pair: KeyPair,
-) {
     let encoded_operation = OperationEncoded::try_from(&operation).unwrap();
     let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
     assert!(signed_encoded_entry

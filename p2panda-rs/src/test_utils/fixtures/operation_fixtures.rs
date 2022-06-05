@@ -10,14 +10,14 @@ use crate::operation::{
     Operation, OperationEncoded, OperationFields, OperationId, OperationValue, OperationWithMeta,
 };
 use crate::schema::SchemaId;
-use crate::test_utils::constants::{DEFAULT_HASH, TEST_SCHEMA_ID};
+use crate::test_utils::constants;
 use crate::test_utils::fixtures::{entry_signed_encoded, public_key, random_hash, schema};
 
 /// Fixture which injects the default testing `OperationId` into a test method.
 ///
 /// Default value can be overridden at testing time by passing in a custom hash string.
 #[fixture]
-pub fn operation_id(#[default(DEFAULT_HASH)] hash_str: &str) -> OperationId {
+pub fn operation_id(#[default(constants::DEFAULT_HASH)] hash_str: &str) -> OperationId {
     hash_str.parse().unwrap()
 }
 
@@ -38,7 +38,7 @@ pub fn operation_value() -> OperationValue {
 /// tuples.
 #[fixture]
 pub fn operation_fields(
-    #[default(vec![("message", operation_value())])] fields_vec: Vec<(&str, OperationValue)>,
+    #[default(constants::default_fields())] fields_vec: Vec<(&str, OperationValue)>,
 ) -> OperationFields {
     let mut operation_fields = OperationFields::new();
     for (key, value) in fields_vec.iter() {
@@ -53,7 +53,7 @@ pub fn operation_fields(
 /// tuples.
 #[fixture]
 pub fn some_fields(
-    #[default(vec![("message", operation_value())])] fields_vec: Vec<(&str, OperationValue)>,
+    #[default(constants::default_fields())] fields_vec: Vec<(&str, OperationValue)>,
 ) -> Option<OperationFields> {
     Some(operation_fields(fields_vec))
 }
@@ -79,7 +79,7 @@ pub fn any_operation(
     fields: Option<OperationFields>,
     previous_operations: Option<Vec<OperationId>>,
 ) -> Operation {
-    let schema_id = SchemaId::new(TEST_SCHEMA_ID).unwrap();
+    let schema_id = SchemaId::new(constants::TEST_SCHEMA_ID).unwrap();
     match fields {
         // It's a CREATE operation
         Some(fields) if previous_operations.is_none() => {
@@ -113,7 +113,7 @@ pub fn create_operation(
 #[fixture]
 pub fn update_operation(
     schema: SchemaId,
-    #[default(vec![operation_id(DEFAULT_HASH)])] previous_operations: Vec<OperationId>,
+    #[default(vec![operation_id(constants::DEFAULT_HASH)])] previous_operations: Vec<OperationId>,
     #[default(operation_fields(vec![("message", OperationValue::Text("Updated, hello!".to_string()))]))]
     fields: OperationFields,
 ) -> Operation {
@@ -127,7 +127,7 @@ pub fn update_operation(
 #[fixture]
 pub fn delete_operation(
     schema: SchemaId,
-    #[default(vec![operation_id(DEFAULT_HASH)])] previous_operations: Vec<OperationId>,
+    #[default(vec![operation_id(constants::DEFAULT_HASH)])] previous_operations: Vec<OperationId>,
 ) -> Operation {
     Operation::new_delete(schema, previous_operations).unwrap()
 }

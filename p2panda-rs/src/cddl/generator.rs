@@ -122,7 +122,7 @@ mod tests {
             generator::{generate_create_fields, generate_fields, generate_update_fields},
         },
         schema::FieldType,
-        test_utils::fixtures::defaults::schema,
+        test_utils::templates::defaults::schema,
     };
 
     fn person() -> BTreeMap<String, FieldType> {

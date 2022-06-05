@@ -155,12 +155,13 @@ mod tests {
     use crate::operation::{
         AsOperation, Operation, OperationEncoded, OperationId, OperationValue, OperationWithMeta,
     };
-    use crate::test_utils::defaults;
     use crate::test_utils::fixtures::{
         create_operation, entry_signed_encoded, key_pair, operation_encoded, operation_fields,
         operation_id,
     };
-    use crate::test_utils::templates::{all_meta_operation_types, implements_as_operation};
+    use crate::test_utils::templates::{
+        all_meta_operation_types, defaults, implements_as_operation,
+    };
     use crate::Validate;
 
     #[rstest]
