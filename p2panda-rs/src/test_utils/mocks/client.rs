@@ -28,11 +28,10 @@
 //!
 //! // Create a new operation to publish
 //! let operation = create_operation(
-//!     schema(TEST_SCHEMA_ID),
-//!     operation_fields(vec![(
+//!     &[(
 //!         "message",
 //!         OperationValue::Text("Ohh, my first message!".to_string()),
-//!     )]),
+//!     )],
 //! );
 //!
 //! // Retrieve the next entry args from the node

@@ -116,7 +116,7 @@ mod tests {
             ]
         );
         assert!(!document_view.is_empty());
-        assert_eq!(document_view.len(), 5);
+        assert_eq!(document_view.len(), 6);
         assert_eq!(
             document_view.get("username").unwrap(),
             &DocumentViewValue::new(

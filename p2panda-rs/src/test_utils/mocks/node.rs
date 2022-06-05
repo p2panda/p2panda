@@ -27,11 +27,10 @@
 //!     &mut node,
 //!     &panda,
 //!     &create_operation(
-//!         schema(TEST_SCHEMA_ID),
-//!         operation_fields(vec![(
+//!         &[(
 //!             "message",
 //!             OperationValue::Text("Ohh, my first message!".to_string()),
-//!         )]),
+//!         )],
 //!     )
 //! )
 //! .unwrap();
@@ -41,12 +40,11 @@
 //!     &mut node,
 //!     &panda,
 //!     &update_operation(
-//!         schema(TEST_SCHEMA_ID),
-//!         document1_hash_id.clone().into(),
-//!         operation_fields(vec![(
+//!         &[(
 //!             "message",
 //!             OperationValue::Text("Which I now update.".to_string()),
-//!         )]),
+//!         )],
+//!         &document1_hash_id.clone().into(),
 //!     )
 //! )
 //! .unwrap();
@@ -56,8 +54,7 @@
 //!     &mut node,
 //!     &panda,
 //!     &delete_operation(
-//!         schema(TEST_SCHEMA_ID),
-//!         entry2_hash.into()
+//!         &entry2_hash.into()
 //!     )
 //! )
 //! .unwrap();
@@ -67,11 +64,10 @@
 //!     &mut node,
 //!     &panda,
 //!     &create_operation(
-//!         schema(TEST_SCHEMA_ID),
-//!         operation_fields(vec![(
+//!         &[(
 //!             "message",
 //!             OperationValue::Text("Let's try that again.".to_string()),
-//!         )]),
+//!         )],
 //!     )
 //! )
 //! .unwrap();
