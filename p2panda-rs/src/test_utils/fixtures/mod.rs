@@ -95,19 +95,14 @@
 //! # Ok(())
 //! # }
 //! ```
-#[cfg(any(feature = "testing", test))]
 pub mod defaults;
-#[cfg(any(feature = "testing", test))]
 #[allow(clippy::module_inception)]
 mod fixtures;
-#[cfg(any(feature = "testing", test))]
+mod new_fixtures;
 mod params;
-#[cfg(any(feature = "testing", test))]
 pub mod templates;
-#[cfg(test)]
 mod tests;
 
-#[cfg(any(feature = "testing", test))]
 pub use fixtures::*;
-#[cfg(any(feature = "testing", test))]
+pub use new_fixtures::*;
 pub use params::*;

@@ -21,6 +21,8 @@ use crate::test_utils::constants::{DEFAULT_HASH, DEFAULT_PRIVATE_KEY, TEST_SCHEM
 use crate::test_utils::fixtures::defaults;
 use crate::test_utils::utils;
 
+use crate::test_utils::fixtures::*;
+
 /// Fixture which injects the default private key string into a test method.
 #[fixture]
 pub fn private_key() -> String {
@@ -146,20 +148,6 @@ pub fn some_fields(
     Some(utils::operation_fields(fields_vec))
 }
 
-/// Fixture which injects the default Entry into a test method.
-///
-/// Default value can be overridden at testing time by passing in custom operation, seq number,
-/// backlink and skiplink.
-#[fixture]
-pub fn entry(
-    operation: Operation,
-    seq_num: SeqNum,
-    #[default(None)] backlink: Option<Hash>,
-    #[default(None)] skiplink: Option<Hash>,
-) -> Entry {
-    utils::entry(operation, skiplink, backlink, seq_num)
-}
-
 /// Fixture which injects the default Operation into a test method.
 ///
 /// Default value can be overridden at testing time by passing in custom operation fields and
@@ -179,11 +167,6 @@ pub fn operation(
 pub fn some_hash(#[default(DEFAULT_HASH)] str: &str) -> Option<Hash> {
     let hash = Hash::new(str);
     Some(hash.unwrap())
-}
-
-#[fixture]
-pub fn entry_signed_encoded(entry: Entry, key_pair: KeyPair) -> EntrySigned {
-    sign_and_encode(&entry, &key_pair).unwrap()
 }
 
 #[fixture]

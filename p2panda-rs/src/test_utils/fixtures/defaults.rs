@@ -61,7 +61,13 @@ pub fn create_meta_operation() -> OperationWithMeta {
     let operation = create_operation();
     fixtures::meta_operation(
         fixtures::entry_signed_encoded(
-            fixtures::entry(operation.clone(), fixtures::seq_num(1), None, None),
+            fixtures::entry(
+                operation.clone(),
+                fixtures::seq_num(1),
+                None,
+                None,
+                fixtures::log_id(1),
+            ),
             fixtures::key_pair(fixtures::private_key()),
         ),
         fixtures::operation_encoded(operation),
@@ -73,7 +79,13 @@ pub fn update_meta_operation() -> OperationWithMeta {
     let operation = update_operation();
     fixtures::meta_operation(
         fixtures::entry_signed_encoded(
-            fixtures::entry(operation.clone(), fixtures::seq_num(2), some_hash(), None),
+            fixtures::entry(
+                operation.clone(),
+                fixtures::seq_num(2),
+                some_hash(),
+                None,
+                fixtures::log_id(1),
+            ),
             fixtures::key_pair(fixtures::private_key()),
         ),
         fixtures::operation_encoded(operation),
@@ -85,7 +97,13 @@ pub fn delete_meta_operation() -> OperationWithMeta {
     let operation = delete_operation();
     fixtures::meta_operation(
         fixtures::entry_signed_encoded(
-            fixtures::entry(operation.clone(), fixtures::seq_num(2), some_hash(), None),
+            fixtures::entry(
+                operation.clone(),
+                fixtures::seq_num(2),
+                some_hash(),
+                None,
+                fixtures::log_id(1),
+            ),
             fixtures::key_pair(fixtures::private_key()),
         ),
         fixtures::operation_encoded(operation),
@@ -94,12 +112,24 @@ pub fn delete_meta_operation() -> OperationWithMeta {
 
 /// The default first entry.
 pub fn first_entry() -> Entry {
-    fixtures::entry(create_operation(), fixtures::seq_num(1), None, None)
+    fixtures::entry(
+        create_operation(),
+        fixtures::seq_num(1),
+        None,
+        None,
+        fixtures::log_id(1),
+    )
 }
 
 /// The default entry with only a backlink.
 pub fn entry_with_backlink() -> Entry {
-    fixtures::entry(create_operation(), fixtures::seq_num(2), some_hash(), None)
+    fixtures::entry(
+        create_operation(),
+        fixtures::seq_num(2),
+        some_hash(),
+        None,
+        fixtures::log_id(1),
+    )
 }
 
 /// The default entry with a backlink and skiplink.
@@ -109,6 +139,7 @@ pub fn entry_with_backlink_and_skiplink() -> Entry {
         fixtures::seq_num(13),
         some_hash(),
         some_hash(),
+        fixtures::log_id(1),
     )
 }
 
@@ -119,5 +150,6 @@ pub fn entry_with_only_a_skiplink() -> Entry {
         fixtures::seq_num(13),
         some_hash(),
         some_hash(),
+        fixtures::log_id(1),
     )
 }

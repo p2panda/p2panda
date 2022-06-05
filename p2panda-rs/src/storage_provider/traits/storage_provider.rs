@@ -599,6 +599,7 @@ pub mod tests {
             next_entry.seq_num(),
             next_entry.backlink_hash(),
             next_entry.skiplink_hash(),
+            next_entry.log_id(),
         );
 
         let encoded_entry = sign_and_encode(&update_entry, &key_pair).unwrap();

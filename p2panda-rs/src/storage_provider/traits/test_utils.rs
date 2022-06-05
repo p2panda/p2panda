@@ -303,6 +303,7 @@ pub fn test_db(
         SeqNum::new(1).unwrap(),
         None,
         None,
+        LogId::new(1),
     );
 
     let encoded_entry = sign_and_encode(&create_entry, &key_pair).unwrap();
@@ -342,7 +343,13 @@ pub fn test_db(
             fields.clone(),
         );
 
-        let update_entry = entry(update_operation.clone(), seq_num, Some(backlink), skiplink);
+        let update_entry = entry(
+            update_operation.clone(),
+            seq_num,
+            Some(backlink),
+            skiplink,
+            LogId::new(1),
+        );
 
         let encoded_entry = sign_and_encode(&update_entry, &key_pair).unwrap();
         let encoded_operation = OperationEncoded::try_from(&update_operation).unwrap();
