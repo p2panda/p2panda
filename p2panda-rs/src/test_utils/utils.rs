@@ -82,11 +82,6 @@ pub fn keypair_from_private(private_key: String) -> KeyPair {
     KeyPair::from_private_key_str(&private_key).unwrap()
 }
 
-/// Generate a sequence number based on u64 value.
-pub fn seq_num(n: u64) -> SeqNum {
-    SeqNum::new(n).unwrap()
-}
-
 /// Generate a hash based on a hash string.
 pub fn hash(hash_str: &str) -> Hash {
     Hash::new(hash_str).unwrap()
@@ -95,23 +90,6 @@ pub fn hash(hash_str: &str) -> Hash {
 /// Generate an application schema based on a schema id string.
 pub fn schema(schema_id: &str) -> SchemaId {
     SchemaId::new(schema_id).unwrap()
-}
-
-/// Generate an entry based on passed values.
-pub fn entry(
-    operation: Operation,
-    skiplink: Option<Hash>,
-    backlink: Option<Hash>,
-    seq_num: SeqNum,
-) -> Entry {
-    Entry::new(
-        &LogId::default(),
-        Some(&operation),
-        skiplink.as_ref(),
-        backlink.as_ref(),
-        &seq_num,
-    )
-    .unwrap()
 }
 
 /// Generate a CREATE operation based on passed schema id and operation fields.

@@ -214,7 +214,8 @@ mod tests {
     use crate::hash::Hash;
     use crate::operation::{Operation, OperationFields, OperationValue};
     use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::schema;
+    use crate::test_utils::fixtures::{entry, schema};
+    use crate::Validate;
 
     use super::Entry;
 
@@ -277,5 +278,10 @@ mod tests {
             &SeqNum::new(2).unwrap()
         )
         .is_err());
+    }
+
+    #[rstest]
+    pub fn validate_many(entry: Entry) {
+        assert!(entry.validate().is_ok())
     }
 }

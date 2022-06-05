@@ -10,7 +10,7 @@ use rand::Rng;
 use rstest::fixture;
 
 use crate::document::{DocumentId, DocumentViewId};
-use crate::entry::{sign_and_encode, Entry, EntrySigned, SeqNum};
+use crate::entry::EntrySigned;
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::{
@@ -47,13 +47,6 @@ pub fn key_pair(#[default(DEFAULT_PRIVATE_KEY.into())] private_key: String) -> K
 #[fixture]
 pub fn random_key_pair() -> KeyPair {
     utils::new_key_pair()
-}
-
-/// Fixture which injects the default SeqNum into a test method. Default value can be overridden at
-/// testing time by passing in a custom seq num as u64.
-#[fixture]
-pub fn seq_num(#[default(1)] n: u64) -> SeqNum {
-    utils::seq_num(n)
 }
 
 /// Fixture which injects the default schema id into a test method. Default value can be
