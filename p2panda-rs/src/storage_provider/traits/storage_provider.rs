@@ -222,7 +222,9 @@ pub mod tests {
     use crate::entry::{sign_and_encode, Entry, LogId};
     use crate::hash::Hash;
     use crate::identity::KeyPair;
-    use crate::operation::{AsOperation, OperationEncoded, OperationFields, OperationValue};
+    use crate::operation::{
+        AsOperation, OperationEncoded, OperationFields, OperationId, OperationValue,
+    };
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::test_utils::{
         test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
@@ -593,7 +595,7 @@ pub mod tests {
         // Recreate this entry and replace previous_operations to contain invalid OperationId
         let update_operation_with_invalid_previous_operations = operation(
             Some(operation_fields.clone()),
-            Some(vec![invalid_prev_op]),
+            Some(invalid_prev_op.into()),
             schema.clone(),
         );
 
@@ -650,7 +652,7 @@ pub mod tests {
                 "poopy",
                 OperationValue::Text("This is the WRONG operation :-(".to_string()),
             )])),
-            Some(vec![next_entry.operation_encoded().unwrap().hash().into()]),
+            Some(next_entry.operation_encoded().unwrap().hash().into()),
             schema.clone(),
         );
 

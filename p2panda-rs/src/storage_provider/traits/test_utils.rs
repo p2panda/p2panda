@@ -335,11 +335,13 @@ pub fn test_db(
 
         let update_operation = operation(
             Some(operation_fields.clone()),
-            Some(vec![db_entries
-                .get(seq_num.as_u64() as usize - 2)
-                .unwrap()
-                .hash()
-                .into()]),
+            Some(
+                db_entries
+                    .get(seq_num.as_u64() as usize - 2)
+                    .unwrap()
+                    .hash()
+                    .into(),
+            ),
             schema.clone(),
         );
 

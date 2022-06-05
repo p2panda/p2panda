@@ -4,6 +4,7 @@ use std::convert::TryFrom;
 
 use rstest::fixture;
 
+use crate::document::DocumentViewId;
 use crate::entry::EntrySigned;
 use crate::identity::Author;
 use crate::operation::{
@@ -33,12 +34,12 @@ pub fn operation_value() -> OperationValue {
 }
 
 #[fixture]
-pub fn random_previous_operations(#[default(1)] num: u32) -> Vec<OperationId> {
-    let mut previous_operations = Vec::new();
+pub fn random_previous_operations(#[default(1)] num: u32) -> DocumentViewId {
+    let mut previous_operations: Vec<OperationId> = Vec::new();
     for _ in 0..num {
         previous_operations.push(random_hash().into())
     }
-    previous_operations
+    DocumentViewId::new(&previous_operations).unwrap()
 }
 
 /// Fixture which injects the default testing OperationFields value into a test method.
@@ -78,7 +79,7 @@ pub fn some_fields(
 #[fixture]
 pub fn operation(
     #[from(some_fields)] fields: Option<OperationFields>,
-    #[default(None)] previous_operations: Option<Vec<OperationId>>,
+    #[default(None)] previous_operations: Option<DocumentViewId>,
     schema: SchemaId,
 ) -> Operation {
     match fields {
@@ -117,7 +118,7 @@ pub fn create_operation(
 #[fixture]
 pub fn update_operation(
     schema: SchemaId,
-    #[default(vec![operation_id(constants::DEFAULT_HASH)])] previous_operations: Vec<OperationId>,
+    #[default(operation_id(constants::DEFAULT_HASH).into())] previous_operations: DocumentViewId,
     #[default(operation_fields(vec![("message", OperationValue::Text("Updated, hello!".to_string()))]))]
     fields: OperationFields,
 ) -> Operation {
@@ -131,7 +132,7 @@ pub fn update_operation(
 #[fixture]
 pub fn delete_operation(
     schema: SchemaId,
-    #[default(vec![operation_id(constants::DEFAULT_HASH)])] previous_operations: Vec<OperationId>,
+    #[default(operation_id(constants::DEFAULT_HASH).into())] previous_operations: DocumentViewId,
 ) -> Operation {
     Operation::new_delete(schema, previous_operations).unwrap()
 }
@@ -140,7 +141,7 @@ pub fn delete_operation(
 #[fixture]
 pub fn operation_with_meta(
     #[from(some_fields)] fields: Option<OperationFields>,
-    #[default(None)] previous_operations: Option<Vec<OperationId>>,
+    #[default(None)] previous_operations: Option<DocumentViewId>,
     public_key: Author,
     schema: SchemaId,
     #[from(random_operation_id)] operation_id: OperationId,
@@ -172,7 +173,7 @@ pub fn meta_operation(
 #[fixture]
 pub fn operation_encoded(
     #[from(some_fields)] fields: Option<OperationFields>,
-    #[default(None)] previous_operations: Option<Vec<OperationId>>,
+    #[default(None)] previous_operations: Option<DocumentViewId>,
     schema: SchemaId,
 ) -> OperationEncoded {
     OperationEncoded::try_from(&operation(fields, previous_operations, schema)).unwrap()

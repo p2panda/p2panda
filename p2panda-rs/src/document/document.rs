@@ -311,8 +311,9 @@ mod tests {
     use crate::operation::{OperationEncoded, OperationId, OperationValue, OperationWithMeta};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, operation_fields, operation_with_meta, random_key_pair,
-        random_operation_id, random_previous_operations, schema, update_operation,
+        create_operation, delete_operation, operation_fields, operation_with_meta,
+        random_document_view_id, random_key_pair, random_previous_operations, schema,
+        update_operation,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
 
@@ -401,7 +402,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone().into()],
+                panda_entry_1_hash.clone().into(),
                 operation_fields(vec![(
                     "name",
                     OperationValue::Text("Panda Cafe!".to_string()),
@@ -420,7 +421,7 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone().into()],
+                panda_entry_1_hash.clone().into(),
                 operation_fields(vec![(
                     "name",
                     OperationValue::Text("Penguin Cafe".to_string()),
@@ -442,7 +443,8 @@ mod tests {
                 DocumentViewId::new(&[
                     penguin_entry_1_hash.clone().into(),
                     panda_entry_2_hash.clone().into(),
-                ],
+                ])
+                .unwrap(),
                 operation_fields(vec![(
                     "name",
                     OperationValue::Text("Polar Bear Cafe".to_string()),
@@ -460,7 +462,7 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![penguin_entry_2_hash.clone().into()],
+                penguin_entry_2_hash.clone().into(),
                 operation_fields(vec![(
                     "name",
                     OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
@@ -629,7 +631,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema,
-                vec![panda_entry_1_hash.into()],
+                panda_entry_1_hash.into(),
                 operation_fields(vec![(
                     "name",
                     OperationValue::Text("Panda Cafe!".to_string()),
@@ -683,7 +685,7 @@ mod tests {
         // Construct an update operation with non-existant previous operations
         let operation_with_wrong_prev_ops = update_operation(
             schema,
-            vec![incorrect_previous_operation],
+            incorrect_previous_operation,
             operation_fields(vec![(
                 "name",
                 OperationValue::Text("Panda Cafe!".to_string()),
@@ -748,7 +750,7 @@ mod tests {
             &panda,
             &update_operation(
                 SchemaId::new("schema_definition_v1").unwrap(),
-                vec![panda_entry_1_hash.into()],
+                panda_entry_1_hash.into(),
                 operation_fields(vec![(
                     "name",
                     OperationValue::Text("Panda Cafe!".to_string()),

@@ -342,7 +342,7 @@ mod tests {
     use crate::operation::{OperationEncoded, OperationValue, Relation};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        operation_fields, random_document_id, random_operation_id, schema,
+        operation_fields, random_document_id, random_document_view_id, schema,
     };
     use crate::test_utils::templates::many_valid_operations;
     use crate::Validate;
@@ -378,7 +378,7 @@ mod tests {
             version: OperationVersion::Default,
             schema: schema.clone(),
             // CREATE operations must not contain previous_operations
-            previous_operations: Some(vec![prev_op_id.clone()]), // Error
+            previous_operations: Some(prev_op_id.clone()), // Error
             fields: Some(operation_fields.clone()),
         };
 

@@ -22,11 +22,17 @@ pub fn document_view_id(#[default(vec![DEFAULT_HASH])] hash_str_vec: Vec<&str>) 
         .into_iter()
         .map(|hash| hash.parse::<OperationId>().unwrap())
         .collect();
-    DocumentViewId::new(&hashes)
+    DocumentViewId::new(&hashes).unwrap()
 }
 
 /// Fixture which injects a random document id.
 #[fixture]
 pub fn random_document_id() -> DocumentId {
-    DocumentId::new(random_hash().into())
+    random_hash().into()
+}
+
+/// Fixture which injects a random document id.
+#[fixture]
+pub fn random_document_view_id() -> DocumentViewId {
+    random_hash().into()
 }

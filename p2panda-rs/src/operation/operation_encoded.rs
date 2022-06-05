@@ -77,7 +77,7 @@ mod tests {
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         encoded_create_string, operation, operation_encoded_invalid_relation_fields,
-        operation_fields, random_document_id, random_operation_id, schema, Fixture,
+        operation_fields, random_document_id, random_document_view_id, schema, Fixture,
     };
     use crate::test_utils::templates::version_fixtures;
     use crate::Validate;
@@ -135,7 +135,7 @@ mod tests {
                   friend_document_2.clone(),
               ]))),
             ])),
-            Some(vec![random_operation_id()]),
+            Some(random_document_view_id()),
         )]
         update_operation: Operation,
     ) {

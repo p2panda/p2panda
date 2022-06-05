@@ -20,7 +20,7 @@ pub fn create_operation() -> Operation {
 pub fn update_operation() -> Operation {
     fixtures::operation(
         Some(fields()),
-        Some(vec![DEFAULT_HASH.parse().unwrap()]),
+        Some(DEFAULT_HASH.parse().unwrap()),
         TEST_SCHEMA_ID.parse().unwrap(),
     )
 }
@@ -29,7 +29,7 @@ pub fn update_operation() -> Operation {
 pub fn delete_operation() -> Operation {
     fixtures::operation(
         None,
-        Some(vec![DEFAULT_HASH.parse().unwrap()]),
+        Some(DEFAULT_HASH.parse().unwrap()),
         TEST_SCHEMA_ID.parse().unwrap(),
     )
 }
@@ -68,7 +68,7 @@ pub fn update_meta_operation() -> OperationWithMeta {
         ),
         fixtures::operation_encoded(
             Some(fields()),
-            Some(vec![DEFAULT_HASH.parse().unwrap()]),
+            Some(DEFAULT_HASH.parse().unwrap()),
             TEST_SCHEMA_ID.parse().unwrap(),
         ),
     )
@@ -90,7 +90,7 @@ pub fn delete_meta_operation() -> OperationWithMeta {
         ),
         fixtures::operation_encoded(
             None,
-            Some(vec![DEFAULT_HASH.parse().unwrap()]),
+            Some(DEFAULT_HASH.parse().unwrap()),
             TEST_SCHEMA_ID.parse().unwrap(),
         ),
     )
