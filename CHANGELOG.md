@@ -58,6 +58,7 @@ Highlights are marked with a pancake 🥞
 - Additional constructor method for `OperationWithMeta` [322](https://github.com/p2panda/p2panda/pull/322) `rs`
 - Minor method renaming in `EntryStore` [323](https://github.com/p2panda/p2panda/pull/323) `rs`
 - Require storage provider errors to be thread-safe [#340](https://github.com/p2panda/p2panda/pull/340)
+- Make previous_operations a `DocumentViewId` [#342](https://github.com/p2panda/p2panda/pull/342) `rs`
 
 ## Fixed
 

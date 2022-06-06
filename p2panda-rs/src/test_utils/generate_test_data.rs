@@ -43,7 +43,7 @@ fn main() {
         &panda,
         &update_operation(
             schema_id.clone(),
-            vec![entry1_hash.into()],
+            entry1_hash.into(),
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("Which I now update.".to_string()),
@@ -58,7 +58,7 @@ fn main() {
         &panda,
         &update_operation(
             schema_id.clone(),
-            vec![entry2_hash.into()],
+            entry2_hash.into(),
             operation_fields(vec![(
                 "message",
                 OperationValue::Text("And then update again.".to_string()),
@@ -71,7 +71,7 @@ fn main() {
     send_to_node(
         &mut node,
         &panda,
-        &delete_operation(schema_id, vec![entry3_hash.into()]),
+        &delete_operation(schema_id, entry3_hash.into()),
     )
     .unwrap();
 

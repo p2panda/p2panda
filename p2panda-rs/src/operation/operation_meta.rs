@@ -2,6 +2,7 @@
 
 use std::hash::Hash as StdHash;
 
+use crate::document::DocumentViewId;
 use crate::entry::{decode_entry, EntrySigned};
 use crate::identity::Author;
 use crate::operation::{
@@ -123,8 +124,8 @@ impl AsOperation for OperationWithMeta {
         self.operation.fields()
     }
 
-    /// Returns vector of previous operations.
-    fn previous_operations(&self) -> Option<Vec<OperationId>> {
+    /// Returns this operations previous_operations as a `DocumentViewId`.
+    fn previous_operations(&self) -> Option<DocumentViewId> {
         self.operation.previous_operations()
     }
 }

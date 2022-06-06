@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::document::DocumentId;
+use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::{EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
@@ -102,7 +102,7 @@ pub trait AsStorageOperation: Sized + Clone + Send + Sync {
     fn id(&self) -> OperationId;
 
     /// The previous operations for this operation.
-    fn previous_operations(&self) -> Vec<OperationId>;
+    fn previous_operations(&self) -> Option<DocumentViewId>;
 
     /// The id of the schema this operation follows.
     fn schema_id(&self) -> SchemaId;
