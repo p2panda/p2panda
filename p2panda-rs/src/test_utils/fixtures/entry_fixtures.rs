@@ -10,22 +10,6 @@ use crate::operation::Operation;
 use crate::test_utils::constants::default_fields;
 use crate::test_utils::fixtures::{key_pair, operation, operation_fields};
 
-/// Fixture which injects the default testing SeqNum(1) into a test method.
-///
-/// Default value can be overridden at testing time by passing in a custom seq num as u64.
-#[fixture]
-pub fn seq_num(#[default(1)] n: u64) -> SeqNum {
-    SeqNum::new(n).unwrap()
-}
-
-/// Fixture which injects the default testing LogId(1) into a test method.
-///
-/// Default value can be overridden at testing time by passing in a custom log id as u64.
-#[fixture]
-pub fn log_id(#[default(1)] id: u64) -> LogId {
-    LogId::new(id)
-}
-
 /// Fixture which injects the default testing Entry into a test method.
 ///
 /// Default value can be overridden at testing time by passing in custom operation, seq number,
