@@ -160,7 +160,7 @@ mod tests {
         entry_signed_encoded, key_pair, operation, operation_encoded, operation_fields,
         operation_id,
     };
-    use crate::test_utils::templates::{all_meta_operation_types, implements_as_operation};
+    use crate::test_utils::templates::{implements_as_operation, various_operation_with_meta};
     use crate::Validate;
 
     #[rstest]
@@ -198,7 +198,7 @@ mod tests {
         assert_eq!(operation_with_meta.operation_id(), &operation_id);
     }
 
-    #[apply(all_meta_operation_types)]
+    #[apply(various_operation_with_meta)]
     fn only_some_operations_should_contain_fields(#[case] operation_with_meta: OperationWithMeta) {
         if operation_with_meta.is_create() {
             assert!(operation_with_meta.operation().fields().is_some());
@@ -213,13 +213,13 @@ mod tests {
         }
     }
 
-    #[apply(all_meta_operation_types)]
+    #[apply(various_operation_with_meta)]
     fn operations_should_validate(#[case] operation_with_meta: OperationWithMeta) {
         assert!(operation_with_meta.operation().validate().is_ok());
         assert!(operation_with_meta.validate().is_ok())
     }
 
-    #[apply(all_meta_operation_types)]
+    #[apply(various_operation_with_meta)]
     fn trait_methods_should_match(#[case] operation_with_meta: OperationWithMeta) {
         let operation = operation_with_meta.operation();
         assert_eq!(operation_with_meta.fields(), operation.fields());
@@ -245,7 +245,7 @@ mod tests {
         operation.has_previous_operations();
     }
 
-    #[apply(all_meta_operation_types)]
+    #[apply(various_operation_with_meta)]
     fn it_hashes(#[case] operation_with_meta: OperationWithMeta) {
         let mut hash_map = HashMap::new();
         let key_value = "Value identified by a hash".to_string();

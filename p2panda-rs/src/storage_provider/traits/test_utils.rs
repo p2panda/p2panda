@@ -298,13 +298,7 @@ pub fn test_db(
     )];
 
     // Create and push a first entry containing a CREATE operation to the entries list
-    let create_entry = entry(
-        create_operation.clone(),
-        SeqNum::new(1).unwrap(),
-        None,
-        None,
-        LogId::new(1),
-    );
+    let create_entry = entry(1, 1, None, None, Some(create_operation.clone()));
 
     let encoded_entry = sign_and_encode(&create_entry, &key_pair).unwrap();
     let encoded_operation = OperationEncoded::try_from(&create_operation).unwrap();
@@ -346,11 +340,11 @@ pub fn test_db(
         );
 
         let update_entry = entry(
-            update_operation.clone(),
-            seq_num,
+            seq_num.as_u64(),
+            1,
             Some(backlink),
             skiplink,
-            LogId::new(1),
+            Some(update_operation.clone()),
         );
 
         let encoded_entry = sign_and_encode(&update_entry, &key_pair).unwrap();

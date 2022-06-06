@@ -12,7 +12,7 @@ use crate::operation::{
 };
 use crate::schema::SchemaId;
 use crate::test_utils::constants::{self, TEST_SCHEMA_ID};
-use crate::test_utils::fixtures::{entry_signed_encoded, public_key, random_hash, schema};
+use crate::test_utils::fixtures::{entry_signed_encoded, public_key, random_hash};
 
 /// Fixture which injects the default testing `OperationId` into a test method.
 ///
@@ -82,7 +82,7 @@ pub fn operation(
     #[default(None)] previous_operations: Option<DocumentViewId>,
     #[default(Some(TEST_SCHEMA_ID.parse().unwrap()))] schema: Option<SchemaId>,
 ) -> Operation {
-    let schema = schema.unwrap_or(TEST_SCHEMA_ID.parse().unwrap());
+    let schema = schema.unwrap_or_else(|| TEST_SCHEMA_ID.parse().unwrap());
     match fields {
         // It's a CREATE operation
         Some(fields) if previous_operations.is_none() => {
@@ -107,8 +107,8 @@ pub fn operation_with_meta(
     #[default(Some(random_operation_id()))] operation_id: Option<OperationId>,
 ) -> OperationWithMeta {
     OperationWithMeta::new_test_operation(
-        &operation_id.unwrap_or(random_operation_id()),
-        &author.unwrap_or(public_key()),
+        &operation_id.unwrap_or_else(random_operation_id),
+        &author.unwrap_or_else(public_key),
         &operation(fields, previous_operations, schema),
     )
 }

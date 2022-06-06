@@ -7,7 +7,8 @@ use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::Operation;
 
-use crate::test_utils::fixtures::{key_pair, operation};
+use crate::test_utils::constants::default_fields;
+use crate::test_utils::fixtures::{key_pair, operation, operation_fields};
 
 /// Fixture which injects the default testing SeqNum(1) into a test method.
 ///
@@ -31,18 +32,19 @@ pub fn log_id(#[default(1)] id: u64) -> LogId {
 /// backlink, skiplink and log_id.
 #[fixture]
 pub fn entry(
-    operation: Operation,
-    seq_num: SeqNum,
+    #[default(1)] seq_num: u64,
+    #[default(1)] log_id: u64,
     #[default(None)] backlink: Option<Hash>,
     #[default(None)] skiplink: Option<Hash>,
-    log_id: LogId,
+    #[default(Some(operation(Some(operation_fields(default_fields())), None, None)))]
+    operation: Option<Operation>,
 ) -> Entry {
     Entry::new(
-        &log_id,
-        Some(&operation),
+        &LogId::new(log_id),
+        operation.as_ref(),
         skiplink.as_ref(),
         backlink.as_ref(),
-        &seq_num,
+        &SeqNum::new(seq_num).unwrap(),
     )
     .unwrap()
 }

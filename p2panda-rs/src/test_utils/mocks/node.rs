@@ -508,17 +508,14 @@ mod tests {
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::operation::OperationValue;
-    use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::{
-        create_operation, key_pair, private_key, schema, update_operation,
-    };
+    use crate::test_utils::fixtures::{create_operation, key_pair, private_key, update_operation};
     use crate::test_utils::mocks::client::Client;
     use crate::test_utils::utils::NextEntryArgs;
 
     use super::{send_to_node, Node};
 
     #[rstest]
-    fn publishing_entries(schema: SchemaId, private_key: String) {
+    fn publishing_entries(private_key: String) {
         let panda = Client::new("panda".to_string(), key_pair(&private_key));
         let mut node = Node::new();
 
@@ -734,7 +731,7 @@ mod tests {
     }
 
     #[rstest]
-    fn next_entry_args_at_specific_seq_num(schema: SchemaId, private_key: String) {
+    fn next_entry_args_at_specific_seq_num(private_key: String) {
         let panda = Client::new("panda".to_string(), key_pair(&private_key));
         let mut node = Node::new();
 
@@ -787,7 +784,7 @@ mod tests {
     }
 
     #[rstest]
-    fn concurrent_updates(schema: SchemaId, private_key: String) {
+    fn concurrent_updates(private_key: String) {
         let panda = Client::new("panda".to_string(), key_pair(&private_key));
         let penguin = Client::new(
             "penguin".to_string(),

@@ -218,14 +218,13 @@ pub mod tests {
     use async_trait::async_trait;
     use rstest::rstest;
 
-    use crate::document::{DocumentId, DocumentViewId};
+    use crate::document::DocumentId;
     use crate::entry::{sign_and_encode, Entry, LogId};
     use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::{
         AsOperation, OperationEncoded, OperationFields, OperationId, OperationValue,
     };
-    use crate::schema::SchemaId;
     use crate::storage_provider::traits::test_utils::{
         test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
         SimplestStorageProvider, StorageEntry, StorageLog,
@@ -233,9 +232,7 @@ pub mod tests {
     use crate::storage_provider::traits::{
         AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
     };
-    use crate::test_utils::fixtures::{
-        entry, key_pair, operation, operation_fields, operation_id, schema,
-    };
+    use crate::test_utils::fixtures::{entry, key_pair, operation, operation_fields, operation_id};
 
     use super::StorageProvider;
 
@@ -569,7 +566,6 @@ pub mod tests {
     #[async_std::test]
     async fn prev_op_does_not_exist(
         test_db: SimplestStorageProvider,
-        schema: SchemaId,
         operation_fields: OperationFields,
         #[from(operation_id)] invalid_prev_op: OperationId,
         key_pair: KeyPair,
@@ -600,11 +596,11 @@ pub mod tests {
         );
 
         let update_entry = entry(
-            update_operation_with_invalid_previous_operations.clone(),
-            next_entry.seq_num(),
+            next_entry.seq_num().as_u64(),
+            next_entry.log_id().as_u64(),
             next_entry.backlink_hash(),
             next_entry.skiplink_hash(),
-            next_entry.log_id(),
+            Some(update_operation_with_invalid_previous_operations.clone()),
         );
 
         let encoded_entry = sign_and_encode(&update_entry, &key_pair).unwrap();
@@ -627,7 +623,7 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn invalid_entry_op_pair(test_db: SimplestStorageProvider, schema: SchemaId) {
+    async fn invalid_entry_op_pair(test_db: SimplestStorageProvider) {
         let entries = test_db.entries.lock().unwrap().clone();
         let logs = test_db.logs.lock().unwrap().clone();
 
