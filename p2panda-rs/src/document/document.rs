@@ -461,7 +461,7 @@ mod tests {
         ]
         .iter()
         .map(|hash| {
-            let entry = node.get_entry(&hash);
+            let entry = node.get_entry(hash);
             OperationWithMeta::new_from_entry(&entry.entry_encoded(), &entry.operation_encoded())
                 .unwrap()
         })
@@ -475,7 +475,7 @@ mod tests {
         exp_result.insert(
             "name",
             DocumentViewValue::new(
-                &operations[4].operation_id(),
+                operations[4].operation_id(),
                 &OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
             ),
         );

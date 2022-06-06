@@ -78,7 +78,7 @@ impl Display for DocumentView {
 
 #[cfg(test)]
 mod tests {
-    use rstest::{fixture, rstest};
+    use rstest::rstest;
 
     use crate::document::document_view_fields::DocumentViewValue;
     use crate::document::{reduce, DocumentId};
