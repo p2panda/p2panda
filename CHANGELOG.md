@@ -75,6 +75,7 @@ Highlights are marked with a pancake 🥞
 - Extend test coverage for `OperationFields` [#236](https://github.com/p2panda/p2panda/pull/236) `rs`
 - Further develop our best practices for writing documentation [#240](https://github.com/p2panda/p2panda/pull/240) `rs`
 - Test `debug` macro calls in Github CI [#288](https://github.com/p2panda/p2panda/pull/288) `rs`
+- Move private module doc strings into public places [#339](https://github.com/p2panda/p2panda/pull/339) `rs`
 
 ## [0.3.0]
 
