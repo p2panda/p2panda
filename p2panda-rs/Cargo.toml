@@ -29,7 +29,6 @@ required-features = ["testing"]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-# Defines a feature named `webp` that does not enable any other features.
 testing = ["dep:rstest", "dep:rstest_reuse"]
 
 [dependencies]
