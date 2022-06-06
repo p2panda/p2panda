@@ -117,10 +117,9 @@ mod tests {
             OperationValue::Relation(Relation::new(DocumentId::new(operation_id.clone())));
         assert_eq!(relation.field_type(), "relation");
 
-        let pinned_relation =
-            OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::new(&[
-                operation_id.clone(),
-            ])));
+        let pinned_relation = OperationValue::PinnedRelation(PinnedRelation::new(
+            DocumentViewId::new(&[operation_id.clone()]).unwrap(),
+        ));
         assert_eq!(pinned_relation.field_type(), "pinned_relation");
 
         let relation_list = OperationValue::RelationList(RelationList::new(vec![DocumentId::new(
@@ -129,7 +128,7 @@ mod tests {
         assert_eq!(relation_list.field_type(), "relation_list");
 
         let pinned_relation_list = OperationValue::PinnedRelationList(PinnedRelationList::new(
-            vec![DocumentViewId::new(&[operation_id])],
+            vec![DocumentViewId::new(&[operation_id]).unwrap()],
         ));
         assert_eq!(pinned_relation_list.field_type(), "pinned_relation_list");
     }
@@ -154,11 +153,9 @@ mod tests {
         );
 
         // 2. Pinned relation
-        let pinned_relation =
-            OperationValue::PinnedRelation(PinnedRelation::new(DocumentViewId::new(&[
-                operation_2,
-                operation_3,
-            ])));
+        let pinned_relation = OperationValue::PinnedRelation(PinnedRelation::new(
+            DocumentViewId::new(&[operation_2, operation_3]).unwrap(),
+        ));
         assert_eq!(
             pinned_relation,
             OperationValue::deserialize_str(&pinned_relation.serialize())
@@ -177,8 +174,8 @@ mod tests {
         // 4. Pinned relation list
         let pinned_relation_list =
             OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
-                DocumentViewId::new(&[operation_6, operation_7]),
-                DocumentViewId::new(&[operation_8]),
+                DocumentViewId::new(&[operation_6, operation_7]).unwrap(),
+                DocumentViewId::new(&[operation_8]).unwrap(),
             ]));
         assert_eq!(
             pinned_relation_list,
@@ -197,10 +194,9 @@ mod tests {
         let value = OperationValue::Relation(relation);
         assert!(value.validate().is_ok());
 
-        let pinned_relation = PinnedRelation::new(DocumentViewId::new(&[
-            operation_id_1.clone(),
-            operation_id_2.clone(),
-        ]));
+        let pinned_relation = PinnedRelation::new(
+            DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]).unwrap(),
+        );
         let value = OperationValue::PinnedRelation(pinned_relation);
         assert!(value.validate().is_ok());
 

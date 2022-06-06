@@ -8,10 +8,11 @@
 use std::convert::TryFrom;
 use std::slice::Iter;
 
+use crate::document::DocumentViewId;
 use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{AsOperation, Operation, OperationEncoded, OperationId};
+use crate::operation::{AsOperation, Operation, OperationEncoded};
 use crate::schema::SchemaId;
 
 /// Entry of an append-only which contains an encoded entry and operation.
@@ -64,7 +65,7 @@ impl LogEntry {
     }
 
     /// Get the previous operation hash for this entry.
-    pub fn previous_operations(&self) -> Option<Vec<OperationId>> {
+    pub fn previous_operations(&self) -> Option<DocumentViewId> {
         self.operation().previous_operations()
     }
 }

@@ -9,11 +9,12 @@
 //! into `rstest` defined methods.
 use serde::Serialize;
 
+use crate::document::DocumentViewId;
 use crate::entry::{Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::{
-    Operation, OperationEncoded, OperationFields, OperationId, OperationValue, OperationWithMeta,
+    Operation, OperationEncoded, OperationFields, OperationValue, OperationWithMeta,
 };
 use crate::schema::SchemaId;
 use crate::test_utils::constants::TEST_SCHEMA_ID;
@@ -44,7 +45,7 @@ pub struct NextEntryArgs {
 /// provided, this is a DELETE operation.
 pub fn any_operation(
     fields: Option<OperationFields>,
-    previous_operations: Option<Vec<OperationId>>,
+    previous_operations: Option<DocumentViewId>,
 ) -> Operation {
     let schema_id = SchemaId::new(TEST_SCHEMA_ID).unwrap();
     match fields {
@@ -121,14 +122,14 @@ pub fn create_operation(schema: SchemaId, fields: OperationFields) -> Operation 
 /// Generate an UPDATE operation based on passed schema id, document id and operation fields.
 pub fn update_operation(
     schema: SchemaId,
-    previous_operations: Vec<OperationId>,
+    previous_operations: DocumentViewId,
     fields: OperationFields,
 ) -> Operation {
     Operation::new_update(schema, previous_operations, fields).unwrap()
 }
 
 /// Generate a DELETE operation based on passed schema id and document id.
-pub fn delete_operation(schema: SchemaId, previous_operations: Vec<OperationId>) -> Operation {
+pub fn delete_operation(schema: SchemaId, previous_operations: DocumentViewId) -> Operation {
     Operation::new_delete(schema, previous_operations).unwrap()
 }
 
