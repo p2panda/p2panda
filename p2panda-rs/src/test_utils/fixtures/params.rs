@@ -83,7 +83,7 @@ pub fn document_view_id(#[default(vec![DEFAULT_HASH])] hash_str_vec: Vec<&str>) 
         .into_iter()
         .map(|hash| hash.parse::<OperationId>().unwrap())
         .collect();
-    DocumentViewId::new(&hashes)
+    DocumentViewId::new(&hashes).unwrap()
 }
 
 /// Fixture which injects the default `OperationId` into a test method. Default value can be
@@ -110,6 +110,12 @@ pub fn random_operation_id() -> OperationId {
 #[fixture]
 pub fn random_document_id() -> DocumentId {
     DocumentId::new(random_hash().into())
+}
+
+/// Fixture which injects a random document view id into a test method.
+#[fixture]
+pub fn random_document_view_id() -> DocumentViewId {
+    DocumentViewId::new(&[random_hash().into(), random_hash().into()]).unwrap()
 }
 
 /// Fixture which injects the default OperationFields value into a test method.
@@ -161,7 +167,7 @@ pub fn entry(
 #[fixture]
 pub fn operation(
     #[from(some_fields)] fields: Option<OperationFields>,
-    #[default(None)] previous_operations: Option<Vec<OperationId>>,
+    #[default(None)] previous_operations: Option<DocumentViewId>,
 ) -> Operation {
     utils::any_operation(fields, previous_operations)
 }
@@ -201,7 +207,7 @@ pub fn create_operation(schema: SchemaId, fields: OperationFields) -> Operation 
 #[fixture]
 pub fn update_operation(
     schema: SchemaId,
-    #[default(vec![operation_id(DEFAULT_HASH)])] previous_operations: Vec<OperationId>,
+    #[default(document_view_id(vec![DEFAULT_HASH]))] previous_operations: DocumentViewId,
     #[default(fields(vec![("message", OperationValue::Text("Updated, hello!".to_string()))]))]
     fields: OperationFields,
 ) -> Operation {
@@ -215,7 +221,7 @@ pub fn update_operation(
 #[fixture]
 pub fn delete_operation(
     schema: SchemaId,
-    #[default(vec![operation_id(DEFAULT_HASH)])] previous_operations: Vec<OperationId>,
+    #[default(document_view_id(vec![DEFAULT_HASH]))] previous_operations: DocumentViewId,
 ) -> Operation {
     utils::delete_operation(schema, previous_operations)
 }

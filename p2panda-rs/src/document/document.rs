@@ -173,6 +173,7 @@ impl Display for Document {
 /// ```
 #[derive(Debug, Clone)]
 pub struct DocumentBuilder {
+    /// All the operations present in this document.
     operations: Vec<OperationWithMeta>,
 }
 
@@ -187,9 +188,9 @@ impl DocumentBuilder {
         self.operations.clone()
     }
 
-    /// Validates the set of operations and builds the document.
+    /// Validates all contained operations and builds the document.
     ///
-    /// The returned document also contains the latest resolved [document view][`DocumentView`].
+    /// The returned document contains the latest resolved [document view][`DocumentView`].
     ///
     /// Validation checks the following:
     /// - There is exactly one `CREATE` operation.
@@ -197,6 +198,23 @@ impl DocumentBuilder {
     /// - All operations follow the same schema.
     /// - No cycles exist in the graph.
     pub fn build(&self) -> Result<Document, DocumentBuilderError> {
+        self.build_to_view_id(None)
+    }
+
+    /// Validates all contained operations and builds the document up to the
+    /// requested [`DocumentViewId`].
+    ///
+    /// The returned document contains the requested [document view][`DocumentView`].
+    ///
+    /// Validation checks the following:
+    /// - There is exactly one `CREATE` operation.
+    /// - All operations are causally connected to the root operation.
+    /// - All operations follow the same schema.
+    /// - No cycles exist in the graph.
+    pub fn build_to_view_id(
+        &self,
+        document_view_id: Option<DocumentViewId>,
+    ) -> Result<Document, DocumentBuilderError> {
         // Find CREATE operation
         let mut collect_create_operation: Vec<OperationWithMeta> = self
             .operations()
@@ -230,8 +248,16 @@ impl DocumentBuilder {
 
         let document_id = DocumentId::new(create_operation.operation_id().clone());
 
-        // Build the graph  and then sort the operations into a linear order
-        let graph = build_graph(&self.operations)?;
+        // Build the graph.
+        let mut graph = build_graph(&self.operations)?;
+
+        // If a specific document view was requested then trim the graph to that point.
+        match document_view_id {
+            Some(id) => graph = graph.trim(&id.sorted())?,
+            None => (),
+        };
+
+        // Topologically sort the operations in the graph.
         let sorted_graph_data = graph.sort()?;
 
         // These are the current graph tips, to be added to the document view id
@@ -252,7 +278,7 @@ impl DocumentBuilder {
         };
 
         // Construct the document view id
-        let document_view_id = DocumentViewId::new(&graph_tips);
+        let document_view_id = DocumentViewId::new(&graph_tips).unwrap();
 
         // Construct the document view, from the reduced values and the document view id
         let document_view = if is_deleted {
@@ -280,13 +306,13 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::document_view_fields::{DocumentViewFields, DocumentViewValue};
-    use crate::document::DocumentId;
+    use crate::document::{DocumentId, DocumentViewId};
     use crate::identity::KeyPair;
     use crate::operation::{OperationEncoded, OperationId, OperationValue, OperationWithMeta};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         create_operation, create_operation_with_meta, delete_operation, delete_operation_with_meta,
-        fields, random_key_pair, random_operation_id, schema, update_operation,
+        fields, random_document_view_id, random_key_pair, schema, update_operation,
         update_operation_with_meta,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
@@ -377,7 +403,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone().into()],
+                panda_entry_1_hash.clone().into(),
                 fields(vec![(
                     "name",
                     OperationValue::Text("Panda Cafe!".to_string()),
@@ -396,7 +422,7 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone().into()],
+                panda_entry_1_hash.clone().into(),
                 fields(vec![(
                     "name",
                     OperationValue::Text("Penguin Cafe".to_string()),
@@ -415,10 +441,11 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![
+                DocumentViewId::new(&[
                     penguin_entry_1_hash.clone().into(),
                     panda_entry_2_hash.clone().into(),
-                ],
+                ])
+                .unwrap(),
                 fields(vec![(
                     "name",
                     OperationValue::Text("Polar Bear Cafe".to_string()),
@@ -436,7 +463,7 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![penguin_entry_2_hash.clone().into()],
+                penguin_entry_2_hash.clone().into(),
                 fields(vec![(
                     "name",
                     OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
@@ -605,7 +632,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema,
-                vec![panda_entry_1_hash.into()],
+                panda_entry_1_hash.into(),
                 fields(vec![(
                     "name",
                     OperationValue::Text("Panda Cafe!".to_string()),
@@ -636,7 +663,7 @@ mod tests {
     fn incorrect_previous_operations(
         schema: SchemaId,
         #[from(random_key_pair)] key_pair_1: KeyPair,
-        #[from(random_operation_id)] incorrect_previous_operation: OperationId,
+        #[from(random_document_view_id)] incorrect_previous_operation: DocumentViewId,
     ) {
         let panda = Client::new("panda".to_string(), key_pair_1);
         let mut node = Node::new();
@@ -659,7 +686,7 @@ mod tests {
         // Construct an update operation with non-existant previous operations
         let operation_with_wrong_prev_ops = update_operation(
             schema,
-            vec![incorrect_previous_operation],
+            incorrect_previous_operation,
             fields(vec![(
                 "name",
                 OperationValue::Text("Panda Cafe!".to_string()),
@@ -724,7 +751,7 @@ mod tests {
             &panda,
             &update_operation(
                 SchemaId::new("schema_definition_v1").unwrap(),
-                vec![panda_entry_1_hash.into()],
+                panda_entry_1_hash.into(),
                 fields(vec![(
                     "name",
                     OperationValue::Text("Panda Cafe!".to_string()),
@@ -779,7 +806,7 @@ mod tests {
         send_to_node(
             &mut node,
             &panda,
-            &delete_operation(schema, vec![panda_entry_1_hash.into()]),
+            &delete_operation(schema, panda_entry_1_hash.into()),
         )
         .unwrap();
 
@@ -875,7 +902,7 @@ mod tests {
             &polar,
             &update_operation(
                 schema.clone(),
-                vec![polar_entry_1_hash.clone().into()],
+                polar_entry_1_hash.clone().into(),
                 operation_fields(vec![
                     ("name", OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".to_string())),
                     ("owner", OperationValue::Text("しろくま".to_string())),
@@ -888,7 +915,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema.clone(),
-                vec![polar_entry_1_hash.clone().into()],
+                polar_entry_1_hash.clone().into(),
                 operation_fields(vec![(
                     "name",
                     OperationValue::Text("🐼 Cafe!!".to_string()),
@@ -901,10 +928,11 @@ mod tests {
             &polar,
             &update_operation(
                 schema.clone(),
-                vec![
+                DocumentViewId::new(&[
                     panda_entry_1_hash.clone().into(),
                     polar_entry_2_hash.clone().into(),
-                ],
+                ])
+                .unwrap(),
                 operation_fields(vec![("house-number", OperationValue::Integer(102))]),
             ),
         )
@@ -912,7 +940,7 @@ mod tests {
         let (polar_entry_4_hash, _) = send_to_node(
             &mut node,
             &polar,
-            &delete_operation(schema, vec![polar_entry_3_hash.clone().into()]),
+            &delete_operation(schema, polar_entry_3_hash.clone().into()),
         )
         .unwrap();
         let entry_1 = node.get_entry(&polar_entry_1_hash);
@@ -1080,5 +1108,127 @@ mod tests {
 
         assert!(document.view().is_none());
         assert!(document.is_deleted());
+    }
+
+    #[rstest]
+    fn builds_specific_document_view(schema: SchemaId) {
+        let panda = Client::new(
+            "panda".to_string(),
+            KeyPair::from_private_key_str(
+                "ddcafe34db2625af34c8ba3cf35d46e23283d908c9848c8b43d1f5d0fde779ea",
+            )
+            .unwrap(),
+        );
+
+        let mut node = Node::new();
+
+        let (panda_entry_1_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &create_operation(
+                schema.clone(),
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Panda Cafe".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let (panda_entry_2_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &update_operation(
+                schema.clone(),
+                vec![panda_entry_1_hash.clone().into()],
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Panda Cafe!".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        let (panda_entry_3_hash, _) = send_to_node(
+            &mut node,
+            &panda,
+            &update_operation(
+                schema,
+                vec![panda_entry_1_hash.clone().into()],
+                fields(vec![(
+                    "name",
+                    OperationValue::Text("Panda Cafe!!!!!!".to_string()),
+                )]),
+            ),
+        )
+        .unwrap();
+
+        // DOCUMENT: [panda_1]<--[penguin_1]
+        //                    \----[panda_2]
+
+        let operations: Vec<OperationWithMeta> = node
+            .all_entries()
+            .into_iter()
+            .map(|entry| {
+                OperationWithMeta::new_from_entry(
+                    &entry.entry_encoded(),
+                    &entry.operation_encoded(),
+                )
+                .unwrap()
+            })
+            .collect();
+
+        let document_builder = DocumentBuilder::new(operations);
+
+        assert_eq!(
+            document_builder
+                .build_to_view_id(Some(panda_entry_1_hash.into()))
+                .unwrap()
+                .view()
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .value(),
+            &OperationValue::Text("Panda Cafe".to_string())
+        );
+
+        assert_eq!(
+            document_builder
+                .build_to_view_id(Some(panda_entry_2_hash.clone().into()))
+                .unwrap()
+                .view()
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .value(),
+            &OperationValue::Text("Panda Cafe!".to_string())
+        );
+
+        assert_eq!(
+            document_builder
+                .build_to_view_id(Some(panda_entry_3_hash.clone().into()))
+                .unwrap()
+                .view()
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .value(),
+            &OperationValue::Text("Panda Cafe!!!!!!".to_string())
+        );
+
+        assert_eq!(
+            document_builder
+                .build_to_view_id(Some(DocumentViewId::new(&[
+                    panda_entry_2_hash.into(),
+                    panda_entry_3_hash.into()
+                ])))
+                .unwrap()
+                .view()
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .value(),
+            &OperationValue::Text("Panda Cafe!".to_string())
+        );
     }
 }

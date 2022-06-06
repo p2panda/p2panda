@@ -78,7 +78,7 @@ mod tests {
     use crate::test_utils::fixtures::templates::version_fixtures;
     use crate::test_utils::fixtures::{
         encoded_create_string, fields, operation_encoded_invalid_relation_fields,
-        random_document_id, random_operation_id, schema, update_operation, Fixture,
+        random_document_id, random_document_view_id, schema, update_operation, Fixture,
     };
     use crate::Validate;
 
@@ -126,7 +126,7 @@ mod tests {
             // Schema hash
             schema.clone(),
             // Previous operations
-            vec![random_operation_id()],
+            random_document_view_id(),
             // Operation fields
             fields(vec![
               ("username", OperationValue::Text("bubu".to_owned())),

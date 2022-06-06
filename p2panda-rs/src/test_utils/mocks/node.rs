@@ -42,7 +42,7 @@
 //!     &panda,
 //!     &update_operation(
 //!         schema(TEST_SCHEMA_ID),
-//!         vec![document1_hash_id.clone().into()],
+//!         document1_hash_id.clone().into(),
 //!         operation_fields(vec![(
 //!             "message",
 //!             OperationValue::Text("Which I now update.".to_string()),
@@ -57,7 +57,7 @@
 //!     &panda,
 //!     &delete_operation(
 //!         schema(TEST_SCHEMA_ID),
-//!         vec![entry2_hash.into()]
+//!         entry2_hash.into()
 //!     )
 //! )
 //! .unwrap();
@@ -117,17 +117,10 @@ pub fn send_to_node(
             .previous_operations()
             .expect("UPDATE / DELETE operations must contain previous_operations");
 
-        // If it's an empty collection we have a problem as all UPDATE and DELETE operations
-        // must be pointing at other existing operations.
-        if previous_operations.is_empty() {
-            return Err(
-                "UPDATE / DELETE operations must have more than 1 previous operation".into(),
-            );
-        };
-
         // Using the first previous operation in the list we retrieve the associated document
         // id from the database.
-        let document_id = node.get_document_id_by_entry(previous_operations[0].as_hash());
+        let document_id = node
+            .get_document_id_by_entry(previous_operations.into_iter().next().unwrap().as_hash());
 
         Some(document_id.expect("This node does not contain the required document"))
     };
@@ -397,7 +390,7 @@ impl Node {
                 )
             });
             let document_id = self
-                .get_document_id_by_entry(previous_operations[0].as_hash())
+                .get_document_id_by_entry(previous_operations.into_iter().next().unwrap().as_hash())
                 .unwrap_or_else(|| {
                     panic!(
                         "Document log for entry {} not found on node",
@@ -515,6 +508,7 @@ impl Node {
 mod tests {
     use rstest::rstest;
 
+    use crate::document::DocumentViewId;
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::operation::OperationValue;
@@ -594,7 +588,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone().into()],
+                panda_entry_1_hash.clone().into(),
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Which I now update. [Panda]".to_string()),
@@ -646,7 +640,7 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_2_hash.into()],
+                panda_entry_2_hash.into(),
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("My turn to update. [Penguin]".to_string()),
@@ -680,7 +674,7 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![penguin_entry_1_hash.into()],
+                penguin_entry_1_hash.into(),
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("And again. [Penguin]".to_string()),
@@ -777,7 +771,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema,
-                vec![entry1_hash.clone().into()],
+                entry1_hash.clone().into(),
                 operation_fields(vec![(
                     "message",
                     OperationValue::Text("Which I now update.".to_string()),
@@ -857,7 +851,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone().into()],
+                panda_entry_1_hash.clone().into(),
                 operation_fields(vec![(
                     "cafe_name",
                     OperationValue::Text("Polar Bear Cafe".to_string()),
@@ -884,7 +878,7 @@ mod tests {
             &penguin,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone().into()],
+                panda_entry_1_hash.clone().into(),
                 operation_fields(vec![(
                     "address",
                     OperationValue::Text("1, Polar Bear rd, Panda Town".to_string()),
@@ -911,7 +905,8 @@ mod tests {
             &penguin,
             &update_operation(
                 schema,
-                vec![penguin_entry_1_hash.into(), panda_entry_2_hash.into()],
+                DocumentViewId::new(&[penguin_entry_1_hash.into(), panda_entry_2_hash.into()])
+                    .unwrap(),
                 operation_fields(vec![(
                     "cafe_name",
                     OperationValue::Text("Polar Bear Café".to_string()),

@@ -20,7 +20,7 @@
 //! # use p2panda_rs::test_utils::utils::{create_operation, delete_operation, update_operation, operation_fields};
 //! # use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
 //! # use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
-//! use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewFields};
+//! use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewFields, DocumentViewId};
 //! #
 //! # let polar = Client::new(
 //! #     "polar".to_string(),
@@ -59,7 +59,7 @@
 //! #     &polar,
 //! #     &update_operation(
 //! #         schema.clone(),
-//! #         vec![polar_entry_1_hash.clone().into()],
+//! #         polar_entry_1_hash.clone().into(),
 //! #         operation_fields(vec![
 //! #             ("name", OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".to_string())),
 //! #             ("owner", OperationValue::Text("しろくま".to_string())),
@@ -73,7 +73,7 @@
 //! #     &panda,
 //! #     &update_operation(
 //! #         schema.clone(),
-//! #         vec![polar_entry_1_hash.clone().into()],
+//! #         polar_entry_1_hash.clone().into(),
 //! #         operation_fields(vec![("name", OperationValue::Text("🐼 Cafe!!".to_string()))]),
 //! #     ),
 //! # )
@@ -84,7 +84,7 @@
 //! #     &polar,
 //! #     &update_operation(
 //! #         schema.clone(),
-//! #         vec![panda_entry_1_hash.clone().into(), polar_entry_2_hash.clone().into()],
+//! #         DocumentViewId::new(&[panda_entry_1_hash.clone().into(), polar_entry_2_hash.clone().into()]).unwrap(),
 //! #         operation_fields(vec![("house-number", OperationValue::Integer(102))]),
 //! #     ),
 //! # )
@@ -95,7 +95,7 @@
 //! #     &polar,
 //! #     &delete_operation(
 //! #         schema,
-//! #         vec![polar_entry_3_hash.clone().into()]
+//! #         polar_entry_3_hash.clone().into()
 //! #     ),
 //! # )
 //! # .unwrap();

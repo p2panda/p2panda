@@ -119,9 +119,6 @@ pub struct RelationList(Vec<DocumentId>);
 impl RelationList {
     /// Returns a new list of relations.
     pub fn new(relations: Vec<DocumentId>) -> Self {
-        let mut relations = relations;
-        relations.sort_by_key(|a| a.as_str().to_string());
-
         Self(relations)
     }
 
@@ -160,9 +157,6 @@ pub struct PinnedRelationList(Vec<DocumentViewId>);
 impl PinnedRelationList {
     /// Returns a new list of pinned relations.
     pub fn new(relations: Vec<DocumentViewId>) -> Self {
-        let mut relations = relations;
-        relations.sort_by_key(|a| a.as_str());
-
         Self(relations)
     }
 
@@ -228,10 +222,9 @@ mod tests {
 
     #[rstest]
     fn iterates(#[from(random_hash)] hash_1: Hash, #[from(random_hash)] hash_2: Hash) {
-        let pinned_relation = PinnedRelation::new(DocumentViewId::new(&[
-            hash_1.clone().into(),
-            hash_2.clone().into(),
-        ]));
+        let pinned_relation = PinnedRelation::new(
+            DocumentViewId::new(&[hash_1.clone().into(), hash_2.clone().into()]).unwrap(),
+        );
 
         for hash in pinned_relation {
             assert!(hash.validate().is_ok());
@@ -256,5 +249,25 @@ mod tests {
                 assert!(hash.validate().is_ok());
             }
         }
+    }
+
+    #[rstest]
+    fn list_equality(
+        #[from(random_document_id)] document_1: DocumentId,
+        #[from(random_document_id)] document_2: DocumentId,
+        #[from(random_hash)] operation_id_1: Hash,
+        #[from(random_hash)] operation_id_2: Hash,
+    ) {
+        let relation_list = RelationList::new(vec![document_1.clone(), document_2.clone()]);
+        let relation_list_different_order = RelationList::new(vec![document_2, document_1]);
+        assert_ne!(relation_list, relation_list_different_order);
+
+        let pinned_relation_list = PinnedRelationList::new(vec![
+            operation_id_1.clone().into(),
+            operation_id_2.clone().into(),
+        ]);
+        let pinned_relation_list_different_order =
+            PinnedRelationList::new(vec![operation_id_2.into(), operation_id_1.into()]);
+        assert_ne!(pinned_relation_list, pinned_relation_list_different_order);
     }
 }

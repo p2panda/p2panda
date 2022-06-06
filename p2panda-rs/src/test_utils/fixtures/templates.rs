@@ -63,21 +63,21 @@ fn many_valid_entries(#[case] entry: Entry) {}
 #[allow(unused_qualifications)]
 #[case::update_operation_many_previous(crate::test_utils::utils::any_operation(
     Some(crate::test_utils::fixtures::defaults::fields()),
-    Some(vec![
+    Some(DocumentViewId::new(&[
         crate::test_utils::fixtures::random_operation_id(),
         crate::test_utils::fixtures::random_operation_id(),
         crate::test_utils::fixtures::random_operation_id()
-        ])
+        ]).unwrap())
     )
 )]
 #[case::delete_operation_many_previous(crate::test_utils::utils::any_operation(
     None,
     #[allow(unused_qualifications)]
-    Some(vec![
+    Some(DocumentViewId::new(&[
         crate::test_utils::fixtures::random_operation_id(),
         crate::test_utils::fixtures::random_operation_id(),
         crate::test_utils::fixtures::random_operation_id()
-        ])
+        ]).unwrap())
     )
 )]
 fn many_valid_operations(#[case] operation: Operation) {}
