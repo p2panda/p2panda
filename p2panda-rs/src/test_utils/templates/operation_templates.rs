@@ -7,14 +7,16 @@ use rstest_reuse::template;
 #[rstest]
 #[allow(unused_qualifications)]
 #[case(crate::test_utils::fixtures::operation(
-    Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())), 
+    Some(crate::test_utils::fixtures::operation_fields(
+        crate::test_utils::constants::default_fields()
+    )),
     None,
     None,
 ))]
 #[allow(unused_qualifications)]
 #[case::update_operation(
     crate::test_utils::fixtures::operation(
-        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())), 
+        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())),
         Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
         None,
     )
@@ -30,7 +32,7 @@ use rstest_reuse::template;
 #[allow(unused_qualifications)]
 #[case::update_operation_many_previous(
     crate::test_utils::fixtures::operation(
-        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())), 
+        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())),
         Some(DocumentViewId::new(&[
             crate::test_utils::fixtures::random_operation_id(),
             crate::test_utils::fixtures::random_operation_id(),
@@ -52,7 +54,6 @@ use rstest_reuse::template;
     )
 )]
 fn many_valid_operations(#[case] operation: Operation) {}
-
 
 /// This template contains various types of valid meta-operation.
 #[template]
@@ -94,13 +95,13 @@ fn various_operation_with_meta(#[case] operation: OperationWithMeta) {}
 ))]
 #[allow(unused_qualifications)]
 #[case::update_operation(crate::test_utils::fixtures::operation(
-    Some(crate::test_utils::fixtures::operation_fields(default_fields())), 
-    Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()), 
+    Some(crate::test_utils::fixtures::operation_fields(default_fields())),
+    Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
     None
 ))]
 #[allow(unused_qualifications)]
-#[case::delete_operation(crate::test_utils::fixtures::operation(None, Some(
-    crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()), 
+#[case::delete_operation(crate::test_utils::fixtures::operation(None,Some(
+    crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
     None
 ))]
 #[allow(unused_qualifications)]
@@ -129,10 +130,9 @@ fn various_operation_with_meta(#[case] operation: OperationWithMeta) {}
 ))]
 fn implements_as_operation(#[case] operation: impl AsOperation) {}
 
-
+#[allow(unused_imports)]
+pub(crate) use implements_as_operation;
 #[allow(unused_imports)]
 pub(crate) use many_valid_operations;
 #[allow(unused_imports)]
 pub(crate) use various_operation_with_meta;
-#[allow(unused_imports)]
-pub(crate) use implements_as_operation;

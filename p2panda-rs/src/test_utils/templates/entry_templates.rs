@@ -12,8 +12,10 @@ use rstest_reuse::template;
     None,
     None,
     Some(crate::test_utils::fixtures::operation(
-        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())), 
-        None, 
+        Some(crate::test_utils::fixtures::operation_fields(
+            crate::test_utils::constants::default_fields()
+        )),
+        None,
         None
     ))
 ))]
@@ -24,8 +26,8 @@ use rstest_reuse::template;
     Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
     None,
     Some(crate::test_utils::fixtures::operation(
-        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())), 
-        None, 
+        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())),
+        None,
         None
     ))
 ))]
@@ -36,8 +38,8 @@ use rstest_reuse::template;
     Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
     Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
     Some(crate::test_utils::fixtures::operation(
-        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())), 
-        None, 
+        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())),
+        None,
         None
     ))
 ))]
@@ -47,8 +49,8 @@ use rstest_reuse::template;
     Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
     None,
     Some(crate::test_utils::fixtures::operation(
-        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())), 
-        None, 
+        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())),
+        None,
         None
     ))
 ))]
