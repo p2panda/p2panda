@@ -100,7 +100,7 @@ fn various_operation_with_meta(#[case] operation: OperationWithMeta) {}
     None
 ))]
 #[allow(unused_qualifications)]
-#[case::delete_operation(crate::test_utils::fixtures::operation(None,Some(
+#[case::delete_operation(crate::test_utils::fixtures::operation(None, Some(
     crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
     None
 ))]
