@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::credentials::{Credential, CredentialBundle, CredentialType};
+use openmls::credentials::{Credential, CredentialBundle};
 use openmls::extensions::{Extension, LifetimeExtension};
 use openmls::key_packages::{KeyPackage, KeyPackageBundle};
+use openmls::prelude::SignatureKeypair;
 use openmls_traits::key_store::OpenMlsKeyStore;
-use openmls_traits::types::SignatureScheme;
 use openmls_traits::OpenMlsCryptoProvider;
 
 use crate::identity::KeyPair;
@@ -33,7 +33,7 @@ impl MlsMember {
             None => {
                 // @TODO: Not sure how this is possible to access ..
                 // Related issue: https://github.com/openmls/openmls/issues/898
-                /* // Full key here because we need it to sign
+                // Full key here because we need it to sign
                 let private_key = key_pair.private_key().to_bytes();
                 let full_key = [private_key, public_key].concat();
 
@@ -50,22 +50,7 @@ impl MlsMember {
                 // Persist CredentialBundle in key store for the future
                 provider
                     .key_store()
-                    .store(bundle.credential().signature_key(), &bundle)
-                    .map_err(|_| MlsError::KeyStoreSerialization)?; */
-
-                // @TODO: Remove this as soon as we figured out how to derive a `CredentialBundle`
-                // from the p2panda key pair
-                let bundle = CredentialBundle::new(
-                    public_key.to_vec(),
-                    CredentialType::Basic,
-                    SignatureScheme::ED25519,
-                    provider,
-                )?;
-
-                // Persist CredentialBundle in key store for the future
-                provider
-                    .key_store()
-                    .store(bundle.credential().identity(), &bundle)
+                    .store(bundle.credential().signature_key().as_slice(), &bundle)
                     .map_err(|_| MlsError::KeyStoreSerialization)?;
 
                 bundle
