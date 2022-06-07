@@ -996,13 +996,7 @@ mod tests {
         let (panda_entry_1_hash, _) = send_to_node(
             &mut node,
             &panda,
-            &create_operation(
-                schema.clone(),
-                fields(vec![(
-                    "name",
-                    OperationValue::Text("Panda Cafe".to_string()),
-                )]),
-            ),
+            &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
         )
         .unwrap();
 
@@ -1010,12 +1004,8 @@ mod tests {
             &mut node,
             &panda,
             &update_operation(
-                schema.clone(),
-                panda_entry_1_hash.clone().into(),
-                fields(vec![(
-                    "name",
-                    OperationValue::Text("Panda Cafe!".to_string()),
-                )]),
+                &[("name", OperationValue::Text("Panda Cafe!".to_string()))],
+                &panda_entry_1_hash.clone().into(),
             ),
         )
         .unwrap();
@@ -1024,12 +1014,8 @@ mod tests {
             &mut node,
             &panda,
             &update_operation(
-                schema,
-                panda_entry_1_hash.clone().into(),
-                fields(vec![(
-                    "name",
-                    OperationValue::Text("Panda Cafe!!!!!!".to_string()),
-                )]),
+                &[("name", OperationValue::Text("Panda Cafe!!!!!!".to_string()))],
+                &panda_entry_1_hash.clone().into(),
             ),
         )
         .unwrap();
