@@ -76,6 +76,48 @@ pub fn some_fields(
 /// If a value for `fields` is provided, this is a CREATE operation. If values for both `fields`
 /// and `document_id` are provided, this is an UPDATE operation. If no value for `fields` is
 /// provided, this is a DELETE operation.
+///
+/// ```
+/// # extern crate p2panda_rs;
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// # #[cfg(test)]
+/// # mod tests {
+/// use rstest::rstest;
+///
+/// use p2panda_rs::operation::{AsOperation, Operation, OperationValue};
+/// use p2panda_rs::test_utils::constants::{default_fields, TEST_SCHEMA_ID};
+/// use p2panda_rs::test_utils::fixtures::{operation, operation_fields};
+///
+/// #[rstest]
+/// fn insert_default_operation(operation: Operation) {
+///     assert_eq!(
+///         *operation.fields().unwrap().get("username").unwrap(),
+///         OperationValue::Text("bubu".to_string())
+///     )
+/// }
+///
+/// #[rstest]
+/// fn change_just_the_fields(
+///     #[with(Some(operation_fields(vec![("username", OperationValue::Text("panda".to_string()))])))]
+///     operation: Operation,
+/// ) {
+///     assert_eq!(
+///         *operation.fields().unwrap().get("username").unwrap(),
+///         OperationValue::Text("panda".to_string())
+///     )
+/// }
+///
+/// #[rstest]
+/// #[case(operation(Some(operation_fields(default_fields())), None, None))] /// if no schema is passed, the default is chosen
+/// #[case(operation(Some(operation_fields(default_fields())), None, Some(TEST_SCHEMA_ID.parse().unwrap())))]
+/// #[case(operation(Some(operation_fields(default_fields())), None, Some("schema_definition_v1".parse().unwrap())))]
+/// #[should_panic]
+/// #[case(operation(Some(operation_fields(default_fields())), None, Some("not_a_schema_string".parse().unwrap())))]
+/// fn operations_with_different_schema(#[case] _operation: Operation) {}
+/// # }
+/// # Ok(())
+/// # }
+/// ```
 #[fixture]
 pub fn operation(
     #[from(some_fields)] fields: Option<OperationFields>,
@@ -176,4 +218,41 @@ pub fn update_operation(
 /// Helper method for easily constructing a DELETE operation.
 pub fn delete_operation(previous_operations: &DocumentViewId) -> Operation {
     operation(None, Some(previous_operations.to_owned()), None)
+}
+
+mod tests {
+    // DOC TESTS //
+
+    use rstest::rstest;
+
+    use crate::operation::{AsOperation, Operation, OperationValue};
+    use crate::test_utils::constants::{default_fields, TEST_SCHEMA_ID};
+    use crate::test_utils::fixtures::{operation, operation_fields};
+
+    #[rstest]
+    fn insert_default_operation(operation: Operation) {
+        assert_eq!(
+            *operation.fields().unwrap().get("username").unwrap(),
+            OperationValue::Text("bubu".to_string())
+        )
+    }
+
+    #[rstest]
+    fn change_just_the_fields(
+        #[with(Some(operation_fields(vec![("username", OperationValue::Text("panda".to_string()))])))]
+        operation: Operation,
+    ) {
+        assert_eq!(
+            *operation.fields().unwrap().get("username").unwrap(),
+            OperationValue::Text("panda".to_string())
+        )
+    }
+
+    #[rstest]
+    #[case(operation(Some(operation_fields(default_fields())), None, None))] // if no schema is passed, the default is chosen
+    #[case(operation(Some(operation_fields(default_fields())), None, Some(TEST_SCHEMA_ID.parse().unwrap())))]
+    #[case(operation(Some(operation_fields(default_fields())), None, Some("schema_definition_v1".parse().unwrap())))]
+    #[should_panic]
+    #[case(operation(Some(operation_fields(default_fields())), None, Some("not_a_schema_string".parse().unwrap())))]
+    fn operations_with_different_schema(#[case] _operation: Operation) {}
 }
