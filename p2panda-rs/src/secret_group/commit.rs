@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::framing::{ContentType, MlsMessageIn, MlsMessageOut};
+use openmls::framing::{MlsMessageIn, MlsMessageOut};
 use openmls::messages::Welcome;
 use tls_codec::{TlsDeserialize, TlsSerialize, TlsSize};
 
@@ -34,7 +34,7 @@ impl SecretGroupCommit {
 
     /// Returns the MLS Commit message.
     pub(crate) fn commit(&self) -> MlsMessageIn {
-        self.mls_commit_message.into()
+        self.mls_commit_message.to_owned().into()
     }
 
     /// Returns an MLS Welcome message when given.

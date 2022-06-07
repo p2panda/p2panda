@@ -3,8 +3,8 @@
 use openmls::credentials::{Credential, CredentialBundle, CredentialType};
 use openmls::extensions::{Extension, LifetimeExtension};
 use openmls::key_packages::{KeyPackage, KeyPackageBundle};
-use openmls::prelude::SignatureScheme;
 use openmls_traits::key_store::OpenMlsKeyStore;
+use openmls_traits::types::SignatureScheme;
 use openmls_traits::OpenMlsCryptoProvider;
 
 use crate::identity::KeyPair;
@@ -107,12 +107,12 @@ impl MlsMember {
 
         // Retrieve [KeyPackage] from bundle which is the public part of it
         let key_package = key_package_bundle.key_package().clone();
-        let key_package_hash = key_package.hash_ref(provider.crypto())?.as_slice();
+        let key_package_hash = key_package.hash_ref(provider.crypto())?;
 
         // Save generated bundle in key-store
         provider
             .key_store()
-            .store(&key_package_hash, &key_package_bundle)
+            .store(key_package_hash.as_slice(), &key_package_bundle)
             .map_err(|_| MlsError::KeyStoreSerialization)?;
 
         // Finally return the public part

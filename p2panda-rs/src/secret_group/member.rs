@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::prelude::{Credential, KeyPackage};
+use openmls::credentials::Credential;
+use openmls::key_packages::KeyPackage;
 use openmls_traits::OpenMlsCryptoProvider;
 
 use crate::identity::KeyPair;
@@ -66,7 +67,8 @@ impl SecretGroupMember {
 
 #[cfg(test)]
 mod tests {
-    use openmls::prelude::{CredentialBundle, KeyPackageBundle};
+    use openmls::credentials::CredentialBundle;
+    use openmls::key_packages::KeyPackageBundle;
     use openmls_traits::key_store::OpenMlsKeyStore;
     use openmls_traits::OpenMlsCryptoProvider;
 
@@ -104,11 +106,12 @@ mod tests {
         let key_package = member.key_package(&provider).unwrap();
 
         // Credential bundle and key package got saved in key store
-        let key_package_bundle: Option<KeyPackageBundle> =
-            provider.key_store().read(&key_package.hash(&provider));
+        let key_package_bundle: Option<KeyPackageBundle> = provider
+            .key_store()
+            .read(&key_package.hash_ref(provider.crypto()).unwrap().as_slice());
         let credential_bundle: Option<CredentialBundle> = provider
             .key_store()
-            .read(&member.credential().signature_key());
+            .read(&member.credential().signature_key().as_slice());
         assert!(key_package_bundle.is_some());
         assert!(credential_bundle.is_some());
     }

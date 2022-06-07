@@ -3,9 +3,10 @@
 use std::convert::TryFrom;
 
 use ed25519_dalek::PublicKey;
-use openmls::framing::{MlsMessageIn, MlsMessageOut, VerifiableMlsPlaintext};
+use openmls::framing::MlsMessageOut;
 use openmls::group::GroupId;
-use openmls::prelude::{Credential, KeyPackage};
+use openmls::key_packages::KeyPackage;
+use openmls::prelude::KeyPackageRef;
 use openmls_traits::OpenMlsCryptoProvider;
 use tls_codec::{Deserialize, Serialize, TlsVecU32};
 
@@ -164,20 +165,28 @@ impl SecretGroup {
     pub fn remove_members(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
-        // @TODO: Identify group members by p2panda public keys instead which we can internally
-        // translate to key package hashes. Using key package hashes is part of the new MLS spec
-        // and needs to be implemented in `openmls`.
-        // See: https://github.com/openmls/openmls/issues/541
-        member_leaf_indexes: &[usize],
+        members: &[Author],
     ) -> Result<SecretGroupCommit, SecretGroupError> {
         if !self.owned {
             return Err(SecretGroupError::NotOwner);
         }
 
+        // Convert p2panda public keys to mls key package references
+        let key_package_refs: Vec<KeyPackageRef> = members
+            .iter()
+            .map(|member| {
+                KeyPackageRef::new(
+                    member.as_str().as_bytes(),
+                    crate::secret_group::mls::MLS_CIPHERSUITE_NAME,
+                    provider.crypto(),
+                )
+                // @TODO
+                .expect("Conversion failed")
+            })
+            .collect();
+
         // Remove members
-        let mls_message_out = self
-            .mls_group
-            .remove_members(provider, member_leaf_indexes)?;
+        let mls_message_out = self.mls_group.remove_members(provider, &key_package_refs)?;
 
         // Process message directly to establish group state for encryption
         self.process_commit_directly(provider, &mls_message_out)?;
@@ -190,19 +199,17 @@ impl SecretGroup {
 
     /// Return the current group members.
     pub fn members(&self) -> Result<Vec<Author>, SecretGroupError> {
-        let read_author = |member: Credential| {
-            let public_key = PublicKey::from_bytes(member.identity())
-                .map_err(|_| SecretGroupError::InvalidMemberPublicKey)?;
-
-            // It's safe to unwrap here since we just constructed the public key ourselves
-            Ok(Author::try_from(public_key).unwrap())
-        };
-
         self.mls_group
             .members()
             .unwrap()
             .into_iter()
-            .map(read_author)
+            .map(|key_package| {
+                let public_key = PublicKey::from_bytes(key_package.credential().identity())
+                    .map_err(|_| SecretGroupError::InvalidMemberPublicKey)?;
+
+                // It's safe to unwrap here since we just constructed the public key ourselves
+                Ok(Author::try_from(public_key).unwrap())
+            })
             .collect()
     }
 
@@ -219,18 +226,10 @@ impl SecretGroup {
     fn process_commit_directly(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
-        mls_message_out: &MlsMessageOut,
+        mls_message: &MlsMessageOut,
     ) -> Result<(), SecretGroupError> {
-        // Convert "out" to "in" message
-        let mls_commit_message = match mls_message_out {
-            MlsMessageOut::Plaintext(message) => Ok(MlsMessageIn::Plaintext(
-                VerifiableMlsPlaintext::from_plaintext(message.clone(), None),
-            )),
-            _ => Err(SecretGroupError::NeedsToBeMlsPlaintext),
-        }?;
-
         self.mls_group
-            .process_commit(provider, mls_commit_message)?;
+            .process_commit(provider, mls_message.to_owned().into())?;
 
         Ok(())
     }
@@ -446,9 +445,9 @@ impl SecretGroup {
         message: &SecretGroupMessage,
     ) -> Result<Vec<u8>, SecretGroupError> {
         match message {
-            SecretGroupMessage::SenderRatchetSecret(ciphertext) => {
-                Ok(self.mls_group.decrypt(provider, ciphertext.clone())?)
-            }
+            SecretGroupMessage::SenderRatchetSecret(ciphertext) => Ok(self
+                .mls_group
+                .decrypt(provider, ciphertext.to_owned().into())?),
             SecretGroupMessage::LongTermSecret(ciphertext) => {
                 let secret = self
                     .long_term_secret(ciphertext.long_term_epoch())
@@ -576,8 +575,9 @@ mod tests {
         let mut group_2 = SecretGroup::new_from_welcome(&provider, &commit).unwrap();
         assert!(!group_2.is_owned());
 
-        // Invited member does not have permission to change group.
-        assert!(group_2.remove_members(&provider, &[1]).is_err());
+        // Invited member does not have permission to change group
+        let author = Author::try_from(key_pair_2.public_key().to_owned()).unwrap();
+        assert!(group_2.remove_members(&provider, &[author]).is_err());
         assert!(group_2.rotate_long_term_secret(&provider).is_err());
         assert!(group.rotate_long_term_secret(&provider).is_ok());
     }

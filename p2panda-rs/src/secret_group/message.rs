@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::framing::MlsCiphertext;
+use openmls::framing::MlsMessageOut;
 
 use crate::secret_group::lts::LongTermSecretCiphertext;
 
@@ -10,7 +10,7 @@ use crate::secret_group::lts::LongTermSecretCiphertext;
 pub enum SecretGroupMessage {
     /// This message contains user data encrypted with a MLS sender ratchet secret and encoded in
     /// form of a MLS application message.
-    SenderRatchetSecret(MlsCiphertext),
+    SenderRatchetSecret(MlsMessageOut),
 
     /// This message contains user data encrypted with a long-term secret and encoded as a
     /// long-term secret ciphertext.
