@@ -6,6 +6,7 @@ use openmls::key_packages::{KeyPackage, KeyPackageBundle};
 use openmls::prelude::SignatureKeypair;
 use openmls_traits::key_store::OpenMlsKeyStore;
 use openmls_traits::OpenMlsCryptoProvider;
+use tls_codec::Serialize;
 
 use crate::identity::KeyPair;
 use crate::secret_group::mls::{MlsError, MLS_CIPHERSUITE_NAME, MLS_LIFETIME_EXTENSION_DAYS};
@@ -50,7 +51,14 @@ impl MlsMember {
                 // Persist CredentialBundle in key store for the future
                 provider
                     .key_store()
-                    .store(bundle.credential().signature_key().as_slice(), &bundle)
+                    .store(
+                        &bundle
+                            .credential()
+                            .signature_key()
+                            .tls_serialize_detached()
+                            .unwrap(),
+                        &bundle,
+                    )
                     .map_err(|_| MlsError::KeyStoreSerialization)?;
 
                 bundle
