@@ -1,22 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::framing::{MlsCiphertext, MlsMessageIn, MlsMessageOut};
-use openmls::group::{GroupEvent, GroupId, ManagedGroup, ManagedGroupConfig};
-use openmls::prelude::{Credential, KeyPackage, Welcome, WireFormat};
+use openmls::ciphersuite::hash_ref::KeyPackageRef;
+use openmls::credentials::Credential;
+use openmls::framing::{MlsMessageIn, MlsMessageOut, ProcessedMessage};
+use openmls::group::{
+    GroupId, MlsGroup as Group, MlsGroupConfig, PURE_PLAINTEXT_WIRE_FORMAT_POLICY,
+};
+use openmls::key_packages::KeyPackage;
+use openmls::messages::Welcome;
 use openmls_traits::OpenMlsCryptoProvider;
 
 use crate::secret_group::mls::{MlsError, MLS_PADDING_SIZE};
 
 /// Wrapper around the Managed MLS Group of `openmls`.
 #[derive(Debug)]
-pub struct MlsGroup(ManagedGroup);
+pub struct MlsGroup(Group);
 
 impl MlsGroup {
     /// Returns a p2panda specific configuration for MLS Groups
-    fn config() -> ManagedGroupConfig {
-        ManagedGroupConfig::builder()
+    fn config() -> MlsGroupConfig {
+        MlsGroupConfig::builder()
             // Handshake messages should not be encrypted
-            .wire_format(WireFormat::MlsPlaintext)
+            .wire_format_policy(PURE_PLAINTEXT_WIRE_FORMAT_POLICY)
             // Size of padding in bytes
             .padding_size(MLS_PADDING_SIZE)
             // Flag to indicate the Ratchet Tree Extension should be used, otherwise we would need
@@ -39,10 +44,15 @@ impl MlsGroup {
         key_package: KeyPackage,
     ) -> Result<Self, MlsError> {
         // Retrieve hash from key package
-        let key_package_hash = key_package.hash(provider);
+        let key_package_hash = key_package.hash_ref(provider.crypto())?;
 
         // Create MLS group with one member inside
-        let group = ManagedGroup::new(provider, &Self::config(), group_id, &key_package_hash)?;
+        let group = Group::new(
+            provider,
+            &Self::config(),
+            group_id,
+            key_package_hash.as_slice(),
+        )?;
 
         Ok(Self(group))
     }
@@ -55,7 +65,7 @@ impl MlsGroup {
         provider: &impl OpenMlsCryptoProvider,
         welcome: Welcome,
     ) -> Result<Self, MlsError> {
-        let group = ManagedGroup::new_from_welcome(provider, &Self::config(), welcome, None)?;
+        let group = Group::new_from_welcome(provider, &Self::config(), welcome, None)?;
         Ok(Self(group))
     }
 
@@ -72,21 +82,19 @@ impl MlsGroup {
         provider: &impl OpenMlsCryptoProvider,
         members: &[KeyPackage],
     ) -> Result<(MlsMessageOut, Welcome), MlsError> {
-        Ok(self.0.add_members(provider, members)?)
+        let message = self.0.add_members(provider, members)?;
+        self.0.merge_pending_commit()?;
+        Ok(message)
     }
 
     /// Removes members from a MLS group which results in a Commit message.
-    ///
-    /// Please note that this current implementation requires the member leaf indexes to identify
-    /// the to-be-removed members which will be changed in the future.
-    ///
-    /// See: https://github.com/openmls/openmls/issues/541
     pub fn remove_members(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
-        member_leaf_indexes: &[usize],
+        members: &[KeyPackageRef],
     ) -> Result<MlsMessageOut, MlsError> {
-        let results = self.0.remove_members(provider, member_leaf_indexes)?;
+        let results = self.0.remove_members(provider, members)?;
+        self.0.merge_pending_commit()?;
 
         // MLS returns an `MlsMessageOut` and optional `Welcome` message when removing a member. We
         // can be sure there will be no Welcome message in the p2panda case, so we only take the
@@ -106,10 +114,23 @@ impl MlsGroup {
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
         message: MlsMessageIn,
-    ) -> Result<Vec<GroupEvent>, MlsError> {
-        // @TODO: This API will change soon in `openmls`.
-        // See: https://github.com/openmls/openmls/pull/576
-        Ok(self.0.process_message(message, provider)?)
+    ) -> Result<(), MlsError> {
+        // Check for syntactic errors
+        let unverified_message = self.0.parse_message(message, provider)?;
+
+        // Check for semantic errors
+        let processed_message =
+            self.0
+                .process_unverified_message(unverified_message, None, provider)?;
+
+        // Process the message finally and advance the group key schedule
+        if let ProcessedMessage::StagedCommitMessage(staged_commit) = processed_message {
+            self.0.merge_staged_commit(*staged_commit)?;
+        } else {
+            unreachable!("Expected a StagedCommit.");
+        }
+
+        Ok(())
     }
 
     // Encryption
@@ -133,15 +154,8 @@ impl MlsGroup {
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
         data: &[u8],
-    ) -> Result<MlsCiphertext, MlsError> {
-        let message = self.0.create_message(provider, data)?;
-
-        // @TODO: This should be handled internally by `openmls` instead:
-        // https://github.com/openmls/openmls/issues/584
-        match message {
-            MlsMessageOut::Ciphertext(ciphertext) => Ok(ciphertext),
-            _ => panic!("Expected MLS ciphertext"),
-        }
+    ) -> Result<MlsMessageOut, MlsError> {
+        Ok(self.0.create_message(provider, data)?)
     }
 
     /// Decrypts data with the current known MLS group secrets.
@@ -151,19 +165,20 @@ impl MlsGroup {
     pub fn decrypt(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
-        ciphertext: MlsCiphertext,
+        message: MlsMessageIn,
     ) -> Result<Vec<u8>, MlsError> {
-        // @TODO: This API will change soon in `openmls`.
-        // See: https://github.com/openmls/openmls/pull/576
-        let group_events = self
-            .0
-            .process_message(MlsMessageIn::Ciphertext(ciphertext), provider)?;
+        // Check for syntactic errors
+        let unverified_message = self.0.parse_message(message, provider)?;
 
-        match group_events.last() {
-            Some(GroupEvent::ApplicationMessage(application_message_event)) => {
-                Ok(application_message_event.message().to_owned())
-            }
-            _ => panic!("Expected an ApplicationMessage event"),
+        // Check for semantic errors
+        let processed_message =
+            self.0
+                .process_unverified_message(unverified_message, None, provider)?;
+
+        if let ProcessedMessage::ApplicationMessage(application_message) = processed_message {
+            Ok(application_message.into_bytes())
+        } else {
+            unreachable!("Expected an ApplicationMessage event");
         }
     }
 
@@ -176,7 +191,7 @@ impl MlsGroup {
     }
 
     /// Returns the own `Credential` in this group or an Error when member was already removed.
-    pub fn credential(&self) -> Result<Credential, MlsError> {
+    pub fn credential(&self) -> Result<&Credential, MlsError> {
         Ok(self.0.credential()?)
     }
 
@@ -187,7 +202,7 @@ impl MlsGroup {
     }
 
     /// Return members of MLS group.
-    pub fn members(&self) -> Result<Vec<Credential>, MlsError> {
+    pub fn members(&self) -> Result<Vec<&KeyPackage>, MlsError> {
         Ok(self.0.members())
     }
 }
@@ -214,7 +229,7 @@ mod tests {
 
         let message = "This is a very secret message";
         let ciphertext = group.encrypt(&provider, message.as_bytes()).unwrap();
-        let plaintext = group.decrypt(&provider, ciphertext).unwrap();
+        let plaintext = group.decrypt(&provider, ciphertext.into()).unwrap();
         assert_eq!(&plaintext, message.as_bytes());
     }
 }

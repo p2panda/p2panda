@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::prelude::{
-    Credential, CredentialBundle, Extension, KeyPackage, KeyPackageBundle, LifetimeExtension,
-    SignatureKeypair,
-};
+use openmls::credentials::{Credential, CredentialBundle};
+use openmls::extensions::{Extension, LifetimeExtension};
+use openmls::key_packages::{KeyPackage, KeyPackageBundle};
 use openmls_traits::key_store::OpenMlsKeyStore;
 use openmls_traits::OpenMlsCryptoProvider;
 
@@ -35,12 +34,14 @@ impl MlsMember {
                 let private_key = key_pair.private_key().to_bytes();
                 let full_key = [private_key, public_key].concat();
 
+                // @TODO: Not sure how this is possible to access ..
                 let signature_key_pair = SignatureKeypair::from_bytes(
                     MLS_CIPHERSUITE_NAME.into(),
                     full_key.to_vec(),
                     public_key.to_vec(),
                 );
 
+                // @TODO: Not sure how this is possible to access ..
                 // A CredentialBundle contains a Credential and the corresponding private key.
                 // BasicCredential is a raw, unauthenticated assertion of an identity/key binding.
                 let bundle = CredentialBundle::from_parts(public_key.to_vec(), signature_key_pair);
@@ -90,7 +91,7 @@ impl MlsMember {
 
         // Retrieve [KeyPackage] from bundle which is the public part of it
         let key_package = key_package_bundle.key_package().clone();
-        let key_package_hash = key_package.hash(provider);
+        let key_package_hash = key_package.hash_ref(provider.crypto())?.as_slice();
 
         // Save generated bundle in key-store
         provider

@@ -66,6 +66,7 @@ async-std = { version = "1.10.0", features = ["attributes"] }
 criterion = "0.3.4"
 ctor = "0.1.2"
 incremental-topo = "0.1.2"
+openmls = { version = "^0.4.0", features = ["crypto-subtle", "test-utils"] }
 pretty_env_logger = "0.4"
 rstest = "0.12.0"
 rstest_reuse = "0.1.3"

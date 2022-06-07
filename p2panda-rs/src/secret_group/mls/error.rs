@@ -6,13 +6,38 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum MlsError {
-    /// Internal MLS `KeyPackage` error.
     #[error(transparent)]
-    KeyPackage(#[from] openmls::prelude::KeyPackageError),
+    KeyPackage(#[from] openmls::key_packages::errors::KeyPackageBundleNewError),
 
-    /// Internal MLS `ManagedGroup` error.
     #[error(transparent)]
-    ManagedGroup(#[from] openmls::prelude::ManagedGroupError),
+    Welcome(#[from] openmls::group::errors::WelcomeError),
+
+    #[error(transparent)]
+    GroupState(#[from] openmls::group::errors::MlsGroupStateError),
+
+    #[error(transparent)]
+    ParseMessage(#[from] openmls::group::errors::ParseMessageError),
+
+    #[error(transparent)]
+    UnverifiedMessage(#[from] openmls::group::errors::UnverifiedMessageError),
+
+    #[error(transparent)]
+    ExportSecret(#[from] openmls::group::errors::ExportSecretError),
+
+    #[error(transparent)]
+    CreateMessage(#[from] openmls::group::errors::CreateMessageError),
+
+    #[error(transparent)]
+    NewGroup(#[from] openmls::group::errors::NewGroupError),
+
+    #[error(transparent)]
+    AddMembers(#[from] openmls::group::errors::AddMembersError),
+
+    #[error(transparent)]
+    RemoveMembers(#[from] openmls::group::errors::RemoveMembersError),
+
+    #[error(transparent)]
+    Library(#[from] openmls::error::LibraryError),
 
     /// Internal `openmls_memory_keystore` serialisation error.
     // @TODO: This will be changed as soon as we have our own key store implementation.
