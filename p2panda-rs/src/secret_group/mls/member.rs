@@ -32,6 +32,7 @@ impl MlsMember {
         let credential_bundle = match provider.key_store().read(&public_key) {
             None => {
                 // @TODO: Not sure how this is possible to access ..
+                // Related issue: https://github.com/openmls/openmls/issues/898
                 /* // Full key here because we need it to sign
                 let private_key = key_pair.private_key().to_bytes();
                 let full_key = [private_key, public_key].concat();
