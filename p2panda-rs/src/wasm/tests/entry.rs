@@ -8,7 +8,7 @@ use crate::document::DocumentViewId;
 use crate::hash::Hash;
 use crate::operation::{OperationEncoded, OperationFields, OperationValue};
 use crate::schema::SchemaId;
-use crate::test_utils::utils::create_operation;
+use crate::test_utils::fixtures::operation;
 use crate::wasm::{decode_entry, sign_encode_entry, KeyPair, SignEncodeEntryResult};
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -28,7 +28,7 @@ fn encodes_decodes_entries() {
         .add("name", OperationValue::Text("Hello!".to_string()))
         .unwrap();
 
-    let operation = create_operation(schema, fields);
+    let operation = operation(Some(fields), None, Some(schema));
     let operation_encoded = OperationEncoded::try_from(&operation).unwrap();
 
     // Encode correct entry

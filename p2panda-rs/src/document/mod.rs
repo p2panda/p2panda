@@ -17,7 +17,7 @@
 //! # use p2panda_rs::identity::KeyPair;
 //! # use p2panda_rs::operation::{OperationValue, OperationWithMeta};
 //! # use p2panda_rs::schema::SchemaId;
-//! # use p2panda_rs::test_utils::utils::{create_operation, delete_operation, update_operation, operation_fields};
+//! # use p2panda_rs::test_utils::fixtures::{create_operation, delete_operation, update_operation, operation_fields};
 //! # use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
 //! # use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 //! use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewFields, DocumentViewId};
@@ -40,63 +40,55 @@
 //! # let schema = SchemaId::new(TEST_SCHEMA_ID).unwrap();
 //! # let mut node = Node::new();
 //! #
+//! # let mut node = Node::new();
 //! # let (polar_entry_1_hash, _) = send_to_node(
 //! #     &mut node,
 //! #     &polar,
-//! #     &create_operation(
-//! #         schema.clone(),
-//! #         operation_fields(vec![
-//! #             ("name", OperationValue::Text("Polar Bear Cafe".to_string())),
-//! #             ("owner", OperationValue::Text("Polar Bear".to_string())),
-//! #             ("house-number", OperationValue::Integer(12)),
-//! #         ]),
-//! #     ),
+//! #     &create_operation(&[
+//! #         ("name", OperationValue::Text("Polar Bear Cafe".to_string())),
+//! #         ("owner", OperationValue::Text("Polar Bear".to_string())),
+//! #         ("house-number", OperationValue::Integer(12)),
+//! #     ]),
 //! # )
 //! # .unwrap();
-//! #
 //! # let (polar_entry_2_hash, _) = send_to_node(
 //! #     &mut node,
 //! #     &polar,
 //! #     &update_operation(
-//! #         schema.clone(),
-//! #         polar_entry_1_hash.clone().into(),
-//! #         operation_fields(vec![
+//! #         &[
 //! #             ("name", OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".to_string())),
 //! #             ("owner", OperationValue::Text("しろくま".to_string())),
-//! #         ]),
+//! #         ],
+//! #         &polar_entry_1_hash.clone().into(),
 //! #     ),
 //! # )
 //! # .unwrap();
-//! #
 //! # let (panda_entry_1_hash, _) = send_to_node(
 //! #     &mut node,
 //! #     &panda,
 //! #     &update_operation(
-//! #         schema.clone(),
-//! #         polar_entry_1_hash.clone().into(),
-//! #         operation_fields(vec![("name", OperationValue::Text("🐼 Cafe!!".to_string()))]),
+//! #         &[("name", OperationValue::Text("🐼 Cafe!!".to_string()))],
+//! #         &polar_entry_1_hash.clone().into(),
 //! #     ),
 //! # )
 //! # .unwrap();
-//! #
 //! # let (polar_entry_3_hash, _) = send_to_node(
 //! #     &mut node,
 //! #     &polar,
 //! #     &update_operation(
-//! #         schema.clone(),
-//! #         DocumentViewId::new(&[panda_entry_1_hash.clone().into(), polar_entry_2_hash.clone().into()]).unwrap(),
-//! #         operation_fields(vec![("house-number", OperationValue::Integer(102))]),
+//! #         &[("house-number", OperationValue::Integer(102))],
+//! #         &DocumentViewId::new(&[
+//! #             panda_entry_1_hash.clone().into(),
+//! #             polar_entry_2_hash.clone().into(),
+//! #         ])
+//! #         .unwrap(),
 //! #     ),
 //! # )
 //! # .unwrap();
-//! #
 //! # let (polar_entry_4_hash, _) = send_to_node(
 //! #     &mut node,
 //! #     &polar,
-//! #     &delete_operation(
-//! #         schema,
-//! #         polar_entry_3_hash.clone().into()
-//! #     ),
+//! #     &delete_operation(&polar_entry_3_hash.clone().into()),
 //! # )
 //! # .unwrap();
 //! #

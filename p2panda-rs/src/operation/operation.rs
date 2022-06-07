@@ -341,10 +341,10 @@ mod tests {
     use crate::document::{DocumentId, DocumentViewId};
     use crate::operation::{OperationEncoded, OperationValue, Relation};
     use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::templates::many_valid_operations;
     use crate::test_utils::fixtures::{
-        fields, random_document_id, random_document_view_id, schema,
+        operation_fields, random_document_id, random_document_view_id, schema,
     };
+    use crate::test_utils::templates::many_valid_operations;
     use crate::Validate;
 
     use super::{AsOperation, Operation, OperationAction, OperationFields, OperationVersion};
@@ -358,7 +358,7 @@ mod tests {
 
     #[rstest]
     fn operation_validation(
-        fields: OperationFields,
+        operation_fields: OperationFields,
         schema: SchemaId,
         #[from(random_document_view_id)] prev_op_id: DocumentViewId,
     ) {
@@ -379,7 +379,7 @@ mod tests {
             schema: schema.clone(),
             // CREATE operations must not contain previous_operations
             previous_operations: Some(prev_op_id.clone()), // Error
-            fields: Some(fields.clone()),
+            fields: Some(operation_fields.clone()),
         };
 
         assert!(invalid_create_operation_2.validate().is_err());
@@ -390,7 +390,7 @@ mod tests {
             schema: schema.clone(),
             // UPDATE operations must contain previous_operations
             previous_operations: None, // Error
-            fields: Some(fields.clone()),
+            fields: Some(operation_fields.clone()),
         };
 
         assert!(invalid_update_operation_1.validate().is_err());
@@ -423,7 +423,7 @@ mod tests {
             schema,
             previous_operations: Some(prev_op_id),
             // DELETE operations must not contain fields
-            fields: Some(fields), // Error
+            fields: Some(operation_fields), // Error
         };
 
         assert!(invalid_delete_operation_2.validate().is_err());

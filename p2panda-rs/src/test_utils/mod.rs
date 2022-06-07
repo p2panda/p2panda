@@ -7,5 +7,6 @@
 pub mod constants;
 pub mod fixtures;
 pub mod mocks;
+pub mod templates;
 pub mod test_data;
 pub mod utils;

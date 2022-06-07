@@ -69,15 +69,15 @@ let mut node = Node::new();
 let (panda_entry_1_hash, next_entry_args) = send_to_node(
     &mut node,
     &panda,
-    &create_operation(
-        SchemaId::new(TEST_SCHEMA_ID).unwrap(),
-        operation_fields(vec![(
+    &operation(
+        Some(operation_fields(vec![(
             "cafe_name",
             OperationValue::Text("Panda Cafe".to_string()),
-        )]),
-    ),
-)
-.unwrap();
+        )])), 
+        None, 
+        None
+    )
+).unwrap();
 
 // Panda publishes an update operation. This appends a new entry to the document log, the operation also refers to the previous
 // tip of the graph by it's operation id.
@@ -87,16 +87,15 @@ let (panda_entry_1_hash, next_entry_args) = send_to_node(
 let (panda_entry_2_hash, next_entry_args) = send_to_node(
     &mut node,
     &panda,
-    &update_operation(
-        SchemaId::new(TEST_SCHEMA_ID).unwrap(),
-        panda_entry_1_hash.clone().into(), // The previous tip of this document graph
-        operation_fields(vec![(
+    &operation(
+        Some(operation_fields(vec![(
             "cafe_name",
             OperationValue::Text("Panda Cafe!!".to_string()),
-        )]),
-    ),
-)
-.unwrap();
+        )])), 
+        Some(panda_entry_1_hash.clone().into()), 
+        None
+    )
+).unwrap();
 
 // Now Penguin publishes an update operation which refers to Panda's document (via it's tip operation). In doing this
 // Penguin creates their own document log which now contains one entry, the operation on this entry refers to Panda's document
@@ -107,14 +106,14 @@ let (panda_entry_2_hash, next_entry_args) = send_to_node(
 let (penguin_entry_1_hash, next_entry_args) = send_to_node(
     &mut node,
     &penguin,
-    &update_operation(
-        SchemaId::new(TEST_SCHEMA_ID).unwrap(),
-        panda_entry_2_hash.into(),
-        operation_fields(vec![(
-            "message",
-            OperationValue::Text("Penguin Cafe".to_string()),
-        )]),
-    ),
+    &operation(
+        Some(operation_fields(vec![(
+            "cafe_name",
+            OperationValue::Text("Panda Cafe!!".to_string()),
+        )])), 
+        Some(panda_entry_2_hash.clone().into()), 
+        None
+    )
 )
 .unwrap();
 ```
@@ -125,10 +124,10 @@ To enable logging in the mock node run the test suite with the following env var
 
 ```bash
 # Run tests with info logging
-RUST_LOG=p2panda_rs=info cargo test
+RUST_LOG=p2panda_rs=info cargo test --all-features
 
 # Run tests with info and debug logging
-RUST_LOG=p2panda_rs=debug cargo test
+RUST_LOG=p2panda_rs=debug cargo test --all-features
 ```
 
 ## Test data

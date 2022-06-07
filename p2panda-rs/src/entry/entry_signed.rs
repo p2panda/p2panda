@@ -151,8 +151,8 @@ mod tests {
     use crate::entry::{sign_and_encode, Entry, EntrySigned};
     use crate::identity::KeyPair;
     use crate::operation::OperationEncoded;
-    use crate::test_utils::fixtures::templates::many_valid_entries;
     use crate::test_utils::fixtures::{entry_signed_encoded, key_pair, operation_encoded};
+    use crate::test_utils::templates::many_valid_entries;
 
     #[rstest]
     fn test_entry_signed(entry_signed_encoded: EntrySigned, key_pair: KeyPair) {
