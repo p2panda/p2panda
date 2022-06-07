@@ -4,7 +4,6 @@ use rand::Rng;
 use rstest::fixture;
 
 use crate::hash::Hash;
-use crate::test_utils::constants::DEFAULT_HASH;
 
 /// Fixture which injects a random hash into a test method.
 #[fixture]

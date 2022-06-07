@@ -156,12 +156,12 @@ pub fn operation_encoded_invalid_relation_fields() -> OperationEncoded {
     OperationEncoded::new("A466616374696F6E6663726561746566736368656D61784A76656E75655F30303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696F6E01666669656C6473A1696C6F636174696F6E73A264747970656872656C6174696F6E6576616C756578443833653230343337333866326235636463643362366362306662623832666531323539303564306637356531363438386133386433393566663566396435656138326235").unwrap()
 }
 
-// Helpers for easily constructing common operation types
-
+/// Helper method for easily constructing a CREATE operation.
 pub fn create_operation(fields: &[(&str, OperationValue)]) -> Operation {
     operation(Some(operation_fields(fields.to_vec())), None, None)
 }
 
+/// Helper method for easily constructing an UPDATE operation.
 pub fn update_operation(
     fields: &[(&str, OperationValue)],
     previous_operations: &DocumentViewId,
@@ -173,6 +173,7 @@ pub fn update_operation(
     )
 }
 
+/// Helper method for easily constructing a DELETE operation.
 pub fn delete_operation(previous_operations: &DocumentViewId) -> Operation {
     operation(None, Some(previous_operations.to_owned()), None)
 }

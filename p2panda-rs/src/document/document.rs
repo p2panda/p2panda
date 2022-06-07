@@ -982,7 +982,7 @@ mod tests {
     }
 
     #[rstest]
-    fn builds_specific_document_view(schema: SchemaId) {
+    fn builds_specific_document_view() {
         let panda = Client::new(
             "panda".to_string(),
             KeyPair::from_private_key_str(
