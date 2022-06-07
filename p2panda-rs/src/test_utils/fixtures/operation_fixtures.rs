@@ -70,12 +70,12 @@ pub fn some_fields(
 
 /// Fixture which injects the default Operation into a test method.
 ///
-/// Default value can be overridden at testing time by passing in custom operation fields and
-/// document id.
+/// Default value can be overidden at testing time by passing in custom parameters.
 ///
 /// If a value for `fields` is provided, this is a CREATE operation. If values for both `fields`
-/// and `document_id` are provided, this is an UPDATE operation. If no value for `fields` is
-/// provided, this is a DELETE operation.
+/// and `previous_operations` are provided, this is an UPDATE operation. If no value for `fields` is
+/// provided, this is a DELETE operation. The schema field is optional and a default is used when
+/// not passed.
 ///
 /// ```
 /// # extern crate p2panda_rs;
@@ -140,6 +140,13 @@ pub fn operation(
 }
 
 /// Fixture which injects a test `OperationWithMeta` into a test method.
+///
+/// Default value can be overidden at testing time by passing in custom parameters.
+///
+/// If a value for `fields` is provided, this is a CREATE operation. If values for both `fields`
+/// and `previous_operations` are provided, this is an UPDATE operation. If no value for `fields` is
+/// provided, this is a DELETE operation. The schema, author and operation_id fields are optional
+/// and a default is used when not passed.
 #[fixture]
 pub fn operation_with_meta(
     #[from(some_fields)] fields: Option<OperationFields>,
@@ -155,6 +162,7 @@ pub fn operation_with_meta(
     )
 }
 
+/// Fixture which injects an encoded operation string into a test method.
 #[fixture]
 pub fn encoded_create_string(operation: Operation) -> String {
     OperationEncoded::try_from(&operation)
@@ -163,7 +171,9 @@ pub fn encoded_create_string(operation: Operation) -> String {
         .to_owned()
 }
 
-/// Fixture which injects the default CREATE `OperationWithMeta` into a test method.
+/// Fixture which injects an `OperationWithMeta` into a test method.
+///
+/// Constructed from an encoded entry and operation.
 #[fixture]
 pub fn meta_operation(
     entry_signed_encoded: EntrySigned,
@@ -172,6 +182,7 @@ pub fn meta_operation(
     OperationWithMeta::new_from_entry(&entry_signed_encoded, &operation_encoded).unwrap()
 }
 
+/// Fixture which injects an `OperationEncoded` into a test method.
 #[fixture]
 pub fn operation_encoded(
     #[from(some_fields)] fields: Option<OperationFields>,
@@ -181,7 +192,7 @@ pub fn operation_encoded(
     OperationEncoded::try_from(&operation(fields, previous_operations, schema)).unwrap()
 }
 
-/// Invalid YASMF hash in `document` with correct length but unknown hash format identifier.
+/// Operation who's YASMF hash in `document` is correct length but unknown hash format identifier.
 #[fixture]
 pub fn operation_encoded_invalid_relation_fields() -> OperationEncoded {
     // {
