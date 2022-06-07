@@ -1140,7 +1140,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema.clone(),
-                vec![panda_entry_1_hash.clone().into()],
+                panda_entry_1_hash.clone().into(),
                 fields(vec![(
                     "name",
                     OperationValue::Text("Panda Cafe!".to_string()),
@@ -1154,7 +1154,7 @@ mod tests {
             &panda,
             &update_operation(
                 schema,
-                vec![panda_entry_1_hash.clone().into()],
+                panda_entry_1_hash.clone().into(),
                 fields(vec![(
                     "name",
                     OperationValue::Text("Panda Cafe!!!!!!".to_string()),
@@ -1218,10 +1218,10 @@ mod tests {
 
         assert_eq!(
             document_builder
-                .build_to_view_id(Some(DocumentViewId::new(&[
-                    panda_entry_2_hash.into(),
-                    panda_entry_3_hash.into()
-                ])))
+                .build_to_view_id(Some(
+                    DocumentViewId::new(&[panda_entry_2_hash.into(), panda_entry_3_hash.into()])
+                        .unwrap()
+                ))
                 .unwrap()
                 .view()
                 .unwrap()
