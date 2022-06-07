@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::credentials::{Credential, CredentialBundle};
+use openmls::credentials::{Credential, CredentialBundle, CredentialType};
 use openmls::extensions::{Extension, LifetimeExtension};
 use openmls::key_packages::{KeyPackage, KeyPackageBundle};
+use openmls::prelude::SignatureScheme;
 use openmls_traits::key_store::OpenMlsKeyStore;
 use openmls_traits::OpenMlsCryptoProvider;
 
@@ -30,18 +31,17 @@ impl MlsMember {
         // Check if CredentialBundle already exists in store, otherwise generate it
         let credential_bundle = match provider.key_store().read(&public_key) {
             None => {
-                // Full key here because we need it to sign
+                // @TODO: Not sure how this is possible to access ..
+                /* // Full key here because we need it to sign
                 let private_key = key_pair.private_key().to_bytes();
                 let full_key = [private_key, public_key].concat();
 
-                // @TODO: Not sure how this is possible to access ..
                 let signature_key_pair = SignatureKeypair::from_bytes(
                     MLS_CIPHERSUITE_NAME.into(),
                     full_key.to_vec(),
                     public_key.to_vec(),
                 );
 
-                // @TODO: Not sure how this is possible to access ..
                 // A CredentialBundle contains a Credential and the corresponding private key.
                 // BasicCredential is a raw, unauthenticated assertion of an identity/key binding.
                 let bundle = CredentialBundle::from_parts(public_key.to_vec(), signature_key_pair);
@@ -50,6 +50,21 @@ impl MlsMember {
                 provider
                     .key_store()
                     .store(bundle.credential().signature_key(), &bundle)
+                    .map_err(|_| MlsError::KeyStoreSerialization)?; */
+
+                // @TODO: Remove this as soon as we figured out how to derive a `CredentialBundle`
+                // from the p2panda key pair
+                let bundle = CredentialBundle::new(
+                    public_key.to_vec(),
+                    CredentialType::Basic,
+                    SignatureScheme::ED25519,
+                    provider,
+                )?;
+
+                // Persist CredentialBundle in key store for the future
+                provider
+                    .key_store()
+                    .store(bundle.credential().identity(), &bundle)
                     .map_err(|_| MlsError::KeyStoreSerialization)?;
 
                 bundle

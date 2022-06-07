@@ -7,6 +7,9 @@ use thiserror::Error;
 #[allow(missing_copy_implementations)]
 pub enum MlsError {
     #[error(transparent)]
+    Credential(#[from] openmls::credentials::errors::CredentialError),
+
+    #[error(transparent)]
     KeyPackage(#[from] openmls::key_packages::errors::KeyPackageBundleNewError),
 
     #[error(transparent)]
