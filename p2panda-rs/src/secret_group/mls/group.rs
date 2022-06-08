@@ -6,9 +6,13 @@ use openmls::framing::{MlsMessageIn, MlsMessageOut, ProcessedMessage};
 use openmls::group::{GroupId, MlsGroup as Group, MlsGroupConfig};
 use openmls::key_packages::KeyPackage;
 use openmls::messages::Welcome;
+use openmls::prelude::SenderRatchetConfiguration;
 use openmls_traits::OpenMlsCryptoProvider;
 
-use crate::secret_group::mls::{MlsError, MLS_PADDING_SIZE, MLS_WIRE_FORMAT_POLICY};
+use crate::secret_group::mls::{
+    MlsError, MLS_MAX_FORWARD_DISTANCE, MLS_MAX_PAST_EPOCHS, MLS_OUT_OF_ORDER_TOLERANCE,
+    MLS_PADDING_SIZE, MLS_WIRE_FORMAT_POLICY,
+};
 
 /// Wrapper around the Managed MLS Group of `openmls`.
 #[derive(Debug)]
@@ -17,11 +21,14 @@ pub struct MlsGroup(Group);
 impl MlsGroup {
     /// Returns a p2panda specific configuration for MLS Groups.
     fn config() -> MlsGroupConfig {
+        let sender_ratchet_configuration =
+            SenderRatchetConfiguration::new(MLS_OUT_OF_ORDER_TOLERANCE, MLS_MAX_FORWARD_DISTANCE);
+
         MlsGroupConfig::builder()
-            // @TODO: Add max past epochs config
-            // .max_past_epochs(16)
-            // @TODO: Add Sender Ratchet config
-            // .sender_ratchet_configuration()
+            // This allows application messages from previous epochs to be decrypted
+            .max_past_epochs(MLS_MAX_PAST_EPOCHS)
+            // Stores the configuration parameters for decryption ratchets
+            .sender_ratchet_configuration(sender_ratchet_configuration)
             // Handshake messages should not be encrypted
             .wire_format_policy(MLS_WIRE_FORMAT_POLICY)
             // Size of padding in bytes

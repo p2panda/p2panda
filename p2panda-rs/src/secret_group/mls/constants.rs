@@ -28,3 +28,20 @@ pub const MLS_LIFETIME_EXTENSION_DAYS: u64 = 60; // 60 days
 /// Defines the wire format policy for outgoing and incoming handshake messages. Application are
 /// always encrypted regardless.
 pub const MLS_WIRE_FORMAT_POLICY: WireFormatPolicy = PURE_PLAINTEXT_WIRE_FORMAT_POLICY;
+
+/// This number sets the storage size of message secrets from past epochs.
+///
+/// It is a trade-off between functionality and forward secrecy and is used if we can not guarantee
+/// that application messages will be sent in the same epoch in which they were generated.
+pub const MLS_MAX_PAST_EPOCHS: usize = 8;
+
+/// This parameter defines how many incoming messages can be skipped in case they have been
+/// dropped, deleted or are missing.
+pub const MLS_MAX_FORWARD_DISTANCE: u32 = 1024;
+
+/// This parameter defines a window for which decryption secrets are kept.
+///
+/// This is useful in case we cannot guarantee that all application messages have total order
+/// within an epoch. Use this carefully, since keeping decryption secrets affects forward secrecy
+/// within an epoch.
+pub const MLS_OUT_OF_ORDER_TOLERANCE: u32 = 16;
