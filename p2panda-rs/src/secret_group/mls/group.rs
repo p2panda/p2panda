@@ -3,25 +3,27 @@
 use openmls::ciphersuite::hash_ref::KeyPackageRef;
 use openmls::credentials::Credential;
 use openmls::framing::{MlsMessageIn, MlsMessageOut, ProcessedMessage};
-use openmls::group::{
-    GroupId, MlsGroup as Group, MlsGroupConfig, PURE_PLAINTEXT_WIRE_FORMAT_POLICY,
-};
+use openmls::group::{GroupId, MlsGroup as Group, MlsGroupConfig};
 use openmls::key_packages::KeyPackage;
 use openmls::messages::Welcome;
 use openmls_traits::OpenMlsCryptoProvider;
 
-use crate::secret_group::mls::{MlsError, MLS_PADDING_SIZE};
+use crate::secret_group::mls::{MlsError, MLS_PADDING_SIZE, MLS_WIRE_FORMAT_POLICY};
 
 /// Wrapper around the Managed MLS Group of `openmls`.
 #[derive(Debug)]
 pub struct MlsGroup(Group);
 
 impl MlsGroup {
-    /// Returns a p2panda specific configuration for MLS Groups
+    /// Returns a p2panda specific configuration for MLS Groups.
     fn config() -> MlsGroupConfig {
         MlsGroupConfig::builder()
+            // @TODO: Add max past epochs config
+            // .max_past_epochs(16)
+            // @TODO: Add Sender Ratchet config
+            // .sender_ratchet_configuration()
             // Handshake messages should not be encrypted
-            .wire_format_policy(PURE_PLAINTEXT_WIRE_FORMAT_POLICY)
+            .wire_format_policy(MLS_WIRE_FORMAT_POLICY)
             // Size of padding in bytes
             .padding_size(MLS_PADDING_SIZE)
             // Flag to indicate the Ratchet Tree Extension should be used, otherwise we would need
@@ -82,8 +84,12 @@ impl MlsGroup {
         provider: &impl OpenMlsCryptoProvider,
         members: &[KeyPackage],
     ) -> Result<(MlsMessageOut, Welcome), MlsError> {
+        // Create staged commit with proposals to add members
         let message = self.0.add_members(provider, members)?;
+
+        // Merge and process the staged commit directly, this advances the group epoch
         self.0.merge_pending_commit()?;
+
         Ok(message)
     }
 
@@ -93,7 +99,10 @@ impl MlsGroup {
         provider: &impl OpenMlsCryptoProvider,
         members: &[KeyPackageRef],
     ) -> Result<MlsMessageOut, MlsError> {
+        // Create staged commit with proposals to remove members
         let results = self.0.remove_members(provider, members)?;
+
+        // Merge and process the staged commit directly, this advances the group epoch
         self.0.merge_pending_commit()?;
 
         // MLS returns an `MlsMessageOut` and optional `Welcome` message when removing a member. We
@@ -127,6 +136,7 @@ impl MlsGroup {
         if let ProcessedMessage::StagedCommitMessage(staged_commit) = processed_message {
             self.0.merge_staged_commit(*staged_commit)?;
         } else {
+            // @TODO
             unreachable!("Expected a StagedCommit.");
         }
 
@@ -160,6 +170,8 @@ impl MlsGroup {
 
     /// Decrypts data with the current known MLS group secrets.
     ///
+    /// Accepts an optional public key to verify the authenticity of the message.
+    ///
     /// In this implementation the data has to be an Application message as Handshake messages are
     /// not encrypted in p2panda.
     pub fn decrypt(
@@ -167,7 +179,7 @@ impl MlsGroup {
         provider: &impl OpenMlsCryptoProvider,
         message: MlsMessageIn,
     ) -> Result<Vec<u8>, MlsError> {
-        // Check for syntactic errors
+        // Check for syntactic errors and decrypt messsage
         let unverified_message = self.0.parse_message(message, provider)?;
 
         // Check for semantic errors
@@ -178,6 +190,7 @@ impl MlsGroup {
         if let ProcessedMessage::ApplicationMessage(application_message) = processed_message {
             Ok(application_message.into_bytes())
         } else {
+            // @TODO
             unreachable!("Expected an ApplicationMessage event");
         }
     }
@@ -202,8 +215,8 @@ impl MlsGroup {
     }
 
     /// Return members of MLS group.
-    pub fn members(&self) -> Result<Vec<&KeyPackage>, MlsError> {
-        Ok(self.0.members())
+    pub fn members(&self) -> Vec<&KeyPackage> {
+        self.0.members()
     }
 }
 
@@ -221,15 +234,19 @@ mod tests {
         let key_pair = KeyPair::new();
         let provider = MlsProvider::new();
 
+        // Create MLS group with one member
         let member = MlsMember::new(&provider, &key_pair).unwrap();
         let group_id = GroupId::random(&provider);
         let key_package = member.key_package(&provider).unwrap();
-        let mut group = MlsGroup::new(&provider, group_id, key_package).unwrap();
-        assert!(group.is_active());
+        let mut group = MlsGroup::new(&provider, group_id, key_package.clone()).unwrap();
 
+        // Group is active and contains the owner of the group as the only member
+        assert!(group.is_active());
+        assert_eq!(group.members(), vec![&key_package]);
+
+        // Owner can not decrypt its own messages (for forward secrecy)
         let message = "This is a very secret message";
         let ciphertext = group.encrypt(&provider, message.as_bytes()).unwrap();
-        let plaintext = group.decrypt(&provider, ciphertext.into()).unwrap();
-        assert_eq!(&plaintext, message.as_bytes());
+        assert!(group.decrypt(&provider, ciphertext.into()).is_err());
     }
 }

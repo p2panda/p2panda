@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
-
 use crate::hash::Hash;
-use crate::identity::{Author, KeyPair};
+use crate::identity::KeyPair;
 use crate::secret_group::lts::LongTermSecretEpoch;
 use crate::secret_group::mls::MlsProvider;
 use crate::secret_group::{SecretGroup, SecretGroupMember};
@@ -79,7 +77,7 @@ fn long_term_secret_evolution() {
 
     // Billie invites Calvin into the group
     let group_commit = billie_group
-        .add_members(&billie_provider, &[calvin_key_package])
+        .add_members(&billie_provider, &[calvin_key_package.clone()])
         .unwrap();
 
     // Calvin joins the group and decrypts the `LongTermSecret`
@@ -111,9 +109,8 @@ fn long_term_secret_evolution() {
     billie_group
         .rotate_long_term_secret(&billie_provider)
         .unwrap();
-    let calvin_author = Author::try_from(calvin_key_pair.public_key().to_owned()).unwrap();
     let group_commit = billie_group
-        .remove_members(&billie_provider, &[calvin_author])
+        .remove_members(&billie_provider, &[calvin_key_package.clone()])
         .unwrap();
     assert!(group_commit.welcome().is_none());
 
@@ -247,7 +244,7 @@ fn sender_ratchet_evolution() {
 
     // Billie invites Calvin into the group
     let group_commit = billie_group
-        .add_members(&billie_provider, &[calvin_key_package])
+        .add_members(&billie_provider, &[calvin_key_package.clone()])
         .unwrap();
 
     // Calvin joins the group

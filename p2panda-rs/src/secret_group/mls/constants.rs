@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use openmls::group::{WireFormatPolicy, PURE_PLAINTEXT_WIRE_FORMAT_POLICY};
 use openmls_traits::types::Ciphersuite;
 
 /// MLS ciphersuite used by p2panda.
@@ -23,3 +24,7 @@ pub const MLS_PADDING_SIZE: usize = 16;
 /// The lifetime extension represents the times between which clients will consider a KeyPackage
 /// valid.
 pub const MLS_LIFETIME_EXTENSION_DAYS: u64 = 60; // 60 days
+
+/// Defines the wire format policy for outgoing and incoming handshake messages. Application are
+/// always encrypted regardless.
+pub const MLS_WIRE_FORMAT_POLICY: WireFormatPolicy = PURE_PLAINTEXT_WIRE_FORMAT_POLICY;

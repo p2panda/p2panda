@@ -71,6 +71,7 @@ mod tests {
     use openmls::key_packages::KeyPackageBundle;
     use openmls_traits::key_store::OpenMlsKeyStore;
     use openmls_traits::OpenMlsCryptoProvider;
+    use tls_codec::Serialize;
 
     use crate::identity::KeyPair;
     use crate::secret_group::mls::MlsProvider;
@@ -109,9 +110,13 @@ mod tests {
         let key_package_bundle: Option<KeyPackageBundle> = provider
             .key_store()
             .read(&key_package.hash_ref(provider.crypto()).unwrap().as_slice());
-        let credential_bundle: Option<CredentialBundle> = provider
-            .key_store()
-            .read(&member.credential().signature_key().as_slice());
+        let credential_bundle: Option<CredentialBundle> = provider.key_store().read(
+            &member
+                .credential()
+                .signature_key()
+                .tls_serialize_detached()
+                .unwrap(),
+        );
         assert!(key_package_bundle.is_some());
         assert!(credential_bundle.is_some());
     }

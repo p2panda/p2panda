@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
-
-use ed25519_dalek::PublicKey;
-use openmls::framing::MlsMessageOut;
 use openmls::group::GroupId;
 use openmls::key_packages::KeyPackage;
 use openmls::prelude::KeyPackageRef;
@@ -11,7 +7,6 @@ use openmls_traits::OpenMlsCryptoProvider;
 use tls_codec::{Deserialize, Serialize, TlsVecU32};
 
 use crate::hash::Hash;
-use crate::identity::Author;
 use crate::secret_group::lts::{
     LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch, LongTermSecretNonce,
     LTS_DEFAULT_CIPHERSUITE, LTS_EXPORTER_LABEL, LTS_NONCE_EXPORTER_LABEL,
@@ -129,6 +124,12 @@ impl SecretGroup {
     /// members to join. Every `Welcome` message contains a list of [`KeyPackage`] references for
     /// clients to find out which commit needs to be downloaded to join.
     ///
+    /// According to the MLS specification commits would first be sent to a "Delivery Service" and
+    /// then processed after they got received again to assure correct ordering, but in the p2panda
+    /// case they need to be processed directly to be able to encrypt long-term secrets based on
+    /// the new MLS group state. Also we don't have to worry about ordering here as commits are
+    /// organised by only one single append-only log (single-writer).
+    ///
     /// Note: Only group owners can maintain group members.
     pub fn add_members(
         &mut self,
@@ -139,11 +140,8 @@ impl SecretGroup {
             return Err(SecretGroupError::NotOwner);
         }
 
-        // Add members
+        // Add members. This gets processed directly to establish group state for encryption.
         let (mls_message_out, mls_welcome) = self.mls_group.add_members(provider, key_packages)?;
-
-        // Process message directly to establish group state for encryption
-        self.process_commit_directly(provider, &mls_message_out)?;
 
         // Re-Encrypt long-term secrets for this group epoch
         let encrypt_long_term_secrets = self.encrypt_long_term_secrets(provider)?;
@@ -165,7 +163,7 @@ impl SecretGroup {
     pub fn remove_members(
         &mut self,
         provider: &impl OpenMlsCryptoProvider,
-        members: &[Author],
+        members: &[KeyPackage],
     ) -> Result<SecretGroupCommit, SecretGroupError> {
         if !self.owned {
             return Err(SecretGroupError::NotOwner);
@@ -175,21 +173,15 @@ impl SecretGroup {
         let key_package_refs: Vec<KeyPackageRef> = members
             .iter()
             .map(|member| {
-                KeyPackageRef::new(
-                    member.as_str().as_bytes(),
-                    crate::secret_group::mls::MLS_CIPHERSUITE_NAME,
-                    provider.crypto(),
-                )
-                // @TODO
-                .expect("Conversion failed")
+                member
+                    .hash_ref(provider.crypto())
+                    // @TODO
+                    .expect("Conversion failed")
             })
             .collect();
 
-        // Remove members
+        // Remove members. This gets processed to establish group state for encryption.
         let mls_message_out = self.mls_group.remove_members(provider, &key_package_refs)?;
-
-        // Process message directly to establish group state for encryption
-        self.process_commit_directly(provider, &mls_message_out)?;
 
         // Re-Encrypt long-term secrets for this group epoch
         let encrypt_long_term_secrets = self.encrypt_long_term_secrets(provider)?;
@@ -198,41 +190,12 @@ impl SecretGroup {
     }
 
     /// Return the current group members.
-    pub fn members(&self) -> Result<Vec<Author>, SecretGroupError> {
-        self.mls_group
-            .members()
-            .unwrap()
-            .into_iter()
-            .map(|key_package| {
-                let public_key = PublicKey::from_bytes(key_package.credential().identity())
-                    .map_err(|_| SecretGroupError::InvalidMemberPublicKey)?;
-
-                // It's safe to unwrap here since we just constructed the public key ourselves
-                Ok(Author::try_from(public_key).unwrap())
-            })
-            .collect()
+    pub fn members(&self) -> Vec<&KeyPackage> {
+        self.mls_group.members()
     }
 
     // Commits
     // =======
-
-    // Internal method for the group owner to process MLS Commit messages directly.
-    //
-    // According to the MLS specification commits would first be sent to a "Delivery Service" and
-    // then processed after they got received again to assure correct ordering, but in the p2panda
-    // case they need to be processed directly to be able to encrypt long-term secrets based on the
-    // new MLS group state. Also we don't have to worry about ordering here as commits are
-    // organised by only one single append-only log (single-writer).
-    fn process_commit_directly(
-        &mut self,
-        provider: &impl OpenMlsCryptoProvider,
-        mls_message: &MlsMessageOut,
-    ) -> Result<(), SecretGroupError> {
-        self.mls_group
-            .process_commit(provider, mls_message.to_owned().into())?;
-
-        Ok(())
-    }
 
     /// Process an incoming `SecretGroupCommit` message to apply latest updates to the group.
     pub fn process_commit(
@@ -490,10 +453,8 @@ impl SecretGroup {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryFrom;
-
     use crate::hash::Hash;
-    use crate::identity::{Author, KeyPair};
+    use crate::identity::KeyPair;
     use crate::secret_group::lts::LongTermSecretEpoch;
     use crate::secret_group::{MlsProvider, SecretGroupMember, SecretGroupMessage};
 
@@ -571,13 +532,14 @@ mod tests {
         let key_pair_2 = KeyPair::new();
         let member = SecretGroupMember::new(&provider, &key_pair_2).unwrap();
         let key_package = member.key_package(&provider).unwrap();
-        let commit = group.add_members(&provider, &[key_package]).unwrap();
+        let commit = group
+            .add_members(&provider, &[key_package.clone()])
+            .unwrap();
         let mut group_2 = SecretGroup::new_from_welcome(&provider, &commit).unwrap();
         assert!(!group_2.is_owned());
 
         // Invited member does not have permission to change group
-        let author = Author::try_from(key_pair_2.public_key().to_owned()).unwrap();
-        assert!(group_2.remove_members(&provider, &[author]).is_err());
+        assert!(group_2.remove_members(&provider, &[key_package]).is_err());
         assert!(group_2.rotate_long_term_secret(&provider).is_err());
         assert!(group.rotate_long_term_secret(&provider).is_ok());
     }
@@ -590,20 +552,27 @@ mod tests {
         let provider = MlsProvider::new();
         let owner = SecretGroupMember::new(&provider, &key_pair).unwrap();
         let mut group = SecretGroup::new(&provider, &group_instance_id, &owner).unwrap();
+        let member_key_package_1 = group.members().first().unwrap().clone().to_owned();
 
         // Add a new member
         let provider_2 = MlsProvider::new();
         let key_pair_2 = KeyPair::new();
         let member = SecretGroupMember::new(&provider, &key_pair_2).unwrap();
-        let member_key_package = member.key_package(&provider_2).unwrap();
-        group.add_members(&provider, &[member_key_package]).unwrap();
+        let member_key_package_2 = member.key_package(&provider_2).unwrap();
+        group
+            .add_members(&provider, &[member_key_package_2.clone()])
+            .unwrap();
 
         // Expect the group to contain the owner and the new member
         assert_eq!(
-            group.members().unwrap(),
-            [
-                Author::try_from(key_pair.public_key().to_owned()).unwrap(),
-                Author::try_from(key_pair_2.public_key().to_owned()).unwrap()
+            group
+                .members()
+                .iter()
+                .map(|member| member.credential().identity())
+                .collect::<Vec<&[u8]>>(),
+            vec![
+                member_key_package_1.credential().identity(),
+                member_key_package_2.credential().identity(),
             ]
         );
     }
