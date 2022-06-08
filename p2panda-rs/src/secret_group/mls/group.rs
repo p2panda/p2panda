@@ -176,8 +176,6 @@ impl MlsGroup {
 
     /// Decrypts data with the current known MLS group secrets.
     ///
-    /// Accepts an optional public key to verify the authenticity of the message.
-    ///
     /// In this implementation the data has to be an Application message as Handshake messages are
     /// not encrypted in p2panda.
     pub fn decrypt(
