@@ -37,10 +37,8 @@
 //! // Create a secret group with member as the owner
 //! let mut group = SecretGroup::new(&provider, &group_instance_id, &member)?;
 //!
-//! // Encrypt and decrypt message again for the only member
+//! // Encrypt message
 //! let ciphertext = group.encrypt(&provider, b"Secret Message")?;
-//! let plaintext = group.decrypt(&provider, &ciphertext)?;
-//! assert_eq!(plaintext, b"Secret Message");
 //! # Ok(())
 //! # }
 //! ```
