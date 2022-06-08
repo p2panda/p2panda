@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use openmls::ciphersuite::hash_ref::KeyPackageRef;
 use openmls::group::GroupId;
 use openmls::key_packages::KeyPackage;
-use openmls::prelude::KeyPackageRef;
 use openmls_traits::OpenMlsCryptoProvider;
 use tls_codec::{Deserialize, Serialize, TlsVecU32};
 
