@@ -62,7 +62,7 @@
 // This must be imported here at the root of the crate in order for the `rstest` fixture macros to
 // work as expected.
 #![allow(clippy::single_component_path_imports)]
-#[cfg(test)]
+#[cfg(any(feature = "testing", test))]
 use rstest_reuse;
 
 pub mod cddl;
@@ -75,6 +75,7 @@ pub mod operation;
 pub mod schema;
 pub mod secret_group;
 pub mod storage_provider;
+#[cfg(any(feature = "testing", test))]
 pub mod test_utils;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
@@ -82,7 +83,7 @@ pub mod wasm;
 /// Trait used by p2panda structs to validate arguments.
 pub trait Validate {
     /// Validation error type.
-    type Error: std::fmt::Debug + std::error::Error + 'static;
+    type Error: std::fmt::Debug + std::error::Error + Send + Sync + 'static;
 
     /// Validates p2panda data type instance.
     fn validate(&self) -> Result<(), Self::Error>;

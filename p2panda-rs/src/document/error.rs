@@ -3,6 +3,7 @@
 use thiserror::Error;
 
 use crate::hash::HashError;
+use crate::operation::OperationId;
 
 /// Error types for methods of `DocumentBuilder` struct.
 #[allow(missing_copy_implementations)]
@@ -26,7 +27,7 @@ pub enum DocumentBuilderError {
 
     /// An operation with invalid id or previous operations was added to the document.
     #[error("Operation {0} cannot be connected to the document graph")]
-    InvalidOperationLink(String),
+    InvalidOperationLink(OperationId),
 
     /// Handle errors when sorting the graph.
     #[error(transparent)]
@@ -74,4 +75,8 @@ pub enum DocumentViewIdError {
     /// Handle errors from validating operation id hashes
     #[error(transparent)]
     InvalidOperationId(#[from] HashError),
+
+    /// Document view ids must contain at least one operation ids
+    #[error("Expected one or more operation ids")]
+    ZeroOperationIds,
 }

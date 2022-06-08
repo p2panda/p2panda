@@ -5,7 +5,8 @@ use std::hash::{Hash as StdHash, Hasher};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::operation::{OperationEncoded, OperationError, OperationFields, OperationId};
+use crate::document::DocumentViewId;
+use crate::operation::{OperationEncoded, OperationError, OperationFields};
 use crate::schema::SchemaId;
 use crate::Validate;
 
@@ -106,9 +107,10 @@ pub struct Operation {
     /// Version schema of this operation.
     version: OperationVersion,
 
-    /// Optional array of operation ids directly preceding this one in the document.
+    /// Optional DocumentViewId containing the operation ids directly preceding this one
+    /// in the document.
     #[serde(skip_serializing_if = "Option::is_none")]
-    previous_operations: Option<Vec<OperationId>>,
+    previous_operations: Option<DocumentViewId>,
 
     /// Optional fields map holding the operation data.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -161,7 +163,7 @@ impl Operation {
     /// Returns new UPDATE operation.
     pub fn new_update(
         schema: SchemaId,
-        previous_operations: Vec<OperationId>,
+        previous_operations: DocumentViewId,
         fields: OperationFields,
     ) -> Result<Self, OperationError> {
         let operation = Self {
@@ -180,7 +182,7 @@ impl Operation {
     /// Returns new DELETE operation.
     pub fn new_delete(
         schema: SchemaId,
-        previous_operations: Vec<OperationId>,
+        previous_operations: DocumentViewId,
     ) -> Result<Self, OperationError> {
         let operation = Self {
             action: OperationAction::Delete,
@@ -219,17 +221,16 @@ pub trait AsOperation {
     fn fields(&self) -> Option<OperationFields>;
 
     /// Returns vector of this operation's previous operation ids
-    fn previous_operations(&self) -> Option<Vec<OperationId>>;
+    fn previous_operations(&self) -> Option<DocumentViewId>;
 
     /// Returns true if operation contains fields.
     fn has_fields(&self) -> bool {
         self.fields().is_some()
     }
 
-    /// Returns true if previous_operations contains an vec which itself contains
-    /// at least one item.
+    /// Returns true if previous_operations contains a document view id.
     fn has_previous_operations(&self) -> bool {
-        self.previous_operations().is_some() && !self.previous_operations().unwrap().is_empty()
+        self.previous_operations().is_some()
     }
 
     /// Returns true when instance is CREATE operation.
@@ -270,7 +271,7 @@ impl AsOperation for Operation {
     }
 
     /// Returns known previous operations vector of this operation.
-    fn previous_operations(&self) -> Option<Vec<OperationId>> {
+    fn previous_operations(&self) -> Option<DocumentViewId> {
         self.previous_operations.clone()
     }
 }
@@ -337,11 +338,13 @@ mod tests {
     use rstest::rstest;
     use rstest_reuse::apply;
 
-    use crate::document::DocumentId;
-    use crate::operation::{OperationEncoded, OperationId, OperationValue, Relation};
+    use crate::document::{DocumentId, DocumentViewId};
+    use crate::operation::{OperationEncoded, OperationValue, Relation};
     use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::templates::many_valid_operations;
-    use crate::test_utils::fixtures::{fields, random_document_id, random_operation_id, schema};
+    use crate::test_utils::fixtures::{
+        operation_fields, random_document_id, random_document_view_id, schema,
+    };
+    use crate::test_utils::templates::many_valid_operations;
     use crate::Validate;
 
     use super::{AsOperation, Operation, OperationAction, OperationFields, OperationVersion};
@@ -355,9 +358,9 @@ mod tests {
 
     #[rstest]
     fn operation_validation(
-        fields: OperationFields,
+        operation_fields: OperationFields,
         schema: SchemaId,
-        #[from(random_operation_id)] prev_op_id: OperationId,
+        #[from(random_document_view_id)] prev_op_id: DocumentViewId,
     ) {
         let invalid_create_operation_1 = Operation {
             action: OperationAction::Create,
@@ -375,8 +378,8 @@ mod tests {
             version: OperationVersion::Default,
             schema: schema.clone(),
             // CREATE operations must not contain previous_operations
-            previous_operations: Some(vec![prev_op_id.clone()]), // Error
-            fields: Some(fields.clone()),
+            previous_operations: Some(prev_op_id.clone()), // Error
+            fields: Some(operation_fields.clone()),
         };
 
         assert!(invalid_create_operation_2.validate().is_err());
@@ -387,7 +390,7 @@ mod tests {
             schema: schema.clone(),
             // UPDATE operations must contain previous_operations
             previous_operations: None, // Error
-            fields: Some(fields.clone()),
+            fields: Some(operation_fields.clone()),
         };
 
         assert!(invalid_update_operation_1.validate().is_err());
@@ -396,23 +399,12 @@ mod tests {
             action: OperationAction::Update,
             version: OperationVersion::Default,
             schema: schema.clone(),
-            previous_operations: Some(vec![prev_op_id.clone()]),
+            previous_operations: Some(prev_op_id.clone()),
             // UPDATE operations must contain fields
             fields: None, // Error
         };
 
         assert!(invalid_update_operation_2.validate().is_err());
-
-        let invalid_update_operation_3 = Operation {
-            action: OperationAction::Update,
-            version: OperationVersion::Default,
-            schema: schema.clone(),
-            // UPDATE operations must contain previous_operations containing at least one operation_id
-            previous_operations: Some(vec![]), // Error
-            fields: None,
-        };
-
-        assert!(invalid_update_operation_3.validate().is_err());
 
         let invalid_delete_operation_1 = Operation {
             action: OperationAction::Delete,
@@ -428,30 +420,19 @@ mod tests {
         let invalid_delete_operation_2 = Operation {
             action: OperationAction::Delete,
             version: OperationVersion::Default,
-            schema: schema.clone(),
-            previous_operations: Some(vec![prev_op_id]),
+            schema,
+            previous_operations: Some(prev_op_id),
             // DELETE operations must not contain fields
-            fields: Some(fields), // Error
+            fields: Some(operation_fields), // Error
         };
 
         assert!(invalid_delete_operation_2.validate().is_err());
-
-        let invalid_delete_operation_3 = Operation {
-            action: OperationAction::Update,
-            version: OperationVersion::Default,
-            schema,
-            // DELETE operations must contain previous_operations containing at least one operation_id
-            previous_operations: Some(vec![]), // Error
-            fields: None,
-        };
-
-        assert!(invalid_delete_operation_3.validate().is_err());
     }
 
     #[rstest]
     fn encode_and_decode(
         schema: SchemaId,
-        #[from(random_operation_id)] prev_op_id: OperationId,
+        #[from(random_document_view_id)] prev_op_id: DocumentViewId,
         #[from(random_document_id)] document_id: DocumentId,
     ) {
         // Create test operation
@@ -477,7 +458,7 @@ mod tests {
             )
             .unwrap();
 
-        let operation = Operation::new_update(schema, vec![prev_op_id], fields).unwrap();
+        let operation = Operation::new_update(schema, prev_op_id, fields).unwrap();
 
         assert!(operation.is_update());
 

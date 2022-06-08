@@ -226,7 +226,10 @@ where
             // Nodes returned by `next()` have always been added by `add_link()`, which ensures
             // that these keys all have corresponding nodes in the graph so we can unwrap here.
             let node = self.get_node(node_key).unwrap();
-            if !sorted.contains(&node) {
+            if !sorted
+                .iter()
+                .any(|sorted_node| sorted_node.key() == node.key())
+            {
                 next_nodes.push(node)
             }
         }
@@ -237,6 +240,109 @@ where
         next_nodes.sort_by_key(|node_a| node_a.key());
         next_nodes.reverse();
         Some(next_nodes)
+    }
+
+    /// Returns a new graph instance which has had all nodes removed which aren't causally linked
+    /// to the passed nodes.
+    ///
+    /// Data contained in the returned nodes is unchanged, but the nodes' `next` arrays are edited
+    /// to reflect the new graph connections. The returned graph can be sorted in order to arrive
+    /// at a linear ordering of nodes.  
+    pub fn trim(&'a mut self, tip_nodes: &[K]) -> Result<Graph<K, V>, GraphError> {
+        // Instantiate the passed graph tips and make sure they exist in the graph.
+        let mut graph_tips = vec![];
+        for key in tip_nodes {
+            let node = match self.get_node(key) {
+                Some(node) => node.to_owned(),
+                None => return Err(GraphError::InvalidTrimNodes),
+            };
+            graph_tips.push(node)
+        }
+
+        // The queue initially contains all the passed graph tips.
+        let mut queue: Vec<&Node<K, V>> = graph_tips.iter().collect();
+        let mut next_graph_nodes: HashMap<K, Node<K, V>> = HashMap::new();
+
+        while let Some(mut current_node) = queue.pop() {
+            // Push the current node to the graph nodes array.
+            next_graph_nodes.insert(current_node.key().to_owned(), current_node.clone());
+
+            // We now start traversing the graph backwards from this point until we reach the root
+            // or a merge node.
+            while !current_node.previous().is_empty() {
+                if queue.len() > self.0.len() {
+                    return Err(GraphError::CycleDetected);
+                }
+
+                // Collect parent nodes from the graph by their key.
+                let mut parent_nodes: Vec<&Node<K, V>> = current_node
+                    .previous()
+                    .iter()
+                    // Unwrap as all nodes parents should exist in the graph.
+                    .map(|key| self.get_node(key).unwrap())
+                    .collect();
+
+                for parent_node in parent_nodes.clone() {
+                    // If a parent node has already been visited, we retrieve it, if not we set it's
+                    // `next` field to an empty vec. This is done because we don't want to include any
+                    // links to nodes which will be removed.
+                    let mut parent_node_mut = match next_graph_nodes.get(parent_node.key()) {
+                        Some(node) => node.to_owned(),
+                        None => {
+                            // If it hasn't we set it's `next` field to an empty
+                            let mut parent_node = parent_node.clone();
+                            parent_node.next = vec![];
+                            parent_node
+                        }
+                    };
+
+                    // Push the current node's key to the `next` field of the parent_node unless
+                    // it is already included.
+                    if !parent_node_mut.next.contains(current_node.key()) {
+                        parent_node_mut.next.push(current_node.key().to_owned());
+                    }
+
+                    // Insert the parent_node into the next_graph_nodes.
+                    next_graph_nodes.insert(parent_node.key().to_owned(), parent_node_mut.clone());
+                }
+
+                // If this is a merge node push all parent nodes back into the queue
+                // and break out of the loop.
+                if current_node.is_merge() {
+                    for parent_node in parent_nodes {
+                        queue.push(parent_node);
+                    }
+                    break;
+                }
+
+                // Pop and unwrap as we know there is exactly one node in the parent nodes.
+                current_node = parent_nodes.pop().unwrap();
+            }
+        }
+
+        // We need to edit the `next` field of every passed tip node so that they only contain nodes
+        // which exist in the graph.
+        let next_graph_nodes = next_graph_nodes
+            .clone()
+            .iter_mut()
+            .map(|(key, node)| {
+                let tips = node
+                    .next
+                    .iter()
+                    .filter_map(|next_node| {
+                        next_graph_nodes
+                            .get(next_node)
+                            .map(|node| node.key().to_owned())
+                    })
+                    .collect();
+
+                node.next = tips;
+
+                (key.to_owned(), node.to_owned())
+            })
+            .collect();
+
+        Ok(Graph(next_graph_nodes))
     }
 
     /// Sorts the graph topologically and returns the result.
@@ -473,6 +579,135 @@ mod test {
         graph.add_link(&'e', &'b'); // 'e' doesn't exist in the graph.
 
         assert!(graph.walk_from(&'a').is_err())
+    }
+
+    #[test]
+    fn can_trim_graph() {
+        let mut graph = Graph::new();
+        graph.add_node(&'a', 1);
+        graph.add_node(&'b', 2);
+        graph.add_node(&'c', 3);
+        graph.add_node(&'d', 4);
+        graph.add_node(&'e', 5);
+
+        graph.add_link(&'a', &'b');
+        graph.add_link(&'b', &'c');
+        graph.add_link(&'c', &'d');
+        graph.add_link(&'c', &'e');
+
+        let result = graph.trim(&['d', 'e']).unwrap().sort();
+        assert_eq!(result.unwrap().sorted(), [1, 2, 3, 4, 5]);
+
+        let result = graph.trim(&['c']).unwrap().sort();
+        assert_eq!(result.unwrap().sorted(), [1, 2, 3]);
+
+        let result = graph.trim(&['e']).unwrap().sort();
+        assert_eq!(result.unwrap().sorted(), [1, 2, 3, 5]);
+
+        let result = graph.trim(&['d']).unwrap().sort();
+        assert_eq!(result.unwrap().sorted(), [1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn can_trim_more_complex_graph() {
+        let mut graph = Graph::new();
+        graph.add_node(&'a', 'A');
+        graph.add_node(&'b', 'B');
+        graph.add_node(&'c', 'C');
+        graph.add_node(&'d', 'D');
+        graph.add_node(&'e', 'E');
+        graph.add_node(&'f', 'F');
+        graph.add_node(&'g', 'G');
+        graph.add_node(&'h', 'H');
+        graph.add_node(&'i', 'I');
+        graph.add_node(&'j', 'J');
+        graph.add_node(&'k', 'K');
+
+        graph.add_link(&'a', &'b');
+        graph.add_link(&'b', &'c');
+        graph.add_link(&'c', &'d');
+        graph.add_link(&'d', &'e');
+        graph.add_link(&'e', &'f');
+
+        graph.add_link(&'a', &'g');
+        graph.add_link(&'g', &'h');
+        graph.add_link(&'h', &'d');
+
+        graph.add_link(&'c', &'i');
+        graph.add_link(&'i', &'j');
+        graph.add_link(&'j', &'k');
+        graph.add_link(&'k', &'f');
+
+        //             /--[I]<--[J]<--[K]<--\
+        //  /--[B]<--[C]--\                  \
+        // [A]<--[G]<-----[H]<--[D]<--[E]<---[F]
+        //
+
+        let result = graph.trim(&['k']).unwrap().sort();
+        assert_eq!(result.unwrap().sorted(), ['A', 'B', 'C', 'I', 'J', 'K']);
+
+        let result = graph.trim(&['k', 'e']).unwrap().sort();
+        assert_eq!(
+            result.unwrap().sorted(),
+            ['A', 'B', 'C', 'I', 'J', 'K', 'G', 'H', 'D', 'E']
+        );
+
+        let result = graph.trim(&['f']).unwrap().sort();
+        assert_eq!(
+            result.unwrap().sorted(),
+            ['A', 'B', 'C', 'I', 'J', 'K', 'G', 'H', 'D', 'E', 'F']
+        );
+
+        let result = graph.trim(&['k', 'g']).unwrap().sort();
+        assert_eq!(
+            result.unwrap().sorted(),
+            ['A', 'B', 'C', 'I', 'J', 'K', 'G']
+        );
+
+        // This is a weird case, many "tips" are passed, but they all exist in the same branch. It is valid though
+        // and we process it correctly.
+        let result = graph.trim(&['a', 'b', 'c', 'j']).unwrap().sort();
+        assert_eq!(result.unwrap().sorted(), ['A', 'B', 'C', 'I', 'J']);
+    }
+
+    #[test]
+    fn invalid_trim_node_keys() {
+        let mut graph = Graph::new();
+        graph.add_node(&'a', 1);
+        graph.add_node(&'b', 2);
+        graph.add_node(&'c', 3);
+        graph.add_node(&'d', 4);
+        graph.add_node(&'e', 5);
+
+        graph.add_link(&'a', &'b');
+        graph.add_link(&'b', &'c');
+        graph.add_link(&'c', &'d');
+        graph.add_link(&'c', &'e');
+
+        let expected_err = "Requested trim nodes not found in graph";
+        assert_eq!(
+            graph.trim(&['d', 'f']).unwrap_err().to_string(),
+            expected_err
+        );
+        assert_eq!(graph.trim(&['g']).unwrap_err().to_string(), expected_err);
+    }
+
+    #[test]
+    fn trim_can_detect_cycle() {
+        let mut graph = Graph::new();
+
+        graph.add_node(&'a', 1);
+        graph.add_node(&'b', 2);
+        graph.add_node(&'c', 3);
+        graph.add_node(&'d', 4);
+
+        graph.add_link(&'a', &'b');
+        graph.add_link(&'b', &'c');
+        graph.add_link(&'c', &'d');
+        graph.add_link(&'d', &'b');
+
+        let expected_err = "Cycle detected";
+        assert_eq!(graph.trim(&['d']).unwrap_err().to_string(), expected_err);
     }
 
     #[test]

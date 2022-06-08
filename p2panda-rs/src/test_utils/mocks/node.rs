@@ -12,26 +12,25 @@
 //! use p2panda_rs::schema::SchemaId;
 //! use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
 //! use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
-//! use p2panda_rs::test_utils::utils::{
-//!     create_operation, delete_operation, schema, new_key_pair, operation_fields, update_operation,
+//! use p2panda_rs::test_utils::fixtures::{
+//!     create_operation, delete_operation, schema, random_key_pair, operation_fields, update_operation,
 //! };
 //!
 //! // Instantiate a new mock node
 //! let mut node = Node::new();
 //!
 //! // Instantiate one client named "panda"
-//! let panda = Client::new("panda".to_string(), new_key_pair());
+//! let panda = Client::new("panda".to_string(), random_key_pair());
 //!
 //! // Panda creates a new chat document by publishing a CREATE operation
 //! let (document1_hash_id, _) = send_to_node(
 //!     &mut node,
 //!     &panda,
 //!     &create_operation(
-//!         schema(TEST_SCHEMA_ID),
-//!         operation_fields(vec![(
+//!         &[(
 //!             "message",
 //!             OperationValue::Text("Ohh, my first message!".to_string()),
-//!         )]),
+//!         )],
 //!     )
 //! )
 //! .unwrap();
@@ -41,12 +40,11 @@
 //!     &mut node,
 //!     &panda,
 //!     &update_operation(
-//!         schema(TEST_SCHEMA_ID),
-//!         vec![document1_hash_id.clone().into()],
-//!         operation_fields(vec![(
+//!         &[(
 //!             "message",
 //!             OperationValue::Text("Which I now update.".to_string()),
-//!         )]),
+//!         )],
+//!         &document1_hash_id.clone().into(),
 //!     )
 //! )
 //! .unwrap();
@@ -56,8 +54,7 @@
 //!     &mut node,
 //!     &panda,
 //!     &delete_operation(
-//!         schema(TEST_SCHEMA_ID),
-//!         vec![entry2_hash.into()]
+//!         &entry2_hash.into()
 //!     )
 //! )
 //! .unwrap();
@@ -67,11 +64,10 @@
 //!     &mut node,
 //!     &panda,
 //!     &create_operation(
-//!         schema(TEST_SCHEMA_ID),
-//!         operation_fields(vec![(
+//!         &[(
 //!             "message",
 //!             OperationValue::Text("Let's try that again.".to_string()),
-//!         )]),
+//!         )],
 //!     )
 //! )
 //! .unwrap();
@@ -117,17 +113,10 @@ pub fn send_to_node(
             .previous_operations()
             .expect("UPDATE / DELETE operations must contain previous_operations");
 
-        // If it's an empty collection we have a problem as all UPDATE and DELETE operations
-        // must be pointing at other existing operations.
-        if previous_operations.is_empty() {
-            return Err(
-                "UPDATE / DELETE operations must have more than 1 previous operation".into(),
-            );
-        };
-
         // Using the first previous operation in the list we retrieve the associated document
         // id from the database.
-        let document_id = node.get_document_id_by_entry(previous_operations[0].as_hash());
+        let document_id = node
+            .get_document_id_by_entry(previous_operations.into_iter().next().unwrap().as_hash());
 
         Some(document_id.expect("This node does not contain the required document"))
     };
@@ -397,7 +386,7 @@ impl Node {
                 )
             });
             let document_id = self
-                .get_document_id_by_entry(previous_operations[0].as_hash())
+                .get_document_id_by_entry(previous_operations.into_iter().next().unwrap().as_hash())
                 .unwrap_or_else(|| {
                     panic!(
                         "Document log for entry {} not found on node",
@@ -515,21 +504,19 @@ impl Node {
 mod tests {
     use rstest::rstest;
 
+    use crate::document::DocumentViewId;
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::operation::OperationValue;
-    use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::{private_key, schema};
+    use crate::test_utils::fixtures::{create_operation, key_pair, private_key, update_operation};
     use crate::test_utils::mocks::client::Client;
-    use crate::test_utils::utils::{
-        create_operation, keypair_from_private, operation_fields, update_operation, NextEntryArgs,
-    };
+    use crate::test_utils::utils::NextEntryArgs;
 
     use super::{send_to_node, Node};
 
     #[rstest]
-    fn publishing_entries(schema: SchemaId, private_key: String) {
-        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
+    fn publishing_entries(private_key: String) {
+        let panda = Client::new("panda".to_string(), key_pair(&private_key));
         let mut node = Node::new();
 
         // This is an empty node which has no author logs.
@@ -557,13 +544,10 @@ mod tests {
         let (panda_entry_1_hash, next_entry_args) = send_to_node(
             &mut node,
             &panda,
-            &create_operation(
-                schema.clone(),
-                operation_fields(vec![(
-                    "message",
-                    OperationValue::Text("Ohh, my first message! [Panda]".to_string()),
-                )]),
-            ),
+            &create_operation(&[(
+                "message",
+                OperationValue::Text("Ohh, my first message! [Panda]".to_string()),
+            )]),
         )
         .unwrap();
 
@@ -593,12 +577,11 @@ mod tests {
             &mut node,
             &panda,
             &update_operation(
-                schema.clone(),
-                vec![panda_entry_1_hash.clone().into()],
-                operation_fields(vec![(
+                &[(
                     "message",
                     OperationValue::Text("Which I now update. [Panda]".to_string()),
-                )]),
+                )],
+                &panda_entry_1_hash.clone().into(),
             ),
         )
         .unwrap();
@@ -645,12 +628,11 @@ mod tests {
             &mut node,
             &penguin,
             &update_operation(
-                schema.clone(),
-                vec![panda_entry_2_hash.into()],
-                operation_fields(vec![(
+                &[(
                     "message",
                     OperationValue::Text("My turn to update. [Penguin]".to_string()),
-                )]),
+                )],
+                &panda_entry_2_hash.into(),
             ),
         )
         .unwrap();
@@ -679,12 +661,11 @@ mod tests {
             &mut node,
             &penguin,
             &update_operation(
-                schema.clone(),
-                vec![penguin_entry_1_hash.into()],
-                operation_fields(vec![(
+                &[(
                     "message",
                     OperationValue::Text("And again. [Penguin]".to_string()),
-                )]),
+                )],
+                &penguin_entry_1_hash.into(),
             ),
         )
         .unwrap();
@@ -707,11 +688,11 @@ mod tests {
 
         // We can query the node for the current document state.
         let document = node.get_document(&panda_entry_1_hash);
-
+        let document_view_value = document.view().unwrap().get("message").unwrap();
         // It was last updated by Penguin, this writes over previous values.
         assert_eq!(
-            *document.view().get("message").unwrap(),
-            OperationValue::Text("And again. [Penguin]".to_string())
+            document_view_value.value(),
+            &OperationValue::Text("And again. [Penguin]".to_string())
         );
         // There should only be one document in the database.
         assert_eq!(node.get_documents().len(), 1);
@@ -723,13 +704,10 @@ mod tests {
         let (panda_entry_1_hash, next_entry_args) = send_to_node(
             &mut node,
             &panda,
-            &create_operation(
-                schema,
-                operation_fields(vec![(
-                    "message",
-                    OperationValue::Text("Ohh, my first message in a new document!".to_string()),
-                )]),
-            ),
+            &create_operation(&[(
+                "message",
+                OperationValue::Text("Ohh, my first message in a new document!".to_string()),
+            )]),
         )
         .unwrap();
 
@@ -753,21 +731,18 @@ mod tests {
     }
 
     #[rstest]
-    fn next_entry_args_at_specific_seq_num(schema: SchemaId, private_key: String) {
-        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
+    fn next_entry_args_at_specific_seq_num(private_key: String) {
+        let panda = Client::new("panda".to_string(), key_pair(&private_key));
         let mut node = Node::new();
 
         // Publish a CREATE operation
         let (entry1_hash, _) = send_to_node(
             &mut node,
             &panda,
-            &create_operation(
-                schema.clone(),
-                operation_fields(vec![(
-                    "message",
-                    OperationValue::Text("Ohh, my first message!".to_string()),
-                )]),
-            ),
+            &create_operation(&[(
+                "message",
+                OperationValue::Text("Ohh, my first message!".to_string()),
+            )]),
         )
         .unwrap();
 
@@ -776,12 +751,11 @@ mod tests {
             &mut node,
             &panda,
             &update_operation(
-                schema,
-                vec![entry1_hash.clone().into()],
-                operation_fields(vec![(
+                &[(
                     "message",
                     OperationValue::Text("Which I now update.".to_string()),
-                )]),
+                )],
+                &entry1_hash.clone().into(),
             ),
         )
         .unwrap();
@@ -810,13 +784,11 @@ mod tests {
     }
 
     #[rstest]
-    fn concurrent_updates(schema: SchemaId, private_key: String) {
-        let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
+    fn concurrent_updates(private_key: String) {
+        let panda = Client::new("panda".to_string(), key_pair(&private_key));
         let penguin = Client::new(
             "penguin".to_string(),
-            keypair_from_private(
-                "eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e3".to_string(),
-            ),
+            key_pair("eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e3"),
         );
         let mut node = Node::new();
 
@@ -826,26 +798,24 @@ mod tests {
         let (panda_entry_1_hash, _) = send_to_node(
             &mut node,
             &panda,
-            &create_operation(
-                schema.clone(),
-                operation_fields(vec![
-                    (
-                        "cafe_name",
-                        OperationValue::Text("Polar Pear Cafe".to_string()),
-                    ),
-                    (
-                        "address",
-                        OperationValue::Text("1, Polar Bear Rise, Panda Town".to_string()),
-                    ),
-                ]),
-            ),
+            &create_operation(&[
+                (
+                    "cafe_name",
+                    OperationValue::Text("Polar Pear Cafe".to_string()),
+                ),
+                (
+                    "address",
+                    OperationValue::Text("1, Polar Bear Rise, Panda Town".to_string()),
+                ),
+            ]),
         )
         .unwrap();
 
         let document = node.get_document(&panda_entry_1_hash);
+        let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
-            *document.view().get("cafe_name").unwrap(),
-            OperationValue::Text("Polar Pear Cafe".to_string())
+            document_view_value.value(),
+            &OperationValue::Text("Polar Pear Cafe".to_string())
         );
 
         // Publish an UPDATE operation
@@ -855,20 +825,20 @@ mod tests {
             &mut node,
             &panda,
             &update_operation(
-                schema.clone(),
-                vec![panda_entry_1_hash.clone().into()],
-                operation_fields(vec![(
+                &[(
                     "cafe_name",
                     OperationValue::Text("Polar Bear Cafe".to_string()),
-                )]),
+                )],
+                &panda_entry_1_hash.clone().into(),
             ),
         )
         .unwrap();
 
         let document = node.get_document(&panda_entry_1_hash);
+        let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
-            *document.view().get("cafe_name").unwrap(),
-            OperationValue::Text("Polar Bear Cafe".to_string())
+            document_view_value.value(),
+            &OperationValue::Text("Polar Bear Cafe".to_string())
         );
 
         // Penguin publishes an UPDATE operation, but they haven't seen Panda's most recent entry [2]
@@ -881,20 +851,20 @@ mod tests {
             &mut node,
             &penguin,
             &update_operation(
-                schema.clone(),
-                vec![panda_entry_1_hash.clone().into()],
-                operation_fields(vec![(
+                &[(
                     "address",
                     OperationValue::Text("1, Polar Bear rd, Panda Town".to_string()),
-                )]),
+                )],
+                &panda_entry_1_hash.clone().into(),
             ),
         )
         .unwrap();
 
         let document = node.get_document(&panda_entry_1_hash);
+        let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
-            *document.view().get("address").unwrap(),
-            OperationValue::Text("1, Polar Bear rd, Panda Town".to_string())
+            document_view_value.value(),
+            &OperationValue::Text("Polar Bear Cafe".to_string())
         );
 
         // Penguin publishes another UPDATE operation, this time they have replicated all entries
@@ -907,20 +877,22 @@ mod tests {
             &mut node,
             &penguin,
             &update_operation(
-                schema,
-                vec![penguin_entry_1_hash.into(), panda_entry_2_hash.into()],
-                operation_fields(vec![(
+                &[(
                     "cafe_name",
                     OperationValue::Text("Polar Bear Café".to_string()),
-                )]),
+                )],
+                &DocumentViewId::new(&[penguin_entry_1_hash.into(), panda_entry_2_hash.into()])
+                    .unwrap(),
             ),
         )
         .unwrap();
 
         let document = node.get_document(&panda_entry_1_hash);
+
+        let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
-            *document.view().get("cafe_name").unwrap(),
-            OperationValue::Text("Polar Bear Café".to_string())
+            document_view_value.value(),
+            &OperationValue::Text("Polar Bear Café".to_string())
         );
 
         // As more operations are published, the graph could look like this:

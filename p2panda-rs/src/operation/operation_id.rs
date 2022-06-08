@@ -8,9 +8,10 @@ use serde::{Deserialize, Serialize};
 use crate::hash::{Hash, HashError};
 use crate::Validate;
 
-/// Uniquely identifies an [`Operation`].
+/// Uniquely identifies an [`Operation`](crate::operation::Operation).
 ///
-/// An `OperationId` is the hash of the [`Entry`] with which an operation was published.
+/// An `OperationId` is the hash of the [`Entry`](crate::entry::Entry) with which an operation was
+/// published.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct OperationId(Hash);
 
@@ -25,7 +26,7 @@ impl OperationId {
         self.0.as_str()
     }
 
-    /// Access the inner [`Hash`] value of this operation id.
+    /// Access the inner [`crate::hash::Hash`] value of this operation id.
     pub fn as_hash(&self) -> &Hash {
         &self.0
     }

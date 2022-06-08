@@ -34,7 +34,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --manifest-path ${{ env.cargo_manifest }}
+          args: --manifest-path ${{ env.cargo_manifest }} --all-features
         # Ensure debug output is also tested
         env:
           RUST_LOG: debug
@@ -143,7 +143,7 @@ jobs:
         uses: actions-rs/tarpaulin@v0.1
         with:
           # Force cleaning via `--force-clean` flag to prevent buggy code coverage
-          args: --manifest-path ${{ env.cargo_manifest }} --locked --force-clean
+          args: --manifest-path ${{ env.cargo_manifest }} --locked --force-clean --all-features
         # Ensure debug output is also tested
         env:
           RUST_LOG: debug

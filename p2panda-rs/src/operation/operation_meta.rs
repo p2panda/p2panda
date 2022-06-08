@@ -2,6 +2,7 @@
 
 use std::hash::Hash as StdHash;
 
+use crate::document::DocumentViewId;
 use crate::entry::{decode_entry, EntrySigned};
 use crate::identity::Author;
 use crate::operation::{
@@ -87,6 +88,21 @@ impl OperationWithMeta {
     }
 }
 
+#[cfg(any(feature = "testing", test))]
+impl OperationWithMeta {
+    pub fn new_test_operation(
+        id: &OperationId,
+        public_key: &Author,
+        operation: &Operation,
+    ) -> Self {
+        Self {
+            operation_id: id.clone(),
+            public_key: public_key.clone(),
+            operation: operation.clone(),
+        }
+    }
+}
+
 impl AsOperation for OperationWithMeta {
     /// Returns action type of operation.
     fn action(&self) -> OperationAction {
@@ -108,8 +124,8 @@ impl AsOperation for OperationWithMeta {
         self.operation.fields()
     }
 
-    /// Returns vector of previous operations.
-    fn previous_operations(&self) -> Option<Vec<OperationId>> {
+    /// Returns this operations previous_operations as a `DocumentViewId`.
+    fn previous_operations(&self) -> Option<DocumentViewId> {
         self.operation.previous_operations()
     }
 }
@@ -139,20 +155,18 @@ mod tests {
     use crate::operation::{
         AsOperation, Operation, OperationEncoded, OperationId, OperationValue, OperationWithMeta,
     };
-    use crate::test_utils::fixtures::defaults::schema;
-    use crate::test_utils::fixtures::templates::{
-        all_meta_operation_types, implements_as_operation,
-    };
+    use crate::test_utils::constants::{default_fields, TEST_SCHEMA_ID};
     use crate::test_utils::fixtures::{
-        create_operation, defaults, entry_signed_encoded, fields, key_pair, operation_encoded,
+        entry_signed_encoded, key_pair, operation, operation_encoded, operation_fields,
         operation_id,
     };
+    use crate::test_utils::templates::{implements_as_operation, various_operation_with_meta};
     use crate::Validate;
 
     #[rstest]
+    #[case(operation_encoded(Some(operation_fields(default_fields())), None, Some(TEST_SCHEMA_ID.parse().unwrap())))]
     #[should_panic]
-    #[case(operation_encoded(create_operation(schema(), fields(vec![("message", OperationValue::Text("Not the right message".to_string()))]))))]
-    #[case(operation_encoded(defaults::create_operation()))]
+    #[case(operation_encoded(Some(operation_fields(vec![("message", OperationValue::Text("Not the right message".to_string()))])), None, Some(TEST_SCHEMA_ID.parse().unwrap())))]
     fn create_operation_with_meta(
         entry_signed_encoded: EntrySigned,
         #[case] operation_encoded: OperationEncoded,
@@ -166,7 +180,7 @@ mod tests {
     fn new_operation_not_from_entry(
         key_pair: KeyPair,
         operation_id: OperationId,
-        #[from(create_operation)] operation: Operation,
+        #[from(operation)] operation: Operation,
     ) {
         let author = Author::try_from(*key_pair.public_key()).unwrap();
         let operation_with_meta = OperationWithMeta::new(&author, &operation_id, &operation);
@@ -184,7 +198,7 @@ mod tests {
         assert_eq!(operation_with_meta.operation_id(), &operation_id);
     }
 
-    #[apply(all_meta_operation_types)]
+    #[apply(various_operation_with_meta)]
     fn only_some_operations_should_contain_fields(#[case] operation_with_meta: OperationWithMeta) {
         if operation_with_meta.is_create() {
             assert!(operation_with_meta.operation().fields().is_some());
@@ -199,13 +213,13 @@ mod tests {
         }
     }
 
-    #[apply(all_meta_operation_types)]
+    #[apply(various_operation_with_meta)]
     fn operations_should_validate(#[case] operation_with_meta: OperationWithMeta) {
         assert!(operation_with_meta.operation().validate().is_ok());
         assert!(operation_with_meta.validate().is_ok())
     }
 
-    #[apply(all_meta_operation_types)]
+    #[apply(various_operation_with_meta)]
     fn trait_methods_should_match(#[case] operation_with_meta: OperationWithMeta) {
         let operation = operation_with_meta.operation();
         assert_eq!(operation_with_meta.fields(), operation.fields());
@@ -231,7 +245,7 @@ mod tests {
         operation.has_previous_operations();
     }
 
-    #[apply(all_meta_operation_types)]
+    #[apply(various_operation_with_meta)]
     fn it_hashes(#[case] operation_with_meta: OperationWithMeta) {
         let mut hash_map = HashMap::new();
         let key_value = "Value identified by a hash".to_string();

@@ -29,7 +29,12 @@ Highlights are marked with a pancake 🥞
 - Implement document view id hash as a limited-size identifier for document views [#277](https://github.com/p2panda/p2panda/pull/277) `rs`
 - Additional methods on `EntryStore` needed for replication [310](https://github.com/p2panda/p2panda/pull/310) `rs`
 - Introduce `DocumentViewHash`, implement `Hash` for `DocumentViewId` [#313](https://github.com/p2panda/p2panda/pull/313) `rs`
+- Introduce `DocumentViewFields` & `DocumentViewValue` and other `Document` additions [#319](https://github.com/p2panda/p2panda/pull/319) `rs`
+- Storage traits for `Operation` [#326](https://github.com/p2panda/p2panda/pull/326) `rs`
 - Implement schema hash id as a unique identifier for schemas `rs` [#282](https://github.com/p2panda/p2panda/pull/282) `rs`
+- `Graph` method for selecting sub-section of graph [#335](https://github.com/p2panda/p2panda/pull/335) `rs`
+- Storage traits for documents [#343](https://github.com/p2panda/p2panda/pull/343) `rs`
+- Materialise a document at a specific document view [#337](https://github.com/p2panda/p2panda/pull/337) `rs`
 
 ## Changed
 
@@ -53,6 +58,9 @@ Highlights are marked with a pancake 🥞
 - Methods for getting string representations of `OperationValue` field type and `OperationAction` [#303](https://github.com/p2panda/p2panda/pull/303) `rs`
 - Additional constructor method for `OperationWithMeta` [322](https://github.com/p2panda/p2panda/pull/322) `rs`
 - Minor method renaming in `EntryStore` [323](https://github.com/p2panda/p2panda/pull/323) `rs`
+- Require storage provider errors to be thread-safe [#340](https://github.com/p2panda/p2panda/pull/340)
+- Make previous_operations a `DocumentViewId` [#342](https://github.com/p2panda/p2panda/pull/342) `rs`
+- Restructure / refactor `test_utils` and place behind `testing` flag [#344](https://github.com/p2panda/p2panda/pull/344) `rs`
 
 ## Fixed
 
@@ -68,6 +76,7 @@ Highlights are marked with a pancake 🥞
 - Extend test coverage for `OperationFields` [#236](https://github.com/p2panda/p2panda/pull/236) `rs`
 - Further develop our best practices for writing documentation [#240](https://github.com/p2panda/p2panda/pull/240) `rs`
 - Test `debug` macro calls in Github CI [#288](https://github.com/p2panda/p2panda/pull/288) `rs`
+- Move private module doc strings into public places [#339](https://github.com/p2panda/p2panda/pull/339) `rs`
 
 ## [0.3.0]
 

@@ -12,8 +12,7 @@ use crate::entry::decode_entry;
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{Operation, OperationEncoded};
-use crate::test_utils::mocks::Client;
-use crate::test_utils::mocks::Node;
+use crate::test_utils::mocks::{Client, Node};
 
 /// Next entry args formatted correctly for the test data.
 #[derive(Serialize, Debug)]

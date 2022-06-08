@@ -16,17 +16,17 @@ use crate::Validate;
 /// Trait which handles all high level storage queries and insertions.
 ///
 /// This trait should be implemented on the root storage provider struct. It's definitions make up
-/// the high level methods a p2panda client needs when interacting with data storage. It will
-/// be used for storing entries (`publish_entry`), getting required entry arguments when creating
-/// entries (`get_entry_args`) and retrieving a document id by entry hash (`get_document_by_entry`).
-/// Methods defined on `StorageEntry` and `StorageLog` for lower level access to their respective
-/// data structures will also be available.
+/// the high level methods a p2panda client needs when interacting with data storage. It will be
+/// used for storing entries (`publish_entry`), getting required entry arguments when creating
+/// entries (`get_entry_args`) and retrieving a document id by entry hash
+/// (`get_document_by_entry`). Methods defined on `StorageEntry` and `StorageLog` for lower level
+/// access to their respective data structures will also be available.
 ///
-/// The methods defined here are the minimum required for a working storage backend,
-/// additional custom methods can be added per implementation.
+/// The methods defined here are the minimum required for a working storage backend, additional
+/// custom methods can be added per implementation.
 ///
-/// For example: if I wanted to use a SQLite backend, then I would first implement [`StorageLog`]
-/// and [`StorageEntry`] traits with all their required methods defined (they are required traits
+/// For example: if I wanted to use a SQLite backend, then I would first implement [`AsStorageLog`]
+/// and [`AsStorageEntry`] traits with all their required methods defined (they are required traits
 /// containing lower level accessors and setters for the respective data structures). With these
 /// traits defined [`StorageProvider`] is almost complete as it contains default definitions for
 /// most of it's methods (`get_entry_args` and `publish_entry` are defined below). The only one
@@ -59,14 +59,14 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
     async fn get_document_by_entry(
         &self,
         entry_hash: &Hash,
-    ) -> Result<Option<DocumentId>, Box<dyn std::error::Error>>;
+    ) -> Result<Option<DocumentId>, Box<dyn std::error::Error + Send + Sync>>;
 
     /// Returns required data (backlink and skiplink entry hashes, last sequence number and the
     /// document's log_id) to encode a new bamboo entry.
     async fn get_entry_args(
         &self,
         params: &Self::EntryArgsRequest,
-    ) -> Result<Self::EntryArgsResponse, Box<dyn std::error::Error>> {
+    ) -> Result<Self::EntryArgsResponse, Box<dyn std::error::Error + Send + Sync>> {
         // Validate the entry args request parameters.
         params.validate()?;
 
@@ -109,7 +109,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
     async fn publish_entry(
         &self,
         params: &Self::PublishEntryRequest,
-    ) -> Result<Self::PublishEntryResponse, Box<dyn std::error::Error>> {
+    ) -> Result<Self::PublishEntryResponse, Box<dyn std::error::Error + Send + Sync>> {
         // Create a storage entry.
         let entry = StorageEntry::new(params.entry_signed(), params.operation_encoded())?;
         // Validate the entry (this also maybe happened in the above constructor)
@@ -130,10 +130,14 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
             operation.validate()?;
 
-            // Unwrap here as we validated in the previous line which would error if previous_operations wasn't present
-            // and didn't contain at least one operation_id.
-            let previous_operations = operation.previous_operations().unwrap();
-            let previous_operation_id = previous_operations.get(0).unwrap();
+            // Unwrap here as we validated in the previous line which would error if previous_operations wasn't present.
+            let previous_operation_id = operation
+                .previous_operations()
+                .unwrap()
+                .into_iter()
+                .next()
+                // Unwrap as all DocumentViewId's contain at least one OperationId.
+                .unwrap();
 
             self.get_document_by_entry(previous_operation_id.as_hash())
                 .await?
@@ -221,7 +225,6 @@ pub mod tests {
     use crate::operation::{
         AsOperation, OperationEncoded, OperationFields, OperationId, OperationValue,
     };
-    use crate::schema::SchemaId;
     use crate::storage_provider::traits::test_utils::{
         test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
         SimplestStorageProvider, StorageEntry, StorageLog,
@@ -229,9 +232,7 @@ pub mod tests {
     use crate::storage_provider::traits::{
         AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
     };
-    use crate::test_utils::fixtures::{
-        entry, fields, key_pair, operation_id, schema, update_operation,
-    };
+    use crate::test_utils::fixtures::{entry, key_pair, operation, operation_fields, operation_id};
 
     use super::StorageProvider;
 
@@ -248,7 +249,7 @@ pub mod tests {
         async fn get_document_by_entry(
             &self,
             entry_hash: &Hash,
-        ) -> Result<Option<DocumentId>, Box<dyn std::error::Error>> {
+        ) -> Result<Option<DocumentId>, Box<dyn std::error::Error + Sync + Send>> {
             let entries = self.entries.lock().unwrap();
 
             let entry = entries.iter().find(|entry| entry.hash() == *entry_hash);
@@ -565,8 +566,7 @@ pub mod tests {
     #[async_std::test]
     async fn prev_op_does_not_exist(
         test_db: SimplestStorageProvider,
-        schema: SchemaId,
-        fields: OperationFields,
+        operation_fields: OperationFields,
         #[from(operation_id)] invalid_prev_op: OperationId,
         key_pair: KeyPair,
     ) {
@@ -589,14 +589,18 @@ pub mod tests {
         let next_entry = entries.get(3).unwrap();
 
         // Recreate this entry and replace previous_operations to contain invalid OperationId
-        let update_operation_with_invalid_previous_operations =
-            update_operation(schema.clone(), vec![invalid_prev_op], fields.clone());
+        let update_operation_with_invalid_previous_operations = operation(
+            Some(operation_fields.clone()),
+            Some(invalid_prev_op.into()),
+            None,
+        );
 
         let update_entry = entry(
-            update_operation_with_invalid_previous_operations.clone(),
-            next_entry.seq_num(),
+            next_entry.seq_num().as_u64(),
+            next_entry.log_id().as_u64(),
             next_entry.backlink_hash(),
             next_entry.skiplink_hash(),
+            Some(update_operation_with_invalid_previous_operations.clone()),
         );
 
         let encoded_entry = sign_and_encode(&update_entry, &key_pair).unwrap();
@@ -619,7 +623,7 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn invalid_entry_op_pair(test_db: SimplestStorageProvider, schema: SchemaId) {
+    async fn invalid_entry_op_pair(test_db: SimplestStorageProvider) {
         let entries = test_db.entries.lock().unwrap().clone();
         let logs = test_db.logs.lock().unwrap().clone();
 
@@ -639,13 +643,13 @@ pub mod tests {
         let next_entry = entries.get(3).unwrap();
 
         // Create a new operation which does not match the one contained in the entry hash
-        let mismatched_operation = update_operation(
-            schema.clone(),
-            vec![next_entry.operation_encoded().unwrap().hash().into()],
-            fields(vec![(
+        let mismatched_operation = operation(
+            Some(operation_fields(vec![(
                 "poopy",
                 OperationValue::Text("This is the WRONG operation :-(".to_string()),
-            )]),
+            )])),
+            Some(next_entry.operation_encoded().unwrap().hash().into()),
+            None,
         );
 
         let encoded_operation = OperationEncoded::try_from(&mismatched_operation).unwrap();
