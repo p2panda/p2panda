@@ -143,8 +143,7 @@ impl MlsGroup {
         if let ProcessedMessage::StagedCommitMessage(staged_commit) = processed_message {
             self.0.merge_staged_commit(*staged_commit)?;
         } else {
-            // @TODO
-            unreachable!("Expected a StagedCommit.");
+            return Err(MlsError::UnexpectedMessage);
         }
 
         Ok(())
@@ -197,8 +196,7 @@ impl MlsGroup {
         if let ProcessedMessage::ApplicationMessage(application_message) = processed_message {
             Ok(application_message.into_bytes())
         } else {
-            // @TODO
-            unreachable!("Expected an ApplicationMessage event");
+            return Err(MlsError::UnexpectedMessage);
         }
     }
 

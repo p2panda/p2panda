@@ -175,12 +175,11 @@ impl SecretGroup {
             .map(|member| {
                 member
                     .hash_ref(provider.crypto())
-                    // @TODO
-                    .expect("Conversion failed")
+                    .expect("Hashing key package references failed")
             })
             .collect();
 
-        // Remove members. This gets processed to establish group state for encryption.
+        // Remove members. This gets processed directly to establish group state for encryption
         let mls_message_out = self.mls_group.remove_members(provider, &key_package_refs)?;
 
         // Re-Encrypt long-term secrets for this group epoch
