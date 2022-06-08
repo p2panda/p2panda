@@ -194,7 +194,7 @@ impl MlsGroup {
         if let ProcessedMessage::ApplicationMessage(application_message) = processed_message {
             Ok(application_message.into_bytes())
         } else {
-            return Err(MlsError::UnexpectedMessage);
+            Err(MlsError::UnexpectedMessage)
         }
     }
 
