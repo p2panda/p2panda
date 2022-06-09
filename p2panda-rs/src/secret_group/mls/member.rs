@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::ciphersuite::Ciphersuite;
-use openmls::prelude::{
-    Credential, CredentialBundle, Extension, KeyPackage, KeyPackageBundle, LifetimeExtension,
-    SignatureKeypair,
-};
+use openmls::credentials::{Credential, CredentialBundle};
+use openmls::extensions::{Extension, LifetimeExtension};
+use openmls::key_packages::{KeyPackage, KeyPackageBundle};
+use openmls::prelude::SignatureKeypair;
 use openmls_traits::key_store::OpenMlsKeyStore;
 use openmls_traits::OpenMlsCryptoProvider;
+use tls_codec::Serialize;
 
 use crate::identity::KeyPair;
 use crate::secret_group::mls::{MlsError, MLS_CIPHERSUITE_NAME, MLS_LIFETIME_EXTENSION_DAYS};
@@ -26,39 +26,35 @@ impl MlsMember {
         provider: &impl OpenMlsCryptoProvider,
         key_pair: &KeyPair,
     ) -> Result<Self, MlsError> {
-        // Unwrap here since we can be sure this ciphersuite exists
-        let ciphersuite = Ciphersuite::new(MLS_CIPHERSUITE_NAME).unwrap();
-
         // Credential identities are p2panda public keys!
         let public_key = key_pair.public_key().to_bytes();
 
-        // Check if CredentialBundle already exists in store, otherwise generate it
-        let credential_bundle = match provider.key_store().read(&public_key) {
-            None => {
-                // Full key here because we need it to sign
-                let private_key = key_pair.private_key().to_bytes();
-                let full_key = [private_key, public_key].concat();
+        // Full key here because we need it to sign
+        let private_key = key_pair.private_key().to_bytes();
+        let full_key = [private_key, public_key].concat();
 
-                let signature_key_pair = SignatureKeypair::from_bytes(
-                    ciphersuite.signature_scheme(),
-                    full_key.to_vec(),
-                    public_key.to_vec(),
-                );
+        let signature_key_pair = SignatureKeypair::from_bytes(
+            MLS_CIPHERSUITE_NAME.into(),
+            full_key.to_vec(),
+            public_key.to_vec(),
+        );
 
-                // A CredentialBundle contains a Credential and the corresponding private key.
-                // BasicCredential is a raw, unauthenticated assertion of an identity/key binding.
-                let bundle = CredentialBundle::from_parts(public_key.to_vec(), signature_key_pair);
+        // A CredentialBundle contains a Credential and the corresponding private key.
+        // BasicCredential is a raw, unauthenticated assertion of an identity/key binding.
+        let credential_bundle =
+            CredentialBundle::from_parts(public_key.to_vec(), signature_key_pair);
 
-                // Persist CredentialBundle in key store for the future
-                provider
-                    .key_store()
-                    .store(bundle.credential().signature_key(), &bundle)
-                    .map_err(|_| MlsError::KeyStoreSerialization)?;
+        // Persist CredentialBundle in key store for the future
+        let name = credential_bundle
+            .credential()
+            .signature_key()
+            .tls_serialize_detached()
+            .map_err(|_| MlsError::KeyStoreSerialization)?;
 
-                bundle
-            }
-            Some(bundle) => bundle,
-        };
+        provider
+            .key_store()
+            .store(&name, &credential_bundle)
+            .map_err(|_| MlsError::KeyStoreSerialization)?;
 
         Ok(Self { credential_bundle })
     }
@@ -94,12 +90,12 @@ impl MlsMember {
 
         // Retrieve [KeyPackage] from bundle which is the public part of it
         let key_package = key_package_bundle.key_package().clone();
-        let key_package_hash = key_package.hash(provider);
+        let key_package_hash = key_package.hash_ref(provider.crypto())?;
 
         // Save generated bundle in key-store
         provider
             .key_store()
-            .store(&key_package_hash, &key_package_bundle)
+            .store(key_package_hash.as_slice(), &key_package_bundle)
             .map_err(|_| MlsError::KeyStoreSerialization)?;
 
         // Finally return the public part
@@ -117,12 +113,26 @@ mod tests {
     use super::MlsMember;
 
     #[test]
+    fn panda_identity() {
+        let key_pair = KeyPair::new();
+        let provider = MlsProvider::new();
+        let member = MlsMember::new(&provider, &key_pair).unwrap();
+
+        // MLS identity and p2panda public key is the same
+        assert_eq!(
+            member.credential().identity(),
+            key_pair.public_key().to_bytes()
+        );
+    }
+
+    #[test]
     fn key_package_verify() {
         let key_pair = KeyPair::new();
         let provider = MlsProvider::new();
         let member = MlsMember::new(&provider, &key_pair).unwrap();
         let key_package = member.key_package(&provider).unwrap();
 
+        // Key Package can be verified with Credential signature
         assert!(key_package
             .verify_no_out(&provider, member.credential())
             .is_ok());

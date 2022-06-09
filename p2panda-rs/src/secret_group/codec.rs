@@ -3,7 +3,7 @@
 use std::convert::TryFrom;
 use std::io::{Read, Write};
 
-use openmls::framing::MlsCiphertext;
+use openmls::framing::MlsMessageOut;
 use tls_codec::{TlsDeserialize, TlsSerialize, TlsSize};
 
 use crate::secret_group::lts::LongTermSecretCiphertext;
@@ -84,7 +84,7 @@ impl tls_codec::Deserialize for SecretGroupMessage {
         // Translate into enum and decode inner values
         match message_type {
             SecretGroupMessageType::SenderRatchetSecret => Ok(Self::SenderRatchetSecret(
-                MlsCiphertext::tls_deserialize(bytes)?,
+                MlsMessageOut::tls_deserialize(bytes)?,
             )),
             SecretGroupMessageType::LongTermSecret => Ok(Self::LongTermSecret(
                 LongTermSecretCiphertext::tls_deserialize(bytes)?,

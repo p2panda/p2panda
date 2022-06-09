@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use memory_keystore::MemoryKeyStore;
+use openmls_memory_keystore::MemoryKeyStore;
+use openmls_rust_crypto::RustCrypto;
 use openmls_traits::OpenMlsCryptoProvider;
-use rust_crypto::RustCrypto;
 
 /// Implements the `OpenMlsCryptoProvider` trait to be used as a crypto and key store backend for
 /// all other MLS structs and methods.

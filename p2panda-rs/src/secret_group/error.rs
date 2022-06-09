@@ -14,14 +14,6 @@ pub enum SecretGroupError {
     #[error("commit does not contain welcome message")]
     WelcomeMissing,
 
-    /// MLS commit message was expected to be in plaintext.
-    #[error("mls commit needs to be in plaintext")]
-    NeedsToBeMlsPlaintext,
-
-    /// MLS commit message was expected.
-    #[error("mls message is not a commit")]
-    NeedsToBeMlsCommit,
-
     /// Long-term secret does not match current secret group.
     #[error("long-term secret has an invalid group id")]
     LTSInvalidGroupID,

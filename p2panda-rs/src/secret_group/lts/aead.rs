@@ -28,8 +28,6 @@ pub fn encrypt(
 }
 
 /// Decrypt tagged ciphertext using the AEAD algorithm given by ciphersuite.
-// @TODO: This is currently broken upstream
-// See: https://github.com/openmls/openmls/pull/587
 pub fn decrypt(
     provider: &impl OpenMlsCryptoProvider,
     ciphersuite: &LongTermSecretCiphersuite,

@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use openmls::framing::{
-    MlsMessageIn, MlsMessageOut, MlsPlaintextContentType, VerifiableMlsPlaintext,
-};
+use openmls::framing::{MlsMessageIn, MlsMessageOut};
 use openmls::messages::Welcome;
 use tls_codec::{TlsDeserialize, TlsSerialize, TlsSize};
 
@@ -15,7 +13,7 @@ use crate::secret_group::{SecretGroupError, SecretGroupMessage};
 /// this commit invites new members into the group.
 #[derive(Debug, Clone, TlsSerialize, TlsDeserialize, TlsSize)]
 pub struct SecretGroupCommit {
-    mls_commit_message: VerifiableMlsPlaintext,
+    mls_commit_message: MlsMessageOut,
     mls_welcome_message: Option<Welcome>,
     encrypted_long_term_secrets: SecretGroupMessage,
 }
@@ -23,28 +21,12 @@ pub struct SecretGroupCommit {
 impl SecretGroupCommit {
     /// Returns a new instance of a [SecretGroupCommit] message.
     pub(crate) fn new(
-        mls_message_out: MlsMessageOut,
+        mls_commit_message: MlsMessageOut,
         mls_welcome_message: Option<Welcome>,
         encrypted_long_term_secrets: SecretGroupMessage,
     ) -> Result<Self, SecretGroupError> {
-        // Check if message is in plaintext
-        // @TODO: This should be handled internally by `openmls` instead:
-        // https://github.com/openmls/openmls/issues/584
-        let mls_commit_message = match mls_message_out {
-            MlsMessageOut::Plaintext(message) => Ok(message),
-            _ => Err(SecretGroupError::NeedsToBeMlsPlaintext),
-        }?;
-
-        // Check if message is a commit
-        if !matches!(
-            mls_commit_message.content(),
-            MlsPlaintextContentType::Commit(..),
-        ) {
-            return Err(SecretGroupError::NeedsToBeMlsCommit);
-        }
-
         Ok(Self {
-            mls_commit_message: VerifiableMlsPlaintext::from_plaintext(mls_commit_message, None),
+            mls_commit_message,
             mls_welcome_message,
             encrypted_long_term_secrets,
         })
@@ -52,7 +34,7 @@ impl SecretGroupCommit {
 
     /// Returns the MLS Commit message.
     pub(crate) fn commit(&self) -> MlsMessageIn {
-        MlsMessageIn::Plaintext(self.mls_commit_message.clone())
+        self.mls_commit_message.to_owned().into()
     }
 
     /// Returns an MLS Welcome message when given.
