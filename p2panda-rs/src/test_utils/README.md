@@ -124,10 +124,10 @@ To enable logging in the mock node run the test suite with the following env var
 
 ```bash
 # Run tests with info logging
-RUST_LOG=p2panda_rs=info cargo test --all-features
+RUST_LOG=p2panda_rs=info cargo test
 
 # Run tests with info and debug logging
-RUST_LOG=p2panda_rs=debug cargo test --all-features
+RUST_LOG=p2panda_rs=debug cargo test
 ```
 
 ## Test data
