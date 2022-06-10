@@ -9,7 +9,7 @@ use crate::Validate;
 
 use super::OperationId;
 
-/// An operation which has been encoded on a signed entry.
+/// An operation which has been encoded and published on a signed entry.
 ///
 /// Contains the values of an operation as well as it's author and id. The reason an unpublished
 /// operation has no id is that the id is derived from the hash of the signed entry an operation is

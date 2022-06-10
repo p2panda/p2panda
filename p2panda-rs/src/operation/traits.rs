@@ -7,6 +7,7 @@ use crate::operation::{
 };
 use crate::schema::SchemaId;
 
+/// Trait to be implemented on `Operation` and `VerifiedOperation` structs.
 pub trait AsOperation {
     /// Returns action type of operation.
     fn action(&self) -> OperationAction;

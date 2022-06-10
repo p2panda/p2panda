@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::document::{DocumentId, DocumentViewId};
+use crate::document::DocumentId;
 use crate::entry::{EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{
-    Operation, OperationAction, OperationEncoded, OperationFields, OperationId,
-};
+use crate::operation::{Operation, OperationEncoded};
 use crate::schema::SchemaId;
 use crate::Validate;
 
