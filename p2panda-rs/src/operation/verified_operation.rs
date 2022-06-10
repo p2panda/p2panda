@@ -9,8 +9,11 @@ use crate::Validate;
 
 use super::OperationId;
 
-/// Wrapper struct containing an operation, its operation id, and the public key of its
-/// author.
+/// An operation which has been encoded on a signed entry.
+///
+/// Contains the values of an operation as well as it's author and id. The reason an unpublished
+/// operation has no id is that the id is derived from the hash of the signed entry an operation is
+/// encoded on.
 #[derive(Debug, Clone, Eq, PartialEq, StdHash)]
 pub struct VerifiedOperation {
     /// The hash of this operation's entry.
