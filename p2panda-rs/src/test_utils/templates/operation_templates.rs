@@ -82,7 +82,7 @@ fn many_valid_operations(#[case] operation: Operation) {}
     None,
     None
 ))]
-fn various_operation_with_meta(#[case] operation: OperationWithMeta) {}
+fn various_operation_with_meta(#[case] operation: VerifiedOperation) {}
 
 /// This template contains examples of all structs which implement the `AsOperation` trait.
 #[template]

@@ -88,7 +88,7 @@ use crate::document::{Document, DocumentBuilder};
 use crate::entry::{decode_entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{AsOperation, Operation, OperationEncoded, OperationWithMeta};
+use crate::operation::{AsOperation, Operation, OperationEncoded, VerifiedOperation};
 use crate::test_utils::mocks::logs::{AuthorLogs, LogEntry};
 use crate::test_utils::mocks::utils::Result;
 use crate::test_utils::mocks::Client;
@@ -475,7 +475,7 @@ impl Node {
         let operations = entries
             .iter()
             .map(|entry| {
-                OperationWithMeta::new_from_entry(
+                VerifiedOperation::new_from_entry(
                     &entry.entry_encoded(),
                     &entry.operation_encoded(),
                 )

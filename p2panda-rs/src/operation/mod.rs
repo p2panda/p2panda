@@ -10,17 +10,19 @@ mod operation;
 mod operation_encoded;
 mod operation_fields;
 mod operation_id;
-mod operation_meta;
 mod operation_value;
 mod relation;
+mod traits;
+mod verified_operation;
 
 pub use error::{
-    OperationEncodedError, OperationError, OperationFieldsError, OperationWithMetaError,
+    OperationEncodedError, OperationError, OperationFieldsError, VerifiedOperationError,
 };
-pub use operation::{AsOperation, Operation, OperationAction, OperationVersion};
+pub use operation::{Operation, OperationAction, OperationVersion};
 pub use operation_encoded::OperationEncoded;
 pub use operation_fields::OperationFields;
 pub use operation_id::OperationId;
-pub use operation_meta::OperationWithMeta;
 pub use operation_value::OperationValue;
 pub use relation::{PinnedRelation, PinnedRelationList, Relation, RelationList};
+pub use traits::{AsOperation, AsVerifiedOperation};
+pub use verified_operation::VerifiedOperation;

@@ -82,7 +82,7 @@ mod tests {
 
     use crate::document::document_view_fields::DocumentViewValue;
     use crate::document::{reduce, DocumentId};
-    use crate::operation::{OperationValue, OperationWithMeta, Relation};
+    use crate::operation::{AsVerifiedOperation, OperationValue, Relation, VerifiedOperation};
     use crate::test_utils::constants::DEFAULT_HASH;
     use crate::test_utils::fixtures::{
         document_id, document_view_id, operation_fields, operation_with_meta,
@@ -92,7 +92,7 @@ mod tests {
 
     #[rstest]
     fn from_single_create_op(
-        operation_with_meta: OperationWithMeta,
+        operation_with_meta: VerifiedOperation,
         document_view_id: DocumentViewId,
     ) {
         let expected_relation = Relation::new(DEFAULT_HASH.parse().unwrap());
@@ -158,7 +158,7 @@ mod tests {
 
     #[rstest]
     fn with_update_op(
-        #[from(operation_with_meta)] create_operation: OperationWithMeta,
+        #[from(operation_with_meta)] create_operation: VerifiedOperation,
         #[from(operation_with_meta)]
         #[with(Some(operation_fields(vec![
             ("username", OperationValue::Text("yahoo".to_owned())),
@@ -166,7 +166,7 @@ mod tests {
             ("age", OperationValue::Integer(12)),
             ("is_admin", OperationValue::Boolean(true)),
         ])), Some(DEFAULT_HASH.parse().unwrap()))]
-        update_operation: OperationWithMeta,
+        update_operation: VerifiedOperation,
         document_view_id: DocumentViewId,
         #[from(document_id)] relation_id: DocumentId,
     ) {

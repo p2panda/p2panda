@@ -8,13 +8,13 @@ use crate::document::{
 };
 use crate::graph::Graph;
 use crate::identity::Author;
-use crate::operation::{AsOperation, OperationId, OperationWithMeta};
+use crate::operation::{AsOperation, AsVerifiedOperation, OperationId, VerifiedOperation};
 use crate::schema::SchemaId;
 
 /// Construct a graph from a list of operations.
 pub(super) fn build_graph(
-    operations: &[OperationWithMeta],
-) -> Result<Graph<OperationId, OperationWithMeta>, DocumentBuilderError> {
+    operations: &[VerifiedOperation],
+) -> Result<Graph<OperationId, VerifiedOperation>, DocumentBuilderError> {
     let mut graph = Graph::new();
 
     // Add all operations to the graph.
@@ -49,7 +49,7 @@ type IsDeleted = bool;
 /// flag is set to true. If the document contains one or more UPDATE operations, then the reduced
 /// view is returned and the `edited` flag is set to true.
 pub(super) fn reduce(
-    ordered_operations: &[OperationWithMeta],
+    ordered_operations: &[VerifiedOperation],
 ) -> (Option<DocumentViewFields>, IsEdited, IsDeleted) {
     let mut is_edited = false;
 
@@ -79,7 +79,7 @@ pub(super) fn reduce(
 pub struct DocumentMeta {
     deleted: IsDeleted,
     edited: IsEdited,
-    operations: Vec<OperationWithMeta>,
+    operations: Vec<VerifiedOperation>,
 }
 
 /// A replicatable data type designed to handle concurrent updates in a way where all replicas
@@ -125,7 +125,7 @@ impl Document {
     }
 
     /// Get the operations contained in this document.
-    pub fn operations(&self) -> &Vec<OperationWithMeta> {
+    pub fn operations(&self) -> &Vec<VerifiedOperation> {
         &self.meta.operations
     }
 
@@ -147,7 +147,7 @@ impl Display for Document {
 }
 
 /// A struct for building [documents][`Document`] from a collection of [operations with
-/// metadata][`crate::operation::OperationWithMeta`].
+/// metadata][`crate::operation::VerifiedOperation`].
 ///
 /// ## Example
 ///
@@ -157,13 +157,13 @@ impl Display for Document {
 /// # mod tests {
 /// # use rstest::rstest;
 /// # use p2panda_rs::document::DocumentBuilder;
-/// # use p2panda_rs::operation::OperationWithMeta;
+/// # use p2panda_rs::operation::VerifiedOperation;
 /// # use p2panda_rs::test_utils::meta_operation;
 /// #
 /// # #[rstest]
-/// # fn main(#[from(meta_operation)] operation: OperationWithMeta) -> () {
-/// // You need a `Vec<OperationWithMeta>` that includes the `CREATE` operation
-/// let operations: Vec<OperationWithMeta> = vec![operation];
+/// # fn main(#[from(meta_operation)] operation: VerifiedOperation) -> () {
+/// // You need a `Vec<VerifiedOperation>` that includes the `CREATE` operation
+/// let operations: Vec<VerifiedOperation> = vec![operation];
 ///
 /// // Then you can make a `Document` from it
 /// let document = DocumentBuilder::new(operations).build();
@@ -174,17 +174,17 @@ impl Display for Document {
 #[derive(Debug, Clone)]
 pub struct DocumentBuilder {
     /// All the operations present in this document.
-    operations: Vec<OperationWithMeta>,
+    operations: Vec<VerifiedOperation>,
 }
 
 impl DocumentBuilder {
     /// Instantiate a new `DocumentBuilder` from a collection of operations.
-    pub fn new(operations: Vec<OperationWithMeta>) -> DocumentBuilder {
+    pub fn new(operations: Vec<VerifiedOperation>) -> DocumentBuilder {
         Self { operations }
     }
 
     /// Get all operations for this document.
-    pub fn operations(&self) -> Vec<OperationWithMeta> {
+    pub fn operations(&self) -> Vec<VerifiedOperation> {
         self.operations.clone()
     }
 
@@ -216,7 +216,7 @@ impl DocumentBuilder {
         document_view_id: Option<DocumentViewId>,
     ) -> Result<Document, DocumentBuilderError> {
         // Find CREATE operation
-        let mut collect_create_operation: Vec<OperationWithMeta> = self
+        let mut collect_create_operation: Vec<VerifiedOperation> = self
             .operations()
             .into_iter()
             .filter(|op| op.is_create())
@@ -308,7 +308,9 @@ mod tests {
     use crate::document::document_view_fields::{DocumentViewFields, DocumentViewValue};
     use crate::document::{DocumentId, DocumentViewId};
     use crate::identity::KeyPair;
-    use crate::operation::{OperationEncoded, OperationId, OperationValue, OperationWithMeta};
+    use crate::operation::{
+        AsVerifiedOperation, OperationEncoded, OperationId, OperationValue, VerifiedOperation,
+    };
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, operation, operation_fields, operation_with_meta,
@@ -321,15 +323,15 @@ mod tests {
 
     #[rstest]
     fn reduces_operations(
-        #[from(operation_with_meta)] create_operation: OperationWithMeta,
+        #[from(operation_with_meta)] create_operation: VerifiedOperation,
         #[from(operation_with_meta)]
         #[with(
             Some(operation_fields(vec![("username", OperationValue::Text("Yahooo!".into()))])), Some(random_previous_operations(1)))
         ]
-        update_operation: OperationWithMeta,
+        update_operation: VerifiedOperation,
         #[from(operation_with_meta)]
         #[with(None, Some(random_previous_operations(1)))]
-        delete_operation: OperationWithMeta,
+        delete_operation: VerifiedOperation,
     ) {
         let (reduced_create, is_edited, is_deleted) = reduce(&[create_operation.clone()]);
         assert_eq!(
@@ -452,7 +454,7 @@ mod tests {
         )
         .unwrap();
 
-        let operations: Vec<OperationWithMeta> = [
+        let operations: Vec<VerifiedOperation> = [
             panda_entry_1_hash,
             panda_entry_2_hash,
             penguin_entry_1_hash,
@@ -462,7 +464,7 @@ mod tests {
         .iter()
         .map(|hash| {
             let entry = node.get_entry(hash);
-            OperationWithMeta::new_from_entry(&entry.entry_encoded(), &entry.operation_encoded())
+            VerifiedOperation::new_from_entry(&entry.entry_encoded(), &entry.operation_encoded())
                 .unwrap()
         })
         .collect();
@@ -582,7 +584,7 @@ mod tests {
         // Only retrieve the update operation.
         let only_the_update_operation = &node.all_entries()[1];
 
-        let operations = vec![OperationWithMeta::new_from_entry(
+        let operations = vec![VerifiedOperation::new_from_entry(
             &only_the_update_operation.entry_encoded(),
             &only_the_update_operation.operation_encoded(),
         )
@@ -622,7 +624,7 @@ mod tests {
 
         let entry_one = node.get_entry(&panda_entry_1_hash);
 
-        let operation_one = OperationWithMeta::new_from_entry(
+        let operation_one = VerifiedOperation::new_from_entry(
             &entry_one.entry_encoded(),
             &entry_one.operation_encoded(),
         )
@@ -631,7 +633,7 @@ mod tests {
         let entry_two =
             panda.signed_encoded_entry(operation_with_wrong_prev_ops.clone(), next_entry_args);
 
-        let operation_two = OperationWithMeta::new_from_entry(
+        let operation_two = VerifiedOperation::new_from_entry(
             &entry_two,
             &OperationEncoded::try_from(&operation_with_wrong_prev_ops).unwrap(),
         )
@@ -678,11 +680,11 @@ mod tests {
         )
         .unwrap();
 
-        let operations: Vec<OperationWithMeta> = node
+        let operations: Vec<VerifiedOperation> = node
             .all_entries()
             .into_iter()
             .map(|entry| {
-                OperationWithMeta::new_from_entry(
+                VerifiedOperation::new_from_entry(
                     &entry.entry_encoded(),
                     &entry.operation_encoded(),
                 )
@@ -722,11 +724,11 @@ mod tests {
         )
         .unwrap();
 
-        let operations: Vec<OperationWithMeta> = node
+        let operations: Vec<VerifiedOperation> = node
             .all_entries()
             .into_iter()
             .map(|entry| {
-                OperationWithMeta::new_from_entry(
+                VerifiedOperation::new_from_entry(
                     &entry.entry_encoded(),
                     &entry.operation_encoded(),
                 )
@@ -757,7 +759,7 @@ mod tests {
 
         let published_create_operation = &node.all_entries()[0];
 
-        let create_op_with_meta = OperationWithMeta::new_from_entry(
+        let create_op_with_meta = VerifiedOperation::new_from_entry(
             &published_create_operation.entry_encoded(),
             &published_create_operation.operation_encoded(),
         )
@@ -841,7 +843,7 @@ mod tests {
         )
         .unwrap();
 
-        let operations: Vec<OperationWithMeta> = [
+        let operations: Vec<VerifiedOperation> = [
             polar_entry_1_hash,
             polar_entry_2_hash,
             panda_entry_1_hash,
@@ -851,7 +853,7 @@ mod tests {
         .iter()
         .map(|hash| {
             let entry = node.get_entry(hash);
-            OperationWithMeta::new_from_entry(&entry.entry_encoded(), &entry.operation_encoded())
+            VerifiedOperation::new_from_entry(&entry.entry_encoded(), &entry.operation_encoded())
                 .unwrap()
         })
         .collect();
@@ -1023,11 +1025,11 @@ mod tests {
         // DOCUMENT: [panda_1]<--[penguin_1]
         //                    \----[panda_2]
 
-        let operations: Vec<OperationWithMeta> = node
+        let operations: Vec<VerifiedOperation> = node
             .all_entries()
             .into_iter()
             .map(|entry| {
-                OperationWithMeta::new_from_entry(
+                VerifiedOperation::new_from_entry(
                     &entry.entry_encoded(),
                     &entry.operation_encoded(),
                 )

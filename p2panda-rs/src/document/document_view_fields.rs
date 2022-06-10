@@ -4,7 +4,8 @@ use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
 use crate::operation::{
-    AsOperation, OperationFields, OperationId, OperationValue, OperationWithMeta,
+    AsOperation, AsVerifiedOperation, OperationFields, OperationId, OperationValue,
+    VerifiedOperation,
 };
 
 /// The current value of a document fiew field as well as the id of the operation it came from.
@@ -96,8 +97,8 @@ impl Default for DocumentViewFields {
     }
 }
 
-impl From<OperationWithMeta> for DocumentViewFields {
-    fn from(operation: OperationWithMeta) -> Self {
+impl From<VerifiedOperation> for DocumentViewFields {
+    fn from(operation: VerifiedOperation) -> Self {
         let mut document_view_fields = DocumentViewFields::new();
 
         if let Some(fields) = operation.fields() {
@@ -118,7 +119,9 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::{DocumentViewFields, DocumentViewValue};
-    use crate::operation::{AsOperation, OperationId, OperationValue, OperationWithMeta};
+    use crate::operation::{
+        AsOperation, AsVerifiedOperation, OperationId, OperationValue, VerifiedOperation,
+    };
     use crate::test_utils::fixtures::{operation_with_meta, random_operation_id};
 
     #[rstest]
@@ -154,14 +157,14 @@ mod tests {
     }
 
     #[rstest]
-    fn from_meta_operation(operation_with_meta: OperationWithMeta) {
+    fn from_meta_operation(operation_with_meta: VerifiedOperation) {
         let document_view_fields = DocumentViewFields::from(operation_with_meta.clone());
         let operation_fields = operation_with_meta.operation().fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
 
     #[rstest]
-    fn new_from_operation_fields(operation_with_meta: OperationWithMeta) {
+    fn new_from_operation_fields(operation_with_meta: VerifiedOperation) {
         let document_view_fields = DocumentViewFields::new_from_operation_fields(
             operation_with_meta.operation_id(),
             &operation_with_meta.operation().fields().unwrap(),

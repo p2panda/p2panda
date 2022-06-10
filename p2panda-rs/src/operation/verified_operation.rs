@@ -2,14 +2,9 @@
 
 use std::hash::Hash as StdHash;
 
-use crate::document::DocumentViewId;
 use crate::entry::{decode_entry, EntrySigned};
 use crate::identity::Author;
-use crate::operation::{
-    AsOperation, Operation, OperationAction, OperationEncoded, OperationFields, OperationVersion,
-    OperationWithMetaError,
-};
-use crate::schema::SchemaId;
+use crate::operation::{AsVerifiedOperation, Operation, OperationEncoded, VerifiedOperationError};
 use crate::Validate;
 
 use super::OperationId;
@@ -17,7 +12,7 @@ use super::OperationId;
 /// Wrapper struct containing an operation, its operation id, and the public key of its
 /// author.
 #[derive(Debug, Clone, Eq, PartialEq, StdHash)]
-pub struct OperationWithMeta {
+pub struct VerifiedOperation {
     /// The hash of this operation's entry.
     operation_id: OperationId,
 
@@ -28,16 +23,16 @@ pub struct OperationWithMeta {
     operation: Operation,
 }
 
-impl OperationWithMeta {
-    /// Returns a new `OperationWithMeta` instance.
+impl VerifiedOperation {
+    /// Returns a new `VerifiedOperation` instance.
     ///
-    /// Use `OperationWithMeta::new_from_entry()` instead if you want to validate that the operation
+    /// Use `VerifiedOperation::new_from_entry()` instead if you want to validate that the operation
     /// was signed by this public key.
     pub fn new(
         public_key: &Author,
         operation_id: &OperationId,
         operation: &Operation,
-    ) -> Result<Self, OperationWithMetaError> {
+    ) -> Result<Self, VerifiedOperationError> {
         let operation_with_meta = Self {
             public_key: public_key.clone(),
             operation_id: operation_id.clone(),
@@ -49,13 +44,13 @@ impl OperationWithMeta {
         Ok(operation_with_meta)
     }
 
-    /// Returns a new `OperationWithMeta` instance constructed from an `EntrySigned`
+    /// Returns a new `VerifiedOperation` instance constructed from an `EntrySigned`
     /// and an `OperationEncoded`. This constructor validates that the passed operation matches the
     /// one oncoded in the passed signed entry.
     pub fn new_from_entry(
         entry_encoded: &EntrySigned,
         operation_encoded: &OperationEncoded,
-    ) -> Result<Self, OperationWithMetaError> {
+    ) -> Result<Self, VerifiedOperationError> {
         let operation = Operation::from(operation_encoded);
 
         // This validates that the entry and operation are correctly matching.
@@ -71,25 +66,27 @@ impl OperationWithMeta {
 
         Ok(operation_with_meta)
     }
+}
 
+impl AsVerifiedOperation for VerifiedOperation {
     /// Returns the identifier for this operation.
-    pub fn operation_id(&self) -> &OperationId {
+    fn operation_id(&self) -> &OperationId {
         &self.operation_id
     }
 
     /// Returns the public key of the author of this operation.
-    pub fn public_key(&self) -> &Author {
+    fn public_key(&self) -> &Author {
         &self.public_key
     }
 
     /// Returns the wrapped operation.
-    pub fn operation(&self) -> &Operation {
+    fn operation(&self) -> &Operation {
         &self.operation
     }
 }
 
 #[cfg(any(feature = "testing", test))]
-impl OperationWithMeta {
+impl VerifiedOperation {
     pub fn new_test_operation(
         id: &OperationId,
         public_key: &Author,
@@ -103,35 +100,8 @@ impl OperationWithMeta {
     }
 }
 
-impl AsOperation for OperationWithMeta {
-    /// Returns action type of operation.
-    fn action(&self) -> OperationAction {
-        self.operation.action().to_owned()
-    }
-
-    /// Returns version of operation.
-    fn version(&self) -> OperationVersion {
-        self.operation.version().to_owned()
-    }
-
-    /// Returns schema of operation.
-    fn schema(&self) -> SchemaId {
-        self.operation.schema()
-    }
-
-    /// Returns data fields of operation.
-    fn fields(&self) -> Option<OperationFields> {
-        self.operation.fields()
-    }
-
-    /// Returns this operations previous_operations as a `DocumentViewId`.
-    fn previous_operations(&self) -> Option<DocumentViewId> {
-        self.operation.previous_operations()
-    }
-}
-
-impl Validate for OperationWithMeta {
-    type Error = OperationWithMetaError;
+impl Validate for VerifiedOperation {
+    type Error = VerifiedOperationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
         self.operation.validate()?;
@@ -153,7 +123,8 @@ mod tests {
     use crate::entry::EntrySigned;
     use crate::identity::{Author, KeyPair};
     use crate::operation::{
-        AsOperation, Operation, OperationEncoded, OperationId, OperationValue, OperationWithMeta,
+        AsOperation, AsVerifiedOperation, Operation, OperationEncoded, OperationId, OperationValue,
+        VerifiedOperation,
     };
     use crate::test_utils::constants::{default_fields, TEST_SCHEMA_ID};
     use crate::test_utils::fixtures::{
@@ -172,7 +143,7 @@ mod tests {
         #[case] operation_encoded: OperationEncoded,
     ) {
         let operation_with_meta =
-            OperationWithMeta::new_from_entry(&entry_signed_encoded, &operation_encoded);
+            VerifiedOperation::new_from_entry(&entry_signed_encoded, &operation_encoded);
         assert!(operation_with_meta.is_ok())
     }
 
@@ -183,7 +154,7 @@ mod tests {
         #[from(operation)] operation: Operation,
     ) {
         let author = Author::try_from(*key_pair.public_key()).unwrap();
-        let operation_with_meta = OperationWithMeta::new(&author, &operation_id, &operation);
+        let operation_with_meta = VerifiedOperation::new(&author, &operation_id, &operation);
         assert!(operation_with_meta.is_ok());
         let operation_with_meta = operation_with_meta.unwrap();
         assert_eq!(operation_with_meta.fields(), operation.fields());
@@ -199,7 +170,7 @@ mod tests {
     }
 
     #[apply(various_operation_with_meta)]
-    fn only_some_operations_should_contain_fields(#[case] operation_with_meta: OperationWithMeta) {
+    fn only_some_operations_should_contain_fields(#[case] operation_with_meta: VerifiedOperation) {
         if operation_with_meta.is_create() {
             assert!(operation_with_meta.operation().fields().is_some());
         }
@@ -214,13 +185,13 @@ mod tests {
     }
 
     #[apply(various_operation_with_meta)]
-    fn operations_should_validate(#[case] operation_with_meta: OperationWithMeta) {
+    fn operations_should_validate(#[case] operation_with_meta: VerifiedOperation) {
         assert!(operation_with_meta.operation().validate().is_ok());
         assert!(operation_with_meta.validate().is_ok())
     }
 
     #[apply(various_operation_with_meta)]
-    fn trait_methods_should_match(#[case] operation_with_meta: OperationWithMeta) {
+    fn trait_methods_should_match(#[case] operation_with_meta: VerifiedOperation) {
         let operation = operation_with_meta.operation();
         assert_eq!(operation_with_meta.fields(), operation.fields());
         assert_eq!(operation_with_meta.action(), operation.action());
@@ -246,7 +217,7 @@ mod tests {
     }
 
     #[apply(various_operation_with_meta)]
-    fn it_hashes(#[case] operation_with_meta: OperationWithMeta) {
+    fn it_hashes(#[case] operation_with_meta: VerifiedOperation) {
         let mut hash_map = HashMap::new();
         let key_value = "Value identified by a hash".to_string();
         hash_map.insert(&operation_with_meta, key_value.clone());
