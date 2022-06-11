@@ -56,11 +56,15 @@ in NodeJS or any modern web browser.
 
 - Generate Ed25519 author key pairs.
 - Create and encode [`Bamboo`] entries.
-- Send operations to [`node`] servers via JSON RPC calls.
-- Query and filter data in the network.
+- Send operations to [`node`] servers.
+- Query and filter data in the network via GraphQL.
+- Encrypt data with [`OpenMLS`].
+- Publish and update application data schemas.
+- Create relationships between documents.
 
 [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
-[`node`]: https://github.com/p2panda/node
+[`node`]: https://github.com/p2panda/aquadoggo
+[`OpenMLS`]: https://github.com/openmls/openmls
 
 ## Usage
 
