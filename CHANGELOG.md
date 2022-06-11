@@ -9,8 +9,6 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
-- Add `mockall` crate and create mocks for `EntryStore` and `LogStore` [#314](https://github.com/p2panda/p2panda/pull/314).
-
 ## Added
 
 - `Document` for sorting and reducing a graph of `Operations` [#169](https://github.com/p2panda/p2panda/pull/169) `rs` 🥞
@@ -59,7 +57,7 @@ Highlights are marked with a pancake 🥞
 - Additional constructor method for `OperationWithMeta` [322](https://github.com/p2panda/p2panda/pull/322) `rs`
 - Minor method renaming in `EntryStore` [323](https://github.com/p2panda/p2panda/pull/323) `rs`
 - Require storage provider errors to be thread-safe [#340](https://github.com/p2panda/p2panda/pull/340)
-- Make previous_operations a `DocumentViewId` [#342](https://github.com/p2panda/p2panda/pull/342) `rs`
+- Make `previous_operations` a `DocumentViewId` [#342](https://github.com/p2panda/p2panda/pull/342) `rs`
 - Restructure / refactor `test_utils` and place behind `testing` flag [#344](https://github.com/p2panda/p2panda/pull/344) `rs`
 - Update `openmls` crate to `v0.4.1` [#336](https://github.com/p2panda/p2panda/pull/336) `rs`
 
@@ -68,6 +66,7 @@ Highlights are marked with a pancake 🥞
 - Fix determination of field types in p2panda-js [#202](https://github.com/p2panda/p2panda/pull/202) `js`
 - Fix equality of document view ids by sorting before comparison [#284](https://github.com/p2panda/p2panda/pull/284) `js`
 - Pin all versions in `Cargo.toml` to avoid unexpected crate updates [#299](https://github.com/p2panda/p2panda/pull/299) `rs`
+- Fix document test needing `testing` feature to be activated [#350](https://github.com/p2panda/p2panda/pull/350) `rs`
 
 ## Everything burrito
 
@@ -78,6 +77,7 @@ Highlights are marked with a pancake 🥞
 - Further develop our best practices for writing documentation [#240](https://github.com/p2panda/p2panda/pull/240) `rs`
 - Test `debug` macro calls in Github CI [#288](https://github.com/p2panda/p2panda/pull/288) `rs`
 - Move private module doc strings into public places [#339](https://github.com/p2panda/p2panda/pull/339) `rs`
+- Add `mockall` crate and create mocks for `EntryStore` and `LogStore` [#314](https://github.com/p2panda/p2panda/pull/314) `rs`
 
 ## [0.3.0]
 
