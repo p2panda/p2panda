@@ -18,7 +18,7 @@
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
 # use p2panda_rs::hash::Hash;
 # use p2panda_rs::identity::KeyPair;
-# use p2panda_rs::operation::{OperationValue, VerifiedOperation};
+# use p2panda_rs::operation::{OperationValue, VerifiedOperation, AsVerifiedOperation};
 # use p2panda_rs::schema::SchemaId;
 # use p2panda_rs::test_utils::fixtures::{create_operation, delete_operation, update_operation, operation_fields};
 # use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
