@@ -17,7 +17,11 @@ pub trait OperationStore<Operation: AsVerifiedOperation> {
     ///
     /// The passed operation must implement the `AsVerifiedOperation` trait. Errors when
     /// a fatal DB error occurs.
-    async fn insert_operation(&self, operation: &Operation) -> Result<(), OperationStorageError>;
+    async fn insert_operation(
+        &self,
+        operation: &Operation,
+        document_id: &DocumentId,
+    ) -> Result<(), OperationStorageError>;
 
     /// Get an operation identified by it's OperationId.
     ///
@@ -25,7 +29,7 @@ pub trait OperationStore<Operation: AsVerifiedOperation> {
     /// `OperationId` metadata.
     async fn get_operation_by_id(
         &self,
-        id: OperationId,
+        id: &OperationId,
     ) -> Result<Option<Operation>, OperationStorageError>;
 
     /// Get the id of the document an operation is contained within.
@@ -34,7 +38,7 @@ pub trait OperationStore<Operation: AsVerifiedOperation> {
     /// a None variant.
     async fn get_document_by_operation_id(
         &self,
-        id: OperationId,
+        id: &OperationId,
     ) -> Result<Option<DocumentId>, OperationStorageError>;
 
     /// Get all operations which are part of a specific document.
