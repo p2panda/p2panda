@@ -313,9 +313,8 @@ mod tests {
     };
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, operation, operation_fields, operation_with_meta,
-        random_document_view_id, random_key_pair, random_previous_operations, schema,
-        update_operation,
+        create_operation, delete_operation, operation, operation_fields, random_document_view_id,
+        random_key_pair, random_previous_operations, schema, update_operation, verified_operation,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
 
@@ -323,13 +322,13 @@ mod tests {
 
     #[rstest]
     fn reduces_operations(
-        #[from(operation_with_meta)] create_operation: VerifiedOperation,
-        #[from(operation_with_meta)]
+        #[from(verified_operation)] create_operation: VerifiedOperation,
+        #[from(verified_operation)]
         #[with(
             Some(operation_fields(vec![("username", OperationValue::Text("Yahooo!".into()))])), Some(random_previous_operations(1)))
         ]
         update_operation: VerifiedOperation,
-        #[from(operation_with_meta)]
+        #[from(verified_operation)]
         #[with(None, Some(random_previous_operations(1)))]
         delete_operation: VerifiedOperation,
     ) {

@@ -36,15 +36,15 @@ impl VerifiedOperation {
         operation_id: &OperationId,
         operation: &Operation,
     ) -> Result<Self, VerifiedOperationError> {
-        let operation_with_meta = Self {
+        let verified_operation = Self {
             public_key: public_key.clone(),
             operation_id: operation_id.clone(),
             operation: operation.clone(),
         };
 
-        operation_with_meta.validate()?;
+        verified_operation.validate()?;
 
-        Ok(operation_with_meta)
+        Ok(verified_operation)
     }
 
     /// Returns a new `VerifiedOperation` instance constructed from an `EntrySigned`
@@ -59,15 +59,15 @@ impl VerifiedOperation {
         // This validates that the entry and operation are correctly matching.
         decode_entry(entry_encoded, Some(operation_encoded))?;
 
-        let operation_with_meta = Self {
+        let verified_operation = Self {
             operation_id: entry_encoded.hash().into(),
             public_key: entry_encoded.author(),
             operation,
         };
 
-        operation_with_meta.validate()?;
+        verified_operation.validate()?;
 
-        Ok(operation_with_meta)
+        Ok(verified_operation)
     }
 }
 
@@ -134,20 +134,20 @@ mod tests {
         entry_signed_encoded, key_pair, operation, operation_encoded, operation_fields,
         operation_id,
     };
-    use crate::test_utils::templates::{implements_as_operation, various_operation_with_meta};
+    use crate::test_utils::templates::{implements_as_operation, various_verified_operation};
     use crate::Validate;
 
     #[rstest]
     #[case(operation_encoded(Some(operation_fields(default_fields())), None, Some(TEST_SCHEMA_ID.parse().unwrap())))]
     #[should_panic]
     #[case(operation_encoded(Some(operation_fields(vec![("message", OperationValue::Text("Not the right message".to_string()))])), None, Some(TEST_SCHEMA_ID.parse().unwrap())))]
-    fn create_operation_with_meta(
+    fn create_verified_operation(
         entry_signed_encoded: EntrySigned,
         #[case] operation_encoded: OperationEncoded,
     ) {
-        let operation_with_meta =
+        let verified_operation =
             VerifiedOperation::new_from_entry(&entry_signed_encoded, &operation_encoded);
-        assert!(operation_with_meta.is_ok())
+        assert!(verified_operation.is_ok())
     }
 
     #[rstest]
@@ -157,51 +157,51 @@ mod tests {
         #[from(operation)] operation: Operation,
     ) {
         let author = Author::try_from(*key_pair.public_key()).unwrap();
-        let operation_with_meta = VerifiedOperation::new(&author, &operation_id, &operation);
-        assert!(operation_with_meta.is_ok());
-        let operation_with_meta = operation_with_meta.unwrap();
-        assert_eq!(operation_with_meta.fields(), operation.fields());
-        assert_eq!(operation_with_meta.action(), operation.action());
-        assert_eq!(operation_with_meta.version(), operation.version());
-        assert_eq!(operation_with_meta.schema(), operation.schema());
+        let verified_operation = VerifiedOperation::new(&author, &operation_id, &operation);
+        assert!(verified_operation.is_ok());
+        let verified_operation = verified_operation.unwrap();
+        assert_eq!(verified_operation.fields(), operation.fields());
+        assert_eq!(verified_operation.action(), operation.action());
+        assert_eq!(verified_operation.version(), operation.version());
+        assert_eq!(verified_operation.schema(), operation.schema());
         assert_eq!(
-            operation_with_meta.previous_operations(),
+            verified_operation.previous_operations(),
             operation.previous_operations()
         );
-        assert_eq!(operation_with_meta.public_key(), &author);
-        assert_eq!(operation_with_meta.operation_id(), &operation_id);
+        assert_eq!(verified_operation.public_key(), &author);
+        assert_eq!(verified_operation.operation_id(), &operation_id);
     }
 
-    #[apply(various_operation_with_meta)]
-    fn only_some_operations_should_contain_fields(#[case] operation_with_meta: VerifiedOperation) {
-        if operation_with_meta.is_create() {
-            assert!(operation_with_meta.operation().fields().is_some());
+    #[apply(various_verified_operation)]
+    fn only_some_operations_should_contain_fields(#[case] verified_operation: VerifiedOperation) {
+        if verified_operation.is_create() {
+            assert!(verified_operation.operation().fields().is_some());
         }
 
-        if operation_with_meta.is_update() {
-            assert!(operation_with_meta.operation().fields().is_some());
+        if verified_operation.is_update() {
+            assert!(verified_operation.operation().fields().is_some());
         }
 
-        if operation_with_meta.is_delete() {
-            assert!(operation_with_meta.operation().fields().is_none());
+        if verified_operation.is_delete() {
+            assert!(verified_operation.operation().fields().is_none());
         }
     }
 
-    #[apply(various_operation_with_meta)]
-    fn operations_should_validate(#[case] operation_with_meta: VerifiedOperation) {
-        assert!(operation_with_meta.operation().validate().is_ok());
-        assert!(operation_with_meta.validate().is_ok())
+    #[apply(various_verified_operation)]
+    fn operations_should_validate(#[case] verified_operation: VerifiedOperation) {
+        assert!(verified_operation.operation().validate().is_ok());
+        assert!(verified_operation.validate().is_ok())
     }
 
-    #[apply(various_operation_with_meta)]
-    fn trait_methods_should_match(#[case] operation_with_meta: VerifiedOperation) {
-        let operation = operation_with_meta.operation();
-        assert_eq!(operation_with_meta.fields(), operation.fields());
-        assert_eq!(operation_with_meta.action(), operation.action());
-        assert_eq!(operation_with_meta.version(), operation.version());
-        assert_eq!(operation_with_meta.schema(), operation.schema());
+    #[apply(various_verified_operation)]
+    fn trait_methods_should_match(#[case] verified_operation: VerifiedOperation) {
+        let operation = verified_operation.operation();
+        assert_eq!(verified_operation.fields(), operation.fields());
+        assert_eq!(verified_operation.action(), operation.action());
+        assert_eq!(verified_operation.version(), operation.version());
+        assert_eq!(verified_operation.schema(), operation.schema());
         assert_eq!(
-            operation_with_meta.previous_operations(),
+            verified_operation.previous_operations(),
             operation.previous_operations()
         );
     }
@@ -219,12 +219,12 @@ mod tests {
         operation.has_previous_operations();
     }
 
-    #[apply(various_operation_with_meta)]
-    fn it_hashes(#[case] operation_with_meta: VerifiedOperation) {
+    #[apply(various_verified_operation)]
+    fn it_hashes(#[case] verified_operation: VerifiedOperation) {
         let mut hash_map = HashMap::new();
         let key_value = "Value identified by a hash".to_string();
-        hash_map.insert(&operation_with_meta, key_value.clone());
-        let key_value_retrieved = hash_map.get(&operation_with_meta).unwrap().to_owned();
+        hash_map.insert(&verified_operation, key_value.clone());
+        let key_value_retrieved = hash_map.get(&verified_operation).unwrap().to_owned();
         assert_eq!(key_value, key_value_retrieved)
     }
 }

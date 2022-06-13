@@ -85,20 +85,20 @@ mod tests {
     use crate::operation::{AsVerifiedOperation, OperationValue, Relation, VerifiedOperation};
     use crate::test_utils::constants::DEFAULT_HASH;
     use crate::test_utils::fixtures::{
-        document_id, document_view_id, operation_fields, operation_with_meta,
+        document_id, document_view_id, operation_fields, verified_operation,
     };
 
     use super::{DocumentView, DocumentViewId};
 
     #[rstest]
     fn from_single_create_op(
-        operation_with_meta: VerifiedOperation,
+        verified_operation: VerifiedOperation,
         document_view_id: DocumentViewId,
     ) {
         let expected_relation = Relation::new(DEFAULT_HASH.parse().unwrap());
 
         // Reduce a single CREATE `Operation`
-        let (view, is_edited, is_deleted) = reduce(&[operation_with_meta.clone()]);
+        let (view, is_edited, is_deleted) = reduce(&[verified_operation.clone()]);
 
         let document_view = DocumentView::new(&document_view_id, &view.unwrap());
 
@@ -120,35 +120,35 @@ mod tests {
         assert_eq!(
             document_view.get("username").unwrap(),
             &DocumentViewValue::new(
-                operation_with_meta.operation_id(),
+                verified_operation.operation_id(),
                 &OperationValue::Text("bubu".to_owned()),
             )
         );
         assert_eq!(
             document_view.get("height").unwrap(),
             &DocumentViewValue::new(
-                operation_with_meta.operation_id(),
+                verified_operation.operation_id(),
                 &OperationValue::Float(3.5)
             ),
         );
         assert_eq!(
             document_view.get("age").unwrap(),
             &DocumentViewValue::new(
-                operation_with_meta.operation_id(),
+                verified_operation.operation_id(),
                 &OperationValue::Integer(28)
             ),
         );
         assert_eq!(
             document_view.get("is_admin").unwrap(),
             &DocumentViewValue::new(
-                operation_with_meta.operation_id(),
+                verified_operation.operation_id(),
                 &OperationValue::Boolean(false)
             ),
         );
         assert_eq!(
             document_view.get("profile_picture").unwrap(),
             &DocumentViewValue::new(
-                operation_with_meta.operation_id(),
+                verified_operation.operation_id(),
                 &OperationValue::Relation(expected_relation)
             ),
         );
@@ -158,8 +158,8 @@ mod tests {
 
     #[rstest]
     fn with_update_op(
-        #[from(operation_with_meta)] create_operation: VerifiedOperation,
-        #[from(operation_with_meta)]
+        #[from(verified_operation)] create_operation: VerifiedOperation,
+        #[from(verified_operation)]
         #[with(Some(operation_fields(vec![
             ("username", OperationValue::Text("yahoo".to_owned())),
             ("height", OperationValue::Float(100.23)),

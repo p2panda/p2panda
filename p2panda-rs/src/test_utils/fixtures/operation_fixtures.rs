@@ -148,7 +148,7 @@ pub fn operation(
 /// provided, this is a DELETE operation. The schema, author and operation_id fields are optional
 /// and a default is used when not passed.
 #[fixture]
-pub fn operation_with_meta(
+pub fn verified_operation(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] previous_operations: Option<DocumentViewId>,
     #[default(Some(TEST_SCHEMA_ID.parse().unwrap()))] schema: Option<SchemaId>,
