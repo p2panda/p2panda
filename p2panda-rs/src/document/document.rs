@@ -758,17 +758,20 @@ mod tests {
 
         let published_create_operation = &node.all_entries()[0];
 
-        let create_op_with_meta = VerifiedOperation::new_from_entry(
+        let create_verified_operation = VerifiedOperation::new_from_entry(
             &published_create_operation.entry_encoded(),
             &published_create_operation.operation_encoded(),
         )
         .unwrap();
 
         assert_eq!(
-            DocumentBuilder::new(vec![create_op_with_meta.clone(), create_op_with_meta])
-                .build()
-                .unwrap_err()
-                .to_string(),
+            DocumentBuilder::new(vec![
+                create_verified_operation.clone(),
+                create_verified_operation
+            ])
+            .build()
+            .unwrap_err()
+            .to_string(),
             "Multiple create operations found".to_string()
         );
     }
