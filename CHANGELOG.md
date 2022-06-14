@@ -60,6 +60,7 @@ Highlights are marked with a pancake 🥞
 - Make `previous_operations` a `DocumentViewId` [#342](https://github.com/p2panda/p2panda/pull/342) `rs`
 - Restructure / refactor `test_utils` and place behind `testing` flag [#344](https://github.com/p2panda/p2panda/pull/344) `rs`
 - Update `openmls` crate to `v0.4.1` [#336](https://github.com/p2panda/p2panda/pull/336) `rs`
+- Replace `OperationWithMeta` with `VerifiedOperation` [#353](https://github.com/p2panda/p2panda/pull/353) `rs`
 
 ## Fixed
 

@@ -8,7 +8,7 @@ use crate::document::DocumentViewId;
 use crate::entry::EntrySigned;
 use crate::identity::Author;
 use crate::operation::{
-    Operation, OperationEncoded, OperationFields, OperationId, OperationValue, OperationWithMeta,
+    Operation, OperationEncoded, OperationFields, OperationId, OperationValue, VerifiedOperation,
 };
 use crate::schema::SchemaId;
 use crate::test_utils::constants::{self, TEST_SCHEMA_ID};
@@ -139,7 +139,7 @@ pub fn operation(
     }
 }
 
-/// Fixture which injects a test `OperationWithMeta` into a test method.
+/// Fixture which injects a test `VerifiedOperation` into a test method.
 ///
 /// Default value can be overidden at testing time by passing in custom parameters.
 ///
@@ -148,14 +148,14 @@ pub fn operation(
 /// provided, this is a DELETE operation. The schema, author and operation_id fields are optional
 /// and a default is used when not passed.
 #[fixture]
-pub fn operation_with_meta(
+pub fn verified_operation(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] previous_operations: Option<DocumentViewId>,
     #[default(Some(TEST_SCHEMA_ID.parse().unwrap()))] schema: Option<SchemaId>,
     #[default(Some(public_key()))] author: Option<Author>,
     #[default(Some(random_operation_id()))] operation_id: Option<OperationId>,
-) -> OperationWithMeta {
-    OperationWithMeta::new_test_operation(
+) -> VerifiedOperation {
+    VerifiedOperation::new_test_operation(
         &operation_id.unwrap_or_else(random_operation_id),
         &author.unwrap_or_else(public_key),
         &operation(fields, previous_operations, schema),
@@ -171,15 +171,15 @@ pub fn encoded_create_string(operation: Operation) -> String {
         .to_owned()
 }
 
-/// Fixture which injects an `OperationWithMeta` into a test method.
+/// Fixture which injects an `VerifiedOperation` into a test method.
 ///
 /// Constructed from an encoded entry and operation.
 #[fixture]
 pub fn meta_operation(
     entry_signed_encoded: EntrySigned,
     operation_encoded: OperationEncoded,
-) -> OperationWithMeta {
-    OperationWithMeta::new_from_entry(&entry_signed_encoded, &operation_encoded).unwrap()
+) -> VerifiedOperation {
+    VerifiedOperation::new_from_entry(&entry_signed_encoded, &operation_encoded).unwrap()
 }
 
 /// Fixture which injects an `OperationEncoded` into a test method.

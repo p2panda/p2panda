@@ -59,7 +59,7 @@ fn many_valid_operations(#[case] operation: Operation) {}
 #[template]
 #[rstest]
 #[allow(unused_qualifications)]
-#[case::create_meta_operation(crate::test_utils::fixtures::operation_with_meta(
+#[case::create_meta_operation(crate::test_utils::fixtures::verified_operation(
     Some(crate::test_utils::fixtures::operation_fields(default_fields())),
     None,
     None,
@@ -67,7 +67,7 @@ fn many_valid_operations(#[case] operation: Operation) {}
     None
 ))]
 #[allow(unused_qualifications)]
-#[case::update_meta_operation(crate::test_utils::fixtures::operation_with_meta(
+#[case::update_meta_operation(crate::test_utils::fixtures::verified_operation(
     Some(crate::test_utils::fixtures::operation_fields(default_fields())),
     Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
     None,
@@ -75,14 +75,14 @@ fn many_valid_operations(#[case] operation: Operation) {}
     None
 ))]
 #[allow(unused_qualifications)]
-#[case::delete_meta_operation(crate::test_utils::fixtures::operation_with_meta(
+#[case::delete_meta_operation(crate::test_utils::fixtures::verified_operation(
     None,
     Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
     None,
     None,
     None
 ))]
-fn various_operation_with_meta(#[case] operation: OperationWithMeta) {}
+fn various_verified_operation(#[case] operation: VerifiedOperation) {}
 
 /// This template contains examples of all structs which implement the `AsOperation` trait.
 #[template]
@@ -105,7 +105,7 @@ fn various_operation_with_meta(#[case] operation: OperationWithMeta) {}
     None
 ))]
 #[allow(unused_qualifications)]
-#[case::create_meta_operation(crate::test_utils::fixtures::operation_with_meta(
+#[case::create_meta_operation(crate::test_utils::fixtures::verified_operation(
     Some(crate::test_utils::fixtures::operation_fields(default_fields())),
     None,
     None,
@@ -113,7 +113,7 @@ fn various_operation_with_meta(#[case] operation: OperationWithMeta) {}
     None
 ))]
 #[allow(unused_qualifications)]
-#[case::update_meta_operation(crate::test_utils::fixtures::operation_with_meta(
+#[case::update_meta_operation(crate::test_utils::fixtures::verified_operation(
     Some(crate::test_utils::fixtures::operation_fields(default_fields())),
     Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
     None,
@@ -121,7 +121,7 @@ fn various_operation_with_meta(#[case] operation: OperationWithMeta) {}
     None
 ))]
 #[allow(unused_qualifications)]
-#[case::delete_meta_operation(crate::test_utils::fixtures::operation_with_meta(
+#[case::delete_meta_operation(crate::test_utils::fixtures::verified_operation(
     None,
     Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
     None,
@@ -135,4 +135,4 @@ pub(crate) use implements_as_operation;
 #[allow(unused_imports)]
 pub(crate) use many_valid_operations;
 #[allow(unused_imports)]
-pub(crate) use various_operation_with_meta;
+pub(crate) use various_verified_operation;

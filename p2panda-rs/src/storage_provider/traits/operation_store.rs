@@ -3,33 +3,34 @@
 use async_trait::async_trait;
 
 use crate::document::DocumentId;
+use crate::operation::AsVerifiedOperation;
 use crate::operation::OperationId;
 use crate::storage_provider::errors::OperationStorageError;
-use crate::storage_provider::traits::AsStorageOperation;
 
 /// Trait which handles all storage actions relating to `Operation`s.
 ///
 /// This trait should be implemented on the root storage provider struct. It's definitions make up
 /// the required methods for inserting and querying operations from storage.
 #[async_trait]
-pub trait OperationStore<StorageOperation: AsStorageOperation> {
+pub trait OperationStore<Operation: AsVerifiedOperation> {
     /// Insert an operation into the db.
     ///
-    /// The passed operation must implement the `AsStorageOperation` trait. Errors when
+    /// The passed operation must implement the `AsVerifiedOperation` trait. Errors when
     /// a fatal DB error occurs.
     async fn insert_operation(
         &self,
-        operation: &StorageOperation,
+        operation: &Operation,
+        document_id: &DocumentId,
     ) -> Result<(), OperationStorageError>;
 
     /// Get an operation identified by it's OperationId.
     ///
-    /// Returns a type implementing `AsStorageOperation` which includes `Author`, `DocumentId` and
+    /// Returns a type implementing `AsVerifiedOperation` which includes `Author`, `DocumentId` and
     /// `OperationId` metadata.
     async fn get_operation_by_id(
         &self,
-        id: OperationId,
-    ) -> Result<Option<StorageOperation>, OperationStorageError>;
+        id: &OperationId,
+    ) -> Result<Option<Operation>, OperationStorageError>;
 
     /// Get the id of the document an operation is contained within.
     ///
@@ -37,7 +38,7 @@ pub trait OperationStore<StorageOperation: AsStorageOperation> {
     /// a None variant.
     async fn get_document_by_operation_id(
         &self,
-        id: OperationId,
+        id: &OperationId,
     ) -> Result<Option<DocumentId>, OperationStorageError>;
 
     /// Get all operations which are part of a specific document.
@@ -48,5 +49,5 @@ pub trait OperationStore<StorageOperation: AsStorageOperation> {
     async fn get_operations_by_document_id(
         &self,
         id: &DocumentId,
-    ) -> Result<Vec<StorageOperation>, OperationStorageError>;
+    ) -> Result<Vec<Operation>, OperationStorageError>;
 }

@@ -49,9 +49,9 @@ pub enum OperationEncodedError {
     InvalidHexEncoding,
 }
 
-/// Error types for methods of `OperationWithMeta` struct.
+/// Error types for methods of `VerifiedOperation` struct.
 #[derive(Error, Debug)]
-pub enum OperationWithMetaError {
+pub enum VerifiedOperationError {
     /// Invalid encoded entry found.
     #[error(transparent)]
     EntrySignedError(#[from] crate::entry::EntrySignedError),

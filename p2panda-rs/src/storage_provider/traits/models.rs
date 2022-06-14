@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::document::{DocumentId, DocumentViewId};
+use crate::document::DocumentId;
 use crate::entry::{EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{
-    Operation, OperationAction, OperationEncoded, OperationFields, OperationId,
-};
+use crate::operation::{Operation, OperationEncoded};
 use crate::schema::SchemaId;
 use crate::Validate;
 
@@ -71,39 +69,5 @@ pub trait AsStorageLog: Sized + Send + Sync {
     fn document_id(&self) -> DocumentId;
 
     /// Returns the SchemaId of this log.
-    fn schema_id(&self) -> SchemaId;
-}
-
-/// Trait to be implemented on a struct representing a stored operation.
-///
-/// Contains the values of an operation as well as it's author, it's id, and the id of
-/// it's document.
-///
-/// Storage implementations should implement this for a data structure that represents an
-/// operation as it is stored in the database. This trait defines methods for reading
-/// values from the operation and some meta data.
-pub trait AsStorageOperation: Sized + Clone + Send + Sync {
-    /// The error type returned by this traits' methods.
-    type AsStorageOperationError: 'static + std::error::Error;
-
-    /// The action this operation performs.
-    fn action(&self) -> OperationAction;
-
-    /// The author who published this operation.
-    fn author(&self) -> Author;
-
-    /// The id of the document this operation is part of.
-    fn document_id(&self) -> DocumentId;
-
-    /// The fields contained in this operation.
-    fn fields(&self) -> Option<OperationFields>;
-
-    /// The id of this operation.
-    fn id(&self) -> OperationId;
-
-    /// The previous operations for this operation.
-    fn previous_operations(&self) -> Option<DocumentViewId>;
-
-    /// The id of the schema this operation follows.
     fn schema_id(&self) -> SchemaId;
 }

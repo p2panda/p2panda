@@ -4,7 +4,8 @@ use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
 use crate::operation::{
-    AsOperation, OperationFields, OperationId, OperationValue, OperationWithMeta,
+    AsOperation, AsVerifiedOperation, OperationFields, OperationId, OperationValue,
+    VerifiedOperation,
 };
 
 /// The current value of a document fiew field as well as the id of the operation it came from.
@@ -96,8 +97,8 @@ impl Default for DocumentViewFields {
     }
 }
 
-impl From<OperationWithMeta> for DocumentViewFields {
-    fn from(operation: OperationWithMeta) -> Self {
+impl From<VerifiedOperation> for DocumentViewFields {
+    fn from(operation: VerifiedOperation) -> Self {
         let mut document_view_fields = DocumentViewFields::new();
 
         if let Some(fields) = operation.fields() {
@@ -118,8 +119,10 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::{DocumentViewFields, DocumentViewValue};
-    use crate::operation::{AsOperation, OperationId, OperationValue, OperationWithMeta};
-    use crate::test_utils::fixtures::{operation_with_meta, random_operation_id};
+    use crate::operation::{
+        AsOperation, AsVerifiedOperation, OperationId, OperationValue, VerifiedOperation,
+    };
+    use crate::test_utils::fixtures::{random_operation_id, verified_operation};
 
     #[rstest]
     fn construct_fields(#[from(random_operation_id)] value_id: OperationId) {
@@ -154,19 +157,19 @@ mod tests {
     }
 
     #[rstest]
-    fn from_meta_operation(operation_with_meta: OperationWithMeta) {
-        let document_view_fields = DocumentViewFields::from(operation_with_meta.clone());
-        let operation_fields = operation_with_meta.operation().fields().unwrap();
+    fn from_meta_operation(verified_operation: VerifiedOperation) {
+        let document_view_fields = DocumentViewFields::from(verified_operation.clone());
+        let operation_fields = verified_operation.operation().fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
 
     #[rstest]
-    fn new_from_operation_fields(operation_with_meta: OperationWithMeta) {
+    fn new_from_operation_fields(verified_operation: VerifiedOperation) {
         let document_view_fields = DocumentViewFields::new_from_operation_fields(
-            operation_with_meta.operation_id(),
-            &operation_with_meta.operation().fields().unwrap(),
+            verified_operation.operation_id(),
+            &verified_operation.operation().fields().unwrap(),
         );
-        let operation_fields = operation_with_meta.operation().fields().unwrap();
+        let operation_fields = verified_operation.operation().fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
 }

@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::document::DocumentViewId;
-use crate::operation::{OperationEncoded, OperationError, OperationFields};
+use crate::operation::{AsOperation, OperationEncoded, OperationError, OperationFields};
 use crate::schema::SchemaId;
 use crate::Validate;
 
@@ -205,50 +205,6 @@ impl Operation {
     }
 }
 
-/// Shared methods for [`Operation`] and
-/// [`OperationWithMeta`][crate::operation::OperationWithMeta].
-pub trait AsOperation {
-    /// Returns action type of operation.
-    fn action(&self) -> OperationAction;
-
-    /// Returns schema of operation.
-    fn schema(&self) -> SchemaId;
-
-    /// Returns version of operation.
-    fn version(&self) -> OperationVersion;
-
-    /// Returns application data fields of operation.
-    fn fields(&self) -> Option<OperationFields>;
-
-    /// Returns vector of this operation's previous operation ids
-    fn previous_operations(&self) -> Option<DocumentViewId>;
-
-    /// Returns true if operation contains fields.
-    fn has_fields(&self) -> bool {
-        self.fields().is_some()
-    }
-
-    /// Returns true if previous_operations contains a document view id.
-    fn has_previous_operations(&self) -> bool {
-        self.previous_operations().is_some()
-    }
-
-    /// Returns true when instance is CREATE operation.
-    fn is_create(&self) -> bool {
-        self.action() == OperationAction::Create
-    }
-
-    /// Returns true when instance is UPDATE operation.
-    fn is_update(&self) -> bool {
-        self.action() == OperationAction::Update
-    }
-
-    /// Returns true when instance is DELETE operation.
-    fn is_delete(&self) -> bool {
-        self.action() == OperationAction::Delete
-    }
-}
-
 impl AsOperation for Operation {
     /// Returns action type of operation.
     fn action(&self) -> OperationAction {
@@ -339,7 +295,7 @@ mod tests {
     use rstest_reuse::apply;
 
     use crate::document::{DocumentId, DocumentViewId};
-    use crate::operation::{OperationEncoded, OperationValue, Relation};
+    use crate::operation::{AsOperation, OperationEncoded, OperationValue, Relation};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         operation_fields, random_document_id, random_document_view_id, schema,
@@ -347,7 +303,7 @@ mod tests {
     use crate::test_utils::templates::many_valid_operations;
     use crate::Validate;
 
-    use super::{AsOperation, Operation, OperationAction, OperationFields, OperationVersion};
+    use super::{Operation, OperationAction, OperationFields, OperationVersion};
 
     #[test]
     fn stringify_action() {
