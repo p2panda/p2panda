@@ -111,6 +111,7 @@ pub mod tests {
         let store = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
@@ -133,6 +134,7 @@ pub mod tests {
         let store = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();

@@ -343,6 +343,7 @@ pub mod tests {
         let store = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let storage_entry = StorageEntry::new(&entry_signed_encoded, &operation_encoded).unwrap();
@@ -373,6 +374,7 @@ pub mod tests {
         let store = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let storage_entry = StorageEntry::new(&entry_signed_encoded, &operation_encoded).unwrap();
@@ -410,6 +412,7 @@ pub mod tests {
         let store = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let author_1_entry = sign_and_encode(&entry, &key_pair_1).unwrap();
@@ -682,6 +685,7 @@ pub mod tests {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(logs)),
             entries: Arc::new(Mutex::new(log_entries_with_skiplink_missing)),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let error_response = new_db

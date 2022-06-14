@@ -5,11 +5,11 @@ use async_trait::async_trait;
 use crate::document::DocumentId;
 use crate::entry::SeqNum;
 use crate::hash::Hash;
-use crate::operation::{AsOperation, Operation};
+use crate::operation::{AsOperation, AsVerifiedOperation, Operation};
 use crate::storage_provider::errors::PublishEntryError;
 use crate::storage_provider::traits::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
-    AsStorageEntry, AsStorageLog, EntryStore, LogStore,
+    AsStorageEntry, AsStorageLog, EntryStore, LogStore, OperationStore,
 };
 use crate::Validate;
 
@@ -33,8 +33,11 @@ use crate::Validate;
 /// which needs defining is `get_document_by_entry`. It is also possible to over-ride the default
 /// definitions for any of the trait methods.
 #[async_trait]
-pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog>:
-    EntryStore<StorageEntry> + LogStore<StorageLog>
+pub trait StorageProvider<
+    StorageEntry: AsStorageEntry,
+    StorageLog: AsStorageLog,
+    StorageOperation: AsVerifiedOperation,
+>: EntryStore<StorageEntry> + LogStore<StorageLog> + OperationStore<StorageOperation>
 {
     /// Params when making a request to get the next entry args for an author and document.
     type EntryArgsRequest: AsEntryArgsRequest + Sync;
@@ -224,6 +227,7 @@ pub mod tests {
     use crate::identity::KeyPair;
     use crate::operation::{
         AsOperation, OperationEncoded, OperationFields, OperationId, OperationValue,
+        VerifiedOperation,
     };
     use crate::storage_provider::traits::test_utils::{
         test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
@@ -237,7 +241,7 @@ pub mod tests {
     use super::StorageProvider;
 
     #[async_trait]
-    impl StorageProvider<StorageEntry, StorageLog> for SimplestStorageProvider {
+    impl StorageProvider<StorageEntry, StorageLog, VerifiedOperation> for SimplestStorageProvider {
         type EntryArgsRequest = EntryArgsRequest;
 
         type EntryArgsResponse = EntryArgsResponse;
@@ -276,6 +280,7 @@ pub mod tests {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let entries = test_db.entries.lock().unwrap().clone();
@@ -323,6 +328,7 @@ pub mod tests {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let entries = test_db.entries.lock().unwrap().clone();
@@ -376,6 +382,7 @@ pub mod tests {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let entries = test_db.entries.lock().unwrap().clone();
@@ -430,6 +437,7 @@ pub mod tests {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let entries = test_db.entries.lock().unwrap().clone();
@@ -482,6 +490,7 @@ pub mod tests {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let entries = test_db.entries.lock().unwrap().clone();
@@ -542,6 +551,7 @@ pub mod tests {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(logs)),
             entries: Arc::new(Mutex::new(log_entries_with_skiplink_missing)),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let entry = entries.get(7).unwrap();
@@ -583,6 +593,7 @@ pub mod tests {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(logs)),
             entries: Arc::new(Mutex::new(three_valid_entries)),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         // Get the valid next entry
@@ -637,6 +648,7 @@ pub mod tests {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(logs)),
             entries: Arc::new(Mutex::new(three_valid_entries)),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         // Get the valid next entry

@@ -10,7 +10,7 @@ use crate::document::DocumentId;
 use crate::entry::{decode_entry, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
-use crate::operation::{Operation, OperationEncoded, OperationFields};
+use crate::operation::{Operation, OperationEncoded, OperationFields, VerifiedOperation};
 use crate::schema::SchemaId;
 use crate::storage_provider::errors::{EntryStorageError, ValidationError};
 use crate::storage_provider::traits::{
@@ -26,6 +26,7 @@ use crate::Validate;
 pub struct SimplestStorageProvider {
     pub logs: Arc<Mutex<Vec<StorageLog>>>,
     pub entries: Arc<Mutex<Vec<StorageEntry>>>,
+    pub operations: Arc<Mutex<Vec<(DocumentId, VerifiedOperation)>>>,
 }
 
 impl SimplestStorageProvider {
@@ -287,6 +288,7 @@ pub fn test_db(
 ) -> SimplestStorageProvider {
     // Initial empty entry vec.
     let mut db_entries: Vec<StorageEntry> = vec![];
+    let mut db_operations: Vec<(DocumentId, VerifiedOperation)> = vec![];
 
     // Create a log vec with one log in it (which we create the entries for below)
     let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
@@ -350,14 +352,18 @@ pub fn test_db(
         let encoded_entry = sign_and_encode(&update_entry, &key_pair).unwrap();
         let encoded_operation = OperationEncoded::try_from(&update_operation).unwrap();
         let storage_entry = StorageEntry::new(&encoded_entry, &encoded_operation).unwrap();
+        let verified_operation =
+            VerifiedOperation::new_from_entry(&encoded_entry, &encoded_operation).unwrap();
 
-        db_entries.push(storage_entry)
+        db_entries.push(storage_entry);
+        db_operations.push((document_id.clone(), verified_operation))
     }
 
     // Instantiate a SimpleStorage with the existing entry and log values stored.
     SimplestStorageProvider {
         logs: Arc::new(Mutex::new(db_logs)),
         entries: Arc::new(Mutex::new(db_entries.clone())),
+        operations: Arc::new(Mutex::new(db_operations)),
     }
 }
 
