@@ -56,12 +56,11 @@ in NodeJS or any modern web browser.
 
 - Generate Ed25519 author key pairs.
 - Create and encode [`Bamboo`] entries.
-- Publish and update data schemas.
-- Create, update and delete data.
+- Publish schemas.
+- Create, update and delete data collaboratively.
 - Encrypt data with [`OpenMLS`].
-- Send data to [`node`] servers.
-- Collaborate with others on the same data.
-- Query and filter data in the network via GraphQL.
+- Send new entries to [`node`] servers.
+- Query and filter data in the network.
 
 [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 [`node`]: https://github.com/p2panda/aquadoggo
