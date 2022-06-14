@@ -7,7 +7,8 @@ use crate::operation::{
 };
 use crate::schema::SchemaId;
 
-/// Trait to be implemented on `Operation` and `VerifiedOperation` structs.
+/// Trait to be implemented on [`Operation`] and
+/// [`VerifiedOperation`][crate::operation::VerifiedOperation] structs.
 pub trait AsOperation {
     /// Returns action type of operation.
     fn action(&self) -> OperationAction;
@@ -57,8 +58,9 @@ pub trait AsOperation {
 /// operation has no id is that the id is derived from the hash of the signed entry an operation is
 /// encoded on.
 ///
-/// StorageProvider implementations should implement this for a data structure that represents an
-/// operation as it is stored in the database.
+/// [`StorageProvider`][crate::storage_provider::traits::StorageProvider] implementations should
+/// implement this for a data structure that represents an operation as it is stored in the
+/// database.
 pub trait AsVerifiedOperation {
     /// Returns the identifier for this operation.
     fn operation_id(&self) -> &OperationId;
