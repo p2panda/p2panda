@@ -11,7 +11,8 @@ use crate::entry::{decode_entry, sign_and_encode, Entry, EntrySigned, LogId, Seq
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::{
-    Operation, OperationEncoded, OperationFields, OperationValue, VerifiedOperation,
+    AsVerifiedOperation, Operation, OperationEncoded, OperationFields, OperationValue,
+    VerifiedOperation,
 };
 use crate::schema::SchemaId;
 use crate::storage_provider::errors::{EntryStorageError, ValidationError};

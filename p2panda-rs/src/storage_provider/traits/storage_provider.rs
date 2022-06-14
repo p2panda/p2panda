@@ -196,6 +196,12 @@ pub trait StorageProvider<
         // Finally insert Entry in database
         self.insert_entry(entry.clone()).await?;
 
+        // Then insert the operation into the database
+        let verified_operation =
+            StorageOperation::new_from_entry(params.entry_signed(), params.operation_encoded())?;
+        self.insert_operation(&verified_operation, &document_id)
+            .await?;
+
         // Already return arguments for next entry creation
         let entry_latest: StorageEntry = self
             .get_latest_entry(&entry.author(), &entry.log_id())
