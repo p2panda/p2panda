@@ -106,6 +106,10 @@ jobs:
         run: npm ci
         working-directory: ${{ env.working_directory }}
 
+      - name: Compile wasm
+        run: npm run build
+        working-directory: ${{ env.working_directory }}
+
       - name: Build documentation website
         run: npm run docs
         working-directory: ${{ env.working_directory }}
