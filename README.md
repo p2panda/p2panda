@@ -56,11 +56,15 @@ in NodeJS or any modern web browser.
 
 - Generate Ed25519 author key pairs.
 - Create and encode [`Bamboo`] entries.
-- Send operations to [`node`] servers via JSON RPC calls.
+- Publish schemas.
+- Create, update and delete data collaboratively.
+- Encrypt data with [`OpenMLS`].
+- Send new entries to [`node`] servers.
 - Query and filter data in the network.
 
 [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
-[`node`]: https://github.com/p2panda/node
+[`node`]: https://github.com/p2panda/aquadoggo
+[`OpenMLS`]: https://github.com/openmls/openmls
 
 ## Usage
 
@@ -127,7 +131,7 @@ GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)
 
 ## Supported by
 
-<img src="https://p2panda.org/images/ngi-logo.png" width="auto" height="80px">
+<img src="https://p2panda.org/images/ngi-logo.png" width="auto" height="80px"><br />
 <img src="https://p2panda.org/images/eu-flag-logo.png" width="auto" height="80px">
 
 *This project has received funding from the European Union’s Horizon 2020
