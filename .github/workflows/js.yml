@@ -19,16 +19,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
 
       - name: Setup node ${{ matrix.node }}
         # This action handles node dependency caching for us
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v2
         with:
           node-version: "${{ matrix.node }}"
 
       - name: Restore from cargo and npm cache
-        uses: actions/cache@v3
+        uses: actions/cache@v2
         with:
           path: ${{ env.cache_path }}
           # Note that this caching action does NOT cache node dependencies.
@@ -55,16 +55,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
 
       - name: Setup node
         # This action also handles dependency caching for us
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v2
         with:
           node-version-file: ${{ env.working_directory}}/.nvmrc
 
       - name: Restore from cargo and npm cache
-        uses: actions/cache@v3
+        uses: actions/cache@v2
         with:
           path: ${{ env.cache_path }}
           key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}
