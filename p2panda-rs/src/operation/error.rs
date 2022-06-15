@@ -24,13 +24,6 @@ pub enum OperationError {
     #[error("previous_operations field should be empty")]
     ExistingPreviousOperations,
 
-    // /// `CREATE` operations must define all fields of their schema
-    // #[error("operation contains a field '{0}' that is not defined by its schema {1}")]
-    // UndefinedField(String, SchemaId),
-    /// Field values must match the type defined in their schema.
-    #[error("failed decoding field '{0}' as '{1:?}'")]
-    InvalidFieldType(String, FieldType),
-
     /// Invalid hash found.
     #[error(transparent)]
     HashError(#[from] crate::hash::HashError),
@@ -57,7 +50,11 @@ pub enum OperationEncodedError {
     #[error("invalid hex encoding in operation")]
     InvalidHexEncoding,
 
-    /// Invalid operation.
+    /// Field values must match the type defined in their schema.
+    #[error("failed decoding field '{0}' as '{1:?}'")]
+    InvalidFieldType(String, FieldType),
+
+    /// Encoded operations have to contain valid operations..
     #[error(transparent)]
     OperationError(#[from] OperationError),
 }

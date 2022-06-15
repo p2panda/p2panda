@@ -11,7 +11,6 @@ use crate::schema::{Schema, SchemaId};
 use crate::Validate;
 
 use super::operation::PlainOperation;
-use super::OperationError;
 
 /// Operation represented in hex encoded CBOR format.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, StdHash)]
@@ -95,9 +94,9 @@ mod tests {
     use crate::schema::{FieldType, Schema};
     use crate::test_utils::constants::TEST_SCHEMA_ID;
     use crate::test_utils::fixtures::{
-        encoded_create_string, operation, operation_encoded_invalid_relation_fields,
-        operation_fields, random_document_id, random_document_view_id, schema, schema_item,
-        Fixture,
+        default_schema, encoded_create_string, operation,
+        operation_encoded_invalid_relation_fields, operation_fields, random_document_id,
+        random_document_view_id, schema, schema_item, Fixture,
     };
     use crate::test_utils::templates::version_fixtures;
     use crate::Validate;
@@ -148,19 +147,7 @@ mod tests {
 
     #[rstest]
     fn encode_decode_all_field_types(
-        #[values(schema_item(
-            schema(TEST_SCHEMA_ID),
-            "",
-            vec![
-                ("username", FieldType::String),
-                ("age", FieldType::Int),
-                ("height", FieldType::Float),
-                ("is_admin", FieldType::Bool),
-                ("profile_picture", FieldType::Relation(schema(TEST_SCHEMA_ID))),
-                ("my_friends", FieldType::RelationList(schema(TEST_SCHEMA_ID)))
-            ]
-        ))]
-        schema_item: Schema,
+        default_schema: Schema,
         #[from(random_document_id)] picture_document: DocumentId,
         #[from(random_document_id)] friend_document_1: DocumentId,
         #[from(random_document_id)] friend_document_2: DocumentId,
@@ -182,10 +169,10 @@ mod tests {
         update_operation: Operation,
     ) {
         let operation_encoded = OperationEncoded::try_from(&update_operation).unwrap();
-        let operation = operation_encoded.decode(&schema_item).unwrap();
+        let operation = operation_encoded.decode(&default_schema).unwrap();
 
         assert!(operation.is_update());
-        assert_eq!(operation.schema(), schema_item.id().clone());
+        assert_eq!(operation.schema(), default_schema.id().clone());
 
         let fields = operation.fields().unwrap();
 

@@ -302,10 +302,8 @@ pub mod tests {
             let entries = self.entries.lock().unwrap();
             let logs = self.logs.lock().unwrap();
 
-            println!("Start {}", schema);
             let mut matching_entries = vec![];
             for log in logs.iter() {
-                println!("Log {}", log.schema_id());
                 if &log.schema_id() == schema {
                     matching_entries.extend(
                         entries
