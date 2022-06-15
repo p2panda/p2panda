@@ -74,7 +74,7 @@ pub mod tests {
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::LogStorageError;
     use crate::storage_provider::traits::test_utils::{
-        aquadoggo_test_db, SimplestStorageProvider, StorageLog, TestStore,
+        test_db, SimplestStorageProvider, StorageLog, TestStore,
     };
     use crate::storage_provider::traits::{AsStorageLog, LogStore};
     use crate::test_utils::fixtures::{document_id, key_pair, schema};
@@ -152,7 +152,7 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn find_document_log_id(
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(3, 1)]
         #[future]
         db: TestStore,

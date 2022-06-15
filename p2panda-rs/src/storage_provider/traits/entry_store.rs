@@ -213,7 +213,7 @@ pub mod tests {
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::EntryStorageError;
     use crate::storage_provider::traits::test_utils::{
-        aquadoggo_test_db, SimplestStorageProvider, StorageEntry, TestStore, SKIPLINK_ENTRIES,
+        test_db, SimplestStorageProvider, StorageEntry, TestStore, SKIPLINK_ENTRIES,
     };
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
     use crate::test_utils::fixtures::{
@@ -445,7 +445,7 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn get_entry_by_hash(
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(3, 1)]
         #[future]
         db: TestStore,
@@ -480,7 +480,7 @@ pub mod tests {
     #[async_std::test]
     async fn try_get_backlink(
         #[values[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 ,15 ,16]] seq_num: usize,
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(17, 1)]
         #[future]
         db: TestStore,
@@ -506,7 +506,7 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn try_get_backlink_entry_missing(
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(17, 1)]
         #[future]
         db: TestStore,
@@ -539,7 +539,7 @@ pub mod tests {
     async fn try_get_backlink_invalid_skiplink(
         key_pair: KeyPair,
         operation_encoded: OperationEncoded,
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(4, 1)]
         #[future]
         db: TestStore,
@@ -604,7 +604,7 @@ pub mod tests {
     async fn try_get_skiplink(
         #[case] seq_num: usize,
         #[case] expected_skiplink_seq_num: Option<usize>,
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(17, 1)]
         #[future]
         db: TestStore,
@@ -627,7 +627,7 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn try_get_skiplink_entry_missing(
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(4, 1)]
         #[future]
         db: TestStore,
@@ -660,7 +660,7 @@ pub mod tests {
     async fn try_get_skiplink_invalid_skiplink(
         key_pair: KeyPair,
         operation_encoded: OperationEncoded,
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(4, 1)]
         #[future]
         db: TestStore,
@@ -706,7 +706,7 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn can_determine_next_skiplink(
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(17, 1)]
         #[future]
         db: TestStore,
@@ -729,7 +729,7 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn skiplink_does_not_exist(
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(17, 1)]
         #[future]
         db: TestStore,
@@ -766,7 +766,7 @@ pub mod tests {
     #[async_std::test]
     async fn get_n_entries(
         key_pair: KeyPair,
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(16, 1)]
         #[future]
         db: TestStore,
@@ -801,7 +801,7 @@ pub mod tests {
     #[async_std::test]
     async fn get_cert_pool(
         key_pair: KeyPair,
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(17, 1)]
         #[future]
         db: TestStore,

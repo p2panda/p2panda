@@ -71,7 +71,7 @@ mod tests {
     };
     use crate::storage_provider::errors::OperationStorageError;
     use crate::storage_provider::traits::test_utils::{
-        aquadoggo_test_db, SimplestStorageProvider, TestStore,
+        test_db, SimplestStorageProvider, TestStore,
     };
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore, StorageProvider};
     use crate::test_utils::constants::{default_fields, DEFAULT_HASH};
@@ -163,7 +163,7 @@ mod tests {
         #[from(public_key)] author: Author,
         operation_id: OperationId,
         document_id: DocumentId,
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[future]
         db: TestStore,
     ) {
@@ -193,7 +193,7 @@ mod tests {
     async fn insert_operation_twice(
         #[from(verified_operation)] verified_operation: VerifiedOperation,
         document_id: DocumentId,
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[future]
         db: TestStore,
     ) {
@@ -221,7 +221,7 @@ mod tests {
         #[with(Some(operation_fields(default_fields())), Some(DEFAULT_HASH.parse().unwrap()))]
         update_operation: VerifiedOperation,
         document_id: DocumentId,
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[future]
         db: TestStore,
     ) {
@@ -267,7 +267,7 @@ mod tests {
     #[async_std::test]
     async fn get_operations_by_document_id(
         key_pair: KeyPair,
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(5, 1)]
         #[future]
         db: TestStore,

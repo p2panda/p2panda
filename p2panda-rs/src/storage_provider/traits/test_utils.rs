@@ -309,7 +309,7 @@ pub struct TestStore {
 /// Returns a `TestStore` containing storage provider instance, a vector of key pairs for all authors
 /// in the db, and a vector of the ids for all documents.
 #[fixture]
-pub async fn aquadoggo_test_db(
+pub async fn test_db(
     // Number of entries per log/document
     #[default(0)] no_of_entries: usize,
     // Number of authors, each with a log populated as defined above
@@ -411,7 +411,7 @@ pub async fn aquadoggo_test_db(
 #[rstest]
 #[async_std::test]
 async fn test_the_test_db(
-    #[from(aquadoggo_test_db)]
+    #[from(test_db)]
     #[with(17, 1)]
     #[future]
     db: TestStore,

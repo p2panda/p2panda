@@ -230,8 +230,8 @@ pub mod tests {
         VerifiedOperation,
     };
     use crate::storage_provider::traits::test_utils::{
-        aquadoggo_test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest,
-        PublishEntryResponse, SimplestStorageProvider, StorageEntry, StorageLog, TestStore,
+        test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
+        SimplestStorageProvider, StorageEntry, StorageLog, TestStore,
     };
     use crate::storage_provider::traits::{
         AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
@@ -276,7 +276,7 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn can_publish_entries(
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(20, 1)]
         #[future]
         db: TestStore,
@@ -328,7 +328,7 @@ pub mod tests {
     #[async_std::test]
     async fn rejects_invalid_backlink(
         key_pair: KeyPair,
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(4, 1)]
         #[future]
         db: TestStore,
@@ -385,7 +385,7 @@ pub mod tests {
     #[async_std::test]
     async fn rejects_invalid_skiplink(
         key_pair: KeyPair,
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(4, 1)]
         #[future]
         db: TestStore,
@@ -441,7 +441,7 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn gets_entry_args(
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(20, 1)]
         #[future]
         db: TestStore,
@@ -497,7 +497,7 @@ pub mod tests {
     #[async_std::test]
     async fn wrong_log_id(
         key_pair: KeyPair,
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(2, 1)]
         #[future]
         db: TestStore,
@@ -548,7 +548,7 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn skiplink_does_not_exist(
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(8, 1)]
         #[future]
         db: TestStore,
@@ -594,7 +594,7 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn prev_op_does_not_exist(
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(4, 1)]
         #[future]
         db: TestStore,
@@ -658,7 +658,7 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn invalid_entry_op_pair(
-        #[from(aquadoggo_test_db)]
+        #[from(test_db)]
         #[with(4, 1)]
         #[future]
         db: TestStore,
