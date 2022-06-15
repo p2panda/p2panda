@@ -19,16 +19,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup node ${{ matrix.node }}
         # This action handles node dependency caching for us
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: "${{ matrix.node }}"
 
       - name: Restore from cargo and npm cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ${{ env.cache_path }}
           # Note that this caching action does NOT cache node dependencies.
@@ -55,16 +55,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup node
         # This action also handles dependency caching for us
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version-file: ${{ env.working_directory}}/.nvmrc
 
       - name: Restore from cargo and npm cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ${{ env.cache_path }}
           key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}
@@ -79,3 +79,28 @@ jobs:
       - name: Run build
         run: npm run build
         working-directory: ${{ env.working_directory }}
+
+  js-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node
+        # This action also handles dependency caching for us
+        uses: actions/setup-node@v3
+        with:
+          node-version-file: ${{ env.working_directory}}/.nvmrc
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build documentation website
+        run: npm run docs
+
+      - name: Deploy documentation website
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
