@@ -230,8 +230,8 @@ pub mod tests {
         VerifiedOperation,
     };
     use crate::storage_provider::traits::test_utils::{
-        test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
-        SimplestStorageProvider, StorageEntry, StorageLog,
+        aquadoggo_test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest,
+        PublishEntryResponse, SimplestStorageProvider, StorageEntry, StorageLog, TestStore,
     };
     use crate::storage_provider::traits::{
         AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
@@ -275,15 +275,21 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn can_publish_entries(test_db: SimplestStorageProvider) {
+    async fn can_publish_entries(
+        #[from(aquadoggo_test_db)]
+        #[with(20, 1)]
+        #[future]
+        db: TestStore,
+    ) {
         // Instantiate a new store
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
             operations: Arc::new(Mutex::new(Vec::new())),
         };
+        let db = db.await;
 
-        let entries = test_db.entries.lock().unwrap().clone();
+        let entries = db.store.entries.lock().unwrap().clone();
 
         for entry in entries.clone() {
             // Publish each test entry in order
@@ -324,14 +330,21 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn rejects_invalid_backlink(key_pair: KeyPair, test_db: SimplestStorageProvider) {
+    async fn rejects_invalid_backlink(
+        key_pair: KeyPair,
+        #[from(aquadoggo_test_db)]
+        #[with(4, 1)]
+        #[future]
+        db: TestStore,
+    ) {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
             operations: Arc::new(Mutex::new(Vec::new())),
         };
+        let db = db.await;
 
-        let entries = test_db.entries.lock().unwrap().clone();
+        let entries = db.store.entries.lock().unwrap().clone();
 
         // Publish 3 entries to the new database
         for index in 0..3 {
@@ -378,14 +391,21 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn rejects_invalid_skiplink(key_pair: KeyPair, test_db: SimplestStorageProvider) {
+    async fn rejects_invalid_skiplink(
+        key_pair: KeyPair,
+        #[from(aquadoggo_test_db)]
+        #[with(4, 1)]
+        #[future]
+        db: TestStore,
+    ) {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
             operations: Arc::new(Mutex::new(Vec::new())),
         };
+        let db = db.await;
 
-        let entries = test_db.entries.lock().unwrap().clone();
+        let entries = db.store.entries.lock().unwrap().clone();
 
         // Publish 3 entries to the new database
         for index in 0..3 {
@@ -432,15 +452,21 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn gets_entry_args(test_db: SimplestStorageProvider) {
+    async fn gets_entry_args(
+        #[from(aquadoggo_test_db)]
+        #[with(20, 1)]
+        #[future]
+        db: TestStore,
+    ) {
         // Instantiate a new store
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
             operations: Arc::new(Mutex::new(Vec::new())),
         };
+        let db = db.await;
 
-        let entries = test_db.entries.lock().unwrap().clone();
+        let entries = db.store.entries.lock().unwrap().clone();
 
         for entry in entries.clone() {
             let is_create = entry.operation().is_create();
@@ -485,15 +511,22 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn wrong_log_id(key_pair: KeyPair, test_db: SimplestStorageProvider) {
+    async fn wrong_log_id(
+        key_pair: KeyPair,
+        #[from(aquadoggo_test_db)]
+        #[with(2, 1)]
+        #[future]
+        db: TestStore,
+    ) {
         // Instantiate a new store
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
             operations: Arc::new(Mutex::new(Vec::new())),
         };
+        let db = db.await;
 
-        let entries = test_db.entries.lock().unwrap().clone();
+        let entries = db.store.entries.lock().unwrap().clone();
 
         // Entry request for valid first intry in log 1
         let publish_entry_request = PublishEntryRequest(
@@ -534,9 +567,15 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn skiplink_does_not_exist(test_db: SimplestStorageProvider) {
-        let entries = test_db.entries.lock().unwrap().clone();
-        let logs = test_db.logs.lock().unwrap().clone();
+    async fn skiplink_does_not_exist(
+        #[from(aquadoggo_test_db)]
+        #[with(8, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
+        let logs = db.store.logs.lock().unwrap().clone();
 
         // Init database with on document log which has an entry at seq num 4 missing
         let log_entries_with_skiplink_missing = vec![
@@ -575,13 +614,17 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn prev_op_does_not_exist(
-        test_db: SimplestStorageProvider,
+        #[from(aquadoggo_test_db)]
+        #[with(4, 1)]
+        #[future]
+        db: TestStore,
         operation_fields: OperationFields,
         #[from(operation_id)] invalid_prev_op: OperationId,
         key_pair: KeyPair,
     ) {
-        let entries = test_db.entries.lock().unwrap().clone();
-        let logs = test_db.logs.lock().unwrap().clone();
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
+        let logs = db.store.logs.lock().unwrap().clone();
 
         // Init database with 3 valid entries
         let three_valid_entries = vec![
@@ -634,9 +677,15 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn invalid_entry_op_pair(test_db: SimplestStorageProvider) {
-        let entries = test_db.entries.lock().unwrap().clone();
-        let logs = test_db.logs.lock().unwrap().clone();
+    async fn invalid_entry_op_pair(
+        #[from(aquadoggo_test_db)]
+        #[with(4, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
+        let logs = db.store.logs.lock().unwrap().clone();
 
         // Init database with 3 valid entries
         let three_valid_entries = vec![

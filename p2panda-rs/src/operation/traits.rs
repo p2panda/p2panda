@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::document::DocumentViewId;
-use crate::entry::{decode_entry, EntrySigned};
+use crate::entry::EntrySigned;
 use crate::identity::Author;
 use crate::operation::{
     Operation, OperationAction, OperationFields, OperationId, OperationVersion,
@@ -66,7 +66,9 @@ pub trait AsOperation {
 pub trait AsVerifiedOperation:
     Sized + Clone + Send + Sync + Validate + PartialEq + std::fmt::Debug
 {
+    /// Error type for `AsVerifiedOperation`
     type VerifiedOperationError: 'static + std::error::Error + Send + Sync;
+
     /// Returns a new `VerifiedOperation` instance.
     ///
     /// Use `VerifiedOperation::new_from_entry()` instead if you want to validate that the operation
