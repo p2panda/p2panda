@@ -293,8 +293,8 @@ pub fn test_key_pairs(no_of_authors: usize) -> Vec<KeyPair> {
     key_pairs
 }
 
-/// Container for `SqlStore` with access to the document ids and key_pairs
-/// used in the pre-populated database for testing.
+/// Container for the test store with access to the document ids and key_pairs
+/// present in the pre-populated database.
 pub struct TestStore {
     pub store: SimplestStorageProvider,
     pub key_pairs: Vec<KeyPair>,
