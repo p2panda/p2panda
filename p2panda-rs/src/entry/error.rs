@@ -39,7 +39,8 @@ pub enum EntrySignedError {
     #[error("entry requires skiplink for encoding")]
     SkiplinkMissing,
 
-    #[error("schema required to decode entry payload")]
+    /// Operations can only be decoded with access to their schema definition.
+    #[error("a schema is required to decode the entry payload")]
     SchemaMissing,
 
     /// Handle errors from `SeqNum` struct.

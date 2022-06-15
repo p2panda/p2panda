@@ -41,52 +41,7 @@ operation_body = (
     action: "create", fields: create_fields //
     action: "update", fields: update_fields, previous_operations: previous_operations //
     action: "delete", previous_operations: previous_operations
-)
-
-; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-; Operation values
-; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-value_text = (
-    type: "str",
-    value: tstr,
-)
-
-value_integer = (
-    type: "int",
-    value: int,
-)
-
-value_float = (
-    type: "float",
-    value: float,
-)
-
-value_boolean = (
-    type: "bool",
-    value: bool,
-)
-
-value_relation = (
-    type: "relation",
-    value: relation,
-)
-
-value_relation_list = (
-    type: "relation_list",
-    value: relation_list,
-)
-
-value_pinned_relation = (
-    type: "pinned_relation",
-    value: pinned_relation,
-)
-
-value_pinned_relation_list = (
-    type: "pinned_relation_list",
-    value: pinned_relation_list,
-)
-"#;
+)"#;
 
 const CDDL_ANY_OPERATION: &str = r#"
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -114,16 +69,15 @@ update_fields = fields
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 fields = {
-    + tstr => {
-        value_text //
-        value_integer //
-        value_float //
-        value_boolean //
-        value_relation //
-        value_relation_list //
-        value_pinned_relation //
-        value_pinned_relation_list
-    }
+    + tstr =>
+        tstr /
+        int /
+        float /
+        bool /
+        relation /
+        relation_list /
+        pinned_relation /
+        pinned_relation_list
 }
 "#;
 
@@ -143,18 +97,15 @@ update_fields = { + (name // description // fields) }
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 name = (
-    name: { value_text },
+    name: tstr,
 )
 
 description = (
-    description: { value_text },
+    description: tstr,
 )
 
 fields = (
-    fields: {
-        type: "relation_list",
-        value: pinned_relation_list,
-    },
+    fields: pinned_relation_list,
 )
 "#;
 
@@ -174,19 +125,16 @@ update_fields = { + (name // description // field_type) }
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 name = (
-    name: { value_text },
+    name: tstr,
 )
 
 description = (
-    description: { value_text },
+    description: tstr,
 )
 
 field_type = (
-    field_type: {
-        type: "str",
-        value: "str" / "int" / "float" / "bool" / "relation" /
-            "relation_list" / "pinned_relation" / "pinned_relation_list",
-    }
+    field_type: "str" / "int" / "float" / "bool" / "relation" /
+    "relation_list" / "pinned_relation" / "pinned_relation_list"
 )
 "#;
 
@@ -240,26 +188,11 @@ mod tests {
                     "schema" => "menu_0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
                     "version" => 1,
                     "fields" => {
-                        "national_dish" => {
-                            "value" => "Pumpkin",
-                            "type" => "str"
-                        },
-                        "country" => {
-                            "value" => "0020f407359f54a9dbfabba3c5d8cab5fe4e99867dbc81ca1a29588c3bd478712644",
-                            "type" => "relation"
-                        },
-                        "vegan_friendly" => {
-                            "value" => true,
-                            "type" => "bool"
-                        },
-                        "yummyness" => {
-                            "value" => 8,
-                            "type" => "int"
-                        },
-                        "yumsimumsiness" => {
-                            "value" => 7.2,
-                            "type" => "float"
-                        },
+                        "national_dish" => "Pumpkin",
+                        "country" => "0020f407359f54a9dbfabba3c5d8cab5fe4e99867dbc81ca1a29588c3bd478712644",
+                        "vegan_friendly" => true,
+                        "yummyness" => 8,
+                        "yumsimumsiness" => 7.2,
                     },
                 })
                 .unwrap()
@@ -278,10 +211,7 @@ mod tests {
                         "00207134365ce71dca6bd7c31d04bfb3244b29897ab538906216fc8ff3d6189410ad",
                     ],
                     "fields" => {
-                        "national_dish" => {
-                            "value" => "Almonds",
-                            "type" => "str"
-                        },
+                        "national_dish" => "Almonds",
                     },
                 })
                 .unwrap()
@@ -317,10 +247,7 @@ mod tests {
                     "schema" => "menu_80f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f",
                     "version" => 1,
                     "fields" => {
-                        "food" => {
-                            "value" => "Pumkin",
-                            "type" => "str"
-                        }
+                        "food" => "Pumpkin"
                     }
                 })
                 .unwrap()
@@ -368,11 +295,7 @@ mod tests {
                     "schema" => "menu_80f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
                     "version" => 1,
                     "fields" => {
-                        "size" => {
-                            // Value and type do not match
-                            "value" => "This is not a number",
-                            "type" => "int",
-                        },
+                        "size" => "This is not a number",
                     },
                 })
                 .unwrap()
@@ -443,27 +366,18 @@ mod tests {
                     "schema" => "schema_definition_v1",
                     "version" => 1,
                     "fields" => {
-                        "name" => {
-                            "value" => "Locations",
-                            "type" => "str"
-                        },
-                        "description" => {
-                            "value" => "Holds information about places",
-                            "type" => "str"
-                        },
-                        "fields" => {
-                            "value" => [
-                                [
-                                    "0020c039b78e3f9a84370e23642d911d2648f9db0b9150e43c853de863936bdefe5d",
-                                    "0020981f3763e1cefab859c315157b79179188f8187da4d53eea3fb8a571a3b5c0a6",
-                                ],
-                                [
-                                    "00206a98fffb0b1424ada1ed241b32da8287852d6b4eb37a1b381892c4fbd800e9e8",
-                                ],
+                        "name" => "Locations",
+                        "description" => "Holds information about places",
+                        "fields" => [
+                            [
+                                "0020c039b78e3f9a84370e23642d911d2648f9db0b9150e43c853de863936bdefe5d",
+                                "0020981f3763e1cefab859c315157b79179188f8187da4d53eea3fb8a571a3b5c0a6",
                             ],
-                            "type" => "relation_list"
-                        },
-                    },
+                            [
+                                "00206a98fffb0b1424ada1ed241b32da8287852d6b4eb37a1b381892c4fbd800e9e8",
+                            ],
+                        ],
+                },
                 })
                 .unwrap()
             )
@@ -480,10 +394,7 @@ mod tests {
                         "00207134365ce71dca6bd7c31d04bfb3244b29897ab538906216fc8ff3d6189410ad",
                     ],
                     "fields" => {
-                        "name" => {
-                            "value" => "Telephones",
-                            "type" => "str"
-                        },
+                        "name" => "Telephones",
                     },
                 })
                 .unwrap()
@@ -518,14 +429,8 @@ mod tests {
                     "schema" => "schema_definition_v1",
                     "version" => 1,
                     "fields" => {
-                        "name" => {
-                            "value" => "Locations",
-                            "type" => "str"
-                        },
-                        "description" => {
-                            "value" => "Holds information about places",
-                            "type" => "str"
-                        },
+                        "name" => "Locations",
+                        "description" => "Holds information about places",
                         // "fields" missing
                     },
                 })
@@ -542,27 +447,15 @@ mod tests {
                     "schema" => "schema_definition_v1",
                     "version" => 1,
                     "fields" => {
-                        "name" => {
-                            "value" => "Locations",
-                            "type" => "str"
-                        },
-                        "description" => {
-                            "value" => "Holds information about places",
-                            "type" => "str"
-                        },
+                        "name" => "Locations",
+                        "description" => "Holds information about places",
                         // "field_type" is an unknown field
-                        "field_type" => {
-                            "value" => "What am I doing here?",
-                            "type" => "str"
-                        },
-                        "fields" => {
-                            "value" => [
-                                [
-                                    "00206de69fe88aa24e0929bad2fc9808a0ce2aad8e6d8fb914f4a9178995a56b3435"
-                                ]
-                            ],
-                            "type" => "relation_list"
-                        },
+                        "field_type" => "What am I doing here?",
+                        "fields" => [
+                            [
+                                "00206de69fe88aa24e0929bad2fc9808a0ce2aad8e6d8fb914f4a9178995a56b3435"
+                            ]
+                        ],
                     },
                 })
                 .unwrap()
@@ -580,11 +473,7 @@ mod tests {
                         "00207134365ce71dca6bd7c31d04bfb3244b29897ab538906216fc8ff3d6189410ad",
                     ],
                     "fields" => {
-                        "name" => {
-                            // "name" is not an integer
-                            "value" => 12,
-                            "type" => "int"
-                        },
+                        "name" => 12,
                     },
                 })
                 .unwrap()
@@ -603,18 +492,9 @@ mod tests {
                     "schema" => "schema_field_definition_v1",
                     "version" => 1,
                     "fields" => {
-                        "name" => {
-                            "value" => "Size",
-                            "type" => "str"
-                        },
-                        "description" => {
-                            "value" => "In centimeters",
-                            "type" => "str"
-                        },
-                        "field_type" => {
-                            "value" => "float",
-                            "type" => "str"
-                        },
+                        "name" => "Size",
+                        "description" => "In centimeters",
+                        "field_type" => "float",
                     },
                 })
                 .unwrap()
@@ -634,22 +514,10 @@ mod tests {
                         "0020e967334f97ac477bf1f53568e475376ae28687e272de3f3d0672ec6f2aa9be53",
                     ],
                     "fields" => {
-                        "field_type" => {
-                            "value" => "relation",
-                            "type" => "str"
-                        },
-                        "field_type" => {
-                            "value" => "relation_list",
-                            "type" => "str"
-                        },
-                        "field_type" => {
-                            "value" => "pinned_relation",
-                            "type" => "str"
-                        },
-                        "field_type" => {
-                            "value" => "pinned_relation_list",
-                            "type" => "str"
-                        },
+                        "field_type" => "relation",
+                        "field_type" => "relation_list",
+                        "field_type" => "pinned_relation",
+                        "field_type" => "pinned_relation_list",
                     },
                 })
                 .unwrap()
@@ -684,15 +552,9 @@ mod tests {
                     "schema" => "schema_field_definition_v1",
                     "version" => 1,
                     "fields" => {
-                        "name" => {
-                            "value" => "Size",
-                            "type" => "str"
-                        },
+                        "name" => "Size",
                         // "description" field missing
-                        "field_type" => {
-                            "value" => "float",
-                            "type" => "str"
-                        },
+                        "field_type" => "float"
                     },
                 })
                 .unwrap()
@@ -711,11 +573,7 @@ mod tests {
                         "00209caa5f232debd2835e35a673d5eb148ea803a272c6ca004cd86cbe4a834718d5",
                     ],
                     "fields" => {
-                        "field_type" => {
-                            // Unknown field type
-                            "value" => "beaver_nest",
-                            "type" => "str"
-                        },
+                        "field_type" => "beaver_nest",
                     },
                 })
                 .unwrap()

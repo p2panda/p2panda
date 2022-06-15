@@ -2,6 +2,8 @@
 
 use thiserror::Error;
 
+use crate::schema::{FieldType, SchemaId};
+
 /// Error types for methods of `Operation` struct.
 #[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
@@ -21,6 +23,13 @@ pub enum OperationError {
     /// Invalid attempt to create an operation with previous operations data.
     #[error("previous_operations field should be empty")]
     ExistingPreviousOperations,
+
+    // /// `CREATE` operations must define all fields of their schema
+    // #[error("operation contains a field '{0}' that is not defined by its schema {1}")]
+    // UndefinedField(String, SchemaId),
+    /// Field values must match the type defined in their schema.
+    #[error("failed decoding field '{0}' as '{1:?}'")]
+    InvalidFieldType(String, FieldType),
 
     /// Invalid hash found.
     #[error(transparent)]

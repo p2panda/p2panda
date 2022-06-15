@@ -113,12 +113,12 @@ fn fixture_decode_operation(#[case] fixture: Fixture) {
 
 /// Test decoding an entry from version fixtures.
 #[apply(version_fixtures)]
-fn fixture_decode_entry(#[case] fixture: Fixture, default_schema: Schema) {
+fn fixture_decode_entry(#[case] fixture: Fixture) {
     // Decode fixture EntrySigned
     let entry = decode_entry(
         &fixture.entry_signed_encoded,
         Some(&fixture.operation_encoded),
-        Some(&default_schema),
+        Some(&fixture.schema),
     )
     .unwrap();
 

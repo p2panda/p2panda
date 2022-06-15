@@ -238,7 +238,7 @@ impl PlainOperation {
     pub fn to_operation(&self, schema: &Schema) -> Result<Operation, OperationError> {
         match self.action {
             OperationAction::Create => {
-                Operation::new_create(self.schema.clone(), self.get_fields(schema))
+                Operation::new_create(self.schema.clone(), self.get_fields(schema)?)
             }
             OperationAction::Update => Operation::new_update(
                 self.schema.clone(),
@@ -246,7 +246,7 @@ impl PlainOperation {
                     .as_ref()
                     .ok_or(OperationError::EmptyPreviousOperations)?
                     .to_owned(),
-                self.get_fields(schema),
+                self.get_fields(schema)?,
             ),
             OperationAction::Delete => Operation::new_delete(
                 self.schema.clone(),
@@ -259,7 +259,7 @@ impl PlainOperation {
     }
 
     /// Parses field values using information from the supplied schema.
-    fn get_fields(&self, schema: &Schema) -> OperationFields {
+    fn get_fields(&self, schema: &Schema) -> Result<OperationFields, OperationError> {
         let mut fields = OperationFields::new();
 
         for (field_name, value) in self.fields.as_ref().unwrap().to_owned().iter() {
@@ -269,31 +269,59 @@ impl PlainOperation {
                 .unwrap_or_else(|| panic!("schema has no field '{}'", field_name));
 
             let field_value = match field_type {
-                FieldType::Bool => OperationValue::Boolean(value.inner().deserialized().unwrap()),
-                FieldType::Int => OperationValue::Integer(value.inner().deserialized().unwrap()),
-                FieldType::Float => OperationValue::Float(value.inner().deserialized().unwrap()),
-                FieldType::String => OperationValue::Text(value.inner().deserialized().unwrap()),
+                FieldType::Bool => {
+                    OperationValue::Boolean(value.inner().deserialized().map_err(|_| {
+                        OperationError::InvalidFieldType(field_name.to_string(), field_type.clone())
+                    })?)
+                }
+                FieldType::Int => {
+                    OperationValue::Integer(value.inner().deserialized().map_err(|_| {
+                        OperationError::InvalidFieldType(field_name.to_string(), field_type.clone())
+                    })?)
+                }
+                FieldType::Float => {
+                    OperationValue::Float(value.inner().deserialized().map_err(|_| {
+                        OperationError::InvalidFieldType(field_name.to_string(), field_type.clone())
+                    })?)
+                }
+                FieldType::String => {
+                    OperationValue::Text(value.inner().deserialized().map_err(|_| {
+                        OperationError::InvalidFieldType(field_name.to_string(), field_type.clone())
+                    })?)
+                }
                 FieldType::Relation(_) => {
-                    let doc_id: DocumentId = value.inner().deserialized().unwrap();
+                    let doc_id: DocumentId = value.inner().deserialized().map_err(|_| {
+                        OperationError::InvalidFieldType(field_name.to_string(), field_type.clone())
+                    })?;
                     OperationValue::Relation(Relation::new(doc_id))
                 }
                 FieldType::RelationList(_) => {
-                    let doc_ids: Vec<DocumentId> = value.inner().deserialized().unwrap();
+                    let doc_ids: Vec<DocumentId> = value.inner().deserialized().map_err(|_| {
+                        OperationError::InvalidFieldType(field_name.to_string(), field_type.clone())
+                    })?;
                     OperationValue::RelationList(RelationList::new(doc_ids))
                 }
                 FieldType::PinnedRelation(_) => {
-                    let view_id: DocumentViewId = value.inner().deserialized().unwrap();
+                    let view_id: DocumentViewId = value.inner().deserialized().map_err(|_| {
+                        OperationError::InvalidFieldType(field_name.to_string(), field_type.clone())
+                    })?;
                     OperationValue::PinnedRelation(PinnedRelation::new(view_id))
                 }
                 FieldType::PinnedRelationList(_) => {
-                    let view_id: Vec<DocumentViewId> = value.inner().deserialized().unwrap();
+                    let view_id: Vec<DocumentViewId> =
+                        value.inner().deserialized().map_err(|_| {
+                            OperationError::InvalidFieldType(
+                                field_name.to_string(),
+                                field_type.clone(),
+                            )
+                        })?;
                     OperationValue::PinnedRelationList(PinnedRelationList::new(view_id))
                 }
             };
 
             fields.add(field_name, field_value).unwrap();
         }
-        fields
+        Ok(fields)
     }
 }
 

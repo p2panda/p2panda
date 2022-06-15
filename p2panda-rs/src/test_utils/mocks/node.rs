@@ -841,7 +841,10 @@ mod tests {
         let test_schema = schema_item(
             schema(TEST_SCHEMA_ID),
             "",
-            vec![("message", FieldType::String)],
+            vec![
+                ("cafe_name", FieldType::String),
+                ("address", FieldType::String),
+            ],
         );
         let mut node = Node::new(vec![test_schema]);
 

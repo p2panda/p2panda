@@ -39,7 +39,8 @@ pub fn default_schema(
         ("height", FieldType::Float),
         ("age", FieldType::Int),
         ("is_admin", FieldType::Bool),
-        ("profile_picture", FieldType::Relation(schema(TEST_SCHEMA_ID)))
+        ("profile_picture", FieldType::Relation(schema(TEST_SCHEMA_ID))),
+        ("my_friends", FieldType::RelationList(schema(TEST_SCHEMA_ID)))
     ])]
     fields: Vec<(&str, FieldType)>,
 ) -> Schema {

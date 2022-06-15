@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use async_trait::async_trait;
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use mockall::automock;
@@ -205,9 +207,9 @@ pub mod tests {
     use crate::schema::{Schema, SchemaId};
     use crate::storage_provider::errors::EntryStorageError;
     use crate::storage_provider::traits::test_utils::{
-        test_db, SimplestStorageProvider, StorageEntry, SKIPLINK_ENTRIES,
+        test_db, SimplestStorageProvider, StorageEntry, StorageLog, SKIPLINK_ENTRIES,
     };
-    use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog, EntryStore};
+    use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog, EntryStore, LogStore};
     use crate::test_utils::fixtures::{
         default_schema, entry, entry_signed_encoded, key_pair, operation_encoded, random_key_pair,
         schema,
@@ -298,26 +300,21 @@ pub mod tests {
             schema: &SchemaId,
         ) -> Result<Vec<StorageEntry>, EntryStorageError> {
             let entries = self.entries.lock().unwrap();
+            let logs = self.logs.lock().unwrap();
 
-            let matching_entries = self
-                .logs
-                .lock()
-                .unwrap()
-                .iter()
-                // Find logs with the correct schema
-                .filter(|l| &l.schema_id() == schema)
-                // Take author and log id of those logs
-                .map(|l| (l.author(), l.id()))
-                // Now find entries matching those author/log id combinations
-                .map(|(author, log_id)| {
-                    entries
-                        .iter()
-                        .filter(|e| e.log_id() == log_id && e.author() == author)
-                        .map(|e| e.to_owned())
-                        .collect::<Vec<StorageEntry>>()
-                })
-                .flatten()
-                .collect();
+            println!("Start {}", schema);
+            let mut matching_entries = vec![];
+            for log in logs.iter() {
+                println!("Log {}", log.schema_id());
+                if &log.schema_id() == schema {
+                    matching_entries.extend(
+                        entries
+                            .iter()
+                            .filter(|e| e.log_id() == log.id() && e.author() == log.author())
+                            .map(|e| e.clone()),
+                    );
+                }
+            }
 
             Ok(matching_entries)
         }
@@ -412,6 +409,12 @@ pub mod tests {
         );
     }
 
+    //
+    //
+    //
+    //
+    //
+
     #[rstest]
     #[async_std::test]
     async fn get_by_schema(
@@ -429,6 +432,18 @@ pub mod tests {
 
         let author_1_entry = sign_and_encode(&entry, &key_pair_1).unwrap();
         let author_2_entry = sign_and_encode(&entry, &key_pair_2).unwrap();
+        let author_1_log = StorageLog::new(
+            &Author::new(&hex::encode(key_pair_1.public_key().to_bytes())).unwrap(),
+            &schema,
+            &author_1_entry.hash().into(),
+            &entry.log_id(),
+        );
+        let author_2_log = StorageLog::new(
+            &Author::new(&hex::encode(key_pair_2.public_key().to_bytes())).unwrap(),
+            &schema,
+            &author_2_entry.hash().into(),
+            &entry.log_id(),
+        );
         let author_1_entry = StorageEntry::new(&author_1_entry, &operation_encoded).unwrap();
         let author_2_entry = StorageEntry::new(&author_2_entry, &operation_encoded).unwrap();
 
@@ -440,6 +455,8 @@ pub mod tests {
             .is_empty());
 
         // Insert two entries into the store.
+        store.insert_log(author_1_log).await.unwrap();
+        store.insert_log(author_2_log).await.unwrap();
         store.insert_entry(author_1_entry).await.unwrap();
         store.insert_entry(author_2_entry).await.unwrap();
 

@@ -125,9 +125,8 @@ mod tests {
         ))]
         schema_item: Schema,
     ) {
-        let operation = operation_encoded_invalid_relation_fields.decode(&schema_item);
-        assert!(operation.is_ok());
-        assert!(operation.unwrap().validate().is_err());
+        let decoded = operation_encoded_invalid_relation_fields.decode(&schema_item);
+        assert!(decoded.is_err());
     }
 
     #[apply(version_fixtures)]

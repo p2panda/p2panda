@@ -18,7 +18,7 @@ use crate::storage_provider::traits::{
     AsStorageEntry, AsStorageLog,
 };
 use crate::test_utils::fixtures::{
-    document_id, entry, key_pair, operation, operation_fields, schema,
+    default_schema, document_id, entry, key_pair, operation, operation_fields, schema,
 };
 use crate::Validate;
 
@@ -26,7 +26,6 @@ use crate::Validate;
 pub struct SimplestStorageProvider {
     pub logs: Arc<Mutex<Vec<StorageLog>>>,
     pub entries: Arc<Mutex<Vec<StorageEntry>>>,
-    // pub schemas: Vec<Schema>,
 }
 
 impl SimplestStorageProvider {
@@ -43,10 +42,6 @@ impl SimplestStorageProvider {
         // Remove duplicate logs.
         logs.dedup();
     }
-
-    // pub fn db_get_schema(&self, schema_id: &SchemaId) -> Option<&Schema> {
-    //     self.schemas.iter().find(|s| s.id() == schema_id)
-    // }
 }
 
 /// A log entry represented as a concatenated string of `"{author}-{schema}-{document_id}-{log_id}"`
@@ -96,12 +91,8 @@ pub struct StorageEntry(String);
 impl StorageEntry {
     fn entry_decoded(&self, schema: Option<&Schema>) -> Entry {
         // Unwrapping as validation occurs in constructor.
-        decode_entry(
-            &self.entry_signed(),
-            self.operation_encoded().as_ref(),
-            schema,
-        )
-        .unwrap()
+        let op = self.operation_encoded().unwrap();
+        decode_entry(&self.entry_signed(), schema.map(|_| &op), schema).unwrap()
     }
 
     pub fn entry_signed(&self) -> EntrySigned {
@@ -293,7 +284,7 @@ pub fn test_db(
     key_pair: KeyPair,
     #[from(operation)] create_operation: Operation,
     operation_fields: OperationFields,
-    schema: SchemaId,
+    default_schema: Schema,
     document_id: DocumentId,
 ) -> SimplestStorageProvider {
     // Initial empty entry vec.
@@ -303,7 +294,7 @@ pub fn test_db(
     let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
     let db_logs: Vec<StorageLog> = vec![StorageLog::new(
         &author,
-        &schema,
+        &default_schema.id(),
         &document_id,
         &LogId::new(1),
     )];
@@ -347,7 +338,7 @@ pub fn test_db(
                     .hash()
                     .into(),
             ),
-            Some(schema.clone()),
+            Some(default_schema.id().clone()),
         );
 
         let update_entry = entry(

@@ -312,7 +312,7 @@ mod tests {
         AsVerifiedOperation, OperationEncoded, OperationId, OperationValue, VerifiedOperation,
     };
     use crate::schema::{FieldType, SchemaId};
-    use crate::test_utils::constants::TEST_SCHEMA_ID;
+    use crate::test_utils::constants::{DEFAULT_HASH, TEST_SCHEMA_ID};
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, operation, operation_fields, random_document_view_id,
         random_key_pair, random_previous_operations, schema, schema_item, update_operation,
@@ -673,12 +673,19 @@ mod tests {
     #[rstest]
     fn operation_schemas_not_matching(#[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
-        let test_schema = schema_item(
+        let test_schema_1 = schema_item(
             schema(TEST_SCHEMA_ID),
             "",
             vec![("name", FieldType::String)],
         );
-        let mut node = Node::new(vec![test_schema.clone()]);
+        let test_schema_2 = schema_item(
+            schema(
+                "not_venue_0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543",
+            ),
+            "",
+            vec![("name", FieldType::String)],
+        );
+        let mut node = Node::new(vec![test_schema_1.clone(), test_schema_2.clone()]);
 
         // Panda publishes a create operation.
         // This instantiates a new document.
@@ -699,7 +706,7 @@ mod tests {
                     OperationValue::Text("Panda Cafe!".to_string()),
                 )])),
                 Some(panda_entry_1_hash.into()),
-                Some(SchemaId::new("schema_definition_v1").unwrap()),
+                Some(test_schema_2.id().clone()),
             ),
         )
         .unwrap();
@@ -711,7 +718,7 @@ mod tests {
                 VerifiedOperation::new_from_entry(
                     &entry.entry_encoded(),
                     &entry.operation_encoded(),
-                    &test_schema,
+                    &test_schema_1,
                 )
                 .unwrap()
             })
@@ -929,7 +936,7 @@ mod tests {
         assert!(document.is_ok());
 
         let document = document.unwrap();
-        assert_eq!(format!("{}", document), "<Document f21e48>");
+        assert_eq!(format!("{}", document), "<Document fe918a>");
 
         // This process already builds, sorts and reduces the document. We can now
         // access the derived view to check it's values.
@@ -1064,7 +1071,10 @@ mod tests {
             &mut node,
             &panda,
             &update_operation(
-                &[("name", OperationValue::Text("Panda Cafe!".to_string()))],
+                &[(
+                    "name",
+                    OperationValue::Text("Panda Cafe! (fork 1)".to_string()),
+                )],
                 &panda_entry_1_hash.clone().into(),
             ),
         )
@@ -1074,14 +1084,17 @@ mod tests {
             &mut node,
             &panda,
             &update_operation(
-                &[("name", OperationValue::Text("Panda Cafe!!!!!!".to_string()))],
+                &[(
+                    "name",
+                    OperationValue::Text("Panda Cafe! (fork 2)".to_string()),
+                )],
                 &panda_entry_1_hash.clone().into(),
             ),
         )
         .unwrap();
 
-        // DOCUMENT: [panda_1]<--[penguin_1]
-        //                    \----[panda_2]
+        // DOCUMENT: [panda_1]<--[panda_2]
+        //                    \----[panda_3]
 
         let operations: Vec<VerifiedOperation> = node
             .all_entries()
@@ -1119,7 +1132,7 @@ mod tests {
                 .get("name")
                 .unwrap()
                 .value(),
-            &OperationValue::Text("Panda Cafe!".to_string())
+            &OperationValue::Text("Panda Cafe! (fork 1)".to_string())
         );
 
         assert_eq!(
@@ -1131,8 +1144,13 @@ mod tests {
                 .get("name")
                 .unwrap()
                 .value(),
-            &OperationValue::Text("Panda Cafe!!!!!!".to_string())
+            &OperationValue::Text("Panda Cafe! (fork 2)".to_string())
         );
+
+        let expected_value = match panda_entry_2_hash > panda_entry_3_hash {
+            true => OperationValue::Text("Panda Cafe! (fork 1)".to_string()),
+            false => OperationValue::Text("Panda Cafe! (fork 2)".to_string()),
+        };
 
         assert_eq!(
             document_builder
@@ -1146,7 +1164,7 @@ mod tests {
                 .get("name")
                 .unwrap()
                 .value(),
-            &OperationValue::Text("Panda Cafe!".to_string())
+            &expected_value
         );
     }
 }
