@@ -93,6 +93,15 @@ jobs:
         with:
           node-version-file: ${{ env.working_directory}}/.nvmrc
 
+      - name: Restore from cargo and npm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.cache_path }}
+          key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
       - name: Install dependencies
         run: npm ci
         working-directory: ${{ env.working_directory }}
