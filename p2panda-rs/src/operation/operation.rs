@@ -5,10 +5,13 @@ use std::hash::{Hash as StdHash, Hasher};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::document::DocumentViewId;
+use crate::document::{DocumentId, DocumentViewId};
 use crate::operation::{AsOperation, OperationEncoded, OperationError, OperationFields};
-use crate::schema::SchemaId;
+use crate::schema::{FieldType, Schema, SchemaId};
 use crate::Validate;
+
+use super::operation_fields::PlainOperationFields;
+use super::{OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList};
 
 /// Operation format versions to introduce API changes in the future.
 ///
@@ -96,7 +99,7 @@ impl<'de> Deserialize<'de> for OperationAction {
 /// operation ids which identify the known branch tips at the time of publication. These allow
 /// us to build the graph and retain knowledge of the graph state at the time the specific
 /// operation was published.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Operation {
     /// Describes if this operation creates, updates or deletes data.
     action: OperationAction,
@@ -109,11 +112,9 @@ pub struct Operation {
 
     /// Optional DocumentViewId containing the operation ids directly preceding this one
     /// in the document.
-    #[serde(skip_serializing_if = "Option::is_none")]
     previous_operations: Option<DocumentViewId>,
 
     /// Optional fields map holding the operation data.
-    #[serde(skip_serializing_if = "Option::is_none")]
     fields: Option<OperationFields>,
 }
 
@@ -200,8 +201,111 @@ impl Operation {
     /// Encodes operation in CBOR format and returns bytes.
     pub fn to_cbor(&self) -> Vec<u8> {
         let mut cbor_bytes = Vec::new();
-        ciborium::ser::into_writer(&self, &mut cbor_bytes).unwrap();
+        let plain_operation = PlainOperation::from(self.to_owned());
+        ciborium::ser::into_writer(&plain_operation, &mut cbor_bytes).unwrap();
         cbor_bytes
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PlainOperation {
+    /// Describes if this operation creates, updates or deletes data.
+    action: OperationAction,
+
+    /// Hash of schema describing format of operation fields.
+    schema: SchemaId,
+
+    /// Version schema of this operation.
+    version: OperationVersion,
+
+    /// Optional DocumentViewId containing the operation ids directly preceding this one
+    /// in the document.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    previous_operations: Option<DocumentViewId>,
+
+    /// Optional fields map holding the operation data.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fields: Option<PlainOperationFields>,
+}
+
+impl PlainOperation {
+    // Access this operation's schema.
+    pub fn schema(&self) -> &SchemaId {
+        &self.schema
+    }
+
+    /// Converts this plain operation into a regular [`Operation`].
+    pub fn to_operation(&self, schema: &Schema) -> Result<Operation, OperationError> {
+        match self.action {
+            OperationAction::Create => {
+                Operation::new_create(self.schema.clone(), self.get_fields(schema))
+            }
+            OperationAction::Update => Operation::new_update(
+                self.schema.clone(),
+                self.previous_operations
+                    .as_ref()
+                    .ok_or(OperationError::EmptyPreviousOperations)?
+                    .to_owned(),
+                self.get_fields(schema),
+            ),
+            OperationAction::Delete => Operation::new_delete(
+                self.schema.clone(),
+                self.previous_operations
+                    .as_ref()
+                    .ok_or(OperationError::EmptyPreviousOperations)?
+                    .to_owned(),
+            ),
+        }
+    }
+
+    /// Parses field values using information from the supplied schema.
+    fn get_fields(&self, schema: &Schema) -> OperationFields {
+        let mut fields = OperationFields::new();
+
+        for (field_name, value) in self.fields.as_ref().unwrap().to_owned().iter() {
+            let field_type = schema
+                .fields()
+                .get(field_name)
+                .unwrap_or_else(|| panic!("schema has no field '{}'", field_name));
+
+            let field_value = match field_type {
+                FieldType::Bool => OperationValue::Boolean(value.inner().deserialized().unwrap()),
+                FieldType::Int => OperationValue::Integer(value.inner().deserialized().unwrap()),
+                FieldType::Float => OperationValue::Float(value.inner().deserialized().unwrap()),
+                FieldType::String => OperationValue::Text(value.inner().deserialized().unwrap()),
+                FieldType::Relation(_) => {
+                    let doc_id: DocumentId = value.inner().deserialized().unwrap();
+                    OperationValue::Relation(Relation::new(doc_id))
+                }
+                FieldType::RelationList(_) => {
+                    let doc_ids: Vec<DocumentId> = value.inner().deserialized().unwrap();
+                    OperationValue::RelationList(RelationList::new(doc_ids))
+                }
+                FieldType::PinnedRelation(_) => {
+                    let view_id: DocumentViewId = value.inner().deserialized().unwrap();
+                    OperationValue::PinnedRelation(PinnedRelation::new(view_id))
+                }
+                FieldType::PinnedRelationList(_) => {
+                    let view_id: Vec<DocumentViewId> = value.inner().deserialized().unwrap();
+                    OperationValue::PinnedRelationList(PinnedRelationList::new(view_id))
+                }
+            };
+
+            fields.add(field_name, field_value).unwrap();
+        }
+        fields
+    }
+}
+
+impl From<Operation> for PlainOperation {
+    fn from(operation: Operation) -> Self {
+        Self {
+            action: operation.action(),
+            schema: operation.schema(),
+            version: operation.version(),
+            previous_operations: operation.previous_operations(),
+            fields: operation.fields().map(PlainOperationFields::from),
+        }
     }
 }
 
@@ -229,13 +333,6 @@ impl AsOperation for Operation {
     /// Returns known previous operations vector of this operation.
     fn previous_operations(&self) -> Option<DocumentViewId> {
         self.previous_operations.clone()
-    }
-}
-
-/// Decodes an encoded operation and returns it.
-impl From<&OperationEncoded> for Operation {
-    fn from(operation_encoded: &OperationEncoded) -> Self {
-        ciborium::de::from_reader(&operation_encoded.to_bytes()[..]).unwrap()
     }
 }
 
@@ -296,9 +393,10 @@ mod tests {
 
     use crate::document::{DocumentId, DocumentViewId};
     use crate::operation::{AsOperation, OperationEncoded, OperationValue, Relation};
-    use crate::schema::SchemaId;
+    use crate::schema::{FieldType, Schema, SchemaId};
+    use crate::test_utils::constants::TEST_SCHEMA_ID;
     use crate::test_utils::fixtures::{
-        operation_fields, random_document_id, random_document_view_id, schema,
+        operation_fields, random_document_id, random_document_view_id, schema, schema_item,
     };
     use crate::test_utils::templates::many_valid_operations;
     use crate::Validate;
@@ -386,8 +484,19 @@ mod tests {
     }
 
     #[rstest]
+    #[case(schema_item(
+        schema(TEST_SCHEMA_ID),
+        "test description",
+        vec![
+            ("username", FieldType::String),
+            ("height", FieldType::Float),
+            ("age", FieldType::Int),
+            ("is_admin", FieldType::Bool),
+            ("profile_picture", FieldType::Relation(schema(TEST_SCHEMA_ID)))
+        ]
+    ))]
     fn encode_and_decode(
-        schema: SchemaId,
+        #[case] schema: Schema,
         #[from(random_document_view_id)] prev_op_id: DocumentViewId,
         #[from(random_document_id)] document_id: DocumentId,
     ) {
@@ -414,7 +523,7 @@ mod tests {
             )
             .unwrap();
 
-        let operation = Operation::new_update(schema, prev_op_id, fields).unwrap();
+        let operation = Operation::new_update(schema.id().to_owned(), prev_op_id, fields).unwrap();
 
         assert!(operation.is_update());
 
@@ -422,7 +531,7 @@ mod tests {
         let encoded = OperationEncoded::try_from(&operation).unwrap();
 
         // ... and decode it again
-        let operation_restored = Operation::try_from(&encoded).unwrap();
+        let operation_restored = encoded.decode(&schema).unwrap();
 
         assert_eq!(operation, operation_restored);
     }

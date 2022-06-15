@@ -202,14 +202,15 @@ pub mod tests {
     use crate::hash::Hash;
     use crate::identity::{Author, KeyPair};
     use crate::operation::{AsOperation, Operation, OperationEncoded};
-    use crate::schema::SchemaId;
+    use crate::schema::{Schema, SchemaId};
     use crate::storage_provider::errors::EntryStorageError;
     use crate::storage_provider::traits::test_utils::{
         test_db, SimplestStorageProvider, StorageEntry, SKIPLINK_ENTRIES,
     };
-    use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
+    use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog, EntryStore};
     use crate::test_utils::fixtures::{
-        entry, entry_signed_encoded, key_pair, operation_encoded, random_key_pair, schema,
+        default_schema, entry, entry_signed_encoded, key_pair, operation_encoded, random_key_pair,
+        schema,
     };
 
     /// Implement `EntryStore` trait on `SimplestStorageProvider`
@@ -298,13 +299,27 @@ pub mod tests {
         ) -> Result<Vec<StorageEntry>, EntryStorageError> {
             let entries = self.entries.lock().unwrap();
 
-            let entries: Vec<StorageEntry> = entries
+            let matching_entries = self
+                .logs
+                .lock()
+                .unwrap()
                 .iter()
-                .filter(|entry| entry.operation().schema() == *schema)
-                .map(|e| e.to_owned())
+                // Find logs with the correct schema
+                .filter(|l| &l.schema_id() == schema)
+                // Take author and log id of those logs
+                .map(|l| (l.author(), l.id()))
+                // Now find entries matching those author/log id combinations
+                .map(|(author, log_id)| {
+                    entries
+                        .iter()
+                        .filter(|e| e.log_id() == log_id && e.author() == author)
+                        .map(|e| e.to_owned())
+                        .collect::<Vec<StorageEntry>>()
+                })
+                .flatten()
                 .collect();
 
-            Ok(entries)
+            Ok(matching_entries)
         }
 
         async fn get_certificate_pool(
@@ -504,6 +519,7 @@ pub mod tests {
         key_pair: KeyPair,
         operation_encoded: OperationEncoded,
         test_db: SimplestStorageProvider,
+        default_schema: Schema,
     ) {
         let entries = test_db.entries.lock().unwrap().clone();
 
@@ -513,7 +529,7 @@ pub mod tests {
         // Reconstruct it with an invalid backlink
         let entry_at_seq_num_four_with_wrong_backlink = Entry::new(
             &entry_at_seq_num_four.log_id(),
-            Some(&Operation::from(&operation_encoded)),
+            Some(&operation_encoded.decode(&default_schema).unwrap()),
             entry_at_seq_num_four.skiplink_hash().as_ref(),
             Some(&Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
             &entry_at_seq_num_four.seq_num(),
@@ -611,6 +627,7 @@ pub mod tests {
         key_pair: KeyPair,
         operation_encoded: OperationEncoded,
         test_db: SimplestStorageProvider,
+        default_schema: Schema,
     ) {
         let entries = test_db.entries.lock().unwrap().clone();
 
@@ -620,7 +637,7 @@ pub mod tests {
         // Reconstruct it with an invalid skiplink
         let entry_at_seq_num_four_with_wrong_skiplink = Entry::new(
             &entry_at_seq_num_four.log_id(),
-            Some(&Operation::from(&operation_encoded)),
+            Some(&operation_encoded.decode(&default_schema).unwrap()),
             Some(&Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
             entry_at_seq_num_four.backlink_hash().as_ref(),
             &entry_at_seq_num_four.seq_num(),

@@ -89,6 +89,7 @@ use crate::entry::{decode_entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{AsOperation, Operation, OperationEncoded, VerifiedOperation};
+use crate::schema::{Schema, SchemaId};
 use crate::test_utils::mocks::logs::{AuthorLogs, LogEntry};
 use crate::test_utils::mocks::utils::Result;
 use crate::test_utils::mocks::Client;
@@ -131,7 +132,8 @@ pub fn send_to_node(
     let operation_encoded = OperationEncoded::try_from(operation).unwrap();
 
     // Both are published to the node.
-    let next_entry_args = node.publish_entry(&entry_encoded, &operation_encoded)?;
+    let next_entry_args =
+        node.publish_entry(&entry_encoded, &operation_encoded, &operation.schema())?;
 
     // Return entry hash so we can use it to perform UPDATE and DELETE operations later.
     // @TODO: We really want to return the next entry args here which would include
@@ -173,13 +175,15 @@ pub type Database = HashMap<String, AuthorLogs>;
 pub struct Node {
     /// Internal database structure.
     db: Database,
+    schemas: Vec<Schema>,
 }
 
 impl Node {
     /// Create a new mock Node.
-    pub fn new() -> Self {
+    pub fn new(schemas: Vec<Schema>) -> Self {
         Self {
             db: Database::new(),
+            schemas,
         }
     }
 
@@ -364,8 +368,16 @@ impl Node {
         &mut self,
         entry_encoded: &EntrySigned,
         operation_encoded: &OperationEncoded,
+        schema_id: &SchemaId,
     ) -> Result<NextEntryArgs> {
-        let entry = decode_entry(entry_encoded, Some(operation_encoded))?;
+        let schema = self
+            .schemas
+            .iter()
+            .find(|s| s.id() == schema_id)
+            .unwrap_or_else(|| panic!("Schema {} not registered on node", schema_id))
+            .clone();
+
+        let entry = decode_entry(entry_encoded, Some(operation_encoded), Some(&schema))?;
         let log_id = entry.log_id();
         let author = entry_encoded.author();
         let operation = entry.operation().unwrap();
@@ -443,7 +455,12 @@ impl Node {
 
                 // If it matches then we now create and insert the new log with it's
                 // first entry included.
-                author_logs.create_new_log(document_id.clone(), entry_encoded, operation_encoded);
+                author_logs.create_new_log(
+                    document_id.clone(),
+                    entry_encoded,
+                    operation_encoded,
+                    &schema,
+                );
             }
         };
 
@@ -469,15 +486,32 @@ impl Node {
             .collect()
     }
 
+    pub fn get_document_schema(&self, id: &Hash) -> Schema {
+        let log = self
+            .db()
+            .iter()
+            .find_map(|(_, author_logs)| author_logs.iter().find(|log| log.document() == *id))
+            .unwrap()
+            .clone();
+
+        self.schemas
+            .iter()
+            .find(|s| s.id() == &log.schema())
+            .unwrap()
+            .clone()
+    }
+
     /// Get a single resolved document from the node.
     pub fn get_document(&self, id: &Hash) -> Document {
         let entries = self.get_document_entries(id);
+        let schema = self.get_document_schema(id);
         let operations = entries
             .iter()
             .map(|entry| {
                 VerifiedOperation::new_from_entry(
                     &entry.entry_encoded(),
                     &entry.operation_encoded(),
+                    &schema,
                 )
                 .unwrap()
             })
@@ -508,7 +542,11 @@ mod tests {
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::operation::OperationValue;
-    use crate::test_utils::fixtures::{create_operation, key_pair, private_key, update_operation};
+    use crate::schema::FieldType;
+    use crate::test_utils::constants::TEST_SCHEMA_ID;
+    use crate::test_utils::fixtures::{
+        create_operation, key_pair, private_key, schema, schema_item, update_operation,
+    };
     use crate::test_utils::mocks::client::Client;
     use crate::test_utils::utils::NextEntryArgs;
 
@@ -517,7 +555,12 @@ mod tests {
     #[rstest]
     fn publishing_entries(private_key: String) {
         let panda = Client::new("panda".to_string(), key_pair(&private_key));
-        let mut node = Node::new();
+        let test_schema = schema_item(
+            schema(TEST_SCHEMA_ID),
+            "",
+            vec![("message", FieldType::String)],
+        );
+        let mut node = Node::new(vec![test_schema]);
 
         // This is an empty node which has no author logs.
         let next_entry_args = node
@@ -733,7 +776,12 @@ mod tests {
     #[rstest]
     fn next_entry_args_at_specific_seq_num(private_key: String) {
         let panda = Client::new("panda".to_string(), key_pair(&private_key));
-        let mut node = Node::new();
+        let test_schema = schema_item(
+            schema(TEST_SCHEMA_ID),
+            "",
+            vec![("message", FieldType::String)],
+        );
+        let mut node = Node::new(vec![test_schema]);
 
         // Publish a CREATE operation
         let (entry1_hash, _) = send_to_node(
@@ -790,7 +838,12 @@ mod tests {
             "penguin".to_string(),
             key_pair("eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e3"),
         );
-        let mut node = Node::new();
+        let test_schema = schema_item(
+            schema(TEST_SCHEMA_ID),
+            "",
+            vec![("message", FieldType::String)],
+        );
+        let mut node = Node::new(vec![test_schema]);
 
         // Publish a CREATE operation
         //

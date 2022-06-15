@@ -10,12 +10,13 @@ use rstest_reuse::apply;
 use crate::entry::{decode_entry, sign_and_encode, Entry, LogId, SeqNum};
 use crate::identity::KeyPair;
 use crate::operation::{AsOperation, Operation, OperationEncoded};
-use crate::test_utils::fixtures::{key_pair, Fixture};
+use crate::schema::Schema;
+use crate::test_utils::fixtures::{default_schema, key_pair, Fixture};
 use crate::test_utils::templates::{many_valid_entries, version_fixtures};
 
 /// Test encoding and decoding entries.
 #[apply(many_valid_entries)]
-fn entry_encoding_decoding(#[case] entry: Entry, key_pair: KeyPair) {
+fn entry_encoding_decoding(#[case] entry: Entry, key_pair: KeyPair, default_schema: Schema) {
     // Encode Operation
     let encoded_operation = OperationEncoded::try_from(entry.operation().unwrap()).unwrap();
 
@@ -23,7 +24,12 @@ fn entry_encoding_decoding(#[case] entry: Entry, key_pair: KeyPair) {
     let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
 
     // Decode signed and encoded Entry
-    let decoded_entry = decode_entry(&signed_encoded_entry, Some(&encoded_operation)).unwrap();
+    let decoded_entry = decode_entry(
+        &signed_encoded_entry,
+        Some(&encoded_operation),
+        Some(&default_schema),
+    )
+    .unwrap();
 
     // All Entry and decoded Entry values should be equal
     assert_eq!(entry.log_id(), decoded_entry.log_id());
@@ -38,7 +44,7 @@ fn entry_encoding_decoding(#[case] entry: Entry, key_pair: KeyPair) {
 
 /// Test decoding an entry then signing and encoding it again.
 #[apply(many_valid_entries)]
-fn sign_and_encode_roundtrip(#[case] entry: Entry, key_pair: KeyPair) {
+fn sign_and_encode_roundtrip(#[case] entry: Entry, key_pair: KeyPair, default_schema: Schema) {
     // Sign a p2panda entry. For this encoding, the entry is converted into a bamboo-rs-core entry,
     // which means that it also doesn't contain the operation anymore
     let entry_first_encoded = sign_and_encode(&entry, &key_pair).unwrap();
@@ -46,8 +52,12 @@ fn sign_and_encode_roundtrip(#[case] entry: Entry, key_pair: KeyPair) {
     // Make an unsigned, decoded p2panda entry from the signed and encoded form. This is adding the
     // operation back
     let operation_encoded = OperationEncoded::try_from(entry.operation().unwrap()).unwrap();
-    let entry_decoded: Entry =
-        decode_entry(&entry_first_encoded, Some(&operation_encoded)).unwrap();
+    let entry_decoded: Entry = decode_entry(
+        &entry_first_encoded,
+        Some(&operation_encoded),
+        Some(&default_schema),
+    )
+    .unwrap();
 
     // Re-encode the recovered entry to be able to check that we still have the same data
     let test_entry_signed_encoded = sign_and_encode(&entry_decoded, &key_pair).unwrap();
@@ -82,7 +92,7 @@ fn fixture_sign_encode(#[case] fixture: Fixture) {
 #[apply(version_fixtures)]
 fn fixture_decode_operation(#[case] fixture: Fixture) {
     // Decode fixture OperationEncoded
-    let operation = Operation::try_from(&fixture.operation_encoded).unwrap();
+    let operation = fixture.operation_encoded.decode(&fixture.schema).unwrap();
     let operation_fields = operation.fields().unwrap();
 
     let fixture_operation_fields = fixture.entry.operation().unwrap().fields().unwrap();
@@ -103,11 +113,12 @@ fn fixture_decode_operation(#[case] fixture: Fixture) {
 
 /// Test decoding an entry from version fixtures.
 #[apply(version_fixtures)]
-fn fixture_decode_entry(#[case] fixture: Fixture) {
+fn fixture_decode_entry(#[case] fixture: Fixture, default_schema: Schema) {
     // Decode fixture EntrySigned
     let entry = decode_entry(
         &fixture.entry_signed_encoded,
         Some(&fixture.operation_encoded),
+        Some(&default_schema),
     )
     .unwrap();
 

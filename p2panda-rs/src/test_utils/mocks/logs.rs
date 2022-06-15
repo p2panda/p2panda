@@ -13,7 +13,7 @@ use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{AsOperation, Operation, OperationEncoded};
-use crate::schema::SchemaId;
+use crate::schema::{Schema, SchemaId};
 
 /// Entry of an append-only which contains an encoded entry and operation.
 #[derive(Clone, Debug)]
@@ -50,8 +50,8 @@ impl LogEntry {
     }
 
     /// Get the operation from this entry.
-    pub fn operation(&self) -> Operation {
-        Operation::try_from(&self.operation_encoded).unwrap()
+    pub fn operation(&self, schema: &Schema) -> Operation {
+        self.operation_encoded.decode(schema).unwrap()
     }
 
     /// Get the encoded entry from this entry.
@@ -65,8 +65,8 @@ impl LogEntry {
     }
 
     /// Get the previous operation hash for this entry.
-    pub fn previous_operations(&self) -> Option<DocumentViewId> {
-        self.operation().previous_operations()
+    pub fn previous_operations(&self, schema: &Schema) -> Option<DocumentViewId> {
+        self.operation(schema).previous_operations()
     }
 }
 
@@ -95,8 +95,9 @@ impl Log {
         document_id: Hash,
         entry_signed: &EntrySigned,
         operation_encoded: &OperationEncoded,
+        schema: &Schema,
     ) -> Self {
-        let entry = decode_entry(entry_signed, Some(operation_encoded)).unwrap();
+        let entry = decode_entry(entry_signed, Some(operation_encoded), Some(schema)).unwrap();
         let mut log = Self {
             author: entry_signed.author(),
             log_id: entry.log_id().to_owned(),
@@ -160,9 +161,14 @@ impl AuthorLogs {
         document_id: Hash,
         entry_signed: &EntrySigned,
         operation_encoded: &OperationEncoded,
+        schema: &Schema,
     ) {
-        self.0
-            .push(Log::new(document_id, entry_signed, operation_encoded))
+        self.0.push(Log::new(
+            document_id,
+            entry_signed,
+            operation_encoded,
+            schema,
+        ))
     }
 
     /// Returns the number of logs this author owns.
@@ -225,13 +231,23 @@ mod tests {
 
     use crate::entry::{decode_entry, EntrySigned, LogId};
     use crate::operation::{AsOperation, OperationEncoded};
-    use crate::test_utils::fixtures::{entry_signed_encoded, operation_encoded};
+    use crate::schema::Schema;
+    use crate::test_utils::fixtures::{default_schema, entry_signed_encoded, operation_encoded};
 
     use super::{AuthorLogs, Log, LogEntry};
 
     #[rstest]
-    fn log_entry(entry_signed_encoded: EntrySigned, operation_encoded: OperationEncoded) {
-        let entry = decode_entry(&entry_signed_encoded, Some(&operation_encoded)).unwrap();
+    fn log_entry(
+        entry_signed_encoded: EntrySigned,
+        operation_encoded: OperationEncoded,
+        default_schema: Schema,
+    ) {
+        let entry = decode_entry(
+            &entry_signed_encoded,
+            Some(&operation_encoded),
+            Some(&default_schema),
+        )
+        .unwrap();
         let log_entry = LogEntry::new(&entry_signed_encoded, &operation_encoded);
 
         assert_eq!(log_entry.entry_encoded(), entry_signed_encoded);
@@ -242,18 +258,28 @@ mod tests {
         assert_eq!(log_entry.author(), entry_signed_encoded.author().as_str());
         assert_eq!(log_entry.hash(), entry_signed_encoded.hash());
         assert_eq!(
-            log_entry.operation().schema(),
+            log_entry.operation(&default_schema).schema(),
             entry.operation().unwrap().schema()
         );
     }
 
     #[rstest]
-    fn log(entry_signed_encoded: EntrySigned, operation_encoded: OperationEncoded) {
-        let entry = decode_entry(&entry_signed_encoded, Some(&operation_encoded)).unwrap();
+    fn log(
+        entry_signed_encoded: EntrySigned,
+        operation_encoded: OperationEncoded,
+        default_schema: Schema,
+    ) {
+        let entry = decode_entry(
+            &entry_signed_encoded,
+            Some(&operation_encoded),
+            Some(&default_schema),
+        )
+        .unwrap();
         let log = Log::new(
             entry_signed_encoded.hash(),
             &entry_signed_encoded,
             &operation_encoded,
+            &default_schema,
         );
 
         assert_eq!(log.entries().len(), 1);
@@ -264,12 +290,17 @@ mod tests {
     }
 
     #[rstest]
-    fn author_logs(entry_signed_encoded: EntrySigned, operation_encoded: OperationEncoded) {
+    fn author_logs(
+        entry_signed_encoded: EntrySigned,
+        operation_encoded: OperationEncoded,
+        default_schema: Schema,
+    ) {
         let mut author_logs = AuthorLogs::new();
         author_logs.create_new_log(
             entry_signed_encoded.hash(),
             &entry_signed_encoded,
             &operation_encoded,
+            &default_schema,
         );
 
         assert_eq!(author_logs.len(), 1);

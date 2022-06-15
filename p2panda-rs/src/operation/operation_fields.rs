@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use crate::operation::{OperationError, OperationFieldsError, OperationValue};
 use crate::Validate;
 
+use super::operation_value::PlainOperationValue;
+
 /// Operation fields are used to store application data. They are implemented as a simple key/value
 /// store with support for a limited number of data types (see [`OperationValue`] for further
 /// documentation on this). A `OperationFields` instance can contain any number and types of
@@ -117,6 +119,29 @@ impl Validate for OperationFields {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PlainOperationFields(BTreeMap<String, PlainOperationValue>);
+
+impl PlainOperationFields {
+    /// Returns an iterator of existing operation fields.
+    pub fn iter(&self) -> Iter<String, PlainOperationValue> {
+        self.0.iter()
+    }
+}
+
+impl From<OperationFields> for PlainOperationFields {
+    fn from(value: OperationFields) -> Self {
+        let mut map = BTreeMap::new();
+        for (field_name, field_value) in value.iter() {
+            map.insert(
+                field_name.to_owned(),
+                PlainOperationValue::from(field_value.to_owned()),
+            );
+        }
+        PlainOperationFields(map)
     }
 }
 

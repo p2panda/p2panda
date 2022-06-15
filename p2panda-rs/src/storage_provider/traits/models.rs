@@ -5,7 +5,7 @@ use crate::entry::{EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{Operation, OperationEncoded};
-use crate::schema::SchemaId;
+use crate::schema::{Schema, SchemaId};
 use crate::Validate;
 
 /// Trait to be implemented on a struct representing a stored entry.
@@ -47,7 +47,7 @@ pub trait AsStorageEntry:
     fn log_id(&self) -> LogId;
 
     /// Returns the operation contained on this entry.
-    fn operation(&self) -> Operation;
+    fn operation(&self, schema: &Schema) -> Operation;
 }
 
 /// Trait to be implemented on a struct representing a stored log.

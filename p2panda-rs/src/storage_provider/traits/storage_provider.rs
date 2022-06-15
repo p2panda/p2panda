@@ -6,6 +6,7 @@ use crate::document::DocumentId;
 use crate::entry::SeqNum;
 use crate::hash::Hash;
 use crate::operation::{AsOperation, Operation};
+use crate::schema::Schema;
 use crate::storage_provider::errors::PublishEntryError;
 use crate::storage_provider::traits::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
@@ -109,6 +110,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
     async fn publish_entry(
         &self,
         params: &Self::PublishEntryRequest,
+        schema: &Schema,
     ) -> Result<Self::PublishEntryResponse, Box<dyn std::error::Error + Send + Sync>> {
         // Create a storage entry.
         let entry = StorageEntry::new(params.entry_signed(), params.operation_encoded())?;
@@ -117,7 +119,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
 
         // Every operation refers to a document we need to determine. A document is identified by the
         // hash of its first `CREATE` operation, it is the root operation of every document graph
-        let document_id = if entry.operation().is_create() {
+        let document_id = if entry.operation(schema).is_create() {
             // This is easy: We just use the entry hash directly to determine the document id
             DocumentId::new(entry.hash().into())
         } else {
@@ -126,7 +128,7 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
             // of all log ids and documents there.
             //
             // We can determine the used document hash by looking at this operations' previous_operations.
-            let operation = Operation::from(params.operation_encoded());
+            let operation = params.operation_encoded().decode(&schema)?;
 
             operation.validate()?;
 
@@ -179,10 +181,10 @@ pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog
         )?;
 
         // Register log in database when a new document is created
-        if entry.operation().is_create() {
+        if entry.operation(schema).is_create() {
             let log = StorageLog::new(
                 &entry.author(),
-                &entry.operation().schema(),
+                &entry.operation(schema).schema(),
                 &document_id,
                 &entry.log_id(),
             );
@@ -225,6 +227,7 @@ pub mod tests {
     use crate::operation::{
         AsOperation, OperationEncoded, OperationFields, OperationId, OperationValue,
     };
+    use crate::schema::Schema;
     use crate::storage_provider::traits::test_utils::{
         test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
         SimplestStorageProvider, StorageEntry, StorageLog,
@@ -232,7 +235,9 @@ pub mod tests {
     use crate::storage_provider::traits::{
         AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
     };
-    use crate::test_utils::fixtures::{entry, key_pair, operation, operation_fields, operation_id};
+    use crate::test_utils::fixtures::{
+        default_schema, entry, key_pair, operation, operation_fields, operation_id,
+    };
 
     use super::StorageProvider;
 
@@ -271,7 +276,7 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn can_publish_entries(test_db: SimplestStorageProvider) {
+    async fn can_publish_entries(test_db: SimplestStorageProvider, default_schema: Schema) {
         // Instantiate a new store
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
@@ -287,7 +292,9 @@ pub mod tests {
                 entry.operation_encoded().unwrap().clone(),
             );
 
-            let publish_entry_response = new_db.publish_entry(&publish_entry_request).await;
+            let publish_entry_response = new_db
+                .publish_entry(&publish_entry_request, &default_schema)
+                .await;
 
             // Response should be ok
             assert!(publish_entry_response.is_ok());
@@ -319,7 +326,11 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn rejects_invalid_backlink(key_pair: KeyPair, test_db: SimplestStorageProvider) {
+    async fn rejects_invalid_backlink(
+        key_pair: KeyPair,
+        test_db: SimplestStorageProvider,
+        default_schema: Schema,
+    ) {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
@@ -335,7 +346,10 @@ pub mod tests {
                 entry.operation_encoded().unwrap().clone(),
             );
 
-            new_db.publish_entry(&publish_entry_request).await.unwrap();
+            new_db
+                .publish_entry(&publish_entry_request, &default_schema)
+                .await
+                .unwrap();
         }
 
         // Retrieve the forth entry
@@ -344,7 +358,7 @@ pub mod tests {
         // Reconstruct it with an invalid backlink
         let entry_with_invalid_backlink = Entry::new(
             &entry_four.log_id(),
-            Some(&entry_four.operation()),
+            Some(&entry_four.operation(&default_schema)),
             entry_four.skiplink_hash().as_ref(),
             Some(&entries.get(0).unwrap().hash()),
             &entry_four.seq_num(),
@@ -358,7 +372,9 @@ pub mod tests {
             entry_four.operation_encoded().unwrap(),
         );
 
-        let error_response = new_db.publish_entry(&publish_entry_request).await;
+        let error_response = new_db
+            .publish_entry(&publish_entry_request, &default_schema)
+            .await;
 
         println!("{:#?}", error_response);
         assert_eq!(
@@ -372,7 +388,11 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn rejects_invalid_skiplink(key_pair: KeyPair, test_db: SimplestStorageProvider) {
+    async fn rejects_invalid_skiplink(
+        key_pair: KeyPair,
+        test_db: SimplestStorageProvider,
+        default_schema: Schema,
+    ) {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
@@ -388,7 +408,10 @@ pub mod tests {
                 entry.operation_encoded().unwrap().clone(),
             );
 
-            new_db.publish_entry(&publish_entry_request).await.unwrap();
+            new_db
+                .publish_entry(&publish_entry_request, &default_schema)
+                .await
+                .unwrap();
         }
 
         // Retrieve the forth entry
@@ -397,7 +420,7 @@ pub mod tests {
         // Reconstruct it with an invalid skiplink
         let entry_with_invalid_backlink = Entry::new(
             &entry_four.log_id(),
-            Some(&entry_four.operation()),
+            Some(&entry_four.operation(&default_schema)),
             Some(&entries.get(2).unwrap().hash()),
             entry_four.backlink_hash().as_ref(),
             &entry_four.seq_num(),
@@ -411,7 +434,9 @@ pub mod tests {
             entry_four.operation_encoded().unwrap(),
         );
 
-        let error_response = new_db.publish_entry(&publish_entry_request).await;
+        let error_response = new_db
+            .publish_entry(&publish_entry_request, &default_schema)
+            .await;
 
         println!("{:#?}", error_response);
         assert_eq!(
@@ -425,7 +450,7 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn gets_entry_args(test_db: SimplestStorageProvider) {
+    async fn gets_entry_args(test_db: SimplestStorageProvider, default_schema: Schema) {
         // Instantiate a new store
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
@@ -435,7 +460,7 @@ pub mod tests {
         let entries = test_db.entries.lock().unwrap().clone();
 
         for entry in entries.clone() {
-            let is_create = entry.operation().is_create();
+            let is_create = entry.operation(&default_schema).is_create();
 
             // Determine document id
             let document_id: Option<DocumentId> = match is_create {
@@ -471,13 +496,20 @@ pub mod tests {
                 entry.operation_encoded().unwrap().clone(),
             );
 
-            new_db.publish_entry(&publish_entry_request).await.unwrap();
+            new_db
+                .publish_entry(&publish_entry_request, &default_schema)
+                .await
+                .unwrap();
         }
     }
 
     #[rstest]
     #[async_std::test]
-    async fn wrong_log_id(key_pair: KeyPair, test_db: SimplestStorageProvider) {
+    async fn wrong_log_id(
+        key_pair: KeyPair,
+        test_db: SimplestStorageProvider,
+        default_schema: Schema,
+    ) {
         // Instantiate a new store
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
@@ -493,12 +525,15 @@ pub mod tests {
         );
 
         // Publish the first valid entry
-        new_db.publish_entry(&publish_entry_request).await.unwrap();
+        new_db
+            .publish_entry(&publish_entry_request, &default_schema)
+            .await
+            .unwrap();
 
         // Create a new entry with an invalid log id
         let entry_with_wrong_log_id = Entry::new(
             &LogId::new(2), // This is wrong!!
-            Some(&entries.get(1).unwrap().operation()),
+            Some(&entries.get(1).unwrap().operation(&default_schema)),
             entries.get(1).unwrap().skiplink_hash().as_ref(),
             entries.get(1).unwrap().backlink_hash().as_ref(),
             &entries.get(1).unwrap().seq_num(),
@@ -508,14 +543,17 @@ pub mod tests {
         let signed_entry_with_wrong_log_id =
             sign_and_encode(&entry_with_wrong_log_id, &key_pair).unwrap();
         let encoded_operation =
-            OperationEncoded::try_from(&entries.get(1).unwrap().operation()).unwrap();
+            OperationEncoded::try_from(&entries.get(1).unwrap().operation(&default_schema))
+                .unwrap();
 
         // Create request and publish invalid entry
         let request_with_wrong_log_id =
             PublishEntryRequest(signed_entry_with_wrong_log_id, encoded_operation);
 
         // Should error as the published entry contains an invalid log
-        let error_response = new_db.publish_entry(&request_with_wrong_log_id).await;
+        let error_response = new_db
+            .publish_entry(&request_with_wrong_log_id, &default_schema)
+            .await;
 
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
@@ -525,7 +563,7 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn skiplink_does_not_exist(test_db: SimplestStorageProvider) {
+    async fn skiplink_does_not_exist(test_db: SimplestStorageProvider, default_schema: Schema) {
         let entries = test_db.entries.lock().unwrap().clone();
         let logs = test_db.logs.lock().unwrap().clone();
 
@@ -551,7 +589,9 @@ pub mod tests {
 
         // Should error as an entry at seq num 8 should have a skiplink relation to the missing
         // entry at seq num 4
-        let error_response = new_db.publish_entry(&publish_entry_request).await;
+        let error_response = new_db
+            .publish_entry(&publish_entry_request, &default_schema)
+            .await;
 
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
@@ -569,6 +609,7 @@ pub mod tests {
         operation_fields: OperationFields,
         #[from(operation_id)] invalid_prev_op: OperationId,
         key_pair: KeyPair,
+        default_schema: Schema,
     ) {
         let entries = test_db.entries.lock().unwrap().clone();
         let logs = test_db.logs.lock().unwrap().clone();
@@ -610,7 +651,9 @@ pub mod tests {
         // Publish this entry (which contains an invalid previous_operation)
         let publish_entry_request = PublishEntryRequest(encoded_entry.clone(), encoded_operation);
 
-        let error_response = new_db.publish_entry(&publish_entry_request).await;
+        let error_response = new_db
+            .publish_entry(&publish_entry_request, &default_schema)
+            .await;
 
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
@@ -623,7 +666,7 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn invalid_entry_op_pair(test_db: SimplestStorageProvider) {
+    async fn invalid_entry_op_pair(test_db: SimplestStorageProvider, default_schema: Schema) {
         let entries = test_db.entries.lock().unwrap().clone();
         let logs = test_db.logs.lock().unwrap().clone();
 
@@ -658,7 +701,9 @@ pub mod tests {
         let publish_entry_request =
             PublishEntryRequest(next_entry.entry_signed(), encoded_operation);
 
-        let error_response = new_db.publish_entry(&publish_entry_request).await;
+        let error_response = new_db
+            .publish_entry(&publish_entry_request, &default_schema)
+            .await;
 
         assert_eq!(
             format!("{}", error_response.unwrap_err()),

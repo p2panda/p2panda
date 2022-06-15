@@ -11,7 +11,7 @@ use crate::entry::{decode_entry, sign_and_encode, Entry, EntrySigned, LogId, Seq
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::{Operation, OperationEncoded, OperationFields};
-use crate::schema::SchemaId;
+use crate::schema::{Schema, SchemaId};
 use crate::storage_provider::errors::{EntryStorageError, ValidationError};
 use crate::storage_provider::traits::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
@@ -26,6 +26,7 @@ use crate::Validate;
 pub struct SimplestStorageProvider {
     pub logs: Arc<Mutex<Vec<StorageLog>>>,
     pub entries: Arc<Mutex<Vec<StorageEntry>>>,
+    // pub schemas: Vec<Schema>,
 }
 
 impl SimplestStorageProvider {
@@ -42,6 +43,10 @@ impl SimplestStorageProvider {
         // Remove duplicate logs.
         logs.dedup();
     }
+
+    // pub fn db_get_schema(&self, schema_id: &SchemaId) -> Option<&Schema> {
+    //     self.schemas.iter().find(|s| s.id() == schema_id)
+    // }
 }
 
 /// A log entry represented as a concatenated string of `"{author}-{schema}-{document_id}-{log_id}"`
@@ -89,9 +94,14 @@ impl AsStorageLog for StorageLog {
 pub struct StorageEntry(String);
 
 impl StorageEntry {
-    fn entry_decoded(&self) -> Entry {
+    fn entry_decoded(&self, schema: Option<&Schema>) -> Entry {
         // Unwrapping as validation occurs in constructor.
-        decode_entry(&self.entry_signed(), self.operation_encoded().as_ref()).unwrap()
+        decode_entry(
+            &self.entry_signed(),
+            self.operation_encoded().as_ref(),
+            schema,
+        )
+        .unwrap()
     }
 
     pub fn entry_signed(&self) -> EntrySigned {
@@ -132,24 +142,24 @@ impl AsStorageEntry for StorageEntry {
     }
 
     fn backlink_hash(&self) -> Option<Hash> {
-        self.entry_decoded().backlink_hash().cloned()
+        self.entry_decoded(None).backlink_hash().cloned()
     }
 
     fn skiplink_hash(&self) -> Option<Hash> {
-        self.entry_decoded().skiplink_hash().cloned()
+        self.entry_decoded(None).skiplink_hash().cloned()
     }
 
     fn seq_num(&self) -> SeqNum {
-        *self.entry_decoded().seq_num()
+        *self.entry_decoded(None).seq_num()
     }
 
     fn log_id(&self) -> LogId {
-        *self.entry_decoded().log_id()
+        *self.entry_decoded(None).log_id()
     }
 
-    fn operation(&self) -> Operation {
+    fn operation(&self, schema: &Schema) -> Operation {
         let operation_encoded = self.operation_encoded().unwrap();
-        Operation::from(&operation_encoded)
+        operation_encoded.decode(schema).unwrap()
     }
 }
 
@@ -160,8 +170,8 @@ impl Validate for StorageEntry {
         self.entry_signed().validate()?;
         if let Some(operation) = self.operation_encoded() {
             operation.validate()?;
+            self.entry_signed().validate_operation(&operation)?;
         }
-        decode_entry(&self.entry_signed(), self.operation_encoded().as_ref())?;
         Ok(())
     }
 }
@@ -185,7 +195,8 @@ impl Validate for PublishEntryRequest {
     fn validate(&self) -> Result<(), Self::Error> {
         self.entry_signed().validate()?;
         self.operation_encoded().validate()?;
-        decode_entry(self.entry_signed(), Some(self.operation_encoded()))?;
+        self.entry_signed()
+            .validate_operation(&self.operation_encoded())?;
         Ok(())
     }
 }
@@ -369,7 +380,7 @@ async fn test_the_test_db(test_db: SimplestStorageProvider) {
         let entry = entries.get(seq_num - 1).unwrap();
 
         let expected_seq_num = SeqNum::new(seq_num as u64).unwrap();
-        assert_eq!(expected_seq_num, *entry.entry_decoded().seq_num());
+        assert_eq!(expected_seq_num, entry.seq_num());
 
         let expected_log_id = LogId::default();
         assert_eq!(expected_log_id, entry.log_id());
@@ -381,20 +392,12 @@ async fn test_the_test_db(test_db: SimplestStorageProvider) {
                 .get(seq_num - 2)
                 .map(|backlink_entry| backlink_entry.hash());
         }
-        assert_eq!(
-            expected_backlink_hash,
-            entry.entry_decoded().backlink_hash().cloned()
-        );
+        assert_eq!(expected_backlink_hash, entry.backlink_hash());
 
         let mut expected_skiplink_hash = None;
 
         if SKIPLINK_ENTRIES.contains(&(seq_num as u64)) {
-            let skiplink_seq_num = entry
-                .entry_decoded()
-                .seq_num()
-                .skiplink_seq_num()
-                .unwrap()
-                .as_u64();
+            let skiplink_seq_num = entry.seq_num().skiplink_seq_num().unwrap().as_u64();
 
             let skiplink_entry = entries
                 .get((skiplink_seq_num as usize) - 1)

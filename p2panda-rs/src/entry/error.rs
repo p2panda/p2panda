@@ -39,6 +39,9 @@ pub enum EntrySignedError {
     #[error("entry requires skiplink for encoding")]
     SkiplinkMissing,
 
+    #[error("schema required to decode entry payload")]
+    SchemaMissing,
+
     /// Handle errors from `SeqNum` struct.
     #[error(transparent)]
     SeqNumError(#[from] SeqNumError),

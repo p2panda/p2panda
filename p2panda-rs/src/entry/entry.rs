@@ -99,8 +99,7 @@ use crate::Validate;
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone)]
 pub struct Entry {
     /// Hash of previous Bamboo entry.
     entry_hash_backlink: Option<Hash>,

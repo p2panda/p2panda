@@ -10,9 +10,11 @@ use crate::identity::Author;
 use crate::operation::{
     Operation, OperationEncoded, OperationFields, OperationId, OperationValue, VerifiedOperation,
 };
-use crate::schema::SchemaId;
+use crate::schema::{Schema, SchemaId};
 use crate::test_utils::constants::{self, TEST_SCHEMA_ID};
 use crate::test_utils::fixtures::{entry_signed_encoded, public_key, random_hash};
+
+use super::schema_item;
 
 /// Fixture which injects the default testing `OperationId` into a test method.
 ///
@@ -178,8 +180,10 @@ pub fn encoded_create_string(operation: Operation) -> String {
 pub fn meta_operation(
     entry_signed_encoded: EntrySigned,
     operation_encoded: OperationEncoded,
+    schema_item: Schema,
 ) -> VerifiedOperation {
-    VerifiedOperation::new_from_entry(&entry_signed_encoded, &operation_encoded).unwrap()
+    VerifiedOperation::new_from_entry(&entry_signed_encoded, &operation_encoded, &schema_item)
+        .unwrap()
 }
 
 /// Fixture which injects an `OperationEncoded` into a test method.
@@ -200,13 +204,10 @@ pub fn operation_encoded_invalid_relation_fields() -> OperationEncoded {
     //   "schema": "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
     //   "version": 1,
     //   "fields": {
-    //     "locations": {
-    //       "type": "relation",
-    //       "value": "83e2043738f2b5cdcd3b6cb0fbb82fe125905d0f75e16488a38d395ff5f9d5ea82b5"
-    //     }
+    //     "locations": "83e2043738f2b5cdcd3b6cb0fbb82fe125905d0f75e16488a38d395ff5f9d5ea82b5"
     //   }
     // }
-    OperationEncoded::new("A466616374696F6E6663726561746566736368656D61784A76656E75655F30303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696F6E01666669656C6473A1696C6F636174696F6E73A264747970656872656C6174696F6E6576616C756578443833653230343337333866326235636463643362366362306662623832666531323539303564306637356531363438386133386433393566663566396435656138326235").unwrap()
+    OperationEncoded::new("a466616374696f6e6663726561746566736368656d61784a76656e75655f30303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a1696c6f636174696f6e7378443833653230343337333866326235636463643362366362306662623832666531323539303564306637356531363438386133386433393566663566396435656138326235").unwrap()
 }
 
 /// Helper method for easily constructing a CREATE operation.

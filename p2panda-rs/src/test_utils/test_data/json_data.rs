@@ -11,7 +11,10 @@ use serde::Serialize;
 use crate::entry::decode_entry;
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{Operation, OperationEncoded};
+use crate::operation::{Operation, OperationEncoded, PlainOperation};
+use crate::schema::FieldType;
+use crate::test_utils::constants::TEST_SCHEMA_ID;
+use crate::test_utils::fixtures::{schema, schema_item};
 use crate::test_utils::mocks::{Client, Node};
 
 /// Next entry args formatted correctly for the test data.
@@ -42,7 +45,7 @@ pub struct EncodedEntryData {
 #[serde(rename_all = "camelCase")]
 pub struct LogData {
     encoded_entries: Vec<EncodedEntryData>,
-    decoded_operations: Vec<Operation>,
+    decoded_operations: Vec<PlainOperation>,
     next_entry_args: Vec<NextEntryArgs>,
 }
 
@@ -60,6 +63,12 @@ pub struct AuthorData {
 pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<String, AuthorData> {
     // Init test data map
     let mut test_data: HashMap<String, AuthorData> = HashMap::new();
+
+    let schema = schema_item(
+        schema(TEST_SCHEMA_ID),
+        "",
+        vec![("message", FieldType::String)],
+    );
 
     // Iterate over authors
     for (author_hash, author_logs) in node.db() {
@@ -81,11 +90,16 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
             // Iterate over entries in this document log
             for log_entry in log.entries().iter() {
                 // Encode the operation
-                let operation_encoded = OperationEncoded::try_from(&log_entry.operation()).unwrap();
+                let operation_encoded =
+                    OperationEncoded::try_from(&log_entry.operation(&schema)).unwrap();
 
                 // Decode the entry adding it's operation back in
-                let entry =
-                    decode_entry(&log_entry.entry_encoded, Some(&operation_encoded)).unwrap();
+                let entry = decode_entry(
+                    &log_entry.entry_encoded,
+                    Some(&operation_encoded),
+                    Some(&schema),
+                )
+                .unwrap();
 
                 // Compose encoded entry data
                 let entry_data = EncodedEntryData {
@@ -112,7 +126,9 @@ pub fn generate_test_data(node: &mut Node, clients: Vec<Client>) -> HashMap<Stri
 
                 // Push all data for this entry to the log
                 log_data.encoded_entries.push(entry_data);
-                log_data.decoded_operations.push(log_entry.operation());
+                log_data
+                    .decoded_operations
+                    .push(PlainOperation::from(log_entry.operation(&schema)));
                 log_data.next_entry_args.push(json_entry_args);
             }
 

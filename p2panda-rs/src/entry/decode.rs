@@ -8,6 +8,7 @@ use bamboo_rs_core_ed25519_yasmf::Entry as BambooEntry;
 use crate::entry::{Entry, EntrySigned, EntrySignedError, LogId, SeqNum, SIGNATURE_SIZE};
 use crate::hash::{Hash, HASH_SIZE};
 use crate::operation::{Operation, OperationEncoded};
+use crate::schema::Schema;
 
 /// Method to decode an entry and optionally its payload.
 ///
@@ -23,6 +24,7 @@ use crate::operation::{Operation, OperationEncoded};
 pub fn decode_entry(
     entry_encoded: &EntrySigned,
     operation_encoded: Option<&OperationEncoded>,
+    schema: Option<&Schema>,
 ) -> Result<Entry, EntrySignedError> {
     let entry: BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> =
         entry_encoded.into();
@@ -30,7 +32,7 @@ pub fn decode_entry(
     let operation = match operation_encoded {
         Some(payload) => {
             entry_encoded.validate_operation(payload)?;
-            Some(Operation::from(payload))
+            Some(payload.decode(schema.ok_or(EntrySignedError::SchemaMissing)?)?)
         }
         None => None,
     };

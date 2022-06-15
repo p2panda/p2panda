@@ -5,6 +5,7 @@ use std::hash::Hash as StdHash;
 use crate::entry::{decode_entry, EntrySigned};
 use crate::identity::Author;
 use crate::operation::{AsVerifiedOperation, Operation, OperationEncoded, VerifiedOperationError};
+use crate::schema::Schema;
 use crate::Validate;
 
 use super::OperationId;
@@ -54,11 +55,12 @@ impl VerifiedOperation {
     pub fn new_from_entry(
         entry_encoded: &EntrySigned,
         operation_encoded: &OperationEncoded,
+        schema: &Schema,
     ) -> Result<Self, VerifiedOperationError> {
-        let operation = Operation::from(operation_encoded);
+        let operation = operation_encoded.decode(schema)?;
 
         // This validates that the entry and operation are correctly matching.
-        decode_entry(entry_encoded, Some(operation_encoded))?;
+        entry_encoded.validate_operation(operation_encoded)?;
 
         let verified_operation = Self {
             operation_id: entry_encoded.hash().into(),
@@ -130,10 +132,11 @@ mod tests {
         AsOperation, AsVerifiedOperation, Operation, OperationEncoded, OperationId, OperationValue,
         VerifiedOperation,
     };
+    use crate::schema::Schema;
     use crate::test_utils::constants::{default_fields, TEST_SCHEMA_ID};
     use crate::test_utils::fixtures::{
-        entry_signed_encoded, key_pair, operation, operation_encoded, operation_fields,
-        operation_id,
+        default_schema, entry_signed_encoded, key_pair, operation, operation_encoded,
+        operation_fields, operation_id,
     };
     use crate::test_utils::templates::{implements_as_operation, various_verified_operation};
     use crate::Validate;
@@ -145,9 +148,13 @@ mod tests {
     fn create_verified_operation(
         entry_signed_encoded: EntrySigned,
         #[case] operation_encoded: OperationEncoded,
+        default_schema: Schema,
     ) {
-        let verified_operation =
-            VerifiedOperation::new_from_entry(&entry_signed_encoded, &operation_encoded);
+        let verified_operation = VerifiedOperation::new_from_entry(
+            &entry_signed_encoded,
+            &operation_encoded,
+            &default_schema,
+        );
         assert!(verified_operation.is_ok())
     }
 

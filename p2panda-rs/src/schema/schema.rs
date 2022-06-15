@@ -59,6 +59,18 @@ impl Schema {
         })
     }
 
+    pub fn new_definition(
+        id: SchemaId,
+        description: String,
+        fields: BTreeMap<FieldKey, FieldType>,
+    ) -> Self {
+        Self {
+            id,
+            description,
+            fields,
+        }
+    }
+
     /// Return a definition for this schema expressed as a CDDL string.
     #[allow(unused)]
     pub fn as_cddl(&self) -> String {

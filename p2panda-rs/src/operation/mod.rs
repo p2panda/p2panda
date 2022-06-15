@@ -18,7 +18,7 @@ mod verified_operation;
 pub use error::{
     OperationEncodedError, OperationError, OperationFieldsError, VerifiedOperationError,
 };
-pub use operation::{Operation, OperationAction, OperationVersion};
+pub use operation::{Operation, OperationAction, OperationVersion, PlainOperation};
 pub use operation_encoded::OperationEncoded;
 pub use operation_fields::OperationFields;
 pub use operation_id::OperationId;

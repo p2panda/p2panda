@@ -3,11 +3,11 @@
 use p2panda_rs::hash::Hash;
 use p2panda_rs::identity::KeyPair;
 use p2panda_rs::operation::{OperationId, OperationValue};
-use p2panda_rs::schema::SchemaId;
-use p2panda_rs::test_utils::constants::DEFAULT_PRIVATE_KEY;
+use p2panda_rs::schema::{FieldType, SchemaId};
+use p2panda_rs::test_utils::constants::{DEFAULT_HASH, DEFAULT_PRIVATE_KEY, TEST_SCHEMA_ID};
 use p2panda_rs::test_utils::fixtures::{
-    create_operation, delete_operation, operation, operation_fields, random_key_pair,
-    update_operation,
+    create_operation, delete_operation, operation, operation_fields, random_key_pair, schema,
+    schema_item, update_operation,
 };
 use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
@@ -17,16 +17,20 @@ use p2panda_rs::test_utils::test_data::json_data::generate_test_data;
 /// in `p2panda-js`.
 fn main() {
     // Instantiate mock node
-    let mut node = Node::new();
+    let test_schema = schema_item(
+        "chat_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+            .parse()
+            .unwrap(),
+        "",
+        vec![("message", FieldType::String)],
+    );
+    let mut node = Node::new(vec![test_schema.clone()]);
 
     // Instantiate one client called "panda"
     let panda = Client::new(
         "panda".to_string(),
         KeyPair::from_private_key_str(DEFAULT_PRIVATE_KEY).unwrap(),
     );
-
-    let default_schema_hash: OperationId = Hash::new_from_bytes(vec![3, 2, 1]).unwrap().into();
-    let schema_id = SchemaId::new_application("chat", &default_schema_hash.into());
 
     // Publish a CREATE operation
     let (entry1_hash, _) = send_to_node(
@@ -38,7 +42,7 @@ fn main() {
                 OperationValue::Text("Ohh, my first message!".to_string()),
             )])),
             None,
-            Some(schema_id.clone()),
+            Some(test_schema.id().clone()),
         ),
     )
     .unwrap();
@@ -53,7 +57,7 @@ fn main() {
                 OperationValue::Text("Which I now update.".to_string()),
             )])),
             Some(entry1_hash.into()),
-            Some(schema_id.clone()),
+            Some(test_schema.id().clone()),
         ),
     )
     .unwrap();
@@ -68,7 +72,7 @@ fn main() {
                 OperationValue::Text("And then update again.".to_string()),
             )])),
             Some(entry2_hash.into()),
-            Some(schema_id.clone()),
+            Some(test_schema.id().clone()),
         ),
     )
     .unwrap();
@@ -77,7 +81,11 @@ fn main() {
     send_to_node(
         &mut node,
         &panda,
-        &operation(None, Some(entry3_hash.into()), Some(schema_id.clone())),
+        &operation(
+            None,
+            Some(entry3_hash.into()),
+            Some(test_schema.id().clone()),
+        ),
     )
     .unwrap();
 
@@ -105,7 +113,12 @@ mod tests {
     #[test]
     fn test_data() {
         // Instantiate mock node
-        let mut node = Node::new();
+        let test_schema = schema_item(
+            schema(TEST_SCHEMA_ID),
+            "",
+            vec![("message", FieldType::String)],
+        );
+        let mut node = Node::new(vec![test_schema]);
 
         // Instantiate one client called "panda"
         let panda = Client::new(

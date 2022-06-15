@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use ciborium::value::Value;
 use serde::{Deserialize, Serialize};
 
 use crate::hash::HashError;
 use crate::operation::{PinnedRelation, PinnedRelationList, Relation, RelationList};
+use crate::schema::Schema;
 use crate::Validate;
 
 /// Enum of possible data types which can be added to the operations fields as values.
@@ -85,6 +87,38 @@ impl OperationValue {
     pub(super) fn deserialize_str(str: &str) -> Self {
         let bytes = hex::decode(str).unwrap();
         ciborium::de::from_reader(&bytes[..]).unwrap()
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PlainOperationValue(Value);
+
+impl PlainOperationValue {
+    pub fn inner(&self) -> &Value {
+        &self.0
+    }
+}
+
+impl From<OperationValue> for PlainOperationValue {
+    fn from(value: OperationValue) -> Self {
+        let inner = match value {
+            OperationValue::Boolean(value) => Value::from(value),
+            OperationValue::Integer(value) => Value::from(value),
+            OperationValue::Float(value) => Value::from(value),
+            OperationValue::Text(value) => Value::from(value),
+            OperationValue::Relation(value) => Value::from(value.document_id().as_str()),
+            OperationValue::RelationList(value) => {
+                Value::Array(value.iter().map(|id| Value::from(id.as_str())).collect())
+            }
+            OperationValue::PinnedRelation(value) => Value::from(value.view_id().as_str()),
+            OperationValue::PinnedRelationList(value) => Value::Array(
+                value
+                    .iter()
+                    .map(|view_id| Value::from(view_id.as_str()))
+                    .collect(),
+            ),
+        };
+        PlainOperationValue(inner)
     }
 }
 

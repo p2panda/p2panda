@@ -311,10 +311,12 @@ mod tests {
     use crate::operation::{
         AsVerifiedOperation, OperationEncoded, OperationId, OperationValue, VerifiedOperation,
     };
-    use crate::schema::SchemaId;
+    use crate::schema::{FieldType, SchemaId};
+    use crate::test_utils::constants::TEST_SCHEMA_ID;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, operation, operation_fields, random_document_view_id,
-        random_key_pair, random_previous_operations, schema, update_operation, verified_operation,
+        random_key_pair, random_previous_operations, schema, schema_item, update_operation,
+        verified_operation,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
 
@@ -373,7 +375,8 @@ mod tests {
             )
             .unwrap(),
         );
-        let mut node = Node::new();
+        let test_schema = schema_item(schema.clone(), "", vec![("name", FieldType::String)]);
+        let mut node = Node::new(vec![test_schema.clone()]);
 
         // Panda publishes a create operation.
         // This instantiates a new document.
@@ -463,8 +466,12 @@ mod tests {
         .iter()
         .map(|hash| {
             let entry = node.get_entry(hash);
-            VerifiedOperation::new_from_entry(&entry.entry_encoded(), &entry.operation_encoded())
-                .unwrap()
+            VerifiedOperation::new_from_entry(
+                &entry.entry_encoded(),
+                &entry.operation_encoded(),
+                &test_schema,
+            )
+            .unwrap()
         })
         .collect();
 
@@ -557,7 +564,12 @@ mod tests {
     #[rstest]
     fn must_have_create_operation(#[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
-        let mut node = Node::new();
+        let test_schema = schema_item(
+            schema(TEST_SCHEMA_ID),
+            "",
+            vec![("name", FieldType::String)],
+        );
+        let mut node = Node::new(vec![test_schema.clone()]);
 
         // Panda publishes a create operation.
         // This instantiates a new document.
@@ -586,6 +598,7 @@ mod tests {
         let operations = vec![VerifiedOperation::new_from_entry(
             &only_the_update_operation.entry_encoded(),
             &only_the_update_operation.operation_encoded(),
+            &test_schema,
         )
         .unwrap()];
 
@@ -604,7 +617,12 @@ mod tests {
         #[from(random_document_view_id)] incorrect_previous_operation: DocumentViewId,
     ) {
         let panda = Client::new("panda".to_string(), key_pair_1);
-        let mut node = Node::new();
+        let test_schema = schema_item(
+            schema(TEST_SCHEMA_ID),
+            "",
+            vec![("name", FieldType::String)],
+        );
+        let mut node = Node::new(vec![test_schema.clone()]);
 
         // Panda publishes a create operation.
         // This instantiates a new document.
@@ -626,6 +644,7 @@ mod tests {
         let operation_one = VerifiedOperation::new_from_entry(
             &entry_one.entry_encoded(),
             &entry_one.operation_encoded(),
+            &test_schema,
         )
         .unwrap();
 
@@ -635,6 +654,7 @@ mod tests {
         let operation_two = VerifiedOperation::new_from_entry(
             &entry_two,
             &OperationEncoded::try_from(&operation_with_wrong_prev_ops).unwrap(),
+            &test_schema,
         )
         .unwrap();
 
@@ -653,7 +673,12 @@ mod tests {
     #[rstest]
     fn operation_schemas_not_matching(#[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
-        let mut node = Node::new();
+        let test_schema = schema_item(
+            schema(TEST_SCHEMA_ID),
+            "",
+            vec![("name", FieldType::String)],
+        );
+        let mut node = Node::new(vec![test_schema.clone()]);
 
         // Panda publishes a create operation.
         // This instantiates a new document.
@@ -686,6 +711,7 @@ mod tests {
                 VerifiedOperation::new_from_entry(
                     &entry.entry_encoded(),
                     &entry.operation_encoded(),
+                    &test_schema,
                 )
                 .unwrap()
             })
@@ -703,7 +729,12 @@ mod tests {
     #[rstest]
     fn is_deleted(#[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
-        let mut node = Node::new();
+        let test_schema = schema_item(
+            schema(TEST_SCHEMA_ID),
+            "",
+            vec![("name", FieldType::String)],
+        );
+        let mut node = Node::new(vec![test_schema.clone()]);
 
         // Panda publishes a create operation.
         // This instantiates a new document.
@@ -730,6 +761,7 @@ mod tests {
                 VerifiedOperation::new_from_entry(
                     &entry.entry_encoded(),
                     &entry.operation_encoded(),
+                    &test_schema,
                 )
                 .unwrap()
             })
@@ -745,7 +777,12 @@ mod tests {
     #[rstest]
     fn more_than_one_create(#[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
-        let mut node = Node::new();
+        let test_schema = schema_item(
+            schema(TEST_SCHEMA_ID),
+            "",
+            vec![("name", FieldType::String)],
+        );
+        let mut node = Node::new(vec![test_schema.clone()]);
 
         // Panda publishes a create operation.
         // This instantiates a new document.
@@ -761,6 +798,7 @@ mod tests {
         let create_verified_operation = VerifiedOperation::new_from_entry(
             &published_create_operation.entry_encoded(),
             &published_create_operation.operation_encoded(),
+            &test_schema,
         )
         .unwrap();
 
@@ -793,7 +831,16 @@ mod tests {
             .unwrap(),
         );
 
-        let mut node = Node::new();
+        let test_schema = schema_item(
+            schema(TEST_SCHEMA_ID),
+            "",
+            vec![
+                ("name", FieldType::String),
+                ("owner", FieldType::String),
+                ("house-number", FieldType::Int),
+            ],
+        );
+        let mut node = Node::new(vec![test_schema.clone()]);
         let (polar_entry_1_hash, _) = send_to_node(
             &mut node,
             &polar,
@@ -855,8 +902,12 @@ mod tests {
         .iter()
         .map(|hash| {
             let entry = node.get_entry(hash);
-            VerifiedOperation::new_from_entry(&entry.entry_encoded(), &entry.operation_encoded())
-                .unwrap()
+            VerifiedOperation::new_from_entry(
+                &entry.entry_encoded(),
+                &entry.operation_encoded(),
+                &test_schema,
+            )
+            .unwrap()
         })
         .collect();
 
@@ -995,7 +1046,12 @@ mod tests {
             .unwrap(),
         );
 
-        let mut node = Node::new();
+        let test_schema = schema_item(
+            schema(TEST_SCHEMA_ID),
+            "",
+            vec![("name", FieldType::String)],
+        );
+        let mut node = Node::new(vec![test_schema.clone()]);
 
         let (panda_entry_1_hash, _) = send_to_node(
             &mut node,
@@ -1034,6 +1090,7 @@ mod tests {
                 VerifiedOperation::new_from_entry(
                     &entry.entry_encoded(),
                     &entry.operation_encoded(),
+                    &test_schema,
                 )
                 .unwrap()
             })

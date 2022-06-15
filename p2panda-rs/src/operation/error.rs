@@ -47,6 +47,10 @@ pub enum OperationEncodedError {
     /// Encoded operation string contains invalid hex characters.
     #[error("invalid hex encoding in operation")]
     InvalidHexEncoding,
+
+    /// Invalid operation.
+    #[error(transparent)]
+    OperationError(#[from] OperationError),
 }
 
 /// Error types for methods of `VerifiedOperation` struct.
