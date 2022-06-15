@@ -56,6 +56,13 @@ pub trait LogStore<StorageLog: AsStorageLog> {
 
 #[cfg(test)]
 pub mod tests {
+    // TEST MODULE NOTES //
+    //
+    // In this module we are implementing the `LogStore` trait on `SimplestStorageProvider` just
+    // for testing purposes. We then test these as well as the default trait method implementations.
+    // Arguably the most important tests here are those of `find_document_log_id` as this logic will
+    // actually be used in an implementation using `LogStore`.
+
     use std::convert::TryFrom;
     use std::sync::{Arc, Mutex};
 
@@ -67,7 +74,9 @@ pub mod tests {
     use crate::identity::{Author, KeyPair};
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::LogStorageError;
-    use crate::storage_provider::traits::test_utils::{SimplestStorageProvider, StorageLog};
+    use crate::storage_provider::traits::test_utils::{
+        aquadoggo_test_db, SimplestStorageProvider, StorageLog, TestStore,
+    };
     use crate::storage_provider::traits::{AsStorageLog, LogStore};
     use crate::test_utils::fixtures::{document_id, key_pair, schema};
 
@@ -147,5 +156,26 @@ pub mod tests {
 
         let log_id = store.next_log_id(&author).await.unwrap();
         assert_eq!(log_id, LogId::new(2));
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn find_document_log_id(
+        #[from(aquadoggo_test_db)]
+        #[with(3, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let document_id = db.documents.get(0).unwrap();
+        let key_pair = db.key_pairs.get(0).unwrap();
+        let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
+
+        let log_id = db
+            .store
+            .find_document_log_id(&author, Some(document_id))
+            .await
+            .unwrap();
+        assert_eq!(log_id, LogId::new(1));
     }
 }
