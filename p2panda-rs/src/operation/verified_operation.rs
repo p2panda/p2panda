@@ -11,12 +11,13 @@ use super::OperationId;
 
 /// An operation which has been encoded and published on a signed entry.
 ///
-/// Contains the values of an operation as well as it's author and id. The reason an unpublished
-/// operation has no id is that the id is derived from the hash of the signed entry an operation is
-/// encoded on.
+/// Contains the values of an operation as well as its author and id. This
+/// [operation id][OperationId] is only available on [`VerifiedOperation`] and not on
+/// [`Operation`] because it is derived from the hash of the signed entry an operation is encoded
+/// on.
 #[derive(Debug, Clone, Eq, PartialEq, StdHash)]
 pub struct VerifiedOperation {
-    /// The hash of this operation's entry.
+    /// The hash of the entry this operation was published with.
     operation_id: OperationId,
 
     /// The public key of the author who published this operation.
@@ -71,7 +72,6 @@ impl AsVerifiedOperation for VerifiedOperation {
 
         Ok(verified_operation)
     }
-
     /// Returns the identifier for this operation.
     fn operation_id(&self) -> &OperationId {
         &self.operation_id
