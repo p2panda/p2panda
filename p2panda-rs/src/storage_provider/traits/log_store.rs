@@ -64,7 +64,6 @@ pub mod tests {
     // actually be used in an implementation using `LogStore`.
 
     use std::convert::TryFrom;
-    use std::sync::{Arc, Mutex};
 
     use async_trait::async_trait;
     use rstest::rstest;
@@ -117,11 +116,7 @@ pub mod tests {
     #[async_std::test]
     async fn insert_get_log(key_pair: KeyPair, schema: SchemaId, document_id: DocumentId) {
         // Instantiate a new store.
-        let store = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-            operations: Arc::new(Mutex::new(Vec::new())),
-        };
+        let store = SimplestStorageProvider::default();
 
         let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
         let log = StorageLog::new(&author, &schema, &document_id, &LogId::default());
@@ -140,11 +135,7 @@ pub mod tests {
     #[async_std::test]
     async fn get_next_log_id(key_pair: KeyPair, schema: SchemaId, document_id: DocumentId) {
         // Instantiate a new store.
-        let store = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-            operations: Arc::new(Mutex::new(Vec::new())),
-        };
+        let store = SimplestStorageProvider::default();
 
         let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
         let log_id = store.next_log_id(&author).await.unwrap();

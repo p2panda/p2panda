@@ -26,6 +26,7 @@ use crate::Validate;
 use super::{EntryStore, LogStore, OperationStore, StorageProvider};
 
 /// The simplest storage provider. Used for tests in `entry_store`, `log_store` & `storage_provider`
+#[derive(Default)]
 pub struct SimplestStorageProvider {
     pub logs: Arc<Mutex<Vec<StorageLog>>>,
     pub entries: Arc<Mutex<Vec<StorageEntry>>>,
@@ -325,11 +326,7 @@ pub async fn aquadoggo_test_db(
     let mut documents: Vec<DocumentId> = Vec::new();
     let key_pairs = test_key_pairs(no_of_authors);
 
-    let store = SimplestStorageProvider {
-        logs: Arc::new(Mutex::new(Vec::new())),
-        entries: Arc::new(Mutex::new(Vec::new())),
-        operations: Arc::new(Mutex::new(Vec::new())),
-    };
+    let store = SimplestStorageProvider::default();
 
     // If we don't want any entries in the db return now
     if no_of_entries == 0 {

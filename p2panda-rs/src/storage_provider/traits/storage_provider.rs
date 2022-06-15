@@ -281,13 +281,9 @@ pub mod tests {
         #[future]
         db: TestStore,
     ) {
-        // Instantiate a new store
-        let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-            operations: Arc::new(Mutex::new(Vec::new())),
-        };
         let db = db.await;
+        // Instantiate a new store
+        let new_db = SimplestStorageProvider::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
 
@@ -337,12 +333,8 @@ pub mod tests {
         #[future]
         db: TestStore,
     ) {
-        let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-            operations: Arc::new(Mutex::new(Vec::new())),
-        };
         let db = db.await;
+        let new_db = SimplestStorageProvider::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
 
@@ -398,12 +390,8 @@ pub mod tests {
         #[future]
         db: TestStore,
     ) {
-        let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-            operations: Arc::new(Mutex::new(Vec::new())),
-        };
         let db = db.await;
+        let new_db = SimplestStorageProvider::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
 
@@ -458,13 +446,9 @@ pub mod tests {
         #[future]
         db: TestStore,
     ) {
-        // Instantiate a new store
-        let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-            operations: Arc::new(Mutex::new(Vec::new())),
-        };
         let db = db.await;
+        // Instantiate a new store
+        let new_db = SimplestStorageProvider::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
 
@@ -518,13 +502,9 @@ pub mod tests {
         #[future]
         db: TestStore,
     ) {
-        // Instantiate a new store
-        let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-            operations: Arc::new(Mutex::new(Vec::new())),
-        };
         let db = db.await;
+        // Instantiate a new store
+        let new_db = SimplestStorageProvider::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
 
