@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Display;
 
@@ -14,16 +15,16 @@ type FieldKey = String;
 /// A struct representing a materialised schema.
 ///
 /// It is constructed from a [`SchemaView`] and all related [`SchemaFieldView`]s.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Schema {
     /// The application schema id for this schema.
-    id: SchemaId,
+    pub(crate) id: SchemaId,
 
     /// Describes the schema's intended use.
-    description: String,
+    pub(crate) description: String,
 
     /// Maps all of the schema's field names to their respective types.
-    fields: BTreeMap<FieldKey, FieldType>,
+    pub(crate) fields: BTreeMap<FieldKey, FieldType>,
 }
 
 impl Schema {

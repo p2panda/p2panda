@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 use lazy_static::lazy_static;
@@ -20,7 +21,7 @@ use super::{FieldTypeError, SchemaId};
 /// field_definition.add("name", OperationValue::Text("document_title".to_string()));
 /// field_definition.add("type", FieldType::String.into());
 /// ```
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum FieldType {
     /// Defines a boolean field.
     Bool,

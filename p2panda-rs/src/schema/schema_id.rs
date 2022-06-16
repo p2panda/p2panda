@@ -62,7 +62,10 @@ impl SchemaId {
         let rightmost_section = id
             .rsplit_once('_')
             .ok_or_else(|| {
-                SchemaIdError::MalformedSchemaId("doesn't contain an underscore".to_string())
+                SchemaIdError::MalformedSchemaId(
+                    id.to_string(),
+                    "doesn't contain an underscore".to_string(),
+                )
             })?
             .1;
         let is_system_schema =
@@ -82,10 +85,10 @@ impl SchemaId {
     fn parse_system_schema_str(id_str: &str) -> Result<Self, SchemaIdError> {
         let (name, version_str) = id_str.rsplit_once('_').unwrap();
         let version = version_str[1..].parse::<u8>().map_err(|_| {
-            SchemaIdError::MalformedSchemaId(format!(
-                "couldn't parse system schema version from '{}'",
-                id_str
-            ))
+            SchemaIdError::MalformedSchemaId(
+                id_str.to_string(),
+                "couldn't parse system schema version".to_string(),
+            )
         })?;
         match name {
             SCHEMA_DEFINITION_NAME => Ok(Self::SchemaDefinition(version)),
