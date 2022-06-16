@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use crate::schema::{FieldType, Schema, SchemaId, SchemaIdError};
 
-const DESCRIPTION: &str = "define fields for application data schemas";
+const DESCRIPTION: &str = "Define fields for application data schemas.";
 
 /// Returns the `schema_field_definition` system schema with a given version.
 pub fn get_schema_field_definition(version: u8) -> Result<Schema, SchemaIdError> {
