@@ -131,7 +131,7 @@ localStorage.debug = 'p2panda*';
 npm run docs
 
 # Show documentation in browser
-npm serve ./docs
+npx serve ./docs
 ```
 
 ## License
