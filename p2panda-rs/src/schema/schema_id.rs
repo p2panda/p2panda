@@ -263,12 +263,12 @@ mod test {
     #[rstest]
     #[case(
         "This is not a hash",
-        "malformed schema id: doesn't contain an underscore"
+        "malformed schema id `This is not a hash`: doesn't contain an underscore"
     )]
     // Only an operation id, could be interpreted as document view id but still missing the name
     #[case(
         "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
-        "malformed schema id: doesn't contain an underscore"
+        "malformed schema id `0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b`: doesn't contain an underscore"
     )]
     // Only the name is missing now
     #[case(
@@ -297,7 +297,7 @@ mod test {
     // malformed system schema version number
     #[case(
         "schema_definition_v1.5",
-        "malformed schema id: couldn't parse system schema version from 'schema_definition_v1.5'"
+        "malformed schema id `schema_definition_v1.5`: couldn't parse system schema version"
     )]
     fn invalid_deserialization(#[case] schema_id_str: &str, #[case] expected_err: &str) {
         assert_eq!(
