@@ -2,8 +2,6 @@
 
 use thiserror::Error;
 
-use super::SchemaId;
-
 /// Custom errors related to `SchemaId`.
 #[derive(Error, Debug)]
 pub enum SchemaIdError {
