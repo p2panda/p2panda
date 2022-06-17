@@ -51,15 +51,17 @@ impl AsVerifiedOperation for VerifiedOperation {
     }
 
     /// Returns a new `VerifiedOperation` instance constructed from an `EntrySigned`
-    /// and an `OperationEncoded`. This constructor validates that the passed operation matches the
-    /// one oncoded in the passed signed entry.
+    /// and an `OperationEncoded`.
+    ///
+    /// This constructor verifies that the passed operation matches the one oncoded
+    /// in the passed signed entry.
     fn new_from_entry(
         entry_encoded: &EntrySigned,
         operation_encoded: &OperationEncoded,
     ) -> Result<Self, VerifiedOperationError> {
         let operation = Operation::from(operation_encoded);
 
-        // This validates that the entry and operation are correctly matching.
+        // This verifies that the entry and operation are correctly matching.
         decode_entry(entry_encoded, Some(operation_encoded))?;
 
         let verified_operation = Self {

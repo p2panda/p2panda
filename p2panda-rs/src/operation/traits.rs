@@ -72,9 +72,6 @@ pub trait AsVerifiedOperation:
     type VerifiedOperationError: 'static + std::error::Error + Send + Sync;
 
     /// Returns a new `VerifiedOperation` instance.
-    ///
-    /// Use `VerifiedOperation::new_from_entry()` instead if you want to validate that the operation
-    /// was signed by this public key.
     fn new(
         public_key: &Author,
         operation_id: &OperationId,
@@ -82,8 +79,10 @@ pub trait AsVerifiedOperation:
     ) -> Result<Self, Self::VerifiedOperationError>;
 
     /// Returns a new `VerifiedOperation` instance constructed from an `EntrySigned`
-    /// and an `OperationEncoded`. This constructor validates that the passed operation matches the
-    /// one oncoded in the passed signed entry.
+    /// and an `OperationEncoded`.
+    ///
+    /// Should return an error if the payload signature encoded in the passed entry
+    /// does not match the passes encoded operation.
     fn new_from_entry(
         entry_encoded: &EntrySigned,
         operation_encoded: &OperationEncoded,
