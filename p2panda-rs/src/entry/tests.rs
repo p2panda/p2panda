@@ -7,10 +7,15 @@ use std::convert::TryFrom;
 use rstest::rstest;
 use rstest_reuse::apply;
 
-use crate::entry::{decode_entry, sign_and_encode, Entry, LogId, SeqNum};
+use crate::entry::{decode_entry, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::identity::KeyPair;
 use crate::operation::{AsOperation, Operation, OperationEncoded};
-use crate::test_utils::fixtures::{key_pair, Fixture};
+use crate::test_utils::constants::{default_fields, DEFAULT_HASH};
+use crate::test_utils::fixtures::{
+    entry_signed_encoded_unvalidated, entry_unvalidated, key_pair, operation, operation_fields,
+    random_hash, random_key_pair, Fixture,
+};
+
 use crate::test_utils::templates::{many_valid_entries, version_fixtures};
 
 /// Test encoding and decoding entries.
@@ -63,6 +68,104 @@ fn sign_and_encode_roundtrip(#[case] entry: Entry, key_pair: KeyPair) {
     )
     .unwrap();
     assert!(sign_and_encode(&entry_second, &key_pair).is_ok());
+}
+
+#[rstest]
+#[should_panic(expected = "InvalidHexCharacter { c: 'Z', index: 9 }")]
+#[case::invalid_hex_string("123456789Z")]
+#[should_panic(expected = "OddLength")]
+#[case::another_invalid_hex_string(":{][[5£$%*(&*££  ++`/.")]
+#[case::should_not_have_skiplink(entry_signed_encoded_unvalidated(
+    entry_unvalidated(
+        1,
+        1,
+        None,
+        Some(random_hash()),
+        Some(operation(Some(operation_fields(default_fields())), None, None))
+    ),
+    random_key_pair()
+))]
+#[should_panic(expected = "DecodePayloadHashError { source: DecodeError }")]
+#[case::should_not_have_backlink(entry_signed_encoded_unvalidated(
+    entry_unvalidated(
+        1,
+        1,
+        Some(random_hash()),
+        None,
+        Some(operation(Some(operation_fields(default_fields())), None, None))
+    ),
+    random_key_pair()
+))]
+#[should_panic(expected = "DecodePayloadHashError { source: DecodeError }")]
+#[case::should_not_have_backlink_or_skiplink(
+    entry_signed_encoded_unvalidated(
+        entry_unvalidated(
+            1,
+            1,
+            Some(DEFAULT_HASH.parse().unwrap()),
+            Some(DEFAULT_HASH.parse().unwrap()),
+            Some(operation(Some(operation_fields(default_fields())), None, None))
+        ),
+        random_key_pair()
+    ),
+)]
+#[should_panic(expected = "DecodeBacklinkError { source: DecodeError }")]
+#[case::missing_backlink(entry_signed_encoded_unvalidated(
+    entry_unvalidated(
+        2,
+        1,
+        None,
+        None,
+        Some(operation(Some(operation_fields(default_fields())), None, None))
+    ),
+    random_key_pair()
+))]
+#[should_panic(expected = "DecodeBacklinkError { source: DecodeError }")]
+#[case::missing_skiplink(entry_signed_encoded_unvalidated(
+    entry_unvalidated(
+        8,
+        1,
+        Some(random_hash()),
+        None,
+        Some(operation(Some(operation_fields(default_fields())), None, None))
+    ),
+    random_key_pair()
+))]
+#[should_panic(expected = "DecodePayloadHashError { source: DecodeError }")]
+#[case::should_ommit_skiplink_when_same_as_backlink(
+    entry_signed_encoded_unvalidated(
+        entry_unvalidated(
+            14,
+            1,
+            Some(DEFAULT_HASH.parse().unwrap()),
+            Some(DEFAULT_HASH.parse().unwrap()),
+            Some(operation(Some(operation_fields(default_fields())), None, None))
+        ),
+        random_key_pair()
+    )
+)]
+#[should_panic(expected = "SOME PANIC MESSAGE")] // TODO: do we expect this case to fail?
+#[case::skiplink_and_backlink_should_not_be_the_same(entry_signed_encoded_unvalidated(
+    entry_unvalidated(
+        13,
+        1,
+        Some(DEFAULT_HASH.parse().unwrap()),
+        Some(DEFAULT_HASH.parse().unwrap()),
+        Some(operation(Some(operation_fields(default_fields())), None, None))
+    ),
+    random_key_pair()
+))]
+#[should_panic(expected = "DecodePayloadHashError { source: DecodeError }")]
+#[case::payload_hash_and_size_missing(entry_signed_encoded_unvalidated(
+    entry_unvalidated(1, 1, None, None, None),
+    random_key_pair()
+))]
+fn decoding_invalid_encoded_entries_panics(#[case] entry_signed_encoded_unvalidated: String) {
+    decode_entry(
+        &EntrySigned::new_without_validation(&entry_signed_encoded_unvalidated).unwrap(),
+        None,
+    )
+    .unwrap();
 }
 
 /// Test signing and encoding from version fixtures.
