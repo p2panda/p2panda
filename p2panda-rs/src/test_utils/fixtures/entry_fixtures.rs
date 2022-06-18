@@ -182,7 +182,12 @@ pub fn entry_signed_encoded(entry: Entry, key_pair: KeyPair) -> EntrySigned {
 /// key pair.
 #[fixture]
 pub fn entry_signed_encoded_unvalidated(
-    #[from(entry_unvalidated)] entry: Entry,
+    #[default(1)] seq_num: u64,
+    #[default(1)] log_id: u64,
+    #[default(None)] backlink: Option<Hash>,
+    #[default(None)] skiplink: Option<Hash>,
+    #[default(Some(operation(Some(operation_fields(default_fields())), None, None)))]
+    operation: Option<Operation>,
     key_pair: KeyPair,
 ) -> String {
     let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
@@ -200,15 +205,15 @@ pub fn entry_signed_encoded_unvalidated(
     next_byte_num += author_bytes.len();
 
     // Encode the log_id
-    next_byte_num += varu64_encode(entry.log_id().as_u64(), &mut entry_bytes[next_byte_num..]);
+    next_byte_num += varu64_encode(log_id, &mut entry_bytes[next_byte_num..]);
 
     // Encode the sequence number
-    next_byte_num += varu64_encode(entry.seq_num().as_u64(), &mut entry_bytes[next_byte_num..]);
+    next_byte_num += varu64_encode(seq_num, &mut entry_bytes[next_byte_num..]);
 
     // Encode the lipmaa link
-    next_byte_num = match entry.skiplink_hash() {
+    next_byte_num = match skiplink {
         Some(lipmaa_link) => {
-            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(lipmaa_link.to_owned())
+            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(lipmaa_link)
                 .encode(&mut entry_bytes[next_byte_num..])
                 .unwrap();
             next_byte_num
@@ -217,9 +222,9 @@ pub fn entry_signed_encoded_unvalidated(
     };
 
     // Encode the backlink link
-    next_byte_num = match entry.backlink_hash() {
+    next_byte_num = match backlink {
         Some(backlink) => {
-            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(backlink.to_owned())
+            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(backlink)
                 .encode(&mut entry_bytes[next_byte_num..])
                 .unwrap();
             next_byte_num
@@ -228,9 +233,9 @@ pub fn entry_signed_encoded_unvalidated(
     };
 
     // Encode the operation if it exists.
-    match entry.operation() {
+    match operation {
         Some(operation) => {
-            let operation_encoded = OperationEncoded::try_from(operation).unwrap();
+            let operation_encoded = OperationEncoded::try_from(&operation).unwrap();
             // Encode the payload size
             let operation_size = operation_encoded.size();
             next_byte_num += varu64_encode(operation_size, &mut entry_bytes[next_byte_num..]);
