@@ -4,12 +4,10 @@ use crate::document::DocumentViewId;
 use crate::entry::EntrySigned;
 use crate::identity::Author;
 use crate::operation::{
-    Operation, OperationAction, OperationFields, OperationId, OperationVersion,
+    Operation, OperationAction, OperationEncoded, OperationFields, OperationId, OperationVersion,
 };
 use crate::schema::SchemaId;
 use crate::Validate;
-
-use super::OperationEncoded;
 
 /// Trait to be implemented on [`Operation`] and
 /// [`VerifiedOperation`][crate::operation::VerifiedOperation] structs.
