@@ -205,18 +205,20 @@ pub fn entry_signed_encoded_unvalidated(
     // Encode the sequence number
     next_byte_num += varu64_encode(entry.seq_num().as_u64(), &mut entry_bytes[next_byte_num..]);
 
-    // Encode the backlink and lipmaa links if its not the first sequence
-    next_byte_num = match (entry.backlink_hash(), entry.skiplink_hash()) {
-        (Some(backlink), Some(lipmaa_link)) => {
+    // Encode the lipmaa link
+    next_byte_num = match entry.skiplink_hash() {
+        Some(lipmaa_link) => {
             next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(lipmaa_link.to_owned())
-                .encode(&mut entry_bytes[next_byte_num..])
-                .unwrap();
-            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(backlink.to_owned())
                 .encode(&mut entry_bytes[next_byte_num..])
                 .unwrap();
             next_byte_num
         }
-        (Some(backlink), None) => {
+        _ => next_byte_num,
+    };
+
+    // Encode the backlink link
+    next_byte_num = match entry.backlink_hash() {
+        Some(backlink) => {
             next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(backlink.to_owned())
                 .encode(&mut entry_bytes[next_byte_num..])
                 .unwrap();
