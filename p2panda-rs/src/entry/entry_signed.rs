@@ -156,10 +156,14 @@ mod tests {
     use rstest::rstest;
     use rstest_reuse::apply;
 
-    use crate::entry::{sign_and_encode, Entry, EntrySigned};
+    use crate::entry::{decode_entry, sign_and_encode, Entry, EntrySigned};
     use crate::identity::KeyPair;
     use crate::operation::OperationEncoded;
-    use crate::test_utils::fixtures::{entry_signed_encoded, key_pair, operation_encoded};
+    use crate::test_utils::constants::{default_fields, DEFAULT_HASH};
+    use crate::test_utils::fixtures::{
+        entry_signed_encoded, entry_signed_encoded_unvalidated, entry_unvalidated, key_pair,
+        operation, operation_encoded, operation_fields, random_hash, random_key_pair,
+    };
     use crate::test_utils::templates::many_valid_entries;
 
     #[rstest]
@@ -184,10 +188,174 @@ mod tests {
         assert_eq!(entry_signed_encoded.payload_hash(), expected_payload_hash)
     }
 
-    #[test]
-    fn validate() {
-        // Invalid hex string
-        assert!(EntrySigned::new("123456789Z").is_err());
+    #[rstest]
+    #[case::valid_first_entry(entry_signed_encoded_unvalidated(
+        entry_unvalidated(
+            1,
+            1,
+            None,
+            None,
+            Some(operation(Some(operation_fields(default_fields())), None, None))
+        ),
+        random_key_pair()
+    ))]
+    #[case::valid_entry_with_backlink(entry_signed_encoded_unvalidated(
+        entry_unvalidated(
+            2,
+            1,
+            Some(random_hash()),
+            None,
+            Some(operation(Some(operation_fields(default_fields())), None, None))
+        ),
+        random_key_pair()
+    ))]
+    #[case::valid_entry_with_skiplink_and_backlink(entry_signed_encoded_unvalidated(
+        entry_unvalidated(
+            13,
+            1,
+            Some(random_hash()),
+            Some(random_hash()),
+            Some(operation(Some(operation_fields(default_fields())), None, None))
+        ),
+        random_key_pair()
+    ))]
+    #[case::skiplink_ommitted_when_sam_as_backlink(entry_signed_encoded_unvalidated(
+        entry_unvalidated(
+            14,
+            1,
+            Some(random_hash()),
+            None,
+            Some(operation(Some(operation_fields(default_fields())), None, None))
+        ),
+        random_key_pair()
+    ))]
+    #[case::skiplink_included_even_though_same_as_backlink(entry_signed_encoded_unvalidated(
+        entry_unvalidated(
+            14,
+            1,
+            Some(DEFAULT_HASH.parse().unwrap()),
+            Some(DEFAULT_HASH.parse().unwrap()),
+            Some(operation(Some(operation_fields(default_fields())), None, None))
+        ),
+        random_key_pair()
+    ))]
+
+    fn validate(#[case] entry_signed_encoded_unvalidated: String) {
+        assert!(EntrySigned::new(&entry_signed_encoded_unvalidated).is_ok());
+    }
+
+    #[rstest]
+    #[case::invalid_hex_string("123456789Z", "invalid hex encoding in entry")]
+    #[case::another_invalid_hex_string(":{][[5£$%*(&*££  ++`/.", "invalid hex encoding in entry")]
+    #[case::should_not_have_skiplink(
+        entry_signed_encoded_unvalidated(
+            entry_unvalidated(
+                1,
+                1,
+                None,
+                Some(random_hash()),
+                Some(operation(Some(operation_fields(default_fields())), None, None))
+            ),
+            random_key_pair()
+        ),
+        "entry at this sequence number 1 must not have a skiplink" // TODO
+    )]
+    #[case::should_not_have_backlink(
+        entry_signed_encoded_unvalidated(
+            entry_unvalidated(
+                1,
+                1,
+                Some(random_hash()),
+                None,
+                Some(operation(Some(operation_fields(default_fields())), None, None))
+            ),
+            random_key_pair()
+        ),
+        "entry at sequence number 1 must not have a backlink" // TODO
+    )]
+    #[case::should_not_have_backlink_or_skiplink(
+        entry_signed_encoded_unvalidated(
+            entry_unvalidated(
+                1,
+                1,
+                Some(DEFAULT_HASH.parse().unwrap()),
+                Some(DEFAULT_HASH.parse().unwrap()),
+                Some(operation(Some(operation_fields(default_fields())), None, None))
+            ),
+            random_key_pair()
+        ),
+        "entry at sequence number 1 must not have a backlink" // TODO
+    )]
+    #[case::missing_backlink(
+        entry_signed_encoded_unvalidated(
+            entry_unvalidated(
+                2,
+                1,
+                None,
+                None,
+                Some(operation(Some(operation_fields(default_fields())), None, None))
+            ),
+            random_key_pair()
+        ),
+        "all entries with sequnce number > 1 must have a backlink" // TODO
+    )]
+    #[case::missing_skiplink(
+        entry_signed_encoded_unvalidated(
+            entry_unvalidated(
+                8,
+                1,
+                Some(random_hash()),
+                None,
+                Some(operation(Some(operation_fields(default_fields())), None, None))
+            ),
+            random_key_pair()
+        ),
+        "entries at sequence number 8 must have a skiplink" // TODO
+    )]
+    #[case::skiplink_and_backlink_should_be_the_same(
+        entry_signed_encoded_unvalidated(
+            entry_unvalidated(
+                14,
+                1,
+                Some(random_hash()),
+                Some(DEFAULT_HASH.parse().unwrap()),
+                Some(operation(Some(operation_fields(default_fields())), None, None))
+            ),
+            random_key_pair()
+        ), "backlink and skiplink hashes refering to entries at the same sequence number must match" // TODO
+    )]
+    #[case::payload_hash_and_size_missing(
+        entry_signed_encoded_unvalidated(
+            entry_unvalidated(
+                14,
+                1,
+                Some(random_hash()),
+                Some(DEFAULT_HASH.parse().unwrap()),
+                None
+            ),
+            random_key_pair()
+        ), "payload hash and byte size missing" // TODO
+    )]
+    fn correct_errors_on_invalid_entries(
+        #[case] entry_signed_encoded_unvalidated: String,
+        #[case] expected_error_message: &str,
+    ) {
+        assert_eq!(
+            EntrySigned::new(&entry_signed_encoded_unvalidated)
+                .unwrap_err()
+                .to_string(),
+            expected_error_message
+        );
+
+        assert_eq!(
+            decode_entry(
+                &EntrySigned::new_without_validation(&entry_signed_encoded_unvalidated).unwrap(),
+                None
+            )
+            .unwrap_err()
+            .to_string(),
+            expected_error_message
+        );
     }
 
     #[apply(many_valid_entries)]
