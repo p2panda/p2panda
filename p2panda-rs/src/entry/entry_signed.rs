@@ -144,6 +144,10 @@ impl Validate for EntrySigned {
     /// Validate the integrity of signed Bamboo entries.
     fn validate(&self) -> Result<(), Self::Error> {
         hex::decode(&self.0).map_err(|_| EntrySignedError::InvalidHexEncoding)?;
+        let entry_bytes = self.to_bytes();
+        let _bamboo_entry: bamboo_rs_core_ed25519_yasmf::Entry<&[u8], &[u8]> =
+            entry_bytes.as_slice().try_into()?;
+
         Ok(())
     }
 }
@@ -229,16 +233,6 @@ mod tests {
         ),
         random_key_pair()
     ))]
-    #[case::skiplink_included_even_though_same_as_backlink(entry_signed_encoded_unvalidated(
-        entry_unvalidated(
-            14,
-            1,
-            Some(DEFAULT_HASH.parse().unwrap()),
-            Some(DEFAULT_HASH.parse().unwrap()),
-            Some(operation(Some(operation_fields(default_fields())), None, None))
-        ),
-        random_key_pair()
-    ))]
 
     fn validate(#[case] entry_signed_encoded_unvalidated: String) {
         assert!(EntrySigned::new(&entry_signed_encoded_unvalidated).is_ok());
@@ -258,7 +252,7 @@ mod tests {
             ),
             random_key_pair()
         ),
-        "entry at this sequence number 1 must not have a skiplink" // TODO
+        "Could not decode payload hash DecodeError"
     )]
     #[case::should_not_have_backlink(
         entry_signed_encoded_unvalidated(
@@ -271,7 +265,7 @@ mod tests {
             ),
             random_key_pair()
         ),
-        "entry at sequence number 1 must not have a backlink" // TODO
+        "Could not decode payload hash DecodeError"
     )]
     #[case::should_not_have_backlink_or_skiplink(
         entry_signed_encoded_unvalidated(
@@ -284,7 +278,7 @@ mod tests {
             ),
             random_key_pair()
         ),
-        "entry at sequence number 1 must not have a backlink" // TODO
+        "Could not decode payload hash DecodeError"
     )]
     #[case::missing_backlink(
         entry_signed_encoded_unvalidated(
@@ -297,7 +291,7 @@ mod tests {
             ),
             random_key_pair()
         ),
-        "all entries with sequnce number > 1 must have a backlink" // TODO
+        "Could not decode backlink yamf hash: DecodeError"
     )]
     #[case::missing_skiplink(
         entry_signed_encoded_unvalidated(
@@ -310,19 +304,19 @@ mod tests {
             ),
             random_key_pair()
         ),
-        "entries at sequence number 8 must have a skiplink" // TODO
+        "Could not decode backlink yamf hash: DecodeError"
     )]
-    #[case::skiplink_and_backlink_should_be_the_same(
+    #[case::should_not_include_skiplink(
         entry_signed_encoded_unvalidated(
             entry_unvalidated(
                 14,
                 1,
-                Some(random_hash()),
+                Some(DEFAULT_HASH.parse().unwrap()),
                 Some(DEFAULT_HASH.parse().unwrap()),
                 Some(operation(Some(operation_fields(default_fields())), None, None))
             ),
             random_key_pair()
-        ), "backlink and skiplink hashes refering to entries at the same sequence number must match" // TODO
+        ), "Could not decode payload hash DecodeError"
     )]
     #[case::payload_hash_and_size_missing(
         entry_signed_encoded_unvalidated(
@@ -334,7 +328,7 @@ mod tests {
                 None
             ),
             random_key_pair()
-        ), "payload hash and byte size missing" // TODO
+        ), "Could not decode payload hash DecodeError"
     )]
     fn correct_errors_on_invalid_entries(
         #[case] entry_signed_encoded_unvalidated: String,
@@ -344,16 +338,6 @@ mod tests {
             EntrySigned::new(&entry_signed_encoded_unvalidated)
                 .unwrap_err()
                 .to_string(),
-            expected_error_message
-        );
-
-        assert_eq!(
-            decode_entry(
-                &EntrySigned::new_without_validation(&entry_signed_encoded_unvalidated).unwrap(),
-                None
-            )
-            .unwrap_err()
-            .to_string(),
             expected_error_message
         );
     }
