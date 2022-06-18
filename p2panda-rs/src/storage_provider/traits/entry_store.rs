@@ -191,14 +191,6 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 
 #[cfg(test)]
 pub mod tests {
-    // TEST MODULE NOTES //
-    //
-    // In this module we are implementing the `EntryStore` trait on `SimplestStorageProvider` just
-    // for testing purposes. We then test these as well as the default trait method implementations.
-    // Arguably the most important tests here are those of `try_get_skiplink`, `try_get_backlink` and
-    // `determine_next_skiplink` as this logic will actually be used in an implementation using
-    // `EntryStore`.
-
     use std::convert::TryFrom;
     use std::sync::{Arc, Mutex};
 

@@ -56,13 +56,6 @@ pub trait LogStore<StorageLog: AsStorageLog> {
 
 #[cfg(test)]
 pub mod tests {
-    // TEST MODULE NOTES //
-    //
-    // In this module we are implementing the `LogStore` trait on `SimplestStorageProvider` just
-    // for testing purposes. We then test these as well as the default trait method implementations.
-    // Arguably the most important tests here are those of `find_document_log_id` as this logic will
-    // actually be used in an implementation using `LogStore`.
-
     use std::convert::TryFrom;
 
     use async_trait::async_trait;

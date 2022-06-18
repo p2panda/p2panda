@@ -54,11 +54,6 @@ pub trait OperationStore<StorageOperation: AsVerifiedOperation> {
 
 #[cfg(test)]
 mod tests {
-    // TEST MODULE NOTES //
-    //
-    // In this module we are implementing the `OperationStore` trait on `SimplestStorageProvider` just
-    // for testing purposes (they are used elsewhere).
-
     use async_trait::async_trait;
     use rstest::rstest;
     use std::convert::TryFrom;
