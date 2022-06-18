@@ -53,7 +53,7 @@ impl AsVerifiedOperation for VerifiedOperation {
     /// Returns a new `VerifiedOperation` instance constructed from an `EntrySigned`
     /// and an `OperationEncoded`.
     ///
-    /// This constructor verifies that the passed operation matches the one oncoded
+    /// This constructor verifies that the passed operation matches the one encoded
     /// in the passed signed entry.
     fn new_from_entry(
         entry_encoded: &EntrySigned,
