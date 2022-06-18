@@ -73,32 +73,6 @@ pub fn entry(
     .unwrap()
 }
 
-/// Fixture which injects an `Entry` into a test method WITHOUT any validation during construction.
-/// Default values are those of the first entry in log number 1. The default payload is a CREATE
-/// operation containing the default testing fields.
-///
-/// Default values can be overridden at testing time by passing in custom operation, seq number, log_id,
-/// backlink, skiplink and operation. The `#[with()]` tag can be used to partially change default
-/// values.
-#[fixture]
-pub fn entry_unvalidated(
-    #[default(1)] seq_num: u64,
-    #[default(1)] log_id: u64,
-    #[default(None)] backlink: Option<Hash>,
-    #[default(None)] skiplink: Option<Hash>,
-    #[default(Some(operation(Some(operation_fields(default_fields())), None, None)))]
-    operation: Option<Operation>,
-) -> Entry {
-    Entry::new_without_validation(
-        &LogId::new(log_id),
-        operation.as_ref(),
-        skiplink.as_ref(),
-        backlink.as_ref(),
-        &SeqNum::new(seq_num).unwrap(),
-    )
-    .unwrap()
-}
-
 /// Fixture which injects an `Entry` with auto generated valid values for backlink, skiplink and
 /// operation.
 ///
