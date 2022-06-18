@@ -160,13 +160,13 @@ mod tests {
     use rstest::rstest;
     use rstest_reuse::apply;
 
-    use crate::entry::{decode_entry, sign_and_encode, Entry, EntrySigned};
+    use crate::entry::{sign_and_encode, Entry, EntrySigned};
     use crate::identity::KeyPair;
     use crate::operation::OperationEncoded;
-    use crate::test_utils::constants::{default_fields, DEFAULT_HASH};
+    use crate::test_utils::constants::{default_fields, DEFAULT_HASH, DEFAULT_PRIVATE_KEY};
     use crate::test_utils::fixtures::{
-        entry_signed_encoded, entry_signed_encoded_unvalidated, entry_unvalidated, key_pair,
-        operation, operation_encoded, operation_fields, random_hash, random_key_pair,
+        entry_signed_encoded, entry_signed_encoded_unvalidated, key_pair, operation,
+        operation_encoded, operation_fields, random_hash,
     };
     use crate::test_utils::templates::many_valid_entries;
 
@@ -194,44 +194,36 @@ mod tests {
 
     #[rstest]
     #[case::valid_first_entry(entry_signed_encoded_unvalidated(
-        entry_unvalidated(
-            1,
-            1,
-            None,
-            None,
-            Some(operation(Some(operation_fields(default_fields())), None, None))
-        ),
-        random_key_pair()
+        1,
+        1,
+        None,
+        None,
+        Some(operation(Some(operation_fields(default_fields())), None, None)),
+        key_pair(DEFAULT_PRIVATE_KEY)
     ))]
     #[case::valid_entry_with_backlink(entry_signed_encoded_unvalidated(
-        entry_unvalidated(
-            2,
-            1,
-            Some(random_hash()),
-            None,
-            Some(operation(Some(operation_fields(default_fields())), None, None))
-        ),
-        random_key_pair()
+        2,
+        1,
+        Some(random_hash()),
+        None,
+        Some(operation(Some(operation_fields(default_fields())), None, None)),
+        key_pair(DEFAULT_PRIVATE_KEY)
     ))]
     #[case::valid_entry_with_skiplink_and_backlink(entry_signed_encoded_unvalidated(
-        entry_unvalidated(
-            13,
-            1,
-            Some(random_hash()),
-            Some(random_hash()),
-            Some(operation(Some(operation_fields(default_fields())), None, None))
-        ),
-        random_key_pair()
+        13,
+        1,
+        Some(random_hash()),
+        Some(random_hash()),
+        Some(operation(Some(operation_fields(default_fields())), None, None)),
+        key_pair(DEFAULT_PRIVATE_KEY)
     ))]
     #[case::skiplink_ommitted_when_sam_as_backlink(entry_signed_encoded_unvalidated(
-        entry_unvalidated(
-            14,
-            1,
-            Some(random_hash()),
-            None,
-            Some(operation(Some(operation_fields(default_fields())), None, None))
-        ),
-        random_key_pair()
+        14,
+        1,
+        Some(random_hash()),
+        None,
+        Some(operation(Some(operation_fields(default_fields())), None, None)),
+        key_pair(DEFAULT_PRIVATE_KEY)
     ))]
 
     fn validate(#[case] entry_signed_encoded_unvalidated: String) {
@@ -239,95 +231,109 @@ mod tests {
     }
 
     #[rstest]
+    #[case::empty_string("", "Bytes to decode had length of 0")]
     #[case::invalid_hex_string("123456789Z", "invalid hex encoding in entry")]
     #[case::another_invalid_hex_string(":{][[5£$%*(&*££  ++`/.", "invalid hex encoding in entry")]
+    #[case::seq_number_zero(
+        entry_signed_encoded_unvalidated(
+            0,
+            1,
+            None,
+            None,
+            Some(operation(Some(operation_fields(default_fields())), None, None)),
+            key_pair(DEFAULT_PRIVATE_KEY)
+        ),
+        "Entry sequence must be larger than 0 but was 0"
+    )]
+    // TODO: This doesn't error...
+    //
+    // #[case::log_id_zero(
+    //     entry_signed_encoded_unvalidated(
+    //         1,
+    //         0,
+    //         None,
+    //         None,
+    //         Some(operation(Some(operation_fields(default_fields())), None, None)),
+    //         key_pair(DEFAULT_PRIVATE_KEY)
+    //     ),
+    //     "Log id must be larger than 0 but was 0"
+    // )]
     #[case::should_not_have_skiplink(
         entry_signed_encoded_unvalidated(
-            entry_unvalidated(
-                1,
-                1,
-                None,
-                Some(random_hash()),
-                Some(operation(Some(operation_fields(default_fields())), None, None))
-            ),
-            random_key_pair()
+            1,
+            1,
+            None,
+            Some(random_hash()),
+            Some(operation(Some(operation_fields(default_fields())), None, None)),
+            key_pair(DEFAULT_PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
     )]
     #[case::should_not_have_backlink(
         entry_signed_encoded_unvalidated(
-            entry_unvalidated(
-                1,
-                1,
-                Some(random_hash()),
-                None,
-                Some(operation(Some(operation_fields(default_fields())), None, None))
-            ),
-            random_key_pair()
+            1,
+            1,
+            Some(random_hash()),
+            None,
+            Some(operation(Some(operation_fields(default_fields())), None, None)),
+            key_pair(DEFAULT_PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
     )]
     #[case::should_not_have_backlink_or_skiplink(
         entry_signed_encoded_unvalidated(
-            entry_unvalidated(
                 1,
                 1,
                 Some(DEFAULT_HASH.parse().unwrap()),
                 Some(DEFAULT_HASH.parse().unwrap()),
                 Some(operation(Some(operation_fields(default_fields())), None, None))
-            ),
-            random_key_pair()
+,
+            key_pair(DEFAULT_PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
     )]
     #[case::missing_backlink(
         entry_signed_encoded_unvalidated(
-            entry_unvalidated(
-                2,
-                1,
-                None,
-                None,
-                Some(operation(Some(operation_fields(default_fields())), None, None))
-            ),
-            random_key_pair()
+            2,
+            1,
+            None,
+            None,
+            Some(operation(Some(operation_fields(default_fields())), None, None)),
+            key_pair(DEFAULT_PRIVATE_KEY)
         ),
         "Could not decode backlink yamf hash: DecodeError"
     )]
     #[case::missing_skiplink(
         entry_signed_encoded_unvalidated(
-            entry_unvalidated(
-                8,
-                1,
-                Some(random_hash()),
-                None,
-                Some(operation(Some(operation_fields(default_fields())), None, None))
-            ),
-            random_key_pair()
+            8,
+            1,
+            Some(random_hash()),
+            None,
+            Some(operation(Some(operation_fields(default_fields())), None, None)),
+            key_pair(DEFAULT_PRIVATE_KEY)
         ),
         "Could not decode backlink yamf hash: DecodeError"
     )]
     #[case::should_not_include_skiplink(
         entry_signed_encoded_unvalidated(
-            entry_unvalidated(
                 14,
                 1,
                 Some(DEFAULT_HASH.parse().unwrap()),
                 Some(DEFAULT_HASH.parse().unwrap()),
                 Some(operation(Some(operation_fields(default_fields())), None, None))
-            ),
-            random_key_pair()
+,
+            key_pair(DEFAULT_PRIVATE_KEY)
         ), "Could not decode payload hash DecodeError"
     )]
     #[case::payload_hash_and_size_missing(
         entry_signed_encoded_unvalidated(
-            entry_unvalidated(
                 14,
                 1,
                 Some(random_hash()),
                 Some(DEFAULT_HASH.parse().unwrap()),
                 None
-            ),
-            random_key_pair()
+,
+            key_pair(DEFAULT_PRIVATE_KEY)
         ), "Could not decode payload hash DecodeError"
     )]
     fn correct_errors_on_invalid_entries(

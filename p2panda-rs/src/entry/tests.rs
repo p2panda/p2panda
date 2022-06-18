@@ -10,10 +10,9 @@ use rstest_reuse::apply;
 use crate::entry::{decode_entry, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::identity::KeyPair;
 use crate::operation::{AsOperation, Operation, OperationEncoded};
-use crate::test_utils::constants::{default_fields, DEFAULT_HASH};
+use crate::test_utils::constants::{default_fields, DEFAULT_HASH, DEFAULT_PRIVATE_KEY};
 use crate::test_utils::fixtures::{
-    entry_signed_encoded_unvalidated, entry_unvalidated, key_pair, operation, operation_fields,
-    random_hash, random_key_pair, Fixture,
+    entry_signed_encoded_unvalidated, key_pair, operation, operation_fields, random_hash, Fixture,
 };
 
 use crate::test_utils::templates::{many_valid_entries, version_fixtures};
@@ -71,97 +70,115 @@ fn sign_and_encode_roundtrip(#[case] entry: Entry, key_pair: KeyPair) {
 }
 
 #[rstest]
+#[should_panic(expected = "DecodeInputIsLengthZero")]
+#[case::empty_string("")]
 #[should_panic(expected = "InvalidHexCharacter { c: 'Z', index: 9 }")]
 #[case::invalid_hex_string("123456789Z")]
 #[should_panic(expected = "OddLength")]
 #[case::another_invalid_hex_string(":{][[5£$%*(&*££  ++`/.")]
+#[should_panic(expected = "DecodeSeqIsZero { seq_num: 0 }")]
+#[case::seq_number_zero(entry_signed_encoded_unvalidated(
+    0,
+    1,
+    None,
+    None,
+    Some(operation(Some(operation_fields(default_fields())), None, None)),
+    key_pair(DEFAULT_PRIVATE_KEY)
+))]
+// TODO: This doesn't error...
+//
+// #[should_panic(expected = "DecodePayloadHashError { source: DecodeError }")]
+// #[case::log_id_zero(
+//     entry_signed_encoded_unvalidated(
+//         1,
+//         0,
+//         None,
+//         None,
+//         Some(operation(Some(operation_fields(default_fields())), None, None)),
+//         key_pair(DEFAULT_PRIVATE_KEY)
+//     ),
+//     "Log id must be larger than 0 but was 0"
+// )]
 #[should_panic(expected = "DecodePayloadHashError { source: DecodeError }")]
 #[case::should_not_have_skiplink(entry_signed_encoded_unvalidated(
-    entry_unvalidated(
-        1,
-        1,
-        None,
-        Some(random_hash()),
-        Some(operation(Some(operation_fields(default_fields())), None, None))
-    ),
-    random_key_pair()
+    1,
+    1,
+    None,
+    Some(random_hash()),
+    Some(operation(Some(operation_fields(default_fields())), None, None)),
+    key_pair(DEFAULT_PRIVATE_KEY)
 ))]
 #[should_panic(expected = "DecodePayloadHashError { source: DecodeError }")]
 #[case::should_not_have_backlink(entry_signed_encoded_unvalidated(
-    entry_unvalidated(
-        1,
-        1,
-        Some(random_hash()),
-        None,
-        Some(operation(Some(operation_fields(default_fields())), None, None))
-    ),
-    random_key_pair()
+    1,
+    1,
+    Some(random_hash()),
+    None,
+    Some(operation(Some(operation_fields(default_fields())), None, None)),
+    key_pair(DEFAULT_PRIVATE_KEY)
 ))]
 #[should_panic(expected = "DecodePayloadHashError { source: DecodeError }")]
 #[case::should_not_have_backlink_or_skiplink(
     entry_signed_encoded_unvalidated(
-        entry_unvalidated(
-            1,
+                1,
             1,
             Some(DEFAULT_HASH.parse().unwrap()),
             Some(DEFAULT_HASH.parse().unwrap()),
             Some(operation(Some(operation_fields(default_fields())), None, None))
-        ),
-        random_key_pair()
+    ,
+        key_pair(DEFAULT_PRIVATE_KEY)
     ),
 )]
 #[should_panic(expected = "DecodeBacklinkError { source: DecodeError }")]
 #[case::missing_backlink(entry_signed_encoded_unvalidated(
-    entry_unvalidated(
-        2,
-        1,
-        None,
-        None,
-        Some(operation(Some(operation_fields(default_fields())), None, None))
-    ),
-    random_key_pair()
+    2,
+    1,
+    None,
+    None,
+    Some(operation(Some(operation_fields(default_fields())), None, None)),
+    key_pair(DEFAULT_PRIVATE_KEY)
 ))]
 #[should_panic(expected = "DecodeBacklinkError { source: DecodeError }")]
 #[case::missing_skiplink(entry_signed_encoded_unvalidated(
-    entry_unvalidated(
-        8,
-        1,
-        Some(random_hash()),
-        None,
-        Some(operation(Some(operation_fields(default_fields())), None, None))
-    ),
-    random_key_pair()
+    8,
+    1,
+    Some(random_hash()),
+    None,
+    Some(operation(Some(operation_fields(default_fields())), None, None)),
+    key_pair(DEFAULT_PRIVATE_KEY)
 ))]
 #[should_panic(expected = "DecodePayloadHashError { source: DecodeError }")]
 #[case::should_ommit_skiplink_when_same_as_backlink(
     entry_signed_encoded_unvalidated(
-        entry_unvalidated(
-            14,
+                14,
             1,
             Some(DEFAULT_HASH.parse().unwrap()),
             Some(DEFAULT_HASH.parse().unwrap()),
             Some(operation(Some(operation_fields(default_fields())), None, None))
-        ),
-        random_key_pair()
+    ,
+        key_pair(DEFAULT_PRIVATE_KEY)
     )
 )]
 // TODO: do we expect this case to fail?
 //
 // #[should_panic(expected = "SOME PANIC MESSAGE")]
 // #[case::skiplink_and_backlink_should_not_be_the_same(entry_signed_encoded_unvalidated(
-//     entry_unvalidated(
 //         13,
 //         1,
 //         Some(DEFAULT_HASH.parse().unwrap()),
 //         Some(DEFAULT_HASH.parse().unwrap()),
 //         Some(operation(Some(operation_fields(default_fields())), None, None))
-//     ),
-//     random_key_pair()
+// ,
+//     key_pair(DEFAULT_PRIVATE_KEY)
 // ))]
 #[should_panic(expected = "DecodePayloadHashError { source: DecodeError }")]
 #[case::payload_hash_and_size_missing(entry_signed_encoded_unvalidated(
-    entry_unvalidated(1, 1, None, None, None),
-    random_key_pair()
+    1,
+    1,
+    None,
+    None,
+    None,
+    key_pair(DEFAULT_PRIVATE_KEY)
 ))]
 fn decoding_invalid_encoded_entries_panics(#[case] entry_signed_encoded_unvalidated: String) {
     decode_entry(
