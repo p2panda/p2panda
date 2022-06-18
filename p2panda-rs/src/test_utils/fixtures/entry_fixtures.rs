@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::TryFrom;
+
+use bamboo_rs_core_ed25519_yasmf::entry::MAX_ENTRY_SIZE;
+use bamboo_rs_core_ed25519_yasmf::{Signature as BambooSignature, YasmfHash};
 use lipmaa_link::is_skip_link;
 use rstest::fixture;
+use varu64::encode as varu64_encode;
 
 use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
-use crate::hash::Hash;
+use crate::hash::{Blake3ArrayVec, Hash};
 use crate::identity::KeyPair;
-use crate::operation::Operation;
+use crate::operation::{Operation, OperationEncoded};
 
 use crate::test_utils::constants::default_fields;
 use crate::test_utils::fixtures::{key_pair, operation, operation_fields, random_hash};
@@ -59,6 +64,32 @@ pub fn entry(
     operation: Option<Operation>,
 ) -> Entry {
     Entry::new(
+        &LogId::new(log_id),
+        operation.as_ref(),
+        skiplink.as_ref(),
+        backlink.as_ref(),
+        &SeqNum::new(seq_num).unwrap(),
+    )
+    .unwrap()
+}
+
+/// Fixture which injects an `Entry` into a test method WITHOUT any validation during construction.
+/// Default values are those of the first entry in log number 1. The default payload is a CREATE
+/// operation containing the default testing fields.
+///
+/// Default values can be overridden at testing time by passing in custom operation, seq number, log_id,
+/// backlink, skiplink and operation. The `#[with()]` tag can be used to partially change default
+/// values.
+#[fixture]
+pub fn entry_unvalidated(
+    #[default(1)] seq_num: u64,
+    #[default(1)] log_id: u64,
+    #[default(None)] backlink: Option<Hash>,
+    #[default(None)] skiplink: Option<Hash>,
+    #[default(Some(operation(Some(operation_fields(default_fields())), None, None)))]
+    operation: Option<Operation>,
+) -> Entry {
+    Entry::new_without_validation(
         &LogId::new(log_id),
         operation.as_ref(),
         skiplink.as_ref(),
@@ -142,6 +173,85 @@ pub fn entry_auto_gen_links(#[default(1)] seq_num: u64, #[default(1)] log_id: u6
 #[fixture]
 pub fn entry_signed_encoded(entry: Entry, key_pair: KeyPair) -> EntrySigned {
     sign_and_encode(&entry, &key_pair).unwrap()
+}
+
+/// Fixture which injects the default testing EntrySigned into a test method WITHOUT any validation
+/// during construction.
+///
+/// Default values can be overridden at testing time by passing in custom entry and
+/// key pair.
+#[fixture]
+pub fn entry_signed_encoded_unvalidated(
+    #[from(entry_unvalidated)] entry: Entry,
+    key_pair: KeyPair,
+) -> String {
+    let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
+
+    let mut next_byte_num = 0;
+
+    // Encode the end of feed.
+    entry_bytes[0] = 0;
+    next_byte_num += 1;
+
+    // Encode the author
+    let author_bytes = key_pair.public_key().as_bytes();
+    entry_bytes[next_byte_num..author_bytes.len() + next_byte_num]
+        .copy_from_slice(&author_bytes[..]);
+    next_byte_num += author_bytes.len();
+
+    // Encode the log_id
+    next_byte_num += varu64_encode(entry.log_id().as_u64(), &mut entry_bytes[next_byte_num..]);
+
+    // Encode the sequence number
+    next_byte_num += varu64_encode(entry.seq_num().as_u64(), &mut entry_bytes[next_byte_num..]);
+
+    // Encode the backlink and lipmaa links if its not the first sequence
+    next_byte_num = match (entry.backlink_hash(), entry.skiplink_hash()) {
+        (Some(backlink), Some(lipmaa_link)) => {
+            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(lipmaa_link.to_owned())
+                .encode(&mut entry_bytes[next_byte_num..])
+                .unwrap();
+            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(backlink.to_owned())
+                .encode(&mut entry_bytes[next_byte_num..])
+                .unwrap();
+            next_byte_num
+        }
+        (Some(backlink), None) => {
+            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(backlink.to_owned())
+                .encode(&mut entry_bytes[next_byte_num..])
+                .unwrap();
+            next_byte_num
+        }
+        _ => next_byte_num,
+    };
+
+    // Encode the operation if it exists.
+    match entry.operation() {
+        Some(operation) => {
+            let operation_encoded = OperationEncoded::try_from(operation).unwrap();
+            // Encode the payload size
+            let operation_size = operation_encoded.size();
+            next_byte_num += varu64_encode(operation_size, &mut entry_bytes[next_byte_num..]);
+
+            // Encode the payload hash
+            let operation_hash = operation_encoded.hash();
+            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(operation_hash)
+                .encode(&mut entry_bytes[next_byte_num..])
+                .unwrap();
+        }
+        None => (),
+    };
+
+    // Attach signature.
+    let signature = key_pair.sign(&entry_bytes[..next_byte_num]);
+    let signature_bytes = signature.to_bytes();
+    let sig = Some(BambooSignature(&signature_bytes[..])).unwrap();
+
+    // Trim bytes.
+    next_byte_num += sig.encode(&mut entry_bytes[next_byte_num..]).unwrap();
+
+    // Return hex encoded entry bytes.
+    hex::encode(&entry_bytes[..next_byte_num])
 }
 
 mod tests {
