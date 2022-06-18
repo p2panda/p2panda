@@ -185,6 +185,27 @@ impl Entry {
     }
 }
 
+#[cfg(any(feature = "testing", test))]
+impl Entry {
+    pub fn new_without_validation(
+        log_id: &LogId,
+        operation: Option<&Operation>,
+        entry_hash_skiplink: Option<&Hash>,
+        entry_hash_backlink: Option<&Hash>,
+        seq_num: &SeqNum,
+    ) -> Result<Self, EntryError> {
+        let entry = Self {
+            log_id: log_id.clone().to_owned(),
+            operation: operation.cloned(),
+            entry_hash_skiplink: entry_hash_skiplink.cloned(),
+            entry_hash_backlink: entry_hash_backlink.cloned(),
+            seq_num: *seq_num,
+        };
+
+        Ok(entry)
+    }
+}
+
 impl Validate for Entry {
     type Error = EntryError;
 
