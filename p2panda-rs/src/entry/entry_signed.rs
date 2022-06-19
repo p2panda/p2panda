@@ -157,6 +157,7 @@ mod tests {
     use std::collections::HashMap;
     use std::convert::TryInto;
 
+    use proptest::prelude::prop;
     use rstest::rstest;
     use rstest_reuse::apply;
 
@@ -356,5 +357,42 @@ mod tests {
         hash_map.insert(&entry_first_encoded, key_value.clone());
         let key_value_retrieved = hash_map.get(&entry_first_encoded).unwrap().to_owned();
         assert_eq!(key_value, key_value_retrieved)
+    }
+
+    proptest! {
+        #[test]
+        fn non_standard_strings_dont_crash(ref s in "\\PC*") {
+            println!("{s}");
+            let result = EntrySigned::new(s);
+
+            assert!(result.is_err())
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn partially_correct_strings_dont_crash(
+            ref author in "[0-9a-f]{64}|[*]{0}",
+            ref log_id in prop::num::u64::ANY,
+            ref seq_num in prop::num::u64::ANY,
+            ref skiplink in "[0-9a-f]{68}|[*]{0}",
+            ref backlink in "[0-9a-f]{68}|[*]{0}",
+            ref payload_size in prop::num::u64::ANY,
+            ref payload_hash in "[0-9a-f]{68}|[*]{0}",
+            ref signature in "[0-9a-f]{68}|[*]{0}"
+        ) {
+            let encoded_entry = "0".to_string()
+                + author
+                + log_id.to_string().as_str()
+                + seq_num.to_string().as_str()
+                + skiplink
+                + backlink
+                + payload_size.to_string().as_str()
+                + payload_hash
+                + signature;
+            let result = EntrySigned::new(&encoded_entry);
+
+            assert!(result.is_err())
+        }
     }
 }
