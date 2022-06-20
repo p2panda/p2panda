@@ -2,8 +2,10 @@
 
 use thiserror::Error;
 
+use crate::schema::SchemaId;
+
 /// Custom errors related to `SchemaId`.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum SchemaIdError {
     /// Handle errors from validating operation id hashes.
     #[error(transparent)]
@@ -27,11 +29,19 @@ pub enum SchemaIdError {
 }
 
 /// Custom errors related to `Schema`.
-#[derive(Error, Debug, Clone, Copy)]
+#[derive(Error, Debug, Clone)]
 pub enum SchemaError {
     /// Invalid fields in schema.
     #[error("invalid fields found for this schema")]
     InvalidFields,
+
+    /// Use static definitions of system schemas instead of defining them dynamically.
+    #[error("dynamic definition of system schema {0}")]
+    DynamicSystemSchema(SchemaId),
+
+    /// Schemas must have valid schema ids.
+    #[error(transparent)]
+    SchemaIdError(#[from] SchemaIdError),
 }
 
 /// Custom error types for field types.
