@@ -292,7 +292,7 @@ mod tests {
 
     #[rstest]
     #[case(vec![("message", FieldType::String)])]
-    // This should error
+    // This should error but requires validation of schema instances.
     #[case(vec![])]
     fn new_schema(
         #[from(document_view_id)] schema_view_id: DocumentViewId,
@@ -313,7 +313,7 @@ mod tests {
             "description",
             vec![("wrong", FieldType::Int)],
         );
-        // This should error
+        // This should
         assert_eq!(
             format!("{}", result.unwrap_err()),
             "dynamic redefinition of system schema schema_definition_v1, use `Schema::get_system` instead"
