@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Display;
+
+use serde::{Deserialize, Serialize};
 
 use crate::cddl::generate_cddl_definition;
 use crate::document::DocumentViewHash;
@@ -18,25 +19,25 @@ type FieldKey = String;
 ///
 /// ## Load application schemas from document views
 ///
-/// In most cases you should construct schema instances from their materialised views to ensure that
-/// your definition aligns with a published version of a schema.
+/// In most cases you should construct schema instances from their materialised views to ensure
+/// that your definition aligns with a published version of a schema.
 ///
 /// Use [`Schema::from_views`] to infer a schema instance from a [`SchemaView`] and all related
-/// [`SchemaFieldView`]s
+/// [`SchemaFieldView`]s.
 ///
 /// ## Access system schemas
 ///
 /// Use [`Schema::get_system`] to access static definitions of all system schemas available in this
 /// version of the p2panda library.
 ///
-/// ## Define a schema without going through document views.
+/// ## Define a schema without going through document views
 ///
-/// Use [`Schema::new`] for testing. This method of constructing a schema doesn't validate that the given
-/// schema id matches the provided schema's published description and field definitions.
+/// Use [`Schema::new`] for testing. This method of constructing a schema doesn't validate that the
+/// given schema id matches the provided schema's published description and field definitions.
 ///
-// Fields on this struct are `pub(super)` to enable making static instances of system schemas
-// from their respective files in the `./system` subdirectory. Making system schema instances is
-// not supported by `Schema::new()` to prevent their dynamic redefinition.
+// @NOTE: Fields on this struct are `pub(super)` to enable making static instances of system
+// schemas from their respective files in the `./system` subdirectory. Making system schema
+// instances is not supported by `Schema::new()` to prevent their dynamic redefinition.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Schema {
     /// The application schema id for this schema.
@@ -100,7 +101,7 @@ impl Schema {
         }
     }
 
-    /// Instantiate a new `Schema` from a `SchemaView` and it's `SchemaFieldView`s
+    /// Instantiate a new `Schema` from a `SchemaView` and it's `SchemaFieldView`s.
     pub fn from_views(
         schema: SchemaView,
         fields: Vec<SchemaFieldView>,
@@ -136,8 +137,8 @@ impl Schema {
 
     /// Return a static `Schema` instance for a system schema.
     ///
-    /// Returns an error if this library version doesn't support the system schema with the
-    /// given version.
+    /// Returns an error if this library version doesn't support the system schema with the given
+    /// version.
     ///
     /// ## Example
     ///

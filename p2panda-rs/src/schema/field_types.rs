@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 use lazy_static::lazy_static;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 
 use crate::operation::OperationValue;
-
-use super::{FieldTypeError, SchemaId};
+use crate::schema::{FieldTypeError, SchemaId};
 
 /// Valid field types for publishing an application schema.
 ///

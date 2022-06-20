@@ -12,5 +12,5 @@ mod schema_views;
 pub use error::SystemSchemaError;
 pub use schema_views::{SchemaFieldView, SchemaView};
 
-pub(super) use self::schema_definition::get_schema_definition;
-pub(super) use self::schema_field_definition::get_schema_field_definition;
+pub(super) use schema_definition::get_schema_definition;
+pub(super) use schema_field_definition::get_schema_field_definition;
