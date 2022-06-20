@@ -80,6 +80,7 @@ Highlights are marked with a pancake 🥞
 - Test `debug` macro calls in Github CI [#288](https://github.com/p2panda/p2panda/pull/288) `rs`
 - Move private module doc strings into public places [#339](https://github.com/p2panda/p2panda/pull/339) `rs`
 - Add `mockall` crate and create mocks for `EntryStore` and `LogStore` [#314](https://github.com/p2panda/p2panda/pull/314) `rs`
+- Generate documentation with TypeDoc for `p2panda-js` [#359](https://github.com/p2panda/p2panda/pull/359) `js`
 
 ## [0.3.0]
 
