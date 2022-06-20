@@ -145,18 +145,6 @@ fn sign_and_encode_roundtrip(#[case] entry: Entry, key_pair: KeyPair) {
         key_pair(DEFAULT_PRIVATE_KEY)
     )
 )]
-// TODO: do we expect this case to fail?
-//
-// #[should_panic(expected = "SOME PANIC MESSAGE")]
-// #[case::skiplink_and_backlink_should_not_be_the_same(entry_signed_encoded_unvalidated(
-//         13,
-//         1,
-//         Some(DEFAULT_HASH.parse().unwrap()),
-//         Some(DEFAULT_HASH.parse().unwrap()),
-//         Some(operation(Some(operation_fields(default_fields())), None, None))
-// ,
-//     key_pair(DEFAULT_PRIVATE_KEY)
-// ))]
 #[should_panic(expected = "DecodePayloadHashError { source: DecodeError }")]
 #[case::payload_hash_and_size_missing(entry_signed_encoded_unvalidated(
     1,

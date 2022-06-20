@@ -4,6 +4,7 @@ use std::convert::{TryFrom, TryInto};
 use std::hash::Hash as StdHash;
 
 use arrayvec::ArrayVec;
+use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use bamboo_rs_core_ed25519_yasmf::signature::ED25519_SIGNATURE_SIZE;
 use bamboo_rs_core_ed25519_yasmf::YasmfHash;
 use ed25519_dalek::ed25519::Signature;
@@ -145,8 +146,14 @@ impl Validate for EntrySigned {
     fn validate(&self) -> Result<(), Self::Error> {
         hex::decode(&self.0).map_err(|_| EntrySignedError::InvalidHexEncoding)?;
         let entry_bytes = self.to_bytes();
-        let _bamboo_entry: bamboo_rs_core_ed25519_yasmf::Entry<&[u8], &[u8]> =
+        let bamboo_entry: bamboo_rs_core_ed25519_yasmf::Entry<&[u8], &[u8]> =
             entry_bytes.as_slice().try_into()?;
+
+        if is_lipmaa_required(bamboo_entry.seq_num)
+            && bamboo_entry.backlink == bamboo_entry.lipmaa_link
+        {
+            return Err(EntrySignedError::SkiplinkBacklinkNotUnique);
+        };
 
         Ok(())
     }
@@ -304,25 +311,36 @@ mod tests {
     )]
     #[case::should_not_include_skiplink(
         entry_signed_encoded_unvalidated(
-                14,
-                1,
-                Some(DEFAULT_HASH.parse().unwrap()),
-                Some(DEFAULT_HASH.parse().unwrap()),
-                Some(operation(Some(operation_fields(default_fields())), None, None))
-,
+            14,
+            1,
+            Some(DEFAULT_HASH.parse().unwrap()),
+            Some(DEFAULT_HASH.parse().unwrap()),
+            Some(operation(Some(operation_fields(default_fields())), None, None)),
             key_pair(DEFAULT_PRIVATE_KEY)
-        ), "Could not decode payload hash DecodeError"
+        ),
+        "Could not decode payload hash DecodeError"
     )]
     #[case::payload_hash_and_size_missing(
         entry_signed_encoded_unvalidated(
-                14,
-                1,
-                Some(random_hash()),
-                Some(DEFAULT_HASH.parse().unwrap()),
-                None
-,
+            14,
+            1,
+            Some(random_hash()),
+            Some(DEFAULT_HASH.parse().unwrap()),
+            None,
             key_pair(DEFAULT_PRIVATE_KEY)
-        ), "Could not decode payload hash DecodeError"
+        ),
+        "Could not decode payload hash DecodeError"
+    )]
+    #[case::skiplink_and_backlink_should_be_unique(
+        entry_signed_encoded_unvalidated(
+            13,
+            1,
+            Some(DEFAULT_HASH.parse().unwrap()),
+            Some(DEFAULT_HASH.parse().unwrap()),
+            Some(operation(Some(operation_fields(default_fields())), None, None)),
+            key_pair(DEFAULT_PRIVATE_KEY)
+        ),
+        "entry requires unique skiplink and backlink hashes"
     )]
     fn correct_errors_on_invalid_entries(
         #[case] entry_signed_encoded_unvalidated: String,
