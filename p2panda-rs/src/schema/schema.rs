@@ -93,7 +93,7 @@ impl Schema {
                 description: description.to_owned(),
                 fields: field_map,
             };
-            // schema.validate?;
+            // TODO: Implement `Validate` for `Schema` and call it here
             Ok(schema)
         } else {
             Err(SchemaError::DynamicSystemSchema(id.clone()))
