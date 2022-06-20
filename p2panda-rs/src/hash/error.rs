@@ -3,7 +3,7 @@
 use thiserror::Error;
 
 /// Custom error types for `Hash`.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 #[allow(missing_copy_implementations)]
 pub enum HashError {
     /// Hash string has an invalid length.

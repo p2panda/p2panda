@@ -7,7 +7,7 @@ use crate::operation::OperationId;
 
 /// Error types for methods of `DocumentBuilder` struct.
 #[allow(missing_copy_implementations)]
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum DocumentBuilderError {
     /// No create operation found.
     #[error("Every document must contain one create operation")]
@@ -40,7 +40,7 @@ pub enum DocumentBuilderError {
 
 /// Error types for methods of `Document` struct.
 #[allow(missing_copy_implementations)]
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum DocumentError {
     /// Handle errors when sorting the graph.
     #[error(transparent)]
@@ -53,7 +53,7 @@ pub enum DocumentError {
 
 /// Custom error types for `DocumentView`.
 #[allow(missing_copy_implementations)]
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum DocumentViewError {
     /// TryFrom operation must be CREATE.
     #[error("Operation must be instantiated from a CREATE operation")]
@@ -66,7 +66,7 @@ pub enum DocumentViewError {
 
 /// Error types for `DocumentViewId`
 #[allow(missing_copy_implementations)]
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum DocumentViewIdError {
     /// Document view ids must contain sorted operation ids
     #[error("Expected sorted operation ids in document view id")]
