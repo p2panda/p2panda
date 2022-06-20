@@ -14,12 +14,31 @@ use crate::schema::{FieldType, SchemaError, SchemaId, SchemaIdError, SchemaVersi
 /// The key of a schema field
 type FieldKey = String;
 
-/// A struct representing a materialised schema.
+/// A struct representing a p2panda schema.
 ///
-///Use `Schema::from_views()` to infer it from a [`SchemaView`] and all related
-/// [`SchemaFieldView`]s or use `Schema::new()` to directly construct an application schema instance.
+/// ## Load a schema from document views
 ///
-/// Use `Schema::get_system()` to access static definitions of all system schemas.
+/// In most cases you should construct schema instances from their materialised views to ensure that
+/// your definition aligns with a published version of a schema.
+///
+/// Use [`Schema::from_views`] to infer a schema instance from a [`SchemaView`] and all related
+/// [`SchemaFieldView`]s
+///
+// TODO: Add example
+///
+/// ## Define a schema without going through document views.
+///
+/// Use [`Schema::new`] for testing. This method of constructing a schema doesn't validate that the given
+/// schema id matches the provided schema's published description and field definitions.
+///
+/// ## Access system schemas
+///
+/// Use [`Schema::get_system`] to access static definitions of all system schemas available in this
+/// version of the p2panda library.
+///
+// Fields on this struct are `pub(super)` to enable making static instances of system schemas
+// from their respective files in the `./system` subdirectory. Making system schema instances is
+// not supported by `Schema::new()` to prevent their dynamic redefinition.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Schema {
     /// The application schema id for this schema.
@@ -34,6 +53,33 @@ pub struct Schema {
 
 impl Schema {
     /// Create an application schema instance with the given id, description and fields.
+    ///
+    /// Use [`Schema::get_system`] to access static system schema instances.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # #[cfg(test)]
+    /// # mod doc_test {
+    /// # extern crate p2panda_rs;
+    /// # use p2panda_rs::document::DocumentViewId;
+    /// # use p2panda_rs::test_utils::fixtures::{document_view_id};
+    /// #
+    /// # #[rstest]
+    /// # fn main(#[from(document_view_id)] schema_document_view_id: DocumentViewId) {
+    /// let schema = Schema::new(
+    ///     SchemaId::Application("cucumber", schema_document_view_id),
+    ///     "A variety in the cucumber society's database.",
+    ///     vec![
+    ///         ("name", FieldType::String),
+    ///         ("grow_cycle_days", FieldType::Int),
+    ///         ("flavor_rating", FieldType::Int),
+    ///     ]
+    /// );
+    /// assert!(schema.is_ok());
+    /// # }
+    /// # }
+    /// ```
     pub fn new(
         id: &SchemaId,
         description: &str,
@@ -90,10 +136,21 @@ impl Schema {
         })
     }
 
-    /// Return the schema struct for a system schema id.
+    /// Return a static `Schema` instance for a system schema.
     ///
-    /// Returns an error if this library version doesn't support the given system schema or this
-    /// particular version.
+    /// Returns an error if this library version doesn't support the system schema with the
+    /// given version.
+    ///
+    /// ## Example
+    ///
+    /// Get a `Schema` instance for version 1 of the _schema definition_ schema:
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # use p2panda_rs::schema::{Schema, SchemaId};
+    /// let schema_definition = Schema::get_system(SchemaId::SchemaDefinition(1));
+    /// assert!(schema_definition.is_ok());
+    /// ```
     pub fn get_system(schema_id: SchemaId) -> Result<&'static Schema, SchemaIdError> {
         match schema_id {
             SchemaId::SchemaDefinition(version) => get_schema_definition(version),
