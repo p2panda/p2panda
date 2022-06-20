@@ -92,7 +92,7 @@ impl Schema {
     ///
     /// Returns an error if this library version doesn't support the given system schema or this
     /// particular version.
-    pub fn get_system(schema_id: SchemaId) -> Result<Schema, SchemaIdError> {
+    pub fn get_system(schema_id: SchemaId) -> Result<&'static Schema, SchemaIdError> {
         match schema_id {
             SchemaId::SchemaDefinition(version) => get_schema_definition(version),
             SchemaId::SchemaFieldDefinition(version) => get_schema_field_definition(version),
