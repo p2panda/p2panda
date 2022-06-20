@@ -16,7 +16,7 @@ type FieldKey = String;
 
 /// A struct representing a p2panda schema.
 ///
-/// ## Load a schema from document views
+/// ## Load application schemas from document views
 ///
 /// In most cases you should construct schema instances from their materialised views to ensure that
 /// your definition aligns with a published version of a schema.
@@ -24,17 +24,15 @@ type FieldKey = String;
 /// Use [`Schema::from_views`] to infer a schema instance from a [`SchemaView`] and all related
 /// [`SchemaFieldView`]s
 ///
-// TODO: Add example
+/// ## Access system schemas
+///
+/// Use [`Schema::get_system`] to access static definitions of all system schemas available in this
+/// version of the p2panda library.
 ///
 /// ## Define a schema without going through document views.
 ///
 /// Use [`Schema::new`] for testing. This method of constructing a schema doesn't validate that the given
 /// schema id matches the provided schema's published description and field definitions.
-///
-/// ## Access system schemas
-///
-/// Use [`Schema::get_system`] to access static definitions of all system schemas available in this
-/// version of the p2panda library.
 ///
 // Fields on this struct are `pub(super)` to enable making static instances of system schemas
 // from their respective files in the `./system` subdirectory. Making system schema instances is
