@@ -36,7 +36,7 @@ pub enum SchemaError {
     InvalidFields,
 
     /// Use static definitions of system schemas instead of defining them dynamically.
-    #[error("dynamic definition of system schema {0}")]
+    #[error("dynamic redefinition of system schema {0}, use `Schema::get_system` instead")]
     DynamicSystemSchema(SchemaId),
 
     /// Schemas must have valid schema ids.

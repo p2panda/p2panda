@@ -318,7 +318,7 @@ mod tests {
         // This should error
         assert_eq!(
             format!("{}", result.unwrap_err()),
-            "dynamic definition of system schema schema_definition_v1"
+            "dynamic redefinition of system schema schema_definition_v1, use `Schema::get_system` instead"
         );
     }
 

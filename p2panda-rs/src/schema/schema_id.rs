@@ -292,7 +292,7 @@ mod test {
     // this looks like a system schema, but it is not
     #[case(
         "unknown_system_schema_name_v1",
-        "not a known system schema: unknown_system_schema_name"
+        "unsupported system schema: unknown_system_schema_name"
     )]
     // malformed system schema version number
     #[case(
