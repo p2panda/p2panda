@@ -338,6 +338,21 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_unsupported_system_schema() {
+        let result = Schema::get_system(SchemaId::SchemaDefinition(0));
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "unsupported system schema: schema_definition_v0"
+        );
+
+        let result = Schema::get_system(SchemaId::SchemaFieldDefinition(0));
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "unsupported system schema: schema_field_definition_v0"
+        );
+    }
+
     #[rstest]
     fn test_error_application_schema(document_view_id: DocumentViewId) {
         let schema = Schema::get_system(SchemaId::Application(

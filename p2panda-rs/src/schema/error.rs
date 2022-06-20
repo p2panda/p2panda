@@ -24,7 +24,7 @@ pub enum SchemaIdError {
     MissingApplicationSchemaName(String),
 
     /// Invalid system schema id.
-    #[error("not a known system schema: {0}")]
+    #[error("unsupported system schema: {0}")]
     UnknownSystemSchema(String),
 }
 
