@@ -16,22 +16,24 @@ type FieldKey = String;
 
 /// A struct representing a materialised schema.
 ///
-///Use `Schema::from_views()` to construct it from a [`SchemaView`] and all related
-/// [`SchemaFieldView`]s.
+///Use `Schema::from_views()` to infer it from a [`SchemaView`] and all related
+/// [`SchemaFieldView`]s or use `Schema::new()` to directly construct an application schema instance.
+///
+/// Use `Schema::get_system()` to access static definitions of all system schemas.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Schema {
     /// The application schema id for this schema.
-    pub id: SchemaId,
+    pub(super) id: SchemaId,
 
     /// Describes the schema's intended use.
-    pub description: String,
+    pub(super) description: String,
 
     /// Maps all of the schema's field names to their respective types.
-    pub fields: BTreeMap<FieldKey, FieldType>,
+    pub(super) fields: BTreeMap<FieldKey, FieldType>,
 }
 
 impl Schema {
-    /// Create a schema instance with the given id, description and fields.
+    /// Create an application schema instance with the given id, description and fields.
     pub fn new(
         id: &SchemaId,
         description: &str,
