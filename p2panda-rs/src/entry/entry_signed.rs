@@ -366,7 +366,6 @@ mod tests {
     proptest! {
         #[test]
         fn non_standard_strings_dont_crash(ref s in "\\PC*") {
-            println!("{s}");
             let result = EntrySigned::new(s);
 
             assert!(result.is_err())
