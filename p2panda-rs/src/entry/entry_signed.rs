@@ -233,7 +233,6 @@ mod tests {
         Some(operation(Some(operation_fields(default_fields())), None, None)),
         key_pair(DEFAULT_PRIVATE_KEY)
     ))]
-
     fn validate(#[case] entry_signed_encoded_unvalidated: String) {
         assert!(EntrySigned::new(&entry_signed_encoded_unvalidated).is_ok());
     }
