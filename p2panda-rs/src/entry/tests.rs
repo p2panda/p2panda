@@ -85,20 +85,6 @@ fn sign_and_encode_roundtrip(#[case] entry: Entry, key_pair: KeyPair) {
     Some(operation(Some(operation_fields(default_fields())), None, None)),
     key_pair(DEFAULT_PRIVATE_KEY)
 ))]
-// TODO: This doesn't error...
-//
-// #[should_panic(expected = "DecodePayloadHashError { source: DecodeError }")]
-// #[case::log_id_zero(
-//     entry_signed_encoded_unvalidated(
-//         1,
-//         0,
-//         None,
-//         None,
-//         Some(operation(Some(operation_fields(default_fields())), None, None)),
-//         key_pair(DEFAULT_PRIVATE_KEY)
-//     ),
-//     "Log id must be larger than 0 but was 0"
-// )]
 #[should_panic(expected = "DecodePayloadHashError { source: DecodeError }")]
 #[case::should_not_have_skiplink(entry_signed_encoded_unvalidated(
     1,
