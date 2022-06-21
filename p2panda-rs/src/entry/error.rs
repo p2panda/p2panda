@@ -40,8 +40,8 @@ pub enum EntrySignedError {
     SkiplinkMissing,
 
     /// Backlink and skiplink hashes should be different.
-    #[error("entry requires unique skiplink and backlink hashes")]
-    SkiplinkBacklinkNotUnique,
+    #[error("backlink and skiplink are identical")]
+    BacklinkAndSkiplinkIdentical,
 
     /// Handle errors from `SeqNum` struct.
     #[error(transparent)]

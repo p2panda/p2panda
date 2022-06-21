@@ -152,7 +152,7 @@ impl Validate for EntrySigned {
         if is_lipmaa_required(bamboo_entry.seq_num)
             && bamboo_entry.backlink == bamboo_entry.lipmaa_link
         {
-            return Err(EntrySignedError::SkiplinkBacklinkNotUnique);
+            return Err(EntrySignedError::BacklinkAndSkiplinkIdentical);
         };
 
         Ok(())
@@ -339,7 +339,7 @@ mod tests {
             Some(operation(Some(operation_fields(default_fields())), None, None)),
             key_pair(DEFAULT_PRIVATE_KEY)
         ),
-        "entry requires unique skiplink and backlink hashes"
+        "backlink and skiplink are identical"
     )]
     fn correct_errors_on_invalid_entries(
         #[case] entry_signed_encoded_unvalidated: String,
