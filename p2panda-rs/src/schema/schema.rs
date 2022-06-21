@@ -32,8 +32,9 @@ type FieldKey = String;
 ///
 /// ## Define a schema without going through document views
 ///
-/// Use [`Schema::new`] for testing. This method of constructing a schema doesn't validate that the
-/// given schema id matches the provided schema's published description and field definitions.
+/// [`Schema::new`] is only available for testing. This method of constructing a schema doesn't
+/// validate that the given schema id matches the provided schema's published description and field
+/// definitions.
 ///
 // @NOTE: Fields on this struct are `pub(super)` to enable making static instances of system
 // schemas from their respective files in the `./system` subdirectory. Making system schema
@@ -79,6 +80,7 @@ impl Schema {
     /// # }
     /// # }
     /// ```
+    #[cfg(any(feature = "testing", test))]
     pub fn new(
         id: &SchemaId,
         description: &str,
