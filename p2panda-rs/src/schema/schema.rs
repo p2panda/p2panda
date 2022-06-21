@@ -314,7 +314,6 @@ mod tests {
             "description",
             vec![("wrong", FieldType::Int)],
         );
-        // This should
         assert_eq!(
             format!("{}", result.unwrap_err()),
             "dynamic redefinition of system schema schema_definition_v1, use `Schema::get_system` instead"
