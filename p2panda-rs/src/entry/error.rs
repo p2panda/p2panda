@@ -39,6 +39,10 @@ pub enum EntrySignedError {
     #[error("entry requires skiplink for encoding")]
     SkiplinkMissing,
 
+    /// Backlink and skiplink hashes should be different.
+    #[error("backlink and skiplink are identical")]
+    BacklinkAndSkiplinkIdentical,
+
     /// Handle errors from `SeqNum` struct.
     #[error(transparent)]
     SeqNumError(#[from] SeqNumError),
