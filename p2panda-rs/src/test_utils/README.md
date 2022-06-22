@@ -6,14 +6,15 @@
 
 <br />
 
-`test_utils` provides tools for [p2panda](https://github.com/p2panda/p2panda) which can be used for testing in Rust and the generation of test data.
+`test_utils` provides tools for [p2panda](https://github.com/p2panda/p2panda) which can be used for testing in Rust.
 
 ## Parameter Fixtures
 
 These fixtures can be injected into tests via there parameters. They can be customised using the `#[case]` marco otherwise default values will be used.
+
 A simple example is shown below, see module level [docs](https://github.com/p2panda/p2panda/blob/main/p2panda-rs/src/test_utils/fixtures/mod.rs) for more examples.
 
-```rs
+```rust
 use rstest::rstest;
 use crate::entry::Entry;
 use crate::identity::KeyPair;
@@ -25,15 +26,13 @@ use crate::test_utils::fixtures::{entry, key_pair};
 fn encode_entry(entry: Entry, key_pair: KeyPair) {
   assert!(sign_and_encode(&entry, &key_pair).is_ok());
 }
-
-
 ```
 
 ## Fixture templates
 
 These can be used to apply a collection of different parameter fixtures to a single test.
 
-```rs
+```rust
 use rstest::rstest;
 use crate::entry::Entry;
 use crate::identity::KeyPair;
@@ -49,13 +48,12 @@ fn encode_multiple_entries(#[case] entry: Entry, key_pair: KeyPair) {
 
 ## Mock Node & Client
 
-The two structs `Node` and `Client` can be used to simulate networking traffic with multiple authors that would exist in a live p2panda network. These
-are to be used in testing when needing to generate common p2panda data which relies on communication between these different parts.
+The two structs `Node` and `Client` can be used to simulate networking traffic with multiple authors that would exist in a live p2panda network. These are to be used in testing when needing to generate common p2panda data which relies on communication between these different parts.
 
-```rs
+```rust
 // IMPORTS MISSING FOR BREVITY //
-// We are using many tools from the `test_utils` in this example, please see module level docs for more thorough
-// examples.
+// We are using many tools from the `test_utils` in this example, please see
+// module level docs for more thorough examples.
 
 let panda = Client::new("panda".to_string(), keypair_from_private(private_key));
 let penguin = Client::new("penguin".to_string(), KeyPair::new());
@@ -73,14 +71,15 @@ let (panda_entry_1_hash, next_entry_args) = send_to_node(
         Some(operation_fields(vec![(
             "cafe_name",
             OperationValue::Text("Panda Cafe".to_string()),
-        )])), 
-        None, 
+        )])),
+        None,
         None
     )
 ).unwrap();
 
-// Panda publishes an update operation. This appends a new entry to the document log, the operation also refers to the previous
-// tip of the graph by it's operation id.
+// Panda publishes an update operation. This appends a new entry to the
+// document log, the operation also refers to the previous tip of the graph by
+// it's operation id.
 //
 // PANDA  : [1] <--[2]
 // PENGUIN:
@@ -91,15 +90,16 @@ let (panda_entry_2_hash, next_entry_args) = send_to_node(
         Some(operation_fields(vec![(
             "cafe_name",
             OperationValue::Text("Panda Cafe!!".to_string()),
-        )])), 
-        Some(panda_entry_1_hash.clone().into()), 
+        )])),
+        Some(panda_entry_1_hash.clone().into()),
         None
     )
 ).unwrap();
 
-// Now Penguin publishes an update operation which refers to Panda's document (via it's tip operation). In doing this
-// Penguin creates their own document log which now contains one entry, the operation on this entry refers to Panda's document
-// log tip.
+// Now Penguin publishes an update operation which refers to Panda's document
+// (via it's tip operation). In doing this Penguin creates their own document log
+// which now contains one entry, the operation on this entry refers to Panda's
+// document log tip.
 //
 // PANDA  : [1] <--[2]
 // PENGUIN:           \--[1]
@@ -110,8 +110,8 @@ let (penguin_entry_1_hash, next_entry_args) = send_to_node(
         Some(operation_fields(vec![(
             "cafe_name",
             OperationValue::Text("Panda Cafe!!".to_string()),
-        )])), 
-        Some(panda_entry_2_hash.clone().into()), 
+        )])),
+        Some(panda_entry_2_hash.clone().into()),
         None
     )
 )
@@ -129,91 +129,3 @@ RUST_LOG=p2panda_rs=info cargo test
 # Run tests with info and debug logging
 RUST_LOG=p2panda_rs=debug cargo test
 ```
-
-## Test data
-
-### Generate
-
-```bash
-# Generate JSON formatted test data
-cargo run --bin cbor-test-data
-```
-
-### Format
-
-Test data is generated as CBOR encoded as a hex string. Below is a summary of the data in JSON format (to see actual output, run command mentioned above).
-
-```js
-{
-  // Arbitrary name for identifying author in tests
-  "panda": {
-    "publicKey": "...",
-    "privateKey": "...",
-    "logs": [
-      {
-        "encodedEntries": [
-          {
-            "author": "...",
-            "entryBytes": "...",
-            "entryHash": "...",
-            "payloadBytes": "...",
-            "payloadHash": "...",
-            "logId": 1,
-            "seqNum": 1
-          },
-          //...
-          {
-            "author": "...",
-            //...
-            "seqNum": 4
-          }
-        ],
-        "decodedOperations": [
-          {
-            "action": "create",
-            "schema": "...",
-            "version": 1,
-            "fields": {
-              "message": {
-                "type": "str",
-                "value": "..."
-              }
-            }
-          },
-          {
-            "action": "update",
-            //...
-          },
-          {
-            "action": "update",
-            //...
-          },
-          {
-            "action": "delete",
-            //...
-          }
-        ],
-        "nextEntryArgs": [
-          {
-            "entryHashBacklink": null,
-            "entryHashSkiplink": null,
-            "seqNum": 1,
-            "logId": 1
-          },
-          //...
-          {
-            "entryHashBacklink": "...",
-            "entryHashSkiplink": null,
-            "seqNum": 5,
-            "logId": 1
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-### Usage in `p2panda-js`
-
-The generated test data is used to validate JSON RPC requests in `p2panda-js`. See `generate_test_data.rs` to find out how the test data is formed.
