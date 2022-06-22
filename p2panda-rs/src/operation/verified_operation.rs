@@ -27,12 +27,14 @@ pub struct VerifiedOperation {
     operation: Operation,
 }
 
-impl VerifiedOperation {
+impl AsVerifiedOperation for VerifiedOperation {
+    type VerifiedOperationError = VerifiedOperationError;
+
     /// Returns a new `VerifiedOperation` instance.
     ///
     /// Use `VerifiedOperation::new_from_entry()` instead if you want to validate that the operation
     /// was signed by this public key.
-    pub fn new(
+    fn new(
         public_key: &Author,
         operation_id: &OperationId,
         operation: &Operation,
@@ -49,15 +51,17 @@ impl VerifiedOperation {
     }
 
     /// Returns a new `VerifiedOperation` instance constructed from an `EntrySigned`
-    /// and an `OperationEncoded`. This constructor validates that the passed operation matches the
-    /// one oncoded in the passed signed entry.
-    pub fn new_from_entry(
+    /// and an `OperationEncoded`.
+    ///
+    /// This constructor verifies that the passed operation matches the one encoded
+    /// in the passed signed entry.
+    fn new_from_entry(
         entry_encoded: &EntrySigned,
         operation_encoded: &OperationEncoded,
     ) -> Result<Self, VerifiedOperationError> {
         let operation = Operation::from(operation_encoded);
 
-        // This validates that the entry and operation are correctly matching.
+        // This verifies that the entry and operation are correctly matching.
         decode_entry(entry_encoded, Some(operation_encoded))?;
 
         let verified_operation = Self {
@@ -70,9 +74,6 @@ impl VerifiedOperation {
 
         Ok(verified_operation)
     }
-}
-
-impl AsVerifiedOperation for VerifiedOperation {
     /// Returns the identifier for this operation.
     fn operation_id(&self) -> &OperationId {
         &self.operation_id
