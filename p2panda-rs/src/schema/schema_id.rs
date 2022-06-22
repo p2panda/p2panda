@@ -31,7 +31,7 @@ pub enum SchemaVersion {
 /// [`Document`][`crate::document::Document`].
 ///
 /// Every schema id has a name and version.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum SchemaId {
     /// An application schema.
     Application(String, DocumentViewId),
@@ -62,7 +62,10 @@ impl SchemaId {
         let rightmost_section = id
             .rsplit_once('_')
             .ok_or_else(|| {
-                SchemaIdError::MalformedSchemaId("doesn't contain an underscore".to_string())
+                SchemaIdError::MalformedSchemaId(
+                    id.to_string(),
+                    "doesn't contain an underscore".to_string(),
+                )
             })?
             .1;
         let is_system_schema =
@@ -82,10 +85,10 @@ impl SchemaId {
     fn parse_system_schema_str(id_str: &str) -> Result<Self, SchemaIdError> {
         let (name, version_str) = id_str.rsplit_once('_').unwrap();
         let version = version_str[1..].parse::<u8>().map_err(|_| {
-            SchemaIdError::MalformedSchemaId(format!(
-                "couldn't parse system schema version from '{}'",
-                id_str
-            ))
+            SchemaIdError::MalformedSchemaId(
+                id_str.to_string(),
+                "couldn't parse system schema version".to_string(),
+            )
         })?;
         match name {
             SCHEMA_DEFINITION_NAME => Ok(Self::SchemaDefinition(version)),
@@ -260,12 +263,12 @@ mod test {
     #[rstest]
     #[case(
         "This is not a hash",
-        "malformed schema id: doesn't contain an underscore"
+        "malformed schema id `This is not a hash`: doesn't contain an underscore"
     )]
     // Only an operation id, could be interpreted as document view id but still missing the name
     #[case(
         "0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
-        "malformed schema id: doesn't contain an underscore"
+        "malformed schema id `0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b`: doesn't contain an underscore"
     )]
     // Only the name is missing now
     #[case(
@@ -289,12 +292,12 @@ mod test {
     // this looks like a system schema, but it is not
     #[case(
         "unknown_system_schema_name_v1",
-        "not a known system schema: unknown_system_schema_name"
+        "unsupported system schema: unknown_system_schema_name"
     )]
     // malformed system schema version number
     #[case(
         "schema_definition_v1.5",
-        "malformed schema id: couldn't parse system schema version from 'schema_definition_v1.5'"
+        "malformed schema id `schema_definition_v1.5`: couldn't parse system schema version"
     )]
     fn invalid_deserialization(#[case] schema_id_str: &str, #[case] expected_err: &str) {
         assert_eq!(
