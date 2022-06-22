@@ -33,7 +33,7 @@ Highlights are marked with a pancake 🥞
 - `Graph` method for selecting sub-section of graph [#335](https://github.com/p2panda/p2panda/pull/335) `rs`
 - Storage traits for documents [#343](https://github.com/p2panda/p2panda/pull/343) `rs`
 - Materialise a document at a specific document view [#337](https://github.com/p2panda/p2panda/pull/337) `rs`
-- Static definitions of system schemas and other updates for schema provider in aquadoggo [#365](https://github.com/p2panda/p2panda/pull/365)
+- Static definitions of system schemas and other updates for schema provider in aquadoggo [#365](https://github.com/p2panda/p2panda/pull/365) `rs`
 
 ## Changed
 

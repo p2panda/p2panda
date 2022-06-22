@@ -4,7 +4,6 @@
 //!
 //! They are defined as part of the p2panda specification and may differ from application schemas
 //! in how they are materialised.
-
 use lazy_static::lazy_static;
 
 use crate::schema::Schema;

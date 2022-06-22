@@ -90,13 +90,16 @@ impl Schema {
         for (field_name, field_type) in fields {
             field_map.insert(field_name.to_owned(), field_type.to_owned());
         }
+
         if let SchemaId::Application(_, _) = id {
             let schema = Self {
                 id: id.to_owned(),
                 description: description.to_owned(),
                 fields: field_map,
             };
-            // TODO: Implement `Validate` for `Schema` and call it here
+
+            // @TODO: Implement `Validate` for `Schema` and call it here
+
             Ok(schema)
         } else {
             Err(SchemaError::DynamicSystemSchema(id.clone()))
@@ -295,7 +298,7 @@ mod tests {
 
     #[rstest]
     #[case(vec![("message", FieldType::String)])]
-    // This should error but requires validation of schema instances.
+    // @TODO: This should error but requires validation of schema instances.
     #[case(vec![])]
     fn new_schema(
         #[from(document_view_id)] schema_view_id: DocumentViewId,
