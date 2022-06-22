@@ -20,8 +20,9 @@ use crate::entry::Entry;
 use crate::identity::KeyPair;
 use crate::test_utils::fixtures::{entry, key_pair};
 
-// In this test `entry` and `key_pair` are injected directly into the test, they were imported from
-// the fixtures module above and their default values will be used.
+// In this test `entry` and `key_pair` are injected directly into the test,
+// they were imported from the fixtures module above and their default values
+// will be used.
 #[cfg(test)]
 fn encode_entry(entry: Entry, key_pair: KeyPair) {
   assert!(sign_and_encode(&entry, &key_pair).is_ok());
@@ -38,8 +39,9 @@ use crate::entry::Entry;
 use crate::identity::KeyPair;
 use crate::test_utils::fixtures::{entry, key_pair};
 use crate::test_utils::fixtures::templates::many_valid_entries;
-// This test is similar to the first, but now using a template we can test against many different
-// valid entries.
+
+// This test is similar to the first, but now using a template we can test
+// against many different valid entries.
 #[apply(many_valid_entries)]
 fn encode_multiple_entries(#[case] entry: Entry, key_pair: KeyPair) {
     assert!(sign_and_encode(&entry, &key_pair).is_ok());
