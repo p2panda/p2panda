@@ -54,6 +54,7 @@ The two structs `Node` and `Client` can be used to simulate networking traffic w
 
 ```rust
 // IMPORTS MISSING FOR BREVITY //
+//
 // We are using many tools from the `test_utils` in this example, please see
 // module level docs for more thorough examples.
 
@@ -62,7 +63,8 @@ let penguin = Client::new("penguin".to_string(), KeyPair::new());
 
 let mut node = Node::new();
 
-// Panda publishes a create operation. In doing so they create a document log which contains one entry.
+// Panda publishes a create operation. In doing so they create a document log
+// which contains one entry.
 //
 // PANDA  : [1]
 // PENGUIN:
