@@ -11,6 +11,7 @@ use crate::entry::{decode_entry, sign_and_encode, Entry, LogId, SeqNum};
 use crate::identity::KeyPair;
 use crate::operation::{AsOperation, Operation, OperationEncoded};
 use crate::test_utils::fixtures::{key_pair, Fixture};
+
 use crate::test_utils::templates::{many_valid_entries, version_fixtures};
 
 /// Test encoding and decoding entries.

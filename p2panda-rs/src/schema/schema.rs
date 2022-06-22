@@ -3,33 +3,114 @@
 use std::collections::BTreeMap;
 use std::fmt::Display;
 
+use serde::{Deserialize, Serialize};
+
 use crate::cddl::generate_cddl_definition;
 use crate::document::DocumentViewHash;
-use crate::schema::system::{SchemaFieldView, SchemaView};
-use crate::schema::{FieldType, SchemaError, SchemaId, SchemaVersion};
+use crate::schema::system::{
+    get_schema_definition, get_schema_field_definition, SchemaFieldView, SchemaView,
+};
+use crate::schema::{FieldType, SchemaError, SchemaId, SchemaIdError, SchemaVersion};
 
 /// The key of a schema field
 type FieldKey = String;
 
-/// A struct representing a materialised schema.
+/// A struct representing a p2panda schema.
 ///
-/// It is constructed from a [`SchemaView`] and all related [`SchemaFieldView`]s.
-#[derive(Clone, Debug, PartialEq)]
+/// ## Load application schemas from document views
+///
+/// In most cases you should construct schema instances from their materialised views to ensure
+/// that your definition aligns with a published version of a schema.
+///
+/// Use [`Schema::from_views`] to infer a schema instance from a [`SchemaView`] and all related
+/// [`SchemaFieldView`]s.
+///
+/// ## Access system schemas
+///
+/// Use [`Schema::get_system`] to access static definitions of all system schemas available in this
+/// version of the p2panda library.
+///
+/// ## Define a schema without going through document views
+///
+/// [`Schema::new`] is only available for testing. This method of constructing a schema doesn't
+/// validate that the given schema id matches the provided schema's published description and field
+/// definitions.
+///
+// @NOTE: Fields on this struct are `pub(super)` to enable making static instances of system
+// schemas from their respective files in the `./system` subdirectory. Making system schema
+// instances is not supported by `Schema::new()` to prevent their dynamic redefinition.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Schema {
     /// The application schema id for this schema.
-    id: SchemaId,
+    pub(super) id: SchemaId,
 
     /// Describes the schema's intended use.
-    description: String,
+    pub(super) description: String,
 
     /// Maps all of the schema's field names to their respective types.
-    fields: BTreeMap<FieldKey, FieldType>,
+    pub(super) fields: BTreeMap<FieldKey, FieldType>,
 }
 
 impl Schema {
-    /// Instantiate a new `Schema` from a `SchemaView` and it's `SchemaFieldView`s
-    #[allow(unused)]
-    pub fn new(schema: SchemaView, fields: Vec<SchemaFieldView>) -> Result<Schema, SchemaError> {
+    /// Create an application schema instance with the given id, description and fields.
+    ///
+    /// Use [`Schema::get_system`] to access static system schema instances.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # #[cfg(test)]
+    /// # mod doc_test {
+    /// # extern crate p2panda_rs;
+    /// # use p2panda_rs::document::DocumentViewId;
+    /// # use p2panda_rs::test_utils::fixtures::{document_view_id};
+    /// #
+    /// # #[rstest]
+    /// # fn main(#[from(document_view_id)] schema_document_view_id: DocumentViewId) {
+    /// let schema = Schema::new(
+    ///     SchemaId::Application("cucumber", schema_document_view_id),
+    ///     "A variety in the cucumber society's database.",
+    ///     vec![
+    ///         ("name", FieldType::String),
+    ///         ("grow_cycle_days", FieldType::Int),
+    ///         ("flavor_rating", FieldType::Int),
+    ///     ]
+    /// );
+    /// assert!(schema.is_ok());
+    /// # }
+    /// # }
+    /// ```
+    #[cfg(any(feature = "testing", test))]
+    pub fn new(
+        id: &SchemaId,
+        description: &str,
+        fields: Vec<(&str, FieldType)>,
+    ) -> Result<Self, SchemaError> {
+        let mut field_map: BTreeMap<String, FieldType> = BTreeMap::new();
+        for (field_name, field_type) in fields {
+            field_map.insert(field_name.to_owned(), field_type.to_owned());
+        }
+
+        if let SchemaId::Application(_, _) = id {
+            let schema = Self {
+                id: id.to_owned(),
+                description: description.to_owned(),
+                fields: field_map,
+            };
+
+            // @TODO: Implement `Validate` for `Schema` and call it here
+
+            Ok(schema)
+        } else {
+            Err(SchemaError::DynamicSystemSchema(id.clone()))
+        }
+    }
+
+    /// Instantiate a new `Schema` from a `SchemaView` and it's `SchemaFieldView`s.
+    pub fn from_views(
+        schema: SchemaView,
+        fields: Vec<SchemaFieldView>,
+    ) -> Result<Schema, SchemaError> {
         // Validate that the passed `SchemaFields` are the correct ones for this `Schema`.
         for schema_field in schema.fields().iter() {
             match fields
@@ -57,6 +138,29 @@ impl Schema {
             description: schema.description().to_owned(),
             fields: fields_map,
         })
+    }
+
+    /// Return a static `Schema` instance for a system schema.
+    ///
+    /// Returns an error if this library version doesn't support the system schema with the given
+    /// version.
+    ///
+    /// ## Example
+    ///
+    /// Get a `Schema` instance for version 1 of the _schema definition_ schema:
+    ///
+    /// ```
+    /// # extern crate p2panda_rs;
+    /// # use p2panda_rs::schema::{Schema, SchemaId};
+    /// let schema_definition = Schema::get_system(SchemaId::SchemaDefinition(1));
+    /// assert!(schema_definition.is_ok());
+    /// ```
+    pub fn get_system(schema_id: SchemaId) -> Result<&'static Schema, SchemaIdError> {
+        match schema_id {
+            SchemaId::SchemaDefinition(version) => get_schema_definition(version),
+            SchemaId::SchemaFieldDefinition(version) => get_schema_field_definition(version),
+            _ => Err(SchemaIdError::UnknownSystemSchema(schema_id.as_str())),
+        }
     }
 
     /// Return a definition for this schema expressed as a CDDL string.
@@ -193,6 +297,75 @@ mod tests {
     }
 
     #[rstest]
+    #[case(vec![("message", FieldType::String)])]
+    // @TODO: This should error but requires validation of schema instances.
+    #[case(vec![])]
+    fn new_schema(
+        #[from(document_view_id)] schema_view_id: DocumentViewId,
+        #[case] fields: Vec<(&str, FieldType)>,
+    ) {
+        let result = Schema::new(
+            &SchemaId::Application("venue".to_owned(), schema_view_id),
+            "description",
+            fields,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[rstest]
+    fn no_redefinition_of_system_schemas() {
+        let result = Schema::new(
+            &SchemaId::SchemaDefinition(1),
+            "description",
+            vec![("wrong", FieldType::Int)],
+        );
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "dynamic redefinition of system schema schema_definition_v1, use `Schema::get_system` instead"
+        );
+    }
+
+    #[test]
+    fn test_all_system_schemas() {
+        let schema_definition = Schema::get_system(SchemaId::SchemaDefinition(1)).unwrap();
+        assert_eq!(
+            schema_definition.to_string(),
+            "<Schema schema_definition_v1>"
+        );
+
+        let schema_field_definition =
+            Schema::get_system(SchemaId::SchemaFieldDefinition(1)).unwrap();
+        assert_eq!(
+            schema_field_definition.to_string(),
+            "<Schema schema_field_definition_v1>"
+        );
+    }
+
+    #[test]
+    fn test_unsupported_system_schema() {
+        let result = Schema::get_system(SchemaId::SchemaDefinition(0));
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "unsupported system schema: schema_definition_v0"
+        );
+
+        let result = Schema::get_system(SchemaId::SchemaFieldDefinition(0));
+        assert_eq!(
+            format!("{}", result.unwrap_err()),
+            "unsupported system schema: schema_field_definition_v0"
+        );
+    }
+
+    #[rstest]
+    fn test_error_application_schema(document_view_id: DocumentViewId) {
+        let schema = Schema::get_system(SchemaId::Application(
+            "events".to_string(),
+            document_view_id,
+        ));
+        assert!(schema.is_err())
+    }
+
+    #[rstest]
     fn construct_schema(
         #[from(random_operation_id)] field_operation_id: OperationId,
         #[from(random_operation_id)] relation_operation_id_1: OperationId,
@@ -237,7 +410,7 @@ mod tests {
         // Create venue schema from schema and field views
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        let result = Schema::new(schema_view, vec![bool_field_view, capacity_field_view]);
+        let result = Schema::from_views(schema_view, vec![bool_field_view, capacity_field_view]);
 
         // Schema should be ok
         assert!(result.is_ok());
@@ -351,7 +524,7 @@ mod tests {
         );
 
         // Passing field with invalid DocumentViewId should fail
-        assert!(Schema::new(
+        assert!(Schema::from_views(
             schema_view.clone(),
             vec![
                 bool_field_view.clone(),
@@ -361,10 +534,10 @@ mod tests {
         .is_err());
 
         // Passing too few fields should fail
-        assert!(Schema::new(schema_view.clone(), vec![bool_field_view.clone()]).is_err());
+        assert!(Schema::from_views(schema_view.clone(), vec![bool_field_view.clone()]).is_err());
 
         // Passing too many fields should fail
-        assert!(Schema::new(
+        assert!(Schema::from_views(
             schema_view,
             vec![
                 bool_field_view,

@@ -4,10 +4,10 @@ use std::str::FromStr;
 
 use lazy_static::lazy_static;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 
 use crate::operation::OperationValue;
-
-use super::{FieldTypeError, SchemaId};
+use crate::schema::{FieldTypeError, SchemaId};
 
 /// Valid field types for publishing an application schema.
 ///
@@ -20,7 +20,7 @@ use super::{FieldTypeError, SchemaId};
 /// field_definition.add("name", OperationValue::Text("document_title".to_string()));
 /// field_definition.add("type", FieldType::String.into());
 /// ```
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum FieldType {
     /// Defines a boolean field.
     Bool,

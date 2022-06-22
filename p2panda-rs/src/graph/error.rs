@@ -3,7 +3,7 @@
 use thiserror::Error;
 
 /// Error types for methods of `materialiser` module.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 #[allow(missing_copy_implementations)]
 pub enum GraphError {
     /// Cycle detected in graph.

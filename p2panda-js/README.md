@@ -124,13 +124,23 @@ Enable debug logging from a browser console by storing a key `debug` in local st
 localStorage.debug = 'p2panda*';
 ```
 
+### Documentation
+
+```bash
+# Generate documentation
+npm run docs
+
+# Show documentation in browser
+npx serve ./docs
+```
+
 ## License
 
 GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)
 
 ## Supported by
 
-<img src="https://p2panda.org/images/ngi-logo.png" width="auto" height="80px">
+<img src="https://p2panda.org/images/ngi-logo.png" width="auto" height="80px"><br />
 <img src="https://p2panda.org/images/eu-flag-logo.png" width="auto" height="80px">
 
 *This project has received funding from the European Union’s Horizon 2020 research and innovation programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528*

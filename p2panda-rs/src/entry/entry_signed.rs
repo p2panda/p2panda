@@ -4,6 +4,7 @@ use std::convert::{TryFrom, TryInto};
 use std::hash::Hash as StdHash;
 
 use arrayvec::ArrayVec;
+use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use bamboo_rs_core_ed25519_yasmf::signature::ED25519_SIGNATURE_SIZE;
 use bamboo_rs_core_ed25519_yasmf::YasmfHash;
 use ed25519_dalek::ed25519::Signature;
@@ -110,6 +111,14 @@ impl EntrySigned {
     }
 }
 
+#[cfg(any(feature = "testing", test))]
+impl EntrySigned {
+    pub fn new_without_validation(value: &str) -> Result<Self, EntrySignedError> {
+        let inner = Self(value.to_owned());
+        Ok(inner)
+    }
+}
+
 /// Converts an `EntrySigned` into a Bamboo Entry to interact with the
 /// `bamboo_rs_core_ed25519_yasmf` crate.
 impl From<&EntrySigned> for BambooEntry {
@@ -136,6 +145,16 @@ impl Validate for EntrySigned {
     /// Validate the integrity of signed Bamboo entries.
     fn validate(&self) -> Result<(), Self::Error> {
         hex::decode(&self.0).map_err(|_| EntrySignedError::InvalidHexEncoding)?;
+        let entry_bytes = self.to_bytes();
+        let bamboo_entry: bamboo_rs_core_ed25519_yasmf::Entry<&[u8], &[u8]> =
+            entry_bytes.as_slice().try_into()?;
+
+        if is_lipmaa_required(bamboo_entry.seq_num)
+            && bamboo_entry.backlink == bamboo_entry.lipmaa_link
+        {
+            return Err(EntrySignedError::BacklinkAndSkiplinkIdentical);
+        };
+
         Ok(())
     }
 }
@@ -145,13 +164,18 @@ mod tests {
     use std::collections::HashMap;
     use std::convert::TryInto;
 
+    use proptest::prelude::prop;
     use rstest::rstest;
     use rstest_reuse::apply;
 
     use crate::entry::{sign_and_encode, Entry, EntrySigned};
     use crate::identity::KeyPair;
     use crate::operation::OperationEncoded;
-    use crate::test_utils::fixtures::{entry_signed_encoded, key_pair, operation_encoded};
+    use crate::test_utils::constants::{default_fields, DEFAULT_HASH, DEFAULT_PRIVATE_KEY};
+    use crate::test_utils::fixtures::{
+        entry_signed_encoded, entry_signed_encoded_unvalidated, key_pair, operation,
+        operation_encoded, operation_fields, random_hash,
+    };
     use crate::test_utils::templates::many_valid_entries;
 
     #[rstest]
@@ -176,10 +200,157 @@ mod tests {
         assert_eq!(entry_signed_encoded.payload_hash(), expected_payload_hash)
     }
 
-    #[test]
-    fn validate() {
-        // Invalid hex string
-        assert!(EntrySigned::new("123456789Z").is_err());
+    #[rstest]
+    #[case::valid_first_entry(entry_signed_encoded_unvalidated(
+        1,
+        1,
+        None,
+        None,
+        Some(operation(Some(operation_fields(default_fields())), None, None)),
+        key_pair(DEFAULT_PRIVATE_KEY)
+    ))]
+    #[case::valid_entry_with_backlink(entry_signed_encoded_unvalidated(
+        2,
+        1,
+        Some(random_hash()),
+        None,
+        Some(operation(Some(operation_fields(default_fields())), None, None)),
+        key_pair(DEFAULT_PRIVATE_KEY)
+    ))]
+    #[case::valid_entry_with_skiplink_and_backlink(entry_signed_encoded_unvalidated(
+        13,
+        1,
+        Some(random_hash()),
+        Some(random_hash()),
+        Some(operation(Some(operation_fields(default_fields())), None, None)),
+        key_pair(DEFAULT_PRIVATE_KEY)
+    ))]
+    #[case::skiplink_ommitted_when_sam_as_backlink(entry_signed_encoded_unvalidated(
+        14,
+        1,
+        Some(random_hash()),
+        None,
+        Some(operation(Some(operation_fields(default_fields())), None, None)),
+        key_pair(DEFAULT_PRIVATE_KEY)
+    ))]
+    fn validate(#[case] entry_signed_encoded_unvalidated: String) {
+        assert!(EntrySigned::new(&entry_signed_encoded_unvalidated).is_ok());
+    }
+
+    #[rstest]
+    #[case::empty_string("", "Bytes to decode had length of 0")]
+    #[case::invalid_hex_string("123456789Z", "invalid hex encoding in entry")]
+    #[case::another_invalid_hex_string(":{][[5£$%*(&*££  ++`/.", "invalid hex encoding in entry")]
+    #[case::seq_number_zero(
+        entry_signed_encoded_unvalidated(
+            0,
+            1,
+            None,
+            None,
+            Some(operation(Some(operation_fields(default_fields())), None, None)),
+            key_pair(DEFAULT_PRIVATE_KEY)
+        ),
+        "Entry sequence must be larger than 0 but was 0"
+    )]
+    #[case::should_not_have_skiplink(
+        entry_signed_encoded_unvalidated(
+            1,
+            1,
+            None,
+            Some(random_hash()),
+            Some(operation(Some(operation_fields(default_fields())), None, None)),
+            key_pair(DEFAULT_PRIVATE_KEY)
+        ),
+        "Could not decode payload hash DecodeError"
+    )]
+    #[case::should_not_have_backlink(
+        entry_signed_encoded_unvalidated(
+            1,
+            1,
+            Some(random_hash()),
+            None,
+            Some(operation(Some(operation_fields(default_fields())), None, None)),
+            key_pair(DEFAULT_PRIVATE_KEY)
+        ),
+        "Could not decode payload hash DecodeError"
+    )]
+    #[case::should_not_have_backlink_or_skiplink(
+        entry_signed_encoded_unvalidated(
+                1,
+                1,
+                Some(DEFAULT_HASH.parse().unwrap()),
+                Some(DEFAULT_HASH.parse().unwrap()),
+                Some(operation(Some(operation_fields(default_fields())), None, None))
+,
+            key_pair(DEFAULT_PRIVATE_KEY)
+        ),
+        "Could not decode payload hash DecodeError"
+    )]
+    #[case::missing_backlink(
+        entry_signed_encoded_unvalidated(
+            2,
+            1,
+            None,
+            None,
+            Some(operation(Some(operation_fields(default_fields())), None, None)),
+            key_pair(DEFAULT_PRIVATE_KEY)
+        ),
+        "Could not decode backlink yamf hash: DecodeError"
+    )]
+    #[case::missing_skiplink(
+        entry_signed_encoded_unvalidated(
+            8,
+            1,
+            Some(random_hash()),
+            None,
+            Some(operation(Some(operation_fields(default_fields())), None, None)),
+            key_pair(DEFAULT_PRIVATE_KEY)
+        ),
+        "Could not decode backlink yamf hash: DecodeError"
+    )]
+    #[case::should_not_include_skiplink(
+        entry_signed_encoded_unvalidated(
+            14,
+            1,
+            Some(DEFAULT_HASH.parse().unwrap()),
+            Some(DEFAULT_HASH.parse().unwrap()),
+            Some(operation(Some(operation_fields(default_fields())), None, None)),
+            key_pair(DEFAULT_PRIVATE_KEY)
+        ),
+        "Could not decode payload hash DecodeError"
+    )]
+    #[case::payload_hash_and_size_missing(
+        entry_signed_encoded_unvalidated(
+            14,
+            1,
+            Some(random_hash()),
+            Some(DEFAULT_HASH.parse().unwrap()),
+            None,
+            key_pair(DEFAULT_PRIVATE_KEY)
+        ),
+        "Could not decode payload hash DecodeError"
+    )]
+    #[case::skiplink_and_backlink_should_be_unique(
+        entry_signed_encoded_unvalidated(
+            13,
+            1,
+            Some(DEFAULT_HASH.parse().unwrap()),
+            Some(DEFAULT_HASH.parse().unwrap()),
+            Some(operation(Some(operation_fields(default_fields())), None, None)),
+            key_pair(DEFAULT_PRIVATE_KEY)
+        ),
+        "backlink and skiplink are identical"
+    )]
+    fn correct_errors_on_invalid_entries(
+        #[case] entry_signed_encoded_unvalidated: String,
+        #[case] expected_error_message: &str,
+    ) {
+        assert_eq!(
+            EntrySigned::new(&entry_signed_encoded_unvalidated)
+                .unwrap_err()
+                .to_string(),
+            expected_error_message
+        );
     }
 
     #[apply(many_valid_entries)]
@@ -190,5 +361,41 @@ mod tests {
         hash_map.insert(&entry_first_encoded, key_value.clone());
         let key_value_retrieved = hash_map.get(&entry_first_encoded).unwrap().to_owned();
         assert_eq!(key_value, key_value_retrieved)
+    }
+
+    proptest! {
+        #[test]
+        fn non_standard_strings_dont_crash(ref s in "\\PC*") {
+            let result = EntrySigned::new(s);
+
+            assert!(result.is_err())
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn partially_correct_strings_dont_crash(
+            ref author in "[0-9a-f]{64}|[*]{0}",
+            ref log_id in prop::num::u64::ANY,
+            ref seq_num in prop::num::u64::ANY,
+            ref skiplink in "[0-9a-f]{68}|[*]{0}",
+            ref backlink in "[0-9a-f]{68}|[*]{0}",
+            ref payload_size in prop::num::u64::ANY,
+            ref payload_hash in "[0-9a-f]{68}|[*]{0}",
+            ref signature in "[0-9a-f]{68}|[*]{0}"
+        ) {
+            let encoded_entry = "0".to_string()
+                + author
+                + log_id.to_string().as_str()
+                + seq_num.to_string().as_str()
+                + skiplink
+                + backlink
+                + payload_size.to_string().as_str()
+                + payload_hash
+                + signature;
+            let result = EntrySigned::new(&encoded_entry);
+
+            assert!(result.is_err())
+        }
     }
 }

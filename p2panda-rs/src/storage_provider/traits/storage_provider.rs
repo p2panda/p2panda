@@ -357,7 +357,7 @@ pub mod tests {
             &entry_four.log_id(),
             Some(&entry_four.operation()),
             entry_four.skiplink_hash().as_ref(),
-            Some(&entries.get(0).unwrap().hash()),
+            Some(&entries.get(1).unwrap().hash()),
             &entry_four.seq_num(),
         )
         .unwrap();
@@ -413,7 +413,7 @@ pub mod tests {
         let entry_with_invalid_backlink = Entry::new(
             &entry_four.log_id(),
             Some(&entry_four.operation()),
-            Some(&entries.get(2).unwrap().hash()),
+            Some(&entries.get(1).unwrap().hash()),
             entry_four.backlink_hash().as_ref(),
             &entry_four.seq_num(),
         )

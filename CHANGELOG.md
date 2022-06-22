@@ -33,6 +33,7 @@ Highlights are marked with a pancake 🥞
 - `Graph` method for selecting sub-section of graph [#335](https://github.com/p2panda/p2panda/pull/335) `rs`
 - Storage traits for documents [#343](https://github.com/p2panda/p2panda/pull/343) `rs`
 - Materialise a document at a specific document view [#337](https://github.com/p2panda/p2panda/pull/337) `rs`
+- Static definitions of system schemas and other updates for schema provider in aquadoggo [#365](https://github.com/p2panda/p2panda/pull/365) `rs`
 
 ## Changed
 
@@ -62,6 +63,7 @@ Highlights are marked with a pancake 🥞
 - Update `openmls` crate to `v0.4.1` [#336](https://github.com/p2panda/p2panda/pull/336) `rs`
 - Replace `OperationWithMeta` with `VerifiedOperation` [#353](https://github.com/p2panda/p2panda/pull/353) `rs`
 - Implement `OperationStore` on test provider `SimplestStorageProvider` [#361](https://github.com/p2panda/p2panda/pull/361) `rs`
+- Improve validation in `EntrySigned` constructor [#367](https://github.com/p2panda/p2panda/pull/367) `rs`
 
 ## Fixed
 
@@ -80,6 +82,7 @@ Highlights are marked with a pancake 🥞
 - Test `debug` macro calls in Github CI [#288](https://github.com/p2panda/p2panda/pull/288) `rs`
 - Move private module doc strings into public places [#339](https://github.com/p2panda/p2panda/pull/339) `rs`
 - Add `mockall` crate and create mocks for `EntryStore` and `LogStore` [#314](https://github.com/p2panda/p2panda/pull/314) `rs`
+- Generate documentation with TypeDoc for `p2panda-js` [#359](https://github.com/p2panda/p2panda/pull/359) `js`
 
 ## [0.3.0]
 
