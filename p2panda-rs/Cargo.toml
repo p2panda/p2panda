@@ -20,11 +20,6 @@ debug-js-glue = false
 demangle-name-section = true
 dwarf-debug-info = false
 
-[[bin]]
-name = "cbor-test-data"
-path = "src/test_utils/generate_test_data.rs"
-required-features = ["testing"]
-
 [lib]
 crate-type = ["cdylib", "rlib"]
 

@@ -62,6 +62,7 @@ Highlights are marked with a pancake 🥞
 - Restructure / refactor `test_utils` and place behind `testing` flag [#344](https://github.com/p2panda/p2panda/pull/344) `rs`
 - Update `openmls` crate to `v0.4.1` [#336](https://github.com/p2panda/p2panda/pull/336) `rs`
 - Replace `OperationWithMeta` with `VerifiedOperation` [#353](https://github.com/p2panda/p2panda/pull/353) `rs`
+- Remove test-data generator from `test_utils` [#373](https://github.com/p2panda/p2panda/pull/373) `rs`
 - Implement `OperationStore` on test provider `SimplestStorageProvider` [#361](https://github.com/p2panda/p2panda/pull/361) `rs`
 - Improve validation in `EntrySigned` constructor [#367](https://github.com/p2panda/p2panda/pull/367) `rs`
 
