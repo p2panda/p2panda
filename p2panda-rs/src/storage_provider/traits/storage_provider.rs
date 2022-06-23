@@ -5,11 +5,11 @@ use async_trait::async_trait;
 use crate::document::DocumentId;
 use crate::entry::SeqNum;
 use crate::hash::Hash;
-use crate::operation::{AsOperation, Operation};
+use crate::operation::{AsOperation, AsVerifiedOperation, Operation};
 use crate::storage_provider::errors::PublishEntryError;
 use crate::storage_provider::traits::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
-    AsStorageEntry, AsStorageLog, EntryStore, LogStore,
+    AsStorageEntry, AsStorageLog, EntryStore, LogStore, OperationStore,
 };
 use crate::Validate;
 
@@ -18,23 +18,26 @@ use crate::Validate;
 /// This trait should be implemented on the root storage provider struct. It's definitions make up
 /// the high level methods a p2panda client needs when interacting with data storage. It will be
 /// used for storing entries (`publish_entry`), getting required entry arguments when creating
-/// entries (`get_entry_args`) and retrieving a document id by entry hash
-/// (`get_document_by_entry`). Methods defined on `StorageEntry` and `StorageLog` for lower level
-/// access to their respective data structures will also be available.
+/// entries (`get_entry_args`) and all internal storage actions. Methods defined on `EntryStore`
+/// and `LogStore` and `OperationStore` are for lower level access to their respective data
+/// structures.
 ///
 /// The methods defined here are the minimum required for a working storage backend, additional
 /// custom methods can be added per implementation.
 ///
-/// For example: if I wanted to use a SQLite backend, then I would first implement [`AsStorageLog`]
-/// and [`AsStorageEntry`] traits with all their required methods defined (they are required traits
+/// For example: if I wanted to use an SQLite backend, then I would first implement [`LogStore`]
+/// and [`EntryStore`] traits with all their required methods defined (they are required traits
 /// containing lower level accessors and setters for the respective data structures). With these
 /// traits defined [`StorageProvider`] is almost complete as it contains default definitions for
 /// most of it's methods (`get_entry_args` and `publish_entry` are defined below). The only one
 /// which needs defining is `get_document_by_entry`. It is also possible to over-ride the default
 /// definitions for any of the trait methods.
 #[async_trait]
-pub trait StorageProvider<StorageEntry: AsStorageEntry, StorageLog: AsStorageLog>:
-    EntryStore<StorageEntry> + LogStore<StorageLog>
+pub trait StorageProvider<
+    StorageEntry: AsStorageEntry,
+    StorageLog: AsStorageLog,
+    StorageOperation: AsVerifiedOperation,
+>: EntryStore<StorageEntry> + LogStore<StorageLog> + OperationStore<StorageOperation>
 {
     /// Params when making a request to get the next entry args for an author and document.
     type EntryArgsRequest: AsEntryArgsRequest + Sync;
@@ -224,10 +227,11 @@ pub mod tests {
     use crate::identity::KeyPair;
     use crate::operation::{
         AsOperation, OperationEncoded, OperationFields, OperationId, OperationValue,
+        VerifiedOperation,
     };
     use crate::storage_provider::traits::test_utils::{
         test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
-        SimplestStorageProvider, StorageEntry, StorageLog,
+        SimplestStorageProvider, StorageEntry, StorageLog, TestStore,
     };
     use crate::storage_provider::traits::{
         AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
@@ -237,7 +241,7 @@ pub mod tests {
     use super::StorageProvider;
 
     #[async_trait]
-    impl StorageProvider<StorageEntry, StorageLog> for SimplestStorageProvider {
+    impl StorageProvider<StorageEntry, StorageLog, VerifiedOperation> for SimplestStorageProvider {
         type EntryArgsRequest = EntryArgsRequest;
 
         type EntryArgsResponse = EntryArgsResponse;
@@ -271,14 +275,17 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn can_publish_entries(test_db: SimplestStorageProvider) {
+    async fn can_publish_entries(
+        #[from(test_db)]
+        #[with(20, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
         // Instantiate a new store
-        let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-        };
+        let new_db = SimplestStorageProvider::default();
 
-        let entries = test_db.entries.lock().unwrap().clone();
+        let entries = db.store.entries.lock().unwrap().clone();
 
         for entry in entries.clone() {
             // Publish each test entry in order
@@ -319,13 +326,17 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn rejects_invalid_backlink(key_pair: KeyPair, test_db: SimplestStorageProvider) {
-        let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-        };
+    async fn rejects_invalid_backlink(
+        key_pair: KeyPair,
+        #[from(test_db)]
+        #[with(4, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let new_db = SimplestStorageProvider::default();
 
-        let entries = test_db.entries.lock().unwrap().clone();
+        let entries = db.store.entries.lock().unwrap().clone();
 
         // Publish 3 entries to the new database
         for index in 0..3 {
@@ -372,13 +383,17 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn rejects_invalid_skiplink(key_pair: KeyPair, test_db: SimplestStorageProvider) {
-        let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-        };
+    async fn rejects_invalid_skiplink(
+        key_pair: KeyPair,
+        #[from(test_db)]
+        #[with(4, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let new_db = SimplestStorageProvider::default();
 
-        let entries = test_db.entries.lock().unwrap().clone();
+        let entries = db.store.entries.lock().unwrap().clone();
 
         // Publish 3 entries to the new database
         for index in 0..3 {
@@ -425,14 +440,17 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn gets_entry_args(test_db: SimplestStorageProvider) {
+    async fn gets_entry_args(
+        #[from(test_db)]
+        #[with(20, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
         // Instantiate a new store
-        let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-        };
+        let new_db = SimplestStorageProvider::default();
 
-        let entries = test_db.entries.lock().unwrap().clone();
+        let entries = db.store.entries.lock().unwrap().clone();
 
         for entry in entries.clone() {
             let is_create = entry.operation().is_create();
@@ -477,14 +495,18 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn wrong_log_id(key_pair: KeyPair, test_db: SimplestStorageProvider) {
+    async fn wrong_log_id(
+        key_pair: KeyPair,
+        #[from(test_db)]
+        #[with(2, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
         // Instantiate a new store
-        let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-        };
+        let new_db = SimplestStorageProvider::default();
 
-        let entries = test_db.entries.lock().unwrap().clone();
+        let entries = db.store.entries.lock().unwrap().clone();
 
         // Entry request for valid first intry in log 1
         let publish_entry_request = PublishEntryRequest(
@@ -525,9 +547,15 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn skiplink_does_not_exist(test_db: SimplestStorageProvider) {
-        let entries = test_db.entries.lock().unwrap().clone();
-        let logs = test_db.logs.lock().unwrap().clone();
+    async fn skiplink_does_not_exist(
+        #[from(test_db)]
+        #[with(8, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
+        let logs = db.store.logs.lock().unwrap().clone();
 
         // Init database with on document log which has an entry at seq num 4 missing
         let log_entries_with_skiplink_missing = vec![
@@ -542,6 +570,7 @@ pub mod tests {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(logs)),
             entries: Arc::new(Mutex::new(log_entries_with_skiplink_missing)),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let entry = entries.get(7).unwrap();
@@ -565,13 +594,17 @@ pub mod tests {
     #[rstest]
     #[async_std::test]
     async fn prev_op_does_not_exist(
-        test_db: SimplestStorageProvider,
+        #[from(test_db)]
+        #[with(4, 1)]
+        #[future]
+        db: TestStore,
         operation_fields: OperationFields,
         #[from(operation_id)] invalid_prev_op: OperationId,
         key_pair: KeyPair,
     ) {
-        let entries = test_db.entries.lock().unwrap().clone();
-        let logs = test_db.logs.lock().unwrap().clone();
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
+        let logs = db.store.logs.lock().unwrap().clone();
 
         // Init database with 3 valid entries
         let three_valid_entries = vec![
@@ -583,6 +616,7 @@ pub mod tests {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(logs)),
             entries: Arc::new(Mutex::new(three_valid_entries)),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         // Get the valid next entry
@@ -623,9 +657,15 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn invalid_entry_op_pair(test_db: SimplestStorageProvider) {
-        let entries = test_db.entries.lock().unwrap().clone();
-        let logs = test_db.logs.lock().unwrap().clone();
+    async fn invalid_entry_op_pair(
+        #[from(test_db)]
+        #[with(4, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
+        let logs = db.store.logs.lock().unwrap().clone();
 
         // Init database with 3 valid entries
         let three_valid_entries = vec![
@@ -637,6 +677,7 @@ pub mod tests {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(logs)),
             entries: Arc::new(Mutex::new(three_valid_entries)),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         // Get the valid next entry

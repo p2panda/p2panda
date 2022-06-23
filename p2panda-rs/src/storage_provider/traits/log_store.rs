@@ -57,7 +57,6 @@ pub trait LogStore<StorageLog: AsStorageLog> {
 #[cfg(test)]
 pub mod tests {
     use std::convert::TryFrom;
-    use std::sync::{Arc, Mutex};
 
     use async_trait::async_trait;
     use rstest::rstest;
@@ -67,7 +66,9 @@ pub mod tests {
     use crate::identity::{Author, KeyPair};
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::LogStorageError;
-    use crate::storage_provider::traits::test_utils::{SimplestStorageProvider, StorageLog};
+    use crate::storage_provider::traits::test_utils::{
+        test_db, SimplestStorageProvider, StorageLog, TestStore,
+    };
     use crate::storage_provider::traits::{AsStorageLog, LogStore};
     use crate::test_utils::fixtures::{document_id, key_pair, schema};
 
@@ -108,10 +109,7 @@ pub mod tests {
     #[async_std::test]
     async fn insert_get_log(key_pair: KeyPair, schema: SchemaId, document_id: DocumentId) {
         // Instantiate a new store.
-        let store = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-        };
+        let store = SimplestStorageProvider::default();
 
         let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
         let log = StorageLog::new(&author, &schema, &document_id, &LogId::default());
@@ -130,10 +128,7 @@ pub mod tests {
     #[async_std::test]
     async fn get_next_log_id(key_pair: KeyPair, schema: SchemaId, document_id: DocumentId) {
         // Instantiate a new store.
-        let store = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-        };
+        let store = SimplestStorageProvider::default();
 
         let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
         let log_id = store.next_log_id(&author).await.unwrap();
@@ -145,5 +140,26 @@ pub mod tests {
 
         let log_id = store.next_log_id(&author).await.unwrap();
         assert_eq!(log_id, LogId::new(2));
+    }
+
+    #[rstest]
+    #[async_std::test]
+    async fn find_document_log_id(
+        #[from(test_db)]
+        #[with(3, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let document_id = db.documents.get(0).unwrap();
+        let key_pair = db.key_pairs.get(0).unwrap();
+        let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
+
+        let log_id = db
+            .store
+            .find_document_log_id(&author, Some(document_id))
+            .await
+            .unwrap();
+        assert_eq!(log_id, LogId::new(1));
     }
 }
