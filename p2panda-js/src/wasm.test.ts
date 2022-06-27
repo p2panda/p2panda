@@ -173,8 +173,8 @@ describe('WebAssembly interface', () => {
       const decodedEntry = decodeEntry(entryEncoded, operationEncoded);
       expect(decodedEntry.logId).toEqual(BigInt(LOG_ID));
       expect(decodedEntry.seqNum).toEqual(BigInt(SEQ_NUM));
-      expect(decodedEntry.entryHashBacklink).toBeUndefined();
-      expect(decodedEntry.entryHashSkiplink).toBeUndefined();
+      expect(decodedEntry.backlink).toBeUndefined();
+      expect(decodedEntry.skiplink).toBeUndefined();
       expect(decodedEntry.operation.action).toBe('create');
       expect(decodedEntry.operation.schema).toEqual(TEST_SCHEMA);
 

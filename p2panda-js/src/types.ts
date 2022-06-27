@@ -9,8 +9,8 @@ export type SchemaId =
  * Arguments for publishing the next entry.
  */
 export type EntryArgs = {
-  entryHashSkiplink: string | undefined;
-  entryHashBacklink: string | undefined;
+  skiplink: string | undefined;
+  backlink: string | undefined;
   seqNum: string;
   logId: string;
 };
@@ -39,8 +39,8 @@ export type EntryRecord = Entry & {
  * Decoded entry containing optional `Operation`.
  */
 export type Entry = {
-  entryHashBacklink: string | undefined;
-  entryHashSkiplink: string | undefined;
+  backlink: string | undefined;
+  skiplink: string | undefined;
   logId: BigInt;
   operation: Operation | undefined;
   seqNum: BigInt;
@@ -86,8 +86,8 @@ export type PinnedRelation = string[];
  * Decoded entry containing optional `Operation`.
  */
 export type EntryTagged = {
-  entryHashBacklink: string | undefined;
-  entryHashSkiplink: string | undefined;
+  backlink: string | undefined;
+  skiplink: string | undefined;
   logId: BigInt;
   operation: OperationTagged | undefined;
   seqNum: BigInt;
