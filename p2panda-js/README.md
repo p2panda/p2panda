@@ -61,7 +61,8 @@ import { createKeyPair, Session } from 'p2panda-js';
 // This example uses the "chat" schema at which this hash is pointing. We are
 // still working on a good way for you to create and access data schemas. For
 // now you can use https://github.com/p2panda/fishyfish to do so
-const CHAT_SCHEMA = '00200cf84048b0798942deba7b1b9fcd77ca72876643bd3fedfe612d4c6fb60436be';
+const CHAT_SCHEMA =
+  'chat_message_0020a654068b26617ebd6574b1b03853193ccab2295a983bc85a5891793422832655';
 
 // Create a key pair for every usage context of p2panda, i.e. every device and
 // every piece of software that is used. Key pairs should never have to be
@@ -74,16 +75,39 @@ const session = new Session('https://welle.liebechaos.org').setKeyPair(keyPair);
 
 // Compose your operation payload, according to chosen schema
 const payload = {
-  operation: 'Hi there',
+  message: 'Hi there',
 };
 
 // Send new chat operation to the node
 await session.create(payload, { schema: CHAT_SCHEMA });
 
 // Query instances from the p2panda node
-const instances = await session.query({ schema: CHAT_SCHEMA });
-console.log(instances[0].operation);
-// -> 'Hi there'
+import { gql, useQuery } from '@apollo/client';
+
+const GET_CHAT_MESSAGES = gql`
+  query GetChatMessages {
+    all_${CHAT_SCHEMA} {
+      fields {
+        message
+      }
+    }
+  }
+`;
+
+const Chat = ({}) => {
+  const { loading, error, data } = useQuery(GET_CHAT_MESSAGES);
+
+  if (loading) return 'Loading...';
+  if (error) return `Error! ${error.message}`;
+
+  return (
+    <ul>
+      {data[`all_${CHAT_SCHEMA}`].map((doc) => (
+        <li key={doc.id}>{doc.fields.message}</li>
+      ))}
+    </ul>
+  );
+};
 ```
 
 ## Development Setup
@@ -143,4 +167,4 @@ GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)
 <img src="https://p2panda.org/images/ngi-logo.png" width="auto" height="80px"><br />
 <img src="https://p2panda.org/images/eu-flag-logo.png" width="auto" height="80px">
 
-*This project has received funding from the European Union’s Horizon 2020 research and innovation programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528*
+_This project has received funding from the European Union’s Horizon 2020 research and innovation programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528_

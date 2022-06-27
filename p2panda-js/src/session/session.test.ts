@@ -21,7 +21,7 @@ import {
 } from '../../test/fixtures';
 import { GQL_NEXT_ENTRY_ARGS, GQL_PUBLISH_ENTRY } from './session';
 
-const TEST_SERVER_URL = 'http://localhost:2020/';
+const TEST_SERVER_URL = 'http://localhost:2020';
 
 /**
  * Simple mock p2panda session.
