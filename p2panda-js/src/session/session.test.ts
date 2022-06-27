@@ -56,47 +56,6 @@ describe('Session', () => {
     );
   });
 
-  describe('queryEntries', () => {
-    it('can query entries', async () => {
-      const session = new Session(MOCK_SERVER_URL);
-      const entries = await session.queryEntries(schemaFixture());
-      expect(entries.length).toBe(4);
-    });
-
-    it('throws when querying without a schema', async () => {
-      const session = new Session(MOCK_SERVER_URL);
-      // @ts-ignore: We deliberately use the API wrong here
-      await expect(session.queryEntries()).rejects.toThrow(
-        /Schema must be provided/,
-      );
-    });
-  });
-
-  describe('query', () => {
-    let session: Session;
-
-    beforeEach(() => {
-      session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
-    });
-
-    it('handles valid arguments', async () => {
-      expect(session.query({ schema: schemaFixture() })).resolves;
-      expect(session.setSchema(schemaFixture()).query()).resolves;
-    });
-
-    it('can materialise documents to instances', async () => {
-      const instances = await session.query({
-        schema: schemaFixture(),
-      });
-      expect(instances.length).toEqual(1);
-      expect(instances[0]._meta.deleted).toEqual(true);
-    });
-
-    it('throws when missing a required parameter', async () => {
-      await expect(session.query()).rejects.toThrow();
-    });
-  });
-
   describe('publishEntry', () => {
     it('can publish entries', async () => {
       const session = new Session(MOCK_SERVER_URL);

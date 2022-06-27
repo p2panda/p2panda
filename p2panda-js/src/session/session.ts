@@ -3,19 +3,9 @@
 import { RequestManager, HTTPTransport, Client } from '@open-rpc/client-js';
 import debug from 'debug';
 
-import wasm from '~/wasm';
 import { createDocument, deleteDocument, updateDocument } from '~/document';
-import { queryInstances } from '~/instance';
-import { marshallResponseFields } from '~/utils';
 
-import type {
-  EncodedEntry,
-  EntryArgs,
-  EntryRecord,
-  Fields,
-  InstanceRecord,
-  SchemaId,
-} from '~/types';
+import type { EncodedEntry, EntryArgs, Fields, SchemaId } from '~/types';
 import type { KeyPair } from 'wasm';
 
 const log = debug('p2panda-js:session');
@@ -199,64 +189,6 @@ export class Session {
     return result;
   }
 
-  /**
-   * Query node for encoded entries of a given schema.
-   *
-   * @param schema schema id
-   * @returns an array of encoded entries
-   */
-  private async queryEntriesEncoded(schema: SchemaId): Promise<EncodedEntry[]> {
-    if (!schema) {
-      throw new Error('Schema must be provided');
-    }
-
-    const params = { schema };
-    log('call panda_queryEntries', params);
-    const result = await this.client.request({
-      method: 'panda_queryEntries',
-      params,
-    });
-
-    log('response panda_queryEntries', result);
-    return result.entries;
-  }
-
-  /**
-   * Query node for entries of a given schema and decode entries.
-   *
-   * Returned entries retain their encoded form on `entry.encoded`.
-   *
-   * @param schema schema id
-   * @returns an array of decoded entries
-   */
-  async queryEntries(schema: SchemaId): Promise<EntryRecord[]> {
-    if (!schema) {
-      throw new Error('Schema must be provided');
-    }
-
-    const { decodeEntry } = await wasm;
-    const result = await this.queryEntriesEncoded(schema);
-
-    log(`decoding ${result.length} entries`);
-
-    return Promise.all(
-      result.map(async (entry) => {
-        const decoded = await decodeEntry(entry.entryBytes, entry.payloadBytes);
-
-        if (decoded.operation.action !== 'delete') {
-          decoded.operation.fields = marshallResponseFields(
-            decoded.operation.fields,
-          );
-        }
-
-        return {
-          ...decoded,
-          encoded: entry,
-        };
-      }),
-    );
-  }
-
   // Document operations
 
   /**
@@ -389,26 +321,6 @@ export class Session {
     deleteDocument(documentId, previousOperations, mergedOptions);
 
     return this;
-  }
-
-  /**
-   * Query documents of a specific schema from the node.
-   *
-   * Calling this method will retrieve all entries of the given schema from the
-   * node and then materialise them locally into instances.
-   *
-   * @param options optional config object:
-   * @param options.schema hex-encoded schema id
-   * @returns array of instance records, which have data fields and an extra
-   *  `_meta_ field, which holds instance metadata and its entry history
-   */
-  async query(options?: Partial<Context>): Promise<InstanceRecord[]> {
-    log('query schema', options?.schema || this.schema);
-    const instances = queryInstances({
-      schema: options?.schema || this.schema,
-      session: this,
-    });
-    return instances;
   }
 
   toString(): string {
