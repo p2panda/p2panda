@@ -95,7 +95,3 @@ jobs:
       - name: Run build
         run: npm run build
         working-directory: ${{ env.working_directory }}
-
-  js-dispatch:
-    runs-on: ubuntu-latest
-
