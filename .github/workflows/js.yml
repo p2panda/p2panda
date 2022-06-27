@@ -47,10 +47,12 @@ jobs:
         run: npm run test --coverage
         working-directory: ${{ env.working_directory }}
 
-      - if: matrix.node == 16
+      - name: Upload coverage report to Codecov
+        if: matrix.node == 16
         uses: codecov/codecov-action@v2
 
       - name: Dispatch workflow event
+        if: matrix.node == 16
         # This dispatches an event within the GitHub workspace so the
         # `p2panda/handbook` repository can pick it up for deploying the
         # updated `p2panda-js` API on the website.
