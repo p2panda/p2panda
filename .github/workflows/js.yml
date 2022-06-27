@@ -63,7 +63,7 @@ jobs:
             await github.rest.actions.createWorkflowDispatch({
               owner: 'p2panda',
               repo: 'handbook',
-              workflow_id: 'deploy.yml',
+              workflow_id: '15223432',
               ref: 'main'
             })
 
