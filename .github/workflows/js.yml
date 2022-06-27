@@ -13,6 +13,9 @@ jobs:
   js-test:
     runs-on: ubuntu-latest
 
+    # Sets the right permissions to allow dispatching workflow events
+    permissions: write-all
+
     strategy:
       matrix:
         node: [12, 14, 16]
