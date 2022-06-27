@@ -79,3 +79,13 @@ jobs:
       - name: Run build
         run: npm run build
         working-directory: ${{ env.working_directory }}
+
+      - name: Build documentation page
+        run: npm run docs
+        working-directory: ${{ env.working_directory }}
+
+      - name: Deploy website
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
