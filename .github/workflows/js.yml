@@ -50,6 +50,19 @@ jobs:
       - if: matrix.node == 16
         uses: codecov/codecov-action@v2
 
+      - name: Dispatch workflow event
+        # This dispatches an event within the GitHub workspace so the
+        # `p2panda/handbook` repository can pick it up for deploying the
+        # updated `p2panda-js` API on the website.
+        run: >-
+          curl
+          -X POST
+          -H "Accept: application/vnd.github.v3+json"
+          -H "Authorization: token <TOKEN>" \
+          https://api.github.com/repos/p2panda/handbook/actions/workflows/deploy/dispatches
+          -d '{"ref": "main"}'
+
+
   js-build:
     runs-on: ubuntu-latest
 
@@ -79,3 +92,7 @@ jobs:
       - name: Run build
         run: npm run build
         working-directory: ${{ env.working_directory }}
+
+  js-dispatch:
+    runs-on: ubuntu-latest
+
