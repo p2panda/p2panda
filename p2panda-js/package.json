@@ -11,8 +11,6 @@
     "lint": "eslint --ext .ts .",
     "test": "cross-env NODE_ENV=development run-s clear webpack:node test:jest",
     "test:jest": "jest --coverage=$npm_config_coverage",
-    "test:mock-node": "open-rpc-mock-server --port 2020",
-    "test:template-openrpc": "npx ts-node ./test/generate-openrpc-spec.ts",
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm test' --ext js,ts,json",
     "webpack": "cross-env NODE_ENV=production run-s webpack:web webpack:node",
     "webpack:node": "webpack --config-name node --color",
