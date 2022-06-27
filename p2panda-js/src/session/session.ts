@@ -1,11 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { RequestManager, HTTPTransport, Client } from '@open-rpc/client-js';
 import debug from 'debug';
+import {
+  ApolloClient,
+  ApolloClientOptions,
+  gql,
+  HttpLink,
+  InMemoryCache,
+  NormalizedCacheObject,
+  // Import from `client/core` to not require `react` as a dependency as long
+  // as that is possible.
+} from '@apollo/client/core';
+import fetch from 'node-fetch';
 
 import { createDocument, deleteDocument, updateDocument } from '~/document';
 
-import type { EncodedEntry, EntryArgs, Fields, SchemaId } from '~/types';
+import type { EntryArgs, Fields, SchemaId } from '~/types';
 import type { KeyPair } from 'wasm';
 
 const log = debug('p2panda-js:session');
@@ -15,6 +25,32 @@ export type Context = {
   schema: SchemaId;
   session: Session;
 };
+
+// GraphQL query to retrieve next entry args from node.
+export const GQL_NEXT_ENTRY_ARGS = gql`
+  {
+    nextEntryArgs(publicKey: $publicKey, documentId: $documentId) {
+      logId
+      seqNum
+      backlink
+      skiplink
+    }
+  }
+`;
+
+// GraphQL mutation to publish an entry and retrieve arguments for encoding the
+// next operation on the same document (those are currently not used to update
+// the next entry arguments cache).
+export const GQL_PUBLISH_ENTRY = gql`
+  {
+    publishEntry(entryEncoded: $entry, operationEncoded: $operation) {
+      logId
+      seqNum
+      backlink
+      skiplink
+    }
+  }
+`;
 
 /**
  * Communicate with the p2panda network through a `Session` instance.
@@ -37,19 +73,27 @@ export class Session {
   // Address of a p2panda node that we can connect to
   endpoint: string;
 
-  // An RPC client connected to the configured endpoint
-  client: Client;
+  // A GraphQL client connected to the configured endpoint
+  client: ApolloClient<NormalizedCacheObject>;
 
   // Cached arguments for the next entry
   private nextEntryArgs: { [cacheKey: string]: EntryArgs } = {};
 
-  constructor(endpoint: Session['endpoint']) {
+  constructor(
+    endpoint: Session['endpoint'],
+    apolloOptions?: ApolloClientOptions<NormalizedCacheObject>,
+  ) {
     if (endpoint == null || endpoint === '') {
       throw new Error('Missing `endpoint` parameter for creating a session');
     }
     this.endpoint = endpoint;
-    const transport = new HTTPTransport(endpoint);
-    this.client = new Client(new RequestManager([transport]));
+    this.client = new ApolloClient({
+      // @ts-expect-error using a fetch implementation that ts doesn't consider
+      // valid
+      link: new HttpLink({ uri: endpoint, fetch }),
+      cache: new InMemoryCache(),
+      ...apolloOptions,
+    });
   }
 
   private _schema: SchemaId | null = null;
@@ -113,38 +157,45 @@ export class Session {
    *
    * This uses the cache set through `Session._setNextEntryArgs`.
    *
-   * @param author public key of the author
+   * @param publicKey public key of the author
    * @param document optional document id
    * @returns an `EntryArgs` object
    */
   async getNextEntryArgs(
-    author: string,
+    publicKey: string,
     documentId?: string,
   ): Promise<EntryArgs> {
-    if (!author) {
-      throw new Error('Author must be provided');
+    if (!publicKey) {
+      throw new Error("Author's public key must be provided");
     }
 
     // Use cache only when documentId is set
     if (documentId) {
-      const cacheKey = `${author}/${documentId}`;
+      const cacheKey = `${publicKey}/${documentId}`;
       const cachedValue = this.nextEntryArgs[cacheKey];
 
       if (cachedValue) {
         delete this.nextEntryArgs[cacheKey];
-        log('call panda_getEntryArguments [cached]', cachedValue);
+        log('request nextEntryArgs [cached]', cachedValue);
         return cachedValue;
       }
     }
 
-    // Do RPC call
-    const nextEntryArgs = await this.client.request({
-      method: 'panda_getEntryArguments',
-      params: { author, document: documentId },
-    });
-
-    log('call panda_getEntryArguments', nextEntryArgs);
-    return nextEntryArgs;
+    try {
+      const { data } = await this.client.query<{ nextEntryArgs: EntryArgs }>({
+        query: GQL_NEXT_ENTRY_ARGS,
+        variables: {
+          publicKey,
+          documentId,
+        },
+      });
+      const nextEntryArgs = data.nextEntryArgs;
+      log('request nextEntryArgs', nextEntryArgs);
+      return nextEntryArgs;
+    } catch (err) {
+      log('Error fetching next entry args');
+      throw err;
+    }
   }
 
   /**
@@ -178,15 +229,22 @@ export class Session {
       throw new Error('Encoded entry and operation must be provided');
     }
 
-    const params = { entryEncoded, operationEncoded };
-    log('call panda_publishEntry', params);
-    const result = await this.client.request({
-      method: 'panda_publishEntry',
-      params,
-    });
-
-    log('response panda_publishEntry', result);
-    return result;
+    try {
+      const { data } = await this.client.mutate<{ publishEntry: EntryArgs }>({
+        mutation: GQL_PUBLISH_ENTRY,
+        variables: {
+          entryEncoded,
+          operationEncoded,
+        },
+      });
+      log('request publishEntry', data);
+      if (data?.publishEntry == null)
+        throw new Error("Response doesn't contain field `publishEntry`");
+      return data.publishEntry;
+    } catch (err) {
+      log('Error publishing entry');
+      throw err;
+    }
   }
 
   // Document operations

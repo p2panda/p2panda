@@ -2,6 +2,8 @@
 
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 
+import { createMockClient } from 'mock-apollo-client';
+
 import { KeyPair } from 'wasm';
 import { recoverKeyPair } from '~/identity';
 import { Session } from '~/session';
@@ -16,6 +18,7 @@ import {
   entryFixture,
   schemaFixture,
 } from '../../test/fixtures';
+import { GQL_NEXT_ENTRY_ARGS, GQL_PUBLISH_ENTRY } from './session';
 
 const MOCK_SERVER_URL = 'http://localhost:2020';
 
@@ -59,13 +62,17 @@ describe('Session', () => {
   describe('publishEntry', () => {
     it('can publish entries', async () => {
       const session = new Session(MOCK_SERVER_URL);
+      const mockClient = createMockClient();
+      mockClient.setRequestHandler(GQL_PUBLISH_ENTRY, () =>
+        Promise.resolve({ data: { publishEntry: entryArgsFixture(5) } }),
+      );
+      session.client = mockClient;
+
       const nextEntryArgs = await session.publishEntry(
         encodedEntryFixture(4).entryBytes,
         encodedEntryFixture(4).payloadBytes,
       );
-      expect(nextEntryArgs.entryHashBacklink).toEqual(
-        entryArgsFixture(5).entryHashBacklink,
-      );
+      expect(nextEntryArgs.backlink).toEqual(entryArgsFixture(5).backlink);
     });
 
     it('throws when publishing without all required parameters', async () => {
@@ -84,16 +91,18 @@ describe('Session', () => {
   describe('get/setNextEntryArgs', () => {
     it('returns next entry args from node', async () => {
       const session = new Session(MOCK_SERVER_URL);
+      const mockClient = createMockClient();
+      mockClient.setRequestHandler(GQL_NEXT_ENTRY_ARGS, () =>
+        Promise.resolve({ data: { nextEntryArgs: entryArgsFixture(5) } }),
+      );
+      session.client = mockClient;
+
       const nextEntryArgs = await session.getNextEntryArgs(
         authorFixture().publicKey,
         documentIdFixture(),
       );
-      expect(nextEntryArgs.entryHashSkiplink).toEqual(
-        entryArgsFixture(5).entryHashSkiplink,
-      );
-      expect(nextEntryArgs.entryHashBacklink).toEqual(
-        entryArgsFixture(5).entryHashBacklink,
-      );
+      expect(nextEntryArgs.skiplink).toEqual(entryArgsFixture(5).skiplink);
+      expect(nextEntryArgs.backlink).toEqual(entryArgsFixture(5).backlink);
       expect(nextEntryArgs.seqNum).toEqual(entryArgsFixture(5).seqNum);
       expect(nextEntryArgs.logId).toEqual(entryArgsFixture(5).logId);
     });
@@ -103,16 +112,13 @@ describe('Session', () => {
       // Add a spy to check whether the value is really retrieved from the
       // cache and not requested
       const mockedFn = jest.fn(async () => true);
-      session.client.request = mockedFn;
+      // @ts-ignore Yes, Typescript, a mock is not the same as the original.
+      session.client.query = mockedFn;
 
       const nextEntryArgs = {
-        // Convert json null into undefined
-        entryHashBacklink: entryArgsFixture(5).entryHashBacklink as
-          | string
-          | undefined,
-        entryHashSkiplink: entryArgsFixture(5).entryHashSkiplink as
-          | string
-          | undefined,
+        // Treat json `null` as undefined
+        backlink: entryArgsFixture(5).backlink as string | undefined,
+        skiplink: entryArgsFixture(5).skiplink as string | undefined,
         logId: entryArgsFixture(5).logId,
         seqNum: entryArgsFixture(5).seqNum,
       };

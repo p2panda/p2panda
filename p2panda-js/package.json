@@ -9,10 +9,9 @@
     "clear": "rimraf ./lib ./wasm",
     "docs": "typedoc src/index.ts",
     "lint": "eslint --ext .ts .",
-    "test": "cross-env NODE_ENV=development run-p --race test:mock-node 'test:run'",
+    "test": "cross-env NODE_ENV=development run-s clear webpack:node test:jest",
     "test:jest": "jest --coverage=$npm_config_coverage",
     "test:mock-node": "open-rpc-mock-server --port 2020",
-    "test:run": "run-s clear webpack:node test:jest",
     "test:template-openrpc": "npx ts-node ./test/generate-openrpc-spec.ts",
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm test' --ext js,ts,json",
     "webpack": "cross-env NODE_ENV=production run-s webpack:web webpack:node",
@@ -42,9 +41,6 @@
     "@babel/cli": "^7.16.0",
     "@babel/core": "^7.16.5",
     "@babel/register": "^7.16.5",
-    "@open-rpc/client-js": "^1.7.1",
-    "@open-rpc/mock-server": "^1.7.4",
-    "@open-rpc/typings": "^1.12.1",
     "@tsconfig/node12": "^1.0.9",
     "@types/copy-webpack-plugin": "^8.0.1",
     "@types/debug": "^4.1.7",
@@ -63,6 +59,7 @@
     "eslint-plugin-prettier": "^4.0.0",
     "eslint-webpack-plugin": "^3.1.1",
     "jest": "^27.4.5",
+    "mock-apollo-client": "^1.2.0",
     "nodemon": "^2.0.15",
     "npm-run-all": "^4.1.5",
     "prettier": "^2.5.1",
@@ -77,8 +74,10 @@
     "webpack-cli": "^4.9.1"
   },
   "dependencies": {
+    "@apollo/client": "^3.6.9",
     "debug": "^4.3.3",
     "fetch-headers": "^2.0.0",
+    "graphql": "^16.5.0",
     "node-fetch": "^2.6.1"
   }
 }
