@@ -66,6 +66,7 @@ Highlights are marked with a pancake 🥞
 - Implement `OperationStore` on test provider `SimplestStorageProvider` [#361](https://github.com/p2panda/p2panda/pull/361) `rs`
 - Improve validation in `EntrySigned` constructor [#367](https://github.com/p2panda/p2panda/pull/367) `rs`
 - `Session` interface using GraphQL [#364](https://github.com/p2panda/p2panda/pull/377) `js`
+- Updated dependencies, remove `automock` crate [#379](https://github.com/p2panda/p2panda/pull/379) `rs`
 
 ## Fixed
 
