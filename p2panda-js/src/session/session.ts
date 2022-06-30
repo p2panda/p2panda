@@ -43,7 +43,7 @@ export const GQL_NEXT_ENTRY_ARGS = gql`
 // the next entry arguments cache).
 export const GQL_PUBLISH_ENTRY = gql`
   {
-    publishEntry(entryEncoded: $entry, operationEncoded: $operation) {
+    publishEntry(entry: $entry, operation: $operation) {
       logId
       seqNum
       backlink
@@ -217,15 +217,12 @@ export class Session {
   /**
    * Publish an encoded entry and operation.
    *
-   * @param entryEncoded
-   * @param operationEncoded
+   * @param entry
+   * @param operation
    * @returns next entry arguments
    */
-  async publishEntry(
-    entryEncoded: string,
-    operationEncoded: string,
-  ): Promise<EntryArgs> {
-    if (!entryEncoded || !operationEncoded) {
+  async publishEntry(entry: string, operation: string): Promise<EntryArgs> {
+    if (!entry || !operation) {
       throw new Error('Encoded entry and operation must be provided');
     }
 
@@ -233,8 +230,8 @@ export class Session {
       const { data } = await this.client.mutate<{ publishEntry: EntryArgs }>({
         mutation: GQL_PUBLISH_ENTRY,
         variables: {
-          entryEncoded,
-          operationEncoded,
+          entry,
+          operation,
         },
       });
       log('request publishEntry', data);
