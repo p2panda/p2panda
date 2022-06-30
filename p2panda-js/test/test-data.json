@@ -93,32 +93,32 @@
         ],
         "nextEntryArgs": [
           {
-            "entryHashBacklink": null,
-            "entryHashSkiplink": null,
+            "backlink": null,
+            "skiplink": null,
             "seqNum": "1",
             "logId": "1"
           },
           {
-            "entryHashBacklink": "00201c221b573b1e0c67c5e2c624a93419774cdf46b3d62414c44a698df1237b1c16",
-            "entryHashSkiplink": null,
+            "backlink": "00201c221b573b1e0c67c5e2c624a93419774cdf46b3d62414c44a698df1237b1c16",
+            "skiplink": null,
             "seqNum": "2",
             "logId": "1"
           },
           {
-            "entryHashBacklink": "0020b7188ef505c499bf6d2d4a121e0535285fd444105b3d0b141429880bbb6cf31b",
-            "entryHashSkiplink": null,
+            "backlink": "0020b7188ef505c499bf6d2d4a121e0535285fd444105b3d0b141429880bbb6cf31b",
+            "skiplink": null,
             "seqNum": "3",
             "logId": "1"
           },
           {
-            "entryHashBacklink": "0020a93a4c8b92b4c4e15bd38703a806015bc9f1e72d93e577a29ed73b09bcf9a2b5",
-            "entryHashSkiplink": "00201c221b573b1e0c67c5e2c624a93419774cdf46b3d62414c44a698df1237b1c16",
+            "backlink": "0020a93a4c8b92b4c4e15bd38703a806015bc9f1e72d93e577a29ed73b09bcf9a2b5",
+            "skiplink": "00201c221b573b1e0c67c5e2c624a93419774cdf46b3d62414c44a698df1237b1c16",
             "seqNum": "4",
             "logId": "1"
           },
           {
-            "entryHashBacklink": "0020172f7b7785956aa5a610d5cbe7b1a80a28e32a1d86ad24cfd82ccbd9c3f5c178",
-            "entryHashSkiplink": null,
+            "backlink": "0020172f7b7785956aa5a610d5cbe7b1a80a28e32a1d86ad24cfd82ccbd9c3f5c178",
+            "skiplink": null,
             "seqNum": "5",
             "logId": "1"
           }

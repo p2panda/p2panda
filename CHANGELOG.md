@@ -65,6 +65,7 @@ Highlights are marked with a pancake 🥞
 - Remove test-data generator from `test_utils` [#373](https://github.com/p2panda/p2panda/pull/373) `rs`
 - Implement `OperationStore` on test provider `SimplestStorageProvider` [#361](https://github.com/p2panda/p2panda/pull/361) `rs`
 - Improve validation in `EntrySigned` constructor [#367](https://github.com/p2panda/p2panda/pull/367) `rs`
+- `Session` interface using GraphQL [#364](https://github.com/p2panda/p2panda/pull/377) `js`
 
 ## Fixed
 

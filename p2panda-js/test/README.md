@@ -1,26 +1,14 @@
-# p2panda-js Test Setup
+# p2panda-js Testing
 
-## Setup
+The `test-data.json` file in this directory contains values with valid cross-
+references that can be used as fixtures for testing p2panda. Easy access to
+these values is provided by the functions exported from `./fixtures.ts`.
 
-* [OpenRPC](https://open-rpc.org/) specification defining the RPC methods available when interacting with a p2panda node.
-* Mock server according to this specification for testing requests and responses.
-* `test-data.json` which is consumed by both a JSON schema templating process, which outputs the actual OpenRPC definition file, as well as the test suite itself.
+## Example
 
-## Scripts
+```typescript
+import { documentIdFixture } from './fixtures';
 
-### Generate template
-
-The `test-data.json` contains valid values which you can use as fixtures or test vectors. The values in this file are injected into `openrpc-template.json` via the `generate-openrpc-spec.ts` script. The final `openrpc.json` file is output into the `p2panda-js` folder. This can be accomplished with the following command:
-
-```bash
-npm run test:template-openrpc
-```
-
-### Run tests
-
-To run the tests:
-
-```bash
-npm test
-npm run test:watch
+console.log(documentIdFixture());
+// 00201c221b573b1e0c67c5e2c624a93419774cdf46b3d62414c44a698df1237b1c16
 ```

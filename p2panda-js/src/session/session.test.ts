@@ -2,6 +2,9 @@
 
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 
+import { DocumentNode } from 'graphql';
+import { createMockClient } from 'mock-apollo-client';
+
 import { KeyPair } from 'wasm';
 import { recoverKeyPair } from '~/identity';
 import { Session } from '~/session';
@@ -16,8 +19,44 @@ import {
   entryFixture,
   schemaFixture,
 } from '../../test/fixtures';
+import { GQL_NEXT_ENTRY_ARGS, GQL_PUBLISH_ENTRY } from './session';
 
-const MOCK_SERVER_URL = 'http://localhost:2020';
+/**
+ * Simple mock p2panda session.
+ *
+ * Will respond to:
+ * - query `nextEntryArgs`: always returns entry args for sequence number 6
+ * - mutation `publishEntry` always returns a response as if sequence number 5
+ *  had been published.
+ *
+ * @returns Session
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const createMockSession = (): Session => {
+  const session = new Session('http://localhost:2020');
+  const mockClient = createMockClient();
+
+  // Register nextEntryArgs handler
+  mockClient.setRequestHandler(GQL_NEXT_ENTRY_ARGS, () =>
+    Promise.resolve({
+      data: {
+        nextEntryArgs: entryArgsFixture(5),
+      },
+    }),
+  );
+
+  // Register publishEntry handler
+  mockClient.setRequestHandler(GQL_PUBLISH_ENTRY, () =>
+    Promise.resolve({
+      data: {
+        publishEntry: entryArgsFixture(5),
+      },
+    }),
+  );
+
+  session.client = mockClient;
+  return session;
+};
 
 /**
  * Test the `Session` class.
@@ -42,7 +81,7 @@ describe('Session', () => {
   });
 
   it('has a string representation', async () => {
-    const session = new Session(MOCK_SERVER_URL);
+    const session = createMockSession();
     expect(`${session}`).toEqual('<Session http://localhost:2020>');
 
     session.setKeyPair(keyPair);
@@ -56,61 +95,24 @@ describe('Session', () => {
     );
   });
 
-  describe('queryEntries', () => {
-    it('can query entries', async () => {
-      const session = new Session(MOCK_SERVER_URL);
-      const entries = await session.queryEntries(schemaFixture());
-      expect(entries.length).toBe(4);
-    });
-
-    it('throws when querying without a schema', async () => {
-      const session = new Session(MOCK_SERVER_URL);
-      // @ts-ignore: We deliberately use the API wrong here
-      await expect(session.queryEntries()).rejects.toThrow(
-        /Schema must be provided/,
-      );
-    });
-  });
-
-  describe('query', () => {
-    let session: Session;
-
-    beforeEach(() => {
-      session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
-    });
-
-    it('handles valid arguments', async () => {
-      expect(session.query({ schema: schemaFixture() })).resolves;
-      expect(session.setSchema(schemaFixture()).query()).resolves;
-    });
-
-    it('can materialise documents to instances', async () => {
-      const instances = await session.query({
-        schema: schemaFixture(),
-      });
-      expect(instances.length).toEqual(1);
-      expect(instances[0]._meta.deleted).toEqual(true);
-    });
-
-    it('throws when missing a required parameter', async () => {
-      await expect(session.query()).rejects.toThrow();
-    });
-  });
-
   describe('publishEntry', () => {
     it('can publish entries', async () => {
-      const session = new Session(MOCK_SERVER_URL);
-      const nextEntryArgs = await session.publishEntry(
-        encodedEntryFixture(4).entryBytes,
-        encodedEntryFixture(4).payloadBytes,
-      );
-      expect(nextEntryArgs.entryHashBacklink).toEqual(
-        entryArgsFixture(5).entryHashBacklink,
-      );
+      const session = createMockSession();
+
+      try {
+        const nextEntryArgs = await session.publishEntry(
+          encodedEntryFixture(4).entryBytes,
+          encodedEntryFixture(4).payloadBytes,
+        );
+        expect(nextEntryArgs.backlink).toEqual(entryArgsFixture(5).backlink);
+      } catch (err) {
+        console.error(err);
+        throw err;
+      }
     });
 
     it('throws when publishing without all required parameters', async () => {
-      const session = new Session(MOCK_SERVER_URL);
+      const session = createMockSession();
       await expect(
         // @ts-ignore: We deliberately use the API wrong here
         session.publishEntry(null, encodedEntryFixture(1).payloadBytes),
@@ -124,36 +126,30 @@ describe('Session', () => {
 
   describe('get/setNextEntryArgs', () => {
     it('returns next entry args from node', async () => {
-      const session = new Session(MOCK_SERVER_URL);
+      const session = createMockSession();
+
       const nextEntryArgs = await session.getNextEntryArgs(
         authorFixture().publicKey,
         documentIdFixture(),
       );
-      expect(nextEntryArgs.entryHashSkiplink).toEqual(
-        entryArgsFixture(5).entryHashSkiplink,
-      );
-      expect(nextEntryArgs.entryHashBacklink).toEqual(
-        entryArgsFixture(5).entryHashBacklink,
-      );
+      expect(nextEntryArgs.skiplink).toEqual(entryArgsFixture(5).skiplink);
+      expect(nextEntryArgs.backlink).toEqual(entryArgsFixture(5).backlink);
       expect(nextEntryArgs.seqNum).toEqual(entryArgsFixture(5).seqNum);
       expect(nextEntryArgs.logId).toEqual(entryArgsFixture(5).logId);
     });
 
     it('returns next entry args from cache', async () => {
-      const session = new Session(MOCK_SERVER_URL);
+      const session = createMockSession();
       // Add a spy to check whether the value is really retrieved from the
       // cache and not requested
       const mockedFn = jest.fn(async () => true);
-      session.client.request = mockedFn;
+      // @ts-ignore Yes, Typescript, a mock is not the same as the original.
+      session.client.query = mockedFn;
 
       const nextEntryArgs = {
-        // Convert json null into undefined
-        entryHashBacklink: entryArgsFixture(5).entryHashBacklink as
-          | string
-          | undefined,
-        entryHashSkiplink: entryArgsFixture(5).entryHashSkiplink as
-          | string
-          | undefined,
+        // Treat json `null` as undefined
+        backlink: entryArgsFixture(5).backlink as string | undefined,
+        skiplink: entryArgsFixture(5).skiplink as string | undefined,
         logId: entryArgsFixture(5).logId,
         seqNum: entryArgsFixture(5).seqNum,
       };
@@ -179,7 +175,8 @@ describe('Session', () => {
     const fields = entryFixture(1).operation?.fields as Fields;
 
     beforeEach(async () => {
-      session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
+      session = createMockSession();
+      session.setKeyPair(keyPair);
     });
 
     it('handles valid arguments', async () => {
@@ -217,7 +214,8 @@ describe('Session', () => {
       ?.previous_operations as string[];
 
     beforeEach(async () => {
-      session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
+      session = createMockSession();
+      session.setKeyPair(keyPair);
       jest
         .spyOn(session, 'getNextEntryArgs')
         .mockResolvedValue(entryArgsFixture(2));
@@ -264,7 +262,8 @@ describe('Session', () => {
       ?.previous_operations as string[];
 
     beforeEach(async () => {
-      session = new Session(MOCK_SERVER_URL).setKeyPair(keyPair);
+      session = createMockSession();
+      session.setKeyPair(keyPair);
       jest
         .spyOn(session, 'getNextEntryArgs')
         .mockResolvedValue(entryArgsFixture(3));
