@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use async_trait::async_trait;
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
-use mockall::automock;
 
 use crate::entry::LogId;
 use crate::entry::SeqNum;
@@ -14,7 +15,6 @@ use crate::storage_provider::traits::AsStorageEntry;
 ///
 /// This trait should be implemented on the root storage provider struct. It's definitions make up
 /// the required methods for inserting and querying entries from storage.
-#[automock]
 #[async_trait]
 pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// Insert an entry into storage.
