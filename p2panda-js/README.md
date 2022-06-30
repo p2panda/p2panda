@@ -85,11 +85,9 @@ await session.create(payload, { schema: CHAT_SCHEMA });
 import { gql, useQuery } from '@apollo/client';
 
 const GET_CHAT_MESSAGES = gql`
-  query GetChatMessages {
-    all_${CHAT_SCHEMA} {
-      fields {
-        message
-      }
+  all_${CHAT_SCHEMA} {
+    fields {
+      message
     }
   }
 `;
