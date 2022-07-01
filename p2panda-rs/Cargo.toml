@@ -1,11 +1,12 @@
 [package]
 name = "p2panda-rs"
-version = "0.3.0"
+version = "0.4.0"
 authors = [
   "sophiiistika <sophiiistika@mailbox.org>",
   "adz <x12@adz.garden>",
   "sandreae <contact@samandreae.com>",
   "cafca <cafca@001.land>",
+  "pietgeursen <pietgeursen@gmail.com>",
 ]
 edition = "2018"
 description = "All the things a panda needs"
@@ -30,7 +31,9 @@ testing = ["dep:rstest", "dep:rstest_reuse", "dep:varu64"]
 arrayvec = "^0.5.2"
 async-trait = "^0.1.56"
 bamboo-rs-core-ed25519-yasmf = "^0.1.1"
-cddl-cat = { version = "^0.6.1", default-features = false, features = ["serde_cbor"] }
+cddl-cat = { version = "^0.6.1", default-features = false, features = [
+  "serde_cbor",
+] }
 ciborium = "^0.2.0"
 ed25519 = "^1.5.2"
 ed25519-dalek = "^1.0.1"
