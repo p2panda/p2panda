@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::BTreeMap;
+use std::fmt::Write;
 
 use crate::schema::FieldType;
 
@@ -53,45 +54,54 @@ type FieldName = String;
 
 /// Generate a CDDL definition for the passed field name and type mappings.
 pub fn generate_fields(fields: &BTreeMap<FieldName, FieldType>) -> String {
-    let mut cddl_str = "".to_string();
+    let mut cddl_str = String::new();
+
     for (count, (name, field_type)) in fields.iter().enumerate() {
         if count != 0 {
-            cddl_str += "\n";
+            let _ = writeln!(cddl_str);
         };
-        cddl_str += &format!("{name} = {{ ");
-        cddl_str += &format!("type: \"{}\", ", field_type.serialise());
-        cddl_str += &format!(
-            "value: {}, ",
+
+        let _ = write!(
+            cddl_str,
+            "{} = {{ type: \"{}\", value: {}, }}",
+            name,
+            field_type.serialise(),
             CddlType::from(field_type.to_owned()).as_str()
         );
-        cddl_str += "}";
     }
+
     cddl_str
 }
 
 /// Generate a CDDL definition for the compulsory fields of a CREATE operation.
 pub fn generate_create_fields(fields: &[&String]) -> String {
     let mut cddl_str = "create-fields = { ".to_string();
+
     for (count, key) in fields.iter().enumerate() {
         if count != 0 {
-            cddl_str += ", ";
+            let _ = write!(cddl_str, ", ");
         }
-        cddl_str += key;
+        let _ = write!(cddl_str, "{}", key);
     }
-    cddl_str += " }";
+
+    let _ = write!(cddl_str, " }}");
+
     cddl_str
 }
 
 /// Generate a CDDL definition for the optional fields of an UPDATE operation.
 pub fn generate_update_fields(fields: &[&String]) -> String {
     let mut cddl_str = "update-fields = { + ( ".to_string();
+
     for (count, key) in fields.iter().enumerate() {
         if count != 0 {
-            cddl_str += " // ";
+            let _ = write!(cddl_str, " // ");
         }
-        cddl_str += key;
+        let _ = write!(cddl_str, "{}", key);
     }
-    cddl_str += " ) }";
+
+    let _ = write!(cddl_str, " ) }}");
+
     cddl_str
 }
 
@@ -101,29 +111,23 @@ pub fn generate_update_fields(fields: &[&String]) -> String {
 /// schema.
 pub fn generate_cddl_definition(fields: &BTreeMap<FieldName, FieldType>) -> String {
     let field_names: Vec<&String> = fields.keys().collect();
-    let mut cddl_str = String::from("");
 
-    cddl_str += &generate_fields(&fields.clone());
-    cddl_str += "\n";
-    cddl_str += &generate_create_fields(&field_names);
-    cddl_str += "\n";
-    cddl_str += &generate_update_fields(&field_names);
-
-    cddl_str
+    format!(
+        "{}\n{}\n{}",
+        &generate_fields(&fields.clone()),
+        &generate_create_fields(&field_names),
+        &generate_update_fields(&field_names),
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
-    use crate::{
-        cddl::{
-            generate_cddl_definition,
-            generator::{generate_create_fields, generate_fields, generate_update_fields},
-        },
-        schema::{FieldType, SchemaId},
-        test_utils::constants::TEST_SCHEMA_ID,
-    };
+    use crate::cddl::generate_cddl_definition;
+    use crate::cddl::generator::{generate_create_fields, generate_fields, generate_update_fields};
+    use crate::schema::{FieldType, SchemaId};
+    use crate::test_utils::constants::TEST_SCHEMA_ID;
 
     fn person() -> BTreeMap<String, FieldType> {
         let mut person = BTreeMap::new();
