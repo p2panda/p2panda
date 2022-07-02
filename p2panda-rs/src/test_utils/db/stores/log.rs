@@ -24,7 +24,7 @@ impl LogStore<StorageLog> for SimplestStorageProvider {
         let logs = self.logs.lock().unwrap();
 
         let log = logs
-            .iter()
+            .values()
             .find(|log| log.document_id() == *document_id && log.author() == *author);
 
         let log_id = log.map(|log| log.id());
@@ -34,7 +34,7 @@ impl LogStore<StorageLog> for SimplestStorageProvider {
     async fn next_log_id(&self, author: &Author) -> Result<LogId, LogStorageError> {
         let logs = self.logs.lock().unwrap();
 
-        let author_logs = logs.iter().filter(|log| log.author() == *author);
+        let author_logs = logs.values().filter(|log| log.author() == *author);
         let next_log_id = author_logs.count() + 1;
         Ok(LogId::new(next_log_id as u64))
     }

@@ -57,8 +57,7 @@ impl AsStorageEntry for StorageEntry {
         entry: &EntrySigned,
         operation: &OperationEncoded,
     ) -> Result<Self, Self::AsStorageEntryError> {
-        let entry_decoded = decode_entry(&entry, Some(&operation))
-            .expect("Passed operation did not match the payload hash encoded in the entry");
+        let entry_decoded = decode_entry(entry, None).unwrap();
 
         let entry = StorageEntry {
             author: entry.author(),

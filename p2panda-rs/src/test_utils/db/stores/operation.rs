@@ -17,14 +17,17 @@ impl OperationStore<VerifiedOperation> for SimplestStorageProvider {
     ) -> Result<(), OperationStorageError> {
         let mut operations = self.operations.lock().unwrap();
         if operations
-            .iter()
+            .values()
             .any(|(_document_id, verified_operation)| verified_operation == operation)
         {
             return Err(OperationStorageError::InsertionError(
                 operation.operation_id().clone(),
             ));
         } else {
-            operations.push((document_id.clone(), operation.clone()))
+            operations.insert(
+                operation.operation_id().to_owned(),
+                (document_id.clone(), operation.clone()),
+            )
         };
         Ok(())
     }
@@ -38,10 +41,7 @@ impl OperationStore<VerifiedOperation> for SimplestStorageProvider {
         id: &OperationId,
     ) -> Result<Option<VerifiedOperation>, OperationStorageError> {
         let operations = self.operations.lock().unwrap();
-        Ok(operations
-            .iter()
-            .find(|(_document_id, verified_operation)| verified_operation.operation_id() == id)
-            .map(|(_, operation)| operation.clone()))
+        Ok(operations.get(id).map(|(_, operation)| operation.clone()))
     }
 
     /// Get the id of the document an operation is contained within.
@@ -54,7 +54,7 @@ impl OperationStore<VerifiedOperation> for SimplestStorageProvider {
     ) -> Result<Option<DocumentId>, OperationStorageError> {
         let operations = self.operations.lock().unwrap();
         Ok(operations
-            .iter()
+            .values()
             .find(|(_document_id, verified_operation)| verified_operation.operation_id() == id)
             .map(|(document_id, _operation)| document_id.clone()))
     }
@@ -70,7 +70,7 @@ impl OperationStore<VerifiedOperation> for SimplestStorageProvider {
     ) -> Result<Vec<VerifiedOperation>, OperationStorageError> {
         let operations = self.operations.lock().unwrap();
         Ok(operations
-            .iter()
+            .values()
             .filter(|(document_id, _verified_operation)| document_id == id)
             .map(|(_, operation)| operation.clone())
             .collect())

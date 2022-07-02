@@ -154,7 +154,10 @@ async fn test_the_test_db(
     let db = db.await;
     let entries = db.store.entries.lock().unwrap().clone();
     for seq_num in 1..10 {
-        let entry = entries.get(seq_num - 1).unwrap();
+        let entry = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
+            .unwrap();
 
         let expected_seq_num = SeqNum::new(seq_num as u64).unwrap();
         assert_eq!(expected_seq_num, *entry.entry_decoded().seq_num());
@@ -165,30 +168,25 @@ async fn test_the_test_db(
         let mut expected_backlink_hash = None;
 
         if seq_num != 1 {
-            expected_backlink_hash = entries
-                .get(seq_num - 2)
-                .map(|backlink_entry| backlink_entry.hash());
+            expected_backlink_hash = Some(
+                entries
+                    .values()
+                    .find(|entry| entry.seq_num().as_u64() as usize == seq_num - 1)
+                    .unwrap()
+                    .hash(),
+            );
         }
-        assert_eq!(
-            expected_backlink_hash,
-            entry.entry_decoded().backlink_hash().cloned()
-        );
+        assert_eq!(expected_backlink_hash, entry.backlink_hash());
 
         let mut expected_skiplink_hash = None;
 
         if SKIPLINK_ENTRIES.contains(&(seq_num as u64)) {
-            let skiplink_seq_num = entry
-                .entry_decoded()
-                .seq_num()
-                .skiplink_seq_num()
-                .unwrap()
-                .as_u64();
+            let skiplink_seq_num = entry.seq_num().skiplink_seq_num().unwrap().as_u64();
 
             let skiplink_entry = entries
-                .get((skiplink_seq_num as usize) - 1)
-                .unwrap()
-                .clone();
-
+                .values()
+                .find(|entry| entry.seq_num().as_u64() == skiplink_seq_num)
+                .unwrap();
             expected_skiplink_hash = Some(skiplink_entry.hash());
         };
 

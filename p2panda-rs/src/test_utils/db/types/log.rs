@@ -25,14 +25,12 @@ pub struct StorageLog {
 /// Implement `AsStorageLog` trait for our `StorageLog` struct
 impl AsStorageLog for StorageLog {
     fn new(author: &Author, schema: &SchemaId, document: &DocumentId, log_id: &LogId) -> Self {
-        let log = StorageLog {
+        StorageLog {
             author: author.clone(),
             log_id: *log_id,
             document: document.clone(),
             schema: schema.clone(),
-        };
-
-        log
+        }
     }
 
     fn author(&self) -> Author {
@@ -48,6 +46,6 @@ impl AsStorageLog for StorageLog {
     }
 
     fn id(&self) -> LogId {
-        self.log_id.clone()
+        self.log_id
     }
 }

@@ -28,9 +28,7 @@ impl EntryStore<StorageEntry> for SimplestStorageProvider {
     ) -> Result<Option<StorageEntry>, EntryStorageError> {
         let entries = self.entries.lock().unwrap();
 
-        let entry = entries.iter().find(|entry| entry.hash() == *hash);
-
-        Ok(entry.cloned())
+        Ok(entries.get(hash).cloned())
     }
 
     /// Returns entry at sequence position within an author's log.
@@ -42,8 +40,8 @@ impl EntryStore<StorageEntry> for SimplestStorageProvider {
     ) -> Result<Option<StorageEntry>, EntryStorageError> {
         let entries = self.entries.lock().unwrap();
 
-        let entry = entries.iter().find(|entry| {
-            entry.author() == *author && entry.log_id() == *log_id && entry.seq_num() == *seq_num
+        let entry = entries.values().find(|entry| {
+            entry.seq_num() == *seq_num && entry.author() == *author && entry.log_id() == *log_id
         });
 
         Ok(entry.cloned())
@@ -59,10 +57,10 @@ impl EntryStore<StorageEntry> for SimplestStorageProvider {
 
         let latest_entry = entries
             .iter()
-            .filter(|entry| entry.author() == *author && entry.log_id() == *log_id)
-            .max_by_key(|entry| entry.seq_num().as_u64());
+            .filter(|(_, entry)| entry.author() == *author && entry.log_id() == *log_id)
+            .max_by_key(|(_, entry)| entry.seq_num().as_u64());
 
-        Ok(latest_entry.cloned())
+        Ok(latest_entry.map(|(_, entry)| entry).cloned())
     }
 
     /// Returns the given range of log entries.
@@ -98,8 +96,8 @@ impl EntryStore<StorageEntry> for SimplestStorageProvider {
 
         let entries: Vec<StorageEntry> = entries
             .iter()
-            .filter(|entry| entry.operation().schema() == *schema)
-            .map(|e| e.to_owned())
+            .filter(|(_, entry)| entry.operation().schema() == *schema)
+            .map(|(_, entry)| entry.to_owned())
             .collect();
 
         Ok(entries)
@@ -134,7 +132,6 @@ impl EntryStore<StorageEntry> for SimplestStorageProvider {
 #[cfg(test)]
 pub mod tests {
     use std::convert::TryFrom;
-    use std::sync::{Arc, Mutex};
 
     use rstest::rstest;
 
@@ -156,11 +153,7 @@ pub mod tests {
         operation_encoded: OperationEncoded,
     ) {
         // Instantiate a new store.
-        let store = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-            operations: Arc::new(Mutex::new(Vec::new())),
-        };
+        let store = SimplestStorageProvider::default();
 
         let storage_entry = StorageEntry::new(&entry_signed_encoded, &operation_encoded).unwrap();
 
@@ -187,11 +180,7 @@ pub mod tests {
         operation_encoded: OperationEncoded,
     ) {
         // Instantiate a new store.
-        let store = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-            operations: Arc::new(Mutex::new(Vec::new())),
-        };
+        let store = SimplestStorageProvider::default();
 
         let storage_entry = StorageEntry::new(&entry_signed_encoded, &operation_encoded).unwrap();
 
@@ -225,11 +214,7 @@ pub mod tests {
         schema: SchemaId,
     ) {
         // Instantiate a new store.
-        let store = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(Vec::new())),
-            entries: Arc::new(Mutex::new(Vec::new())),
-            operations: Arc::new(Mutex::new(Vec::new())),
-        };
+        let store = SimplestStorageProvider::default();
 
         let author_1_entry = sign_and_encode(&entry, &key_pair_1).unwrap();
         let author_2_entry = sign_and_encode(&entry, &key_pair_2).unwrap();
@@ -261,25 +246,43 @@ pub mod tests {
         let db = db.await;
         let entries = db.store.entries.lock().unwrap().clone();
 
+        let entry_one = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() == 1)
+            .unwrap();
+
+        let entry_two = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() == 2)
+            .unwrap();
+
+        let entry_three = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() == 2)
+            .unwrap();
+
         assert_eq!(
-            entries.get(0).cloned(),
+            *entry_one,
             db.store
-                .get_entry_by_hash(&entries[0].hash())
+                .get_entry_by_hash(&entry_one.hash())
                 .await
+                .unwrap()
                 .unwrap()
         );
         assert_eq!(
-            entries.get(1).cloned(),
+            *entry_two,
             db.store
-                .get_entry_by_hash(&entries[1].hash())
+                .get_entry_by_hash(&entry_two.hash())
                 .await
+                .unwrap()
                 .unwrap()
         );
         assert_eq!(
-            entries.get(2).cloned(),
+            *entry_three,
             db.store
-                .get_entry_by_hash(&entries[2].hash())
+                .get_entry_by_hash(&entry_three.hash())
                 .await
+                .unwrap()
                 .unwrap()
         );
     }

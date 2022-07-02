@@ -191,6 +191,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 
 #[cfg(test)]
 pub mod tests {
+    use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
 
     use rstest::rstest;
@@ -216,18 +217,22 @@ pub mod tests {
         let db = db.await;
         let entries = db.store.entries.lock().unwrap().clone();
 
+        let entry = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
+            .unwrap();
+
         let backlink = if seq_num == 1 {
             None
         } else {
-            entries.get(seq_num - 2).cloned()
+            entries
+                .values()
+                .find(|entry| entry.seq_num().as_u64() as usize == seq_num - 1)
         };
 
         assert_eq!(
             backlink,
-            db.store
-                .try_get_backlink(&entries[seq_num - 1])
-                .await
-                .unwrap()
+            db.store.try_get_backlink(entry).await.unwrap().as_ref()
         );
     }
 
@@ -242,13 +247,27 @@ pub mod tests {
         let db = db.await;
         let entries = db.store.entries.lock().unwrap().clone();
 
+        // Get the entry with seq number 1
+        let entry_at_seq_num_one = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 1)
+            .unwrap();
+
         // Get the entry with seq number 2
-        let entry_at_seq_num_two = entries.get(1).unwrap();
+        let entry_at_seq_num_two = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 2)
+            .unwrap();
 
         {
             // Remove the entry at seq_num 1, which is the expected backlink for the above seq num 2 entry
-            db.store.entries.lock().unwrap().remove(0);
+            db.store
+                .entries
+                .lock()
+                .unwrap()
+                .remove(&entry_at_seq_num_one.hash());
         }
+
         assert_eq!(
             db.store
                 .try_get_backlink(entry_at_seq_num_two)
@@ -276,7 +295,10 @@ pub mod tests {
         let entries = db.store.entries.lock().unwrap().clone();
 
         // Get the entry with seq number 4
-        let entry_at_seq_num_four = entries.get(3).unwrap();
+        let entry_at_seq_num_four = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 4)
+            .unwrap();
 
         // Reconstruct it with an invalid backlink
         let entry_at_seq_num_four_with_wrong_backlink = Entry::new(
@@ -340,15 +362,22 @@ pub mod tests {
         let db = db.await;
         let entries = db.store.entries.lock().unwrap().clone();
 
-        let expected_skiplink =
-            expected_skiplink_seq_num.map(|seq_num| entries.get(seq_num - 1).cloned().unwrap());
+        let entry = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
+            .unwrap();
 
+        let expected_skiplink = expected_skiplink_seq_num.map(|seq_num| {
+            entries
+                .values()
+                .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
+                .unwrap()
+        });
+
+        // Get the entry with seq number 4
         assert_eq!(
             expected_skiplink,
-            db.store
-                .try_get_skiplink(&entries[seq_num - 1])
-                .await
-                .unwrap()
+            db.store.try_get_skiplink(entry).await.unwrap().as_ref()
         );
     }
 
@@ -363,13 +392,27 @@ pub mod tests {
         let db = db.await;
         let entries = db.store.entries.lock().unwrap().clone();
 
+        // Get the entry with seq number 1
+        let entry_at_seq_num_one = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 1)
+            .unwrap();
+
         // Get the entry with seq number 4
-        let entry_at_seq_num_four = entries.get(3).unwrap();
+        let entry_at_seq_num_four = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 4)
+            .unwrap();
 
         {
             // Remove the entry at seq_num 1, which is the expected skiplink for the above seq num 4 entry
-            db.store.entries.lock().unwrap().remove(0);
+            db.store
+                .entries
+                .lock()
+                .unwrap()
+                .remove(&entry_at_seq_num_one.hash());
         }
+
         assert_eq!(
             db.store
                 .try_get_skiplink(entry_at_seq_num_four)
@@ -397,7 +440,10 @@ pub mod tests {
         let entries = db.store.entries.lock().unwrap().clone();
 
         // Get the entry with seq number 4
-        let entry_at_seq_num_four = entries.get(3).unwrap();
+        let entry_at_seq_num_four = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 4)
+            .unwrap();
 
         // Reconstruct it with an invalid skiplink
         let entry_at_seq_num_four_with_wrong_skiplink = Entry::new(
@@ -443,7 +489,10 @@ pub mod tests {
         let entries = db.store.entries.lock().unwrap().clone();
 
         for seq_num in 1..10 {
-            let current_entry = entries.get(seq_num - 1).unwrap();
+            let current_entry = entries
+                .values()
+                .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
+                .unwrap();
             let next_entry_skiplink = db.store.determine_next_skiplink(current_entry).await;
             assert!(next_entry_skiplink.is_ok());
             if SKIPLINK_ENTRIES.contains(&((seq_num + 1) as u64)) {
@@ -466,23 +515,31 @@ pub mod tests {
         let entries = db.store.entries.lock().unwrap().clone();
         let logs = db.store.logs.lock().unwrap().clone();
 
-        let log_entries_with_skiplink_missing = vec![
-            entries.get(0).unwrap().clone(),
-            entries.get(1).unwrap().clone(),
-            entries.get(2).unwrap().clone(),
-            entries.get(4).unwrap().clone(),
-            entries.get(5).unwrap().clone(),
-        ];
+        let mut log_entries_with_skiplink_missing = entries.clone();
 
+        // Get the entry with seq number 4
+        let entry_at_seq_num_four = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 4)
+            .unwrap();
+
+        // Remove the entry at seq num 4
+        log_entries_with_skiplink_missing.remove(&entry_at_seq_num_four.hash());
+
+        // Get the entry with seq number 7
+        let entry_at_seq_num_seven = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 7)
+            .unwrap();
+
+        // Construct a new db which is missing one entry
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(logs)),
             entries: Arc::new(Mutex::new(log_entries_with_skiplink_missing)),
-            operations: Arc::new(Mutex::new(Vec::new())),
+            operations: Arc::new(Mutex::new(BTreeMap::new())),
         };
 
-        let error_response = new_db
-            .determine_next_skiplink(entries.get(6).unwrap())
-            .await;
+        let error_response = new_db.determine_next_skiplink(entry_at_seq_num_seven).await;
 
         assert_eq!(
             format!("{}", error_response.unwrap_err()),

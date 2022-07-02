@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 
 use crate::document::DocumentId;
 use crate::hash::Hash;
-use crate::operation::VerifiedOperation;
+use crate::operation::{OperationId, VerifiedOperation};
 use crate::storage_provider::traits::StorageProvider;
 use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog};
 
@@ -15,27 +16,26 @@ use super::{
     StorageLog,
 };
 
+type AuthorPlusLogId = String;
+
 /// The simplest storage provider. Used for tests in `entry_store`, `log_store` & `storage_provider`
 #[derive(Default, Debug)]
 pub struct SimplestStorageProvider {
-    pub logs: Arc<Mutex<Vec<StorageLog>>>,
-    pub entries: Arc<Mutex<Vec<StorageEntry>>>,
-    pub operations: Arc<Mutex<Vec<(DocumentId, VerifiedOperation)>>>,
+    pub logs: Arc<Mutex<BTreeMap<AuthorPlusLogId, StorageLog>>>,
+    pub entries: Arc<Mutex<BTreeMap<Hash, StorageEntry>>>,
+    pub operations: Arc<Mutex<BTreeMap<OperationId, (DocumentId, VerifiedOperation)>>>,
 }
 
 impl SimplestStorageProvider {
     pub fn db_insert_entry(&self, entry: StorageEntry) {
         let mut entries = self.entries.lock().unwrap();
-        entries.push(entry);
-        // Remove duplicate entries.
-        entries.dedup();
+        entries.insert(entry.hash(), entry);
     }
 
     pub fn db_insert_log(&self, log: StorageLog) {
+        let author_log_id_str = log.author().as_str().to_string() + &log.id().as_u64().to_string();
         let mut logs = self.logs.lock().unwrap();
-        logs.push(log);
-        // Remove duplicate logs.
-        logs.dedup();
+        logs.insert(author_log_id_str, log);
     }
 }
 
@@ -55,10 +55,12 @@ impl StorageProvider<StorageEntry, StorageLog, VerifiedOperation> for SimplestSt
     ) -> Result<Option<DocumentId>, Box<dyn std::error::Error + Sync + Send>> {
         let entries = self.entries.lock().unwrap();
 
-        let entry = entries.iter().find(|entry| entry.hash() == *entry_hash);
+        let entry = entries
+            .iter()
+            .find(|(_, entry)| entry.hash() == *entry_hash);
 
         let entry = match entry {
-            Some(entry) => entry,
+            Some((_, entry)) => entry,
             None => return Ok(None),
         };
 
@@ -66,8 +68,8 @@ impl StorageProvider<StorageEntry, StorageLog, VerifiedOperation> for SimplestSt
 
         let log = logs
             .iter()
-            .find(|log| log.id() == entry.log_id() && log.author() == entry.author());
+            .find(|(_, log)| log.id() == entry.log_id() && log.author() == entry.author());
 
-        Ok(Some(log.unwrap().document_id()))
+        Ok(log.map(|(_, log)| log.document_id()))
     }
 }
