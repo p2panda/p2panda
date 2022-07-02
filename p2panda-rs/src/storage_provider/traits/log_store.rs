@@ -67,7 +67,7 @@ pub mod tests {
     #[async_std::test]
     async fn find_document_log_id(
         #[from(test_db)]
-        #[with(3, 1)]
+        #[with(3, 1, 1)]
         #[future]
         db: TestStore,
     ) {

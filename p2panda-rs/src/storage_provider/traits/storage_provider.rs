@@ -241,7 +241,7 @@ pub mod tests {
     #[async_std::test]
     async fn can_publish_entries(
         #[from(test_db)]
-        #[with(20, 1)]
+        #[with(20, 1, 1)]
         #[future]
         db: TestStore,
     ) {
@@ -293,7 +293,7 @@ pub mod tests {
     async fn rejects_invalid_backlink(
         key_pair: KeyPair,
         #[from(test_db)]
-        #[with(4, 1)]
+        #[with(4, 1, 1)]
         #[future]
         db: TestStore,
     ) {
@@ -363,7 +363,7 @@ pub mod tests {
     async fn rejects_invalid_skiplink(
         key_pair: KeyPair,
         #[from(test_db)]
-        #[with(4, 1)]
+        #[with(4, 1, 1)]
         #[future]
         db: TestStore,
     ) {
@@ -432,7 +432,7 @@ pub mod tests {
     #[async_std::test]
     async fn gets_entry_args(
         #[from(test_db)]
-        #[with(20, 1)]
+        #[with(20, 1, 1)]
         #[future]
         db: TestStore,
     ) {
@@ -500,7 +500,7 @@ pub mod tests {
     async fn wrong_log_id(
         key_pair: KeyPair,
         #[from(test_db)]
-        #[with(2, 1)]
+        #[with(2, 1, 1)]
         #[future]
         db: TestStore,
     ) {
@@ -562,7 +562,7 @@ pub mod tests {
     #[async_std::test]
     async fn skiplink_does_not_exist(
         #[from(test_db)]
-        #[with(8, 1)]
+        #[with(8, 1, 1)]
         #[future]
         db: TestStore,
     ) {
@@ -609,7 +609,7 @@ pub mod tests {
     #[async_std::test]
     async fn prev_op_does_not_exist(
         #[from(test_db)]
-        #[with(4, 1)]
+        #[with(4, 1, 1)]
         #[future]
         db: TestStore,
         operation_fields: OperationFields,
@@ -672,7 +672,7 @@ pub mod tests {
     #[async_std::test]
     async fn invalid_entry_op_pair(
         #[from(test_db)]
-        #[with(4, 1)]
+        #[with(4, 1, 1)]
         #[future]
         db: TestStore,
     ) {

@@ -239,7 +239,7 @@ pub mod tests {
     #[async_std::test]
     async fn get_entry_by_hash(
         #[from(test_db)]
-        #[with(3, 1)]
+        #[with(3, 1, 1)]
         #[future]
         db: TestStore,
     ) {
@@ -292,7 +292,7 @@ pub mod tests {
     async fn get_n_entries(
         key_pair: KeyPair,
         #[from(test_db)]
-        #[with(16, 1)]
+        #[with(16, 1, 1)]
         #[future]
         db: TestStore,
     ) {
@@ -327,7 +327,7 @@ pub mod tests {
     async fn get_cert_pool(
         key_pair: KeyPair,
         #[from(test_db)]
-        #[with(17, 1)]
+        #[with(17, 1, 1)]
         #[future]
         db: TestStore,
     ) {

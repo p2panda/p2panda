@@ -84,12 +84,17 @@ pub fn doggo_test_fields() -> Vec<(&'static str, OperationValue)> {
 
 /// Helper for creating many key_pairs.
 pub fn test_key_pairs(no_of_authors: usize) -> Vec<KeyPair> {
-    let mut key_pairs = vec![KeyPair::from_private_key_str(DEFAULT_PRIVATE_KEY).unwrap()];
-
-    for _index in 1..no_of_authors {
-        key_pairs.push(KeyPair::new())
-    }
-
+    let mut key_pairs = Vec::new();
+    match no_of_authors {
+        0 => (),
+        1 => key_pairs.push(KeyPair::from_private_key_str(DEFAULT_PRIVATE_KEY).unwrap()),
+        _ => {
+            key_pairs.push(KeyPair::from_private_key_str(DEFAULT_PRIVATE_KEY).unwrap());
+            for _index in 2..no_of_authors {
+                key_pairs.push(KeyPair::new())
+            }
+        }
+    };
     key_pairs
 }
 
@@ -376,13 +381,13 @@ pub async fn send_to_store(
 #[async_std::test]
 async fn test_the_test_db(
     #[from(test_db)]
-    #[with(17, 1)]
+    #[with(17, 1, 1)]
     #[future]
     db: TestStore,
 ) {
     let db = db.await;
     let entries = db.store.entries.lock().unwrap().clone();
-    for seq_num in 1..10 {
+    for seq_num in 1..17 {
         let entry = entries
             .values()
             .find(|entry| entry.seq_num().as_u64() as usize == seq_num)

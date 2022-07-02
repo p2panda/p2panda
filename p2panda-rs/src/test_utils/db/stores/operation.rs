@@ -215,7 +215,7 @@ mod tests {
     async fn get_operations_by_document_id(
         key_pair: KeyPair,
         #[from(test_db)]
-        #[with(5, 1)]
+        #[with(5, 1, 1)]
         #[future]
         db: TestStore,
     ) {

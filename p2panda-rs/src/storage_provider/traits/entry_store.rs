@@ -209,7 +209,7 @@ pub mod tests {
     async fn try_get_backlink(
         #[values[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 ,15 ,16]] seq_num: usize,
         #[from(test_db)]
-        #[with(17, 1)]
+        #[with(17, 1, 1)]
         #[future]
         db: TestStore,
     ) {
@@ -239,7 +239,7 @@ pub mod tests {
     #[async_std::test]
     async fn try_get_backlink_entry_missing(
         #[from(test_db)]
-        #[with(17, 1)]
+        #[with(17, 1, 1)]
         #[future]
         db: TestStore,
     ) {
@@ -286,7 +286,7 @@ pub mod tests {
         key_pair: KeyPair,
         operation_encoded: OperationEncoded,
         #[from(test_db)]
-        #[with(4, 1)]
+        #[with(4, 1, 1)]
         #[future]
         db: TestStore,
     ) {
@@ -354,7 +354,7 @@ pub mod tests {
         #[case] seq_num: usize,
         #[case] expected_skiplink_seq_num: Option<usize>,
         #[from(test_db)]
-        #[with(17, 1)]
+        #[with(17, 1, 1)]
         #[future]
         db: TestStore,
     ) {
@@ -384,7 +384,7 @@ pub mod tests {
     #[async_std::test]
     async fn try_get_skiplink_entry_missing(
         #[from(test_db)]
-        #[with(4, 1)]
+        #[with(4, 1, 1)]
         #[future]
         db: TestStore,
     ) {
@@ -431,7 +431,7 @@ pub mod tests {
         key_pair: KeyPair,
         operation_encoded: OperationEncoded,
         #[from(test_db)]
-        #[with(4, 1)]
+        #[with(4, 1, 1)]
         #[future]
         db: TestStore,
     ) {
@@ -480,7 +480,7 @@ pub mod tests {
     #[async_std::test]
     async fn can_determine_next_skiplink(
         #[from(test_db)]
-        #[with(17, 1)]
+        #[with(17, 1, 1)]
         #[future]
         db: TestStore,
     ) {
@@ -506,7 +506,7 @@ pub mod tests {
     #[async_std::test]
     async fn skiplink_does_not_exist(
         #[from(test_db)]
-        #[with(17, 1)]
+        #[with(17, 1, 1)]
         #[future]
         db: TestStore,
     ) {
