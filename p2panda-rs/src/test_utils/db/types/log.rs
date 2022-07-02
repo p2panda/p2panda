@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::str::FromStr;
-
 use crate::document::DocumentId;
 use crate::entry::LogId;
 use crate::identity::Author;
@@ -10,40 +8,46 @@ use crate::storage_provider::traits::AsStorageLog;
 
 /// A log entry represented as a concatenated string of `"{author}-{schema}-{document_id}-{log_id}"`
 #[derive(Debug, Clone, PartialEq)]
-pub struct StorageLog(String);
+pub struct StorageLog {
+    /// Public key of the author.
+    pub author: Author,
+
+    /// Log id used for this document.
+    pub log_id: LogId,
+
+    /// Hash that identifies the document this log is for.
+    pub document: DocumentId,
+
+    /// SchemaId which identifies the schema for operations in this log.
+    pub schema: SchemaId,
+}
 
 /// Implement `AsStorageLog` trait for our `StorageLog` struct
 impl AsStorageLog for StorageLog {
     fn new(author: &Author, schema: &SchemaId, document: &DocumentId, log_id: &LogId) -> Self {
-        // Concat all values
-        let log_string = format!(
-            "{}-{}-{}-{}",
-            author.as_str(),
-            schema.as_str(),
-            document.as_str(),
-            log_id.as_u64()
-        );
+        let log = StorageLog {
+            author: author.clone(),
+            log_id: *log_id,
+            document: document.clone(),
+            schema: schema.clone(),
+        };
 
-        Self(log_string)
+        log
     }
 
     fn author(&self) -> Author {
-        let params: Vec<&str> = self.0.split('-').collect();
-        Author::new(params[0]).unwrap()
+        self.author.clone()
     }
 
     fn schema_id(&self) -> SchemaId {
-        let params: Vec<&str> = self.0.split('-').collect();
-        SchemaId::from_str(params[1]).unwrap()
+        self.schema.clone()
     }
 
     fn document_id(&self) -> DocumentId {
-        let params: Vec<&str> = self.0.split('-').collect();
-        DocumentId::from_str(params[2]).unwrap()
+        self.document.clone()
     }
 
     fn id(&self) -> LogId {
-        let params: Vec<&str> = self.0.split('-').collect();
-        LogId::from_str(params[3]).unwrap()
+        self.log_id.clone()
     }
 }

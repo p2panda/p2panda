@@ -3,7 +3,7 @@
 use crate::entry::{decode_entry, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{Operation, OperationEncoded};
+use crate::operation::{Operation, OperationEncoded, OperationId};
 use crate::storage_provider::errors::EntryStorageError;
 use crate::storage_provider::traits::AsStorageEntry;
 use crate::storage_provider::ValidationError;
@@ -11,7 +11,28 @@ use crate::Validate;
 
 /// A struct which represents an entry and operation pair in storage as a concatenated string.
 #[derive(Debug, Clone, PartialEq)]
-pub struct StorageEntry(String);
+pub struct StorageEntry {
+    /// Public key of the author.
+    pub author: Author,
+
+    /// Actual Bamboo entry data.
+    pub entry_bytes: EntrySigned,
+
+    /// Hash of Bamboo entry data.
+    pub entry_hash: Hash,
+
+    /// Used log for this entry.
+    pub log_id: LogId,
+
+    /// Payload of entry, can be deleted.
+    pub payload_bytes: Option<OperationEncoded>,
+
+    /// Hash of payload data.
+    pub payload_hash: OperationId,
+
+    /// Sequence number of this entry.
+    pub seq_num: SeqNum,
+}
 
 impl StorageEntry {
     pub fn entry_decoded(&self) -> Entry {
@@ -20,13 +41,11 @@ impl StorageEntry {
     }
 
     pub fn entry_signed(&self) -> EntrySigned {
-        let params: Vec<&str> = self.0.split('-').collect();
-        EntrySigned::new(params[0]).unwrap()
+        self.entry_bytes.clone()
     }
 
     pub fn operation_encoded(&self) -> Option<OperationEncoded> {
-        let params: Vec<&str> = self.0.split('-').collect();
-        Some(OperationEncoded::new(params[1]).unwrap())
+        self.payload_bytes.clone()
     }
 }
 
@@ -38,10 +57,21 @@ impl AsStorageEntry for StorageEntry {
         entry: &EntrySigned,
         operation: &OperationEncoded,
     ) -> Result<Self, Self::AsStorageEntryError> {
-        let entry_string = format!("{}-{}", entry.as_str(), operation.as_str());
-        let storage_entry = Self(entry_string);
-        storage_entry.validate()?;
-        Ok(storage_entry)
+        let entry_decoded = decode_entry(&entry, Some(&operation))
+            .expect("Passed operation did not match the payload hash encoded in the entry");
+
+        let entry = StorageEntry {
+            author: entry.author(),
+            entry_bytes: entry.clone(),
+            entry_hash: entry.hash(),
+            log_id: entry_decoded.log_id().to_owned(),
+            payload_bytes: Some(operation.clone()),
+            payload_hash: entry.payload_hash().into(),
+            seq_num: entry_decoded.seq_num().to_owned(),
+        };
+
+        entry.validate()?;
+        Ok(entry)
     }
 
     fn author(&self) -> Author {
