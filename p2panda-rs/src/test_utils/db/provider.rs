@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 
-use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
+use crate::document::{Document, DocumentId, DocumentView};
 use crate::hash::Hash;
 use crate::operation::{OperationId, VerifiedOperation};
 use crate::schema::SchemaId;

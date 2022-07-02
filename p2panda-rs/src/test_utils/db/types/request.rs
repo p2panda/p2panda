@@ -9,15 +9,18 @@ use crate::storage_provider::ValidationError;
 use crate::Validate;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct PublishEntryRequest(pub EntrySigned, pub OperationEncoded);
+pub struct PublishEntryRequest {
+    pub entry: EntrySigned,
+    pub operation: OperationEncoded,
+}
 
 impl AsPublishEntryRequest for PublishEntryRequest {
     fn entry_signed(&self) -> &EntrySigned {
-        &self.0
+        &self.entry
     }
 
     fn operation_encoded(&self) -> &OperationEncoded {
-        &self.1
+        &self.operation
     }
 }
 
@@ -34,16 +37,16 @@ impl Validate for PublishEntryRequest {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EntryArgsRequest {
-    pub author: Author,
-    pub document: Option<DocumentId>,
+    pub public_key: Author,
+    pub document_id: Option<DocumentId>,
 }
 
 impl AsEntryArgsRequest for EntryArgsRequest {
     fn author(&self) -> &Author {
-        &self.author
+        &self.public_key
     }
     fn document_id(&self) -> &Option<DocumentId> {
-        &self.document
+        &self.document_id
     }
 }
 

@@ -258,10 +258,10 @@ pub mod tests {
                 .unwrap();
 
             // Publish each test entry in order
-            let publish_entry_request = PublishEntryRequest(
-                entry.entry_signed(),
-                entry.operation_encoded().unwrap().clone(),
-            );
+            let publish_entry_request = PublishEntryRequest {
+                entry: entry.entry_signed(),
+                operation: entry.operation_encoded().unwrap().clone(),
+            };
 
             let publish_entry_response = new_db.publish_entry(&publish_entry_request).await;
 
@@ -309,10 +309,10 @@ pub mod tests {
                 .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
                 .unwrap();
 
-            let publish_entry_request = PublishEntryRequest(
-                entry.entry_signed(),
-                entry.operation_encoded().unwrap().clone(),
-            );
+            let publish_entry_request = PublishEntryRequest {
+                entry: entry.entry_signed(),
+                operation: entry.operation_encoded().unwrap().clone(),
+            };
 
             new_db.publish_entry(&publish_entry_request).await.unwrap();
         }
@@ -341,10 +341,10 @@ pub mod tests {
 
         let entry_signed = sign_and_encode(&entry_with_invalid_backlink, &key_pair).unwrap();
 
-        let publish_entry_request = PublishEntryRequest(
-            entry_signed.clone(),
-            entry_four.operation_encoded().unwrap(),
-        );
+        let publish_entry_request = PublishEntryRequest {
+            entry: entry_signed.clone(),
+            operation: entry_four.operation_encoded().unwrap(),
+        };
 
         let error_response = new_db.publish_entry(&publish_entry_request).await;
 
@@ -379,10 +379,10 @@ pub mod tests {
                 .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
                 .unwrap();
 
-            let publish_entry_request = PublishEntryRequest(
-                entry.entry_signed(),
-                entry.operation_encoded().unwrap().clone(),
-            );
+            let publish_entry_request = PublishEntryRequest {
+                entry: entry.entry_signed(),
+                operation: entry.operation_encoded().unwrap().clone(),
+            };
 
             new_db.publish_entry(&publish_entry_request).await.unwrap();
         }
@@ -411,10 +411,10 @@ pub mod tests {
 
         let entry_signed = sign_and_encode(&entry_with_invalid_backlink, &key_pair).unwrap();
 
-        let publish_entry_request = PublishEntryRequest(
-            entry_signed.clone(),
-            entry_four.operation_encoded().unwrap(),
-        );
+        let publish_entry_request = PublishEntryRequest {
+            entry: entry_signed.clone(),
+            operation: entry_four.operation_encoded().unwrap(),
+        };
 
         let error_response = new_db.publish_entry(&publish_entry_request).await;
 
@@ -465,8 +465,8 @@ pub mod tests {
 
             // Construct entry args request
             let entry_args_request = EntryArgsRequest {
-                author: entry.author(),
-                document: document_id,
+                public_key: entry.author(),
+                document_id,
             };
 
             let entry_args_response = new_db.get_entry_args(&entry_args_request).await;
@@ -486,10 +486,10 @@ pub mod tests {
             assert_eq!(entry_args_response.unwrap(), expected_reponse);
 
             // Publish each test entry in order before next loop
-            let publish_entry_request = PublishEntryRequest(
-                entry.entry_signed(),
-                entry.operation_encoded().unwrap().clone(),
-            );
+            let publish_entry_request = PublishEntryRequest {
+                entry: entry.entry_signed(),
+                operation: entry.operation_encoded().unwrap().clone(),
+            };
 
             new_db.publish_entry(&publish_entry_request).await.unwrap();
         }
@@ -516,10 +516,10 @@ pub mod tests {
             .unwrap();
 
         // Entry request for valid first entry in log 1
-        let publish_entry_request = PublishEntryRequest(
-            entry_one.entry_signed(),
-            entry_one.operation_encoded().unwrap(),
-        );
+        let publish_entry_request = PublishEntryRequest {
+            entry: entry_one.entry_signed(),
+            operation: entry_one.operation_encoded().unwrap(),
+        };
 
         // Publish the first valid entry
         new_db.publish_entry(&publish_entry_request).await.unwrap();
@@ -544,8 +544,10 @@ pub mod tests {
         let encoded_operation = OperationEncoded::try_from(&entry_two.operation()).unwrap();
 
         // Create request and publish invalid entry
-        let request_with_wrong_log_id =
-            PublishEntryRequest(signed_entry_with_wrong_log_id, encoded_operation);
+        let request_with_wrong_log_id = PublishEntryRequest {
+            entry: signed_entry_with_wrong_log_id,
+            operation: encoded_operation,
+        };
 
         // Should error as the published entry contains an invalid log
         let error_response = new_db.publish_entry(&request_with_wrong_log_id).await;
@@ -585,10 +587,10 @@ pub mod tests {
             .find(|entry| entry.seq_num().as_u64() as usize == 8)
             .unwrap();
 
-        let publish_entry_request = PublishEntryRequest(
-            entry_at_seq_num_eight.entry_signed(),
-            entry_at_seq_num_eight.operation_encoded().unwrap(),
-        );
+        let publish_entry_request = PublishEntryRequest {
+            entry: entry_at_seq_num_eight.entry_signed(),
+            operation: entry_at_seq_num_eight.operation_encoded().unwrap(),
+        };
 
         // Should error as an entry at seq num 8 should have a skiplink relation to the missing
         // entry at seq num 4
@@ -650,7 +652,10 @@ pub mod tests {
             OperationEncoded::try_from(&update_operation_with_invalid_previous_operations).unwrap();
 
         // Publish this entry (which contains an invalid previous_operation)
-        let publish_entry_request = PublishEntryRequest(encoded_entry.clone(), encoded_operation);
+        let publish_entry_request = PublishEntryRequest {
+            entry: encoded_entry.clone(),
+            operation: encoded_operation,
+        };
 
         let error_response = db.store.publish_entry(&publish_entry_request).await;
 
@@ -706,8 +711,10 @@ pub mod tests {
         let encoded_operation = OperationEncoded::try_from(&mismatched_operation).unwrap();
 
         // Publish this entry with an mismatching operation
-        let publish_entry_request =
-            PublishEntryRequest(entry_at_seq_num_four.entry_signed(), encoded_operation);
+        let publish_entry_request = PublishEntryRequest {
+            entry: entry_at_seq_num_four.entry_signed(),
+            operation: encoded_operation,
+        };
 
         let error_response = db.store.publish_entry(&publish_entry_request).await;
 

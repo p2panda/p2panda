@@ -191,7 +191,6 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 
 #[cfg(test)]
 pub mod tests {
-    use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
 
     use rstest::rstest;

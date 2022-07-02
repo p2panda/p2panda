@@ -6,8 +6,8 @@ use crate::storage_provider::traits::{AsEntryArgsResponse, AsPublishEntryRespons
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PublishEntryResponse {
-    pub entry_hash_backlink: Option<Hash>,
-    pub entry_hash_skiplink: Option<Hash>,
+    pub backlink: Option<Hash>,
+    pub skiplink: Option<Hash>,
     pub seq_num: SeqNum,
     pub log_id: LogId,
 }
@@ -15,15 +15,10 @@ pub struct PublishEntryResponse {
 impl AsPublishEntryResponse for PublishEntryResponse {
     /// Just the constructor method is defined here as all we need this trait for
     /// is constructing entry args to be returned from the default trait methods.
-    fn new(
-        entry_hash_backlink: Option<Hash>,
-        entry_hash_skiplink: Option<Hash>,
-        seq_num: SeqNum,
-        log_id: LogId,
-    ) -> Self {
+    fn new(backlink: Option<Hash>, skiplink: Option<Hash>, seq_num: SeqNum, log_id: LogId) -> Self {
         Self {
-            entry_hash_backlink,
-            entry_hash_skiplink,
+            backlink,
+            skiplink,
             seq_num,
             log_id,
         }
@@ -32,8 +27,8 @@ impl AsPublishEntryResponse for PublishEntryResponse {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EntryArgsResponse {
-    pub entry_hash_backlink: Option<Hash>,
-    pub entry_hash_skiplink: Option<Hash>,
+    pub backlink: Option<Hash>,
+    pub skiplink: Option<Hash>,
     pub seq_num: SeqNum,
     pub log_id: LogId,
 }
@@ -41,15 +36,10 @@ pub struct EntryArgsResponse {
 impl AsEntryArgsResponse for EntryArgsResponse {
     /// Just the constructor method is defined here as all we need this trait for
     /// is constructing entry args to be returned from the default trait methods.
-    fn new(
-        entry_hash_backlink: Option<Hash>,
-        entry_hash_skiplink: Option<Hash>,
-        seq_num: SeqNum,
-        log_id: LogId,
-    ) -> Self {
+    fn new(backlink: Option<Hash>, skiplink: Option<Hash>, seq_num: SeqNum, log_id: LogId) -> Self {
         Self {
-            entry_hash_backlink,
-            entry_hash_skiplink,
+            backlink,
+            skiplink,
             seq_num,
             log_id,
         }
