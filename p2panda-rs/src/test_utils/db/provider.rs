@@ -5,9 +5,10 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 
-use crate::document::DocumentId;
+use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
 use crate::hash::Hash;
 use crate::operation::{OperationId, VerifiedOperation};
+use crate::schema::SchemaId;
 use crate::storage_provider::traits::StorageProvider;
 use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog};
 
@@ -17,6 +18,8 @@ use super::{
 };
 
 type AuthorPlusLogId = String;
+type DocumentViewIdStr = String;
+type DocumentIdStr = String;
 
 /// The simplest storage provider. Used for tests in `entry_store`, `log_store` & `storage_provider`
 #[derive(Default, Debug)]
@@ -24,6 +27,8 @@ pub struct SimplestStorageProvider {
     pub logs: Arc<Mutex<BTreeMap<AuthorPlusLogId, StorageLog>>>,
     pub entries: Arc<Mutex<BTreeMap<Hash, StorageEntry>>>,
     pub operations: Arc<Mutex<BTreeMap<OperationId, (DocumentId, VerifiedOperation)>>>,
+    pub documents: Arc<Mutex<BTreeMap<DocumentIdStr, Document>>>,
+    pub document_views: Arc<Mutex<BTreeMap<DocumentViewIdStr, (SchemaId, DocumentView)>>>,
 }
 
 impl SimplestStorageProvider {

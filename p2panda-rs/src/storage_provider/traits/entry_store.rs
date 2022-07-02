@@ -536,7 +536,7 @@ pub mod tests {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(logs)),
             entries: Arc::new(Mutex::new(log_entries_with_skiplink_missing)),
-            operations: Arc::new(Mutex::new(BTreeMap::new())),
+            ..SimplestStorageProvider::default()
         };
 
         let error_response = new_db.determine_next_skiplink(entry_at_seq_num_seven).await;
