@@ -78,20 +78,26 @@
 //! // There should be 4 entries
 //! entries.len(); // => 4
 //! ```
+use async_std::task;
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use log::{debug, info};
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryFrom;
 
-use crate::document::{Document, DocumentBuilder};
+use crate::document::{Document, DocumentBuilder, DocumentId};
 use crate::entry::{decode_entry, EntrySigned, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{
     AsOperation, AsVerifiedOperation, Operation, OperationEncoded, VerifiedOperation,
 };
-use crate::test_utils::mocks::logs::{AuthorLogs, LogEntry};
+use crate::storage_provider::traits::test_utils::send_to_store;
+use crate::storage_provider::traits::{EntryStore, StorageProvider};
+use crate::test_utils::db::{
+    EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
+};
+use crate::test_utils::db::{SimplestStorageProvider, StorageEntry};
 use crate::test_utils::mocks::utils::Result;
 use crate::test_utils::mocks::Client;
 use crate::test_utils::utils::NextEntryArgs;
@@ -101,7 +107,7 @@ pub fn send_to_node(
     node: &mut Node,
     client: &Client,
     operation: &Operation,
-) -> Result<(Hash, NextEntryArgs)> {
+) -> Result<(Hash, PublishEntryResponse)> {
     // We need to establish which document this operation is targeting before proceeding.
     // First we check if this is a create message, which would mean no document exists yet.
     let document_id = if operation.is_create() {
@@ -117,128 +123,63 @@ pub fn send_to_node(
 
         // Using the first previous operation in the list we retrieve the associated document
         // id from the database.
-        let document_id = node
-            .get_document_id_by_entry(previous_operations.into_iter().next().unwrap().as_hash());
 
-        Some(document_id.expect("This node does not contain the required document"))
+        let document_id = task::block_on(async {
+            node.0
+                .get_document_by_entry(previous_operations.into_iter().next().unwrap().as_hash())
+                .await
+        })
+        .unwrap();
+
+        document_id
     };
 
-    // Here we can retrieve the correct entry arguments for constructing an entry.
-    let entry_args = node.get_next_entry_args(&client.author(), document_id.as_ref(), None)?;
-
-    // The entry is constructed, signed and encoded.
-    let entry_encoded = client.signed_encoded_entry(operation.to_owned(), entry_args);
-
-    // The operation is also encoded.
-    let operation_encoded = OperationEncoded::try_from(operation).unwrap();
-
-    // Both are published to the node.
-    let next_entry_args = node.publish_entry(&entry_encoded, &operation_encoded)?;
-
-    // Return entry hash so we can use it to perform UPDATE and DELETE operations later.
-    // @TODO: We really want to return the next entry args here which would include
-    // the document graph tips. This requires integrating Document into the test utils.
-    Ok((entry_encoded.hash(), next_entry_args))
-}
-
-/// Calculate the skiplink and backlink at a certain point in a log of entries.
-fn calculate_links(seq_num: &SeqNum, log: &[LogEntry]) -> (Option<Hash>, Option<Hash>) {
-    // Next skiplink hash
-    let skiplink = match seq_num.skiplink_seq_num() {
-        Some(seq) if is_lipmaa_required(seq_num.as_u64()) => Some(
-            log.get(seq.as_u64() as usize - 1)
-                .expect("Skiplink missing!")
-                .hash(),
-        ),
-        _ => None,
-    };
-
-    // Next backlink hash
-    let backlink = seq_num.backlink_seq_num().map(|seq| {
-        log.get(seq.as_u64() as usize - 1)
-            .expect("Backlink missing!")
-            .hash()
+    let (entry_encoded, response) = task::block_on(async {
+        send_to_store(
+            &mut node.0,
+            operation,
+            document_id.as_ref(),
+            &client.key_pair,
+        )
+        .await
     });
-    (backlink, skiplink)
-}
 
-/// Mock database type.
-///
-/// Maps the public key of an author against a map of their logs identified by log id.
-pub type Database = HashMap<String, AuthorLogs>;
+    Ok((entry_encoded.hash(), response))
+}
 
 /// This node mocks functionality which would be implemented in a real world p2panda node.
 ///
 /// It does so in a simplistic manner and should only be used in a testing environment or demo
 /// environment.
 #[derive(Debug, Default)]
-pub struct Node {
-    /// Internal database structure.
-    db: Database,
-}
+pub struct Node(SimplestStorageProvider);
 
 impl Node {
     /// Create a new mock Node.
     pub fn new() -> Self {
-        Self {
-            db: Database::new(),
-        }
+        Self(SimplestStorageProvider::default())
     }
 
-    /// Return the entire database.
-    pub fn db(&self) -> Database {
-        self.db.clone()
-    }
-
-    /// Return an array of authors who publish to this node.
-    pub fn get_authors(&self) -> Vec<&String> {
-        self.db.keys().into_iter().collect()
-    }
-
-    /// Get a mutable map of all logs published by a certain author.
-    fn get_author_logs_mut(&mut self, author: &Author) -> Option<&mut AuthorLogs> {
-        self.db.get_mut(author.as_str())
-    }
-
-    /// Get a map of all logs published by a certain author.
-    fn get_author_logs(&self, author: &Author) -> Option<&AuthorLogs> {
-        self.db.get(author.as_str())
+    /// Return the entire store.
+    pub fn db(&self) -> SimplestStorageProvider {
+        self.0.clone()
     }
 
     /// Get entry by id
-    pub fn get_entry(&self, id: &Hash) -> LogEntry {
-        self.all_entries()
-            .iter()
-            .find(|entry| &entry.hash() == id)
-            .unwrap()
-            .to_owned()
-    }
-
-    /// Get the document id associated with the passed entry hash.
-    fn get_document_id_by_entry(&self, entry: &Hash) -> Option<Hash> {
-        let mut document_id = None;
-        self.db.iter().any(|(_author, logs)| {
-            let document_log = logs.find_document_log_by_entry(entry);
-            match document_log {
-                Some(log) => {
-                    document_id = Some(log.document());
-                    true
-                }
-                None => false,
-            }
-        });
-        document_id
+    pub fn get_entry(&self, id: &Hash) -> Option<StorageEntry> {
+        task::block_on(async { self.0.get_entry_by_hash(id).await.unwrap() })
     }
 
     /// Get an array of all entries in database.
-    pub fn all_entries(&self) -> Vec<LogEntry> {
-        let mut all_entries: Vec<LogEntry> = Vec::new();
-        self.db.iter().for_each(|(_id, author_logs)| {
-            author_logs
-                .iter()
-                .for_each(|log| all_entries.append(log.entries().as_mut()))
-        });
-        all_entries
+    pub fn all_entries(&self) -> Vec<StorageEntry> {
+        let mut all_entries: Vec<StorageEntry> = Vec::new();
+        self.0
+            .entries
+            .lock()
+            .unwrap()
+            .into_iter()
+            .map(|(_, entry)| entry)
+            .collect()
     }
 
     /// Public wrapper with logging for private next_entry_args method.
@@ -252,9 +193,9 @@ impl Node {
     pub fn get_next_entry_args(
         &self,
         author: &Author,
-        document_id: Option<&Hash>,
+        document_id: Option<&DocumentId>,
         seq_num: Option<&SeqNum>,
-    ) -> Result<NextEntryArgs> {
+    ) -> Result<EntryArgsResponse> {
         info!(
             "[next_entry_args] REQUEST: next entry args for author {} document {} {}",
             author.as_str(),
@@ -266,7 +207,14 @@ impl Node {
 
         debug!("\n{:?}\n{:?}\n{:?}", author, document_id, seq_num);
 
-        let next_entry_args = self.next_entry_args(author, document_id, seq_num)?;
+        let entry_args_request = EntryArgsRequest {
+            public_key: author.clone(),
+            document_id: document_id.cloned(),
+        };
+
+        let next_entry_args =
+            task::block_on(async move { self.0.get_entry_args(&entry_args_request).await })
+                .unwrap();
 
         info!(
             "[next_entry_args] RESPONSE: log id: {} seq num: {} backlink: {} skiplink: {}",
@@ -289,84 +237,12 @@ impl Node {
         Ok(next_entry_args)
     }
 
-    /// Returns the log id, sequence number, skiplink and backlink hash for a given author and
-    /// document. All of this information is needed to create and sign a new entry.
-    ///
-    /// If a value for the optional seq_num parameter is passed then next entry args *at that
-    /// point* in this log are returned. This is helpful when generating test data and wanting to
-    /// test the flow from requesting entry args through to publishing an entry.
-    fn next_entry_args(
-        &self,
-        author: &Author,
-        document_id: Option<&Hash>,
-        seq_num: Option<&SeqNum>,
-    ) -> Result<NextEntryArgs> {
-        // Get or instantiate a collection of logs for this author.
-        let author_logs = match self.get_author_logs(author) {
-            Some(logs) => logs.clone(),
-            None => AuthorLogs::new(),
-        };
-
-        // Find the log for this document and author if it exists.
-        let document_log = match document_id {
-            Some(document_id) => author_logs.get_log_by_document_id(document_id),
-            None => None,
-        };
-
-        // Construct the next entry args.
-        let entry_args = match document_log {
-            Some(log) => {
-                // If a document log already we retrieve all the entries.
-                let mut entries = log.entries();
-                // If a seq num was passed to this method it means we are
-                // requesting entry args for a specific point in this log.
-                // NB: This is a functionality only implemented in the mock node
-                //for testing purposes.
-                let seq_num_inner = match seq_num {
-                    // If a sequence number was passed ...
-                    Some(s) => {
-                        // ... trim the log to the point in time we are interested in
-                        entries = entries[..s.as_u64() as usize - 1].to_owned();
-                        // ... and return the sequence number.
-                        *s
-                    }
-                    None => {
-                        // If no sequence number was passed calculate and return the next sequence
-                        // number for this log
-                        log.next_seq_num()
-                    }
-                };
-
-                // Calculate backlink and skiplink.
-                let (backlink, skiplink) = calculate_links(&seq_num_inner, &entries);
-
-                // Construct the next entry args.
-                NextEntryArgs {
-                    log_id: log.id(),
-                    seq_num: seq_num_inner,
-                    skiplink,
-                    backlink,
-                }
-            }
-            // This document log doesn't exist yet, so we construct next entry args
-            // based on the next log id for the author.
-            None => NextEntryArgs {
-                log_id: author_logs.next_log_id(),
-                seq_num: SeqNum::default(),
-                skiplink: None,
-                backlink: None,
-            },
-        };
-
-        Ok(entry_args)
-    }
-
     /// Store an entry in the database and return the hash of the newly created entry.
     pub fn publish_entry(
         &mut self,
         entry_encoded: &EntrySigned,
         operation_encoded: &OperationEncoded,
-    ) -> Result<NextEntryArgs> {
+    ) -> Result<PublishEntryResponse> {
         let entry = decode_entry(entry_encoded, Some(operation_encoded))?;
         let log_id = entry.log_id();
         let author = entry_encoded.author();
@@ -380,76 +256,14 @@ impl Node {
 
         debug!("\n{:?}\n{:?}", entry_encoded, operation_encoded);
 
-        let document_id = if !operation.is_create() {
-            let previous_operations = operation.previous_operations().unwrap_or_else(|| {
-                panic!(
-                    "Document log for entry {} not found on node",
-                    entry_encoded.hash().as_str()
-                )
-            });
-            let document_id = self
-                .get_document_id_by_entry(previous_operations.into_iter().next().unwrap().as_hash())
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Document log for entry {} not found on node",
-                        entry_encoded.hash().as_str()
-                    )
-                });
-            info!("Document found with id {}", document_id.as_str());
-            document_id
-        } else {
-            info!(
-                "Creating new document with id {}",
-                entry_encoded.hash().as_str()
-            );
-
-            entry_encoded.hash()
+        let publish_entry_request = PublishEntryRequest {
+            entry: entry_encoded.clone(),
+            operation: operation_encoded.clone(),
         };
 
-        // Get all logs by this author.
-        let author_logs = match self.get_author_logs_mut(&author) {
-            Some(logs) => logs,
-            // If there aren't any, then instantiate a new log collection
-            // and insert it into the db.
-            None => {
-                self.db.insert(author.as_str().into(), AuthorLogs::new());
-                self.get_author_logs_mut(&author).unwrap()
-            }
-        };
-
-        // Get the log for this document from the author logs.
-        match author_logs.get_log_mut(log_id) {
-            Some(_) if operation.is_create() => {
-                // If this is a create message the assigned log id should be free.
-                return Err(format!("Log with id: {} already exists.", log_id.as_u64()).into());
-            }
-            Some(log) => {
-                // If there is one, insert this new entry.
-                log.add_entry(LogEntry::new(entry_encoded, operation_encoded));
-            }
-            None => {
-                // If there isn't one, then create and insert it.
-
-                // First checking if the passed log id matches what we expect the next log
-                // id for this log to be.
-                let expected_log_id = author_logs.next_log_id();
-
-                if *log_id != expected_log_id {
-                    return Err(format!(
-                        "Passed log id {} does not match expected log id {}",
-                        log_id.as_u64(),
-                        expected_log_id.as_u64()
-                    )
-                    .into());
-                };
-
-                // If it matches then we now create and insert the new log with it's
-                // first entry included.
-                author_logs.create_new_log(document_id.clone(), entry_encoded, operation_encoded);
-            }
-        };
-
-        let next_entry_args = self.next_entry_args(&author, Some(&document_id), None)?;
+        let publish_entry_response =
+            task::block_on(async move { self.0.publish_entry(&publish_entry_request).await })
+                .unwrap();
 
         info!(
             "[publish_entry] RESPONSE: succesfully published entry: {} to log: {} and returning next entry args",
@@ -457,47 +271,38 @@ impl Node {
             log_id.as_u64()
         );
 
-        debug!("\n{:?}", next_entry_args);
+        debug!("\n{:?}", publish_entry_response);
 
-        Ok(next_entry_args)
-    }
-
-    /// Returns all of a documents entries from this node. Includes entries from all authors.
-    pub fn get_document_entries(&self, id: &Hash) -> Vec<LogEntry> {
-        self.db()
-            .iter()
-            .flat_map(|(_, author_logs)| author_logs.iter().filter(|log| log.document() == *id))
-            .flat_map(|log| log.entries())
-            .collect()
+        Ok(publish_entry_response)
     }
 
     /// Get a single resolved document from the node.
-    pub fn get_document(&self, id: &Hash) -> Document {
-        let entries = self.get_document_entries(id);
-        let operations = entries
-            .iter()
-            .map(|entry| {
-                VerifiedOperation::new_from_entry(
-                    &entry.entry_encoded(),
-                    &entry.operation_encoded(),
-                )
-                .unwrap()
-            })
+    pub fn get_document(&self, id: &DocumentId) -> Document {
+        let operations = self
+            .0
+            .operations
+            .lock()
+            .unwrap()
+            .into_iter()
+            .filter(|(_, (document_id, operation))| document_id == id)
+            .map(|(_, (_, operation))| operation)
             .collect();
         DocumentBuilder::new(operations).build().unwrap()
     }
 
     /// Get all documents in their resolved state from the node.
     pub fn get_documents(&self) -> Vec<Document> {
-        let mut documents = HashSet::new();
-        for (_author, author_logs) in self.db() {
-            author_logs.iter().for_each(|log| {
-                documents.insert(log.document().as_str().to_string());
-            });
-        }
+        let mut documents: BTreeMap<&str, DocumentId> = BTreeMap::new();
+
+        let operations = self.0.operations.lock().unwrap().into_iter().for_each(
+            |(_, (document_id, operation))| {
+                documents.insert(document_id.as_str(), document_id);
+            },
+        );
+
         documents
-            .iter()
-            .map(|x| self.get_document(&Hash::new(x).unwrap()))
+            .values()
+            .map(|id| self.get_document(&id))
             .collect()
     }
 }
@@ -606,7 +411,7 @@ mod tests {
         let penguin = Client::new("penguin".to_string(), KeyPair::new());
 
         let next_entry_args = node
-            .next_entry_args(&penguin.author(), Some(&panda_entry_1_hash), None)
+            .get_next_entry_args(&penguin.author(), Some(&panda_entry_1_hash.into()), None)
             .unwrap();
 
         expected_next_entry_args = NextEntryArgs {

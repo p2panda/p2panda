@@ -250,7 +250,7 @@ pub async fn test_db(
 
 /// Container for `SqlStore` with access to the document ids and key_pairs used in the
 /// pre-populated database for testing.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct TestStore {
     pub store: SimplestStorageProvider,
     pub test_data: TestData,

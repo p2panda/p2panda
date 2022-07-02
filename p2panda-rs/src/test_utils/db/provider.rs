@@ -22,7 +22,7 @@ type DocumentViewIdStr = String;
 type DocumentIdStr = String;
 
 /// The simplest storage provider. Used for tests in `entry_store`, `log_store` & `storage_provider`
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct SimplestStorageProvider {
     pub logs: Arc<Mutex<BTreeMap<AuthorPlusLogId, StorageLog>>>,
     pub entries: Arc<Mutex<BTreeMap<Hash, StorageEntry>>>,
