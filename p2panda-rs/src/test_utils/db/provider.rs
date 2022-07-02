@@ -16,7 +16,7 @@ use super::{
 };
 
 /// The simplest storage provider. Used for tests in `entry_store`, `log_store` & `storage_provider`
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct SimplestStorageProvider {
     pub logs: Arc<Mutex<Vec<StorageLog>>>,
     pub entries: Arc<Mutex<Vec<StorageEntry>>>,
