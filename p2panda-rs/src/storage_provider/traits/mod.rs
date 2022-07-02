@@ -10,7 +10,7 @@ mod requests;
 mod responses;
 mod storage_provider;
 #[cfg(test)]
-mod test_utils;
+pub mod test_utils;
 
 pub use document_store::DocumentStore;
 pub use entry_store::EntryStore;
