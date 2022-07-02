@@ -5,8 +5,8 @@ use async_trait::async_trait;
 use crate::document::DocumentId;
 use crate::operation::{AsVerifiedOperation, OperationId, VerifiedOperation};
 use crate::storage_provider::errors::OperationStorageError;
-use crate::storage_provider::traits::test_utils::SimplestStorageProvider;
 use crate::storage_provider::traits::OperationStore;
+use crate::test_utils::db::SimplestStorageProvider;
 
 #[async_trait]
 impl OperationStore<VerifiedOperation> for SimplestStorageProvider {

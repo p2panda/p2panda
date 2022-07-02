@@ -199,10 +199,9 @@ pub mod tests {
     use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::{Operation, OperationEncoded};
-    use crate::storage_provider::traits::test_utils::{
-        test_db, SimplestStorageProvider, StorageEntry, TestStore, SKIPLINK_ENTRIES,
-    };
+    use crate::storage_provider::traits::test_utils::{test_db, TestStore, SKIPLINK_ENTRIES};
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
+    use crate::test_utils::db::{SimplestStorageProvider, StorageEntry};
     use crate::test_utils::fixtures::{key_pair, operation_encoded};
 
     #[rstest]

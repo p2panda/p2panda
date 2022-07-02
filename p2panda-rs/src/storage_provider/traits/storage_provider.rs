@@ -218,60 +218,25 @@ pub mod tests {
     use std::convert::TryFrom;
     use std::sync::{Arc, Mutex};
 
-    use async_trait::async_trait;
     use rstest::rstest;
 
     use crate::document::DocumentId;
     use crate::entry::{sign_and_encode, Entry, LogId};
-    use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::{
         AsOperation, OperationEncoded, OperationFields, OperationId, OperationValue,
-        VerifiedOperation,
     };
-    use crate::storage_provider::traits::test_utils::{
-        test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
-        SimplestStorageProvider, StorageEntry, StorageLog, TestStore,
-    };
+    use crate::storage_provider::traits::test_utils::{test_db, TestStore};
     use crate::storage_provider::traits::{
-        AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
+        AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry,
+    };
+    use crate::test_utils::db::{
+        EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
+        SimplestStorageProvider,
     };
     use crate::test_utils::fixtures::{entry, key_pair, operation, operation_fields, operation_id};
 
     use super::StorageProvider;
-
-    #[async_trait]
-    impl StorageProvider<StorageEntry, StorageLog, VerifiedOperation> for SimplestStorageProvider {
-        type EntryArgsRequest = EntryArgsRequest;
-
-        type EntryArgsResponse = EntryArgsResponse;
-
-        type PublishEntryRequest = PublishEntryRequest;
-
-        type PublishEntryResponse = PublishEntryResponse;
-
-        async fn get_document_by_entry(
-            &self,
-            entry_hash: &Hash,
-        ) -> Result<Option<DocumentId>, Box<dyn std::error::Error + Sync + Send>> {
-            let entries = self.entries.lock().unwrap();
-
-            let entry = entries.iter().find(|entry| entry.hash() == *entry_hash);
-
-            let entry = match entry {
-                Some(entry) => entry,
-                None => return Ok(None),
-            };
-
-            let logs = self.logs.lock().unwrap();
-
-            let log = logs
-                .iter()
-                .find(|log| log.id() == entry.log_id() && log.author() == entry.author());
-
-            Ok(Some(log.unwrap().document_id()))
-        }
-    }
 
     #[rstest]
     #[async_std::test]
