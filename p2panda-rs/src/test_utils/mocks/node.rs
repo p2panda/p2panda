@@ -81,13 +81,13 @@
 use async_std::task;
 use log::{debug, info};
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-use crate::document::{Document, DocumentBuilder, DocumentId, DocumentView, DocumentViewId};
-use crate::entry::{decode_entry, EntrySigned, LogId};
+use crate::document::{Document, DocumentBuilder, DocumentId};
+use crate::entry::{decode_entry, EntrySigned};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{AsOperation, Operation, OperationEncoded, OperationId, VerifiedOperation};
+use crate::operation::{Operation, OperationEncoded, OperationId};
 use crate::storage_provider::traits::test_utils::send_to_store;
 use crate::storage_provider::traits::{
     AsStorageEntry, DocumentStore, EntryStore, OperationStore, StorageProvider,
@@ -145,18 +145,18 @@ impl Node {
     }
 
     /// Return the entire store.
-    pub fn db(&self) -> SimplestStorageProvider {
-        self.0.clone()
+    pub fn store(&self) -> &SimplestStorageProvider {
+        &self.0
     }
 
-    /// Get entry by id
-    pub fn get_entry(&self, id: &Hash) -> Option<StorageEntry> {
-        task::block_on(async { self.0.get_entry_by_hash(id).await.unwrap() })
+    /// Get an entry by it's id.
+    pub fn entry(&self, id: &Hash) -> Option<StorageEntry> {
+        task::block_on(async { self.store().get_entry_by_hash(id).await.unwrap() })
     }
 
-    /// Get an array of all entries in database.
+    /// Get all entries in the node's database.
     pub fn all_entries(&self) -> Vec<StorageEntry> {
-        self.0
+        self.store()
             .entries
             .lock()
             .unwrap()
@@ -165,37 +165,24 @@ impl Node {
             .collect()
     }
 
-    pub fn get_authors(&self) -> HashSet<Author> {
+    /// Get all authors who have published to this node.
+    pub fn all_authors(&self) -> HashSet<Author> {
         let mut authors = HashSet::new();
-        let entries = self.0.entries.lock().unwrap();
+        let entries = self.store().entries.lock().unwrap();
         for (_, entry) in entries.iter() {
             authors.insert(entry.author());
         }
         authors
     }
 
-    pub fn get_author_logs(&self, author: &Author) -> HashMap<LogId, HashSet<StorageEntry>> {
-        let mut logs: HashMap<LogId, HashSet<StorageEntry>> = HashMap::new();
-        let entries = self.0.entries.lock().unwrap();
-        for (_, entry) in entries.iter() {
-            if &entry.author() != author {
-                continue;
-            }
-            let mut log_entries = logs.get_mut(&entry.log_id()).cloned().unwrap_or_default();
-            log_entries.insert(entry.clone());
-            logs.insert(entry.log_id(), log_entries);
-        }
-        logs
-    }
-
     /// Get a single resolved document from the node.
-    pub fn get_document(&self, id: &DocumentId) -> Option<Document> {
-        self.0.documents.lock().unwrap().get(id).cloned()
+    pub fn document(&self, id: &DocumentId) -> Option<Document> {
+        self.store().documents.lock().unwrap().get(id).cloned()
     }
 
     /// Get all documents in their resolved state from the node.
-    pub fn get_documents(&self) -> Vec<Document> {
-        self.0
+    pub fn all_documents(&self) -> Vec<Document> {
+        self.store()
             .documents
             .lock()
             .unwrap()
@@ -220,7 +207,7 @@ impl Node {
         info!(
             "[next_entry_args] REQUEST: next entry args for author {} document {}",
             author.as_str(),
-            document_id.map(|id| id.as_str()).unwrap_or("not provided"),
+            document_id.map(|id| id.as_str()).unwrap_or("na"),
         );
 
         debug!("\n{:?}\n{:?}", author, document_id);
@@ -231,7 +218,7 @@ impl Node {
         };
 
         let next_entry_args =
-            task::block_on(async move { self.0.get_entry_args(&entry_args_request).await })?;
+            task::block_on(async move { self.store().get_entry_args(&entry_args_request).await })?;
 
         info!(
             "[next_entry_args] RESPONSE: log id: {} seq num: {} backlink: {} skiplink: {}",
@@ -263,12 +250,11 @@ impl Node {
         let entry = decode_entry(entry_encoded, Some(operation_encoded))?;
         let log_id = entry.log_id();
         let author = entry_encoded.author();
-        let operation = entry.operation().unwrap();
 
         info!(
-            "[publish_entry] REQUEST: publish entry: {} from author: {}",
-            entry_encoded.hash().as_str(),
-            author.as_str()
+            "[publish_entry] REQUEST: publish {} from author: {}",
+            entry_encoded.hash(),
+            author
         );
 
         debug!("\n{:?}\n{:?}", entry_encoded, operation_encoded);
@@ -279,11 +265,13 @@ impl Node {
         };
 
         let publish_entry_response =
-            task::block_on(async move { self.0.publish_entry(&publish_entry_request).await })?;
+            task::block_on(
+                async move { self.store().publish_entry(&publish_entry_request).await },
+            )?;
 
         info!(
-            "[publish_entry] RESPONSE: succesfully published entry: {} to log: {} and returning next entry args",
-            entry_encoded.hash().as_str(),
+            "[publish_entry] RESPONSE: succesfully published {} to log: {} and returning next entry args",
+            entry_encoded.hash(),
             log_id.as_u64()
         );
 
@@ -359,9 +347,7 @@ mod tests {
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
         // The database contains one author now.
-        assert_eq!(node.get_authors().len(), 1);
-        // Who has one log.
-        assert_eq!(node.get_author_logs(&panda.author()).len(), 1);
+        assert_eq!(node.all_authors().len(), 1);
 
         // Panda publishes an update operation.
         // It contains the hash of the current graph tip in it's `previous_operations`.
@@ -392,8 +378,7 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        assert_eq!(node.get_authors().len(), 1);
-        assert_eq!(node.get_author_logs(&panda.author()).len(), 1);
+        assert_eq!(node.all_authors().len(), 1);
 
         let penguin = Client::new("penguin".to_string(), KeyPair::new());
 
@@ -443,8 +428,7 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        assert_eq!(node.get_authors().len(), 2);
-        assert_eq!(node.get_author_logs(&penguin.author()).len(), 1);
+        assert_eq!(node.all_authors().len(), 2);
 
         // Penguin publishes another update operation refering to their own previous operation
         // as the graph tip.
@@ -477,11 +461,10 @@ mod tests {
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
         // Now there are 2 authors publishing ot the node.
-        assert_eq!(node.get_authors().len(), 2);
-        assert_eq!(node.get_author_logs(&penguin.author()).len(), 1);
+        assert_eq!(node.all_authors().len(), 2);
 
         // We can query the node for the current document state.
-        let document = node.get_document(&document_id).unwrap();
+        let document = node.document(&document_id).unwrap();
         let document_view_value = document.view().unwrap().get("message").unwrap();
         // It was last updated by Penguin, this writes over previous values.
         assert_eq!(
@@ -489,7 +472,7 @@ mod tests {
             &OperationValue::Text("And again. [Penguin]".to_string())
         );
         // There should only be one document in the database.
-        assert_eq!(node.get_documents().len(), 1);
+        assert_eq!(node.all_documents().len(), 1);
 
         // Panda publishes another create operation.
         // This again instantiates a new document.
@@ -517,11 +500,9 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        assert_eq!(node.get_authors().len(), 2);
-        // Now panda has 2 document logs.
-        assert_eq!(node.get_author_logs(&panda.author()).len(), 2);
+        assert_eq!(node.all_authors().len(), 2);
         // There should be 2 document in the database.
-        assert_eq!(node.get_documents().len(), 2);
+        assert_eq!(node.all_documents().len(), 2);
     }
 
     #[rstest]
@@ -552,9 +533,7 @@ mod tests {
         )
         .unwrap();
 
-        let document = node
-            .get_document(&panda_entry_1_hash.clone().into())
-            .unwrap();
+        let document = node.document(&panda_entry_1_hash.clone().into()).unwrap();
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
             document_view_value.value(),
@@ -577,9 +556,7 @@ mod tests {
         )
         .unwrap();
 
-        let document = node
-            .get_document(&panda_entry_1_hash.clone().into())
-            .unwrap();
+        let document = node.document(&panda_entry_1_hash.clone().into()).unwrap();
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
             document_view_value.value(),
@@ -605,9 +582,7 @@ mod tests {
         )
         .unwrap();
 
-        let document = node
-            .get_document(&panda_entry_1_hash.clone().into())
-            .unwrap();
+        let document = node.document(&panda_entry_1_hash.clone().into()).unwrap();
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
             document_view_value.value(),
@@ -634,7 +609,7 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.get_document(&panda_entry_1_hash.into()).unwrap();
+        let document = node.document(&panda_entry_1_hash.into()).unwrap();
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
             document_view_value.value(),

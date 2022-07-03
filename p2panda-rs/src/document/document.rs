@@ -465,7 +465,7 @@ mod tests {
         ]
         .iter()
         .map(|hash| {
-            let entry = node.get_entry(hash).unwrap();
+            let entry = node.entry(hash).unwrap();
             VerifiedOperation::new_from_entry(
                 &entry.entry_signed(),
                 &entry.operation_encoded().unwrap(),
@@ -631,7 +631,7 @@ mod tests {
             &incorrect_previous_operation,
         );
 
-        let entry_one = node.get_entry(&panda_entry_1_hash).unwrap();
+        let entry_one = node.entry(&panda_entry_1_hash).unwrap();
 
         let operation_one = VerifiedOperation::new_from_entry(
             &entry_one.entry_signed(),
@@ -864,7 +864,7 @@ mod tests {
         ]
         .iter()
         .map(|hash| {
-            let entry = node.get_entry(hash).unwrap();
+            let entry = node.entry(hash).unwrap();
             VerifiedOperation::new_from_entry(
                 &entry.entry_signed(),
                 &entry.operation_encoded().unwrap(),
