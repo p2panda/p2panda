@@ -9,8 +9,8 @@ use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
 use crate::hash::Hash;
 use crate::operation::{OperationId, VerifiedOperation};
 use crate::schema::SchemaId;
+use crate::storage_provider::traits::StorageProvider;
 use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog};
-use crate::storage_provider::traits::{OperationStore, StorageProvider};
 
 use super::{
     EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse, StorageEntry,
@@ -22,24 +22,20 @@ type AuthorPlusLogId = String;
 /// The simplest storage provider. Used for tests in `entry_store`, `log_store` & `storage_provider`
 #[derive(Default, Debug, Clone)]
 pub struct SimplestStorageProvider {
+    /// Stored logs
     pub logs: Arc<Mutex<HashMap<AuthorPlusLogId, StorageLog>>>,
+
+    /// Stored entries
     pub entries: Arc<Mutex<HashMap<Hash, StorageEntry>>>,
+
+    /// Stored operations
     pub operations: Arc<Mutex<HashMap<OperationId, (DocumentId, VerifiedOperation)>>>,
+
+    /// Stored documents
     pub documents: Arc<Mutex<HashMap<DocumentId, Document>>>,
+
+    /// Materialised and stored document views
     pub document_views: Arc<Mutex<HashMap<DocumentViewId, (SchemaId, DocumentView)>>>,
-}
-
-impl SimplestStorageProvider {
-    pub fn db_insert_entry(&self, entry: StorageEntry) {
-        let mut entries = self.entries.lock().unwrap();
-        entries.insert(entry.hash(), entry);
-    }
-
-    pub fn db_insert_log(&self, log: StorageLog) {
-        let author_log_id_str = log.author().as_str().to_string() + &log.id().as_u64().to_string();
-        let mut logs = self.logs.lock().unwrap();
-        logs.insert(author_log_id_str, log);
-    }
 }
 
 #[async_trait]

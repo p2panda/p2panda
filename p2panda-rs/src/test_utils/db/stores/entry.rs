@@ -17,7 +17,8 @@ use crate::test_utils::db::{SimplestStorageProvider, StorageEntry};
 impl EntryStore<StorageEntry> for SimplestStorageProvider {
     /// Insert an entry into storage.
     async fn insert_entry(&self, entry: StorageEntry) -> Result<(), EntryStorageError> {
-        self.db_insert_entry(entry);
+        let mut entries = self.entries.lock().unwrap();
+        entries.insert(entry.hash(), entry);
         Ok(())
     }
 

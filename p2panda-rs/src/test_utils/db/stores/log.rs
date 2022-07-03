@@ -11,7 +11,9 @@ use crate::test_utils::db::{SimplestStorageProvider, StorageLog};
 #[async_trait]
 impl LogStore<StorageLog> for SimplestStorageProvider {
     async fn insert_log(&self, log: StorageLog) -> Result<bool, LogStorageError> {
-        self.db_insert_log(log);
+        let author_log_id_str = log.author().as_str().to_string() + &log.id().as_u64().to_string();
+        let mut logs = self.logs.lock().unwrap();
+        logs.insert(author_log_id_str, log);
         Ok(true)
     }
 
@@ -50,7 +52,6 @@ mod tests {
     use crate::entry::LogId;
     use crate::identity::{Author, KeyPair};
     use crate::schema::SchemaId;
-    use crate::storage_provider::traits::test_utils::{test_db, TestStore};
     use crate::storage_provider::traits::{AsStorageLog, LogStore};
     use crate::test_utils::db::{SimplestStorageProvider, StorageLog};
     use crate::test_utils::fixtures::{document_id, key_pair, schema};
