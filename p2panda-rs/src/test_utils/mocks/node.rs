@@ -81,13 +81,13 @@
 use async_std::task;
 use log::{debug, info};
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use crate::document::{Document, DocumentBuilder, DocumentId};
-use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
+use crate::entry::{decode_entry, EntrySigned, LogId};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{AsOperation, Operation, OperationEncoded};
+use crate::operation::{AsOperation, Operation, OperationEncoded, OperationId, VerifiedOperation};
 use crate::storage_provider::traits::test_utils::send_to_store;
 use crate::storage_provider::traits::{
     AsStorageEntry, DocumentStore, EntryStore, OperationStore, StorageProvider,
@@ -99,57 +99,32 @@ use crate::test_utils::db::{SimplestStorageProvider, StorageEntry};
 use crate::test_utils::mocks::utils::Result;
 use crate::test_utils::mocks::Client;
 
+pub async fn process_new_operation(node: &mut Node, operation: &OperationId) -> Result<()> {
+    let document_id = node
+        .0
+        .get_document_by_entry(operation.as_hash())
+        .await?
+        .expect("No document found for operation");
+    // Now we perform materialisation on the effected document.
+    let document_operations = node.0.get_operations_by_document_id(&document_id).await?;
+
+    let document = DocumentBuilder::new(document_operations).build()?;
+    node.0.insert_document(&document).await?;
+    Ok(())
+}
+
 /// Helper method signing and encoding entry and sending it to node backend.
 pub fn send_to_node(
     node: &mut Node,
     client: &Client,
     operation: &Operation,
 ) -> Result<(Hash, PublishEntryResponse)> {
-    // We need to establish which document this operation is targeting before proceeding.
-    // First we check if this is a create message, which would mean no document exists yet.
-    let document_id = if operation.is_create() {
-        None
-    } else {
-        // Using the first previous operation in the list we retrieve the associated document
-        // id from the database.
-        task::block_on(async {
-            node.0
-                .get_document_by_entry(
-                    operation
-                        .previous_operations()
-                        .unwrap()
-                        .into_iter()
-                        .next()
-                        .unwrap()
-                        .as_hash(),
-                )
-                .await
-        })
-        .unwrap()
-    };
+    // Insert the entry, operation and log into the database.
+    let (entry_encoded, response) =
+        task::block_on(async { send_to_store(&node.0, operation, &client.key_pair).await })?;
 
-    // Publish entry.
-    //
-    // This inserts the entry, operation and log into the database.
-    let (entry_encoded, response) = task::block_on(async {
-        send_to_store(&node.0, operation, document_id.as_ref(), &client.key_pair).await
-    })
-    .unwrap();
-
-    let document_id = document_id.unwrap_or(entry_encoded.hash().into());
-
-    // Now we perform materialisation on the effected document.
-    task::block_on(async {
-        let document_operations = node
-            .0
-            .get_operations_by_document_id(&document_id)
-            .await
-            .unwrap();
-
-        let document = DocumentBuilder::new(document_operations).build().unwrap();
-        node.0.insert_document(&document).await
-    })
-    .unwrap();
+    // Trigger materialisation by processing the new operation.
+    task::block_on(async { process_new_operation(node, &entry_encoded.hash().into()).await })?;
 
     Ok((entry_encoded.hash(), response))
 }
@@ -238,8 +213,7 @@ impl Node {
         };
 
         let next_entry_args =
-            task::block_on(async move { self.0.get_entry_args(&entry_args_request).await })
-                .unwrap();
+            task::block_on(async move { self.0.get_entry_args(&entry_args_request).await })?;
 
         info!(
             "[next_entry_args] RESPONSE: log id: {} seq num: {} backlink: {} skiplink: {}",
@@ -287,8 +261,7 @@ impl Node {
         };
 
         let publish_entry_response =
-            task::block_on(async move { self.0.publish_entry(&publish_entry_request).await })
-                .unwrap();
+            task::block_on(async move { self.0.publish_entry(&publish_entry_request).await })?;
 
         info!(
             "[publish_entry] RESPONSE: succesfully published entry: {} to log: {} and returning next entry args",
@@ -302,8 +275,8 @@ impl Node {
     }
 
     /// Get a single resolved document from the node.
-    pub fn get_document(&self, id: &DocumentId) -> Document {
-        let operations = self
+    pub fn get_document(&self, id: &DocumentId) -> Option<Document> {
+        let operations: Vec<VerifiedOperation> = self
             .0
             .operations
             .lock()
@@ -312,7 +285,15 @@ impl Node {
             .filter(|(_, (document_id, _))| document_id == id)
             .map(|(_, (_, operation))| operation.clone())
             .collect();
-        DocumentBuilder::new(operations).build().unwrap()
+
+        if operations.is_empty() {
+            return None;
+        };
+        Some(
+            DocumentBuilder::new(operations)
+                .build()
+                .expect("Could not build document"),
+        )
     }
 
     /// Get all documents in their resolved state from the node.
@@ -328,7 +309,10 @@ impl Node {
                 documents.insert(document_id.clone());
             });
 
-        documents.iter().map(|id| self.get_document(&id)).collect()
+        documents
+            .iter()
+            .flat_map(|id| self.get_document(&id))
+            .collect()
     }
 }
 
@@ -520,7 +504,7 @@ mod tests {
         assert_eq!(node.get_author_logs(&penguin.author()).len(), 1);
 
         // We can query the node for the current document state.
-        let document = node.get_document(&document_id);
+        let document = node.get_document(&document_id).unwrap();
         let document_view_value = document.view().unwrap().get("message").unwrap();
         // It was last updated by Penguin, this writes over previous values.
         assert_eq!(
@@ -591,7 +575,9 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.get_document(&panda_entry_1_hash.clone().into());
+        let document = node
+            .get_document(&panda_entry_1_hash.clone().into())
+            .unwrap();
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
             document_view_value.value(),
@@ -614,7 +600,9 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.get_document(&panda_entry_1_hash.clone().into());
+        let document = node
+            .get_document(&panda_entry_1_hash.clone().into())
+            .unwrap();
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
             document_view_value.value(),
@@ -640,7 +628,9 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.get_document(&panda_entry_1_hash.clone().into());
+        let document = node
+            .get_document(&panda_entry_1_hash.clone().into())
+            .unwrap();
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
             document_view_value.value(),
@@ -667,8 +657,7 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.get_document(&panda_entry_1_hash.into());
-
+        let document = node.get_document(&panda_entry_1_hash.into()).unwrap();
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
             document_view_value.value(),

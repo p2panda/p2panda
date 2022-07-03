@@ -304,7 +304,6 @@ pub async fn populate_test_db(db: &mut TestStore, config: &PopulateDatabaseConfi
                         previous_operation,
                         Some(config.schema.to_owned()),
                     ),
-                    document_id.as_ref(),
                     key_pair,
                 )
                 .await
@@ -327,17 +326,32 @@ pub async fn populate_test_db(db: &mut TestStore, config: &PopulateDatabaseConfi
 pub async fn send_to_store(
     store: &SimplestStorageProvider,
     operation: &Operation,
-    document_id: Option<&DocumentId>,
     key_pair: &KeyPair,
 ) -> Result<(EntrySigned, PublishEntryResponse), Box<dyn std::error::Error + Sync + Send>> {
     // Get an Author from the key_pair.
     let author = Author::try_from(key_pair.public_key().to_owned())?;
 
+    let document_id = if operation.is_create() {
+        None
+    } else {
+        store
+            .get_document_by_entry(
+                operation
+                    .previous_operations()
+                    .unwrap()
+                    .into_iter()
+                    .next()
+                    .unwrap()
+                    .as_hash(),
+            )
+            .await?
+    };
+
     // Get the next entry arguments for this author and the passed document id.
     let next_entry_args = store
         .get_entry_args(&EntryArgsRequest {
             public_key: author.clone(),
-            document_id: document_id.cloned(),
+            document_id: document_id.clone(),
         })
         .await?;
 
@@ -361,14 +375,7 @@ pub async fn send_to_store(
     };
     let publish_entry_response = store.publish_entry(&publish_entry_request).await?;
 
-    // Set or unwrap the passed document_id.
-    let document_id = if operation.is_create() {
-        entry.hash().into()
-    } else {
-        document_id
-            .expect("UPDATE or DELETE operation missing document id")
-            .to_owned()
-    };
+    let document_id = document_id.unwrap_or(entry.hash().into());
 
     // Insert the log into the store.
     store
