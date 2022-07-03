@@ -2,7 +2,6 @@
 
 //! Mock p2panda node and client for demo and testing purposes.
 mod client;
-pub mod constants;
 mod node;
 pub mod utils;
 
