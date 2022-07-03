@@ -9,7 +9,7 @@ mod operation_store;
 mod requests;
 mod responses;
 mod storage_provider;
-#[cfg(test)]
+#[cfg(any(feature = "testing", test))]
 pub mod test_utils;
 
 pub use document_store::DocumentStore;

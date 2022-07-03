@@ -79,28 +79,25 @@
 //! entries.len(); // => 4
 //! ```
 use async_std::task;
-use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use log::{debug, info};
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::convert::TryFrom;
 
 use crate::document::{Document, DocumentBuilder, DocumentId};
-use crate::entry::{decode_entry, EntrySigned, SeqNum};
+use crate::entry::{decode_entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{
-    AsOperation, AsVerifiedOperation, Operation, OperationEncoded, VerifiedOperation,
-};
+use crate::operation::{AsOperation, Operation, OperationEncoded};
 use crate::storage_provider::traits::test_utils::send_to_store;
-use crate::storage_provider::traits::{EntryStore, StorageProvider};
+use crate::storage_provider::traits::{
+    AsStorageEntry, DocumentStore, EntryStore, OperationStore, StorageProvider,
+};
 use crate::test_utils::db::{
     EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
 };
 use crate::test_utils::db::{SimplestStorageProvider, StorageEntry};
 use crate::test_utils::mocks::utils::Result;
 use crate::test_utils::mocks::Client;
-use crate::test_utils::utils::NextEntryArgs;
 
 /// Helper method signing and encoding entry and sending it to node backend.
 pub fn send_to_node(
@@ -113,36 +110,46 @@ pub fn send_to_node(
     let document_id = if operation.is_create() {
         None
     } else {
-        // If this isn't a create message, then there must be an existing document
-        // this operation to be valid.
-
-        // We get the previous_operations field first.
-        let previous_operations = operation
-            .previous_operations()
-            .expect("UPDATE / DELETE operations must contain previous_operations");
-
         // Using the first previous operation in the list we retrieve the associated document
         // id from the database.
-
-        let document_id = task::block_on(async {
+        task::block_on(async {
             node.0
-                .get_document_by_entry(previous_operations.into_iter().next().unwrap().as_hash())
+                .get_document_by_entry(
+                    operation
+                        .previous_operations()
+                        .unwrap()
+                        .into_iter()
+                        .next()
+                        .unwrap()
+                        .as_hash(),
+                )
                 .await
         })
-        .unwrap();
-
-        document_id
+        .unwrap()
     };
 
+    // Publish entry.
+    //
+    // This inserts the entry, operation and log into the database.
     let (entry_encoded, response) = task::block_on(async {
-        send_to_store(
-            &mut node.0,
-            operation,
-            document_id.as_ref(),
-            &client.key_pair,
-        )
-        .await
-    });
+        send_to_store(&node.0, operation, document_id.as_ref(), &client.key_pair).await
+    })
+    .unwrap();
+
+    let document_id = document_id.unwrap_or(entry_encoded.hash().into());
+
+    // Now we perform materialisation on the effected document.
+    task::block_on(async {
+        let document_operations = node
+            .0
+            .get_operations_by_document_id(&document_id)
+            .await
+            .unwrap();
+
+        let document = DocumentBuilder::new(document_operations).build().unwrap();
+        node.0.insert_document(&document).await
+    })
+    .unwrap();
 
     Ok((entry_encoded.hash(), response))
 }
@@ -172,14 +179,36 @@ impl Node {
 
     /// Get an array of all entries in database.
     pub fn all_entries(&self) -> Vec<StorageEntry> {
-        let mut all_entries: Vec<StorageEntry> = Vec::new();
         self.0
             .entries
             .lock()
             .unwrap()
-            .into_iter()
-            .map(|(_, entry)| entry)
+            .iter()
+            .map(|(_, entry)| entry.clone())
             .collect()
+    }
+
+    pub fn get_authors(&self) -> HashSet<Author> {
+        let mut authors = HashSet::new();
+        let entries = self.0.entries.lock().unwrap();
+        for (_, entry) in entries.iter() {
+            authors.insert(entry.author());
+        }
+        authors
+    }
+
+    pub fn get_author_logs(&self, author: &Author) -> HashMap<LogId, HashSet<StorageEntry>> {
+        let mut logs: HashMap<LogId, HashSet<StorageEntry>> = HashMap::new();
+        let entries = self.0.entries.lock().unwrap();
+        for (_, entry) in entries.iter() {
+            if &entry.author() != author {
+                continue;
+            }
+            let mut log_entries = logs.get_mut(&entry.log_id()).cloned().unwrap_or_default();
+            log_entries.insert(entry.clone());
+            logs.insert(entry.log_id(), log_entries);
+        }
+        logs
     }
 
     /// Public wrapper with logging for private next_entry_args method.
@@ -194,18 +223,14 @@ impl Node {
         &self,
         author: &Author,
         document_id: Option<&DocumentId>,
-        seq_num: Option<&SeqNum>,
     ) -> Result<EntryArgsResponse> {
         info!(
-            "[next_entry_args] REQUEST: next entry args for author {} document {} {}",
+            "[next_entry_args] REQUEST: next entry args for author {} document {}",
             author.as_str(),
             document_id.map(|id| id.as_str()).unwrap_or("not provided"),
-            seq_num
-                .map(|seq_num| format!("at sequence number {}", seq_num.as_u64()))
-                .unwrap_or_else(|| "".into())
         );
 
-        debug!("\n{:?}\n{:?}\n{:?}", author, document_id, seq_num);
+        debug!("\n{:?}\n{:?}", author, document_id);
 
         let entry_args_request = EntryArgsRequest {
             public_key: author.clone(),
@@ -283,27 +308,27 @@ impl Node {
             .operations
             .lock()
             .unwrap()
-            .into_iter()
-            .filter(|(_, (document_id, operation))| document_id == id)
-            .map(|(_, (_, operation))| operation)
+            .iter()
+            .filter(|(_, (document_id, _))| document_id == id)
+            .map(|(_, (_, operation))| operation.clone())
             .collect();
         DocumentBuilder::new(operations).build().unwrap()
     }
 
     /// Get all documents in their resolved state from the node.
     pub fn get_documents(&self) -> Vec<Document> {
-        let mut documents: BTreeMap<&str, DocumentId> = BTreeMap::new();
+        let mut documents: HashSet<DocumentId> = HashSet::new();
 
-        let operations = self.0.operations.lock().unwrap().into_iter().for_each(
-            |(_, (document_id, operation))| {
-                documents.insert(document_id.as_str(), document_id);
-            },
-        );
+        self.0
+            .operations
+            .lock()
+            .unwrap()
+            .iter()
+            .for_each(|(_, (document_id, _))| {
+                documents.insert(document_id.clone());
+            });
 
-        documents
-            .values()
-            .map(|id| self.get_document(&id))
-            .collect()
+        documents.iter().map(|id| self.get_document(&id)).collect()
     }
 }
 
@@ -327,9 +352,7 @@ mod tests {
         let mut node = Node::new();
 
         // This is an empty node which has no author logs.
-        let next_entry_args = node
-            .get_next_entry_args(&panda.author(), None, None)
-            .unwrap();
+        let next_entry_args = node.get_next_entry_args(&panda.author(), None).unwrap();
 
         // These are the next_entry_args we would expect to get when making a request to this node.
         let mut expected_next_entry_args = NextEntryArgs {
@@ -358,6 +381,9 @@ mod tests {
         )
         .unwrap();
 
+        // The document id is derived from the hash of it's first entry.
+        let document_id = panda_entry_1_hash.clone().into();
+
         // The seq_num has incremented to 2 because panda already published one entry.
         expected_next_entry_args = NextEntryArgs {
             log_id: LogId::new(1),
@@ -374,7 +400,7 @@ mod tests {
         // The database contains one author now.
         assert_eq!(node.get_authors().len(), 1);
         // Who has one log.
-        assert_eq!(node.get_author_logs(&panda.author()).unwrap().len(), 1);
+        assert_eq!(node.get_author_logs(&panda.author()).len(), 1);
 
         // Panda publishes an update operation.
         // It contains the hash of the current graph tip in it's `previous_operations`.
@@ -406,12 +432,12 @@ mod tests {
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
         assert_eq!(node.get_authors().len(), 1);
-        assert_eq!(node.get_author_logs(&panda.author()).unwrap().len(), 1);
+        assert_eq!(node.get_author_logs(&panda.author()).len(), 1);
 
         let penguin = Client::new("penguin".to_string(), KeyPair::new());
 
         let next_entry_args = node
-            .get_next_entry_args(&penguin.author(), Some(&panda_entry_1_hash.into()), None)
+            .get_next_entry_args(&penguin.author(), Some(&document_id))
             .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
@@ -457,7 +483,7 @@ mod tests {
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
         assert_eq!(node.get_authors().len(), 2);
-        assert_eq!(node.get_author_logs(&penguin.author()).unwrap().len(), 1);
+        assert_eq!(node.get_author_logs(&penguin.author()).len(), 1);
 
         // Penguin publishes another update operation refering to their own previous operation
         // as the graph tip.
@@ -472,7 +498,7 @@ mod tests {
                     "message",
                     OperationValue::Text("And again. [Penguin]".to_string()),
                 )],
-                &penguin_entry_1_hash.into(),
+                &penguin_entry_1_hash.clone().into(),
             ),
         )
         .unwrap();
@@ -491,10 +517,10 @@ mod tests {
 
         // Now there are 2 authors publishing ot the node.
         assert_eq!(node.get_authors().len(), 2);
-        assert_eq!(node.get_author_logs(&penguin.author()).unwrap().len(), 1);
+        assert_eq!(node.get_author_logs(&penguin.author()).len(), 1);
 
         // We can query the node for the current document state.
-        let document = node.get_document(&panda_entry_1_hash);
+        let document = node.get_document(&document_id);
         let document_view_value = document.view().unwrap().get("message").unwrap();
         // It was last updated by Penguin, this writes over previous values.
         assert_eq!(
@@ -532,62 +558,9 @@ mod tests {
 
         assert_eq!(node.get_authors().len(), 2);
         // Now panda has 2 document logs.
-        assert_eq!(node.get_author_logs(&panda.author()).unwrap().len(), 2);
+        assert_eq!(node.get_author_logs(&panda.author()).len(), 2);
         // There should be 2 document in the database.
         assert_eq!(node.get_documents().len(), 2);
-    }
-
-    #[rstest]
-    fn next_entry_args_at_specific_seq_num(private_key: String) {
-        let panda = Client::new("panda".to_string(), key_pair(&private_key));
-        let mut node = Node::new();
-
-        // Publish a CREATE operation
-        let (entry1_hash, _) = send_to_node(
-            &mut node,
-            &panda,
-            &create_operation(&[(
-                "message",
-                OperationValue::Text("Ohh, my first message!".to_string()),
-            )]),
-        )
-        .unwrap();
-
-        // Publish an UPDATE operation
-        send_to_node(
-            &mut node,
-            &panda,
-            &update_operation(
-                &[(
-                    "message",
-                    OperationValue::Text("Which I now update.".to_string()),
-                )],
-                &entry1_hash.clone().into(),
-            ),
-        )
-        .unwrap();
-
-        // For testig, we can request entry args for a specific entry in an authors log.
-        let next_entry_args = node
-            .next_entry_args(
-                &panda.author(),
-                Some(&entry1_hash),
-                // Here we request the entry args required for publishing the second entry of the log.
-                Some(&SeqNum::new(2).unwrap()),
-            )
-            .unwrap();
-
-        let expected_next_entry_args = NextEntryArgs {
-            log_id: LogId::new(1),
-            seq_num: SeqNum::new(2).unwrap(),
-            backlink: Some(entry1_hash),
-            skiplink: None,
-        };
-
-        assert_eq!(next_entry_args.log_id, expected_next_entry_args.log_id);
-        assert_eq!(next_entry_args.seq_num, expected_next_entry_args.seq_num);
-        assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
-        assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
     }
 
     #[rstest]
@@ -618,7 +591,7 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.get_document(&panda_entry_1_hash);
+        let document = node.get_document(&panda_entry_1_hash.clone().into());
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
             document_view_value.value(),
@@ -641,7 +614,7 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.get_document(&panda_entry_1_hash);
+        let document = node.get_document(&panda_entry_1_hash.clone().into());
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
             document_view_value.value(),
@@ -667,7 +640,7 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.get_document(&panda_entry_1_hash);
+        let document = node.get_document(&panda_entry_1_hash.clone().into());
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
             document_view_value.value(),
@@ -694,7 +667,7 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.get_document(&panda_entry_1_hash);
+        let document = node.get_document(&panda_entry_1_hash.into());
 
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(

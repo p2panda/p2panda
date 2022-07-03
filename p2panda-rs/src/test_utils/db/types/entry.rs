@@ -10,7 +10,7 @@ use crate::storage_provider::ValidationError;
 use crate::Validate;
 
 /// A struct which represents an entry and operation pair in storage as a concatenated string.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StorageEntry {
     /// Public key of the author.
     pub author: Author,

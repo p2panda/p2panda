@@ -46,10 +46,10 @@
 //! # Ok(())
 //! # }
 //! ```
-use crate::entry::{sign_and_encode, Entry, EntrySigned};
+use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
+use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::Operation;
-use crate::test_utils::utils::NextEntryArgs;
 
 /// A helper struct which represents a client in the pandaverse.
 ///
@@ -94,16 +94,12 @@ impl Client {
     pub fn signed_encoded_entry(
         &self,
         operation: Operation,
-        entry_args: NextEntryArgs,
+        log_id: &LogId,
+        skiplink: Option<&Hash>,
+        backlink: Option<&Hash>,
+        seq_num: &SeqNum,
     ) -> EntrySigned {
-        let entry = Entry::new(
-            &entry_args.log_id,
-            Some(&operation),
-            entry_args.skiplink.as_ref(),
-            entry_args.backlink.as_ref(),
-            &entry_args.seq_num,
-        )
-        .unwrap();
+        let entry = Entry::new(log_id, Some(&operation), skiplink, backlink, seq_num).unwrap();
 
         sign_and_encode(&entry, &self.key_pair).unwrap()
     }

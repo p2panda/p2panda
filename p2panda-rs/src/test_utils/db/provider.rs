@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 
-use crate::document::{Document, DocumentId, DocumentView};
+use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
 use crate::hash::Hash;
 use crate::operation::{OperationId, VerifiedOperation};
 use crate::schema::SchemaId;
-use crate::storage_provider::traits::StorageProvider;
 use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog};
+use crate::storage_provider::traits::{OperationStore, StorageProvider};
 
 use super::{
     EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse, StorageEntry,
@@ -18,17 +18,15 @@ use super::{
 };
 
 type AuthorPlusLogId = String;
-type DocumentViewIdStr = String;
-type DocumentIdStr = String;
 
 /// The simplest storage provider. Used for tests in `entry_store`, `log_store` & `storage_provider`
 #[derive(Default, Debug, Clone)]
 pub struct SimplestStorageProvider {
-    pub logs: Arc<Mutex<BTreeMap<AuthorPlusLogId, StorageLog>>>,
-    pub entries: Arc<Mutex<BTreeMap<Hash, StorageEntry>>>,
-    pub operations: Arc<Mutex<BTreeMap<OperationId, (DocumentId, VerifiedOperation)>>>,
-    pub documents: Arc<Mutex<BTreeMap<DocumentIdStr, Document>>>,
-    pub document_views: Arc<Mutex<BTreeMap<DocumentViewIdStr, (SchemaId, DocumentView)>>>,
+    pub logs: Arc<Mutex<HashMap<AuthorPlusLogId, StorageLog>>>,
+    pub entries: Arc<Mutex<HashMap<Hash, StorageEntry>>>,
+    pub operations: Arc<Mutex<HashMap<OperationId, (DocumentId, VerifiedOperation)>>>,
+    pub documents: Arc<Mutex<HashMap<DocumentId, Document>>>,
+    pub document_views: Arc<Mutex<HashMap<DocumentViewId, (SchemaId, DocumentView)>>>,
 }
 
 impl SimplestStorageProvider {

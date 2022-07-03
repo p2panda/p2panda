@@ -19,7 +19,7 @@ impl DocumentStore for SimplestStorageProvider {
         schema_id: &SchemaId,
     ) -> Result<(), DocumentStorageError> {
         self.document_views.lock().unwrap().insert(
-            document_view.id().as_str(),
+            document_view.id().to_owned(),
             (schema_id.to_owned(), document_view.to_owned()),
         );
 
@@ -38,7 +38,7 @@ impl DocumentStore for SimplestStorageProvider {
             .document_views
             .lock()
             .unwrap()
-            .get(&id.as_str())
+            .get(&id)
             .map(|(_, document_view)| document_view.to_owned()))
     }
 
@@ -47,10 +47,10 @@ impl DocumentStore for SimplestStorageProvider {
     /// Inserts a document into storage and should retain a pointer to it's most recent
     /// document view. Returns an error if a fatal storage error occured.
     async fn insert_document(&self, document: &Document) -> Result<(), DocumentStorageError> {
-        self.documents.lock().unwrap().insert(
-            document.id().to_owned().as_str().to_owned(),
-            document.to_owned(),
-        );
+        self.documents
+            .lock()
+            .unwrap()
+            .insert(document.id().to_owned(), document.to_owned());
 
         Ok(())
     }
@@ -70,7 +70,7 @@ impl DocumentStore for SimplestStorageProvider {
             .documents
             .lock()
             .unwrap()
-            .get(id.as_str())
+            .get(id)
             .map(|document| document.to_owned())
         {
             Some(document) => Ok(document.view().map(|view| view.to_owned())),

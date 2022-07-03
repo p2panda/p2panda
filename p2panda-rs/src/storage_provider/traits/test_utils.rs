@@ -16,10 +16,13 @@ use crate::storage_provider::traits::{OperationStore, StorageProvider};
 use crate::test_utils::constants::{DEFAULT_PRIVATE_KEY, TEST_SCHEMA_ID};
 use crate::test_utils::db::{
     EntryArgsRequest, PublishEntryRequest, PublishEntryResponse, SimplestStorageProvider,
+    StorageLog,
 };
 use crate::test_utils::fixtures::{operation, operation_fields};
 
 use rstest::{fixture, rstest};
+
+use super::{AsStorageLog, LogStore};
 
 pub const SKIPLINK_ENTRIES: [u64; 5] = [4, 8, 12, 13, 17];
 
@@ -250,7 +253,7 @@ pub async fn test_db(
 
 /// Container for `SqlStore` with access to the document ids and key_pairs used in the
 /// pre-populated database for testing.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug)]
 pub struct TestStore {
     pub store: SimplestStorageProvider,
     pub test_data: TestData,
@@ -304,7 +307,8 @@ pub async fn populate_test_db(db: &mut TestStore, config: &PopulateDatabaseConfi
                     document_id.as_ref(),
                     key_pair,
                 )
-                .await;
+                .await
+                .unwrap();
 
                 // Set the previous_operations based on the backlink
                 previous_operation = publish_entry_response.backlink.map(DocumentViewId::from);
@@ -325,9 +329,9 @@ pub async fn send_to_store(
     operation: &Operation,
     document_id: Option<&DocumentId>,
     key_pair: &KeyPair,
-) -> (EntrySigned, PublishEntryResponse) {
+) -> Result<(EntrySigned, PublishEntryResponse), Box<dyn std::error::Error + Sync + Send>> {
     // Get an Author from the key_pair.
-    let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
+    let author = Author::try_from(key_pair.public_key().to_owned())?;
 
     // Get the next entry arguments for this author and the passed document id.
     let next_entry_args = store
@@ -335,8 +339,7 @@ pub async fn send_to_store(
             public_key: author.clone(),
             document_id: document_id.cloned(),
         })
-        .await
-        .unwrap();
+        .await?;
 
     // Construct the next entry.
     let next_entry = Entry::new(
@@ -345,36 +348,45 @@ pub async fn send_to_store(
         next_entry_args.skiplink.map(Hash::from).as_ref(),
         next_entry_args.backlink.map(Hash::from).as_ref(),
         &next_entry_args.seq_num,
-    )
-    .unwrap();
+    )?;
 
     // Encode both the entry and operation.
-    let entry_encoded = sign_and_encode(&next_entry, key_pair).unwrap();
-    let operation_encoded = OperationEncoded::try_from(operation).unwrap();
+    let entry = sign_and_encode(&next_entry, key_pair)?;
+    let operation_encoded = OperationEncoded::try_from(operation)?;
 
     // Publish the entry and get the next entry args.
     let publish_entry_request = PublishEntryRequest {
-        entry: entry_encoded.clone(),
+        entry: entry.clone(),
         operation: operation_encoded,
     };
-    let publish_entry_response = store.publish_entry(&publish_entry_request).await.unwrap();
+    let publish_entry_response = store.publish_entry(&publish_entry_request).await?;
 
     // Set or unwrap the passed document_id.
     let document_id = if operation.is_create() {
-        entry_encoded.hash().into()
+        entry.hash().into()
     } else {
-        document_id.unwrap().to_owned()
+        document_id
+            .expect("UPDATE or DELETE operation missing document id")
+            .to_owned()
     };
 
+    // Insert the log into the store.
+    store
+        .insert_log(StorageLog::new(
+            &entry.author(),
+            &operation.schema(),
+            &document_id,
+            &next_entry_args.log_id,
+        ))
+        .await?;
+
     // Also insert the operation into the store.
-    let verified_operation =
-        VerifiedOperation::new(&author, &entry_encoded.hash().into(), operation).unwrap();
+    let verified_operation = VerifiedOperation::new(&author, &entry.hash().into(), operation)?;
     store
         .insert_operation(&verified_operation, &document_id)
-        .await
-        .unwrap();
+        .await?;
 
-    (entry_encoded, publish_entry_response)
+    Ok((entry, publish_entry_response))
 }
 
 #[rstest]
