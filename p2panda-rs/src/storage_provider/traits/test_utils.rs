@@ -2,16 +2,17 @@
 
 use std::convert::TryFrom;
 
-use crate::document::{DocumentBuilder, DocumentId, DocumentViewId};
+use rstest::fixture;
+
+use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::{sign_and_encode, Entry, EntrySigned};
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::{
-    AsOperation, AsVerifiedOperation, Operation, OperationEncoded, OperationId, OperationValue,
-    PinnedRelation, PinnedRelationList, Relation, RelationList, VerifiedOperation,
+    AsOperation, AsVerifiedOperation, Operation, OperationEncoded, OperationValue, PinnedRelation,
+    PinnedRelationList, Relation, RelationList, VerifiedOperation,
 };
 use crate::schema::SchemaId;
-use crate::storage_provider::traits::DocumentStore;
 use crate::storage_provider::traits::{OperationStore, StorageProvider};
 use crate::test_utils::constants::{DEFAULT_PRIVATE_KEY, TEST_SCHEMA_ID};
 use crate::test_utils::db::{
@@ -20,12 +21,10 @@ use crate::test_utils::db::{
 };
 use crate::test_utils::fixtures::{operation, operation_fields};
 
-use rstest::fixture;
-
 use super::{AsStorageLog, LogStore};
 
 /// The fields used as defaults in the tests.
-pub fn doggo_test_fields() -> Vec<(&'static str, OperationValue)> {
+pub fn complex_test_fields() -> Vec<(&'static str, OperationValue)> {
     vec![
         ("username", OperationValue::Text("bubu".to_owned())),
         ("height", OperationValue::Float(3.5)),
@@ -83,93 +82,6 @@ pub fn doggo_test_fields() -> Vec<(&'static str, OperationValue)> {
     ]
 }
 
-/// Helper for creating many key_pairs.
-pub fn test_key_pairs(no_of_authors: usize) -> Vec<KeyPair> {
-    let mut key_pairs = Vec::new();
-    match no_of_authors {
-        0 => (),
-        1 => key_pairs.push(KeyPair::from_private_key_str(DEFAULT_PRIVATE_KEY).unwrap()),
-        _ => {
-            key_pairs.push(KeyPair::from_private_key_str(DEFAULT_PRIVATE_KEY).unwrap());
-            for _index in 2..no_of_authors {
-                key_pairs.push(KeyPair::new())
-            }
-        }
-    };
-    key_pairs
-}
-
-/// Helper for constructing a publish entry request.
-pub async fn construct_publish_entry_request(
-    provider: &SimplestStorageProvider,
-    operation: &Operation,
-    key_pair: &KeyPair,
-    document_id: Option<&DocumentId>,
-) -> PublishEntryRequest {
-    let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
-    let entry_args_request = EntryArgsRequest {
-        public_key: author.clone(),
-        document_id: document_id.cloned(),
-    };
-    let next_entry_args = provider.get_entry_args(&entry_args_request).await.unwrap();
-
-    let entry = Entry::new(
-        &next_entry_args.log_id,
-        Some(operation),
-        next_entry_args.skiplink.map(Hash::from).as_ref(),
-        next_entry_args.backlink.map(Hash::from).as_ref(),
-        &next_entry_args.seq_num,
-    )
-    .unwrap();
-
-    let entry = sign_and_encode(&entry, key_pair).unwrap();
-    let operation = OperationEncoded::try_from(operation).unwrap();
-    PublishEntryRequest { entry, operation }
-}
-
-/// Helper for inserting an entry, operation and document_view into the database.
-pub async fn insert_entry_operation_and_view(
-    provider: &SimplestStorageProvider,
-    key_pair: &KeyPair,
-    document_id: Option<&DocumentId>,
-    operation: &Operation,
-) -> (DocumentId, DocumentViewId) {
-    if !operation.is_create() && document_id.is_none() {
-        panic!("UPDATE and DELETE operations require a DocumentId to be passed")
-    }
-
-    let request = construct_publish_entry_request(provider, operation, key_pair, document_id).await;
-
-    let operation_id: OperationId = request.entry.hash().into();
-    let document_id = document_id
-        .cloned()
-        .unwrap_or_else(|| request.entry.hash().into());
-
-    let document_view_id: DocumentViewId = request.entry.hash().into();
-
-    let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
-
-    provider.publish_entry(&request).await.unwrap();
-    provider
-        .insert_operation(
-            &VerifiedOperation::new(&author, &operation_id, operation).unwrap(),
-            &document_id,
-        )
-        .await
-        .unwrap();
-
-    let document_operations = provider
-        .get_operations_by_document_id(&document_id)
-        .await
-        .unwrap();
-
-    let document = DocumentBuilder::new(document_operations).build().unwrap();
-
-    provider.insert_document(&document).await.unwrap();
-
-    (document_id, document_view_id)
-}
-
 /// Configuration used in test database population.
 #[derive(Debug)]
 pub struct PopulateDatabaseConfig {
@@ -203,21 +115,17 @@ impl Default for PopulateDatabaseConfig {
             no_of_authors: 0,
             with_delete: false,
             schema: TEST_SCHEMA_ID.parse().unwrap(),
-            create_operation_fields: doggo_test_fields(),
-            update_operation_fields: doggo_test_fields(),
+            create_operation_fields: complex_test_fields(),
+            update_operation_fields: complex_test_fields(),
         }
     }
 }
 
 /// Fixture for constructing a storage provider instance backed by a pre-populated database.
 ///
-/// Returns a `TestStoreRunner` which allows to bootstrap a safe async test environment
-/// connecting to a database. It makes sure the runner disconnects properly from the connection
-/// pool after the test succeeded or even failed.
-///
 /// Passed parameters define what the database should contain. The first entry in each log contains
-/// a valid CREATE operation following entries contain duplicate UPDATE operations. If the
-/// with_delete flag is set to true the last entry in all logs contain be a DELETE operation.
+/// a valid CREATE operation following entries contain UPDATE operations. If the with_delete
+///  flag is set to true the last entry in all logs contain be a DELETE operation.
 #[fixture]
 pub async fn test_db(
     // Number of entries per log/document
@@ -231,9 +139,9 @@ pub async fn test_db(
     // The schema used for all operations in the db
     #[default(TEST_SCHEMA_ID.parse().unwrap())] schema: SchemaId,
     // The fields used for every CREATE operation
-    #[default(doggo_test_fields())] create_operation_fields: Vec<(&'static str, OperationValue)>,
+    #[default(complex_test_fields())] create_operation_fields: Vec<(&'static str, OperationValue)>,
     // The fields used for every UPDATE operation
-    #[default(doggo_test_fields())] update_operation_fields: Vec<(&'static str, OperationValue)>,
+    #[default(complex_test_fields())] update_operation_fields: Vec<(&'static str, OperationValue)>,
 ) -> TestStore {
     let config = PopulateDatabaseConfig {
         no_of_entries,
@@ -250,8 +158,27 @@ pub async fn test_db(
     db
 }
 
-/// Container for `SqlStore` with access to the document ids and key_pairs used in the
-/// pre-populated database for testing.
+/// Helper for creating many key_pairs.
+///
+/// If there is only one key_pair in the list it will always be the default testing
+/// key pair.
+pub fn test_key_pairs(no_of_authors: usize) -> Vec<KeyPair> {
+    let mut key_pairs = Vec::new();
+    match no_of_authors {
+        0 => (),
+        1 => key_pairs.push(KeyPair::from_private_key_str(DEFAULT_PRIVATE_KEY).unwrap()),
+        _ => {
+            key_pairs.push(KeyPair::from_private_key_str(DEFAULT_PRIVATE_KEY).unwrap());
+            for _index in 2..no_of_authors {
+                key_pairs.push(KeyPair::new())
+            }
+        }
+    };
+    key_pairs
+}
+
+/// Container for `SimplestStorageProvider` with access to the document ids and key_pairs present in the
+/// pre-populated database.
 #[derive(Default, Debug)]
 pub struct TestStore {
     /// The store.
