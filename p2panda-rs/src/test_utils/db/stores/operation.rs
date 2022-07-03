@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use async_trait::async_trait;
+use log::info;
 
 use crate::document::DocumentId;
-use crate::operation::{AsVerifiedOperation, OperationId, VerifiedOperation};
+use crate::operation::{AsOperation, AsVerifiedOperation, OperationId, VerifiedOperation};
 use crate::storage_provider::errors::OperationStorageError;
 use crate::storage_provider::traits::OperationStore;
 use crate::test_utils::db::SimplestStorageProvider;
@@ -15,6 +16,12 @@ impl OperationStore<VerifiedOperation> for SimplestStorageProvider {
         operation: &VerifiedOperation,
         document_id: &DocumentId,
     ) -> Result<(), OperationStorageError> {
+        info!(
+            "Inserting {} operation: {} into store",
+            operation.action().as_str(),
+            operation.operation_id(),
+        );
+
         let mut operations = self.operations.lock().unwrap();
         if operations
             .values()

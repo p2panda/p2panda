@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use log::info;
 
 use crate::document::DocumentId;
 use crate::entry::LogId;
@@ -11,6 +12,12 @@ use crate::test_utils::db::{SimplestStorageProvider, StorageLog};
 #[async_trait]
 impl LogStore<StorageLog> for SimplestStorageProvider {
     async fn insert_log(&self, log: StorageLog) -> Result<bool, LogStorageError> {
+        info!(
+            "Inserting log {} into store for {}",
+            log.id().as_u64(),
+            log.author()
+        );
+
         let author_log_id_str = log.author().as_str().to_string() + &log.id().as_u64().to_string();
         let mut logs = self.logs.lock().unwrap();
         logs.insert(author_log_id_str, log);

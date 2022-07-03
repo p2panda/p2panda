@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use async_trait::async_trait;
+use log::info;
 
 use crate::document::DocumentId;
 use crate::entry::SeqNum;
@@ -70,6 +71,16 @@ pub trait StorageProvider<
         &self,
         params: &Self::EntryArgsRequest,
     ) -> Result<Self::EntryArgsResponse, Box<dyn std::error::Error + Send + Sync>> {
+        info!(
+            "Get entry args request recieved for author: {} {}",
+            params.author(),
+            params
+                .document_id()
+                .as_ref()
+                .map(|id| format!("and document: {}", id))
+                .unwrap_or_else(|| "no document id provided".to_string())
+        );
+
         // Validate the entry args request parameters.
         params.validate()?;
 
@@ -87,24 +98,45 @@ pub trait StorageProvider<
             // An entry was found which serves as the backlink for the upcoming entry
             Some(entry_backlink) => {
                 let entry_latest = entry_latest.unwrap();
-                let entry_hash_backlink = entry_backlink.hash();
+                let backlink = entry_backlink.hash();
                 // Determine skiplink ("lipmaa"-link) entry in this log
-                let entry_hash_skiplink = self.determine_next_skiplink(&entry_latest).await?;
+                let skiplink = self.determine_next_skiplink(&entry_latest).await?;
+                let seq_num = entry_latest.seq_num().clone().next().unwrap();
+                let log_id = entry_latest.log_id();
+
+                info!(
+                    "Get entry args response: {} (backlink) {:?} (skiplink) {:?} {:?}",
+                    backlink,
+                    skiplink
+                        .as_ref()
+                        .map(|hash| hash.to_string())
+                        .unwrap_or_else(|| "None".to_string()),
+                    seq_num,
+                    log_id
+                );
 
                 Ok(Self::EntryArgsResponse::new(
-                    Some(entry_hash_backlink.clone()),
-                    entry_hash_skiplink,
-                    entry_latest.seq_num().clone().next().unwrap(),
-                    entry_latest.log_id(),
+                    Some(backlink.clone()),
+                    skiplink,
+                    seq_num,
+                    log_id,
                 ))
             }
+
             // No entry was given yet, we can assume this is the beginning of the log
-            None => Ok(Self::EntryArgsResponse::new(
-                None,
-                None,
-                SeqNum::default(),
-                log,
-            )),
+            None => {
+                info!(
+                    "Get entry args response: None (backlink) None (skiplink) {:?} {:?}",
+                    SeqNum::default(),
+                    log
+                );
+                Ok(Self::EntryArgsResponse::new(
+                    None,
+                    None,
+                    SeqNum::default(),
+                    log,
+                ))
+            }
         }
     }
 
@@ -113,6 +145,12 @@ pub trait StorageProvider<
         &self,
         params: &Self::PublishEntryRequest,
     ) -> Result<Self::PublishEntryResponse, Box<dyn std::error::Error + Send + Sync>> {
+        info!(
+            "Publish entry request recieved from {} containing entry: {}",
+            params.entry_signed().author(),
+            params.entry_signed().hash()
+        );
+
         // Create a storage entry.
         let entry = StorageEntry::new(params.entry_signed(), params.operation_encoded())?;
         // Validate the entry (this also maybe happened in the above constructor)
@@ -203,6 +241,17 @@ pub trait StorageProvider<
             .unwrap();
         let entry_hash_skiplink = self.determine_next_skiplink(&entry_latest).await?;
         let next_seq_num = entry_latest.seq_num().clone().next().unwrap();
+
+        info!(
+            "Publish entry response: {} (backlink) {:?} (skiplink) {:?} {:?}",
+            entry.hash(),
+            entry_hash_skiplink
+                .as_ref()
+                .map(|hash| hash.to_string())
+                .unwrap_or_else(|| "None".to_string()),
+            next_seq_num,
+            entry.log_id()
+        );
 
         Ok(Self::PublishEntryResponse::new(
             Some(entry.hash()),

@@ -310,8 +310,7 @@ mod tests {
     use crate::document::{DocumentId, DocumentViewId};
     use crate::identity::KeyPair;
     use crate::operation::{
-        AsVerifiedOperation, Operation, OperationEncoded, OperationId, OperationValue,
-        VerifiedOperation,
+        AsVerifiedOperation, OperationEncoded, OperationId, OperationValue, VerifiedOperation,
     };
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::AsStorageEntry;

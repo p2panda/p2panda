@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use async_trait::async_trait;
+use log::info;
 
 use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
 use crate::schema::SchemaId;
@@ -18,6 +19,10 @@ impl DocumentStore for SimplestStorageProvider {
         document_view: &DocumentView,
         schema_id: &SchemaId,
     ) -> Result<(), DocumentStorageError> {
+        info!(
+            "Inserting document view with id {} into store",
+            document_view.id()
+        );
         self.document_views.lock().unwrap().insert(
             document_view.id().to_owned(),
             (schema_id.to_owned(), document_view.to_owned()),
@@ -48,19 +53,16 @@ impl DocumentStore for SimplestStorageProvider {
     /// Inserts a document into storage and should retain a pointer to it's most recent
     /// document view. Returns an error if a fatal storage error occured.
     async fn insert_document(&self, document: &Document) -> Result<(), DocumentStorageError> {
+        info!("Inserting document with id {} into store", document.id());
+
         self.documents
             .lock()
             .unwrap()
             .insert(document.id().to_owned(), document.to_owned());
 
         if !document.is_deleted() {
-            self.document_views.lock().unwrap().insert(
-                document.view_id().to_owned(),
-                (
-                    document.schema().to_owned(),
-                    document.view().unwrap().to_owned(),
-                ),
-            );
+            self.insert_document_view(document.view().unwrap(), document.schema())
+                .await?;
         }
 
         Ok(())
