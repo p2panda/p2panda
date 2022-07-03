@@ -191,27 +191,12 @@ impl Node {
             .collect()
     }
 
-    /// Public wrapper with logging for private next_entry_args method.
-    ///
-    /// Returns the log id, sequence number, skiplink and backlink hash for a given author and
-    /// document. All of this information is needed to create and sign a new entry.
-    ///
-    /// If a value for the optional seq_num parameter is passed then next entry args *at that
-    /// point* in this log are returned. This is helpful when generating test data and wanting to
-    /// test the flow from requesting entry args through to publishing an entry.
+    /// Get the next entry arguments for an author and optionally existing document.
     pub fn get_next_entry_args(
         &self,
         author: &Author,
         document_id: Option<&DocumentId>,
     ) -> Result<EntryArgsResponse> {
-        info!(
-            "[next_entry_args] REQUEST: next entry args for author {} document {}",
-            author.as_str(),
-            document_id.map(|id| id.as_str()).unwrap_or("na"),
-        );
-
-        debug!("\n{:?}\n{:?}", author, document_id);
-
         let entry_args_request = EntryArgsRequest {
             public_key: author.clone(),
             document_id: document_id.cloned(),
@@ -220,62 +205,33 @@ impl Node {
         let next_entry_args =
             task::block_on(async move { self.store().get_entry_args(&entry_args_request).await })?;
 
-        info!(
-            "[next_entry_args] RESPONSE: log id: {} seq num: {} backlink: {} skiplink: {}",
-            next_entry_args.log_id.as_u64(),
-            next_entry_args.seq_num.as_u64(),
-            next_entry_args
-                .backlink
-                .as_ref()
-                .map(|hash| hash.as_str())
-                .unwrap_or("none"),
-            next_entry_args
-                .skiplink
-                .as_ref()
-                .map(|hash| hash.as_str())
-                .unwrap_or("none"),
-        );
-
-        debug!("\n{:?}", next_entry_args);
-
         Ok(next_entry_args)
     }
 
-    /// Store an entry in the database and return the hash of the newly created entry.
+    /// Publish an entry to the node.
+    ///
+    /// This method is a sync wrapper around the equivalent async method on the storage
+    /// provider. It validates and publishes an entry to the node. Additionally it seperately
+    /// stores the contained operation and triggers materialisation of documents and views.
     pub fn publish_entry(
         &mut self,
         entry_encoded: &EntrySigned,
         operation_encoded: &OperationEncoded,
     ) -> Result<PublishEntryResponse> {
-        let entry = decode_entry(entry_encoded, Some(operation_encoded))?;
-        let log_id = entry.log_id();
-        let author = entry_encoded.author();
-
-        info!(
-            "[publish_entry] REQUEST: publish {} from author: {}",
-            entry_encoded.hash(),
-            author
-        );
-
-        debug!("\n{:?}\n{:?}", entry_encoded, operation_encoded);
-
         let publish_entry_request = PublishEntryRequest {
             entry: entry_encoded.clone(),
             operation: operation_encoded.clone(),
         };
 
-        let publish_entry_response =
-            task::block_on(
-                async move { self.store().publish_entry(&publish_entry_request).await },
-            )?;
+        let publish_entry_response = task::block_on(async {
+            // Insert the entry, operation and log into the database.
+            self.store().publish_entry(&publish_entry_request).await
+        })?;
 
-        info!(
-            "[publish_entry] RESPONSE: succesfully published {} to log: {} and returning next entry args",
-            entry_encoded.hash(),
-            log_id.as_u64()
-        );
-
-        debug!("\n{:?}", publish_entry_response);
+        task::block_on(async {
+            // Trigger materialisation by processing the new operation.
+            process_new_operation(self, &entry_encoded.hash().into()).await
+        })?;
 
         Ok(publish_entry_response)
     }
