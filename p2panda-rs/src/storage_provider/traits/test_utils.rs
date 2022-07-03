@@ -418,14 +418,11 @@ pub async fn send_to_store(
 mod tests {
     use rstest::rstest;
 
-    use crate::{
-        entry::{LogId, SeqNum},
-        storage_provider::traits::{test_utils::test_db, AsStorageEntry},
-    };
+    use crate::entry::{LogId, SeqNum};
+    use crate::storage_provider::traits::{test_utils::test_db, AsStorageEntry};
+    use crate::test_utils::constants::SKIPLINK_ENTRIES;
 
     use super::TestStore;
-
-    pub const SKIPLINK_ENTRIES: [u64; 5] = [4, 8, 12, 13, 17];
 
     #[rstest]
     #[async_std::test]

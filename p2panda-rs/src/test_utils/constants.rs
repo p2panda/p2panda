@@ -17,6 +17,9 @@ pub const TEST_SCHEMA_ID: &str =
 pub const DEFAULT_PRIVATE_KEY: &str =
     "eb852fefa703901e42f17cdc2aa507947f392a72101b2c1a6d30023af14f75e2";
 
+/// The sequence number of entries containing skiplinks up to seq_num = 20.
+pub const SKIPLINK_ENTRIES: [u64; 5] = [4, 8, 12, 13, 17];
+
 /// The default sequence number, used when an entry is created in a fixture and no custom values
 /// are provided.
 pub const DEFAULT_SEQ_NUM: u64 = 1;
