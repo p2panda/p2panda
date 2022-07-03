@@ -79,12 +79,11 @@
 //! entries.len(); // => 4
 //! ```
 use async_std::task;
-use log::{debug, info};
 
 use std::collections::HashSet;
 
 use crate::document::{Document, DocumentBuilder, DocumentId};
-use crate::entry::{decode_entry, EntrySigned};
+use crate::entry::EntrySigned;
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{Operation, OperationEncoded, OperationId};
@@ -99,42 +98,12 @@ use crate::test_utils::db::{SimplestStorageProvider, StorageEntry};
 use crate::test_utils::mocks::utils::Result;
 use crate::test_utils::mocks::Client;
 
-pub async fn process_new_operation(node: &mut Node, operation: &OperationId) -> Result<()> {
-    let document_id = node
-        .0
-        .get_document_by_entry(operation.as_hash())
-        .await?
-        .expect("No document found for operation");
-
-    // Now we perform materialisation on the effected document.
-    let document_operations = node.0.get_operations_by_document_id(&document_id).await?;
-    let document = DocumentBuilder::new(document_operations).build()?;
-
-    // This inserts the document and it's current view into the store.
-    node.0.insert_document(&document).await?;
-    Ok(())
-}
-
-/// Helper method signing and encoding entry and sending it to node backend.
-pub fn send_to_node(
-    node: &mut Node,
-    client: &Client,
-    operation: &Operation,
-) -> Result<(Hash, PublishEntryResponse)> {
-    // Insert the entry, operation and log into the database.
-    let (entry_encoded, response) =
-        task::block_on(async { send_to_store(&node.0, operation, &client.key_pair).await })?;
-
-    // Trigger materialisation by processing the new operation.
-    task::block_on(async { process_new_operation(node, &entry_encoded.hash().into()).await })?;
-
-    Ok((entry_encoded.hash(), response))
-}
-
-/// This node mocks functionality which would be implemented in a real world p2panda node.
+/// Mock node which simulates the functionality of a real node in the p2panda.
 ///
-/// It does so in a simplistic manner and should only be used in a testing environment or demo
-/// environment.
+/// It contains an implementation of `StorageProvider` which exposes methods for publishing
+/// and storing entries and operations and accessing materialised documents and their views.
+///
+/// Offers a sync interface to some of the underlying async `StorageProvider` methods.
 #[derive(Debug, Default)]
 pub struct Node(SimplestStorageProvider);
 
@@ -147,65 +116,6 @@ impl Node {
     /// Return the entire store.
     pub fn store(&self) -> &SimplestStorageProvider {
         &self.0
-    }
-
-    /// Get an entry by it's id.
-    pub fn entry(&self, id: &Hash) -> Option<StorageEntry> {
-        task::block_on(async { self.store().get_entry_by_hash(id).await.unwrap() })
-    }
-
-    /// Get all entries in the node's database.
-    pub fn all_entries(&self) -> Vec<StorageEntry> {
-        self.store()
-            .entries
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|(_, entry)| entry.clone())
-            .collect()
-    }
-
-    /// Get all authors who have published to this node.
-    pub fn all_authors(&self) -> HashSet<Author> {
-        let mut authors = HashSet::new();
-        let entries = self.store().entries.lock().unwrap();
-        for (_, entry) in entries.iter() {
-            authors.insert(entry.author());
-        }
-        authors
-    }
-
-    /// Get a single resolved document from the node.
-    pub fn document(&self, id: &DocumentId) -> Option<Document> {
-        self.store().documents.lock().unwrap().get(id).cloned()
-    }
-
-    /// Get all documents in their resolved state from the node.
-    pub fn all_documents(&self) -> Vec<Document> {
-        self.store()
-            .documents
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|(_, document)| document.clone())
-            .collect()
-    }
-
-    /// Get the next entry arguments for an author and optionally existing document.
-    pub fn get_next_entry_args(
-        &self,
-        author: &Author,
-        document_id: Option<&DocumentId>,
-    ) -> Result<EntryArgsResponse> {
-        let entry_args_request = EntryArgsRequest {
-            public_key: author.clone(),
-            document_id: document_id.cloned(),
-        };
-
-        let next_entry_args =
-            task::block_on(async move { self.store().get_entry_args(&entry_args_request).await })?;
-
-        Ok(next_entry_args)
     }
 
     /// Publish an entry to the node.
@@ -235,6 +145,106 @@ impl Node {
 
         Ok(publish_entry_response)
     }
+
+    /// Get the next entry arguments for an author and optionally existing document.
+    pub fn get_next_entry_args(
+        &self,
+        author: &Author,
+        document_id: Option<&DocumentId>,
+    ) -> Result<EntryArgsResponse> {
+        let entry_args_request = EntryArgsRequest {
+            public_key: author.clone(),
+            document_id: document_id.cloned(),
+        };
+
+        let next_entry_args =
+            task::block_on(async move { self.store().get_entry_args(&entry_args_request).await })?;
+
+        Ok(next_entry_args)
+    }
+
+    /// Get a stored entry by it's id.
+    pub fn entry(&self, id: &Hash) -> Option<StorageEntry> {
+        task::block_on(async { self.store().get_entry_by_hash(id).await.unwrap() })
+    }
+
+    /// Get all entries stored on the node.
+    pub fn all_entries(&self) -> Vec<StorageEntry> {
+        self.store()
+            .entries
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(_, entry)| entry.clone())
+            .collect()
+    }
+
+    /// Get all authors who have published to this node.
+    pub fn all_authors(&self) -> HashSet<Author> {
+        let mut authors = HashSet::new();
+        let entries = self.store().entries.lock().unwrap();
+        for (_, entry) in entries.iter() {
+            authors.insert(entry.author());
+        }
+        authors
+    }
+
+    /// Get a single document from the node.
+    pub fn document(&self, id: &DocumentId) -> Option<Document> {
+        self.store().documents.lock().unwrap().get(id).cloned()
+    }
+
+    /// Get all documents from the node.
+    pub fn all_documents(&self) -> Vec<Document> {
+        self.store()
+            .documents
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(_, document)| document.clone())
+            .collect()
+    }
+}
+
+/// Helper method for encoding, signing and sending operations to a node.
+///
+/// Internally it composes an entry to encode the operation on, first requesting the next
+/// entry args from the node itself before signing it with the passed client and publishing.
+///
+/// Every call to this method also triggers the effected document to be re-materialised
+/// and it's new state to be stored in preperation for answering query requests.
+pub fn send_to_node(
+    node: &mut Node,
+    client: &Client,
+    operation: &Operation,
+) -> Result<(Hash, PublishEntryResponse)> {
+    // Insert the entry, operation and log into the database.
+    let (entry_encoded, response) =
+        task::block_on(async { send_to_store(&node.0, operation, &client.key_pair).await })?;
+
+    // Trigger materialisation by processing the new operation.
+    task::block_on(async { process_new_operation(node, &entry_encoded.hash().into()).await })?;
+
+    Ok((entry_encoded.hash(), response))
+}
+
+/// Re-materialise the document effected by the passed operation.
+///
+/// Errors if a document for this operation does not already exist in the database.
+pub async fn process_new_operation(node: &mut Node, operation: &OperationId) -> Result<()> {
+    let document_id = node
+        .0
+        .get_document_by_entry(operation.as_hash())
+        .await?
+        .expect("No document found for operation");
+
+    // Now we perform materialisation on the effected document.
+    let document_operations = node.0.get_operations_by_document_id(&document_id).await?;
+    let document = DocumentBuilder::new(document_operations).build()?;
+
+    // This inserts the document and it's current view into the store.
+    node.0.insert_document(&document).await?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -317,7 +327,7 @@ mod tests {
                     "message",
                     OperationValue::Text("Which I now update. [Panda]".to_string()),
                 )],
-                &panda_entry_1_hash.clone().into(),
+                &panda_entry_1_hash.into(),
             ),
         )
         .unwrap();
@@ -399,7 +409,7 @@ mod tests {
                     "message",
                     OperationValue::Text("And again. [Penguin]".to_string()),
                 )],
-                &penguin_entry_1_hash.clone().into(),
+                &penguin_entry_1_hash.into(),
             ),
         )
         .unwrap();
