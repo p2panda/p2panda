@@ -83,7 +83,7 @@ use log::{debug, info};
 
 use std::collections::{HashMap, HashSet};
 
-use crate::document::{Document, DocumentBuilder, DocumentId};
+use crate::document::{Document, DocumentBuilder, DocumentId, DocumentView, DocumentViewId};
 use crate::entry::{decode_entry, EntrySigned, LogId};
 use crate::hash::Hash;
 use crate::identity::Author;
@@ -105,10 +105,12 @@ pub async fn process_new_operation(node: &mut Node, operation: &OperationId) -> 
         .get_document_by_entry(operation.as_hash())
         .await?
         .expect("No document found for operation");
+
     // Now we perform materialisation on the effected document.
     let document_operations = node.0.get_operations_by_document_id(&document_id).await?;
-
     let document = DocumentBuilder::new(document_operations).build()?;
+
+    // This inserts the document and it's current view into the store.
     node.0.insert_document(&document).await?;
     Ok(())
 }
@@ -184,6 +186,22 @@ impl Node {
             logs.insert(entry.log_id(), log_entries);
         }
         logs
+    }
+
+    /// Get a single resolved document from the node.
+    pub fn get_document(&self, id: &DocumentId) -> Option<Document> {
+        self.0.documents.lock().unwrap().get(id).cloned()
+    }
+
+    /// Get all documents in their resolved state from the node.
+    pub fn get_documents(&self) -> Vec<Document> {
+        self.0
+            .documents
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(_, document)| document.clone())
+            .collect()
     }
 
     /// Public wrapper with logging for private next_entry_args method.
@@ -272,47 +290,6 @@ impl Node {
         debug!("\n{:?}", publish_entry_response);
 
         Ok(publish_entry_response)
-    }
-
-    /// Get a single resolved document from the node.
-    pub fn get_document(&self, id: &DocumentId) -> Option<Document> {
-        let operations: Vec<VerifiedOperation> = self
-            .0
-            .operations
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|(_, (document_id, _))| document_id == id)
-            .map(|(_, (_, operation))| operation.clone())
-            .collect();
-
-        if operations.is_empty() {
-            return None;
-        };
-        Some(
-            DocumentBuilder::new(operations)
-                .build()
-                .expect("Could not build document"),
-        )
-    }
-
-    /// Get all documents in their resolved state from the node.
-    pub fn get_documents(&self) -> Vec<Document> {
-        let mut documents: HashSet<DocumentId> = HashSet::new();
-
-        self.0
-            .operations
-            .lock()
-            .unwrap()
-            .iter()
-            .for_each(|(_, (document_id, _))| {
-                documents.insert(document_id.clone());
-            });
-
-        documents
-            .iter()
-            .flat_map(|id| self.get_document(&id))
-            .collect()
     }
 }
 

@@ -34,12 +34,13 @@ impl DocumentStore for SimplestStorageProvider {
         &self,
         id: &DocumentViewId,
     ) -> Result<Option<DocumentView>, DocumentStorageError> {
-        Ok(self
+        let view = self
             .document_views
             .lock()
             .unwrap()
             .get(&id)
-            .map(|(_, document_view)| document_view.to_owned()))
+            .map(|(_, document_view)| document_view.to_owned());
+        Ok(view)
     }
 
     /// Insert a document into storage.
@@ -51,6 +52,16 @@ impl DocumentStore for SimplestStorageProvider {
             .lock()
             .unwrap()
             .insert(document.id().to_owned(), document.to_owned());
+
+        if !document.is_deleted() {
+            self.document_views.lock().unwrap().insert(
+                document.view_id().to_owned(),
+                (
+                    document.schema().to_owned(),
+                    document.view().unwrap().to_owned(),
+                ),
+            );
+        }
 
         Ok(())
     }
