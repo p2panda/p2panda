@@ -38,7 +38,7 @@ impl DocumentStore for SimplestStorageProvider {
             .document_views
             .lock()
             .unwrap()
-            .get(&id)
+            .get(id)
             .map(|(_, document_view)| document_view.to_owned());
         Ok(view)
     }

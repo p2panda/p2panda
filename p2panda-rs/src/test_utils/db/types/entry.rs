@@ -35,15 +35,18 @@ pub struct StorageEntry {
 }
 
 impl StorageEntry {
+    /// Get the decoded entry.
     pub fn entry_decoded(&self) -> Entry {
         // Unwrapping as validation occurs in constructor.
         decode_entry(&self.entry_signed(), self.operation_encoded().as_ref()).unwrap()
     }
 
+    /// Get the encoded entry.
     pub fn entry_signed(&self) -> EntrySigned {
         self.entry_bytes.clone()
     }
 
+    /// Get the encoded operation.
     pub fn operation_encoded(&self) -> Option<OperationEncoded> {
         self.payload_bytes.clone()
     }

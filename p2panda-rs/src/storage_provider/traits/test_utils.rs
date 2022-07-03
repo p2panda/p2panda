@@ -3,7 +3,7 @@
 use std::convert::TryFrom;
 
 use crate::document::{DocumentBuilder, DocumentId, DocumentViewId};
-use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
+use crate::entry::{sign_and_encode, Entry, EntrySigned};
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::{
@@ -11,7 +11,7 @@ use crate::operation::{
     PinnedRelation, PinnedRelationList, Relation, RelationList, VerifiedOperation,
 };
 use crate::schema::SchemaId;
-use crate::storage_provider::traits::{AsStorageEntry, DocumentStore};
+use crate::storage_provider::traits::DocumentStore;
 use crate::storage_provider::traits::{OperationStore, StorageProvider};
 use crate::test_utils::constants::{DEFAULT_PRIVATE_KEY, TEST_SCHEMA_ID};
 use crate::test_utils::db::{
@@ -20,11 +20,9 @@ use crate::test_utils::db::{
 };
 use crate::test_utils::fixtures::{operation, operation_fields};
 
-use rstest::{fixture, rstest};
+use rstest::fixture;
 
 use super::{AsStorageLog, LogStore};
-
-pub const SKIPLINK_ENTRIES: [u64; 5] = [4, 8, 12, 13, 17];
 
 /// The fields used as defaults in the tests.
 pub fn doggo_test_fields() -> Vec<(&'static str, OperationValue)> {
@@ -172,6 +170,7 @@ pub async fn insert_entry_operation_and_view(
     (document_id, document_view_id)
 }
 
+/// Configuration used in test database population.
 #[derive(Debug)]
 pub struct PopulateDatabaseConfig {
     /// Number of entries per log/document.
@@ -255,15 +254,29 @@ pub async fn test_db(
 /// pre-populated database for testing.
 #[derive(Default, Debug)]
 pub struct TestStore {
+    /// The store.
     pub store: SimplestStorageProvider,
+
+    /// Test data collected during store population.
     pub test_data: TestData,
 }
 
 /// Data collected when populating a `TestData` base in order to easily check values which
 /// would be otherwise hard or impossible to get through the store methods.
+///
+/// Note: if new entries are published to this node, their key and any newly created
+/// documents will not be added to these lists.
 #[derive(Default, Debug)]
 pub struct TestData {
+    /// KeyPairs which were used to pre-populate this store.
     pub key_pairs: Vec<KeyPair>,
+
+    /// The id of all documents which were inserted into the store when it was
+    /// pre-populated with values.
+    ///
+    /// Note: if new entries are published to this node, any newly created documents
+    /// will not be added to this list.their key will not be added to
+    /// this list.
     pub documents: Vec<DocumentId>,
 }
 
@@ -281,7 +294,6 @@ pub async fn populate_test_db(db: &mut TestStore, config: &PopulateDatabaseConfi
             .push(KeyPair::from_private_key(key_pair.private_key()).unwrap());
 
         for _log_id in 0..config.no_of_logs {
-            let mut document_id: Option<DocumentId> = None;
             let mut previous_operation: Option<DocumentViewId> = None;
 
             for index in 0..config.no_of_entries {
@@ -314,7 +326,7 @@ pub async fn populate_test_db(db: &mut TestStore, config: &PopulateDatabaseConfi
 
                 // If this was the first entry in the document, store the doucment id for later.
                 if index == 0 {
-                    document_id = Some(entry_encoded.hash().into());
+                    let document_id = Some(entry_encoded.hash().into());
                     db.test_data.documents.push(document_id.clone().unwrap());
                 }
             }
@@ -375,7 +387,13 @@ pub async fn send_to_store(
     };
     let publish_entry_response = store.publish_entry(&publish_entry_request).await?;
 
-    let document_id = document_id.unwrap_or(entry.hash().into());
+    let document_id = {
+        let default = entry.hash().into();
+        match document_id {
+            Some(id) => id,
+            None => default,
+        }
+    };
 
     // Insert the log into the store.
     store
@@ -396,53 +414,67 @@ pub async fn send_to_store(
     Ok((entry, publish_entry_response))
 }
 
-#[rstest]
-#[async_std::test]
-async fn test_the_test_db(
-    #[from(test_db)]
-    #[with(17, 1, 1)]
-    #[future]
-    db: TestStore,
-) {
-    let db = db.await;
-    let entries = db.store.entries.lock().unwrap().clone();
-    for seq_num in 1..17 {
-        let entry = entries
-            .values()
-            .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
-            .unwrap();
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
 
-        let expected_seq_num = SeqNum::new(seq_num as u64).unwrap();
-        assert_eq!(expected_seq_num, *entry.entry_decoded().seq_num());
+    use crate::{
+        entry::{LogId, SeqNum},
+        storage_provider::traits::{test_utils::test_db, AsStorageEntry},
+    };
 
-        let expected_log_id = LogId::default();
-        assert_eq!(expected_log_id, entry.log_id());
+    use super::TestStore;
 
-        let mut expected_backlink_hash = None;
+    pub const SKIPLINK_ENTRIES: [u64; 5] = [4, 8, 12, 13, 17];
 
-        if seq_num != 1 {
-            expected_backlink_hash = Some(
-                entries
-                    .values()
-                    .find(|entry| entry.seq_num().as_u64() as usize == seq_num - 1)
-                    .unwrap()
-                    .hash(),
-            );
-        }
-        assert_eq!(expected_backlink_hash, entry.backlink_hash());
-
-        let mut expected_skiplink_hash = None;
-
-        if SKIPLINK_ENTRIES.contains(&(seq_num as u64)) {
-            let skiplink_seq_num = entry.seq_num().skiplink_seq_num().unwrap().as_u64();
-
-            let skiplink_entry = entries
+    #[rstest]
+    #[async_std::test]
+    async fn test_the_test_db(
+        #[from(test_db)]
+        #[with(17, 1, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
+        for seq_num in 1..17 {
+            let entry = entries
                 .values()
-                .find(|entry| entry.seq_num().as_u64() == skiplink_seq_num)
+                .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
                 .unwrap();
-            expected_skiplink_hash = Some(skiplink_entry.hash());
-        };
 
-        assert_eq!(expected_skiplink_hash, entry.skiplink_hash());
+            let expected_seq_num = SeqNum::new(seq_num as u64).unwrap();
+            assert_eq!(expected_seq_num, *entry.entry_decoded().seq_num());
+
+            let expected_log_id = LogId::default();
+            assert_eq!(expected_log_id, entry.log_id());
+
+            let mut expected_backlink_hash = None;
+
+            if seq_num != 1 {
+                expected_backlink_hash = Some(
+                    entries
+                        .values()
+                        .find(|entry| entry.seq_num().as_u64() as usize == seq_num - 1)
+                        .unwrap()
+                        .hash(),
+                );
+            }
+            assert_eq!(expected_backlink_hash, entry.backlink_hash());
+
+            let mut expected_skiplink_hash = None;
+
+            if SKIPLINK_ENTRIES.contains(&(seq_num as u64)) {
+                let skiplink_seq_num = entry.seq_num().skiplink_seq_num().unwrap().as_u64();
+
+                let skiplink_entry = entries
+                    .values()
+                    .find(|entry| entry.seq_num().as_u64() == skiplink_seq_num)
+                    .unwrap();
+                expected_skiplink_hash = Some(skiplink_entry.hash());
+            };
+
+            assert_eq!(expected_skiplink_hash, entry.skiplink_hash());
+        }
     }
 }
