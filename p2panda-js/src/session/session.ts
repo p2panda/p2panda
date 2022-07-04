@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { RequestManager, HTTPTransport, Client } from '@open-rpc/client-js';
 import debug from 'debug';
+import {
+  ApolloClient,
+  ApolloClientOptions,
+  gql,
+  HttpLink,
+  InMemoryCache,
+  NormalizedCacheObject,
+  // Import from `client/core` to not require `react` as a dependency as long
+  // as that is possible.
+} from '@apollo/client/core';
+import fetch from 'node-fetch';
 
-import wasm from '~/wasm';
 import { createDocument, deleteDocument, updateDocument } from '~/document';
-import { queryInstances } from '~/instance';
-import { marshallResponseFields } from '~/utils';
 
-import type {
-  EncodedEntry,
-  EntryArgs,
-  EntryRecord,
-  Fields,
-  InstanceRecord,
-  SchemaId,
-} from '~/types';
+import type { EntryArgs, Fields, SchemaId } from '~/types';
 import type { KeyPair } from 'wasm';
 
 const log = debug('p2panda-js:session');
@@ -25,6 +25,32 @@ export type Context = {
   schema: SchemaId;
   session: Session;
 };
+
+// GraphQL query to retrieve next entry args from node.
+export const GQL_NEXT_ENTRY_ARGS = gql`
+  {
+    nextEntryArgs(publicKey: $publicKey, documentId: $documentId) {
+      logId
+      seqNum
+      backlink
+      skiplink
+    }
+  }
+`;
+
+// GraphQL mutation to publish an entry and retrieve arguments for encoding the
+// next operation on the same document (those are currently not used to update
+// the next entry arguments cache).
+export const GQL_PUBLISH_ENTRY = gql`
+  {
+    publishEntry(entry: $entry, operation: $operation) {
+      logId
+      seqNum
+      backlink
+      skiplink
+    }
+  }
+`;
 
 /**
  * Communicate with the p2panda network through a `Session` instance.
@@ -47,19 +73,27 @@ export class Session {
   // Address of a p2panda node that we can connect to
   endpoint: string;
 
-  // An RPC client connected to the configured endpoint
-  client: Client;
+  // A GraphQL client connected to the configured endpoint
+  client: ApolloClient<NormalizedCacheObject>;
 
   // Cached arguments for the next entry
   private nextEntryArgs: { [cacheKey: string]: EntryArgs } = {};
 
-  constructor(endpoint: Session['endpoint']) {
+  constructor(
+    endpoint: Session['endpoint'],
+    apolloOptions?: ApolloClientOptions<NormalizedCacheObject>,
+  ) {
     if (endpoint == null || endpoint === '') {
       throw new Error('Missing `endpoint` parameter for creating a session');
     }
     this.endpoint = endpoint;
-    const transport = new HTTPTransport(endpoint);
-    this.client = new Client(new RequestManager([transport]));
+    this.client = new ApolloClient({
+      // @ts-expect-error using a fetch implementation that ts doesn't consider
+      // valid
+      link: new HttpLink({ uri: endpoint, fetch }),
+      cache: new InMemoryCache(),
+      ...apolloOptions,
+    });
   }
 
   private _schema: SchemaId | null = null;
@@ -123,38 +157,45 @@ export class Session {
    *
    * This uses the cache set through `Session._setNextEntryArgs`.
    *
-   * @param author public key of the author
+   * @param publicKey public key of the author
    * @param document optional document id
    * @returns an `EntryArgs` object
    */
   async getNextEntryArgs(
-    author: string,
+    publicKey: string,
     documentId?: string,
   ): Promise<EntryArgs> {
-    if (!author) {
-      throw new Error('Author must be provided');
+    if (!publicKey) {
+      throw new Error("Author's public key must be provided");
     }
 
     // Use cache only when documentId is set
     if (documentId) {
-      const cacheKey = `${author}/${documentId}`;
+      const cacheKey = `${publicKey}/${documentId}`;
       const cachedValue = this.nextEntryArgs[cacheKey];
 
       if (cachedValue) {
         delete this.nextEntryArgs[cacheKey];
-        log('call panda_getEntryArguments [cached]', cachedValue);
+        log('request nextEntryArgs [cached]', cachedValue);
         return cachedValue;
       }
     }
 
-    // Do RPC call
-    const nextEntryArgs = await this.client.request({
-      method: 'panda_getEntryArguments',
-      params: { author, document: documentId },
-    });
-
-    log('call panda_getEntryArguments', nextEntryArgs);
-    return nextEntryArgs;
+    try {
+      const { data } = await this.client.query<{ nextEntryArgs: EntryArgs }>({
+        query: GQL_NEXT_ENTRY_ARGS,
+        variables: {
+          publicKey,
+          documentId,
+        },
+      });
+      const nextEntryArgs = data.nextEntryArgs;
+      log('request nextEntryArgs', nextEntryArgs);
+      return nextEntryArgs;
+    } catch (err) {
+      log('Error fetching next entry args');
+      throw err;
+    }
   }
 
   /**
@@ -176,85 +217,31 @@ export class Session {
   /**
    * Publish an encoded entry and operation.
    *
-   * @param entryEncoded
-   * @param operationEncoded
+   * @param entry
+   * @param operation
    * @returns next entry arguments
    */
-  async publishEntry(
-    entryEncoded: string,
-    operationEncoded: string,
-  ): Promise<EntryArgs> {
-    if (!entryEncoded || !operationEncoded) {
+  async publishEntry(entry: string, operation: string): Promise<EntryArgs> {
+    if (!entry || !operation) {
       throw new Error('Encoded entry and operation must be provided');
     }
 
-    const params = { entryEncoded, operationEncoded };
-    log('call panda_publishEntry', params);
-    const result = await this.client.request({
-      method: 'panda_publishEntry',
-      params,
-    });
-
-    log('response panda_publishEntry', result);
-    return result;
-  }
-
-  /**
-   * Query node for encoded entries of a given schema.
-   *
-   * @param schema schema id
-   * @returns an array of encoded entries
-   */
-  private async queryEntriesEncoded(schema: SchemaId): Promise<EncodedEntry[]> {
-    if (!schema) {
-      throw new Error('Schema must be provided');
+    try {
+      const { data } = await this.client.mutate<{ publishEntry: EntryArgs }>({
+        mutation: GQL_PUBLISH_ENTRY,
+        variables: {
+          entry,
+          operation,
+        },
+      });
+      log('request publishEntry', data);
+      if (data?.publishEntry == null)
+        throw new Error("Response doesn't contain field `publishEntry`");
+      return data.publishEntry;
+    } catch (err) {
+      log('Error publishing entry');
+      throw err;
     }
-
-    const params = { schema };
-    log('call panda_queryEntries', params);
-    const result = await this.client.request({
-      method: 'panda_queryEntries',
-      params,
-    });
-
-    log('response panda_queryEntries', result);
-    return result.entries;
-  }
-
-  /**
-   * Query node for entries of a given schema and decode entries.
-   *
-   * Returned entries retain their encoded form on `entry.encoded`.
-   *
-   * @param schema schema id
-   * @returns an array of decoded entries
-   */
-  async queryEntries(schema: SchemaId): Promise<EntryRecord[]> {
-    if (!schema) {
-      throw new Error('Schema must be provided');
-    }
-
-    const { decodeEntry } = await wasm;
-    const result = await this.queryEntriesEncoded(schema);
-
-    log(`decoding ${result.length} entries`);
-
-    return Promise.all(
-      result.map(async (entry) => {
-        const decoded = await decodeEntry(entry.entryBytes, entry.payloadBytes);
-
-        if (decoded.operation.action !== 'delete') {
-          decoded.operation.fields = marshallResponseFields(
-            decoded.operation.fields,
-          );
-        }
-
-        return {
-          ...decoded,
-          encoded: entry,
-        };
-      }),
-    );
   }
 
   // Document operations
@@ -389,26 +376,6 @@ export class Session {
     deleteDocument(documentId, previousOperations, mergedOptions);
 
     return this;
-  }
-
-  /**
-   * Query documents of a specific schema from the node.
-   *
-   * Calling this method will retrieve all entries of the given schema from the
-   * node and then materialise them locally into instances.
-   *
-   * @param options optional config object:
-   * @param options.schema hex-encoded schema id
-   * @returns array of instance records, which have data fields and an extra
-   *  `_meta_ field, which holds instance metadata and its entry history
-   */
-  async query(options?: Partial<Context>): Promise<InstanceRecord[]> {
-    log('query schema', options?.schema || this.schema);
-    const instances = queryInstances({
-      schema: options?.schema || this.schema,
-      session: this,
-    });
-    return instances;
   }
 
   toString(): string {

@@ -95,7 +95,7 @@ impl<V: PartialEq + Clone + Debug> GraphData<V> {
     }
 }
 
-impl<'a, K, V> Node<K, V>
+impl<K, V> Node<K, V>
 where
     K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
     V: PartialEq + Clone + Debug,
@@ -247,7 +247,7 @@ where
     ///
     /// Data contained in the returned nodes is unchanged, but the nodes' `next` arrays are edited
     /// to reflect the new graph connections. The returned graph can be sorted in order to arrive
-    /// at a linear ordering of nodes.  
+    /// at a linear ordering of nodes.
     pub fn trim(&'a mut self, tip_nodes: &[K]) -> Result<Graph<K, V>, GraphError> {
         // Instantiate the passed graph tips and make sure they exist in the graph.
         let mut graph_tips = vec![];
@@ -443,7 +443,7 @@ where
     }
 }
 
-impl<'a, K, V> Default for Graph<K, V>
+impl<K, V> Default for Graph<K, V>
 where
     K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
     V: PartialEq + Clone + Debug,

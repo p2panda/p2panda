@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+## [0.4.0]
+
+Released on 2022-07-01: :package: `p2panda-js` and :package: `p2panda-rs`
+
 ## Added
 
 - `Document` for sorting and reducing a graph of `Operations` [#169](https://github.com/p2panda/p2panda/pull/169) `rs` 🥞
@@ -25,7 +29,7 @@ Highlights are marked with a pancake 🥞
 - `StorageProvider` and associated traits for implementing storage solutions [#274](https://github.com/p2panda/p2panda/pull/274) `rs` 🥞
 - Implement `Display` trait for various structs [#281](https://github.com/p2panda/p2panda/pull/281) `rs`
 - Implement document view id hash as a limited-size identifier for document views [#277](https://github.com/p2panda/p2panda/pull/277) `rs`
-- Additional methods on `EntryStore` needed for replication [310](https://github.com/p2panda/p2panda/pull/310) `rs`
+- Additional methods on `EntryStore` needed for replication [#310](https://github.com/p2panda/p2panda/pull/310) `rs`
 - Introduce `DocumentViewHash`, implement `Hash` for `DocumentViewId` [#313](https://github.com/p2panda/p2panda/pull/313) `rs`
 - Introduce `DocumentViewFields` & `DocumentViewValue` and other `Document` additions [#319](https://github.com/p2panda/p2panda/pull/319) `rs`
 - Storage traits for `Operation` [#326](https://github.com/p2panda/p2panda/pull/326) `rs`
@@ -33,6 +37,7 @@ Highlights are marked with a pancake 🥞
 - `Graph` method for selecting sub-section of graph [#335](https://github.com/p2panda/p2panda/pull/335) `rs`
 - Storage traits for documents [#343](https://github.com/p2panda/p2panda/pull/343) `rs`
 - Materialise a document at a specific document view [#337](https://github.com/p2panda/p2panda/pull/337) `rs`
+- Static definitions of system schemas and other updates for schema provider in aquadoggo [#365](https://github.com/p2panda/p2panda/pull/365) `rs`
 
 ## Changed
 
@@ -45,7 +50,7 @@ Highlights are marked with a pancake 🥞
 - Implement `OperationValue` variants for all relation types [#260](https://github.com/p2panda/p2panda/pull/260) `rs` `js`
 - Support all `Relation` flavours in `cddl` module [#259](https://github.com/p2panda/p2panda/pull/259) `rs`
 - Impl `IntoIter` trait for `PinnedRelation`, `RelationList` and `DocumentViewId` [#266](https://github.com/p2panda/p2panda/pull/266) `rs`
-- Improve error reporting when adding operation fields [#262](https://github.com/p2panda/p2panda/issues/262)] `rs` `js`
+- Improve error reporting when adding operation fields [#262](https://github.com/p2panda/p2panda/issues/262) `rs` `js`
 - Update mock node API [#286](https://github.com/p2panda/p2panda/issues/286) `rs`
 - Refactored graph module to be generic over graph node keys and other graph improvements [#289](https://github.com/p2panda/p2panda/issues/289) `rs`
 - Require sorted serialisation of document view ids [#284](https://github.com/p2panda/p2panda/pull/284) `rs`
@@ -54,13 +59,18 @@ Highlights are marked with a pancake 🥞
 - Update `Schema` implementation to make use of new `SchemaId` [#296](https://github.com/p2panda/p2panda/pull/296) `rs`
 - Require schema field definitions to specify a specific schema [#269](https://github.com/p2panda/p2panda/pull/269) `rs` 🥞
 - Methods for getting string representations of `OperationValue` field type and `OperationAction` [#303](https://github.com/p2panda/p2panda/pull/303) `rs`
-- Additional constructor method for `OperationWithMeta` [322](https://github.com/p2panda/p2panda/pull/322) `rs`
-- Minor method renaming in `EntryStore` [323](https://github.com/p2panda/p2panda/pull/323) `rs`
+- Additional constructor method for `OperationWithMeta` [#322](https://github.com/p2panda/p2panda/pull/322) `rs`
+- Minor method renaming in `EntryStore` [#323](https://github.com/p2panda/p2panda/pull/323) `rs`
 - Require storage provider errors to be thread-safe [#340](https://github.com/p2panda/p2panda/pull/340)
 - Make `previous_operations` a `DocumentViewId` [#342](https://github.com/p2panda/p2panda/pull/342) `rs`
 - Restructure / refactor `test_utils` and place behind `testing` flag [#344](https://github.com/p2panda/p2panda/pull/344) `rs`
 - Update `openmls` crate to `v0.4.1` [#336](https://github.com/p2panda/p2panda/pull/336) `rs`
 - Replace `OperationWithMeta` with `VerifiedOperation` [#353](https://github.com/p2panda/p2panda/pull/353) `rs`
+- Remove test-data generator from `test_utils` [#373](https://github.com/p2panda/p2panda/pull/373) `rs`
+- Implement `OperationStore` on test provider `SimplestStorageProvider` [#361](https://github.com/p2panda/p2panda/pull/361) `rs`
+- Improve validation in `EntrySigned` constructor [#367](https://github.com/p2panda/p2panda/pull/367) `rs`
+- `Session` interface using GraphQL [#364](https://github.com/p2panda/p2panda/pull/377) `js`
+- Updated dependencies, remove `automock` crate [#379](https://github.com/p2panda/p2panda/pull/379) `rs`
 
 ## Fixed
 
@@ -79,6 +89,7 @@ Highlights are marked with a pancake 🥞
 - Test `debug` macro calls in Github CI [#288](https://github.com/p2panda/p2panda/pull/288) `rs`
 - Move private module doc strings into public places [#339](https://github.com/p2panda/p2panda/pull/339) `rs`
 - Add `mockall` crate and create mocks for `EntryStore` and `LogStore` [#314](https://github.com/p2panda/p2panda/pull/314) `rs`
+- Generate documentation with TypeDoc for `p2panda-js` [#359](https://github.com/p2panda/p2panda/pull/359) `js`
 
 ## [0.3.0]
 
@@ -191,7 +202,8 @@ Released on 2021-01-18: :package: `p2panda-js` and 2021-01-28: :package: `p2pand
 - JavaScript library export with WebAssembly running in browsers and NodeJS. [#21](https://github.com/p2panda/p2panda/pull/21) `js`
 - Ed25519 key pair generation. [#4](https://github.com/p2panda/p2panda/pull/4) `rs`
 
-[unreleased]: https://github.com/p2panda/p2panda/compare/v0.3.0...HEAD
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/p2panda/p2panda/releases/tag/v0.4.0
 [0.3.0]: https://github.com/p2panda/p2panda/releases/tag/v0.3.0
 [0.2.1]: https://github.com/p2panda/p2panda/releases/tag/v0.2.1
 [0.2.0]: https://github.com/p2panda/p2panda/releases/tag/v0.2.0

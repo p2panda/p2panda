@@ -5,10 +5,12 @@
 .prettierignore
 .prettierrc.json
 /wasm
+docs
 jest.config.ts
 openrpc.json
 src
 test
 tsconfig.json
+typedoc.json
 webpack
 webpack.config.ts

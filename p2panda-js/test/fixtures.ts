@@ -84,12 +84,8 @@ export const entryFixture = (seqNum: number): Entry => {
   }
 
   const entry: Entry = {
-    entryHashBacklink: nextEntryArgs[index].entryHashBacklink as
-      | string
-      | undefined,
-    entryHashSkiplink: nextEntryArgs[index].entryHashSkiplink as
-      | string
-      | undefined,
+    backlink: nextEntryArgs[index].backlink as string | undefined,
+    skiplink: nextEntryArgs[index].skiplink as string | undefined,
     seqNum: BigInt(nextEntryArgs[index].seqNum),
     logId: BigInt(nextEntryArgs[index].logId),
     operation,
@@ -127,12 +123,8 @@ export const entryArgsFixture = (seqNum: number): EntryArgs => {
   const index = seqNum - 1;
 
   const entryArgs: EntryArgs = {
-    entryHashBacklink: nextEntryArgs[index].entryHashBacklink as
-      | string
-      | undefined,
-    entryHashSkiplink: nextEntryArgs[index].entryHashSkiplink as
-      | string
-      | undefined,
+    backlink: (nextEntryArgs[index].backlink || null) as string | undefined,
+    skiplink: (nextEntryArgs[index].skiplink || null) as string | undefined,
     seqNum: nextEntryArgs[index].seqNum,
     logId: nextEntryArgs[index].logId,
   };

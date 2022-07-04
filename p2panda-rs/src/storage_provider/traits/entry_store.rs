@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use async_trait::async_trait;
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
-use mockall::automock;
 
 use crate::entry::LogId;
 use crate::entry::SeqNum;
@@ -14,7 +15,6 @@ use crate::storage_provider::traits::AsStorageEntry;
 ///
 /// This trait should be implemented on the root storage provider struct. It's definitions make up
 /// the required methods for inserting and querying entries from storage.
-#[automock]
 #[async_trait]
 pub trait EntryStore<StorageEntry: AsStorageEntry> {
     /// Insert an entry into storage.
@@ -205,7 +205,7 @@ pub mod tests {
     use crate::schema::SchemaId;
     use crate::storage_provider::errors::EntryStorageError;
     use crate::storage_provider::traits::test_utils::{
-        test_db, SimplestStorageProvider, StorageEntry, SKIPLINK_ENTRIES,
+        test_db, SimplestStorageProvider, StorageEntry, TestStore, SKIPLINK_ENTRIES,
     };
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
     use crate::test_utils::fixtures::{
@@ -343,6 +343,7 @@ pub mod tests {
         let store = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let storage_entry = StorageEntry::new(&entry_signed_encoded, &operation_encoded).unwrap();
@@ -373,6 +374,7 @@ pub mod tests {
         let store = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let storage_entry = StorageEntry::new(&entry_signed_encoded, &operation_encoded).unwrap();
@@ -410,6 +412,7 @@ pub mod tests {
         let store = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(Vec::new())),
             entries: Arc::new(Mutex::new(Vec::new())),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let author_1_entry = sign_and_encode(&entry, &key_pair_1).unwrap();
@@ -433,20 +436,35 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn get_entry_by_hash(test_db: SimplestStorageProvider) {
-        let entries = test_db.entries.lock().unwrap().clone();
+    async fn get_entry_by_hash(
+        #[from(test_db)]
+        #[with(3, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
 
         assert_eq!(
             entries.get(0).cloned(),
-            test_db.get_entry_by_hash(&entries[0].hash()).await.unwrap()
+            db.store
+                .get_entry_by_hash(&entries[0].hash())
+                .await
+                .unwrap()
         );
         assert_eq!(
             entries.get(1).cloned(),
-            test_db.get_entry_by_hash(&entries[1].hash()).await.unwrap()
+            db.store
+                .get_entry_by_hash(&entries[1].hash())
+                .await
+                .unwrap()
         );
         assert_eq!(
             entries.get(2).cloned(),
-            test_db.get_entry_by_hash(&entries[2].hash()).await.unwrap()
+            db.store
+                .get_entry_by_hash(&entries[2].hash())
+                .await
+                .unwrap()
         );
     }
 
@@ -454,11 +472,15 @@ pub mod tests {
     #[async_std::test]
     async fn try_get_backlink(
         #[values[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 ,15 ,16]] seq_num: usize,
-        test_db: SimplestStorageProvider,
+        #[from(test_db)]
+        #[with(17, 1)]
+        #[future]
+        db: TestStore,
     ) {
-        let entries = test_db.entries.lock().unwrap().clone();
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
 
-        let backlink = if seq_num < 2 {
+        let backlink = if seq_num == 1 {
             None
         } else {
             entries.get(seq_num - 2).cloned()
@@ -466,7 +488,7 @@ pub mod tests {
 
         assert_eq!(
             backlink,
-            test_db
+            db.store
                 .try_get_backlink(&entries[seq_num - 1])
                 .await
                 .unwrap()
@@ -475,18 +497,24 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn try_get_backlink_entry_missing(test_db: SimplestStorageProvider) {
-        let entries = test_db.entries.lock().unwrap().clone();
+    async fn try_get_backlink_entry_missing(
+        #[from(test_db)]
+        #[with(17, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
 
         // Get the entry with seq number 2
         let entry_at_seq_num_two = entries.get(1).unwrap();
 
         {
             // Remove the entry at seq_num 1, which is the expected backlink for the above seq num 2 entry
-            test_db.entries.lock().unwrap().remove(0);
+            db.store.entries.lock().unwrap().remove(0);
         }
         assert_eq!(
-            test_db
+            db.store
                 .try_get_backlink(entry_at_seq_num_two)
                 .await
                 .unwrap_err()
@@ -503,9 +531,13 @@ pub mod tests {
     async fn try_get_backlink_invalid_skiplink(
         key_pair: KeyPair,
         operation_encoded: OperationEncoded,
-        test_db: SimplestStorageProvider,
+        #[from(test_db)]
+        #[with(4, 1)]
+        #[future]
+        db: TestStore,
     ) {
-        let entries = test_db.entries.lock().unwrap().clone();
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
 
         // Get the entry with seq number 4
         let entry_at_seq_num_four = entries.get(3).unwrap();
@@ -530,7 +562,7 @@ pub mod tests {
         .unwrap();
 
         assert_eq!(
-            test_db
+            db.store
                 .try_get_backlink(&entry_at_seq_num_four_with_wrong_backlink)
                 .await
                 .unwrap_err()
@@ -564,16 +596,20 @@ pub mod tests {
     async fn try_get_skiplink(
         #[case] seq_num: usize,
         #[case] expected_skiplink_seq_num: Option<usize>,
-        test_db: SimplestStorageProvider,
+        #[from(test_db)]
+        #[with(17, 1)]
+        #[future]
+        db: TestStore,
     ) {
-        let entries = test_db.entries.lock().unwrap().clone();
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
 
         let expected_skiplink =
             expected_skiplink_seq_num.map(|seq_num| entries.get(seq_num - 1).cloned().unwrap());
 
         assert_eq!(
             expected_skiplink,
-            test_db
+            db.store
                 .try_get_skiplink(&entries[seq_num - 1])
                 .await
                 .unwrap()
@@ -582,18 +618,24 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn try_get_skiplink_entry_missing(test_db: SimplestStorageProvider) {
-        let entries = test_db.entries.lock().unwrap().clone();
+    async fn try_get_skiplink_entry_missing(
+        #[from(test_db)]
+        #[with(4, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
 
         // Get the entry with seq number 4
         let entry_at_seq_num_four = entries.get(3).unwrap();
 
         {
             // Remove the entry at seq_num 1, which is the expected skiplink for the above seq num 4 entry
-            test_db.entries.lock().unwrap().remove(0);
+            db.store.entries.lock().unwrap().remove(0);
         }
         assert_eq!(
-            test_db
+            db.store
                 .try_get_skiplink(entry_at_seq_num_four)
                 .await
                 .unwrap_err()
@@ -610,9 +652,13 @@ pub mod tests {
     async fn try_get_skiplink_invalid_skiplink(
         key_pair: KeyPair,
         operation_encoded: OperationEncoded,
-        test_db: SimplestStorageProvider,
+        #[from(test_db)]
+        #[with(4, 1)]
+        #[future]
+        db: TestStore,
     ) {
-        let entries = test_db.entries.lock().unwrap().clone();
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
 
         // Get the entry with seq number 4
         let entry_at_seq_num_four = entries.get(3).unwrap();
@@ -637,7 +683,7 @@ pub mod tests {
         .unwrap();
 
         assert_eq!(
-            test_db
+            db.store
                 .try_get_skiplink(&entry_at_seq_num_four_with_wrong_skiplink)
                 .await
                 .unwrap_err()
@@ -651,11 +697,18 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn can_determine_next_skiplink(test_db: SimplestStorageProvider) {
-        let entries = test_db.entries.lock().unwrap().clone();
+    async fn can_determine_next_skiplink(
+        #[from(test_db)]
+        #[with(17, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
+
         for seq_num in 1..10 {
             let current_entry = entries.get(seq_num - 1).unwrap();
-            let next_entry_skiplink = test_db.determine_next_skiplink(current_entry).await;
+            let next_entry_skiplink = db.store.determine_next_skiplink(current_entry).await;
             assert!(next_entry_skiplink.is_ok());
             if SKIPLINK_ENTRIES.contains(&((seq_num + 1) as u64)) {
                 assert!(next_entry_skiplink.unwrap().is_some());
@@ -667,9 +720,15 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn skiplink_does_not_exist(test_db: SimplestStorageProvider) {
-        let entries = test_db.entries.lock().unwrap().clone();
-        let logs = test_db.logs.lock().unwrap().clone();
+    async fn skiplink_does_not_exist(
+        #[from(test_db)]
+        #[with(17, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
+        let logs = db.store.logs.lock().unwrap().clone();
 
         let log_entries_with_skiplink_missing = vec![
             entries.get(0).unwrap().clone(),
@@ -682,6 +741,7 @@ pub mod tests {
         let new_db = SimplestStorageProvider {
             logs: Arc::new(Mutex::new(logs)),
             entries: Arc::new(Mutex::new(log_entries_with_skiplink_missing)),
+            operations: Arc::new(Mutex::new(Vec::new())),
         };
 
         let error_response = new_db
@@ -696,23 +756,33 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn get_n_entries(key_pair: KeyPair, test_db: SimplestStorageProvider) {
+    async fn get_n_entries(
+        key_pair: KeyPair,
+        #[from(test_db)]
+        #[with(16, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
         let author = Author::try_from(*key_pair.public_key()).unwrap();
         let log_id = LogId::default();
 
-        let five_entries = test_db
+        let five_entries = db
+            .store
             .get_paginated_log_entries(&author, &log_id, &SeqNum::new(1).unwrap(), 5)
             .await
             .unwrap();
         assert_eq!(five_entries.len(), 5);
 
-        let end_of_log_reached = test_db
+        let end_of_log_reached = db
+            .store
             .get_paginated_log_entries(&author, &log_id, &SeqNum::new(1).unwrap(), 1000)
             .await
             .unwrap();
         assert_eq!(end_of_log_reached.len(), 16);
 
-        let first_entry_not_found = test_db
+        let first_entry_not_found = db
+            .store
             .get_paginated_log_entries(&author, &log_id, &SeqNum::new(10000).unwrap(), 1)
             .await
             .unwrap();
@@ -721,11 +791,19 @@ pub mod tests {
 
     #[rstest]
     #[async_std::test]
-    async fn get_cert_pool(key_pair: KeyPair, test_db: SimplestStorageProvider) {
+    async fn get_cert_pool(
+        key_pair: KeyPair,
+        #[from(test_db)]
+        #[with(17, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
         let author = Author::try_from(*key_pair.public_key()).unwrap();
         let log_id = LogId::default();
 
-        let cert_pool = test_db
+        let cert_pool = db
+            .store
             .get_certificate_pool(&author, &log_id, &SeqNum::new(16).unwrap())
             .await
             .unwrap();

@@ -9,8 +9,8 @@ export type SchemaId =
  * Arguments for publishing the next entry.
  */
 export type EntryArgs = {
-  entryHashSkiplink: string | undefined;
-  entryHashBacklink: string | undefined;
+  skiplink: string | undefined;
+  backlink: string | undefined;
   seqNum: string;
   logId: string;
 };
@@ -39,8 +39,8 @@ export type EntryRecord = Entry & {
  * Decoded entry containing optional `Operation`.
  */
 export type Entry = {
-  entryHashBacklink: string | undefined;
-  entryHashSkiplink: string | undefined;
+  backlink: string | undefined;
+  skiplink: string | undefined;
   logId: BigInt;
   operation: Operation | undefined;
   seqNum: BigInt;
@@ -86,8 +86,8 @@ export type PinnedRelation = string[];
  * Decoded entry containing optional `Operation`.
  */
 export type EntryTagged = {
-  entryHashBacklink: string | undefined;
-  entryHashSkiplink: string | undefined;
+  backlink: string | undefined;
+  skiplink: string | undefined;
   logId: BigInt;
   operation: OperationTagged | undefined;
   seqNum: BigInt;
@@ -178,23 +178,4 @@ export type OperationValuePinnedRelation = {
 export type OperationValuePinnedRelationList = {
   value: PinnedRelation[];
   type: 'pinned_relation_list';
-};
-
-/**
- * A materialised instance item with meta data.
- */
-export type InstanceRecord = Record<
-  string,
-  boolean | number | string | unknown
-> & {
-  _meta: {
-    id: string;
-    author: string;
-    deleted: boolean;
-    edited: boolean;
-    entries: EntryRecord[];
-    schema: SchemaId;
-    // The tip of the operation graph which produced this instance.
-    last_operation: string;
-  };
 };

@@ -8,7 +8,8 @@ use crate::document::DocumentViewId;
 use crate::entry::EntrySigned;
 use crate::identity::Author;
 use crate::operation::{
-    Operation, OperationEncoded, OperationFields, OperationId, OperationValue, VerifiedOperation,
+    AsVerifiedOperation, Operation, OperationEncoded, OperationFields, OperationId, OperationValue,
+    VerifiedOperation,
 };
 use crate::schema::SchemaId;
 use crate::test_utils::constants::{self, TEST_SCHEMA_ID};
