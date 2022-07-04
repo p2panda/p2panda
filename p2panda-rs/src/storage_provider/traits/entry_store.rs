@@ -513,7 +513,6 @@ pub mod tests {
     ) {
         let db = db.await;
         let entries = db.store.entries.lock().unwrap().clone();
-        let logs = db.store.logs.lock().unwrap().clone();
 
         let mut log_entries_with_skiplink_missing = entries.clone();
 

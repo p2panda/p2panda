@@ -80,9 +80,9 @@
 //! ```
 use async_std::task;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use crate::document::{Document, DocumentBuilder, DocumentId};
+use crate::document::{Document, DocumentBuilder, DocumentId, DocumentView, DocumentViewId};
 use crate::entry::{decode_entry, EntrySigned};
 use crate::hash::Hash;
 use crate::identity::Author;
@@ -91,8 +91,7 @@ use crate::operation::{
 };
 use crate::storage_provider::traits::test_utils::send_to_store;
 use crate::storage_provider::traits::{
-    AsStorageEntry, AsStorageLog, DocumentStore, EntryStore, LogStore, OperationStore,
-    StorageProvider,
+    AsStorageEntry, AsStorageLog, DocumentStore, LogStore, OperationStore, StorageProvider,
 };
 use crate::test_utils::db::{
     EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse, StorageLog,
@@ -160,7 +159,7 @@ impl Node {
                     &entry.author(),
                     &verified_operation.schema(),
                     &document_id,
-                    &decoded_entry.log_id(),
+                    decoded_entry.log_id(),
                 ))
                 .await
         })?;
@@ -197,46 +196,46 @@ impl Node {
         Ok(next_entry_args)
     }
 
-    /// Get a stored entry by it's id.
-    pub fn entry(&self, id: &Hash) -> Option<StorageEntry> {
-        task::block_on(async { self.store().get_entry_by_hash(id).await.unwrap() })
+    /// Get all entries stored on the node.
+    pub fn entries(&self) -> HashMap<Hash, StorageEntry> {
+        self.store().entries.lock().unwrap().clone()
     }
 
-    /// Get all entries stored on the node.
-    pub fn all_entries(&self) -> Vec<StorageEntry> {
+    /// Get all operations stored on the node.
+    pub fn operations(&self) -> HashMap<OperationId, VerifiedOperation> {
         self.store()
-            .entries
+            .operations
             .lock()
             .unwrap()
             .iter()
-            .map(|(_, entry)| entry.clone())
+            .map(|(id, (_, operation))| (id.clone(), operation.clone()))
+            .collect()
+    }
+
+    /// Get all documents stored on the node.
+    pub fn documents(&self) -> HashMap<DocumentId, Document> {
+        self.store().documents.lock().unwrap().clone()
+    }
+
+    /// Get all document views stored on the node.
+    pub fn document_views(&self) -> HashMap<DocumentViewId, DocumentView> {
+        self.store()
+            .document_views
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(id, (_, document_view))| (id.clone(), document_view.clone()))
             .collect()
     }
 
     /// Get all authors who have published to this node.
-    pub fn all_authors(&self) -> HashSet<Author> {
+    pub fn authors(&self) -> HashSet<Author> {
         let mut authors = HashSet::new();
         let entries = self.store().entries.lock().unwrap();
         for (_, entry) in entries.iter() {
             authors.insert(entry.author());
         }
         authors
-    }
-
-    /// Get a single document from the node.
-    pub fn document(&self, id: &DocumentId) -> Option<Document> {
-        self.store().documents.lock().unwrap().get(id).cloned()
-    }
-
-    /// Get all documents from the node.
-    pub fn all_documents(&self) -> Vec<Document> {
-        self.store()
-            .documents
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|(_, document)| document.clone())
-            .collect()
     }
 }
 
@@ -288,10 +287,9 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::{DocumentId, DocumentViewId};
-    use crate::entry::{sign_and_encode, Entry, LogId, SeqNum};
-    use crate::identity::{Author, KeyPair};
+    use crate::entry::{LogId, SeqNum};
+    use crate::identity::KeyPair;
     use crate::operation::{OperationEncoded, OperationValue};
-    use crate::test_utils::db::EntryArgsRequest;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, key_pair, private_key, update_operation,
     };
@@ -352,7 +350,7 @@ mod tests {
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
         // The database contains one author now.
-        assert_eq!(node.all_authors().len(), 1);
+        assert_eq!(node.authors().len(), 1);
 
         // Panda publishes an update operation.
         // It contains the hash of the current graph tip in it's `previous_operations`.
@@ -383,7 +381,7 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        assert_eq!(node.all_authors().len(), 1);
+        assert_eq!(node.authors().len(), 1);
 
         let penguin = Client::new("penguin".to_string(), KeyPair::new());
 
@@ -433,7 +431,7 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        assert_eq!(node.all_authors().len(), 2);
+        assert_eq!(node.authors().len(), 2);
 
         // Penguin publishes another update operation refering to their own previous operation
         // as the graph tip.
@@ -466,10 +464,10 @@ mod tests {
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
         // Now there are 2 authors publishing ot the node.
-        assert_eq!(node.all_authors().len(), 2);
+        assert_eq!(node.authors().len(), 2);
 
         // We can query the node for the current document state.
-        let document = node.document(&document_id).unwrap();
+        let document = node.documents().get(&document_id).unwrap().clone();
         let document_view_value = document.view().unwrap().get("message").unwrap();
         // It was last updated by Penguin, this writes over previous values.
         assert_eq!(
@@ -477,7 +475,7 @@ mod tests {
             &OperationValue::Text("And again. [Penguin]".to_string())
         );
         // There should only be one document in the database.
-        assert_eq!(node.all_documents().len(), 1);
+        assert_eq!(node.documents().len(), 1);
 
         // Panda publishes another create operation.
         // This again instantiates a new document.
@@ -505,9 +503,9 @@ mod tests {
         assert_eq!(next_entry_args.backlink, expected_next_entry_args.backlink);
         assert_eq!(next_entry_args.skiplink, expected_next_entry_args.skiplink);
 
-        assert_eq!(node.all_authors().len(), 2);
+        assert_eq!(node.authors().len(), 2);
         // There should be 2 document in the database.
-        assert_eq!(node.all_documents().len(), 2);
+        assert_eq!(node.documents().len(), 2);
     }
 
     #[rstest]
@@ -538,7 +536,9 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.document(&panda_entry_1_hash.clone().into()).unwrap();
+        let document_id = panda_entry_1_hash.clone().into();
+
+        let document = node.documents().get(&document_id).unwrap().to_owned();
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
             document_view_value.value(),
@@ -561,7 +561,7 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.document(&panda_entry_1_hash.clone().into()).unwrap();
+        let document = node.documents().get(&document_id).unwrap().to_owned();
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
             document_view_value.value(),
@@ -582,12 +582,12 @@ mod tests {
                     "address",
                     OperationValue::Text("1, Polar Bear rd, Panda Town".to_string()),
                 )],
-                &panda_entry_1_hash.clone().into(),
+                &panda_entry_1_hash.into(),
             ),
         )
         .unwrap();
 
-        let document = node.document(&panda_entry_1_hash.clone().into()).unwrap();
+        let document = node.documents().get(&document_id).unwrap().to_owned();
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
             document_view_value.value(),
@@ -614,7 +614,7 @@ mod tests {
         )
         .unwrap();
 
-        let document = node.document(&panda_entry_1_hash.into()).unwrap();
+        let document = node.documents().get(&document_id).unwrap().clone();
         let document_view_value = document.view().unwrap().get("cafe_name").unwrap();
         assert_eq!(
             document_view_value.value(),

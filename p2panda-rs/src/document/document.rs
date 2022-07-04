@@ -310,10 +310,10 @@ mod tests {
     use crate::document::{DocumentId, DocumentViewId};
     use crate::identity::KeyPair;
     use crate::operation::{
-        AsVerifiedOperation, OperationEncoded, OperationId, OperationValue, VerifiedOperation,
+        AsOperation, AsVerifiedOperation, OperationEncoded, OperationId, OperationValue,
+        VerifiedOperation,
     };
     use crate::schema::SchemaId;
-    use crate::storage_provider::traits::AsStorageEntry;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, operation, operation_fields, random_document_view_id,
         random_key_pair, random_operation_id, random_previous_operations, schema, update_operation,
@@ -456,23 +456,28 @@ mod tests {
         )
         .unwrap();
 
-        let operations: Vec<VerifiedOperation> = [
-            panda_entry_1_hash,
-            panda_entry_2_hash,
-            penguin_entry_1_hash,
-            penguin_entry_2_hash,
-            penguin_entry_3_hash,
-        ]
-        .iter()
-        .map(|hash| {
-            let entry = node.entry(hash).unwrap();
-            VerifiedOperation::new_from_entry(
-                &entry.entry_signed(),
-                &entry.operation_encoded().unwrap(),
-            )
-            .unwrap()
-        })
-        .collect();
+        let operations: Vec<VerifiedOperation> = vec![
+            node.operations()
+                .get(&panda_entry_1_hash.into())
+                .unwrap()
+                .clone(),
+            node.operations()
+                .get(&panda_entry_2_hash.into())
+                .unwrap()
+                .clone(),
+            node.operations()
+                .get(&penguin_entry_1_hash.into())
+                .unwrap()
+                .clone(),
+            node.operations()
+                .get(&penguin_entry_2_hash.into())
+                .unwrap()
+                .clone(),
+            node.operations()
+                .get(&penguin_entry_3_hash.into())
+                .unwrap()
+                .clone(),
+        ];
 
         let document = DocumentBuilder::new(operations.clone()).build();
 
@@ -587,11 +592,8 @@ mod tests {
         .unwrap();
 
         // Only retrieve the update operation.
-        let all_entries = node.all_entries();
-        let only_the_update_operation = all_entries
-            .iter()
-            .find(|entry| entry.hash() == update_entry_hash)
-            .unwrap();
+        let entries = node.entries();
+        let only_the_update_operation = entries.get(&update_entry_hash).unwrap();
 
         let operations = vec![VerifiedOperation::new_from_entry(
             &only_the_update_operation.entry_signed(),
@@ -631,13 +633,11 @@ mod tests {
             &incorrect_previous_operation,
         );
 
-        let entry_one = node.entry(&panda_entry_1_hash).unwrap();
-
-        let operation_one = VerifiedOperation::new_from_entry(
-            &entry_one.entry_signed(),
-            &entry_one.operation_encoded().unwrap(),
-        )
-        .unwrap();
+        let operation_one = node
+            .operations()
+            .get(&panda_entry_1_hash.into())
+            .unwrap()
+            .clone();
 
         let entry_two = panda.signed_encoded_entry(
             operation_with_wrong_prev_ops.clone(),
@@ -733,18 +733,7 @@ mod tests {
         )
         .unwrap();
 
-        let operations: Vec<VerifiedOperation> = node
-            .all_entries()
-            .into_iter()
-            .map(|entry| {
-                VerifiedOperation::new_from_entry(
-                    &entry.entry_signed(),
-                    &entry.operation_encoded().unwrap(),
-                )
-                .unwrap()
-            })
-            .collect();
-
+        let operations: Vec<VerifiedOperation> = node.operations().values().cloned().collect();
         let document = DocumentBuilder::new(operations).build().unwrap();
 
         assert!(document.is_deleted());
@@ -766,13 +755,12 @@ mod tests {
         )
         .unwrap();
 
-        let published_create_operation = &node.all_entries()[0];
-
-        let create_verified_operation = VerifiedOperation::new_from_entry(
-            &published_create_operation.entry_signed(),
-            &published_create_operation.operation_encoded().unwrap(),
-        )
-        .unwrap();
+        let create_verified_operation = node
+            .operations()
+            .values()
+            .find(|operation| operation.is_create())
+            .unwrap()
+            .to_owned();
 
         assert_eq!(
             DocumentBuilder::new(vec![
@@ -855,23 +843,28 @@ mod tests {
         )
         .unwrap();
 
-        let operations: Vec<VerifiedOperation> = [
-            polar_entry_1_hash,
-            polar_entry_2_hash,
-            panda_entry_1_hash,
-            polar_entry_3_hash,
-            polar_entry_4_hash,
-        ]
-        .iter()
-        .map(|hash| {
-            let entry = node.entry(hash).unwrap();
-            VerifiedOperation::new_from_entry(
-                &entry.entry_signed(),
-                &entry.operation_encoded().unwrap(),
-            )
-            .unwrap()
-        })
-        .collect();
+        let operations: Vec<VerifiedOperation> = vec![
+            node.operations()
+                .get(&polar_entry_1_hash.into())
+                .unwrap()
+                .clone(),
+            node.operations()
+                .get(&polar_entry_2_hash.into())
+                .unwrap()
+                .clone(),
+            node.operations()
+                .get(&panda_entry_1_hash.into())
+                .unwrap()
+                .clone(),
+            node.operations()
+                .get(&polar_entry_3_hash.into())
+                .unwrap()
+                .clone(),
+            node.operations()
+                .get(&polar_entry_4_hash.into())
+                .unwrap()
+                .clone(),
+        ];
 
         // These two operations were both published by the same author and they form a simple
         // update graph which looks like this:
@@ -1040,17 +1033,7 @@ mod tests {
         // DOCUMENT: [panda_1]<--[penguin_1]
         //                    \----[panda_2]
 
-        let operations: Vec<VerifiedOperation> = node
-            .all_entries()
-            .into_iter()
-            .map(|entry| {
-                VerifiedOperation::new_from_entry(
-                    &entry.entry_signed(),
-                    &entry.operation_encoded().unwrap(),
-                )
-                .unwrap()
-            })
-            .collect();
+        let operations: Vec<VerifiedOperation> = node.operations().values().cloned().collect();
 
         let document_builder = DocumentBuilder::new(operations);
 

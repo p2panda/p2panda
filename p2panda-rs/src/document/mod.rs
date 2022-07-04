@@ -95,21 +95,11 @@ use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewField
 # )
 # .unwrap();
 #
-# let entry_1 = node.entry(&polar_entry_1_hash).unwrap();
-# let operation_1 =
-#     VerifiedOperation::new_from_entry(&entry_1.entry_signed(), &entry_1.operation_encoded().unwrap()).unwrap();
-# let entry_2 = node.entry(&polar_entry_2_hash).unwrap();
-# let operation_2 =
-#     VerifiedOperation::new_from_entry(&entry_2.entry_signed(), &entry_2.operation_encoded().unwrap()).unwrap();
-# let entry_3 = node.entry(&panda_entry_1_hash).unwrap();
-# let operation_3 =
-#     VerifiedOperation::new_from_entry(&entry_3.entry_signed(), &entry_3.operation_encoded().unwrap()).unwrap();
-# let entry_4 = node.entry(&polar_entry_3_hash).unwrap();
-# let operation_4 =
-#     VerifiedOperation::new_from_entry(&entry_4.entry_signed(), &entry_4.operation_encoded().unwrap()).unwrap();
-# let entry_5 = node.entry(&polar_entry_4_hash).unwrap();
-# let operation_5 =
-#     VerifiedOperation::new_from_entry(&entry_5.entry_signed(), &entry_5.operation_encoded().unwrap()).unwrap();
+# let operation_1 = node.operations().get(&polar_entry_1_hash.into()).unwrap();
+# let operation_2 = node.operations().get(&polar_entry_2_hash.into()).unwrap();
+# let operation_3 = node.operations().get(&panda_entry_1_hash.into()).unwrap();
+# let operation_4 = node.operations().get(&polar_entry_3_hash.into()).unwrap();
+# let operation_5 = node.operations().get(&polar_entry_4_hash.into()).unwrap();
 #
 //== Operation creation is hidden for brevity, see the operation module docs for details ==//
 
