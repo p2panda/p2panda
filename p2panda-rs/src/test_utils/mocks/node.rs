@@ -8,6 +8,9 @@
 //! ## Example
 //!
 //! ```
+//! # extern crate p2panda_rs;
+//! # #[async_std::main]
+//! # async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 //! use p2panda_rs::operation::OperationValue;
 //! use p2panda_rs::schema::SchemaId;
 //! use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
@@ -32,8 +35,7 @@
 //!             OperationValue::Text("Ohh, my first message!".to_string()),
 //!         )],
 //!     )
-//! )
-//! .unwrap();
+//! ).await?;
 //!
 //! // Panda updates the document by publishing an UPDATE operation
 //! let (entry2_hash, _) = send_to_node(
@@ -46,8 +48,7 @@
 //!         )],
 //!         &document1_hash_id.clone().into(),
 //!     )
-//! )
-//! .unwrap();
+//! ).await?;
 //!
 //! // Panda deletes their document by publishing a DELETE operation
 //! send_to_node(
@@ -56,8 +57,7 @@
 //!     &delete_operation(
 //!         &entry2_hash.into()
 //!     )
-//! )
-//! .unwrap();
+//! ).await?;
 //!
 //! // Panda creates another chat document by publishing a new CREATE operation
 //! send_to_node(
@@ -69,14 +69,16 @@
 //!             OperationValue::Text("Let's try that again.".to_string()),
 //!         )],
 //!     )
-//! )
-//! .unwrap();
+//! ).await?;
 //!
 //! // Get all entries published to this node
 //! let entries = node.entries();
 //!
 //! // There should be 4 entries
 //! entries.len(); // => 4
+//!
+//! # Ok(())
+//! # }
 //! ```
 use std::collections::{HashMap, HashSet};
 

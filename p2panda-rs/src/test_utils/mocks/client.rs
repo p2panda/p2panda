@@ -9,7 +9,8 @@
 //!
 //! ```
 //! # extern crate p2panda_rs;
-//! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+//! # #[async_std::main]
+//! # async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 //! use std::convert::TryFrom;
 //!
 //! use p2panda_rs::operation::AsOperation;
@@ -37,7 +38,7 @@
 //! println!("{:#?}", operation);
 //!
 //! // Retrieve the next entry args from the node
-//! let args = node.get_next_entry_args(&panda.author(), None)?;
+//! let args = node.get_next_entry_args(&panda.author(), None).await?;
 //!
 //! // Sign and encode an entry
 //! let entry_encoded = panda.signed_encoded_entry(
@@ -49,7 +50,7 @@
 //! );
 //! let operation_encoded = OperationEncoded::try_from(&operation)?;
 //!
-//! node.publish_entry(&entry_encoded, &operation_encoded)?;
+//! node.publish_entry(&entry_encoded, &operation_encoded).await?;
 //!
 //! # Ok(())
 //! # }

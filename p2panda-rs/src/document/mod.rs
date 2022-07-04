@@ -15,7 +15,8 @@
     doc = r##"
 ```
 # extern crate p2panda_rs;
-# fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+# #[async_std::main]
+# async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 # use p2panda_rs::hash::Hash;
 # use p2panda_rs::identity::KeyPair;
 # use p2panda_rs::operation::{OperationValue, VerifiedOperation, AsVerifiedOperation};
@@ -29,21 +30,20 @@ use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewField
 #     "polar".to_string(),
 #     KeyPair::from_private_key_str(
 #         "ddcafe34db2625af34c8ba3cf35d46e23283d908c9848c8b43d1f5d0fde779ea",
-#     )
-#     .unwrap(),
+#     )?,
 # );
 # let panda = Client::new(
 #     "panda".to_string(),
 #     KeyPair::from_private_key_str(
 #         "1d86b2524b48f0ba86103cddc6bdfd87774ab77ab4c0ea989ed0eeab3d28827a",
-#     )
-#     .unwrap(),
+#     )?,
 # );
 #
 # let schema = SchemaId::new(TEST_SCHEMA_ID).unwrap();
 # let mut node = Node::new();
 #
 # let mut node = Node::new();
+# 
 # let (polar_entry_1_hash, _) = send_to_node(
 #     &mut node,
 #     &polar,
@@ -52,8 +52,8 @@ use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewField
 #         ("owner", OperationValue::Text("Polar Bear".to_string())),
 #         ("house-number", OperationValue::Integer(12)),
 #     ]),
-# )
-# .unwrap();
+# ).await?;
+#
 # let (polar_entry_2_hash, _) = send_to_node(
 #     &mut node,
 #     &polar,
@@ -64,8 +64,8 @@ use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewField
 #         ],
 #         &polar_entry_1_hash.clone().into(),
 #     ),
-# )
-# .unwrap();
+# ).await?;
+#
 # let (panda_entry_1_hash, _) = send_to_node(
 #     &mut node,
 #     &panda,
@@ -73,8 +73,7 @@ use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewField
 #         &[("name", OperationValue::Text("🐼 Cafe!!".to_string()))],
 #         &polar_entry_1_hash.clone().into(),
 #     ),
-# )
-# .unwrap();
+# ).await?;
 # let (polar_entry_3_hash, _) = send_to_node(
 #     &mut node,
 #     &polar,
@@ -86,14 +85,13 @@ use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewField
 #         ])
 #         .unwrap(),
 #     ),
-# )
-# .unwrap();
+# ).await?;
+#
 # let (polar_entry_4_hash, _) = send_to_node(
 #     &mut node,
 #     &polar,
 #     &delete_operation(&polar_entry_3_hash.clone().into()),
-# )
-# .unwrap();
+# ).await?;
 #
 # let operation_1 = node.operations().get(&polar_entry_1_hash.into()).unwrap().clone();
 # let operation_2 = node.operations().get(&polar_entry_2_hash.into()).unwrap().clone();
