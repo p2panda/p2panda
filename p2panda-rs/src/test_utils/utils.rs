@@ -13,7 +13,7 @@ use crate::entry::{LogId, SeqNum};
 use crate::hash::Hash;
 
 /// A custom `Result` type to be able to dynamically propagate `Error` types.
-pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 /// Struct which contains the values for the next entry args needed when publishing a new entry.
 #[derive(Serialize, Debug)]

@@ -95,8 +95,8 @@ use crate::test_utils::db::{
     EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse, StorageLog,
 };
 use crate::test_utils::db::{SimplestStorageProvider, StorageEntry};
-use crate::test_utils::mocks::utils::Result;
 use crate::test_utils::mocks::Client;
+use crate::test_utils::utils::Result;
 
 /// Mock node which simulates the functionality of a real node in the p2panda.
 ///

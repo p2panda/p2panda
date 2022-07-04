@@ -4,7 +4,6 @@
 mod client;
 #[cfg(not(target_arch = "wasm32"))]
 mod node;
-pub mod utils;
 
 pub use client::Client;
 #[cfg(not(target_arch = "wasm32"))]
