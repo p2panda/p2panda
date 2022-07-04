@@ -25,12 +25,11 @@ dwarf-debug-info = false
 crate-type = ["cdylib", "rlib"]
 
 [features]
-testing = ["dep:rstest", "dep:rstest_reuse", "dep:varu64", "dep:async-std"]
+testing = ["dep:rstest", "dep:rstest_reuse", "dep:varu64"]
 
 [dependencies]
 arrayvec = "^0.5.2"
 async-trait = "^0.1.56"
-async-std = { version = "^1.12.0", features = ["attributes"], optional = true }
 bamboo-rs-core-ed25519-yasmf = "^0.1.1"
 cddl-cat = { version = "^0.6.1", default-features = false, features = [
   "serde_cbor",
@@ -56,6 +55,7 @@ thiserror = "^1.0.31"
 tls_codec = { version = "^0.2.0", features = ["derive", "serde_serialize"] }
 varu64 = { version = "^0.7.0", default-features = false, optional = true }
 yasmf-hash = "^0.1.1"
+tokio = "1.19.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rand = "^0.7.3"

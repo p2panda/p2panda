@@ -361,7 +361,8 @@ mod tests {
     }
 
     #[rstest]
-    fn resolve_documents(schema: SchemaId) {
+    #[async_std::test]
+    async fn resolve_documents(schema: SchemaId) {
         let panda = Client::new(
             "panda".to_string(),
             KeyPair::from_private_key_str(
@@ -388,6 +389,7 @@ mod tests {
             &panda,
             &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
         )
+        .await
         .unwrap();
 
         // Panda publishes an update operation.
@@ -403,6 +405,7 @@ mod tests {
                 &panda_entry_1_hash.clone().into(),
             ),
         )
+        .await
         .unwrap();
 
         // Penguin publishes an update operation which creates a new branch in the graph.
@@ -418,6 +421,7 @@ mod tests {
                 &panda_entry_1_hash.clone().into(),
             ),
         )
+        .await
         .unwrap();
 
         // Penguin publishes a new operation while now being aware of the previous branching situation.
@@ -437,6 +441,7 @@ mod tests {
                 .unwrap(),
             ),
         )
+        .await
         .unwrap();
 
         // Penguin publishes a new update operation which points at the current graph tip.
@@ -454,6 +459,7 @@ mod tests {
                 &penguin_entry_2_hash.clone().into(),
             ),
         )
+        .await
         .unwrap();
 
         let operations: Vec<VerifiedOperation> = vec![
@@ -566,7 +572,8 @@ mod tests {
     }
 
     #[rstest]
-    fn must_have_create_operation(#[from(random_key_pair)] key_pair_1: KeyPair) {
+    #[async_std::test]
+    async fn must_have_create_operation(#[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
         let mut node = Node::new();
 
@@ -577,6 +584,7 @@ mod tests {
             &panda,
             &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
         )
+        .await
         .unwrap();
 
         // Panda publishes an update operation.
@@ -589,6 +597,7 @@ mod tests {
                 &panda_entry_1_hash.into(),
             ),
         )
+        .await
         .unwrap();
 
         // Only retrieve the update operation.
@@ -611,7 +620,8 @@ mod tests {
     }
 
     #[rstest]
-    fn incorrect_previous_operations(
+    #[async_std::test]
+    async fn incorrect_previous_operations(
         #[from(random_key_pair)] key_pair_1: KeyPair,
         #[from(random_document_view_id)] incorrect_previous_operation: DocumentViewId,
     ) {
@@ -625,6 +635,7 @@ mod tests {
             &panda,
             &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
         )
+        .await
         .unwrap();
 
         // Construct an update operation with non-existant previous operations
@@ -666,7 +677,8 @@ mod tests {
     }
 
     #[rstest]
-    fn operation_schemas_not_matching(
+    #[async_std::test]
+    async fn operation_schemas_not_matching(
         #[from(random_key_pair)] key_pair_1: KeyPair,
         #[from(random_operation_id)] create_operation_id: OperationId,
         #[from(random_operation_id)] update_operation_id: OperationId,
@@ -711,7 +723,8 @@ mod tests {
     }
 
     #[rstest]
-    fn is_deleted(#[from(random_key_pair)] key_pair_1: KeyPair) {
+    #[async_std::test]
+    async fn is_deleted(#[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
         let mut node = Node::new();
 
@@ -722,6 +735,7 @@ mod tests {
             &panda,
             &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
         )
+        .await
         .unwrap();
 
         // Panda publishes an delete operation.
@@ -731,6 +745,7 @@ mod tests {
             &panda,
             &delete_operation(&panda_entry_1_hash.into()),
         )
+        .await
         .unwrap();
 
         let operations: Vec<VerifiedOperation> = node.operations().values().cloned().collect();
@@ -742,7 +757,8 @@ mod tests {
     }
 
     #[rstest]
-    fn more_than_one_create(#[from(random_key_pair)] key_pair_1: KeyPair) {
+    #[async_std::test]
+    async fn more_than_one_create(#[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
         let mut node = Node::new();
 
@@ -753,6 +769,7 @@ mod tests {
             &panda,
             &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
         )
+        .await
         .unwrap();
 
         let create_verified_operation = node
@@ -775,7 +792,8 @@ mod tests {
     }
 
     #[rstest]
-    fn doc_test() {
+    #[async_std::test]
+    async fn doc_test() {
         let polar = Client::new(
             "polar".to_string(),
             KeyPair::from_private_key_str(
@@ -801,6 +819,7 @@ mod tests {
                 ("house-number", OperationValue::Integer(12)),
             ]),
         )
+        .await
         .unwrap();
         let (polar_entry_2_hash, _) = send_to_node(
             &mut node,
@@ -813,6 +832,7 @@ mod tests {
                 &polar_entry_1_hash.clone().into(),
             ),
         )
+        .await
         .unwrap();
         let (panda_entry_1_hash, _) = send_to_node(
             &mut node,
@@ -822,6 +842,7 @@ mod tests {
                 &polar_entry_1_hash.clone().into(),
             ),
         )
+        .await
         .unwrap();
         let (polar_entry_3_hash, _) = send_to_node(
             &mut node,
@@ -835,12 +856,14 @@ mod tests {
                 .unwrap(),
             ),
         )
+        .await
         .unwrap();
         let (polar_entry_4_hash, _) = send_to_node(
             &mut node,
             &polar,
             &delete_operation(&polar_entry_3_hash.clone().into()),
         )
+        .await
         .unwrap();
 
         let operations: Vec<VerifiedOperation> = vec![
@@ -992,7 +1015,8 @@ mod tests {
     }
 
     #[rstest]
-    fn builds_specific_document_view() {
+    #[async_std::test]
+    async fn builds_specific_document_view() {
         let panda = Client::new(
             "panda".to_string(),
             KeyPair::from_private_key_str(
@@ -1008,6 +1032,7 @@ mod tests {
             &panda,
             &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
         )
+        .await
         .unwrap();
 
         let (panda_entry_2_hash, _) = send_to_node(
@@ -1018,6 +1043,7 @@ mod tests {
                 &panda_entry_1_hash.clone().into(),
             ),
         )
+        .await
         .unwrap();
 
         let (panda_entry_3_hash, _) = send_to_node(
@@ -1028,6 +1054,7 @@ mod tests {
                 &panda_entry_1_hash.clone().into(),
             ),
         )
+        .await
         .unwrap();
 
         // DOCUMENT: [panda_1]<--[penguin_1]

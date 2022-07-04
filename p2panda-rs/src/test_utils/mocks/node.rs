@@ -78,8 +78,6 @@
 //! // There should be 4 entries
 //! entries.len(); // => 4
 //! ```
-use async_std::task;
-
 use std::collections::{HashMap, HashSet};
 
 use crate::document::{Document, DocumentBuilder, DocumentId, DocumentView, DocumentViewId};
@@ -127,7 +125,7 @@ impl Node {
     /// stores the contained operation and triggers materialisation of documents and views.
     ///
     /// Equivalent to using the helper method `send_to_store()` to publish entries.
-    pub fn publish_entry(
+    pub async fn publish_entry(
         &mut self,
         entry: &EntrySigned,
         operation: &OperationEncoded,
@@ -138,49 +136,44 @@ impl Node {
         };
 
         // Publish the entry.
-        let publish_entry_response = task::block_on(async {
-            // Insert the entry, operation and log into the database.
-            self.store().publish_entry(&publish_entry_request).await
-        })?;
+        let publish_entry_response = self.store().publish_entry(&publish_entry_request).await?;
+
+        // Insert the entry, operation and log into the database.
 
         // Retrieve the document id from the database.
-        let document_id =
-            task::block_on(async { self.0.get_document_by_entry(&entry.hash()).await })?
-                .expect("Could not find document in database");
+        let document_id = self
+            .0
+            .get_document_by_entry(&entry.hash())
+            .await?
+            .expect("Could not find document in database");
 
         // Access the verified operation and decoded entry.
         let verified_operation = VerifiedOperation::new_from_entry(entry, operation)?;
         let decoded_entry = decode_entry(entry, Some(operation))?;
 
         // Insert the log into the store.
-        task::block_on(async {
-            self.0
-                .insert_log(StorageLog::new(
-                    &entry.author(),
-                    &verified_operation.schema(),
-                    &document_id,
-                    decoded_entry.log_id(),
-                ))
-                .await
-        })?;
+        self.0
+            .insert_log(StorageLog::new(
+                &entry.author(),
+                &verified_operation.schema(),
+                &document_id,
+                decoded_entry.log_id(),
+            ))
+            .await?;
 
         // Insert the operation into the store.
-        task::block_on(async {
-            self.0
-                .insert_operation(&verified_operation, &document_id)
-                .await
-        })?;
+        self.0
+            .insert_operation(&verified_operation, &document_id)
+            .await?;
 
         // Trigger materialisation by processing the new operation.
-        task::block_on(async {
-            process_new_operation(self, verified_operation.operation_id()).await
-        })?;
+        process_new_operation(self, verified_operation.operation_id()).await?;
 
         Ok(publish_entry_response)
     }
 
     /// Get the next entry arguments for an author and optionally existing document.
-    pub fn get_next_entry_args(
+    pub async fn get_next_entry_args(
         &self,
         author: &Author,
         document_id: Option<&DocumentId>,
@@ -190,8 +183,7 @@ impl Node {
             document_id: document_id.cloned(),
         };
 
-        let next_entry_args =
-            task::block_on(async move { self.store().get_entry_args(&entry_args_request).await })?;
+        let next_entry_args = self.store().get_entry_args(&entry_args_request).await?;
 
         Ok(next_entry_args)
     }
@@ -246,17 +238,16 @@ impl Node {
 ///
 /// Every call to this method also triggers the effected document to be re-materialised
 /// and it's new state to be stored in preperation for answering query requests.
-pub fn send_to_node(
+pub async fn send_to_node(
     node: &mut Node,
     client: &Client,
     operation: &Operation,
 ) -> Result<(Hash, PublishEntryResponse)> {
     // Insert the entry, operation and log into the database.
-    let (entry_encoded, response) =
-        task::block_on(async { send_to_store(&node.0, operation, &client.key_pair).await })?;
+    let (entry_encoded, response) = send_to_store(&node.0, operation, &client.key_pair).await?;
 
     // Trigger materialisation by processing the new operation.
-    task::block_on(async { process_new_operation(node, &entry_encoded.hash().into()).await })?;
+    process_new_operation(node, &entry_encoded.hash().into()).await?;
 
     Ok((entry_encoded.hash(), response))
 }
@@ -299,12 +290,16 @@ mod tests {
     use super::{send_to_node, Node};
 
     #[rstest]
-    fn publishing_entries(private_key: String) {
+    #[async_std::test]
+    async fn publishing_entries(private_key: String) {
         let panda = Client::new("panda".to_string(), key_pair(&private_key));
         let mut node = Node::new();
 
         // This is an empty node which has no author logs.
-        let next_entry_args = node.get_next_entry_args(&panda.author(), None).unwrap();
+        let next_entry_args = node
+            .get_next_entry_args(&panda.author(), None)
+            .await
+            .unwrap();
 
         // These are the next_entry_args we would expect to get when making a request to this node.
         let mut expected_next_entry_args = NextEntryArgs {
@@ -331,6 +326,7 @@ mod tests {
                 OperationValue::Text("Ohh, my first message! [Panda]".to_string()),
             )]),
         )
+        .await
         .unwrap();
 
         // The document id is derived from the hash of it's first entry.
@@ -367,6 +363,7 @@ mod tests {
                 &panda_entry_1_hash.into(),
             ),
         )
+        .await
         .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
@@ -387,6 +384,7 @@ mod tests {
 
         let next_entry_args = node
             .get_next_entry_args(&penguin.author(), Some(&document_id))
+            .await
             .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
@@ -417,6 +415,7 @@ mod tests {
                 &panda_entry_2_hash.into(),
             ),
         )
+        .await
         .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
@@ -449,6 +448,7 @@ mod tests {
                 &penguin_entry_1_hash.into(),
             ),
         )
+        .await
         .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
@@ -489,6 +489,7 @@ mod tests {
                 OperationValue::Text("Ohh, my first message in a new document!".to_string()),
             )]),
         )
+        .await
         .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
@@ -509,7 +510,8 @@ mod tests {
     }
 
     #[rstest]
-    fn concurrent_updates(private_key: String) {
+    #[async_std::test]
+    async fn concurrent_updates(private_key: String) {
         let panda = Client::new("panda".to_string(), key_pair(&private_key));
         let penguin = Client::new(
             "penguin".to_string(),
@@ -534,6 +536,7 @@ mod tests {
                 ),
             ]),
         )
+        .await
         .unwrap();
 
         let document_id = panda_entry_1_hash.clone().into();
@@ -559,6 +562,7 @@ mod tests {
                 &panda_entry_1_hash.clone().into(),
             ),
         )
+        .await
         .unwrap();
 
         let document = node.documents().get(&document_id).unwrap().to_owned();
@@ -585,6 +589,7 @@ mod tests {
                 &panda_entry_1_hash.into(),
             ),
         )
+        .await
         .unwrap();
 
         let document = node.documents().get(&document_id).unwrap().to_owned();
@@ -612,6 +617,7 @@ mod tests {
                     .unwrap(),
             ),
         )
+        .await
         .unwrap();
 
         let document = node.documents().get(&document_id).unwrap().clone();
@@ -629,7 +635,8 @@ mod tests {
     }
 
     #[rstest]
-    fn publish_many_entries() {
+    #[async_std::test]
+    async fn publish_many_entries() {
         let client = Client::new("panda".into(), KeyPair::new());
         let num_of_entries = 50;
 
@@ -641,6 +648,7 @@ mod tests {
         for seq_num in 1..num_of_entries + 1 {
             let entry_args = node_1
                 .get_next_entry_args(&client.author(), document_id.as_ref())
+                .await
                 .unwrap();
 
             let operation = if seq_num == 1 {
@@ -655,7 +663,7 @@ mod tests {
             };
 
             // Send the entry to node_1 using `send_to_node()`
-            let result = send_to_node(&mut node_1, &client, &operation);
+            let result = send_to_node(&mut node_1, &client, &operation).await;
             assert!(result.is_ok());
 
             // Send the entry to node_2 using `node.publish_entry()`
@@ -669,7 +677,7 @@ mod tests {
 
             let encoded_operation = OperationEncoded::try_from(&operation).unwrap();
 
-            let result = node_2.publish_entry(&entry, &encoded_operation);
+            let result = node_2.publish_entry(&entry, &encoded_operation).await;
             assert!(result.is_ok());
 
             // Set the document id if this was the first entry
