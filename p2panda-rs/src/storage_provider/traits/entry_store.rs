@@ -534,7 +534,6 @@ pub mod tests {
 
         // Construct a new db which is missing one entry
         let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(logs)),
             entries: Arc::new(Mutex::new(log_entries_with_skiplink_missing)),
             ..SimplestStorageProvider::default()
         };

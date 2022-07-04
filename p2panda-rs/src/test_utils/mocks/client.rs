@@ -9,7 +9,7 @@
 //!
 //! ```
 //! # extern crate p2panda_rs;
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 //! use std::convert::TryFrom;
 //!
 //! use p2panda_rs::operation::AsOperation;
@@ -17,7 +17,7 @@
 //! use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
 //! use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 //! use p2panda_rs::test_utils::fixtures::{
-//!     create_operation, schema, random_key_pair, operation_fields, update_operation,
+//!     create_operation, schema, random_key_pair, operation_fields
 //! };
 //!
 //! // Instantiate a new mock node
@@ -34,11 +34,19 @@
 //!     )],
 //! );
 //!
+//! println!("{:#?}", operation);
+//!
 //! // Retrieve the next entry args from the node
-//! let entry_args = node.get_next_entry_args(&panda.author(), None, None)?;
+//! let args = node.get_next_entry_args(&panda.author(), None)?;
 //!
 //! // Sign and encode an entry
-//! let entry_encoded = panda.signed_encoded_entry(operation.to_owned(), entry_args);
+//! let entry_encoded = panda.signed_encoded_entry(
+//!     operation.to_owned(),
+//!     &args.log_id,
+//!     args.skiplink.as_ref(),
+//!     args.backlink.as_ref(),
+//!     &args.seq_num
+//! );
 //! let operation_encoded = OperationEncoded::try_from(&operation)?;
 //!
 //! node.publish_entry(&entry_encoded, &operation_encoded)?;

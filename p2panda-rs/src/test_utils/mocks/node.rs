@@ -83,16 +83,19 @@ use async_std::task;
 use std::collections::HashSet;
 
 use crate::document::{Document, DocumentBuilder, DocumentId};
-use crate::entry::EntrySigned;
+use crate::entry::{decode_entry, EntrySigned};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{Operation, OperationEncoded, OperationId};
+use crate::operation::{
+    AsOperation, AsVerifiedOperation, Operation, OperationEncoded, OperationId, VerifiedOperation,
+};
 use crate::storage_provider::traits::test_utils::send_to_store;
 use crate::storage_provider::traits::{
-    AsStorageEntry, DocumentStore, EntryStore, OperationStore, StorageProvider,
+    AsStorageEntry, AsStorageLog, DocumentStore, EntryStore, LogStore, OperationStore,
+    StorageProvider,
 };
 use crate::test_utils::db::{
-    EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
+    EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse, StorageLog,
 };
 use crate::test_utils::db::{SimplestStorageProvider, StorageEntry};
 use crate::test_utils::mocks::utils::Result;
@@ -123,24 +126,55 @@ impl Node {
     /// This method is a sync wrapper around the equivalent async method on the storage
     /// provider. It validates and publishes an entry to the node. Additionally it seperately
     /// stores the contained operation and triggers materialisation of documents and views.
+    ///
+    /// Equivalent to using the helper method `send_to_store()` to publish entries.
     pub fn publish_entry(
         &mut self,
-        entry_encoded: &EntrySigned,
-        operation_encoded: &OperationEncoded,
+        entry: &EntrySigned,
+        operation: &OperationEncoded,
     ) -> Result<PublishEntryResponse> {
         let publish_entry_request = PublishEntryRequest {
-            entry: entry_encoded.clone(),
-            operation: operation_encoded.clone(),
+            entry: entry.clone(),
+            operation: operation.clone(),
         };
 
+        // Publish the entry.
         let publish_entry_response = task::block_on(async {
             // Insert the entry, operation and log into the database.
             self.store().publish_entry(&publish_entry_request).await
         })?;
 
+        // Retrieve the document id from the database.
+        let document_id =
+            task::block_on(async { self.0.get_document_by_entry(&entry.hash()).await })?
+                .expect("Could not find document in database");
+
+        // Access the verified operation and decoded entry.
+        let verified_operation = VerifiedOperation::new_from_entry(entry, operation)?;
+        let decoded_entry = decode_entry(entry, Some(operation))?;
+
+        // Insert the log into the store.
         task::block_on(async {
-            // Trigger materialisation by processing the new operation.
-            process_new_operation(self, &entry_encoded.hash().into()).await
+            self.0
+                .insert_log(StorageLog::new(
+                    &entry.author(),
+                    &verified_operation.schema(),
+                    &document_id,
+                    &decoded_entry.log_id(),
+                ))
+                .await
+        })?;
+
+        // Insert the operation into the store.
+        task::block_on(async {
+            self.0
+                .insert_operation(&verified_operation, &document_id)
+                .await
+        })?;
+
+        // Trigger materialisation by processing the new operation.
+        task::block_on(async {
+            process_new_operation(self, verified_operation.operation_id()).await
         })?;
 
         Ok(publish_entry_response)
@@ -249,13 +283,18 @@ pub async fn process_new_operation(node: &mut Node, operation: &OperationId) -> 
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
+
     use rstest::rstest;
 
-    use crate::document::DocumentViewId;
-    use crate::entry::{LogId, SeqNum};
-    use crate::identity::KeyPair;
-    use crate::operation::OperationValue;
-    use crate::test_utils::fixtures::{create_operation, key_pair, private_key, update_operation};
+    use crate::document::{DocumentId, DocumentViewId};
+    use crate::entry::{sign_and_encode, Entry, LogId, SeqNum};
+    use crate::identity::{Author, KeyPair};
+    use crate::operation::{OperationEncoded, OperationValue};
+    use crate::test_utils::db::EntryArgsRequest;
+    use crate::test_utils::fixtures::{
+        create_operation, delete_operation, key_pair, private_key, update_operation,
+    };
     use crate::test_utils::mocks::client::Client;
     use crate::test_utils::utils::NextEntryArgs;
 
@@ -587,5 +626,65 @@ mod tests {
         // PANDA  : [1] <--[2]          [3] <--[4] <--[5]
         //            \       \         /
         // PENGUIN:    [1] <--[2] <--[3]
+    }
+
+    #[rstest]
+    fn publish_many_entries() {
+        let client = Client::new("panda".into(), KeyPair::new());
+        let num_of_entries = 50;
+
+        let mut node_1 = Node::new();
+        let mut node_2 = Node::new();
+
+        let mut document_id: Option<DocumentId> = None;
+
+        for seq_num in 1..num_of_entries + 1 {
+            let entry_args = node_1
+                .get_next_entry_args(&client.author(), document_id.as_ref())
+                .unwrap();
+
+            let operation = if seq_num == 1 {
+                create_operation(&[("name", OperationValue::Text("Panda".to_string()))])
+            } else if seq_num == (num_of_entries + 1) {
+                delete_operation(&entry_args.backlink.clone().unwrap().into())
+            } else {
+                update_operation(
+                    &[("name", OperationValue::Text("🐼".to_string()))],
+                    &entry_args.backlink.clone().unwrap().into(),
+                )
+            };
+
+            // Send the entry to node_1 using `send_to_node()`
+            let result = send_to_node(&mut node_1, &client, &operation);
+            assert!(result.is_ok());
+
+            // Send the entry to node_2 using `node.publish_entry()`
+            let entry = client.signed_encoded_entry(
+                operation.clone(),
+                &entry_args.log_id,
+                entry_args.skiplink.as_ref(),
+                entry_args.backlink.as_ref(),
+                &entry_args.seq_num,
+            );
+
+            let encoded_operation = OperationEncoded::try_from(&operation).unwrap();
+
+            let result = node_2.publish_entry(&entry, &encoded_operation);
+            assert!(result.is_ok());
+
+            // Set the document id if this was the first entry
+            if seq_num == 1 {
+                document_id = Some(entry.hash().into());
+            }
+        }
+
+        assert_eq!(node_1.0.entries.lock().unwrap().len(), 50);
+        assert_eq!(node_1.0.logs.lock().unwrap().len(), 1);
+        assert_eq!(node_1.0.documents.lock().unwrap().len(), 1);
+        assert_eq!(node_1.0.document_views.lock().unwrap().len(), 50);
+        assert_eq!(node_2.0.entries.lock().unwrap().len(), 50);
+        assert_eq!(node_2.0.logs.lock().unwrap().len(), 1);
+        assert_eq!(node_2.0.documents.lock().unwrap().len(), 1);
+        assert_eq!(node_2.0.document_views.lock().unwrap().len(), 50);
     }
 }

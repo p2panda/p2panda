@@ -15,7 +15,7 @@
     doc = r##"
 ```
 # extern crate p2panda_rs;
-# fn main() -> Result<(), Box<dyn std::error::Error>> {
+# fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 # use p2panda_rs::hash::Hash;
 # use p2panda_rs::identity::KeyPair;
 # use p2panda_rs::operation::{OperationValue, VerifiedOperation, AsVerifiedOperation};
@@ -95,21 +95,21 @@ use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewField
 # )
 # .unwrap();
 #
-# let entry_1 = node.get_entry(&polar_entry_1_hash);
+# let entry_1 = node.entry(&polar_entry_1_hash).unwrap();
 # let operation_1 =
-#     VerifiedOperation::new_from_entry(&entry_1.entry_encoded(), &entry_1.operation_encoded()).unwrap();
-# let entry_2 = node.get_entry(&polar_entry_2_hash);
+#     VerifiedOperation::new_from_entry(&entry_1.entry_signed(), &entry_1.operation_encoded().unwrap()).unwrap();
+# let entry_2 = node.entry(&polar_entry_2_hash).unwrap();
 # let operation_2 =
-#     VerifiedOperation::new_from_entry(&entry_2.entry_encoded(), &entry_2.operation_encoded()).unwrap();
-# let entry_3 = node.get_entry(&panda_entry_1_hash);
+#     VerifiedOperation::new_from_entry(&entry_2.entry_signed(), &entry_2.operation_encoded().unwrap()).unwrap();
+# let entry_3 = node.entry(&panda_entry_1_hash).unwrap();
 # let operation_3 =
-#     VerifiedOperation::new_from_entry(&entry_3.entry_encoded(), &entry_3.operation_encoded()).unwrap();
-# let entry_4 = node.get_entry(&polar_entry_3_hash);
+#     VerifiedOperation::new_from_entry(&entry_3.entry_signed(), &entry_3.operation_encoded().unwrap()).unwrap();
+# let entry_4 = node.entry(&polar_entry_3_hash).unwrap();
 # let operation_4 =
-#     VerifiedOperation::new_from_entry(&entry_4.entry_encoded(), &entry_4.operation_encoded()).unwrap();
-# let entry_5 = node.get_entry(&polar_entry_4_hash);
+#     VerifiedOperation::new_from_entry(&entry_4.entry_signed(), &entry_4.operation_encoded().unwrap()).unwrap();
+# let entry_5 = node.entry(&polar_entry_4_hash).unwrap();
 # let operation_5 =
-#     VerifiedOperation::new_from_entry(&entry_5.entry_encoded(), &entry_5.operation_encoded()).unwrap();
+#     VerifiedOperation::new_from_entry(&entry_5.entry_signed(), &entry_5.operation_encoded().unwrap()).unwrap();
 #
 //== Operation creation is hidden for brevity, see the operation module docs for details ==//
 
