@@ -95,11 +95,11 @@ use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewField
 # )
 # .unwrap();
 #
-# let operation_1 = node.operations().get(&polar_entry_1_hash.into()).unwrap();
-# let operation_2 = node.operations().get(&polar_entry_2_hash.into()).unwrap();
-# let operation_3 = node.operations().get(&panda_entry_1_hash.into()).unwrap();
-# let operation_4 = node.operations().get(&polar_entry_3_hash.into()).unwrap();
-# let operation_5 = node.operations().get(&polar_entry_4_hash.into()).unwrap();
+# let operation_1 = node.operations().get(&polar_entry_1_hash.into()).unwrap().clone();
+# let operation_2 = node.operations().get(&polar_entry_2_hash.into()).unwrap().clone();
+# let operation_3 = node.operations().get(&panda_entry_1_hash.into()).unwrap().clone();
+# let operation_4 = node.operations().get(&polar_entry_3_hash.into()).unwrap().clone();
+# let operation_5 = node.operations().get(&polar_entry_4_hash.into()).unwrap().clone();
 #
 //== Operation creation is hidden for brevity, see the operation module docs for details ==//
 

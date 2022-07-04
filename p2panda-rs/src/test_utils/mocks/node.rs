@@ -73,7 +73,7 @@
 //! .unwrap();
 //!
 //! // Get all entries published to this node
-//! let entries = node.all_entries();
+//! let entries = node.entries();
 //!
 //! // There should be 4 entries
 //! entries.len(); // => 4
