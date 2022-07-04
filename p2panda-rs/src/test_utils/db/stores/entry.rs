@@ -11,11 +11,11 @@ use crate::operation::AsOperation;
 use crate::schema::SchemaId;
 use crate::storage_provider::errors::EntryStorageError;
 use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
-use crate::test_utils::db::{SimplestStorageProvider, StorageEntry};
+use crate::test_utils::db::{MemoryStore, StorageEntry};
 
-/// Implement `EntryStore` trait on `SimplestStorageProvider`
+/// Implement `EntryStore` trait on `MemoryStore`
 #[async_trait]
-impl EntryStore<StorageEntry> for SimplestStorageProvider {
+impl EntryStore<StorageEntry> for MemoryStore {
     /// Insert an entry into storage.
     async fn insert_entry(&self, entry: StorageEntry) -> Result<(), EntryStorageError> {
         info!("Inserting entry: {} into store", entry.hash());
@@ -145,7 +145,7 @@ pub mod tests {
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::test_utils::{test_db, TestStore};
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
-    use crate::test_utils::db::{SimplestStorageProvider, StorageEntry};
+    use crate::test_utils::db::{MemoryStore, StorageEntry};
     use crate::test_utils::fixtures::{
         entry, entry_signed_encoded, key_pair, operation_encoded, random_key_pair, schema,
     };
@@ -157,7 +157,7 @@ pub mod tests {
         operation_encoded: OperationEncoded,
     ) {
         // Instantiate a new store.
-        let store = SimplestStorageProvider::default();
+        let store = MemoryStore::default();
 
         let storage_entry = StorageEntry::new(&entry_signed_encoded, &operation_encoded).unwrap();
 
@@ -184,7 +184,7 @@ pub mod tests {
         operation_encoded: OperationEncoded,
     ) {
         // Instantiate a new store.
-        let store = SimplestStorageProvider::default();
+        let store = MemoryStore::default();
 
         let storage_entry = StorageEntry::new(&entry_signed_encoded, &operation_encoded).unwrap();
 
@@ -218,7 +218,7 @@ pub mod tests {
         schema: SchemaId,
     ) {
         // Instantiate a new store.
-        let store = SimplestStorageProvider::default();
+        let store = MemoryStore::default();
 
         let author_1_entry = sign_and_encode(&entry, &key_pair_1).unwrap();
         let author_2_entry = sign_and_encode(&entry, &key_pair_2).unwrap();

@@ -16,8 +16,7 @@ use crate::schema::SchemaId;
 use crate::storage_provider::traits::{OperationStore, StorageProvider};
 use crate::test_utils::constants::{DEFAULT_PRIVATE_KEY, TEST_SCHEMA_ID};
 use crate::test_utils::db::{
-    EntryArgsRequest, PublishEntryRequest, PublishEntryResponse, SimplestStorageProvider,
-    StorageLog,
+    EntryArgsRequest, MemoryStore, PublishEntryRequest, PublishEntryResponse, StorageLog,
 };
 use crate::test_utils::fixtures::{operation, operation_fields};
 
@@ -177,12 +176,12 @@ pub fn test_key_pairs(no_of_authors: usize) -> Vec<KeyPair> {
     key_pairs
 }
 
-/// Container for `SimplestStorageProvider` with access to the document ids and key_pairs present in the
+/// Container for `MemoryStore` with access to the document ids and key_pairs present in the
 /// pre-populated database.
 #[derive(Default, Debug)]
 pub struct TestStore {
     /// The store.
-    pub store: SimplestStorageProvider,
+    pub store: MemoryStore,
 
     /// Test data collected during store population.
     pub test_data: TestData,
@@ -263,7 +262,7 @@ pub async fn populate_test_db(db: &mut TestStore, config: &PopulateDatabaseConfi
 
 /// Helper method for publishing an operation encoded on an entry to a store.
 pub async fn send_to_store(
-    store: &SimplestStorageProvider,
+    store: &MemoryStore,
     operation: &Operation,
     key_pair: &KeyPair,
 ) -> Result<(EntrySigned, PublishEntryResponse), Box<dyn std::error::Error + Sync + Send>> {

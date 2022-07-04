@@ -94,7 +94,7 @@ use crate::storage_provider::traits::{
 use crate::test_utils::db::{
     EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse, StorageLog,
 };
-use crate::test_utils::db::{SimplestStorageProvider, StorageEntry};
+use crate::test_utils::db::{MemoryStore, StorageEntry};
 use crate::test_utils::mocks::Client;
 use crate::test_utils::utils::Result;
 
@@ -105,16 +105,16 @@ use crate::test_utils::utils::Result;
 ///
 /// Offers a sync interface to some of the underlying async `StorageProvider` methods.
 #[derive(Debug, Default)]
-pub struct Node(SimplestStorageProvider);
+pub struct Node(MemoryStore);
 
 impl Node {
     /// Create a new mock Node.
     pub fn new() -> Self {
-        Self(SimplestStorageProvider::default())
+        Self(MemoryStore::default())
     }
 
     /// Return the entire store.
-    pub fn store(&self) -> &SimplestStorageProvider {
+    pub fn store(&self) -> &MemoryStore {
         &self.0
     }
 

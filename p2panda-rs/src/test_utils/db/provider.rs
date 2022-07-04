@@ -19,9 +19,11 @@ use super::{
 
 type AuthorPlusLogId = String;
 
-/// The simplest storage provider. Used for tests in `entry_store`, `log_store` & `storage_provider`
+/// An in memory implementation of p2panda storage provider traits.
+///
+/// Primarily used in testing environments.
 #[derive(Default, Debug, Clone)]
-pub struct SimplestStorageProvider {
+pub struct MemoryStore {
     /// Stored logs
     pub logs: Arc<Mutex<HashMap<AuthorPlusLogId, StorageLog>>>,
 
@@ -39,7 +41,7 @@ pub struct SimplestStorageProvider {
 }
 
 #[async_trait]
-impl StorageProvider<StorageEntry, StorageLog, VerifiedOperation> for SimplestStorageProvider {
+impl StorageProvider<StorageEntry, StorageLog, VerifiedOperation> for MemoryStore {
     type EntryArgsRequest = EntryArgsRequest;
 
     type EntryArgsResponse = EntryArgsResponse;

@@ -7,10 +7,10 @@ use crate::document::DocumentId;
 use crate::operation::{AsOperation, AsVerifiedOperation, OperationId, VerifiedOperation};
 use crate::storage_provider::errors::OperationStorageError;
 use crate::storage_provider::traits::OperationStore;
-use crate::test_utils::db::SimplestStorageProvider;
+use crate::test_utils::db::MemoryStore;
 
 #[async_trait]
-impl OperationStore<VerifiedOperation> for SimplestStorageProvider {
+impl OperationStore<VerifiedOperation> for MemoryStore {
     async fn insert_operation(
         &self,
         operation: &VerifiedOperation,

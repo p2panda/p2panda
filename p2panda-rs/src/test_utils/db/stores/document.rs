@@ -7,10 +7,10 @@ use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
 use crate::schema::SchemaId;
 use crate::storage_provider::errors::DocumentStorageError;
 use crate::storage_provider::traits::DocumentStore;
-use crate::test_utils::db::SimplestStorageProvider;
+use crate::test_utils::db::MemoryStore;
 
 #[async_trait]
-impl DocumentStore for SimplestStorageProvider {
+impl DocumentStore for MemoryStore {
     /// Insert document view into storage.
     ///
     /// returns an error when a fatal storage error occurs.

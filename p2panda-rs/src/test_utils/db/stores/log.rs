@@ -6,11 +6,11 @@ use crate::entry::LogId;
 use crate::identity::Author;
 use crate::storage_provider::errors::LogStorageError;
 use crate::storage_provider::traits::{AsStorageLog, LogStore};
-use crate::test_utils::db::{SimplestStorageProvider, StorageLog};
+use crate::test_utils::db::{MemoryStore, StorageLog};
 
-/// Implement the `LogStore` trait on SimplestStorageProvider
+/// Implement the `LogStore` trait on MemoryStore
 #[async_trait]
-impl LogStore<StorageLog> for SimplestStorageProvider {
+impl LogStore<StorageLog> for MemoryStore {
     async fn insert_log(&self, log: StorageLog) -> Result<bool, LogStorageError> {
         info!(
             "Inserting log {} into store for {}",
@@ -60,14 +60,14 @@ mod tests {
     use crate::identity::{Author, KeyPair};
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{AsStorageLog, LogStore};
-    use crate::test_utils::db::{SimplestStorageProvider, StorageLog};
+    use crate::test_utils::db::{MemoryStore, StorageLog};
     use crate::test_utils::fixtures::{document_id, key_pair, schema};
 
     #[rstest]
     #[async_std::test]
     async fn insert_get_log(key_pair: KeyPair, schema: SchemaId, document_id: DocumentId) {
         // Instantiate a new store.
-        let store = SimplestStorageProvider::default();
+        let store = MemoryStore::default();
 
         let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
         let log = StorageLog::new(&author, &schema, &document_id, &LogId::default());
@@ -86,7 +86,7 @@ mod tests {
     #[async_std::test]
     async fn get_next_log_id(key_pair: KeyPair, schema: SchemaId, document_id: DocumentId) {
         // Instantiate a new store.
-        let store = SimplestStorageProvider::default();
+        let store = MemoryStore::default();
 
         let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
         let log_id = store.next_log_id(&author).await.unwrap();

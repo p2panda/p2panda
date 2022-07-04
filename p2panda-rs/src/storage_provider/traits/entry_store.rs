@@ -202,7 +202,7 @@ pub mod tests {
     use crate::storage_provider::traits::test_utils::{test_db, TestStore};
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
     use crate::test_utils::constants::SKIPLINK_ENTRIES;
-    use crate::test_utils::db::{SimplestStorageProvider, StorageEntry};
+    use crate::test_utils::db::{MemoryStore, StorageEntry};
     use crate::test_utils::fixtures::{key_pair, operation_encoded};
 
     #[rstest]
@@ -532,9 +532,9 @@ pub mod tests {
             .unwrap();
 
         // Construct a new db which is missing one entry
-        let new_db = SimplestStorageProvider {
+        let new_db = MemoryStore {
             entries: Arc::new(Mutex::new(log_entries_with_skiplink_missing)),
-            ..SimplestStorageProvider::default()
+            ..MemoryStore::default()
         };
 
         let error_response = new_db.determine_next_skiplink(entry_at_seq_num_seven).await;

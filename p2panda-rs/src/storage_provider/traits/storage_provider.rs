@@ -279,8 +279,7 @@ pub mod tests {
         AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry,
     };
     use crate::test_utils::db::{
-        EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
-        SimplestStorageProvider,
+        EntryArgsRequest, EntryArgsResponse, MemoryStore, PublishEntryRequest, PublishEntryResponse,
     };
     use crate::test_utils::fixtures::{entry, key_pair, operation, operation_fields, operation_id};
 
@@ -296,7 +295,7 @@ pub mod tests {
     ) {
         let db = db.await;
         // Instantiate a new store
-        let new_db = SimplestStorageProvider::default();
+        let new_db = MemoryStore::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
 
@@ -347,7 +346,7 @@ pub mod tests {
         db: TestStore,
     ) {
         let db = db.await;
-        let new_db = SimplestStorageProvider::default();
+        let new_db = MemoryStore::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
 
@@ -417,7 +416,7 @@ pub mod tests {
         db: TestStore,
     ) {
         let db = db.await;
-        let new_db = SimplestStorageProvider::default();
+        let new_db = MemoryStore::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
 
@@ -487,7 +486,7 @@ pub mod tests {
     ) {
         let db = db.await;
         // Instantiate a new store
-        let new_db = SimplestStorageProvider::default();
+        let new_db = MemoryStore::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
 
@@ -555,7 +554,7 @@ pub mod tests {
     ) {
         let db = db.await;
         // Instantiate a new store
-        let new_db = SimplestStorageProvider::default();
+        let new_db = MemoryStore::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
 
