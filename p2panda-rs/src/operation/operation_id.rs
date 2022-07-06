@@ -102,10 +102,9 @@ mod tests {
         let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         let operation_id = OperationId::new(Hash::new(hash_str).unwrap());
 
-        // Long string representation via `Debug` trait and functions
+        // Long string representation functions
         assert_eq!(operation_id.as_str(), hash_str);
         assert_eq!(operation_id.to_string(), hash_str);
-        assert_ne!(format!("{:?}", operation_id), operation_id.as_short_str());
 
         // Short string representation via `Display` trait and function
         assert_eq!(format!("{}", operation_id), "<Operation 6ec805>");

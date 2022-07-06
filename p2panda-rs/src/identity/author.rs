@@ -171,10 +171,9 @@ mod tests {
         let author_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
         let author = Author::new(author_str).unwrap();
 
-        // Long string representation via `Debug` trait and functions
+        // Long string representation functions
         assert_eq!(author_str, author.as_str());
         assert_eq!(author_str, author.to_string());
-        assert_ne!(format!("{:?}", author), author.as_short_str());
 
         // Short string representation via `Display` trait and function
         assert_eq!(format!("{}", author), "<Author a5d982>");
