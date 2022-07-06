@@ -159,7 +159,7 @@ impl Schema {
         match schema_id {
             SchemaId::SchemaDefinition(version) => get_schema_definition(version),
             SchemaId::SchemaFieldDefinition(version) => get_schema_field_definition(version),
-            _ => Err(SchemaIdError::UnknownSystemSchema(schema_id.as_str())),
+            _ => Err(SchemaIdError::UnknownSystemSchema(schema_id.to_string())),
         }
     }
 
@@ -249,6 +249,7 @@ mod tests {
         operation_id: &OperationId,
     ) -> SchemaView {
         let mut schema = DocumentViewFields::new();
+
         schema.insert(
             "name",
             DocumentViewValue::new(
@@ -270,6 +271,7 @@ mod tests {
                 &OperationValue::PinnedRelationList(fields.clone()),
             ),
         );
+
         let schema_view: SchemaView = DocumentView::new(view_id, &schema).try_into().unwrap();
         schema_view
     }
@@ -294,6 +296,25 @@ mod tests {
             .try_into()
             .unwrap();
         capacity_field_view
+    }
+
+    #[rstest]
+    fn string_representation(#[from(document_view_id)] schema_view_id: DocumentViewId) {
+        let schema = Schema::new(
+            &SchemaId::Application("venue".into(), schema_view_id),
+            "Some description",
+            vec![("number", FieldType::Int)],
+        )
+        .unwrap();
+
+        // Short string representation via `Display` trait and function
+        assert_eq!(format!("{}", schema), "<Schema venue 496543>");
+
+        // Make sure the id is matching
+        assert_eq!(
+            schema.id().to_string(),
+            "venue_0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+        );
     }
 
     #[rstest]

@@ -60,7 +60,7 @@ impl AsStorageLog for StorageLog {
         let log_string = format!(
             "{}-{}-{}-{}",
             author.as_str(),
-            schema.as_str(),
+            schema.to_string(),
             document.as_str(),
             log_id.as_u64()
         );

@@ -57,13 +57,13 @@ mod tests {
     #[test]
     fn default_hash() {
         let default_hash = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
-        assert_eq!(default_hash.as_str(), DEFAULT_HASH)
+        assert_eq!(default_hash.to_string(), DEFAULT_HASH)
     }
 
     #[test]
     fn default_schema() {
         let venue_schema_hash: OperationId = Hash::new_from_bytes(vec![3, 2, 1]).unwrap().into();
         let schema = SchemaId::new_application("venue", &venue_schema_hash.into());
-        assert_eq!(schema.as_str(), TEST_SCHEMA_ID)
+        assert_eq!(schema.to_string(), TEST_SCHEMA_ID)
     }
 }

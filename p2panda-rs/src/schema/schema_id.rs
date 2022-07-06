@@ -128,8 +128,8 @@ impl SchemaId {
         ))
     }
 
-    /// Returns schema id as string slice.
-    pub fn as_str(&self) -> String {
+    /// Returns schema id as `String`.
+    pub fn to_string(&self) -> String {
         match self {
             SchemaId::Application(name, view_id) => {
                 let mut schema_id = name.to_string();
@@ -171,7 +171,7 @@ impl fmt::Display for SchemaId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SchemaId::Application(name, view_id) => write!(f, "{} {}", name, view_id),
-            system_schema => write!(f, "{}", system_schema.as_str()),
+            system_schema => write!(f, "{}", system_schema.to_string()),
         }
     }
 }
@@ -207,7 +207,7 @@ impl Serialize for SchemaId {
     where
         S: Serializer,
     {
-        serializer.serialize_str(&self.as_str())
+        serializer.serialize_str(&self.to_string())
     }
 }
 
@@ -332,13 +332,20 @@ mod test {
     }
 
     #[test]
-    fn parse_schema_type() {
+    fn from_str() {
         let schema: SchemaId = "schema_definition_v1".parse().unwrap();
         assert_eq!(schema, SchemaId::SchemaDefinition(1));
     }
 
     #[rstest]
-    fn display(schema: SchemaId) {
+    fn string_representation(schema: SchemaId) {
+        // Long string representation functions
+        assert_eq!(
+            schema.to_string(),
+            "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+        );
+
+        // Short string representation via `Display` trait
         assert_eq!(format!("{}", schema), "venue 8fc78b");
         assert_eq!(
             format!("{}", SchemaId::SchemaDefinition(1)),

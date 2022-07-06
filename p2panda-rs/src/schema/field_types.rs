@@ -59,13 +59,15 @@ impl FieldType {
             FieldType::Int => "int".to_string(),
             FieldType::Float => "float".to_string(),
             FieldType::String => "str".to_string(),
-            FieldType::Relation(schema_id) => format!("relation({})", schema_id.as_str()),
-            FieldType::RelationList(schema_id) => format!("relation_list({})", schema_id.as_str()),
+            FieldType::Relation(schema_id) => format!("relation({})", schema_id.to_string()),
+            FieldType::RelationList(schema_id) => {
+                format!("relation_list({})", schema_id.to_string())
+            }
             FieldType::PinnedRelation(schema_id) => {
-                format!("pinned_relation({})", schema_id.as_str())
+                format!("pinned_relation({})", schema_id.to_string())
             }
             FieldType::PinnedRelationList(schema_id) => {
-                format!("pinned_relation_list({})", schema_id.as_str())
+                format!("pinned_relation_list({})", schema_id.to_string())
             }
         }
     }
