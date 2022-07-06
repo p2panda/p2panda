@@ -43,9 +43,14 @@ impl Author {
         Ok(author)
     }
 
-    /// Returns author as hex string.
+    /// Returns hexadecimal representation of public key bytes as `&str`.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+
+    /// Returns hexadecimal representation of public key bytes as `String`.
+    pub fn to_string(&self) -> String {
+        self.0.clone()
     }
 
     /// Return a shortened six character representation.
@@ -56,21 +61,21 @@ impl Author {
     /// # use p2panda_rs::identity::Author;
     /// let pub_key = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
     /// let author = pub_key.parse::<Author>().unwrap();
-    /// assert_eq!(author.short_str(), "a5d982");
+    /// assert_eq!(author.as_short_str(), "a5d982");
     /// ```
-    pub fn short_str(&self) -> &str {
-        let offset = self.0.len() - 6;
-        &self.0[offset..]
+    pub fn as_short_str(&self) -> &str {
+        // Display last 6 of 64 hexadecimal characters of public key string
+        &self.0[58..]
     }
 }
 
 impl Display for Author {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<Author {}>", self.short_str())
+        write!(f, "<Author {}>", self.as_short_str())
     }
 }
 
-/// Convert Ed25519 `PublicKey` to `Author` instance.
+/// Convert ed25519_dalek `PublicKey` to `Author` instance.
 impl TryFrom<PublicKey> for Author {
     type Error = AuthorError;
 
@@ -112,24 +117,67 @@ impl Validate for Author {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryInto;
+
+    use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
+
+    use crate::identity::AuthorError;
+
     use super::Author;
 
     #[test]
     fn validate() {
-        assert!(Author::new("abcdefg").is_err());
-        assert!(Author::new("112233445566ff").is_err());
+        // Invalid hexadecimal characters
+        assert!(matches!(
+            Author::new("vzf4f58a2d89e93313f2de99604a814ezea9800of217b140e9l3a7ba59a5d98p"),
+            Err(AuthorError::InvalidHexEncoding)
+        ));
+
+        // Invalid length
+        assert!(matches!(
+            Author::new("123456789ffa"),
+            Err(AuthorError::InvalidLength)
+        ));
+
+        // Valid public key string
         assert!(
             Author::new("7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982").is_ok()
         );
     }
 
     #[test]
-    fn string_conversion() {
+    fn from_public_key() {
+        let public_key_bytes: [u8; PUBLIC_KEY_LENGTH] = [
+            215, 90, 152, 1, 130, 177, 10, 183, 213, 75, 254, 211, 201, 100, 7, 58, 14, 225, 114,
+            243, 218, 166, 35, 37, 175, 2, 26, 104, 247, 7, 81, 26,
+        ];
+        let public_key = PublicKey::from_bytes(&public_key_bytes).unwrap();
+
+        // Convert `ed25519_dalek` `PublicKey` into `Author` instance
+        let author: Author = public_key.try_into().unwrap();
+        assert_eq!(author.to_string(), hex::encode(public_key_bytes));
+    }
+
+    #[test]
+    fn from_str() {
+        // Convert string into `Author` instance
         let author_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
         let author: Author = author_str.parse().unwrap();
         assert_eq!(author_str, author.as_str());
+    }
 
-        // Display impl
+    #[test]
+    fn string_representation() {
+        let author_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
+        let author = Author::new(author_str).unwrap();
+
+        // Long string representation via `Debug` trait and functions
+        assert_eq!(author_str, author.as_str());
+        assert_eq!(author_str, author.to_string());
+        assert_ne!(format!("{:?}", author), author.as_short_str());
+
+        // Short string representation via `Display` trait and function
         assert_eq!(format!("{}", author), "<Author a5d982>");
+        assert_eq!(author.as_short_str(), "a5d982");
     }
 }
