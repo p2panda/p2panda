@@ -64,8 +64,8 @@ impl Author {
     /// assert_eq!(author.as_short_str(), "a5d982");
     /// ```
     pub fn as_short_str(&self) -> &str {
-        // Display last 6 of 64 hexadecimal characters of public key string
-        &self.0[58..]
+        let offset = PUBLIC_KEY_LENGTH * 2 - 6;
+        &self.0[offset..]
     }
 }
 
