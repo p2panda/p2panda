@@ -40,7 +40,7 @@ impl DocumentId {
 
 impl Display for DocumentId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.as_hash().short_str())
+        write!(f, "{}", self.0.as_short_str())
     }
 }
 

@@ -70,9 +70,9 @@ impl Hash {
     /// # use p2panda_rs::hash::Hash;
     /// let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
     /// let hash: Hash = hash_str.parse().unwrap();
-    /// assert_eq!(hash.short_str(), "6ec805");
+    /// assert_eq!(hash.as_short_str(), "6ec805");
     /// ```
-    pub fn short_str(&self) -> &str {
+    pub fn as_short_str(&self) -> &str {
         let offset = MAX_YAMF_HASH_SIZE * 2 - 6;
         &self.as_str()[offset..]
     }
@@ -80,7 +80,7 @@ impl Hash {
 
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<Hash {}>", self.short_str())
+        write!(f, "<Hash {}>", self.as_short_str())
     }
 }
 

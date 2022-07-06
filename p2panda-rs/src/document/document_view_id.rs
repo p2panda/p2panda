@@ -75,7 +75,7 @@ impl fmt::Display for DocumentViewId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (i, operation_id) in self.0.clone().into_iter().enumerate() {
             let separator = if i == 0 { "" } else { "_" };
-            write!(f, "{}{}", separator, operation_id.as_hash().short_str())?;
+            write!(f, "{}{}", separator, operation_id.as_short_str())?;
         }
         Ok(())
     }
