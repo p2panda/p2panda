@@ -312,21 +312,49 @@ mod tests {
         AsVerifiedOperation, OperationEncoded, OperationId, OperationValue, VerifiedOperation,
     };
     use crate::schema::SchemaId;
+    use crate::test_utils::constants::TEST_SCHEMA_ID;
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, operation, operation_fields, random_document_view_id,
-        random_key_pair, random_previous_operations, schema, update_operation, verified_operation,
+        create_operation, delete_operation, operation, operation_fields, public_key,
+        random_document_view_id, random_key_pair, random_previous_operations, schema,
+        update_operation, verified_operation,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
 
     use super::{reduce, DocumentBuilder};
 
     #[rstest]
+    fn string_representation(
+        #[from(verified_operation)]
+        #[with(
+            Some(operation_fields(vec![("username", OperationValue::Text("Yahooo!".into()))])),
+            None,
+            Some(TEST_SCHEMA_ID.parse().unwrap()),
+            Some(public_key()),
+            Some("0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805".parse().unwrap())
+        )]
+        operation: VerifiedOperation,
+    ) {
+        let builder = DocumentBuilder::new(vec![operation]);
+        let document = builder.build().unwrap();
+
+        // Short string representation via `Display` trait
+        assert_eq!(format!("{}", document), "<Document 6ec805>");
+
+        // Make sure the id is matching
+        assert_eq!(
+            document.id().as_str(),
+            "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805"
+        );
+    }
+
+    #[rstest]
     fn reduces_operations(
         #[from(verified_operation)] create_operation: VerifiedOperation,
         #[from(verified_operation)]
         #[with(
-            Some(operation_fields(vec![("username", OperationValue::Text("Yahooo!".into()))])), Some(random_previous_operations(1)))
-        ]
+            Some(operation_fields(vec![("username", OperationValue::Text("Yahooo!".into()))])),
+            Some(random_previous_operations(1))
+        )]
         update_operation: VerifiedOperation,
         #[from(verified_operation)]
         #[with(None, Some(random_previous_operations(1)))]
@@ -351,6 +379,7 @@ mod tests {
 
         let (reduced_delete, is_edited, is_deleted) =
             reduce(&[create_operation, update_operation, delete_operation]);
+
         // The value remains the same, but the deleted flag is true now.
         assert!(reduced_delete.is_none());
         assert!(is_edited);
