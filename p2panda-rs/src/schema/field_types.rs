@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::fmt::Display;
 use std::str::FromStr;
 
 use lazy_static::lazy_static;
@@ -50,10 +51,11 @@ pub enum FieldType {
     PinnedRelationList(SchemaId),
 }
 
-impl FieldType {
-    /// Returns string representation of this field type.
-    pub fn to_string(&self) -> String {
-        match self {
+/// Returns string representation of this field type.
+impl Display for FieldType {
+    // Note: This automatically implements the `to_string` function as well.
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let field_type_str = match self {
             FieldType::Bool => "bool".to_string(),
             FieldType::Int => "int".to_string(),
             FieldType::Float => "float".to_string(),
@@ -68,7 +70,9 @@ impl FieldType {
             FieldType::PinnedRelationList(schema_id) => {
                 format!("pinned_relation_list({})", schema_id.to_string())
             }
-        }
+        };
+
+        write!(f, "{}", field_type_str)
     }
 }
 
