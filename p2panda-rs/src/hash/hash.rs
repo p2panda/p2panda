@@ -57,9 +57,14 @@ impl Hash {
         hex::decode(&self.0).unwrap()
     }
 
-    /// Returns hash as hex string.
+    /// Returns hash as `&str`.
     pub fn as_str(&self) -> &str {
-        self.0.as_str()
+        &self.0
+    }
+
+    /// Returns hash as `String`.
+    pub fn to_string(&self) -> String {
+        self.0.clone()
     }
 
     /// Return a shortened six character representation.
@@ -208,7 +213,7 @@ mod tests {
     }
 
     #[test]
-    fn convert_string() {
+    fn from_string() {
         let hash_str = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 
         // Using TryFrom<&str>
@@ -222,8 +227,19 @@ mod tests {
         // Using TryFrom<String>
         let hash_from_string = Hash::try_from(String::from(hash_str)).unwrap();
         assert_eq!(hash_str, hash_from_string.as_str());
+    }
 
-        // Display impl
-        assert_eq!(format!("{}", hash_from_string), "<Hash 496543>");
+    #[test]
+    fn string_representation() {
+        let hash_str = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
+        let hash = Hash::new(hash_str).unwrap();
+
+        // Long string representation functions
+        assert_eq!(hash_str, hash.as_str());
+        assert_eq!(hash_str, hash.to_string());
+
+        // Short string representation via `Display` trait and function
+        assert_eq!(format!("{}", hash), "<Hash 496543>");
+        assert_eq!(hash.as_short_str(), "496543");
     }
 }
