@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::fmt;
+use std::fmt::{Display, Write};
 use std::str::FromStr;
 
 use serde::de::{SeqAccess, Visitor};
@@ -60,23 +60,28 @@ impl DocumentViewId {
         graph_tips
     }
 
-    /// Get a string representation of all graph tips in this view id.
-    pub fn as_str(&self) -> String {
-        let mut id_str = "".to_string();
+    /// Get a string representation of document view id.
+    ///
+    /// The string contains the hashes of all graph tips.
+    pub fn to_string(&self) -> String {
+        let mut id_str = String::new();
+
         for (i, operation_id) in self.sorted().iter().enumerate() {
             let separator = if i == 0 { "" } else { "_" };
-            id_str += format!("{}{}", separator, operation_id.as_hash().as_str()).as_str();
+            let _ = write!(id_str, "{}{}", separator, operation_id.as_str());
         }
+
         id_str
     }
 }
 
-impl fmt::Display for DocumentViewId {
+impl Display for DocumentViewId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (i, operation_id) in self.0.clone().into_iter().enumerate() {
             let separator = if i == 0 { "" } else { "_" };
             write!(f, "{}{}", separator, operation_id.as_short_str())?;
         }
+
         Ok(())
     }
 }
@@ -124,7 +129,7 @@ struct DocumentViewIdVisitor;
 impl<'de> Visitor<'de> for DocumentViewIdVisitor {
     type Value = DocumentViewId;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         formatter.write_str("sequence of operation id strings")
     }
 
@@ -284,6 +289,7 @@ mod tests {
         let operation_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
             .parse::<OperationId>()
             .unwrap();
+
         let view_id_unmerged = DocumentViewId::new(&[operation_1, operation_2]).unwrap();
         assert_eq!(format!("{}", view_id_unmerged), "496543_f16e79");
     }
@@ -293,7 +299,7 @@ mod tests {
         let document_view_id = DEFAULT_HASH.parse::<DocumentViewId>().unwrap();
 
         assert_eq!(
-            document_view_id.as_str(),
+            document_view_id.to_string(),
             "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
         );
 
@@ -303,8 +309,9 @@ mod tests {
         let operation_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
             .parse::<OperationId>()
             .unwrap();
+
         let document_view_id = DocumentViewId::new(&[operation_1, operation_2]).unwrap();
-        assert_eq!(document_view_id.as_str(), "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79");
+        assert_eq!(document_view_id.to_string(), "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79");
         assert_eq!("0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79".parse::<DocumentViewId>().unwrap(), document_view_id);
     }
 
