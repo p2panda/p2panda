@@ -52,7 +52,7 @@ pub enum FieldType {
 }
 
 impl FieldType {
-    /// Serialises this field type to text.
+    /// Returns string representation of this field type.
     pub fn to_string(&self) -> String {
         match self {
             FieldType::Bool => "bool".to_string(),
