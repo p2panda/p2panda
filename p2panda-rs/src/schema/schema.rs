@@ -3,8 +3,6 @@
 use std::collections::BTreeMap;
 use std::fmt::Display;
 
-use serde::{Deserialize, Serialize};
-
 use crate::cddl::generate_cddl_definition;
 use crate::document::DocumentViewHash;
 use crate::schema::system::{
@@ -39,7 +37,7 @@ type FieldKey = String;
 // @NOTE: Fields on this struct are `pub(super)` to enable making static instances of system
 // schemas from their respective files in the `./system` subdirectory. Making system schema
 // instances is not supported by `Schema::new()` to prevent their dynamic redefinition.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Schema {
     /// The application schema id for this schema.
     pub(super) id: SchemaId,

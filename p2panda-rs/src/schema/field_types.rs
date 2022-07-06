@@ -4,7 +4,6 @@ use std::str::FromStr;
 
 use lazy_static::lazy_static;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
 
 use crate::operation::OperationValue;
 use crate::schema::{FieldTypeError, SchemaId};
@@ -20,7 +19,7 @@ use crate::schema::{FieldTypeError, SchemaId};
 /// field_definition.add("name", OperationValue::Text("document_title".to_string()));
 /// field_definition.add("type", FieldType::String.into());
 /// ```
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum FieldType {
     /// Defines a boolean field.
     Bool,
