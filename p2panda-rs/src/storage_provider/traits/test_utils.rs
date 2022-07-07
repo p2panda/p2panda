@@ -191,7 +191,7 @@ pub struct TestStore {
 /// Data collected when populating a `TestData` base in order to easily check values which
 /// would be otherwise hard or impossible to get through the store methods.
 ///
-/// Note: if new entries are published to this node, their key and any newly created
+/// Note: if new entries are published to this node, keypairs and any newly created
 /// documents will not be added to these lists.
 #[derive(Default, Debug)]
 pub struct TestData {
@@ -200,10 +200,6 @@ pub struct TestData {
 
     /// The id of all documents which were inserted into the store when it was
     /// pre-populated with values.
-    ///
-    /// Note: if new entries are published to this node, any newly created documents
-    /// will not be added to this list.their key will not be added to
-    /// this list.
     pub documents: Vec<DocumentId>,
 }
 
