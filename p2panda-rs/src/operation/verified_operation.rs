@@ -131,7 +131,7 @@ mod tests {
         AsOperation, AsVerifiedOperation, Operation, OperationEncoded, OperationId, OperationValue,
         VerifiedOperation,
     };
-    use crate::test_utils::constants::{default_fields, TEST_SCHEMA_ID};
+    use crate::test_utils::constants::{test_fields, SCHEMA_ID};
     use crate::test_utils::fixtures::{
         entry_signed_encoded, key_pair, operation, operation_encoded, operation_fields,
         operation_id,
@@ -140,9 +140,9 @@ mod tests {
     use crate::Validate;
 
     #[rstest]
-    #[case(operation_encoded(Some(operation_fields(default_fields())), None, Some(TEST_SCHEMA_ID.parse().unwrap())))]
+    #[case(operation_encoded(Some(operation_fields(test_fields())), None, Some(SCHEMA_ID.parse().unwrap())))]
     #[should_panic]
-    #[case(operation_encoded(Some(operation_fields(vec![("message", OperationValue::Text("Not the right message".to_string()))])), None, Some(TEST_SCHEMA_ID.parse().unwrap())))]
+    #[case(operation_encoded(Some(operation_fields(vec![("message", OperationValue::Text("Not the right message".to_string()))])), None, Some(SCHEMA_ID.parse().unwrap())))]
     fn create_verified_operation(
         entry_signed_encoded: EntrySigned,
         #[case] operation_encoded: OperationEncoded,

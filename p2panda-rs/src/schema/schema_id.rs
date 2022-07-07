@@ -224,14 +224,14 @@ impl<'de> Deserialize<'de> for SchemaId {
 mod test {
     use rstest::rstest;
 
-    use crate::test_utils::constants::TEST_SCHEMA_ID;
+    use crate::test_utils::constants::SCHEMA_ID;
     use crate::test_utils::fixtures::schema;
 
     use super::SchemaId;
 
     #[rstest]
     #[case(
-        SchemaId::new(TEST_SCHEMA_ID).unwrap(),
+        SchemaId::new(SCHEMA_ID).unwrap(),
         "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
     )]
     #[case(SchemaId::SchemaDefinition(1), "schema_definition_v1")]

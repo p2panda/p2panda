@@ -22,7 +22,7 @@
 # use p2panda_rs::operation::{OperationValue, VerifiedOperation, AsVerifiedOperation};
 # use p2panda_rs::schema::SchemaId;
 # use p2panda_rs::test_utils::fixtures::{create_operation, delete_operation, update_operation, operation_fields};
-# use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
+# use p2panda_rs::test_utils::constants::SCHEMA_ID;
 # use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewFields, DocumentViewId};
 #
@@ -39,7 +39,7 @@ use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewField
 #     )?,
 # );
 #
-# let schema = SchemaId::new(TEST_SCHEMA_ID).unwrap();
+# let schema = SchemaId::new(SCHEMA_ID).unwrap();
 # let mut node = Node::new();
 #
 # let mut node = Node::new();

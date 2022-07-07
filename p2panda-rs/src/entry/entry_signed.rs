@@ -171,7 +171,7 @@ mod tests {
     use crate::entry::{sign_and_encode, Entry, EntrySigned};
     use crate::identity::KeyPair;
     use crate::operation::OperationEncoded;
-    use crate::test_utils::constants::{default_fields, DEFAULT_HASH, DEFAULT_PRIVATE_KEY};
+    use crate::test_utils::constants::{test_fields, HASH, PRIVATE_KEY};
     use crate::test_utils::fixtures::{
         entry_signed_encoded, entry_signed_encoded_unvalidated, key_pair, operation,
         operation_encoded, operation_fields, random_hash,
@@ -206,32 +206,32 @@ mod tests {
         1,
         None,
         None,
-        Some(operation(Some(operation_fields(default_fields())), None, None)),
-        key_pair(DEFAULT_PRIVATE_KEY)
+        Some(operation(Some(operation_fields(test_fields())), None, None)),
+        key_pair(PRIVATE_KEY)
     ))]
     #[case::valid_entry_with_backlink(entry_signed_encoded_unvalidated(
         2,
         1,
         Some(random_hash()),
         None,
-        Some(operation(Some(operation_fields(default_fields())), None, None)),
-        key_pair(DEFAULT_PRIVATE_KEY)
+        Some(operation(Some(operation_fields(test_fields())), None, None)),
+        key_pair(PRIVATE_KEY)
     ))]
     #[case::valid_entry_with_skiplink_and_backlink(entry_signed_encoded_unvalidated(
         13,
         1,
         Some(random_hash()),
         Some(random_hash()),
-        Some(operation(Some(operation_fields(default_fields())), None, None)),
-        key_pair(DEFAULT_PRIVATE_KEY)
+        Some(operation(Some(operation_fields(test_fields())), None, None)),
+        key_pair(PRIVATE_KEY)
     ))]
     #[case::skiplink_ommitted_when_sam_as_backlink(entry_signed_encoded_unvalidated(
         14,
         1,
         Some(random_hash()),
         None,
-        Some(operation(Some(operation_fields(default_fields())), None, None)),
-        key_pair(DEFAULT_PRIVATE_KEY)
+        Some(operation(Some(operation_fields(test_fields())), None, None)),
+        key_pair(PRIVATE_KEY)
     ))]
     fn validate(#[case] entry_signed_encoded_unvalidated: String) {
         assert!(EntrySigned::new(&entry_signed_encoded_unvalidated).is_ok());
@@ -247,8 +247,8 @@ mod tests {
             1,
             None,
             None,
-            Some(operation(Some(operation_fields(default_fields())), None, None)),
-            key_pair(DEFAULT_PRIVATE_KEY)
+            Some(operation(Some(operation_fields(test_fields())), None, None)),
+            key_pair(PRIVATE_KEY)
         ),
         "Entry sequence must be larger than 0 but was 0"
     )]
@@ -258,8 +258,8 @@ mod tests {
             1,
             None,
             Some(random_hash()),
-            Some(operation(Some(operation_fields(default_fields())), None, None)),
-            key_pair(DEFAULT_PRIVATE_KEY)
+            Some(operation(Some(operation_fields(test_fields())), None, None)),
+            key_pair(PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
     )]
@@ -269,8 +269,8 @@ mod tests {
             1,
             Some(random_hash()),
             None,
-            Some(operation(Some(operation_fields(default_fields())), None, None)),
-            key_pair(DEFAULT_PRIVATE_KEY)
+            Some(operation(Some(operation_fields(test_fields())), None, None)),
+            key_pair(PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
     )]
@@ -278,11 +278,11 @@ mod tests {
         entry_signed_encoded_unvalidated(
                 1,
                 1,
-                Some(DEFAULT_HASH.parse().unwrap()),
-                Some(DEFAULT_HASH.parse().unwrap()),
-                Some(operation(Some(operation_fields(default_fields())), None, None))
+                Some(HASH.parse().unwrap()),
+                Some(HASH.parse().unwrap()),
+                Some(operation(Some(operation_fields(test_fields())), None, None))
 ,
-            key_pair(DEFAULT_PRIVATE_KEY)
+            key_pair(PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
     )]
@@ -292,8 +292,8 @@ mod tests {
             1,
             None,
             None,
-            Some(operation(Some(operation_fields(default_fields())), None, None)),
-            key_pair(DEFAULT_PRIVATE_KEY)
+            Some(operation(Some(operation_fields(test_fields())), None, None)),
+            key_pair(PRIVATE_KEY)
         ),
         "Could not decode backlink yamf hash: DecodeError"
     )]
@@ -303,8 +303,8 @@ mod tests {
             1,
             Some(random_hash()),
             None,
-            Some(operation(Some(operation_fields(default_fields())), None, None)),
-            key_pair(DEFAULT_PRIVATE_KEY)
+            Some(operation(Some(operation_fields(test_fields())), None, None)),
+            key_pair(PRIVATE_KEY)
         ),
         "Could not decode backlink yamf hash: DecodeError"
     )]
@@ -312,10 +312,10 @@ mod tests {
         entry_signed_encoded_unvalidated(
             14,
             1,
-            Some(DEFAULT_HASH.parse().unwrap()),
-            Some(DEFAULT_HASH.parse().unwrap()),
-            Some(operation(Some(operation_fields(default_fields())), None, None)),
-            key_pair(DEFAULT_PRIVATE_KEY)
+            Some(HASH.parse().unwrap()),
+            Some(HASH.parse().unwrap()),
+            Some(operation(Some(operation_fields(test_fields())), None, None)),
+            key_pair(PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
     )]
@@ -324,9 +324,9 @@ mod tests {
             14,
             1,
             Some(random_hash()),
-            Some(DEFAULT_HASH.parse().unwrap()),
+            Some(HASH.parse().unwrap()),
             None,
-            key_pair(DEFAULT_PRIVATE_KEY)
+            key_pair(PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
     )]
@@ -334,10 +334,10 @@ mod tests {
         entry_signed_encoded_unvalidated(
             13,
             1,
-            Some(DEFAULT_HASH.parse().unwrap()),
-            Some(DEFAULT_HASH.parse().unwrap()),
-            Some(operation(Some(operation_fields(default_fields())), None, None)),
-            key_pair(DEFAULT_PRIVATE_KEY)
+            Some(HASH.parse().unwrap()),
+            Some(HASH.parse().unwrap()),
+            Some(operation(Some(operation_fields(test_fields())), None, None)),
+            key_pair(PRIVATE_KEY)
         ),
         "backlink and skiplink are identical"
     )]

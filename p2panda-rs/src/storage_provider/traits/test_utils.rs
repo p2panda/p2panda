@@ -14,7 +14,7 @@ use crate::operation::{
 };
 use crate::schema::SchemaId;
 use crate::storage_provider::traits::{OperationStore, StorageProvider};
-use crate::test_utils::constants::{DEFAULT_PRIVATE_KEY, TEST_SCHEMA_ID};
+use crate::test_utils::constants::{PRIVATE_KEY, SCHEMA_ID};
 use crate::test_utils::db::{
     EntryArgsRequest, MemoryStore, PublishEntryRequest, PublishEntryResponse, StorageLog,
 };
@@ -113,7 +113,7 @@ impl Default for PopulateDatabaseConfig {
             no_of_logs: 0,
             no_of_authors: 0,
             with_delete: false,
-            schema: TEST_SCHEMA_ID.parse().unwrap(),
+            schema: SCHEMA_ID.parse().unwrap(),
             create_operation_fields: complex_test_fields(),
             update_operation_fields: complex_test_fields(),
         }
@@ -136,7 +136,7 @@ pub async fn test_db(
     // A boolean flag for wether all logs should contain a delete operation
     #[default(false)] with_delete: bool,
     // The schema used for all operations in the db
-    #[default(TEST_SCHEMA_ID.parse().unwrap())] schema: SchemaId,
+    #[default(SCHEMA_ID.parse().unwrap())] schema: SchemaId,
     // The fields used for every CREATE operation
     #[default(complex_test_fields())] create_operation_fields: Vec<(&'static str, OperationValue)>,
     // The fields used for every UPDATE operation
@@ -165,9 +165,9 @@ pub fn test_key_pairs(no_of_authors: usize) -> Vec<KeyPair> {
     let mut key_pairs = Vec::new();
     match no_of_authors {
         0 => (),
-        1 => key_pairs.push(KeyPair::from_private_key_str(DEFAULT_PRIVATE_KEY).unwrap()),
+        1 => key_pairs.push(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()),
         _ => {
-            key_pairs.push(KeyPair::from_private_key_str(DEFAULT_PRIVATE_KEY).unwrap());
+            key_pairs.push(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap());
             for _index in 2..no_of_authors {
                 key_pairs.push(KeyPair::new())
             }
@@ -346,7 +346,7 @@ mod tests {
 
     use crate::entry::{LogId, SeqNum};
     use crate::storage_provider::traits::{test_utils::test_db, AsStorageEntry};
-    use crate::test_utils::constants::SKIPLINK_ENTRIES;
+    use crate::test_utils::constants::SKIPLINK_SEQ_NUMS;
 
     use super::TestStore;
 
@@ -387,7 +387,7 @@ mod tests {
 
             let mut expected_skiplink_hash = None;
 
-            if SKIPLINK_ENTRIES.contains(&(seq_num as u64)) {
+            if SKIPLINK_SEQ_NUMS.contains(&(seq_num as u64)) {
                 let skiplink_seq_num = entry.seq_num().skiplink_seq_num().unwrap().as_u64();
 
                 let skiplink_entry = entries

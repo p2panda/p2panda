@@ -13,7 +13,7 @@ use rstest_reuse::template;
     None,
     Some(crate::test_utils::fixtures::operation(
         Some(crate::test_utils::fixtures::operation_fields(
-            crate::test_utils::constants::default_fields()
+            crate::test_utils::constants::test_fields()
         )),
         None,
         None
@@ -23,10 +23,10 @@ use rstest_reuse::template;
 #[case::entry_with_backlink(crate::test_utils::fixtures::entry(
     2,
     1,
-    Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
+    Some(crate::test_utils::constants::HASH.parse().unwrap()),
     None,
     Some(crate::test_utils::fixtures::operation(
-        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())),
+        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::test_fields())),
         None,
         None
     ))
@@ -35,10 +35,10 @@ use rstest_reuse::template;
 #[case::entry_with_backlink_and_skiplink(crate::test_utils::fixtures::entry(
     13,
     1,
-    Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
+    Some(crate::test_utils::constants::HASH.parse().unwrap()),
     Some(crate::test_utils::fixtures::random_hash()),
     Some(crate::test_utils::fixtures::operation(
-        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())),
+        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::test_fields())),
         None,
         None
     ))
@@ -47,10 +47,10 @@ use rstest_reuse::template;
 #[case::skiplink_can_be_omitted_when_sam_as_backlink(crate::test_utils::fixtures::entry(
     14,
     1,
-    Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
+    Some(crate::test_utils::constants::HASH.parse().unwrap()),
     None,
     Some(crate::test_utils::fixtures::operation(
-        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())),
+        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::test_fields())),
         None,
         None
     ))

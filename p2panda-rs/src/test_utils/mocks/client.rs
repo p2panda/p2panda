@@ -15,7 +15,7 @@
 //!
 //! use p2panda_rs::operation::AsOperation;
 //! use p2panda_rs::operation::{OperationEncoded, OperationValue};
-//! use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
+//! use p2panda_rs::test_utils::constants::SCHEMA_ID;
 //! use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 //! use p2panda_rs::test_utils::fixtures::{
 //!     create_operation, schema, random_key_pair, operation_fields

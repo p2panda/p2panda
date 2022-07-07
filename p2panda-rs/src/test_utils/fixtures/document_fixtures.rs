@@ -4,14 +4,14 @@ use rstest::fixture;
 
 use crate::document::{DocumentId, DocumentViewId};
 use crate::operation::OperationId;
-use crate::test_utils::constants::DEFAULT_HASH;
+use crate::test_utils::constants::HASH;
 use crate::test_utils::fixtures::random_hash;
 
 /// Fixture which injects the default `DocumentId` into a test method.
 ///
 /// Default value can be overridden at testing time by passing in a custom hash string.
 #[fixture]
-pub fn document_id(#[default(DEFAULT_HASH)] hash_str: &str) -> DocumentId {
+pub fn document_id(#[default(HASH)] hash_str: &str) -> DocumentId {
     hash_str.parse().unwrap()
 }
 
@@ -19,7 +19,7 @@ pub fn document_id(#[default(DEFAULT_HASH)] hash_str: &str) -> DocumentId {
 ///
 /// Default value can be overridden at testing time by passing in a custom vector of hash strings.
 #[fixture]
-pub fn document_view_id(#[default(vec![DEFAULT_HASH])] hash_str_vec: Vec<&str>) -> DocumentViewId {
+pub fn document_view_id(#[default(vec![HASH])] hash_str_vec: Vec<&str>) -> DocumentViewId {
     let hashes: Vec<OperationId> = hash_str_vec
         .into_iter()
         .map(|hash| hash.parse::<OperationId>().unwrap())

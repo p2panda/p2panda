@@ -8,7 +8,7 @@ use rstest_reuse::template;
 #[allow(unused_qualifications)]
 #[case(crate::test_utils::fixtures::operation(
     Some(crate::test_utils::fixtures::operation_fields(
-        crate::test_utils::constants::default_fields()
+        crate::test_utils::constants::test_fields()
     )),
     None,
     None,
@@ -16,8 +16,8 @@ use rstest_reuse::template;
 #[allow(unused_qualifications)]
 #[case::update_operation(
     crate::test_utils::fixtures::operation(
-        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())),
-        Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
+        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::test_fields())),
+        Some(crate::test_utils::constants::HASH.parse().unwrap()),
         None,
     )
 )]
@@ -25,14 +25,14 @@ use rstest_reuse::template;
 #[case::delete_operation(
     crate::test_utils::fixtures::operation(
         None,
-        Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
+        Some(crate::test_utils::constants::HASH.parse().unwrap()),
         None
     )
 )]
 #[allow(unused_qualifications)]
 #[case::update_operation_many_previous(
     crate::test_utils::fixtures::operation(
-        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::default_fields())),
+        Some(crate::test_utils::fixtures::operation_fields(crate::test_utils::constants::test_fields())),
         Some(DocumentViewId::new(&[
             crate::test_utils::fixtures::random_operation_id(),
             crate::test_utils::fixtures::random_operation_id(),
@@ -60,7 +60,7 @@ fn many_valid_operations(#[case] operation: Operation) {}
 #[rstest]
 #[allow(unused_qualifications)]
 #[case::create_meta_operation(crate::test_utils::fixtures::verified_operation(
-    Some(crate::test_utils::fixtures::operation_fields(default_fields())),
+    Some(crate::test_utils::fixtures::operation_fields(test_fields())),
     None,
     None,
     None,
@@ -68,8 +68,8 @@ fn many_valid_operations(#[case] operation: Operation) {}
 ))]
 #[allow(unused_qualifications)]
 #[case::update_meta_operation(crate::test_utils::fixtures::verified_operation(
-    Some(crate::test_utils::fixtures::operation_fields(default_fields())),
-    Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
+    Some(crate::test_utils::fixtures::operation_fields(test_fields())),
+    Some(crate::test_utils::constants::HASH.parse().unwrap()),
     None,
     None,
     None
@@ -77,7 +77,7 @@ fn many_valid_operations(#[case] operation: Operation) {}
 #[allow(unused_qualifications)]
 #[case::delete_meta_operation(crate::test_utils::fixtures::verified_operation(
     None,
-    Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
+    Some(crate::test_utils::constants::HASH.parse().unwrap()),
     None,
     None,
     None
@@ -89,24 +89,24 @@ fn various_verified_operation(#[case] operation: VerifiedOperation) {}
 #[rstest]
 #[allow(unused_qualifications)]
 #[case::create_operation(crate::test_utils::fixtures::operation(
-    Some(crate::test_utils::fixtures::operation_fields(default_fields())),
+    Some(crate::test_utils::fixtures::operation_fields(test_fields())),
     None,
     None
 ))]
 #[allow(unused_qualifications)]
 #[case::update_operation(crate::test_utils::fixtures::operation(
-    Some(crate::test_utils::fixtures::operation_fields(default_fields())),
-    Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
+    Some(crate::test_utils::fixtures::operation_fields(test_fields())),
+    Some(crate::test_utils::constants::HASH.parse().unwrap()),
     None
 ))]
 #[allow(unused_qualifications)]
 #[case::delete_operation(crate::test_utils::fixtures::operation(None, Some(
-    crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
+    crate::test_utils::constants::HASH.parse().unwrap()),
     None
 ))]
 #[allow(unused_qualifications)]
 #[case::create_meta_operation(crate::test_utils::fixtures::verified_operation(
-    Some(crate::test_utils::fixtures::operation_fields(default_fields())),
+    Some(crate::test_utils::fixtures::operation_fields(test_fields())),
     None,
     None,
     None,
@@ -114,8 +114,8 @@ fn various_verified_operation(#[case] operation: VerifiedOperation) {}
 ))]
 #[allow(unused_qualifications)]
 #[case::update_meta_operation(crate::test_utils::fixtures::verified_operation(
-    Some(crate::test_utils::fixtures::operation_fields(default_fields())),
-    Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
+    Some(crate::test_utils::fixtures::operation_fields(test_fields())),
+    Some(crate::test_utils::constants::HASH.parse().unwrap()),
     None,
     None,
     None
@@ -123,7 +123,7 @@ fn various_verified_operation(#[case] operation: VerifiedOperation) {}
 #[allow(unused_qualifications)]
 #[case::delete_meta_operation(crate::test_utils::fixtures::verified_operation(
     None,
-    Some(crate::test_utils::constants::DEFAULT_HASH.parse().unwrap()),
+    Some(crate::test_utils::constants::HASH.parse().unwrap()),
     None,
     None,
     None

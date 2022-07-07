@@ -12,14 +12,14 @@ use crate::operation::{
     VerifiedOperation,
 };
 use crate::schema::SchemaId;
-use crate::test_utils::constants::{self, TEST_SCHEMA_ID};
+use crate::test_utils::constants::{self, SCHEMA_ID};
 use crate::test_utils::fixtures::{entry_signed_encoded, public_key, random_hash};
 
 /// Fixture which injects the default testing `OperationId` into a test method.
 ///
 /// Default value can be overridden at testing time by passing in a custom hash string.
 #[fixture]
-pub fn operation_id(#[default(constants::DEFAULT_HASH)] hash_str: &str) -> OperationId {
+pub fn operation_id(#[default(constants::HASH)] hash_str: &str) -> OperationId {
     hash_str.parse().unwrap()
 }
 
@@ -49,7 +49,7 @@ pub fn random_previous_operations(#[default(1)] num: u32) -> DocumentViewId {
 /// tuples.
 #[fixture]
 pub fn operation_fields(
-    #[default(constants::default_fields())] fields_vec: Vec<(&str, OperationValue)>,
+    #[default(constants::test_fields())] fields_vec: Vec<(&str, OperationValue)>,
 ) -> OperationFields {
     let mut operation_fields = OperationFields::new();
     for (key, value) in fields_vec.iter() {
@@ -64,7 +64,7 @@ pub fn operation_fields(
 /// tuples.
 #[fixture]
 pub fn some_fields(
-    #[default(constants::default_fields())] fields_vec: Vec<(&str, OperationValue)>,
+    #[default(constants::test_fields())] fields_vec: Vec<(&str, OperationValue)>,
 ) -> Option<OperationFields> {
     Some(operation_fields(fields_vec))
 }
@@ -86,7 +86,7 @@ pub fn some_fields(
 /// use rstest::rstest;
 ///
 /// use p2panda_rs::operation::{AsOperation, Operation, OperationValue};
-/// use p2panda_rs::test_utils::constants::{default_fields, TEST_SCHEMA_ID};
+/// use p2panda_rs::test_utils::constants::{test_fields, SCHEMA_ID};
 /// use p2panda_rs::test_utils::fixtures::{operation, operation_fields};
 ///
 /// #[rstest]
@@ -109,11 +109,11 @@ pub fn some_fields(
 /// }
 ///
 /// #[rstest]
-/// #[case(operation(Some(operation_fields(default_fields())), None, None))] /// if no schema is passed, the default is chosen
-/// #[case(operation(Some(operation_fields(default_fields())), None, Some(TEST_SCHEMA_ID.parse().unwrap())))]
-/// #[case(operation(Some(operation_fields(default_fields())), None, Some("schema_definition_v1".parse().unwrap())))]
+/// #[case(operation(Some(operation_fields(test_fields())), None, None))] /// if no schema is passed, the default is chosen
+/// #[case(operation(Some(operation_fields(test_fields())), None, Some(SCHEMA_ID.parse().unwrap())))]
+/// #[case(operation(Some(operation_fields(test_fields())), None, Some("schema_definition_v1".parse().unwrap())))]
 /// #[should_panic]
-/// #[case(operation(Some(operation_fields(default_fields())), None, Some("not_a_schema_string".parse().unwrap())))]
+/// #[case(operation(Some(operation_fields(test_fields())), None, Some("not_a_schema_string".parse().unwrap())))]
 /// fn operations_with_different_schema(#[case] _operation: Operation) {}
 /// # }
 /// # Ok(())
@@ -123,9 +123,9 @@ pub fn some_fields(
 pub fn operation(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] previous_operations: Option<DocumentViewId>,
-    #[default(Some(TEST_SCHEMA_ID.parse().unwrap()))] schema: Option<SchemaId>,
+    #[default(Some(SCHEMA_ID.parse().unwrap()))] schema: Option<SchemaId>,
 ) -> Operation {
-    let schema = schema.unwrap_or_else(|| TEST_SCHEMA_ID.parse().unwrap());
+    let schema = schema.unwrap_or_else(|| SCHEMA_ID.parse().unwrap());
     match fields {
         // It's a CREATE operation
         Some(fields) if previous_operations.is_none() => {
@@ -152,7 +152,7 @@ pub fn operation(
 pub fn verified_operation(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] previous_operations: Option<DocumentViewId>,
-    #[default(Some(TEST_SCHEMA_ID.parse().unwrap()))] schema: Option<SchemaId>,
+    #[default(Some(SCHEMA_ID.parse().unwrap()))] schema: Option<SchemaId>,
     #[default(Some(public_key()))] author: Option<Author>,
     #[default(Some(random_operation_id()))] operation_id: Option<OperationId>,
 ) -> VerifiedOperation {
@@ -188,7 +188,7 @@ pub fn meta_operation(
 pub fn operation_encoded(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] previous_operations: Option<DocumentViewId>,
-    #[default(Some(TEST_SCHEMA_ID.parse().unwrap()))] schema: Option<SchemaId>,
+    #[default(Some(SCHEMA_ID.parse().unwrap()))] schema: Option<SchemaId>,
 ) -> OperationEncoded {
     OperationEncoded::try_from(&operation(fields, previous_operations, schema)).unwrap()
 }

@@ -201,7 +201,7 @@ pub mod tests {
     use crate::operation::{Operation, OperationEncoded};
     use crate::storage_provider::traits::test_utils::{test_db, TestStore};
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
-    use crate::test_utils::constants::SKIPLINK_ENTRIES;
+    use crate::test_utils::constants::SKIPLINK_SEQ_NUMS;
     use crate::test_utils::db::{MemoryStore, StorageEntry};
     use crate::test_utils::fixtures::{key_pair, operation_encoded};
 
@@ -495,7 +495,7 @@ pub mod tests {
                 .unwrap();
             let next_entry_skiplink = db.store.determine_next_skiplink(current_entry).await;
             assert!(next_entry_skiplink.is_ok());
-            if SKIPLINK_ENTRIES.contains(&((seq_num + 1) as u64)) {
+            if SKIPLINK_SEQ_NUMS.contains(&((seq_num + 1) as u64)) {
                 assert!(next_entry_skiplink.unwrap().is_some());
             } else {
                 assert!(next_entry_skiplink.unwrap().is_none())

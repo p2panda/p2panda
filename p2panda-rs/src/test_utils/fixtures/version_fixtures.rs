@@ -34,9 +34,9 @@ pub fn v0_3_0_fixture() -> Fixture {
             OperationValue::Text("for playing chess".to_string()),
         ),
     ]);
-    let operation = create_operation(SchemaId::new(TEST_SCHEMA_ID).unwrap(), operation_fields);
+    let operation = create_operation(SchemaId::new(SCHEMA_ID).unwrap(), operation_fields);
     let key_pair = key_pair("4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176");
-    let operation = create_operation(SchemaId::new(TEST_SCHEMA_ID).unwrap(), operation_fields);
+    let operation = create_operation(SchemaId::new(SCHEMA_ID).unwrap(), operation_fields);
     let entry_signed_encoded = crate::entry::sign_and_encode(
         &entry(operation.clone(), seq_num(1), None, None, log_id(1)),
         &key_pair,

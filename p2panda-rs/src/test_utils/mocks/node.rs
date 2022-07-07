@@ -13,7 +13,7 @@
 //! # async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 //! use p2panda_rs::operation::OperationValue;
 //! use p2panda_rs::schema::SchemaId;
-//! use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
+//! use p2panda_rs::test_utils::constants::SCHEMA_ID;
 //! use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 //! use p2panda_rs::test_utils::fixtures::{
 //!     create_operation, delete_operation, schema, random_key_pair, operation_fields, update_operation,
