@@ -420,6 +420,28 @@ mod tests {
                         "002062b773e62f48cdbbfd3e24956cffd3a9ccb0a844917f1cb726f17405b5e9e2ca",
                     ],
                     "fields" => {
+                        "national_dish" => {
+                            "value" => "00201b9ce32f4783941109210d349558baa9cf9216411201c848394379ef5bbc85b2",
+                            // Relations should not be typed in application operation fields
+                            "type" => "relation(dish_002062b773e62f48cdbbfd3e24956cffd3a9ccb0a844917f1cb726f17405b5e9e2ca)"
+                        },
+                    },
+                })
+                .unwrap()
+            )
+        ).is_err());
+
+        assert!(validate_cbor(
+            &OPERATION_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "update",
+                    "schema" => "menu_0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
+                    "version" => 1,
+                    "previous_operations" => [
+                        "002062b773e62f48cdbbfd3e24956cffd3a9ccb0a844917f1cb726f17405b5e9e2ca",
+                    ],
+                    "fields" => {
                         // Empty fields
                     },
                 })
@@ -739,6 +761,30 @@ mod tests {
             &SCHEMA_FIELD_V1_FORMAT,
             &to_cbor(
                 cbor!({
+                    "action" => "create",
+                    "schema" => "schema_field_definition_v1",
+                    "version" => 1,
+                    "fields" => {
+                        "name" => {
+                            "value" => "Size",
+                            "type" => "str"
+                        },
+                        "type" => {
+                            // Relations are typed in "value"
+                            "value" => "pinned_relation(meters_00208a5cbba0facc96f22fe3c283e05706c74801282bb7ba315fb5c77caa44689846)",
+                            "type" => "str"
+                        },
+                    },
+                })
+                .unwrap()
+            )
+        )
+        .is_ok());
+
+        assert!(validate_cbor(
+            &SCHEMA_FIELD_V1_FORMAT,
+            &to_cbor(
+                cbor!({
                     "action" => "update",
                     "schema" => "schema_field_definition_v1",
                     "version" => 1,
@@ -790,6 +836,30 @@ mod tests {
                             "type" => "str"
                         },
                         // "type" field missing
+                    },
+                })
+                .unwrap()
+            )
+        )
+        .is_err());
+
+        assert!(validate_cbor(
+            &SCHEMA_FIELD_V1_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "create",
+                    "schema" => "schema_field_definition_v1",
+                    "version" => 1,
+                    "fields" => {
+                        "name" => {
+                            "value" => "Size",
+                            "type" => "str"
+                        },
+                        "type" => {
+                            // Missing type for relation_list
+                            "value" => "relation_list",
+                            "type" => "str"
+                        },
                     },
                 })
                 .unwrap()
