@@ -111,14 +111,6 @@ impl EntrySigned {
     }
 }
 
-#[cfg(any(feature = "testing", test))]
-impl EntrySigned {
-    pub fn new_without_validation(value: &str) -> Result<Self, EntrySignedError> {
-        let inner = Self(value.to_owned());
-        Ok(inner)
-    }
-}
-
 /// Converts an `EntrySigned` into a Bamboo Entry to interact with the
 /// `bamboo_rs_core_ed25519_yasmf` crate.
 impl From<&EntrySigned> for BambooEntry {
