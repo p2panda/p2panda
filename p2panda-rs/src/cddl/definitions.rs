@@ -101,7 +101,10 @@ const CDDL_ANY_OPERATION: &str = r#"
 ; sorted hex-encoded operation ids, separated by underscores.
 application_schema_id = tstr .regexp "[A-Za-z]{1}[A-Za-z0-9_]{0,63}_([0-9A-Za-z]{68})(_[0-9A-Za-z]{68})*"
 
+; Constant system schema ids as per p2panda specification.
 system_schema_id = "schema_definition_v1" / "schema_field_definition_v1"
+
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 schema_id =  system_schema_id / application_schema_id
 
@@ -129,7 +132,7 @@ fields = {
 
 const CDDL_SCHEMA_V1: &str = r#"
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-; System Schema "Schema" v1
+; System Schema "schema_definition_v1"
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 schema_id = "schema_definition_v1"
@@ -160,7 +163,7 @@ fields = (
 
 const CDDL_SCHEMA_FIELD_V1: &str = r#"
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-; System Schema "Schema field" v1
+; System Schema "schema_field_definition_v1"
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 schema_id = "schema_field_definition_v1"
