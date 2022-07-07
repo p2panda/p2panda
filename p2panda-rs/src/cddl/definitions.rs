@@ -168,9 +168,9 @@ const CDDL_SCHEMA_FIELD_V1: &str = r#"
 
 schema_id = "schema_field_definition_v1"
 
-create_fields = { name, field_type }
+create_fields = { name, type }
 
-update_fields = { + (name // field_type) }
+update_fields = { + (name // type) }
 
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ; Fields
@@ -180,8 +180,8 @@ name = (
     name: { value_text },
 )
 
-field_type = (
-    field_type: {
+type = (
+    type: {
         type: "str",
         value: "str" / "int" / "float" / "bool" / "relation" /
             "relation_list" / "pinned_relation" / "pinned_relation_list",
@@ -549,8 +549,8 @@ mod tests {
                             "value" => "Holds information about places",
                             "type" => "str"
                         },
-                        // "field_type" is an unknown field
-                        "field_type" => {
+                        // "type" is an unknown field
+                        "type" => {
                             "value" => "What am I doing here?",
                             "type" => "str"
                         },
@@ -606,7 +606,7 @@ mod tests {
                             "value" => "Size",
                             "type" => "str"
                         },
-                        "field_type" => {
+                        "type" => {
                             "value" => "float",
                             "type" => "str"
                         },
@@ -629,19 +629,19 @@ mod tests {
                         "0020e967334f97ac477bf1f53568e475376ae28687e272de3f3d0672ec6f2aa9be53",
                     ],
                     "fields" => {
-                        "field_type" => {
+                        "type" => {
                             "value" => "relation",
                             "type" => "str"
                         },
-                        "field_type" => {
+                        "type" => {
                             "value" => "relation_list",
                             "type" => "str"
                         },
-                        "field_type" => {
+                        "type" => {
                             "value" => "pinned_relation",
                             "type" => "str"
                         },
-                        "field_type" => {
+                        "type" => {
                             "value" => "pinned_relation_list",
                             "type" => "str"
                         },
@@ -683,7 +683,7 @@ mod tests {
                             "value" => "Size",
                             "type" => "str"
                         },
-                        // "field_type" field missing
+                        // "type" field missing
                     },
                 })
                 .unwrap()
@@ -702,7 +702,7 @@ mod tests {
                         "00209caa5f232debd2835e35a673d5eb148ea803a272c6ca004cd86cbe4a834718d5",
                     ],
                     "fields" => {
-                        "field_type" => {
+                        "type" => {
                             // Unknown field type
                             "value" => "beaver_nest",
                             "type" => "str"
