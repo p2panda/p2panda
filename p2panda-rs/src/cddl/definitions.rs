@@ -155,7 +155,7 @@ description = (
 
 fields = (
     fields: {
-        type: "relation_list",
+        type: "pinned_relation_list",
         value: pinned_relation_list,
     },
 )
