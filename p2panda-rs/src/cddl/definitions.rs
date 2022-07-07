@@ -342,8 +342,8 @@ mod tests {
         // encoded with a tool which did not check against the CBOR standard, like this `cbor!`
         // macro), in this case our checks would still pass!
         //
-        // We need another instance making sure that an error gets returned and duplicate fields
-        // are disallowed.
+        // @TODO: We need another instance making sure that an error gets returned and duplicate
+        // fields are disallowed. Related issue: https://github.com/p2panda/p2panda/issues/395
         assert!(validate_cbor(&OPERATION_FORMAT, &data,).is_ok());
     }
 
