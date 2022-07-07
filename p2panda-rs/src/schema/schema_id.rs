@@ -133,10 +133,12 @@ impl SchemaId {
         match self {
             SchemaId::Application(name, view_id) => {
                 let mut schema_id = name.to_string();
+
                 for op_id in view_id.sorted().into_iter() {
                     schema_id.push('_');
-                    schema_id.push_str(op_id.as_hash().as_str());
+                    schema_id.push_str(op_id.as_str());
                 }
+
                 schema_id
             }
             SchemaId::SchemaDefinition(version) => {

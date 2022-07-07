@@ -75,6 +75,7 @@ impl DocumentViewId {
     }
 }
 
+// Get a short string representation of document view id.
 impl Display for DocumentViewId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (i, operation_id) in self.0.clone().into_iter().enumerate() {

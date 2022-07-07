@@ -185,11 +185,7 @@ impl Schema {
     pub fn hash_id(&self) -> String {
         match self.id.version() {
             SchemaVersion::Application(view_id) => {
-                format!(
-                    "{}__{}",
-                    self.name(),
-                    DocumentViewHash::from(&view_id).as_str()
-                )
+                format!("{}__{}", self.name(), DocumentViewHash::from(&view_id))
             }
             SchemaVersion::System(version) => {
                 format!("{}__{}", self.name(), &version.to_string())

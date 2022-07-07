@@ -257,7 +257,7 @@ impl Node {
     ) -> Result<NextEntryArgs> {
         info!(
             "[next_entry_args] REQUEST: next entry args for author {} document {} {}",
-            author.as_str(),
+            author,
             document_id.map(|id| id.as_str()).unwrap_or("not provided"),
             seq_num
                 .map(|seq_num| format!("at sequence number {}", seq_num.as_u64()))
@@ -374,8 +374,8 @@ impl Node {
 
         info!(
             "[publish_entry] REQUEST: publish entry: {} from author: {}",
-            entry_encoded.hash().as_str(),
-            author.as_str()
+            entry_encoded.hash(),
+            author
         );
 
         debug!("\n{:?}\n{:?}", entry_encoded, operation_encoded);
@@ -384,7 +384,7 @@ impl Node {
             let previous_operations = operation.previous_operations().unwrap_or_else(|| {
                 panic!(
                     "Document log for entry {} not found on node",
-                    entry_encoded.hash().as_str()
+                    entry_encoded.hash()
                 )
             });
             let document_id = self
@@ -392,16 +392,13 @@ impl Node {
                 .unwrap_or_else(|| {
                     panic!(
                         "Document log for entry {} not found on node",
-                        entry_encoded.hash().as_str()
+                        entry_encoded.hash()
                     )
                 });
-            info!("Document found with id {}", document_id.as_str());
+            info!("Document found with id {}", document_id);
             document_id
         } else {
-            info!(
-                "Creating new document with id {}",
-                entry_encoded.hash().as_str()
-            );
+            info!("Creating new document with id {}", entry_encoded.hash());
 
             entry_encoded.hash()
         };
@@ -453,7 +450,7 @@ impl Node {
 
         info!(
             "[publish_entry] RESPONSE: succesfully published entry: {} to log: {} and returning next entry args",
-            entry_encoded.hash().as_str(),
+            entry_encoded.hash(),
             log_id.as_u64()
         );
 
@@ -474,6 +471,7 @@ impl Node {
     /// Get a single resolved document from the node.
     pub fn get_document(&self, id: &Hash) -> Document {
         let entries = self.get_document_entries(id);
+
         let operations = entries
             .iter()
             .map(|entry| {
@@ -484,20 +482,23 @@ impl Node {
                 .unwrap()
             })
             .collect();
+
         DocumentBuilder::new(operations).build().unwrap()
     }
 
     /// Get all documents in their resolved state from the node.
     pub fn get_documents(&self) -> Vec<Document> {
         let mut documents = HashSet::new();
+
         for (_author, author_logs) in self.db() {
             author_logs.iter().for_each(|log| {
-                documents.insert(log.document().as_str().to_string());
+                documents.insert(log.document().to_string());
             });
         }
+
         documents
             .iter()
-            .map(|x| self.get_document(&Hash::new(x).unwrap()))
+            .map(|id| self.get_document(&Hash::new(id).unwrap()))
             .collect()
     }
 }

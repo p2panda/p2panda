@@ -36,7 +36,7 @@ impl LogEntry {
 
     /// Get the author of this entry.
     pub fn author(&self) -> String {
-        self.entry_encoded.author().as_str().to_string()
+        self.entry_encoded.author().to_string()
     }
 
     /// Get the hash of this entry.
@@ -46,7 +46,7 @@ impl LogEntry {
 
     /// Get the hash of this entry as a string.
     pub fn hash_str(&self) -> String {
-        self.entry_encoded.hash().as_str().to_string()
+        self.entry_encoded.hash().to_string()
     }
 
     /// Get the operation from this entry.

@@ -209,7 +209,8 @@ pub fn encode_update_operation(
     let previous = jserr!(DocumentViewId::new(&previous_ops));
     let operation = jserr!(Operation::new_update(schema, previous, fields.0));
     let operation_encoded = jserr!(OperationEncoded::try_from(&operation));
-    Ok(operation_encoded.as_str().to_owned())
+
+    Ok(operation_encoded.to_string())
 }
 
 /// Returns an encoded DELETE operation that deletes a given document.

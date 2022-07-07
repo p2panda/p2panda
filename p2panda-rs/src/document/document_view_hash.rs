@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::fmt::Display;
+
 use crate::document::DocumentViewId;
 use crate::hash::Hash;
 
@@ -20,9 +22,15 @@ impl DocumentViewHash {
         Self(hash)
     }
 
-    /// Returns the string representation of the document view hash.
+    /// Returns string representation of the document view hash as `&str`.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+}
+
+impl Display for DocumentViewHash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -70,8 +78,13 @@ mod tests {
     }
 
     #[rstest]
-    fn str_representation(#[from(random_hash)] hash: Hash) {
+    fn string_representation(#[from(random_hash)] hash: Hash) {
         let document_view_hash = DocumentViewHash::new(hash.clone());
         assert_eq!(hash.as_str(), document_view_hash.as_str());
+        assert_eq!(hash.as_str(), &document_view_hash.to_string());
+        assert_eq!(
+            format!("{}", document_view_hash),
+            document_view_hash.as_str()
+        )
     }
 }

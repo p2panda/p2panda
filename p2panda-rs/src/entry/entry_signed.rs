@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::{TryFrom, TryInto};
+use std::fmt::Display;
 use std::hash::Hash as StdHash;
 
 use arrayvec::ArrayVec;
@@ -63,7 +64,7 @@ impl EntrySigned {
         bamboo_entry.payload_hash.try_into().unwrap()
     }
 
-    /// Returns encoded entry as string.
+    /// Returns hex-encoded entry as `&str`.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
@@ -108,6 +109,12 @@ impl EntrySigned {
         }
 
         Ok(())
+    }
+}
+
+impl Display for EntrySigned {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -177,6 +184,14 @@ mod tests {
         operation_encoded, operation_fields, random_hash,
     };
     use crate::test_utils::templates::many_valid_entries;
+
+    #[rstest]
+    fn string_representation(entry_signed_encoded: EntrySigned) {
+        assert_eq!(
+            entry_signed_encoded.as_str(),
+            &entry_signed_encoded.to_string()
+        );
+    }
 
     #[rstest]
     fn test_entry_signed(entry_signed_encoded: EntrySigned, key_pair: KeyPair) {
@@ -367,7 +382,6 @@ mod tests {
         #[test]
         fn non_standard_strings_dont_crash(ref s in "\\PC*") {
             let result = EntrySigned::new(s);
-
             assert!(result.is_err())
         }
     }
@@ -384,17 +398,17 @@ mod tests {
             ref payload_hash in "[0-9a-f]{68}|[*]{0}",
             ref signature in "[0-9a-f]{68}|[*]{0}"
         ) {
-            let encoded_entry = "0".to_string()
-                + author
-                + log_id.to_string().as_str()
-                + seq_num.to_string().as_str()
-                + skiplink
-                + backlink
-                + payload_size.to_string().as_str()
-                + payload_hash
-                + signature;
+            let encoded_entry = format!("0{}{}{}{}{}{}{}{}",
+                author.as_str(),
+                log_id,
+                seq_num,
+                skiplink.as_str(),
+                backlink.as_str(),
+                payload_size,
+                payload_hash.as_str(),
+                signature,
+            );
             let result = EntrySigned::new(&encoded_entry);
-
             assert!(result.is_err())
         }
     }

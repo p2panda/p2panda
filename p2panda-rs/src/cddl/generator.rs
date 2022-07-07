@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::BTreeMap;
-use std::fmt::Write;
+use std::fmt::{Display, Write};
 
 use crate::schema::FieldType;
 
@@ -35,6 +35,12 @@ impl CddlType {
     }
 }
 
+impl Display for CddlType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 impl From<FieldType> for CddlType {
     fn from(field_type: FieldType) -> Self {
         match field_type {
@@ -65,8 +71,8 @@ pub fn generate_fields(fields: &BTreeMap<FieldName, FieldType>) -> String {
             cddl_str,
             "{} = {{ type: \"{}\", value: {}, }}",
             name,
-            field_type.to_string(),
-            CddlType::from(field_type.to_owned()).as_str()
+            field_type,
+            CddlType::from(field_type.to_owned())
         );
     }
 
@@ -128,6 +134,8 @@ mod tests {
     use crate::cddl::generator::{generate_create_fields, generate_fields, generate_update_fields};
     use crate::schema::{FieldType, SchemaId};
     use crate::test_utils::constants::TEST_SCHEMA_ID;
+
+    use super::CddlType;
 
     fn person() -> BTreeMap<String, FieldType> {
         let mut person = BTreeMap::new();
@@ -217,5 +225,12 @@ mod tests {
         let generated_cddl = generate_cddl_definition(&person);
 
         assert_eq!(expected_cddl, generated_cddl);
+    }
+
+    #[test]
+    pub fn string_representation() {
+        assert_eq!(format!("{}", CddlType::Bool), "bool");
+        assert_eq!(CddlType::Bool.as_str(), "bool");
+        assert_eq!(CddlType::Bool.to_string(), "bool");
     }
 }
