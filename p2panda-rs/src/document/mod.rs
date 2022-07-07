@@ -16,7 +16,7 @@
 ```
 # extern crate p2panda_rs;
 # #[async_std::main]
-# async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+# async fn main() -> p2panda_rs::storage_provider::utils::Result<()> {
 # use p2panda_rs::hash::Hash;
 # use p2panda_rs::identity::KeyPair;
 # use p2panda_rs::operation::{OperationValue, VerifiedOperation, AsVerifiedOperation};
