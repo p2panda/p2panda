@@ -92,6 +92,7 @@ impl AsVerifiedOperation for VerifiedOperation {
 
 #[cfg(any(feature = "testing", test))]
 impl VerifiedOperation {
+    /// Create a verified operation from it's unverified parts for testing.
     pub fn new_test_operation(
         id: &OperationId,
         public_key: &Author,
