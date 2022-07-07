@@ -136,7 +136,7 @@ mod tests {
         entry_signed_encoded, key_pair, operation, operation_encoded, operation_fields,
         operation_id,
     };
-    use crate::test_utils::templates::{implements_as_operation, various_verified_operation};
+    use crate::test_utils::templates::{implements_as_operation, many_verified_operations};
     use crate::Validate;
 
     #[rstest]
@@ -174,7 +174,7 @@ mod tests {
         assert_eq!(verified_operation.operation_id(), &operation_id);
     }
 
-    #[apply(various_verified_operation)]
+    #[apply(many_verified_operations)]
     fn only_some_operations_should_contain_fields(#[case] verified_operation: VerifiedOperation) {
         if verified_operation.is_create() {
             assert!(verified_operation.operation().fields().is_some());
@@ -189,13 +189,13 @@ mod tests {
         }
     }
 
-    #[apply(various_verified_operation)]
+    #[apply(many_verified_operations)]
     fn operations_should_validate(#[case] verified_operation: VerifiedOperation) {
         assert!(verified_operation.operation().validate().is_ok());
         assert!(verified_operation.validate().is_ok())
     }
 
-    #[apply(various_verified_operation)]
+    #[apply(many_verified_operations)]
     fn trait_methods_should_match(#[case] verified_operation: VerifiedOperation) {
         let operation = verified_operation.operation();
         assert_eq!(verified_operation.fields(), operation.fields());
@@ -221,7 +221,7 @@ mod tests {
         operation.has_previous_operations();
     }
 
-    #[apply(various_verified_operation)]
+    #[apply(many_verified_operations)]
     fn it_hashes(#[case] verified_operation: VerifiedOperation) {
         let mut hash_map = HashMap::new();
         let key_value = "Value identified by a hash".to_string();

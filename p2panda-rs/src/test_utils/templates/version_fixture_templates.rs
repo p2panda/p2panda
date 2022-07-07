@@ -4,9 +4,9 @@ use rstest_reuse::template;
 
 /// Template which will contain many version fixtures in the future.
 #[template]
+#[export]
 #[rstest]
-#[case::v0_3_0(crate::test_utils::fixtures::v0_3_0_fixture())]
+#[case::v0_3_0($crate::test_utils::fixtures::v0_3_0_fixture())]
 fn version_fixtures(#[case] fixture: Fixture) {}
 
-#[allow(unused_imports)]
-pub(crate) use version_fixtures;
+pub use version_fixtures;
