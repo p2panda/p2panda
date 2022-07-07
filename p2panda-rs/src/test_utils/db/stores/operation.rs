@@ -111,7 +111,7 @@ mod tests {
     #[case::update_operation_many_prev_ops(update_operation(&test_fields(), &random_previous_operations(12)))]
     #[case::delete_operation(delete_operation(&HASH.parse().unwrap()))]
     #[case::delete_operation_many_prev_ops(delete_operation(&random_previous_operations(12)))]
-    #[async_std::test]
+    #[tokio::test]
     async fn insert_get_operations(
         #[case] operation: Operation,
         #[from(public_key)] author: Author,
@@ -143,7 +143,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn insert_operation_twice(
         #[from(verified_operation)] verified_operation: VerifiedOperation,
         document_id: DocumentId,
@@ -166,7 +166,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn gets_document_by_operation_id(
         #[from(verified_operation)]
         #[with(Some(operation_fields(test_fields())), None, None, None, Some(HASH.parse().unwrap()))]
@@ -218,7 +218,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn get_operations_by_document_id(
         key_pair: KeyPair,
         #[from(test_db)]

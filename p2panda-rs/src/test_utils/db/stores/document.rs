@@ -164,7 +164,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn inserts_gets_one_document_view(
         #[from(test_db)]
         #[with(1, 1, 1)]
@@ -225,7 +225,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn document_view_does_not_exist(
         random_document_view_id: DocumentViewId,
         #[from(test_db)]
@@ -244,7 +244,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn inserts_gets_many_document_views(
         #[from(test_db)]
         #[with(10, 1, 1, false, SCHEMA_ID.parse().unwrap(), vec![("username", OperationValue::Text("panda".into()))], vec![("username", OperationValue::Text("PANDA".into()))])]
@@ -301,7 +301,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn inserts_gets_documents(
         #[from(test_db)]
         #[with(1, 1, 1)]
@@ -349,7 +349,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn gets_document_by_id(
         #[from(test_db)]
         #[with(1, 1, 1)]
@@ -397,7 +397,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn no_view_when_document_deleted(
         #[from(test_db)]
         #[with(10, 1, 1, true)]
@@ -425,7 +425,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn get_documents_by_schema_deleted_document(
         #[from(test_db)]
         #[with(10, 1, 1, true)]
@@ -457,7 +457,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn updates_a_document(
         #[from(test_db)]
         #[with(10, 1, 1)]
@@ -493,7 +493,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn gets_documents_by_schema(
         #[from(test_db)]
         #[with(10, 2, 1, false, SCHEMA_ID.parse().unwrap())]

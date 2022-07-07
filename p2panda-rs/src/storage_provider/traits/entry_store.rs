@@ -206,7 +206,7 @@ pub mod tests {
     use crate::test_utils::fixtures::{key_pair, operation_encoded};
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn try_get_backlink(
         #[values[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 ,15 ,16]] seq_num: usize,
         #[from(test_db)]
@@ -237,7 +237,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn try_get_backlink_entry_missing(
         #[from(test_db)]
         #[with(17, 1, 1)]
@@ -282,7 +282,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn try_get_backlink_invalid_skiplink(
         key_pair: KeyPair,
         operation_encoded: OperationEncoded,
@@ -350,7 +350,7 @@ pub mod tests {
         case(15, None),
         case(16, None)
     )]
-    #[async_std::test]
+    #[tokio::test]
     async fn try_get_skiplink(
         #[case] seq_num: usize,
         #[case] expected_skiplink_seq_num: Option<usize>,
@@ -382,7 +382,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn try_get_skiplink_entry_missing(
         #[from(test_db)]
         #[with(4, 1, 1)]
@@ -427,7 +427,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn try_get_skiplink_invalid_skiplink(
         key_pair: KeyPair,
         operation_encoded: OperationEncoded,
@@ -478,7 +478,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn can_determine_next_skiplink(
         #[from(test_db)]
         #[with(17, 1, 1)]
@@ -504,7 +504,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn skiplink_does_not_exist(
         #[from(test_db)]
         #[with(17, 1, 1)]

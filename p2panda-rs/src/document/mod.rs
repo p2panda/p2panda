@@ -15,7 +15,7 @@
     doc = r##"
 ```
 # extern crate p2panda_rs;
-# #[async_std::main]
+# #[tokio::main]
 # async fn main() -> p2panda_rs::storage_provider::utils::Result<()> {
 # use p2panda_rs::hash::Hash;
 # use p2panda_rs::identity::KeyPair;

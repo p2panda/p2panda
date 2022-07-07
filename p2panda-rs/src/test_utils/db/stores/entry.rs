@@ -151,7 +151,7 @@ pub mod tests {
     };
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn insert_get_entry(
         entry_signed_encoded: EntrySigned,
         operation_encoded: OperationEncoded,
@@ -178,7 +178,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn get_latest_entry(
         entry_signed_encoded: EntrySigned,
         operation_encoded: OperationEncoded,
@@ -209,7 +209,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn get_by_schema(
         #[from(random_key_pair)] key_pair_1: KeyPair,
         #[from(random_key_pair)] key_pair_2: KeyPair,
@@ -240,7 +240,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn get_entry_by_hash(
         #[from(test_db)]
         #[with(3, 1, 1)]
@@ -292,7 +292,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn get_n_entries(
         key_pair: KeyPair,
         #[from(test_db)]
@@ -327,7 +327,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn get_cert_pool(
         key_pair: KeyPair,
         #[from(test_db)]

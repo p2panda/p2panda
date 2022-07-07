@@ -361,7 +361,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn resolve_documents(schema: SchemaId) {
         let panda = Client::new(
             "panda".to_string(),
@@ -572,7 +572,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn must_have_create_operation(#[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
         let mut node = Node::new();
@@ -620,7 +620,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn incorrect_previous_operations(
         #[from(random_key_pair)] key_pair_1: KeyPair,
         #[from(random_document_view_id)] incorrect_previous_operation: DocumentViewId,
@@ -677,7 +677,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn operation_schemas_not_matching(
         #[from(random_key_pair)] key_pair_1: KeyPair,
         #[from(random_operation_id)] create_operation_id: OperationId,
@@ -723,7 +723,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn is_deleted(#[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
         let mut node = Node::new();
@@ -757,7 +757,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn more_than_one_create(#[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
         let mut node = Node::new();
@@ -792,7 +792,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn doc_test() {
         let polar = Client::new(
             "polar".to_string(),
@@ -1015,7 +1015,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn builds_specific_document_view() {
         let panda = Client::new(
             "panda".to_string(),

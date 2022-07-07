@@ -352,7 +352,7 @@ mod tests {
     use super::TestStore;
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn test_the_test_db(
         #[from(test_db)]
         #[with(17, 1, 1)]

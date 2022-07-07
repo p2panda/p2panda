@@ -64,7 +64,7 @@ mod tests {
     use crate::test_utils::fixtures::{document_id, key_pair, schema};
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn insert_get_log(key_pair: KeyPair, schema: SchemaId, document_id: DocumentId) {
         // Instantiate a new store.
         let store = MemoryStore::default();
@@ -83,7 +83,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn get_next_log_id(key_pair: KeyPair, schema: SchemaId, document_id: DocumentId) {
         // Instantiate a new store.
         let store = MemoryStore::default();

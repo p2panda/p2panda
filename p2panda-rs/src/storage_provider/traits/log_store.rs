@@ -64,7 +64,7 @@ pub mod tests {
     use crate::storage_provider::traits::LogStore;
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn find_document_log_id(
         #[from(test_db)]
         #[with(3, 1, 1)]

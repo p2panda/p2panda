@@ -9,7 +9,7 @@
 //!
 //! ```
 //! # extern crate p2panda_rs;
-//! # #[async_std::main]
+//! # #[tokio::main]
 //! # async fn main() -> p2panda_rs::storage_provider::utils::Result<()> {
 //! use std::convert::TryFrom;
 //!

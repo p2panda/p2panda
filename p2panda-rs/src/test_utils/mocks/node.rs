@@ -9,8 +9,8 @@
 //!
 //! ```
 //! # extern crate p2panda_rs;
-//! # #[async_std::main]
-//! # async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+//! # #[tokio::main]
+//! # async fn main() -> p2panda_rs::storage_provider::utils::Result<()> {
 //! use p2panda_rs::operation::OperationValue;
 //! use p2panda_rs::schema::SchemaId;
 //! use p2panda_rs::test_utils::constants::SCHEMA_ID;
@@ -292,7 +292,7 @@ mod tests {
     use super::{send_to_node, Node};
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn publishing_entries(private_key: String) {
         let panda = Client::new("panda".to_string(), key_pair(&private_key));
         let mut node = Node::new();
@@ -512,7 +512,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn concurrent_updates(private_key: String) {
         let panda = Client::new("panda".to_string(), key_pair(&private_key));
         let penguin = Client::new(
@@ -637,7 +637,7 @@ mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn publish_many_entries() {
         let client = Client::new("panda".into(), KeyPair::new());
         let num_of_entries = 50;

@@ -284,7 +284,7 @@ pub mod tests {
     use super::StorageProvider;
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn can_publish_entries(
         #[from(test_db)]
         #[with(20, 1, 1)]
@@ -335,7 +335,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn rejects_invalid_backlink(
         key_pair: KeyPair,
         #[from(test_db)]
@@ -405,7 +405,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn rejects_invalid_skiplink(
         key_pair: KeyPair,
         #[from(test_db)]
@@ -475,7 +475,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn gets_entry_args(
         #[from(test_db)]
         #[with(20, 1, 1)]
@@ -542,7 +542,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn wrong_log_id(
         key_pair: KeyPair,
         #[from(test_db)]
@@ -605,7 +605,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn skiplink_does_not_exist(
         #[from(test_db)]
         #[with(8, 1, 1)]
@@ -652,7 +652,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn prev_op_does_not_exist(
         #[from(test_db)]
         #[with(4, 1, 1)]
@@ -715,7 +715,7 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn invalid_entry_op_pair(
         #[from(test_db)]
         #[with(4, 1, 1)]
