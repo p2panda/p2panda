@@ -411,7 +411,7 @@ mod tests {
             &mut node,
             &penguin,
             &update_operation(
-                &[("name", OperationValue::Text("Penguin Cafe".to_string()))],
+                &[("name", OperationValue::Text("Penguin Cafe!!!".to_string()))],
                 &panda_entry_1_hash.clone().into(),
             ),
         )
