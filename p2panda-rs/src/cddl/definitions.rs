@@ -331,6 +331,44 @@ mod tests {
             &OPERATION_FORMAT,
             &to_cbor(
                 cbor!({
+                    "action" => "create",
+                    "schema" => "menu_0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
+                    "version" => 1,
+                    "fields" => {
+                        // Empty fields
+                    },
+                })
+                .unwrap()
+            )
+        ).is_err());
+
+        assert!(validate_cbor(
+            &OPERATION_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "create",
+                    "schema" => "menu_0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
+                    "version" => 1,
+                    "fields" => {
+                        "national_dish" => {
+                            "value" => "Pumpkin",
+                            "type" => "str"
+                        },
+                        // Duplicate field
+                        "national_dish" => {
+                            "value" => 7.2,
+                            "type" => "float"
+                        },
+                    },
+                })
+                .unwrap()
+            )
+        ).is_err());
+
+        assert!(validate_cbor(
+            &OPERATION_FORMAT,
+            &to_cbor(
+                cbor!({
                     // Fields missing in UPDATE operation
                     "action" => "update",
                     "schema" => "menu_80f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
@@ -344,6 +382,50 @@ mod tests {
             )
         )
         .is_err());
+
+        assert!(validate_cbor(
+            &OPERATION_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "update",
+                    "schema" => "menu_0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
+                    "version" => 1,
+                    "previous_operations" => [
+                        "002062b773e62f48cdbbfd3e24956cffd3a9ccb0a844917f1cb726f17405b5e9e2ca",
+                    ],
+                    "fields" => {
+                        "national_dish" => {
+                            "value" => "Pumpkin",
+                            "type" => "str"
+                        },
+                        // Duplicate field
+                        "national_dish" => {
+                            "value" => 7.2,
+                            "type" => "float"
+                        },
+                    },
+                })
+                .unwrap()
+            )
+        ).is_err());
+
+        assert!(validate_cbor(
+            &OPERATION_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "update",
+                    "schema" => "menu_0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
+                    "version" => 1,
+                    "previous_operations" => [
+                        "002062b773e62f48cdbbfd3e24956cffd3a9ccb0a844917f1cb726f17405b5e9e2ca",
+                    ],
+                    "fields" => {
+                        // Empty fields
+                    },
+                })
+                .unwrap()
+            )
+        ).is_err());
 
         assert!(validate_cbor(
             &OPERATION_FORMAT,
@@ -590,6 +672,42 @@ mod tests {
             )
         )
         .is_err());
+
+        assert!(validate_cbor(
+            &SCHEMA_FIELD_V1_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "update",
+                    "schema" => "schema_field_definition_v1",
+                    "version" => 1,
+                    "previous_operations" => [
+                        "00208a5cbba0facc96f22fe3c283e05706c74801282bb7ba315fb5c77caa44689846",
+                        "0020e967334f97ac477bf1f53568e475376ae28687e272de3f3d0672ec6f2aa9be53",
+                    ],
+                    "fields" => {
+                        // Too many "type" fields ..
+                        "type" => {
+                            "value" => "relation",
+                            "type" => "str"
+                        },
+                        "type" => {
+                            "value" => "relation_list",
+                            "type" => "str"
+                        },
+                        "type" => {
+                            "value" => "pinned_relation",
+                            "type" => "str"
+                        },
+                        "type" => {
+                            "value" => "pinned_relation_list",
+                            "type" => "str"
+                        },
+                    },
+                })
+                .unwrap()
+            )
+        )
+        .is_err());
     }
 
     #[test]
@@ -631,18 +749,6 @@ mod tests {
                     "fields" => {
                         "type" => {
                             "value" => "relation",
-                            "type" => "str"
-                        },
-                        "type" => {
-                            "value" => "relation_list",
-                            "type" => "str"
-                        },
-                        "type" => {
-                            "value" => "pinned_relation",
-                            "type" => "str"
-                        },
-                        "type" => {
-                            "value" => "pinned_relation_list",
                             "type" => "str"
                         },
                     },
