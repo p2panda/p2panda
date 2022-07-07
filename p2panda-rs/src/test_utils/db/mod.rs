@@ -3,7 +3,6 @@
 //! Implementations of all `StorageProvider` traits.
 //!
 //! Used in the mock node and for testing.
-
 mod provider;
 mod stores;
 mod types;
