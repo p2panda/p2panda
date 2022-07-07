@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Fixed
+
+- Set log id default to `0` [#398](https://github.com/p2panda/p2panda/pull/398) `rs`
+
 ## [0.4.0]
 
 Released on 2022-07-01: :package: `p2panda-js` and :package: `p2panda-rs`
