@@ -173,6 +173,12 @@ create_fields = { name, type }
 update_fields = { + (name // type) }
 
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; Typed relations
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+typed_relations = tstr .regexp "(relation|relation_list|pinned_relation|pinned_relation_list)\\([A-Za-z]{1}[A-Za-z0-9_]{0,63}_([0-9A-Za-z]{68})(_[0-9A-Za-z]{68})*\\)"
+
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ; Fields
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -183,9 +189,8 @@ name = (
 type = (
     type: {
         type: "str",
-        value: "str" / "int" / "float" / "bool" / "relation" /
-            "relation_list" / "pinned_relation" / "pinned_relation_list",
-    }
+        value: "str" / "int" / "float" / "bool" / typed_relations,
+    },
 )
 "#;
 
@@ -740,8 +745,8 @@ mod tests {
                         },
                     },
                 })
-                .unwrap()
-            )
+                .unwrap(),
+            ),
         )
         .is_ok());
 
@@ -782,7 +787,7 @@ mod tests {
                     ],
                     "fields" => {
                         "type" => {
-                            "value" => "relation",
+                            "value" => "relation(meters_00208a5cbba0facc96f22fe3c283e05706c74801282bb7ba315fb5c77caa44689846)",
                             "type" => "str"
                         },
                     },
