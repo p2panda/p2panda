@@ -26,7 +26,7 @@ impl LogId {
 
 impl Default for LogId {
     fn default() -> Self {
-        Self::new(1)
+        Self::new(0)
     }
 }
 
@@ -71,10 +71,10 @@ mod tests {
         let mut log_id = LogId::default();
 
         let mut next_log_id = log_id.next().unwrap();
-        assert_eq!(next_log_id, LogId::new(2));
+        assert_eq!(next_log_id, LogId::new(1));
 
         let next_log_id = next_log_id.next().unwrap();
-        assert_eq!(next_log_id, LogId::new(3));
+        assert_eq!(next_log_id, LogId::new(2));
     }
 
     #[test]
