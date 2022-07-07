@@ -460,7 +460,7 @@ mod tests {
                                     "00206a98fffb0b1424ada1ed241b32da8287852d6b4eb37a1b381892c4fbd800e9e8",
                                 ],
                             ],
-                            "type" => "relation_list"
+                            "type" => "pinned_relation_list"
                         },
                     },
                 })
@@ -560,7 +560,7 @@ mod tests {
                                     "00206de69fe88aa24e0929bad2fc9808a0ce2aad8e6d8fb914f4a9178995a56b3435"
                                 ]
                             ],
-                            "type" => "relation_list"
+                            "type" => "pinned_relation_list"
                         },
                     },
                 })
@@ -604,10 +604,6 @@ mod tests {
                     "fields" => {
                         "name" => {
                             "value" => "Size",
-                            "type" => "str"
-                        },
-                        "description" => {
-                            "value" => "In centimeters",
                             "type" => "str"
                         },
                         "field_type" => {
@@ -687,11 +683,7 @@ mod tests {
                             "value" => "Size",
                             "type" => "str"
                         },
-                        // "description" field missing
-                        "field_type" => {
-                            "value" => "float",
-                            "type" => "str"
-                        },
+                        // "field_type" field missing
                     },
                 })
                 .unwrap()
