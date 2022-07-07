@@ -168,9 +168,9 @@ const CDDL_SCHEMA_FIELD_V1: &str = r#"
 
 schema_id = "schema_field_definition_v1"
 
-create_fields = { name, description, field_type }
+create_fields = { name, field_type }
 
-update_fields = { + (name // description // field_type) }
+update_fields = { + (name // field_type) }
 
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ; Fields
@@ -178,10 +178,6 @@ update_fields = { + (name // description // field_type) }
 
 name = (
     name: { value_text },
-)
-
-description = (
-    description: { value_text },
 )
 
 field_type = (
