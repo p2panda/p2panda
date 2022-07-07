@@ -9,6 +9,12 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+## Added
+- `MemoryStore` in memory implementation of storage traits [#383](https://github.com/p2panda/p2panda/pull/383) `rs`
+
+## Changed
+- Refactor mock `Node` implementation to use `StorageProvider` traits [#383](https://github.com/p2panda/p2panda/pull/383) `rs`
+
 ## [0.4.0]
 
 Released on 2022-07-01: :package: `p2panda-js` and :package: `p2panda-rs`
