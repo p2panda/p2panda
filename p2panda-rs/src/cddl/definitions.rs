@@ -306,6 +306,43 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_fields() {
+        let data = to_cbor(
+                cbor!({
+                    "action" => "create",
+                    "schema" => "menu_0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
+                    "version" => 1,
+                    "fields" => {
+                        "national_dish" => {
+                            "value" => "Pumpkin",
+                            "type" => "str"
+                        },
+                        // Duplicate field!
+                        "national_dish" => {
+                            "value" => 7.2,
+                            "type" => "float"
+                        },
+                    },
+                })
+                .unwrap()
+            );
+
+        // CDDL does not prevent the CBOR data to contain duplicate fields as it assumes that CBOR
+        // in itself does not allow that behaviour:
+        //
+        // Read more here: https://datatracker.ietf.org/doc/html/rfc8610#section-3.2 and
+        // https://datatracker.ietf.org/doc/html/rfc7049#section-3.7
+        //
+        // We can still imagine binary data containing duplicate fields coming in (for example
+        // encoded with a tool which did not check against the CBOR standard, like this `cbor!`
+        // macro), in this case our checks would still pass!
+        //
+        // We need another instance making sure that an error gets returned and duplicate fields
+        // are disallowed.
+        assert!(validate_cbor(&OPERATION_FORMAT, &data,).is_ok());
+    }
+
+    #[test]
     fn invalid_operations() {
         assert!(validate_cbor(
             &OPERATION_FORMAT,
@@ -346,29 +383,6 @@ mod tests {
             &OPERATION_FORMAT,
             &to_cbor(
                 cbor!({
-                    "action" => "create",
-                    "schema" => "menu_0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
-                    "version" => 1,
-                    "fields" => {
-                        "national_dish" => {
-                            "value" => "Pumpkin",
-                            "type" => "str"
-                        },
-                        // Duplicate field
-                        "national_dish" => {
-                            "value" => 7.2,
-                            "type" => "float"
-                        },
-                    },
-                })
-                .unwrap()
-            )
-        ).is_err());
-
-        assert!(validate_cbor(
-            &OPERATION_FORMAT,
-            &to_cbor(
-                cbor!({
                     // Fields missing in UPDATE operation
                     "action" => "update",
                     "schema" => "menu_80f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
@@ -382,32 +396,6 @@ mod tests {
             )
         )
         .is_err());
-
-        assert!(validate_cbor(
-            &OPERATION_FORMAT,
-            &to_cbor(
-                cbor!({
-                    "action" => "update",
-                    "schema" => "menu_0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
-                    "version" => 1,
-                    "previous_operations" => [
-                        "002062b773e62f48cdbbfd3e24956cffd3a9ccb0a844917f1cb726f17405b5e9e2ca",
-                    ],
-                    "fields" => {
-                        "national_dish" => {
-                            "value" => "Pumpkin",
-                            "type" => "str"
-                        },
-                        // Duplicate field
-                        "national_dish" => {
-                            "value" => 7.2,
-                            "type" => "float"
-                        },
-                    },
-                })
-                .unwrap()
-            )
-        ).is_err());
 
         assert!(validate_cbor(
             &OPERATION_FORMAT,
