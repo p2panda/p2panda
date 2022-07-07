@@ -93,12 +93,12 @@ use crate::storage_provider::traits::test_utils::send_to_store;
 use crate::storage_provider::traits::{
     AsStorageEntry, AsStorageLog, DocumentStore, LogStore, OperationStore, StorageProvider,
 };
+use crate::storage_provider::utils::Result;
 use crate::test_utils::db::{
     EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse, StorageLog,
 };
 use crate::test_utils::db::{MemoryStore, StorageEntry};
 use crate::test_utils::mocks::Client;
-use crate::test_utils::utils::Result;
 
 /// Mock node which simulates the functionality of a real node in the p2panda.
 ///

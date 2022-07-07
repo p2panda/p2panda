@@ -14,6 +14,7 @@ use crate::operation::{
 };
 use crate::schema::SchemaId;
 use crate::storage_provider::traits::{OperationStore, StorageProvider};
+use crate::storage_provider::utils::Result;
 use crate::test_utils::constants::{PRIVATE_KEY, SCHEMA_ID};
 use crate::test_utils::db::{
     EntryArgsRequest, MemoryStore, PublishEntryRequest, PublishEntryResponse, StorageLog,
@@ -265,7 +266,7 @@ pub async fn send_to_store(
     store: &MemoryStore,
     operation: &Operation,
     key_pair: &KeyPair,
-) -> Result<(EntrySigned, PublishEntryResponse), Box<dyn std::error::Error + Sync + Send>> {
+) -> Result<(EntrySigned, PublishEntryResponse)> {
     // Get an Author from the key_pair.
     let author = Author::try_from(key_pair.public_key().to_owned())?;
 

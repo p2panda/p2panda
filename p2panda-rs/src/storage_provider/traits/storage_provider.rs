@@ -12,6 +12,7 @@ use crate::storage_provider::traits::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
     AsStorageEntry, AsStorageLog, EntryStore, LogStore, OperationStore,
 };
+use crate::storage_provider::utils::Result;
 use crate::Validate;
 
 /// Trait which handles all high level storage queries and insertions.
@@ -60,17 +61,14 @@ pub trait StorageProvider<
     ///
     /// If the passed entry cannot be found, or it's associated document doesn't exist yet, `None`
     /// is returned.
-    async fn get_document_by_entry(
-        &self,
-        entry_hash: &Hash,
-    ) -> Result<Option<DocumentId>, Box<dyn std::error::Error + Send + Sync>>;
+    async fn get_document_by_entry(&self, entry_hash: &Hash) -> Result<Option<DocumentId>>;
 
     /// Returns required data (backlink and skiplink entry hashes, last sequence number and the
     /// document's log_id) to encode a new bamboo entry.
     async fn get_entry_args(
         &self,
         params: &Self::EntryArgsRequest,
-    ) -> Result<Self::EntryArgsResponse, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Self::EntryArgsResponse> {
         info!(
             "Get entry args request recieved for author: {} {}",
             params.author(),
@@ -144,7 +142,7 @@ pub trait StorageProvider<
     async fn publish_entry(
         &self,
         params: &Self::PublishEntryRequest,
-    ) -> Result<Self::PublishEntryResponse, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Self::PublishEntryResponse> {
         info!(
             "Publish entry request recieved from {} containing entry: {}",
             params.entry_signed().author(),
