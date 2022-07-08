@@ -98,3 +98,46 @@ where
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use serde::Deserialize;
+
+    use super::StringOrU64;
+
+    #[test]
+    fn deserialize_str_and_u64() {
+        #[derive(PartialEq, Eq, Debug)]
+        struct Test(u64);
+
+        impl From<u64> for Test {
+            fn from(value: u64) -> Self {
+                Self(value)
+            }
+        }
+
+        impl FromStr for Test {
+            type Err = Box<dyn std::error::Error>;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Ok(Test(u64::from_str(s)?))
+            }
+        }
+
+        impl<'de> Deserialize<'de> for Test {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                deserializer.deserialize_any(StringOrU64::<Test>::new())
+            }
+        }
+
+        let mut cbor_bytes = Vec::new();
+        ciborium::ser::into_writer("12", &mut cbor_bytes).unwrap();
+        let result: Test = ciborium::de::from_reader(&cbor_bytes[..]).unwrap();
+        assert_eq!(result, Test(12));
+    }
+}
