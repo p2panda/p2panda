@@ -267,19 +267,22 @@ pub mod tests {
     use rstest::rstest;
 
     use crate::document::DocumentId;
-    use crate::entry::{sign_and_encode, Entry, LogId};
-    use crate::identity::KeyPair;
+    use crate::entry::{sign_and_encode, Entry, LogId, SeqNum};
+    use crate::identity::{Author, KeyPair};
     use crate::operation::{
-        AsOperation, OperationEncoded, OperationFields, OperationId, OperationValue,
+        AsOperation, Operation, OperationEncoded, OperationFields, OperationId, OperationValue,
     };
     use crate::storage_provider::traits::test_utils::{test_db, TestStore};
     use crate::storage_provider::traits::{
         AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry,
     };
+    use crate::test_utils::constants::SCHEMA_ID;
     use crate::test_utils::db::{
         EntryArgsRequest, EntryArgsResponse, MemoryStore, PublishEntryRequest, PublishEntryResponse,
     };
-    use crate::test_utils::fixtures::{entry, key_pair, operation, operation_fields, operation_id};
+    use crate::test_utils::fixtures::{
+        entry, key_pair, operation, operation_fields, operation_id, random_document_id,
+    };
 
     use super::StorageProvider;
 
@@ -487,6 +490,7 @@ pub mod tests {
         let new_db = MemoryStore::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
+        let document_id = db.test_data.documents.first().unwrap().to_owned();
 
         for seq_num in 1..20 {
             let entry = entries
@@ -494,19 +498,10 @@ pub mod tests {
                 .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
                 .unwrap();
 
-            let is_create = entry.operation().is_create();
-
-            // Determine document id
-            let document_id: Option<DocumentId> = match is_create {
-                true => None,
-                false => Some(
-                    entries
-                        .values()
-                        .find(|entry| entry.seq_num().as_u64() as usize == 1)
-                        .unwrap()
-                        .hash()
-                        .into(),
-                ),
+            let document_id = if entry.operation().is_create() {
+                None
+            } else {
+                Some(document_id.clone())
             };
 
             // Construct entry args request
@@ -543,6 +538,114 @@ pub mod tests {
 
     #[rstest]
     #[tokio::test]
+    async fn publish_entry_multi_writer_update(
+        #[from(test_db)]
+        #[with(1, 1, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let document_id = db.test_data.documents.first().unwrap();
+
+        // Compose an update operation with previous operations pointing at an existing document.
+        let operation = Operation::new_update(
+            SCHEMA_ID.parse().unwrap(),
+            document_id.as_str().parse().unwrap(),
+            operation_fields(vec![("username", OperationValue::Text("yo".to_string()))]),
+        )
+        .unwrap();
+
+        // Encode it on the first entry in a new log for new author.
+        let entry = Entry::new(
+            &LogId::new(1),
+            Some(&operation),
+            None,
+            None,
+            &SeqNum::new(1).unwrap(),
+        )
+        .unwrap();
+        let entry_signed = sign_and_encode(&entry, &KeyPair::new()).unwrap();
+
+        // A publish entry request containing the above entry and operation.
+        let publish_entry_request = PublishEntryRequest {
+            entry: entry_signed.clone(),
+            operation: OperationEncoded::try_from(&operation).unwrap(),
+        };
+
+        // Publish the entry and get the response.
+        let publish_entry_response = db
+            .store
+            .publish_entry(&publish_entry_request)
+            .await
+            .unwrap();
+
+        // The response we expect.
+        let expected_publish_entry_result = PublishEntryResponse::new(
+            Some(entry_signed.hash()),
+            None,
+            SeqNum::new(2).unwrap(),
+            LogId::new(1),
+        );
+
+        assert_eq!(publish_entry_response, expected_publish_entry_result)
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn get_entry_args_multi_writer_update(
+        #[from(test_db)]
+        #[with(1, 1, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let document_id = db.test_data.documents.first().cloned();
+
+        // Request containing correct document id.
+        let entry_args_request = EntryArgsRequest {
+            public_key: Author::try_from(KeyPair::new().public_key().to_owned()).unwrap(),
+            document_id,
+        };
+
+        let entry_args_response = db.store.get_entry_args(&entry_args_request).await.unwrap();
+        let expected_entry_args_response =
+            EntryArgsResponse::new(None, None, SeqNum::new(1).unwrap(), LogId::new(1));
+
+        // Correct request returns the expected next entry args.
+        assert_eq!(entry_args_response, expected_entry_args_response);
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn get_entry_args_non_existand_document_id(
+        #[from(test_db)]
+        #[with(1, 1, 1)]
+        #[future]
+        db: TestStore,
+        #[from(random_document_id)] document_id: DocumentId,
+    ) {
+        let db = db.await;
+        let key_pair = db.test_data.key_pairs.first().unwrap();
+
+        // Request containing non-existent document id.
+        let entry_args_request = EntryArgsRequest {
+            public_key: Author::try_from(key_pair.public_key().to_owned()).unwrap(),
+            document_id: Some(document_id),
+        };
+
+        let entry_args_response = db.store.get_entry_args(&entry_args_request).await.unwrap();
+
+        // The response contains args for a new log at sequence number 1.
+        //
+        // @TODO: This is the current behaviour but it may not be what we want.
+        let expected_entry_args_response =
+            EntryArgsResponse::new(None, None, SeqNum::new(1).unwrap(), LogId::new(2));
+
+        assert_eq!(entry_args_response, expected_entry_args_response);
+    }
+
+    #[rstest]
+    #[tokio::test]
     async fn wrong_log_id(
         key_pair: KeyPair,
         #[from(test_db)]
@@ -555,7 +658,6 @@ pub mod tests {
         let new_db = MemoryStore::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
-
         let entry_one = entries
             .values()
             .find(|entry| entry.seq_num().as_u64() as usize == 1)
