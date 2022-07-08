@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+- Deserialize from string and u64 for `LogId` and `SeqNum` [#401](https://github.com/p2panda/p2panda/pull/401) `rs`
+
 ## [0.4.0]
 
 Released on 2022-07-01: :package: `p2panda-js` and :package: `p2panda-rs`
