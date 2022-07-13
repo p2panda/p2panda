@@ -189,6 +189,7 @@ mod tests {
     #[case("1", Some(SeqNum::new(1).unwrap()))]
     #[case(12, Some(SeqNum::new(12).unwrap()))]
     #[case("-1", None)]
+    #[case(-12, None)]
     #[case("0", None)]
     #[case("Not a sequence number", None)]
     fn deserialize_str_and_u64(

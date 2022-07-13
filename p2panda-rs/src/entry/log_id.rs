@@ -45,7 +45,7 @@ impl From<u64> for LogId {
     }
 }
 
-/// Convert any borrowed string representation of an u64 integer into an `LogId` instance.
+/// Convert any borrowed string representation of an u64 integer into a `LogId` instance.
 impl FromStr for LogId {
     type Err = LogIdError;
 
@@ -56,7 +56,7 @@ impl FromStr for LogId {
     }
 }
 
-/// Convert any owned string representation of an u64 integer into an `LogId` instance.
+/// Convert any owned string representation of an u64 integer into a `LogId` instance.
 impl TryFrom<String> for LogId {
     type Error = LogIdError;
 
@@ -110,6 +110,7 @@ mod tests {
     #[case(12, Some(LogId::new(12)))]
     #[case("12", Some(LogId::new(12)))]
     #[case(u64::MAX, Some(LogId::new(u64::MAX)))]
+    #[case(-12, None)]
     #[case("-12", None)]
     #[case("Not a log id", None)]
     fn deserialize_str_and_u64(

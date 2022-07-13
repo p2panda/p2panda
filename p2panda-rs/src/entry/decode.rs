@@ -59,7 +59,7 @@ pub fn decode_entry(
     .unwrap())
 }
 
-/// Visitor which can be used to deserialize a string or u64 integer to a type T.
+/// Visitor which can be used to deserialize a `String` or `u64` integer to a type T.
 pub struct StringOrU64<T>(PhantomData<T>);
 
 impl<T> StringOrU64<T> {
