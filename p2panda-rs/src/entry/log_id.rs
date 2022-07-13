@@ -13,7 +13,7 @@ use crate::entry::error::LogIdError;
 pub struct LogId(u64);
 
 impl LogId {
-    /// Validates and wraps log id value into a new `LogId` instance.
+    /// Returns a new `LogId` instance.
     pub fn new(value: u64) -> Self {
         Self(value)
     }
@@ -34,7 +34,13 @@ impl Iterator for LogId {
     type Item = LogId;
 
     fn next(&mut self) -> Option<Self::Item> {
-        Some(Self(self.0 + 1))
+        match self.0 == std::u64::MAX {
+            true => None,
+            false => {
+                self.0 += 1;
+                Some(*self)
+            }
+        }
     }
 }
 
@@ -75,6 +81,20 @@ mod tests {
 
         let next_log_id = next_log_id.next().unwrap();
         assert_eq!(next_log_id, LogId::new(2));
+    }
+
+    #[test]
+    fn iterator() {
+        let mut log_id = LogId::default();
+
+        assert_eq!(Some(LogId(1)), log_id.next());
+        assert_eq!(Some(LogId(2)), log_id.next());
+        assert_eq!(Some(LogId(3)), log_id.next());
+
+        let mut log_id = LogId(std::u64::MAX - 1);
+
+        assert_eq!(Some(LogId(std::u64::MAX)), log_id.next());
+        assert_eq!(None, log_id.next());
     }
 
     #[test]
