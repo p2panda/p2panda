@@ -83,7 +83,7 @@ where
         E: serde::de::Error,
     {
         let result = FromStr::from_str(value)
-            .map_err(|_| serde::de::Error::custom("Invalid log id string"))?;
+            .map_err(|_| serde::de::Error::custom("Invalid string value"))?;
 
         Ok(result)
     }
@@ -93,7 +93,7 @@ where
         E: serde::de::Error,
     {
         let result = TryInto::<Self::Value>::try_into(value)
-            .map_err(|_| serde::de::Error::custom("Invalid log id u64 integer"))?;
+            .map_err(|_| serde::de::Error::custom("Invalid u64 value"))?;
 
         Ok(result)
     }
