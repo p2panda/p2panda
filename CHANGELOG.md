@@ -13,6 +13,11 @@ Highlights are marked with a pancake 🥞
 
 - Deserialize from string and u64 for `LogId` and `SeqNum` [#401](https://github.com/p2panda/p2panda/pull/401) `rs`
 
+### Fixed
+
+- Set log id default to `0` [#398](https://github.com/p2panda/p2panda/pull/398) `rs`
+- Fix iterator implementations for `SeqNum` and `LogId` [#404](https://github.com/p2panda/p2panda/pull/404) `rs`
+
 ## [0.4.0]
 
 Released on 2022-07-01: :package: `p2panda-js` and :package: `p2panda-rs`
