@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+- Deserialize from string and u64 for `LogId` and `SeqNum` [#401](https://github.com/p2panda/p2panda/pull/401) `rs`
+
 ### Fixed
 
 - Set log id default to `0` [#398](https://github.com/p2panda/p2panda/pull/398) `rs`
