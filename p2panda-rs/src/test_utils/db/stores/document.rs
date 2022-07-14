@@ -177,7 +177,7 @@ mod tests {
         // Get one entry from the pre-polulated db
         let entry = db
             .store
-            .get_entry_at_seq_num(&author, &LogId::new(1), &SeqNum::new(1).unwrap())
+            .get_entry_at_seq_num(&author, &LogId::default(), &SeqNum::new(1).unwrap())
             .await
             .unwrap()
             .unwrap();

@@ -46,7 +46,7 @@ impl LogStore<StorageLog> for MemoryStore {
         let logs = self.logs.lock().unwrap();
 
         let author_logs = logs.values().filter(|log| log.author() == *author);
-        let next_log_id = author_logs.count() + 1;
+        let next_log_id = author_logs.count();
         Ok(LogId::new(next_log_id as u64))
     }
 }
@@ -99,6 +99,6 @@ mod tests {
         assert!(store.insert_log(log).await.is_ok());
 
         let log_id = store.next_log_id(&author).await.unwrap();
-        assert_eq!(log_id, LogId::new(2));
+        assert_eq!(log_id, LogId::new(1));
     }
 }
