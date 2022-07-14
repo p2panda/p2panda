@@ -19,7 +19,7 @@ use crate::test_utils::db::{
 
 type AuthorPlusLogId = String;
 
-/// An in memory implementation of p2panda storage provider traits.
+/// An in-memory implementation of p2panda storage provider traits.
 ///
 /// Primarily used in testing environments.
 #[derive(Default, Debug, Clone)]
