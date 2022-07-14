@@ -577,7 +577,7 @@ pub mod tests {
 
         // Create a new second entry with an invalid log id
         let entry_with_wrong_log_id = Entry::new(
-            &LogId::new(2), // This is wrong!!
+            &LogId::new(1), // This is wrong!!
             Some(&entry_two.operation()),
             entry_two.skiplink_hash().as_ref(),
             entry_two.backlink_hash().as_ref(),
@@ -600,7 +600,7 @@ pub mod tests {
 
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
-            "Requested log id 2 does not match expected log id 1"
+            "Requested log id 1 does not match expected log id 0"
         )
     }
 

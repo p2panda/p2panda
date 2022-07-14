@@ -57,7 +57,7 @@ use crate::test_utils::fixtures::{key_pair, operation, operation_fields, random_
 #[fixture]
 pub fn entry(
     #[default(1)] seq_num: u64,
-    #[default(1)] log_id: u64,
+    #[default(0)] log_id: u64,
     #[default(None)] backlink: Option<Hash>,
     #[default(None)] skiplink: Option<Hash>,
     #[default(Some(operation(Some(operation_fields(test_fields())), None, None)))]
@@ -115,7 +115,7 @@ pub fn entry(
 /// # }
 /// ```
 #[fixture]
-pub fn entry_auto_gen_links(#[default(1)] seq_num: u64, #[default(1)] log_id: u64) -> Entry {
+pub fn entry_auto_gen_links(#[default(1)] seq_num: u64, #[default(0)] log_id: u64) -> Entry {
     let backlink = match seq_num {
         1 => None,
         _ => Some(random_hash()),
@@ -157,7 +157,7 @@ pub fn entry_signed_encoded(entry: Entry, key_pair: KeyPair) -> EntrySigned {
 #[fixture]
 pub fn entry_signed_encoded_unvalidated(
     #[default(1)] seq_num: u64,
-    #[default(1)] log_id: u64,
+    #[default(0)] log_id: u64,
     #[default(None)] backlink: Option<Hash>,
     #[default(None)] skiplink: Option<Hash>,
     #[default(Some(operation(Some(operation_fields(test_fields())), None, None)))]

@@ -103,7 +103,13 @@ impl Iterator for SeqNum {
     type Item = SeqNum;
 
     fn next(&mut self) -> Option<Self::Item> {
-        Some(Self(self.0 + 1))
+        match self.0 == std::u64::MAX {
+            true => None,
+            false => {
+                self.0 += 1;
+                Some(*self)
+            }
+        }
     }
 }
 
@@ -135,6 +141,19 @@ mod tests {
     fn validate() {
         assert!(SeqNum::new(0).is_err());
         assert!(SeqNum::new(100).is_ok());
+    }
+
+    #[test]
+    fn iterator() {
+        let mut seq_num = SeqNum::new(1).unwrap();
+
+        assert_eq!(Some(SeqNum(2)), seq_num.next());
+        assert_eq!(Some(SeqNum(3)), seq_num.next());
+
+        seq_num = SeqNum(std::u64::MAX - 1);
+
+        assert_eq!(Some(SeqNum(std::u64::MAX)), seq_num.next());
+        assert_eq!(None, seq_num.next());
     }
 
     #[test]

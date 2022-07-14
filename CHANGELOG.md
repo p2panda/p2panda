@@ -15,11 +15,16 @@ Highlights are marked with a pancake 🥞
 ## Changed
 - Refactor mock `Node` implementation to use `StorageProvider` traits [#383](https://github.com/p2panda/p2panda/pull/383) `rs`
 
+### Fixed
+
+- Set log id default to `0` [#398](https://github.com/p2panda/p2panda/pull/398) `rs`
+- Fix iterator implementations for `SeqNum` and `LogId` [#404](https://github.com/p2panda/p2panda/pull/404) `rs`
+
 ## [0.4.0]
 
 Released on 2022-07-01: :package: `p2panda-js` and :package: `p2panda-rs`
 
-## Added
+### Added
 
 - `Document` for sorting and reducing a graph of `Operations` [#169](https://github.com/p2panda/p2panda/pull/169) `rs` 🥞
 - Derive `Ord` and `PartialOrd` for `LogId` [#201](https://github.com/p2panda/p2panda/pull/201) `rs`
@@ -45,7 +50,7 @@ Released on 2022-07-01: :package: `p2panda-js` and :package: `p2panda-rs`
 - Materialise a document at a specific document view [#337](https://github.com/p2panda/p2panda/pull/337) `rs`
 - Static definitions of system schemas and other updates for schema provider in aquadoggo [#365](https://github.com/p2panda/p2panda/pull/365) `rs`
 
-## Changed
+### Changed
 
 - `Instance` renamed to `DocumentView` [#169](https://github.com/p2panda/p2panda/pull/169) `rs`
 - Fix letter casing in operations [#230](https://github.com/p2panda/p2panda/pull/230) `rs` `js`
@@ -78,14 +83,14 @@ Released on 2022-07-01: :package: `p2panda-js` and :package: `p2panda-rs`
 - `Session` interface using GraphQL [#364](https://github.com/p2panda/p2panda/pull/377) `js`
 - Updated dependencies, remove `automock` crate [#379](https://github.com/p2panda/p2panda/pull/379) `rs`
 
-## Fixed
+### Fixed
 
 - Fix determination of field types in p2panda-js [#202](https://github.com/p2panda/p2panda/pull/202) `js`
 - Fix equality of document view ids by sorting before comparison [#284](https://github.com/p2panda/p2panda/pull/284) `js`
 - Pin all versions in `Cargo.toml` to avoid unexpected crate updates [#299](https://github.com/p2panda/p2panda/pull/299) `rs`
 - Fix document test needing `testing` feature to be activated [#350](https://github.com/p2panda/p2panda/pull/350) `rs`
 
-## Everything burrito
+### Everything burrito
 
 - Easier to read CDDL schema error strings [#207](https://github.com/p2panda/p2panda/pull/207) `rs`
 - Force cache cleanup to fix code coverage report [#231](https://github.com/p2panda/p2panda/pull/231)

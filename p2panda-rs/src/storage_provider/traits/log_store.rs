@@ -81,6 +81,6 @@ pub mod tests {
             .find_document_log_id(&author, Some(document_id))
             .await
             .unwrap();
-        assert_eq!(log_id, LogId::new(1));
+        assert_eq!(log_id, LogId::new(0));
     }
 }

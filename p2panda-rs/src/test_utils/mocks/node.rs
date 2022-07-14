@@ -305,7 +305,7 @@ mod tests {
 
         // These are the next_entry_args we would expect to get when making a request to this node.
         let mut expected_next_entry_args = NextEntryArgs {
-            log_id: LogId::new(1),
+            log_id: LogId::new(0),
             seq_num: SeqNum::new(1).unwrap(),
             backlink: None,
             skiplink: None,
@@ -336,7 +336,7 @@ mod tests {
 
         // The seq_num has incremented to 2 because panda already published one entry.
         expected_next_entry_args = NextEntryArgs {
-            log_id: LogId::new(1),
+            log_id: LogId::new(0),
             seq_num: SeqNum::new(2).unwrap(),
             backlink: Some(panda_entry_1_hash.clone()),
             skiplink: None,
@@ -369,7 +369,7 @@ mod tests {
         .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
-            log_id: LogId::new(1),
+            log_id: LogId::new(0),
             seq_num: SeqNum::new(3).unwrap(),
             backlink: Some(panda_entry_2_hash.clone()),
             skiplink: None,
@@ -390,7 +390,7 @@ mod tests {
             .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
-            log_id: LogId::new(1),
+            log_id: LogId::new(0),
             seq_num: SeqNum::new(1).unwrap(),
             backlink: None,
             skiplink: None,
@@ -421,7 +421,7 @@ mod tests {
         .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
-            log_id: LogId::new(1),
+            log_id: LogId::new(0),
             seq_num: SeqNum::new(2).unwrap(),
             backlink: Some(penguin_entry_1_hash.clone()),
             skiplink: None,
@@ -454,7 +454,7 @@ mod tests {
         .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
-            log_id: LogId::new(1),
+            log_id: LogId::new(0),
             seq_num: SeqNum::new(3).unwrap(),
             backlink: Some(penguin_entry_2_hash),
             skiplink: None,
@@ -495,7 +495,7 @@ mod tests {
         .unwrap();
 
         expected_next_entry_args = NextEntryArgs {
-            log_id: LogId::new(2),
+            log_id: LogId::new(1),
             seq_num: SeqNum::new(2).unwrap(),
             backlink: Some(panda_entry_1_hash),
             skiplink: None,
