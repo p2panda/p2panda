@@ -98,8 +98,10 @@ pub mod tests {
             let logs = self.logs.lock().unwrap();
 
             let author_logs = logs.iter().filter(|log| log.author() == *author);
-            let next_log_id = author_logs.count() + 1;
-            Ok(LogId::new(next_log_id as u64))
+            let count = author_logs.count() as u64;
+            let next_log_id: u64 = if count > 0 { count + 1 } else { 0 };
+
+            Ok(LogId::new(next_log_id))
         }
     }
 
@@ -158,6 +160,6 @@ pub mod tests {
             .find_document_log_id(&author, Some(document_id))
             .await
             .unwrap();
-        assert_eq!(log_id, LogId::new(1));
+        assert_eq!(log_id, LogId::new(0));
     }
 }

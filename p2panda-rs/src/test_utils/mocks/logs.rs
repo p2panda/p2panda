@@ -186,7 +186,7 @@ impl AuthorLogs {
 
     /// Get the next available log id for this author.
     pub fn next_log_id(&self) -> LogId {
-        LogId::new((self.0.len() + 1) as u64)
+        LogId::new(self.0.len() as u64)
     }
 
     /// Find the log id for the given document.
@@ -266,31 +266,31 @@ mod tests {
     #[rstest]
     fn author_logs(entry_signed_encoded: EntrySigned, operation_encoded: OperationEncoded) {
         let mut author_logs = AuthorLogs::new();
+
         author_logs.create_new_log(
             entry_signed_encoded.hash(),
             &entry_signed_encoded,
             &operation_encoded,
         );
-
         assert_eq!(author_logs.len(), 1);
         assert_eq!(
             author_logs
                 .get_log_by_document_id(&entry_signed_encoded.hash())
                 .unwrap()
                 .id(),
-            LogId::new(1)
+            LogId::new(0)
         );
-        assert_eq!(author_logs.next_log_id(), LogId::new(2));
+        assert_eq!(author_logs.next_log_id(), LogId::new(1));
         assert_eq!(
             author_logs.get_document_log_id(&entry_signed_encoded.hash()),
-            LogId::new(1)
+            LogId::new(0)
         );
         assert_eq!(
             author_logs
                 .find_document_log_by_entry(&entry_signed_encoded.hash())
                 .unwrap()
                 .id(),
-            LogId::new(1)
+            LogId::new(0)
         );
     }
 }
