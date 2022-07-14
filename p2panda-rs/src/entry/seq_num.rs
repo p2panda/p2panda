@@ -209,12 +209,15 @@ mod tests {
     #[case(12, Some(SeqNum::new(12).unwrap()))]
     #[case("-1", None)]
     #[case(-12, None)]
+    #[case("18446744073709551616", None)] // u64::MAX + 1
     #[case("0", None)]
     #[case("Not a sequence number", None)]
     fn deserialize_str_and_u64(
         #[case] value: impl Serialize + Sized,
         #[case] expected_result: Option<SeqNum>,
     ) {
+        println!("{}", u64::MAX);
+
         fn convert<T: Serialize + Sized>(value: T) -> Result<SeqNum, Box<dyn std::error::Error>> {
             let mut cbor_bytes = Vec::new();
             ciborium::ser::into_writer(&value, &mut cbor_bytes)?;

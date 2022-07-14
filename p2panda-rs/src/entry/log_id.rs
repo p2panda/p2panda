@@ -130,6 +130,7 @@ mod tests {
     #[case(12, Some(LogId::new(12)))]
     #[case("12", Some(LogId::new(12)))]
     #[case(u64::MAX, Some(LogId::new(u64::MAX)))]
+    #[case("18446744073709551616", None)] // u64::MAX + 1
     #[case(-12, None)]
     #[case("-12", None)]
     #[case("Not a log id", None)]
