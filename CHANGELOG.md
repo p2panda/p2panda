@@ -9,10 +9,12 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
-## Added
+### Added
+
 - `MemoryStore` in memory implementation of storage traits [#383](https://github.com/p2panda/p2panda/pull/383) `rs`
 
-## Changed
+### Changed
+
 - Refactor mock `Node` implementation to use `StorageProvider` traits [#383](https://github.com/p2panda/p2panda/pull/383) `rs`
 
 ### Fixed
