@@ -7,6 +7,7 @@ use std::str::FromStr;
 use bamboo_rs_core_ed25519_yasmf::lipmaa;
 use serde::{Deserialize, Serialize};
 
+use crate::entry::decode::StringOrU64;
 use crate::entry::SeqNumError;
 use crate::Validate;
 
@@ -14,7 +15,7 @@ use crate::Validate;
 pub const FIRST_SEQ_NUM: u64 = 1;
 
 /// Sequence number describing the position of an entry in its append-only log.
-#[derive(Clone, Copy, Debug, Serialize, Eq, PartialEq, StdHash, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Eq, PartialEq, StdHash)]
 pub struct SeqNum(u64);
 
 impl SeqNum {
@@ -113,6 +114,14 @@ impl Iterator for SeqNum {
     }
 }
 
+impl TryFrom<u64> for SeqNum {
+    type Error = SeqNumError;
+
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
 /// Convert any borrowed string representation of an u64 integer into an `SeqNum` instance.
 impl FromStr for SeqNum {
     type Err = SeqNumError;
@@ -131,9 +140,21 @@ impl TryFrom<String> for SeqNum {
     }
 }
 
+impl<'de> Deserialize<'de> for SeqNum {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_any(StringOrU64::<SeqNum>::new())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::convert::TryFrom;
+
+    use rstest::rstest;
+    use serde::Serialize;
 
     use super::SeqNum;
 
@@ -181,5 +202,36 @@ mod tests {
         let seq_num_try_from = SeqNum::try_from(String::from(large_number)).unwrap();
         assert_eq!(91772991776239, seq_num_from_str.as_u64());
         assert_eq!(seq_num_from_str, seq_num_try_from);
+    }
+
+    #[rstest]
+    #[case("1", Some(SeqNum::new(1).unwrap()))]
+    #[case(12, Some(SeqNum::new(12).unwrap()))]
+    #[case("-1", None)]
+    #[case(-12, None)]
+    #[case("18446744073709551616", None)] // u64::MAX + 1
+    #[case("0", None)]
+    #[case("Not a sequence number", None)]
+    fn deserialize_str_and_u64(
+        #[case] value: impl Serialize + Sized,
+        #[case] expected_result: Option<SeqNum>,
+    ) {
+        println!("{}", u64::MAX);
+
+        fn convert<T: Serialize + Sized>(value: T) -> Result<SeqNum, Box<dyn std::error::Error>> {
+            let mut cbor_bytes = Vec::new();
+            ciborium::ser::into_writer(&value, &mut cbor_bytes)?;
+            let log_id: SeqNum = ciborium::de::from_reader(&cbor_bytes[..])?;
+            Ok(log_id)
+        }
+
+        match expected_result {
+            Some(result) => {
+                assert_eq!(convert(value).unwrap(), result);
+            }
+            None => {
+                assert!(convert(value).is_err());
+            }
+        }
     }
 }

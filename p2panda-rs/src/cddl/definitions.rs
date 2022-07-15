@@ -101,7 +101,10 @@ const CDDL_ANY_OPERATION: &str = r#"
 ; sorted hex-encoded operation ids, separated by underscores.
 application_schema_id = tstr .regexp "[A-Za-z]{1}[A-Za-z0-9_]{0,63}_([0-9A-Za-z]{68})(_[0-9A-Za-z]{68})*"
 
+; Constant system schema ids as per p2panda specification.
 system_schema_id = "schema_definition_v1" / "schema_field_definition_v1"
+
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 schema_id =  system_schema_id / application_schema_id
 
@@ -129,7 +132,7 @@ fields = {
 
 const CDDL_SCHEMA_V1: &str = r#"
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-; System Schema "Schema" v1
+; System Schema "schema_definition_v1"
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 schema_id = "schema_definition_v1"
@@ -152,7 +155,7 @@ description = (
 
 fields = (
     fields: {
-        type: "relation_list",
+        type: "pinned_relation_list",
         value: pinned_relation_list,
     },
 )
@@ -160,14 +163,20 @@ fields = (
 
 const CDDL_SCHEMA_FIELD_V1: &str = r#"
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-; System Schema "Schema field" v1
+; System Schema "schema_field_definition_v1"
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 schema_id = "schema_field_definition_v1"
 
-create_fields = { name, description, field_type }
+create_fields = { name, type }
 
-update_fields = { + (name // description // field_type) }
+update_fields = { + (name // type) }
+
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; Typed relations
+; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+typed_relations = tstr .regexp "(relation|relation_list|pinned_relation|pinned_relation_list)\\([A-Za-z]{1}[A-Za-z0-9_]{0,63}_([0-9A-Za-z]{68})(_[0-9A-Za-z]{68})*\\)"
 
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ; Fields
@@ -177,16 +186,11 @@ name = (
     name: { value_text },
 )
 
-description = (
-    description: { value_text },
-)
-
-field_type = (
-    field_type: {
+type = (
+    type: {
         type: "str",
-        value: "str" / "int" / "float" / "bool" / "relation" /
-            "relation_list" / "pinned_relation" / "pinned_relation_list",
-    }
+        value: "str" / "int" / "float" / "bool" / typed_relations,
+    },
 )
 "#;
 
@@ -307,6 +311,43 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_fields() {
+        let data = to_cbor(
+                cbor!({
+                    "action" => "create",
+                    "schema" => "menu_0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
+                    "version" => 1,
+                    "fields" => {
+                        "national_dish" => {
+                            "value" => "Pumpkin",
+                            "type" => "str"
+                        },
+                        // Duplicate field!
+                        "national_dish" => {
+                            "value" => 7.2,
+                            "type" => "float"
+                        },
+                    },
+                })
+                .unwrap()
+            );
+
+        // CDDL does not prevent the CBOR data to contain duplicate fields as it assumes that CBOR
+        // in itself does not allow that behaviour:
+        //
+        // Read more here: https://datatracker.ietf.org/doc/html/rfc8610#section-3.2 and
+        // https://datatracker.ietf.org/doc/html/rfc7049#section-3.7
+        //
+        // We can still imagine binary data containing duplicate fields coming in (for example
+        // encoded with a tool which did not check against the CBOR standard, like this `cbor!`
+        // macro), in this case our checks would still pass!
+        //
+        // @TODO: We need another instance making sure that an error gets returned and duplicate
+        // fields are disallowed. Related issue: https://github.com/p2panda/p2panda/issues/395
+        assert!(validate_cbor(&OPERATION_FORMAT, &data,).is_ok());
+    }
+
+    #[test]
     fn invalid_operations() {
         assert!(validate_cbor(
             &OPERATION_FORMAT,
@@ -332,6 +373,21 @@ mod tests {
             &OPERATION_FORMAT,
             &to_cbor(
                 cbor!({
+                    "action" => "create",
+                    "schema" => "menu_0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
+                    "version" => 1,
+                    "fields" => {
+                        // Empty fields
+                    },
+                })
+                .unwrap()
+            )
+        ).is_err());
+
+        assert!(validate_cbor(
+            &OPERATION_FORMAT,
+            &to_cbor(
+                cbor!({
                     // Fields missing in UPDATE operation
                     "action" => "update",
                     "schema" => "menu_80f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
@@ -345,6 +401,46 @@ mod tests {
             )
         )
         .is_err());
+
+        assert!(validate_cbor(
+            &OPERATION_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "update",
+                    "schema" => "menu_0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
+                    "version" => 1,
+                    "previous_operations" => [
+                        "002062b773e62f48cdbbfd3e24956cffd3a9ccb0a844917f1cb726f17405b5e9e2ca",
+                    ],
+                    "fields" => {
+                        "national_dish" => {
+                            "value" => "00201b9ce32f4783941109210d349558baa9cf9216411201c848394379ef5bbc85b2",
+                            // Relations should not be typed in application operation fields
+                            "type" => "relation(dish_002062b773e62f48cdbbfd3e24956cffd3a9ccb0a844917f1cb726f17405b5e9e2ca)"
+                        },
+                    },
+                })
+                .unwrap()
+            )
+        ).is_err());
+
+        assert!(validate_cbor(
+            &OPERATION_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "update",
+                    "schema" => "menu_0020080f68089c1ad1cef2006a4eec94af5c1e594e4ae1681edb5c458abec67f9457",
+                    "version" => 1,
+                    "previous_operations" => [
+                        "002062b773e62f48cdbbfd3e24956cffd3a9ccb0a844917f1cb726f17405b5e9e2ca",
+                    ],
+                    "fields" => {
+                        // Empty fields
+                    },
+                })
+                .unwrap()
+            )
+        ).is_err());
 
         assert!(validate_cbor(
             &OPERATION_FORMAT,
@@ -461,7 +557,7 @@ mod tests {
                                     "00206a98fffb0b1424ada1ed241b32da8287852d6b4eb37a1b381892c4fbd800e9e8",
                                 ],
                             ],
-                            "type" => "relation_list"
+                            "type" => "pinned_relation_list"
                         },
                     },
                 })
@@ -550,8 +646,8 @@ mod tests {
                             "value" => "Holds information about places",
                             "type" => "str"
                         },
-                        // "field_type" is an unknown field
-                        "field_type" => {
+                        // "type" is an unknown field
+                        "type" => {
                             "value" => "What am I doing here?",
                             "type" => "str"
                         },
@@ -561,7 +657,7 @@ mod tests {
                                     "00206de69fe88aa24e0929bad2fc9808a0ce2aad8e6d8fb914f4a9178995a56b3435"
                                 ]
                             ],
-                            "type" => "relation_list"
+                            "type" => "pinned_relation_list"
                         },
                     },
                 })
@@ -591,6 +687,42 @@ mod tests {
             )
         )
         .is_err());
+
+        assert!(validate_cbor(
+            &SCHEMA_FIELD_V1_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "update",
+                    "schema" => "schema_field_definition_v1",
+                    "version" => 1,
+                    "previous_operations" => [
+                        "00208a5cbba0facc96f22fe3c283e05706c74801282bb7ba315fb5c77caa44689846",
+                        "0020e967334f97ac477bf1f53568e475376ae28687e272de3f3d0672ec6f2aa9be53",
+                    ],
+                    "fields" => {
+                        // Too many "type" fields ..
+                        "type" => {
+                            "value" => "relation",
+                            "type" => "str"
+                        },
+                        "type" => {
+                            "value" => "relation_list",
+                            "type" => "str"
+                        },
+                        "type" => {
+                            "value" => "pinned_relation",
+                            "type" => "str"
+                        },
+                        "type" => {
+                            "value" => "pinned_relation_list",
+                            "type" => "str"
+                        },
+                    },
+                })
+                .unwrap()
+            )
+        )
+        .is_err());
     }
 
     #[test]
@@ -607,12 +739,32 @@ mod tests {
                             "value" => "Size",
                             "type" => "str"
                         },
-                        "description" => {
-                            "value" => "In centimeters",
+                        "type" => {
+                            "value" => "float",
                             "type" => "str"
                         },
-                        "field_type" => {
-                            "value" => "float",
+                    },
+                })
+                .unwrap(),
+            ),
+        )
+        .is_ok());
+
+        assert!(validate_cbor(
+            &SCHEMA_FIELD_V1_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "create",
+                    "schema" => "schema_field_definition_v1",
+                    "version" => 1,
+                    "fields" => {
+                        "name" => {
+                            "value" => "Size",
+                            "type" => "str"
+                        },
+                        "type" => {
+                            // Relations are typed in "value"
+                            "value" => "pinned_relation(meters_00208a5cbba0facc96f22fe3c283e05706c74801282bb7ba315fb5c77caa44689846)",
                             "type" => "str"
                         },
                     },
@@ -634,20 +786,8 @@ mod tests {
                         "0020e967334f97ac477bf1f53568e475376ae28687e272de3f3d0672ec6f2aa9be53",
                     ],
                     "fields" => {
-                        "field_type" => {
-                            "value" => "relation",
-                            "type" => "str"
-                        },
-                        "field_type" => {
-                            "value" => "relation_list",
-                            "type" => "str"
-                        },
-                        "field_type" => {
-                            "value" => "pinned_relation",
-                            "type" => "str"
-                        },
-                        "field_type" => {
-                            "value" => "pinned_relation_list",
+                        "type" => {
+                            "value" => "relation(meters_00208a5cbba0facc96f22fe3c283e05706c74801282bb7ba315fb5c77caa44689846)",
                             "type" => "str"
                         },
                     },
@@ -688,9 +828,29 @@ mod tests {
                             "value" => "Size",
                             "type" => "str"
                         },
-                        // "description" field missing
-                        "field_type" => {
-                            "value" => "float",
+                        // "type" field missing
+                    },
+                })
+                .unwrap()
+            )
+        )
+        .is_err());
+
+        assert!(validate_cbor(
+            &SCHEMA_FIELD_V1_FORMAT,
+            &to_cbor(
+                cbor!({
+                    "action" => "create",
+                    "schema" => "schema_field_definition_v1",
+                    "version" => 1,
+                    "fields" => {
+                        "name" => {
+                            "value" => "Size",
+                            "type" => "str"
+                        },
+                        "type" => {
+                            // Missing type for relation_list
+                            "value" => "relation_list",
                             "type" => "str"
                         },
                     },
@@ -711,7 +871,7 @@ mod tests {
                         "00209caa5f232debd2835e35a673d5eb148ea803a272c6ca004cd86cbe4a834718d5",
                     ],
                     "fields" => {
-                        "field_type" => {
+                        "type" => {
                             // Unknown field type
                             "value" => "beaver_nest",
                             "type" => "str"

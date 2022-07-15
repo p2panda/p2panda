@@ -6,10 +6,11 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
+use crate::entry::decode::StringOrU64;
 use crate::entry::error::LogIdError;
 
 /// Authors can write entries to multiple logs identified by log ids.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, StdHash)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, StdHash)]
 pub struct LogId(u64);
 
 impl LogId {
@@ -44,7 +45,13 @@ impl Iterator for LogId {
     }
 }
 
-/// Convert any borrowed string representation of an u64 integer into an `LogId` instance.
+impl From<u64> for LogId {
+    fn from(value: u64) -> Self {
+        Self::new(value)
+    }
+}
+
+/// Convert any borrowed string representation of an u64 integer into a `LogId` instance.
 impl FromStr for LogId {
     type Err = LogIdError;
 
@@ -55,7 +62,7 @@ impl FromStr for LogId {
     }
 }
 
-/// Convert any owned string representation of an u64 integer into an `LogId` instance.
+/// Convert any owned string representation of an u64 integer into a `LogId` instance.
 impl TryFrom<String> for LogId {
     type Error = LogIdError;
 
@@ -66,9 +73,21 @@ impl TryFrom<String> for LogId {
     }
 }
 
+impl<'de> Deserialize<'de> for LogId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_any(StringOrU64::<LogId>::new())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::convert::TryFrom;
+
+    use rstest::rstest;
+    use serde::Serialize;
 
     use super::LogId;
 
@@ -104,5 +123,35 @@ mod tests {
         let log_id_try_from = LogId::try_from(String::from(large_number)).unwrap();
         assert_eq!(291919188205818203, log_id_from_str.as_u64());
         assert_eq!(log_id_from_str, log_id_try_from);
+    }
+
+    #[rstest]
+    #[case("0", Some(LogId::new(0)))]
+    #[case(12, Some(LogId::new(12)))]
+    #[case("12", Some(LogId::new(12)))]
+    #[case(u64::MAX, Some(LogId::new(u64::MAX)))]
+    #[case("18446744073709551616", None)] // u64::MAX + 1
+    #[case(-12, None)]
+    #[case("-12", None)]
+    #[case("Not a log id", None)]
+    fn deserialize_str_and_u64(
+        #[case] value: impl Serialize + Sized,
+        #[case] expected_result: Option<LogId>,
+    ) {
+        fn convert<T: Serialize + Sized>(value: T) -> Result<LogId, Box<dyn std::error::Error>> {
+            let mut cbor_bytes = Vec::new();
+            ciborium::ser::into_writer(&value, &mut cbor_bytes)?;
+            let log_id: LogId = ciborium::de::from_reader(&cbor_bytes[..])?;
+            Ok(log_id)
+        }
+
+        match expected_result {
+            Some(result) => {
+                assert_eq!(convert(value).unwrap(), result);
+            }
+            None => {
+                assert!(convert(value).is_err());
+            }
+        }
     }
 }
