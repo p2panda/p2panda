@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use async_trait::async_trait;
-use log::info;
+use log::debug;
 
 use crate::document::DocumentId;
 use crate::entry::SeqNum;
@@ -69,7 +69,7 @@ pub trait StorageProvider<
         &self,
         params: &Self::EntryArgsRequest,
     ) -> Result<Self::EntryArgsResponse> {
-        info!(
+        debug!(
             "Get entry args request recieved for author: {} {}",
             params.author(),
             params
@@ -102,7 +102,7 @@ pub trait StorageProvider<
                 let seq_num = entry_latest.seq_num().clone().next().unwrap();
                 let log_id = entry_latest.log_id();
 
-                info!(
+                debug!(
                     "Get entry args response: {} (backlink) {:?} (skiplink) {:?} {:?}",
                     backlink,
                     skiplink
@@ -123,7 +123,7 @@ pub trait StorageProvider<
 
             // No entry was given yet, we can assume this is the beginning of the log
             None => {
-                info!(
+                debug!(
                     "Get entry args response: None (backlink) None (skiplink) {:?} {:?}",
                     SeqNum::default(),
                     log
@@ -143,7 +143,7 @@ pub trait StorageProvider<
         &self,
         params: &Self::PublishEntryRequest,
     ) -> Result<Self::PublishEntryResponse> {
-        info!(
+        debug!(
             "Publish entry request recieved from {} containing entry: {}",
             params.entry_signed().author(),
             params.entry_signed().hash()
@@ -240,7 +240,7 @@ pub trait StorageProvider<
         let entry_hash_skiplink = self.determine_next_skiplink(&entry_latest).await?;
         let next_seq_num = entry_latest.seq_num().clone().next().unwrap();
 
-        info!(
+        debug!(
             "Publish entry response: {} (backlink) {:?} (skiplink) {:?} {:?}",
             entry.hash(),
             entry_hash_skiplink

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use async_trait::async_trait;
-use log::info;
+use log::debug;
 
 use crate::document::DocumentId;
 use crate::entry::LogId;
@@ -14,7 +14,7 @@ use crate::test_utils::db::{MemoryStore, StorageLog};
 #[async_trait]
 impl LogStore<StorageLog> for MemoryStore {
     async fn insert_log(&self, log: StorageLog) -> Result<bool, LogStorageError> {
-        info!(
+        debug!(
             "Inserting log {} into store for {}",
             log.id().as_u64(),
             log.author()

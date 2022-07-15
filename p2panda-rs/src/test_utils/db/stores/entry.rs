@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use lipmaa_link::get_lipmaa_links_back_to;
-use log::info;
+use log::debug;
 
 use crate::entry::{LogId, SeqNum};
 use crate::hash::Hash;
@@ -18,7 +18,7 @@ use crate::test_utils::db::{MemoryStore, StorageEntry};
 impl EntryStore<StorageEntry> for MemoryStore {
     /// Insert an entry into storage.
     async fn insert_entry(&self, entry: StorageEntry) -> Result<(), EntryStorageError> {
-        info!("Inserting entry: {} into store", entry.hash());
+        debug!("Inserting entry: {} into store", entry.hash());
 
         let mut entries = self.entries.lock().unwrap();
         entries.insert(entry.hash(), entry);

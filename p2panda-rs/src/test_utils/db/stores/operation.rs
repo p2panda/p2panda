@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use async_trait::async_trait;
-use log::info;
+use log::debug;
 
 use crate::document::DocumentId;
 use crate::operation::{AsOperation, AsVerifiedOperation, OperationId, VerifiedOperation};
@@ -16,7 +16,7 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
         operation: &VerifiedOperation,
         document_id: &DocumentId,
     ) -> Result<(), OperationStorageError> {
-        info!(
+        debug!(
             "Inserting {} operation: {} into store",
             operation.action().as_str(),
             operation.operation_id(),
