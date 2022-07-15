@@ -9,15 +9,16 @@
 //!
 //! ```
 //! # extern crate p2panda_rs;
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! # #[tokio::main]
+//! # async fn main() -> p2panda_rs::storage_provider::utils::Result<()> {
 //! use std::convert::TryFrom;
 //!
 //! use p2panda_rs::operation::AsOperation;
 //! use p2panda_rs::operation::{OperationEncoded, OperationValue};
-//! use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
+//! use p2panda_rs::test_utils::constants::SCHEMA_ID;
 //! use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 //! use p2panda_rs::test_utils::fixtures::{
-//!     create_operation, schema, random_key_pair, operation_fields, update_operation,
+//!     create_operation, schema, random_key_pair, operation_fields
 //! };
 //!
 //! // Instantiate a new mock node
@@ -34,22 +35,30 @@
 //!     )],
 //! );
 //!
+//! println!("{:#?}", operation);
+//!
 //! // Retrieve the next entry args from the node
-//! let entry_args = node.get_next_entry_args(&panda.author(), None, None)?;
+//! let args = node.get_next_entry_args(&panda.author(), None).await?;
 //!
 //! // Sign and encode an entry
-//! let entry_encoded = panda.signed_encoded_entry(operation.to_owned(), entry_args);
+//! let entry_encoded = panda.signed_encoded_entry(
+//!     operation.to_owned(),
+//!     &args.log_id,
+//!     args.skiplink.as_ref(),
+//!     args.backlink.as_ref(),
+//!     &args.seq_num
+//! );
 //! let operation_encoded = OperationEncoded::try_from(&operation)?;
 //!
-//! node.publish_entry(&entry_encoded, &operation_encoded)?;
+//! node.publish_entry(&entry_encoded, &operation_encoded).await?;
 //!
 //! # Ok(())
 //! # }
 //! ```
-use crate::entry::{sign_and_encode, Entry, EntrySigned};
+use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
+use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::Operation;
-use crate::test_utils::utils::NextEntryArgs;
 
 /// A helper struct which represents a client in the pandaverse.
 ///
@@ -94,16 +103,12 @@ impl Client {
     pub fn signed_encoded_entry(
         &self,
         operation: Operation,
-        entry_args: NextEntryArgs,
+        log_id: &LogId,
+        skiplink: Option<&Hash>,
+        backlink: Option<&Hash>,
+        seq_num: &SeqNum,
     ) -> EntrySigned {
-        let entry = Entry::new(
-            &entry_args.log_id,
-            Some(&operation),
-            entry_args.skiplink.as_ref(),
-            entry_args.backlink.as_ref(),
-            &entry_args.seq_num,
-        )
-        .unwrap();
+        let entry = Entry::new(log_id, Some(&operation), skiplink, backlink, seq_num).unwrap();
 
         sign_and_encode(&entry, &self.key_pair).unwrap()
     }

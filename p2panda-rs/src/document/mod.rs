@@ -15,13 +15,14 @@
     doc = r##"
 ```
 # extern crate p2panda_rs;
-# fn main() -> Result<(), Box<dyn std::error::Error>> {
+# #[tokio::main]
+# async fn main() -> p2panda_rs::storage_provider::utils::Result<()> {
 # use p2panda_rs::hash::Hash;
 # use p2panda_rs::identity::KeyPair;
 # use p2panda_rs::operation::{OperationValue, VerifiedOperation, AsVerifiedOperation};
 # use p2panda_rs::schema::SchemaId;
 # use p2panda_rs::test_utils::fixtures::{create_operation, delete_operation, update_operation, operation_fields};
-# use p2panda_rs::test_utils::constants::TEST_SCHEMA_ID;
+# use p2panda_rs::test_utils::constants::SCHEMA_ID;
 # use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewFields, DocumentViewId};
 #
@@ -29,21 +30,20 @@ use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewField
 #     "polar".to_string(),
 #     KeyPair::from_private_key_str(
 #         "ddcafe34db2625af34c8ba3cf35d46e23283d908c9848c8b43d1f5d0fde779ea",
-#     )
-#     .unwrap(),
+#     )?,
 # );
 # let panda = Client::new(
 #     "panda".to_string(),
 #     KeyPair::from_private_key_str(
 #         "1d86b2524b48f0ba86103cddc6bdfd87774ab77ab4c0ea989ed0eeab3d28827a",
-#     )
-#     .unwrap(),
+#     )?,
 # );
 #
-# let schema = SchemaId::new(TEST_SCHEMA_ID).unwrap();
+# let schema = SchemaId::new(SCHEMA_ID).unwrap();
 # let mut node = Node::new();
 #
 # let mut node = Node::new();
+# 
 # let (polar_entry_1_hash, _) = send_to_node(
 #     &mut node,
 #     &polar,
@@ -52,8 +52,8 @@ use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewField
 #         ("owner", OperationValue::Text("Polar Bear".to_string())),
 #         ("house-number", OperationValue::Integer(12)),
 #     ]),
-# )
-# .unwrap();
+# ).await?;
+#
 # let (polar_entry_2_hash, _) = send_to_node(
 #     &mut node,
 #     &polar,
@@ -64,8 +64,8 @@ use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewField
 #         ],
 #         &polar_entry_1_hash.clone().into(),
 #     ),
-# )
-# .unwrap();
+# ).await?;
+#
 # let (panda_entry_1_hash, _) = send_to_node(
 #     &mut node,
 #     &panda,
@@ -73,8 +73,7 @@ use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewField
 #         &[("name", OperationValue::Text("🐼 Cafe!!".to_string()))],
 #         &polar_entry_1_hash.clone().into(),
 #     ),
-# )
-# .unwrap();
+# ).await?;
 # let (polar_entry_3_hash, _) = send_to_node(
 #     &mut node,
 #     &polar,
@@ -86,30 +85,19 @@ use p2panda_rs::document::{DocumentBuilder, DocumentViewValue, DocumentViewField
 #         ])
 #         .unwrap(),
 #     ),
-# )
-# .unwrap();
+# ).await?;
+#
 # let (polar_entry_4_hash, _) = send_to_node(
 #     &mut node,
 #     &polar,
 #     &delete_operation(&polar_entry_3_hash.clone().into()),
-# )
-# .unwrap();
+# ).await?;
 #
-# let entry_1 = node.get_entry(&polar_entry_1_hash);
-# let operation_1 =
-#     VerifiedOperation::new_from_entry(&entry_1.entry_encoded(), &entry_1.operation_encoded()).unwrap();
-# let entry_2 = node.get_entry(&polar_entry_2_hash);
-# let operation_2 =
-#     VerifiedOperation::new_from_entry(&entry_2.entry_encoded(), &entry_2.operation_encoded()).unwrap();
-# let entry_3 = node.get_entry(&panda_entry_1_hash);
-# let operation_3 =
-#     VerifiedOperation::new_from_entry(&entry_3.entry_encoded(), &entry_3.operation_encoded()).unwrap();
-# let entry_4 = node.get_entry(&polar_entry_3_hash);
-# let operation_4 =
-#     VerifiedOperation::new_from_entry(&entry_4.entry_encoded(), &entry_4.operation_encoded()).unwrap();
-# let entry_5 = node.get_entry(&polar_entry_4_hash);
-# let operation_5 =
-#     VerifiedOperation::new_from_entry(&entry_5.entry_encoded(), &entry_5.operation_encoded()).unwrap();
+# let operation_1 = node.operations().get(&polar_entry_1_hash.into()).unwrap().clone();
+# let operation_2 = node.operations().get(&polar_entry_2_hash.into()).unwrap().clone();
+# let operation_3 = node.operations().get(&panda_entry_1_hash.into()).unwrap().clone();
+# let operation_4 = node.operations().get(&polar_entry_3_hash.into()).unwrap().clone();
+# let operation_5 = node.operations().get(&polar_entry_4_hash.into()).unwrap().clone();
 #
 //== Operation creation is hidden for brevity, see the operation module docs for details ==//
 

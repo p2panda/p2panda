@@ -9,8 +9,8 @@ mod operation_store;
 mod requests;
 mod responses;
 mod storage_provider;
-#[cfg(test)]
-mod test_utils;
+#[cfg(any(feature = "testing", test))]
+pub mod test_utils;
 
 pub use document_store::DocumentStore;
 pub use entry_store::EntryStore;

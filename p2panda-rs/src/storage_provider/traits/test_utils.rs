@@ -1,462 +1,400 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
-use std::str::FromStr;
-use std::sync::{Arc, Mutex};
 
-use rstest::{fixture, rstest};
+use rstest::fixture;
 
-use crate::document::DocumentId;
-use crate::entry::{decode_entry, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
+use crate::document::{DocumentId, DocumentViewId};
+use crate::entry::{sign_and_encode, Entry, EntrySigned};
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::{
-    AsVerifiedOperation, Operation, OperationEncoded, OperationValue, VerifiedOperation,
+    AsOperation, AsVerifiedOperation, Operation, OperationEncoded, OperationValue, PinnedRelation,
+    PinnedRelationList, Relation, RelationList, VerifiedOperation,
 };
 use crate::schema::SchemaId;
-use crate::storage_provider::errors::{EntryStorageError, ValidationError};
-use crate::storage_provider::traits::{
-    AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
-    AsStorageEntry, AsStorageLog,
+use crate::storage_provider::traits::{OperationStore, StorageProvider};
+use crate::storage_provider::utils::Result;
+use crate::test_utils::constants::{PRIVATE_KEY, SCHEMA_ID};
+use crate::test_utils::db::{
+    EntryArgsRequest, MemoryStore, PublishEntryRequest, PublishEntryResponse, StorageLog,
 };
-use crate::test_utils::constants::{default_fields, DEFAULT_PRIVATE_KEY, TEST_SCHEMA_ID};
-use crate::test_utils::fixtures::{create_operation, delete_operation, update_operation};
-use crate::Validate;
+use crate::test_utils::fixtures::{operation, operation_fields};
 
-use super::{EntryStore, LogStore, OperationStore, StorageProvider};
+use super::{AsStorageLog, LogStore};
 
-/// The simplest storage provider. Used for tests in `entry_store`, `log_store` & `storage_provider`
-#[derive(Default)]
-pub struct SimplestStorageProvider {
-    pub logs: Arc<Mutex<Vec<StorageLog>>>,
-    pub entries: Arc<Mutex<Vec<StorageEntry>>>,
-    pub operations: Arc<Mutex<Vec<(DocumentId, VerifiedOperation)>>>,
+/// The fields used as defaults in the tests.
+pub fn complex_test_fields() -> Vec<(&'static str, OperationValue)> {
+    vec![
+        ("username", OperationValue::Text("bubu".to_owned())),
+        ("height", OperationValue::Float(3.5)),
+        ("age", OperationValue::Integer(28)),
+        ("is_admin", OperationValue::Boolean(false)),
+        (
+            "profile_picture",
+            OperationValue::Relation(Relation::new(
+                Hash::new("0020eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+                    .unwrap()
+                    .into(),
+            )),
+        ),
+        (
+            "special_profile_picture",
+            OperationValue::PinnedRelation(PinnedRelation::new(
+                Hash::new("0020ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+                    .unwrap()
+                    .into(),
+            )),
+        ),
+        (
+            "many_profile_pictures",
+            OperationValue::RelationList(RelationList::new(vec![
+                Hash::new("0020aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                    .unwrap()
+                    .into(),
+                Hash::new("0020bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+                    .unwrap()
+                    .into(),
+            ])),
+        ),
+        (
+            "many_special_profile_pictures",
+            OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
+                Hash::new("0020cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+                    .unwrap()
+                    .into(),
+                Hash::new("0020dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
+                    .unwrap()
+                    .into(),
+            ])),
+        ),
+        (
+            "another_relation_field",
+            OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
+                Hash::new("0020abababababababababababababababababababababababababababababababab")
+                    .unwrap()
+                    .into(),
+                Hash::new("0020cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd")
+                    .unwrap()
+                    .into(),
+            ])),
+        ),
+    ]
 }
 
-impl SimplestStorageProvider {
-    pub fn db_insert_entry(&self, entry: StorageEntry) {
-        let mut entries = self.entries.lock().unwrap();
-        entries.push(entry);
-        // Remove duplicate entries.
-        entries.dedup();
-    }
+/// Configuration used in test database population.
+#[derive(Debug)]
+pub struct PopulateDatabaseConfig {
+    /// Number of entries per log/document.
+    pub no_of_entries: usize,
 
-    pub fn db_insert_log(&self, log: StorageLog) {
-        let mut logs = self.logs.lock().unwrap();
-        logs.push(log);
-        // Remove duplicate logs.
-        logs.dedup();
-    }
+    /// Number of logs for each author.
+    pub no_of_logs: usize,
+
+    /// Number of authors, each with logs populated as defined above.
+    pub no_of_authors: usize,
+
+    /// A boolean flag for wether all logs should contain a delete operation.
+    pub with_delete: bool,
+
+    /// The schema used for all operations in the db.
+    pub schema: SchemaId,
+
+    /// The fields used for every CREATE operation.
+    pub create_operation_fields: Vec<(&'static str, OperationValue)>,
+
+    /// The fields used for every UPDATE operation.
+    pub update_operation_fields: Vec<(&'static str, OperationValue)>,
 }
 
-/// A log entry represented as a concatenated string of `"{author}-{schema}-{document_id}-{log_id}"`
-#[derive(Debug, Clone, PartialEq)]
-pub struct StorageLog(String);
-
-/// Implement `AsStorageLog` trait for our `StorageLog` struct
-impl AsStorageLog for StorageLog {
-    fn new(author: &Author, schema: &SchemaId, document: &DocumentId, log_id: &LogId) -> Self {
-        // Concat all values
-        let log_string = format!(
-            "{}-{}-{}-{}",
-            author.as_str(),
-            schema.as_str(),
-            document.as_str(),
-            log_id.as_u64()
-        );
-
-        Self(log_string)
-    }
-
-    fn author(&self) -> Author {
-        let params: Vec<&str> = self.0.split('-').collect();
-        Author::new(params[0]).unwrap()
-    }
-
-    fn schema_id(&self) -> SchemaId {
-        let params: Vec<&str> = self.0.split('-').collect();
-        SchemaId::from_str(params[1]).unwrap()
-    }
-
-    fn document_id(&self) -> DocumentId {
-        let params: Vec<&str> = self.0.split('-').collect();
-        DocumentId::from_str(params[2]).unwrap()
-    }
-
-    fn id(&self) -> LogId {
-        let params: Vec<&str> = self.0.split('-').collect();
-        LogId::from_str(params[3]).unwrap()
-    }
-}
-
-/// A struct which represents an entry and operation pair in storage as a concatenated string.
-#[derive(Debug, Clone, PartialEq)]
-pub struct StorageEntry(String);
-
-impl StorageEntry {
-    fn entry_decoded(&self) -> Entry {
-        // Unwrapping as validation occurs in constructor.
-        decode_entry(&self.entry_signed(), self.operation_encoded().as_ref()).unwrap()
-    }
-
-    pub fn entry_signed(&self) -> EntrySigned {
-        let params: Vec<&str> = self.0.split('-').collect();
-        EntrySigned::new(params[0]).unwrap()
-    }
-
-    pub fn operation_encoded(&self) -> Option<OperationEncoded> {
-        let params: Vec<&str> = self.0.split('-').collect();
-        Some(OperationEncoded::new(params[1]).unwrap())
-    }
-}
-
-/// Implement `AsStorageEntry` trait for `StorageEntry`
-impl AsStorageEntry for StorageEntry {
-    type AsStorageEntryError = EntryStorageError;
-
-    fn new(
-        entry: &EntrySigned,
-        operation: &OperationEncoded,
-    ) -> Result<Self, Self::AsStorageEntryError> {
-        let entry_string = format!("{}-{}", entry.as_str(), operation.as_str());
-        let storage_entry = Self(entry_string);
-        storage_entry.validate()?;
-        Ok(storage_entry)
-    }
-
-    fn author(&self) -> Author {
-        self.entry_signed().author()
-    }
-
-    fn hash(&self) -> Hash {
-        self.entry_signed().hash()
-    }
-
-    fn entry_bytes(&self) -> Vec<u8> {
-        self.entry_signed().to_bytes()
-    }
-
-    fn backlink_hash(&self) -> Option<Hash> {
-        self.entry_decoded().backlink_hash().cloned()
-    }
-
-    fn skiplink_hash(&self) -> Option<Hash> {
-        self.entry_decoded().skiplink_hash().cloned()
-    }
-
-    fn seq_num(&self) -> SeqNum {
-        *self.entry_decoded().seq_num()
-    }
-
-    fn log_id(&self) -> LogId {
-        *self.entry_decoded().log_id()
-    }
-
-    fn operation(&self) -> Operation {
-        let operation_encoded = self.operation_encoded().unwrap();
-        Operation::from(&operation_encoded)
-    }
-}
-
-impl Validate for StorageEntry {
-    type Error = ValidationError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        self.entry_signed().validate()?;
-        if let Some(operation) = self.operation_encoded() {
-            operation.validate()?;
-        }
-        decode_entry(&self.entry_signed(), self.operation_encoded().as_ref())?;
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct PublishEntryRequest(pub EntrySigned, pub OperationEncoded);
-
-impl AsPublishEntryRequest for PublishEntryRequest {
-    fn entry_signed(&self) -> &EntrySigned {
-        &self.0
-    }
-
-    fn operation_encoded(&self) -> &OperationEncoded {
-        &self.1
-    }
-}
-
-impl Validate for PublishEntryRequest {
-    type Error = ValidationError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        self.entry_signed().validate()?;
-        self.operation_encoded().validate()?;
-        decode_entry(self.entry_signed(), Some(self.operation_encoded()))?;
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct PublishEntryResponse {
-    entry_hash_backlink: Option<Hash>,
-    entry_hash_skiplink: Option<Hash>,
-    seq_num: SeqNum,
-    log_id: LogId,
-}
-
-impl AsPublishEntryResponse for PublishEntryResponse {
-    /// Just the constructor method is defined here as all we need this trait for
-    /// is constructing entry args to be returned from the default trait methods.
-    fn new(
-        entry_hash_backlink: Option<Hash>,
-        entry_hash_skiplink: Option<Hash>,
-        seq_num: SeqNum,
-        log_id: LogId,
-    ) -> Self {
+impl Default for PopulateDatabaseConfig {
+    fn default() -> Self {
         Self {
-            entry_hash_backlink,
-            entry_hash_skiplink,
-            seq_num,
-            log_id,
+            no_of_entries: 0,
+            no_of_logs: 0,
+            no_of_authors: 0,
+            with_delete: false,
+            schema: SCHEMA_ID.parse().unwrap(),
+            create_operation_fields: complex_test_fields(),
+            update_operation_fields: complex_test_fields(),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct EntryArgsResponse {
-    entry_hash_backlink: Option<Hash>,
-    entry_hash_skiplink: Option<Hash>,
-    seq_num: SeqNum,
-    log_id: LogId,
-}
-
-impl AsEntryArgsResponse for EntryArgsResponse {
-    /// Just the constructor method is defined here as all we need this trait for
-    /// is constructing entry args to be returned from the default trait methods.
-    fn new(
-        entry_hash_backlink: Option<Hash>,
-        entry_hash_skiplink: Option<Hash>,
-        seq_num: SeqNum,
-        log_id: LogId,
-    ) -> Self {
-        Self {
-            entry_hash_backlink,
-            entry_hash_skiplink,
-            seq_num,
-            log_id,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct EntryArgsRequest {
-    pub author: Author,
-    pub document: Option<DocumentId>,
-}
-
-impl AsEntryArgsRequest for EntryArgsRequest {
-    fn author(&self) -> &Author {
-        &self.author
-    }
-    fn document_id(&self) -> &Option<DocumentId> {
-        &self.document
-    }
-}
-
-impl Validate for EntryArgsRequest {
-    type Error = ValidationError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        // Validate `author` request parameter
-        self.author().validate()?;
-
-        // Validate `document` request parameter when it is set
-        match self.document_id() {
-            None => (),
-            Some(doc) => {
-                doc.validate()?;
-            }
-        };
-        Ok(())
-    }
-}
-
-pub const SKIPLINK_ENTRIES: [u64; 5] = [4, 8, 12, 13, 17];
-
-/// Helper for creating many key_pairs.
-pub fn test_key_pairs(no_of_authors: usize) -> Vec<KeyPair> {
-    let mut key_pairs = vec![KeyPair::from_private_key_str(DEFAULT_PRIVATE_KEY).unwrap()];
-
-    for _index in 1..no_of_authors {
-        key_pairs.push(KeyPair::new())
-    }
-
-    key_pairs
-}
-
-/// Container for the test store with access to the document ids and key_pairs
-/// present in the pre-populated database.
-pub struct TestStore {
-    pub store: SimplestStorageProvider,
-    pub key_pairs: Vec<KeyPair>,
-    pub documents: Vec<DocumentId>,
-}
-
-/// Fixture for constructing a storage provider instance backed by a pre-polpulated database. Passed
-/// parameters define what the db should contain. The first entry in each log contains a valid CREATE
-/// operation following entries contain duplicate UPDATE operations. If the with_delete flag is set
-/// to true the last entry in all logs contain be a DELETE operation.
+/// Fixture for constructing a storage provider instance backed by a pre-populated database.
 ///
-/// Returns a `TestStore` containing storage provider instance, a vector of key pairs for all authors
-/// in the db, and a vector of the ids for all documents.
+/// Passed parameters define what the database should contain. The first entry in each log contains
+/// a valid CREATE operation following entries contain UPDATE operations. If the with_delete
+///  flag is set to true the last entry in all logs contain be a DELETE operation.
 #[fixture]
 pub async fn test_db(
     // Number of entries per log/document
     #[default(0)] no_of_entries: usize,
-    // Number of authors, each with a log populated as defined above
+    // Number of logs for each author
+    #[default(0)] no_of_logs: usize,
+    // Number of authors, each with logs populated as defined above
     #[default(0)] no_of_authors: usize,
     // A boolean flag for wether all logs should contain a delete operation
     #[default(false)] with_delete: bool,
     // The schema used for all operations in the db
-    #[default(TEST_SCHEMA_ID.parse().unwrap())] schema: SchemaId,
+    #[default(SCHEMA_ID.parse().unwrap())] schema: SchemaId,
     // The fields used for every CREATE operation
-    #[default(default_fields())] create_operation_fields: Vec<(&'static str, OperationValue)>,
+    #[default(complex_test_fields())] create_operation_fields: Vec<(&'static str, OperationValue)>,
     // The fields used for every UPDATE operation
-    #[default(default_fields())] update_operation_fields: Vec<(&'static str, OperationValue)>,
+    #[default(complex_test_fields())] update_operation_fields: Vec<(&'static str, OperationValue)>,
 ) -> TestStore {
-    let mut documents: Vec<DocumentId> = Vec::new();
-    let key_pairs = test_key_pairs(no_of_authors);
+    let config = PopulateDatabaseConfig {
+        no_of_entries,
+        no_of_logs,
+        no_of_authors,
+        with_delete,
+        schema,
+        create_operation_fields,
+        update_operation_fields,
+    };
 
-    let store = SimplestStorageProvider::default();
+    let mut db = TestStore::default();
+    populate_test_db(&mut db, &config).await;
+    db
+}
 
-    // If we don't want any entries in the db return now
-    if no_of_entries == 0 {
-        return TestStore {
-            store,
-            key_pairs,
-            documents,
-        };
-    }
+/// Helper for creating many key_pairs.
+///
+/// If there is only one key_pair in the list it will always be the default testing
+/// key pair.
+pub fn test_key_pairs(no_of_authors: usize) -> Vec<KeyPair> {
+    let mut key_pairs = Vec::new();
+    match no_of_authors {
+        0 => (),
+        1 => key_pairs.push(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()),
+        _ => {
+            key_pairs.push(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap());
+            for _index in 2..no_of_authors {
+                key_pairs.push(KeyPair::new())
+            }
+        }
+    };
+    key_pairs
+}
+
+/// Container for `MemoryStore` with access to the document ids and key_pairs present in the
+/// pre-populated database.
+#[derive(Default, Debug)]
+pub struct TestStore {
+    /// The store.
+    pub store: MemoryStore,
+
+    /// Test data collected during store population.
+    pub test_data: TestData,
+}
+
+/// Data collected when populating a `TestData` base in order to easily check values which
+/// would be otherwise hard or impossible to get through the store methods.
+///
+/// Note: if new entries are published to this node, keypairs and any newly created
+/// documents will not be added to these lists.
+#[derive(Default, Debug)]
+pub struct TestData {
+    /// KeyPairs which were used to pre-populate this store.
+    pub key_pairs: Vec<KeyPair>,
+
+    /// The id of all documents which were inserted into the store when it was
+    /// pre-populated with values.
+    pub documents: Vec<DocumentId>,
+}
+
+/// Helper method for populating a `TestStore` with configurable data.
+///
+/// Passed parameters define what the db should contain. The first entry in each log contains a
+/// valid CREATE operation following entries contain duplicate UPDATE operations. If the
+/// with_delete flag is set to true the last entry in all logs contain be a DELETE operation.
+pub async fn populate_test_db(db: &mut TestStore, config: &PopulateDatabaseConfig) {
+    let key_pairs = test_key_pairs(config.no_of_authors);
 
     for key_pair in &key_pairs {
-        let mut document: Option<DocumentId> = None;
-        let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
-        for index in 0..no_of_entries {
-            let next_entry_args = store
-                .get_entry_args(&EntryArgsRequest {
-                    author: author.clone(),
-                    document: document.as_ref().cloned(),
-                })
-                .await
-                .unwrap();
+        db.test_data
+            .key_pairs
+            .push(KeyPair::from_private_key(key_pair.private_key()).unwrap());
 
-            let next_operation = if index == 0 {
-                create_operation(&create_operation_fields)
-            } else if index == (no_of_entries - 1) && with_delete {
-                delete_operation(&next_entry_args.entry_hash_backlink.clone().unwrap().into())
-            } else {
-                update_operation(
-                    &update_operation_fields,
-                    &next_entry_args.entry_hash_backlink.clone().unwrap().into(),
+        for _log_id in 0..config.no_of_logs {
+            let mut previous_operation: Option<DocumentViewId> = None;
+
+            for index in 0..config.no_of_entries {
+                // Create an operation based on the current index and whether this document should
+                // contain a DELETE operation
+                let next_operation_fields = match index {
+                    // First operation is CREATE
+                    0 => Some(operation_fields(config.create_operation_fields.clone())),
+                    // Last operation is DELETE if the with_delete flag is set
+                    seq if seq == (config.no_of_entries - 1) && config.with_delete => None,
+                    // All other operations are UPDATE
+                    _ => Some(operation_fields(config.update_operation_fields.clone())),
+                };
+
+                // Publish the operation encoded on an entry to storage.
+                let (entry_encoded, publish_entry_response) = send_to_store(
+                    &db.store,
+                    &operation(
+                        next_operation_fields,
+                        previous_operation,
+                        Some(config.schema.to_owned()),
+                    ),
+                    key_pair,
                 )
-            };
-
-            let next_entry = Entry::new(
-                &next_entry_args.log_id,
-                Some(&next_operation),
-                next_entry_args.entry_hash_skiplink.as_ref(),
-                next_entry_args.entry_hash_backlink.as_ref(),
-                &next_entry_args.seq_num,
-            )
-            .unwrap();
-
-            let entry_encoded = sign_and_encode(&next_entry, key_pair).unwrap();
-            let operation_encoded = OperationEncoded::try_from(&next_operation).unwrap();
-
-            if index == 0 {
-                document = Some(entry_encoded.hash().into());
-                documents.push(entry_encoded.hash().into());
-            }
-
-            let storage_entry = StorageEntry::new(&entry_encoded, &operation_encoded).unwrap();
-
-            store.insert_entry(storage_entry).await.unwrap();
-
-            let storage_log = StorageLog::new(
-                &author,
-                &schema,
-                &document.clone().unwrap(),
-                &next_entry_args.log_id,
-            );
-
-            if next_entry_args.seq_num.is_first() {
-                store.insert_log(storage_log).await.unwrap();
-            }
-
-            let verified_operation =
-                VerifiedOperation::new_from_entry(&entry_encoded, &operation_encoded).unwrap();
-
-            store
-                .insert_operation(&verified_operation, &document.clone().unwrap())
                 .await
                 .unwrap();
+
+                // Set the previous_operations based on the backlink
+                previous_operation = publish_entry_response.backlink.map(DocumentViewId::from);
+
+                // If this was the first entry in the document, store the doucment id for later.
+                if index == 0 {
+                    let document_id = Some(entry_encoded.hash().into());
+                    db.test_data.documents.push(document_id.clone().unwrap());
+                }
+            }
         }
-    }
-    TestStore {
-        store,
-        key_pairs,
-        documents,
     }
 }
 
-#[rstest]
-#[async_std::test]
-async fn test_the_test_db(
-    #[from(test_db)]
-    #[with(17, 1)]
-    #[future]
-    db: TestStore,
-) {
-    let db = db.await;
-    let entries = db.store.entries.lock().unwrap().clone();
-    for seq_num in 1..10 {
-        let entry = entries.get(seq_num - 1).unwrap();
+/// Helper method for publishing an operation encoded on an entry to a store.
+pub async fn send_to_store(
+    store: &MemoryStore,
+    operation: &Operation,
+    key_pair: &KeyPair,
+) -> Result<(EntrySigned, PublishEntryResponse)> {
+    // Get an Author from the key_pair.
+    let author = Author::try_from(key_pair.public_key().to_owned())?;
 
-        let expected_seq_num = SeqNum::new(seq_num as u64).unwrap();
-        assert_eq!(expected_seq_num, *entry.entry_decoded().seq_num());
+    let document_id = if operation.is_create() {
+        None
+    } else {
+        store
+            .get_document_by_entry(
+                operation
+                    .previous_operations()
+                    .unwrap()
+                    .into_iter()
+                    .next()
+                    .unwrap()
+                    .as_hash(),
+            )
+            .await?
+    };
 
-        let expected_log_id = LogId::default();
-        assert_eq!(expected_log_id, entry.log_id());
+    // Get the next entry arguments for this author and the passed document id.
+    let next_entry_args = store
+        .get_entry_args(&EntryArgsRequest {
+            public_key: author.clone(),
+            document_id: document_id.clone(),
+        })
+        .await?;
 
-        let mut expected_backlink_hash = None;
+    // Construct the next entry.
+    let next_entry = Entry::new(
+        &next_entry_args.log_id,
+        Some(operation),
+        next_entry_args.skiplink.map(Hash::from).as_ref(),
+        next_entry_args.backlink.map(Hash::from).as_ref(),
+        &next_entry_args.seq_num,
+    )?;
 
-        if seq_num != 1 {
-            expected_backlink_hash = entries
-                .get(seq_num - 2)
-                .map(|backlink_entry| backlink_entry.hash());
+    // Encode both the entry and operation.
+    let entry = sign_and_encode(&next_entry, key_pair)?;
+    let operation_encoded = OperationEncoded::try_from(operation)?;
+
+    // Publish the entry and get the next entry args.
+    let publish_entry_request = PublishEntryRequest {
+        entry: entry.clone(),
+        operation: operation_encoded,
+    };
+    let publish_entry_response = store.publish_entry(&publish_entry_request).await?;
+
+    let document_id = {
+        let default = entry.hash().into();
+        match document_id {
+            Some(id) => id,
+            None => default,
         }
-        assert_eq!(
-            expected_backlink_hash,
-            entry.entry_decoded().backlink_hash().cloned()
-        );
+    };
 
-        let mut expected_skiplink_hash = None;
+    // Insert the log into the store.
+    store
+        .insert_log(StorageLog::new(
+            &entry.author(),
+            &operation.schema(),
+            &document_id,
+            &next_entry_args.log_id,
+        ))
+        .await?;
 
-        if SKIPLINK_ENTRIES.contains(&(seq_num as u64)) {
-            let skiplink_seq_num = entry
-                .entry_decoded()
-                .seq_num()
-                .skiplink_seq_num()
-                .unwrap()
-                .as_u64();
+    // Also insert the operation into the store.
+    let verified_operation = VerifiedOperation::new(&author, &entry.hash().into(), operation)?;
+    store
+        .insert_operation(&verified_operation, &document_id)
+        .await?;
 
-            let skiplink_entry = entries
-                .get((skiplink_seq_num as usize) - 1)
-                .unwrap()
-                .clone();
+    Ok((entry, publish_entry_response))
+}
 
-            expected_skiplink_hash = Some(skiplink_entry.hash());
-        };
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
 
-        assert_eq!(expected_skiplink_hash, entry.skiplink_hash());
+    use crate::entry::{LogId, SeqNum};
+    use crate::storage_provider::traits::{test_utils::test_db, AsStorageEntry};
+    use crate::test_utils::constants::SKIPLINK_SEQ_NUMS;
+
+    use super::TestStore;
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_the_test_db(
+        #[from(test_db)]
+        #[with(17, 1, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+        let entries = db.store.entries.lock().unwrap().clone();
+        for seq_num in 1..17 {
+            let entry = entries
+                .values()
+                .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
+                .unwrap();
+
+            let expected_seq_num = SeqNum::new(seq_num as u64).unwrap();
+            assert_eq!(expected_seq_num, *entry.entry_decoded().seq_num());
+
+            let expected_log_id = LogId::default();
+            assert_eq!(expected_log_id, entry.log_id());
+
+            let mut expected_backlink_hash = None;
+
+            if seq_num != 1 {
+                expected_backlink_hash = Some(
+                    entries
+                        .values()
+                        .find(|entry| entry.seq_num().as_u64() as usize == seq_num - 1)
+                        .unwrap()
+                        .hash(),
+                );
+            }
+            assert_eq!(expected_backlink_hash, entry.backlink_hash());
+
+            let mut expected_skiplink_hash = None;
+
+            if SKIPLINK_SEQ_NUMS.contains(&(seq_num as u64)) {
+                let skiplink_seq_num = entry.seq_num().skiplink_seq_num().unwrap().as_u64();
+
+                let skiplink_entry = entries
+                    .values()
+                    .find(|entry| entry.seq_num().as_u64() == skiplink_seq_num)
+                    .unwrap();
+                expected_skiplink_hash = Some(skiplink_entry.hash());
+            };
+
+            assert_eq!(expected_skiplink_hash, entry.skiplink_hash());
+        }
     }
 }

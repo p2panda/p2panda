@@ -11,6 +11,11 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- `MemoryStore` in memory implementation of storage traits [#383](https://github.com/p2panda/p2panda/pull/383) `rs`
+
+### Changed
+
+- Refactor mock `Node` implementation to use `StorageProvider` traits [#383](https://github.com/p2panda/p2panda/pull/383) `rs`
 - Deserialize from string and u64 for `LogId` and `SeqNum` [#401](https://github.com/p2panda/p2panda/pull/401) `rs`
 
 ### Fixed

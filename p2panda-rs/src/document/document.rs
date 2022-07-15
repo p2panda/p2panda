@@ -299,6 +299,7 @@ impl DocumentBuilder {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
     use std::convert::TryFrom;
@@ -309,12 +310,14 @@ mod tests {
     use crate::document::{DocumentId, DocumentViewId};
     use crate::identity::KeyPair;
     use crate::operation::{
-        AsVerifiedOperation, OperationEncoded, OperationId, OperationValue, VerifiedOperation,
+        AsOperation, AsVerifiedOperation, OperationEncoded, OperationId, OperationValue,
+        VerifiedOperation,
     };
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, operation, operation_fields, random_document_view_id,
-        random_key_pair, random_previous_operations, schema, update_operation, verified_operation,
+        random_key_pair, random_operation_id, random_previous_operations, schema, update_operation,
+        verified_operation,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
 
@@ -358,7 +361,8 @@ mod tests {
     }
 
     #[rstest]
-    fn resolve_documents(schema: SchemaId) {
+    #[tokio::test]
+    async fn resolve_documents(schema: SchemaId) {
         let panda = Client::new(
             "panda".to_string(),
             KeyPair::from_private_key_str(
@@ -385,6 +389,7 @@ mod tests {
             &panda,
             &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
         )
+        .await
         .unwrap();
 
         // Panda publishes an update operation.
@@ -400,6 +405,7 @@ mod tests {
                 &panda_entry_1_hash.clone().into(),
             ),
         )
+        .await
         .unwrap();
 
         // Penguin publishes an update operation which creates a new branch in the graph.
@@ -415,6 +421,7 @@ mod tests {
                 &panda_entry_1_hash.clone().into(),
             ),
         )
+        .await
         .unwrap();
 
         // Penguin publishes a new operation while now being aware of the previous branching situation.
@@ -434,6 +441,7 @@ mod tests {
                 .unwrap(),
             ),
         )
+        .await
         .unwrap();
 
         // Penguin publishes a new update operation which points at the current graph tip.
@@ -451,22 +459,31 @@ mod tests {
                 &penguin_entry_2_hash.clone().into(),
             ),
         )
+        .await
         .unwrap();
 
-        let operations: Vec<VerifiedOperation> = [
-            panda_entry_1_hash,
-            panda_entry_2_hash,
-            penguin_entry_1_hash,
-            penguin_entry_2_hash,
-            penguin_entry_3_hash,
-        ]
-        .iter()
-        .map(|hash| {
-            let entry = node.get_entry(hash);
-            VerifiedOperation::new_from_entry(&entry.entry_encoded(), &entry.operation_encoded())
+        let operations: Vec<VerifiedOperation> = vec![
+            node.operations()
+                .get(&panda_entry_1_hash.into())
                 .unwrap()
-        })
-        .collect();
+                .clone(),
+            node.operations()
+                .get(&panda_entry_2_hash.into())
+                .unwrap()
+                .clone(),
+            node.operations()
+                .get(&penguin_entry_1_hash.into())
+                .unwrap()
+                .clone(),
+            node.operations()
+                .get(&penguin_entry_2_hash.into())
+                .unwrap()
+                .clone(),
+            node.operations()
+                .get(&penguin_entry_3_hash.into())
+                .unwrap()
+                .clone(),
+        ];
 
         let document = DocumentBuilder::new(operations.clone()).build();
 
@@ -555,7 +572,8 @@ mod tests {
     }
 
     #[rstest]
-    fn must_have_create_operation(#[from(random_key_pair)] key_pair_1: KeyPair) {
+    #[tokio::test]
+    async fn must_have_create_operation(#[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
         let mut node = Node::new();
 
@@ -566,11 +584,12 @@ mod tests {
             &panda,
             &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
         )
+        .await
         .unwrap();
 
         // Panda publishes an update operation.
         // It contains the id of the previous operation in it's `previous_operations` array
-        send_to_node(
+        let (update_entry_hash, _) = send_to_node(
             &mut node,
             &panda,
             &update_operation(
@@ -578,14 +597,16 @@ mod tests {
                 &panda_entry_1_hash.into(),
             ),
         )
+        .await
         .unwrap();
 
         // Only retrieve the update operation.
-        let only_the_update_operation = &node.all_entries()[1];
+        let entries = node.entries();
+        let only_the_update_operation = entries.get(&update_entry_hash).unwrap();
 
         let operations = vec![VerifiedOperation::new_from_entry(
-            &only_the_update_operation.entry_encoded(),
-            &only_the_update_operation.operation_encoded(),
+            &only_the_update_operation.entry_signed(),
+            &only_the_update_operation.operation_encoded().unwrap(),
         )
         .unwrap()];
 
@@ -599,7 +620,8 @@ mod tests {
     }
 
     #[rstest]
-    fn incorrect_previous_operations(
+    #[tokio::test]
+    async fn incorrect_previous_operations(
         #[from(random_key_pair)] key_pair_1: KeyPair,
         #[from(random_document_view_id)] incorrect_previous_operation: DocumentViewId,
     ) {
@@ -613,6 +635,7 @@ mod tests {
             &panda,
             &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
         )
+        .await
         .unwrap();
 
         // Construct an update operation with non-existant previous operations
@@ -621,16 +644,19 @@ mod tests {
             &incorrect_previous_operation,
         );
 
-        let entry_one = node.get_entry(&panda_entry_1_hash);
+        let operation_one = node
+            .operations()
+            .get(&panda_entry_1_hash.into())
+            .unwrap()
+            .clone();
 
-        let operation_one = VerifiedOperation::new_from_entry(
-            &entry_one.entry_encoded(),
-            &entry_one.operation_encoded(),
-        )
-        .unwrap();
-
-        let entry_two =
-            panda.signed_encoded_entry(operation_with_wrong_prev_ops.clone(), next_entry_args);
+        let entry_two = panda.signed_encoded_entry(
+            operation_with_wrong_prev_ops.clone(),
+            &next_entry_args.log_id,
+            next_entry_args.skiplink.as_ref(),
+            next_entry_args.backlink.as_ref(),
+            &next_entry_args.seq_num,
+        );
 
         let operation_two = VerifiedOperation::new_from_entry(
             &entry_two,
@@ -651,48 +677,44 @@ mod tests {
     }
 
     #[rstest]
-    fn operation_schemas_not_matching(#[from(random_key_pair)] key_pair_1: KeyPair) {
+    #[tokio::test]
+    async fn operation_schemas_not_matching(
+        #[from(random_key_pair)] key_pair_1: KeyPair,
+        #[from(random_operation_id)] create_operation_id: OperationId,
+        #[from(random_operation_id)] update_operation_id: OperationId,
+    ) {
         let panda = Client::new("panda".to_string(), key_pair_1);
-        let mut node = Node::new();
 
-        // Panda publishes a create operation.
-        // This instantiates a new document.
-        let (panda_entry_1_hash, _) = send_to_node(
-            &mut node,
-            &panda,
-            &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
+        let create_operation = VerifiedOperation::new(
+            &panda.author(),
+            &create_operation_id,
+            &operation(
+                Some(operation_fields(vec![(
+                    "name",
+                    OperationValue::Text("Panda Cafe".to_string()),
+                )])),
+                None,
+                Some(SchemaId::new("schema_field_definition_v1").unwrap()),
+            ),
         )
         .unwrap();
 
-        // Panda publishes an update operation but with the wrong schema.
-        let (_panda_entry_2_hash, _) = send_to_node(
-            &mut node,
-            &panda,
+        let update_operation = VerifiedOperation::new(
+            &panda.author(),
+            &update_operation_id,
             &operation(
                 Some(operation_fields(vec![(
                     "name",
                     OperationValue::Text("Panda Cafe!".to_string()),
                 )])),
-                Some(panda_entry_1_hash.into()),
+                Some(create_operation_id.into()),
                 Some(SchemaId::new("schema_definition_v1").unwrap()),
             ),
         )
         .unwrap();
 
-        let operations: Vec<VerifiedOperation> = node
-            .all_entries()
-            .into_iter()
-            .map(|entry| {
-                VerifiedOperation::new_from_entry(
-                    &entry.entry_encoded(),
-                    &entry.operation_encoded(),
-                )
-                .unwrap()
-            })
-            .collect();
-
         assert_eq!(
-            DocumentBuilder::new(operations)
+            DocumentBuilder::new(vec![create_operation, update_operation])
                 .build()
                 .unwrap_err()
                 .to_string(),
@@ -701,7 +723,8 @@ mod tests {
     }
 
     #[rstest]
-    fn is_deleted(#[from(random_key_pair)] key_pair_1: KeyPair) {
+    #[tokio::test]
+    async fn is_deleted(#[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
         let mut node = Node::new();
 
@@ -712,6 +735,7 @@ mod tests {
             &panda,
             &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
         )
+        .await
         .unwrap();
 
         // Panda publishes an delete operation.
@@ -721,20 +745,10 @@ mod tests {
             &panda,
             &delete_operation(&panda_entry_1_hash.into()),
         )
+        .await
         .unwrap();
 
-        let operations: Vec<VerifiedOperation> = node
-            .all_entries()
-            .into_iter()
-            .map(|entry| {
-                VerifiedOperation::new_from_entry(
-                    &entry.entry_encoded(),
-                    &entry.operation_encoded(),
-                )
-                .unwrap()
-            })
-            .collect();
-
+        let operations: Vec<VerifiedOperation> = node.operations().values().cloned().collect();
         let document = DocumentBuilder::new(operations).build().unwrap();
 
         assert!(document.is_deleted());
@@ -743,7 +757,8 @@ mod tests {
     }
 
     #[rstest]
-    fn more_than_one_create(#[from(random_key_pair)] key_pair_1: KeyPair) {
+    #[tokio::test]
+    async fn more_than_one_create(#[from(random_key_pair)] key_pair_1: KeyPair) {
         let panda = Client::new("panda".to_string(), key_pair_1);
         let mut node = Node::new();
 
@@ -754,15 +769,15 @@ mod tests {
             &panda,
             &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
         )
+        .await
         .unwrap();
 
-        let published_create_operation = &node.all_entries()[0];
-
-        let create_verified_operation = VerifiedOperation::new_from_entry(
-            &published_create_operation.entry_encoded(),
-            &published_create_operation.operation_encoded(),
-        )
-        .unwrap();
+        let create_verified_operation = node
+            .operations()
+            .values()
+            .find(|operation| operation.is_create())
+            .unwrap()
+            .to_owned();
 
         assert_eq!(
             DocumentBuilder::new(vec![
@@ -777,7 +792,8 @@ mod tests {
     }
 
     #[rstest]
-    fn builds_specific_document_view() {
+    #[tokio::test]
+    async fn builds_specific_document_view() {
         let panda = Client::new(
             "panda".to_string(),
             KeyPair::from_private_key_str(
@@ -793,6 +809,7 @@ mod tests {
             &panda,
             &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
         )
+        .await
         .unwrap();
 
         let (panda_entry_2_hash, _) = send_to_node(
@@ -803,6 +820,7 @@ mod tests {
                 &panda_entry_1_hash.clone().into(),
             ),
         )
+        .await
         .unwrap();
 
         let (panda_entry_3_hash, _) = send_to_node(
@@ -813,22 +831,13 @@ mod tests {
                 &panda_entry_1_hash.clone().into(),
             ),
         )
+        .await
         .unwrap();
 
         // DOCUMENT: [panda_1]<--[penguin_1]
         //                    \----[panda_2]
 
-        let operations: Vec<VerifiedOperation> = node
-            .all_entries()
-            .into_iter()
-            .map(|entry| {
-                VerifiedOperation::new_from_entry(
-                    &entry.entry_encoded(),
-                    &entry.operation_encoded(),
-                )
-                .unwrap()
-            })
-            .collect();
+        let operations: Vec<VerifiedOperation> = node.operations().values().cloned().collect();
 
         let document_builder = DocumentBuilder::new(operations);
 

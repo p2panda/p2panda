@@ -83,7 +83,7 @@ mod tests {
     use crate::document::document_view_fields::DocumentViewValue;
     use crate::document::{reduce, DocumentId};
     use crate::operation::{AsVerifiedOperation, OperationValue, Relation, VerifiedOperation};
-    use crate::test_utils::constants::DEFAULT_HASH;
+    use crate::test_utils::constants::HASH;
     use crate::test_utils::fixtures::{
         document_id, document_view_id, operation_fields, verified_operation,
     };
@@ -95,7 +95,7 @@ mod tests {
         verified_operation: VerifiedOperation,
         document_view_id: DocumentViewId,
     ) {
-        let expected_relation = Relation::new(DEFAULT_HASH.parse().unwrap());
+        let expected_relation = Relation::new(HASH.parse().unwrap());
 
         // Reduce a single CREATE `Operation`
         let (view, is_edited, is_deleted) = reduce(&[verified_operation.clone()]);
@@ -165,7 +165,7 @@ mod tests {
             ("height", OperationValue::Float(100.23)),
             ("age", OperationValue::Integer(12)),
             ("is_admin", OperationValue::Boolean(true)),
-        ])), Some(DEFAULT_HASH.parse().unwrap()))]
+        ])), Some(HASH.parse().unwrap()))]
         update_operation: VerifiedOperation,
         document_view_id: DocumentViewId,
         #[from(document_id)] relation_id: DocumentId,

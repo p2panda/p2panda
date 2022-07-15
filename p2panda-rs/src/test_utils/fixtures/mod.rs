@@ -18,7 +18,7 @@
 //! use p2panda_rs::test_utils::fixtures::{entry, entry_auto_gen_links, operation};
 //! use p2panda_rs::operation::{AsOperation, Operation, OperationValue};
 //! use p2panda_rs::entry::Entry;
-//! use p2panda_rs::test_utils::constants::{default_fields, TEST_SCHEMA_ID};
+//! use p2panda_rs::test_utils::constants::{test_fields, SCHEMA_ID};
 //!
 //! #[rstest]
 //! fn inserts_the_default_entry(entry: Entry) {
@@ -35,7 +35,7 @@
 //! #[should_panic]
 //! #[case(entry(0, 1, None, None, None))]
 //! #[should_panic]
-//! #[case::panic(entry(1, 1, Some(DEFAULT_HASH.parse().unwrap()), None, None))]
+//! #[case::panic(entry(1, 1, Some(HASH.parse().unwrap()), None, None))]
 //! fn different_cases_pass_or_panic(#[case] _entry: Entry) {}
 //!
 //! #[rstest]
@@ -82,11 +82,11 @@
 //! }
 //!
 //! #[rstest]
-//! #[case(operation(Some(operation_fields(default_fields())), None, None))] // if no schema is passed, the default is chosen
-//! #[case(operation(Some(operation_fields(default_fields())), None, Some(TEST_SCHEMA_ID.parse().unwrap())))]
-//! #[case(operation(Some(operation_fields(default_fields())), None, Some("schema_definition_v1".parse().unwrap())))]
+//! #[case(operation(Some(operation_fields(test_fields())), None, None))] // if no schema is passed, the default is chosen
+//! #[case(operation(Some(operation_fields(test_fields())), None, Some(SCHEMA_ID.parse().unwrap())))]
+//! #[case(operation(Some(operation_fields(test_fields())), None, Some("schema_definition_v1".parse().unwrap())))]
 //! #[should_panic]
-//! #[case(operation(Some(operation_fields(default_fields())), None, Some("not_a_schema_string".parse().unwrap())))]
+//! #[case(operation(Some(operation_fields(test_fields())), None, Some("not_a_schema_string".parse().unwrap())))]
 //! fn operations_with_different_schema(#[case] _operation: Operation) {}
 //!
 //! # }
