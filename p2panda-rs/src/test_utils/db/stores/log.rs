@@ -50,12 +50,16 @@ impl LogStore<StorageLog> for MemoryStore {
         Ok(LogId::new(next_log_id as u64))
     }
     
-    async fn latest_log_id(&self, author: &Author) -> Result<LogId, LogStorageError> {
+    async fn latest_log_id(&self, author: &Author) -> Result<Option<LogId>, LogStorageError> {
         let logs = self.logs.lock().unwrap();
 
         let author_logs = logs.values().filter(|log| log.author() == *author);
-        let latest_log_id = author_logs.count() -1;
-        Ok(LogId::new(latest_log_id as u64))
+        let log_count = author_logs.count();
+        
+        if log_count == 0 {Ok(None)} else {
+            let latest_log_id = log_count -1;
+            Ok(Some(LogId::new(latest_log_id as u64)))            
+        }
     }
 }
 
