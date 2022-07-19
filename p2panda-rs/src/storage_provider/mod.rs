@@ -3,5 +3,6 @@
 //! Storage provider traits needed for implementing custom p2panda storage solutions.
 pub mod errors;
 pub mod traits;
+pub mod utils;
 
 pub use errors::ValidationError;

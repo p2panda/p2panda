@@ -13,7 +13,7 @@ use crate::hash::{Blake3ArrayVec, Hash};
 use crate::identity::KeyPair;
 use crate::operation::{Operation, OperationEncoded};
 
-use crate::test_utils::constants::default_fields;
+use crate::test_utils::constants::test_fields;
 use crate::test_utils::fixtures::{key_pair, operation, operation_fields, random_hash};
 
 /// Fixture which injects an `Entry` into a test method. Default values are those of
@@ -47,7 +47,7 @@ use crate::test_utils::fixtures::{key_pair, operation, operation_fields, random_
 /// #[should_panic]
 /// #[case(entry(0, 1, None, None, None))]
 /// #[should_panic]
-/// #[case::panic(entry(1, 1, Some(DEFAULT_HASH.parse().unwrap()), None, None))]
+/// #[case::panic(entry(1, 1, Some(HASH.parse().unwrap()), None, None))]
 /// fn different_cases_pass_or_panic(#[case] _entry: Entry) {}
 ///
 /// # }
@@ -57,10 +57,10 @@ use crate::test_utils::fixtures::{key_pair, operation, operation_fields, random_
 #[fixture]
 pub fn entry(
     #[default(1)] seq_num: u64,
-    #[default(1)] log_id: u64,
+    #[default(0)] log_id: u64,
     #[default(None)] backlink: Option<Hash>,
     #[default(None)] skiplink: Option<Hash>,
-    #[default(Some(operation(Some(operation_fields(default_fields())), None, None)))]
+    #[default(Some(operation(Some(operation_fields(test_fields())), None, None)))]
     operation: Option<Operation>,
 ) -> Entry {
     Entry::new(
@@ -115,7 +115,7 @@ pub fn entry(
 /// # }
 /// ```
 #[fixture]
-pub fn entry_auto_gen_links(#[default(1)] seq_num: u64, #[default(1)] log_id: u64) -> Entry {
+pub fn entry_auto_gen_links(#[default(1)] seq_num: u64, #[default(0)] log_id: u64) -> Entry {
     let backlink = match seq_num {
         1 => None,
         _ => Some(random_hash()),
@@ -129,7 +129,7 @@ pub fn entry_auto_gen_links(#[default(1)] seq_num: u64, #[default(1)] log_id: u6
     Entry::new(
         &LogId::new(log_id),
         Some(&operation(
-            Some(operation_fields(default_fields())),
+            Some(operation_fields(test_fields())),
             backlink.clone().map(|hash| hash.into()),
             None,
         )),
@@ -157,10 +157,10 @@ pub fn entry_signed_encoded(entry: Entry, key_pair: KeyPair) -> EntrySigned {
 #[fixture]
 pub fn entry_signed_encoded_unvalidated(
     #[default(1)] seq_num: u64,
-    #[default(1)] log_id: u64,
+    #[default(0)] log_id: u64,
     #[default(None)] backlink: Option<Hash>,
     #[default(None)] skiplink: Option<Hash>,
-    #[default(Some(operation(Some(operation_fields(default_fields())), None, None)))]
+    #[default(Some(operation(Some(operation_fields(test_fields())), None, None)))]
     operation: Option<Operation>,
     key_pair: KeyPair,
 ) -> String {

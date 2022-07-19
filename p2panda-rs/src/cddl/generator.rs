@@ -133,13 +133,13 @@ mod tests {
     use crate::cddl::generate_cddl_definition;
     use crate::cddl::generator::{generate_create_fields, generate_fields, generate_update_fields};
     use crate::schema::{FieldType, SchemaId};
-    use crate::test_utils::constants::TEST_SCHEMA_ID;
+    use crate::test_utils::constants::SCHEMA_ID;
 
     use super::CddlType;
 
     fn person() -> BTreeMap<String, FieldType> {
         let mut person = BTreeMap::new();
-        let test_schema: SchemaId = TEST_SCHEMA_ID.parse().unwrap();
+        let test_schema: SchemaId = SCHEMA_ID.parse().unwrap();
 
         person.insert("name".to_string(), FieldType::String);
         person.insert("age".to_string(), FieldType::Int);

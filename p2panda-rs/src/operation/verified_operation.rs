@@ -92,6 +92,7 @@ impl AsVerifiedOperation for VerifiedOperation {
 
 #[cfg(any(feature = "testing", test))]
 impl VerifiedOperation {
+    /// Create a verified operation from it's unverified parts for testing.
     pub fn new_test_operation(
         id: &OperationId,
         public_key: &Author,
@@ -131,18 +132,18 @@ mod tests {
         AsOperation, AsVerifiedOperation, Operation, OperationEncoded, OperationId, OperationValue,
         VerifiedOperation,
     };
-    use crate::test_utils::constants::{default_fields, TEST_SCHEMA_ID};
+    use crate::test_utils::constants::{test_fields, SCHEMA_ID};
     use crate::test_utils::fixtures::{
         entry_signed_encoded, key_pair, operation, operation_encoded, operation_fields,
         operation_id,
     };
-    use crate::test_utils::templates::{implements_as_operation, various_verified_operation};
+    use crate::test_utils::templates::{implements_as_operation, many_verified_operations};
     use crate::Validate;
 
     #[rstest]
-    #[case(operation_encoded(Some(operation_fields(default_fields())), None, Some(TEST_SCHEMA_ID.parse().unwrap())))]
+    #[case(operation_encoded(Some(operation_fields(test_fields())), None, Some(SCHEMA_ID.parse().unwrap())))]
     #[should_panic]
-    #[case(operation_encoded(Some(operation_fields(vec![("message", OperationValue::Text("Not the right message".to_string()))])), None, Some(TEST_SCHEMA_ID.parse().unwrap())))]
+    #[case(operation_encoded(Some(operation_fields(vec![("message", OperationValue::Text("Not the right message".to_string()))])), None, Some(SCHEMA_ID.parse().unwrap())))]
     fn create_verified_operation(
         entry_signed_encoded: EntrySigned,
         #[case] operation_encoded: OperationEncoded,
@@ -174,7 +175,7 @@ mod tests {
         assert_eq!(verified_operation.operation_id(), &operation_id);
     }
 
-    #[apply(various_verified_operation)]
+    #[apply(many_verified_operations)]
     fn only_some_operations_should_contain_fields(#[case] verified_operation: VerifiedOperation) {
         if verified_operation.is_create() {
             assert!(verified_operation.operation().fields().is_some());
@@ -189,13 +190,13 @@ mod tests {
         }
     }
 
-    #[apply(various_verified_operation)]
+    #[apply(many_verified_operations)]
     fn operations_should_validate(#[case] verified_operation: VerifiedOperation) {
         assert!(verified_operation.operation().validate().is_ok());
         assert!(verified_operation.validate().is_ok())
     }
 
-    #[apply(various_verified_operation)]
+    #[apply(many_verified_operations)]
     fn trait_methods_should_match(#[case] verified_operation: VerifiedOperation) {
         let operation = verified_operation.operation();
         assert_eq!(verified_operation.fields(), operation.fields());
@@ -221,7 +222,7 @@ mod tests {
         operation.has_previous_operations();
     }
 
-    #[apply(various_verified_operation)]
+    #[apply(many_verified_operations)]
     fn it_hashes(#[case] verified_operation: VerifiedOperation) {
         let mut hash_map = HashMap::new();
         let key_value = "Value identified by a hash".to_string();

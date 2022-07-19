@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use async_trait::async_trait;
+use log::debug;
 
 use crate::document::DocumentId;
 use crate::entry::SeqNum;
@@ -11,6 +12,7 @@ use crate::storage_provider::traits::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
     AsStorageEntry, AsStorageLog, EntryStore, LogStore, OperationStore,
 };
+use crate::storage_provider::utils::Result;
 use crate::Validate;
 
 /// Trait which handles all high level storage queries and insertions.
@@ -59,17 +61,24 @@ pub trait StorageProvider<
     ///
     /// If the passed entry cannot be found, or it's associated document doesn't exist yet, `None`
     /// is returned.
-    async fn get_document_by_entry(
-        &self,
-        entry_hash: &Hash,
-    ) -> Result<Option<DocumentId>, Box<dyn std::error::Error + Send + Sync>>;
+    async fn get_document_by_entry(&self, entry_hash: &Hash) -> Result<Option<DocumentId>>;
 
     /// Returns required data (backlink and skiplink entry hashes, last sequence number and the
     /// document's log_id) to encode a new bamboo entry.
     async fn get_entry_args(
         &self,
         params: &Self::EntryArgsRequest,
-    ) -> Result<Self::EntryArgsResponse, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Self::EntryArgsResponse> {
+        debug!(
+            "Get entry args request recieved for author: {} {}",
+            params.author(),
+            params
+                .document_id()
+                .as_ref()
+                .map(|id| format!("and document: {}", id))
+                .unwrap_or_else(|| "no document id provided".to_string())
+        );
+
         // Validate the entry args request parameters.
         params.validate()?;
 
@@ -87,24 +96,45 @@ pub trait StorageProvider<
             // An entry was found which serves as the backlink for the upcoming entry
             Some(entry_backlink) => {
                 let entry_latest = entry_latest.unwrap();
-                let entry_hash_backlink = entry_backlink.hash();
+                let backlink = entry_backlink.hash();
                 // Determine skiplink ("lipmaa"-link) entry in this log
-                let entry_hash_skiplink = self.determine_next_skiplink(&entry_latest).await?;
+                let skiplink = self.determine_next_skiplink(&entry_latest).await?;
+                let seq_num = entry_latest.seq_num().clone().next().unwrap();
+                let log_id = entry_latest.log_id();
+
+                debug!(
+                    "Get entry args response: {} (backlink) {:?} (skiplink) {:?} {:?}",
+                    backlink,
+                    skiplink
+                        .as_ref()
+                        .map(|hash| hash.to_string())
+                        .unwrap_or_else(|| "None".to_string()),
+                    seq_num,
+                    log_id
+                );
 
                 Ok(Self::EntryArgsResponse::new(
-                    Some(entry_hash_backlink.clone()),
-                    entry_hash_skiplink,
-                    entry_latest.seq_num().clone().next().unwrap(),
-                    entry_latest.log_id(),
+                    Some(backlink.clone()),
+                    skiplink,
+                    seq_num,
+                    log_id,
                 ))
             }
+
             // No entry was given yet, we can assume this is the beginning of the log
-            None => Ok(Self::EntryArgsResponse::new(
-                None,
-                None,
-                SeqNum::default(),
-                log,
-            )),
+            None => {
+                debug!(
+                    "Get entry args response: None (backlink) None (skiplink) {:?} {:?}",
+                    SeqNum::default(),
+                    log
+                );
+                Ok(Self::EntryArgsResponse::new(
+                    None,
+                    None,
+                    SeqNum::default(),
+                    log,
+                ))
+            }
         }
     }
 
@@ -112,7 +142,13 @@ pub trait StorageProvider<
     async fn publish_entry(
         &self,
         params: &Self::PublishEntryRequest,
-    ) -> Result<Self::PublishEntryResponse, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Self::PublishEntryResponse> {
+        debug!(
+            "Publish entry request recieved from {} containing entry: {}",
+            params.entry_signed().author(),
+            params.entry_signed().hash()
+        );
+
         // Create a storage entry.
         let entry = StorageEntry::new(params.entry_signed(), params.operation_encoded())?;
         // Validate the entry (this also maybe happened in the above constructor)
@@ -204,6 +240,17 @@ pub trait StorageProvider<
         let entry_hash_skiplink = self.determine_next_skiplink(&entry_latest).await?;
         let next_seq_num = entry_latest.seq_num().clone().next().unwrap();
 
+        debug!(
+            "Publish entry response: {} (backlink) {:?} (skiplink) {:?} {:?}",
+            entry.hash(),
+            entry_hash_skiplink
+                .as_ref()
+                .map(|hash| hash.to_string())
+                .unwrap_or_else(|| "None".to_string()),
+            next_seq_num,
+            entry.log_id()
+        );
+
         Ok(Self::PublishEntryResponse::new(
             Some(entry.hash()),
             entry_hash_skiplink,
@@ -216,83 +263,51 @@ pub trait StorageProvider<
 #[cfg(test)]
 pub mod tests {
     use std::convert::TryFrom;
-    use std::sync::{Arc, Mutex};
 
-    use async_trait::async_trait;
     use rstest::rstest;
 
     use crate::document::DocumentId;
     use crate::entry::{sign_and_encode, Entry, LogId};
-    use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::{
         AsOperation, OperationEncoded, OperationFields, OperationId, OperationValue,
-        VerifiedOperation,
     };
-    use crate::storage_provider::traits::test_utils::{
-        test_db, EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
-        SimplestStorageProvider, StorageEntry, StorageLog, TestStore,
-    };
+    use crate::storage_provider::traits::test_utils::{test_db, TestStore};
     use crate::storage_provider::traits::{
-        AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry, AsStorageLog,
+        AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry,
+    };
+    use crate::test_utils::db::{
+        EntryArgsRequest, EntryArgsResponse, MemoryStore, PublishEntryRequest, PublishEntryResponse,
     };
     use crate::test_utils::fixtures::{entry, key_pair, operation, operation_fields, operation_id};
 
     use super::StorageProvider;
 
-    #[async_trait]
-    impl StorageProvider<StorageEntry, StorageLog, VerifiedOperation> for SimplestStorageProvider {
-        type EntryArgsRequest = EntryArgsRequest;
-
-        type EntryArgsResponse = EntryArgsResponse;
-
-        type PublishEntryRequest = PublishEntryRequest;
-
-        type PublishEntryResponse = PublishEntryResponse;
-
-        async fn get_document_by_entry(
-            &self,
-            entry_hash: &Hash,
-        ) -> Result<Option<DocumentId>, Box<dyn std::error::Error + Sync + Send>> {
-            let entries = self.entries.lock().unwrap();
-
-            let entry = entries.iter().find(|entry| entry.hash() == *entry_hash);
-
-            let entry = match entry {
-                Some(entry) => entry,
-                None => return Ok(None),
-            };
-
-            let logs = self.logs.lock().unwrap();
-
-            let log = logs
-                .iter()
-                .find(|log| log.id() == entry.log_id() && log.author() == entry.author());
-
-            Ok(Some(log.unwrap().document_id()))
-        }
-    }
-
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn can_publish_entries(
         #[from(test_db)]
-        #[with(20, 1)]
+        #[with(20, 1, 1)]
         #[future]
         db: TestStore,
     ) {
         let db = db.await;
         // Instantiate a new store
-        let new_db = SimplestStorageProvider::default();
+        let new_db = MemoryStore::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
 
-        for entry in entries.clone() {
+        for seq_num in 1..20 {
+            let entry = entries
+                .values()
+                .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
+                .unwrap();
+
             // Publish each test entry in order
-            let publish_entry_request = PublishEntryRequest(
-                entry.entry_signed(),
-                entry.operation_encoded().unwrap().clone(),
-            );
+            let publish_entry_request = PublishEntryRequest {
+                entry: entry.entry_signed(),
+                operation: entry.operation_encoded().unwrap().clone(),
+            };
 
             let publish_entry_response = new_db.publish_entry(&publish_entry_request).await;
 
@@ -301,21 +316,16 @@ pub mod tests {
 
             let mut seq_num = entry.seq_num();
 
-            // If this is the highest entry in the db then break here, the test is over
-            if seq_num.as_u64() == entries.len() as u64 {
-                break;
-            };
-
             // Calculate expected response
             let next_seq_num = seq_num.next().unwrap();
-            let skiplink = entries
-                .get(next_seq_num.as_u64() as usize - 1)
-                .unwrap()
-                .skiplink_hash();
-            let backlink = entries
-                .get(next_seq_num.as_u64() as usize - 1)
-                .unwrap()
-                .backlink_hash();
+            let next_entry = entries
+                .values()
+                .find(|entry| entry.seq_num().as_u64() == next_seq_num.as_u64())
+                .unwrap();
+
+            let skiplink = next_entry.skiplink_hash();
+            let backlink = next_entry.backlink_hash();
+
             let expected_reponse =
                 PublishEntryResponse::new(backlink, skiplink, next_seq_num, LogId::default());
 
@@ -325,49 +335,62 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn rejects_invalid_backlink(
         key_pair: KeyPair,
         #[from(test_db)]
-        #[with(4, 1)]
+        #[with(4, 1, 1)]
         #[future]
         db: TestStore,
     ) {
         let db = db.await;
-        let new_db = SimplestStorageProvider::default();
+        let new_db = MemoryStore::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
 
         // Publish 3 entries to the new database
-        for index in 0..3 {
-            let entry = entries.get(index).unwrap();
-            let publish_entry_request = PublishEntryRequest(
-                entry.entry_signed(),
-                entry.operation_encoded().unwrap().clone(),
-            );
+        for seq_num in [1, 2, 3] {
+            let entry = entries
+                .values()
+                .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
+                .unwrap();
+
+            let publish_entry_request = PublishEntryRequest {
+                entry: entry.entry_signed(),
+                operation: entry.operation_encoded().unwrap().clone(),
+            };
 
             new_db.publish_entry(&publish_entry_request).await.unwrap();
         }
 
         // Retrieve the forth entry
-        let entry_four = entries.get(3).unwrap();
+        let entry_four = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 4)
+            .unwrap();
+
+        // Retrieve the second entry
+        let invalid_backlink = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 2)
+            .unwrap();
 
         // Reconstruct it with an invalid backlink
         let entry_with_invalid_backlink = Entry::new(
             &entry_four.log_id(),
             Some(&entry_four.operation()),
             entry_four.skiplink_hash().as_ref(),
-            Some(&entries.get(1).unwrap().hash()),
+            Some(&invalid_backlink.hash()),
             &entry_four.seq_num(),
         )
         .unwrap();
 
         let entry_signed = sign_and_encode(&entry_with_invalid_backlink, &key_pair).unwrap();
 
-        let publish_entry_request = PublishEntryRequest(
-            entry_signed.clone(),
-            entry_four.operation_encoded().unwrap(),
-        );
+        let publish_entry_request = PublishEntryRequest {
+            entry: entry_signed.clone(),
+            operation: entry_four.operation_encoded().unwrap(),
+        };
 
         let error_response = new_db.publish_entry(&publish_entry_request).await;
 
@@ -382,38 +405,51 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn rejects_invalid_skiplink(
         key_pair: KeyPair,
         #[from(test_db)]
-        #[with(4, 1)]
+        #[with(4, 1, 1)]
         #[future]
         db: TestStore,
     ) {
         let db = db.await;
-        let new_db = SimplestStorageProvider::default();
+        let new_db = MemoryStore::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
 
         // Publish 3 entries to the new database
-        for index in 0..3 {
-            let entry = entries.get(index).unwrap();
-            let publish_entry_request = PublishEntryRequest(
-                entry.entry_signed(),
-                entry.operation_encoded().unwrap().clone(),
-            );
+        for seq_num in [1, 2, 3] {
+            let entry = entries
+                .values()
+                .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
+                .unwrap();
+
+            let publish_entry_request = PublishEntryRequest {
+                entry: entry.entry_signed(),
+                operation: entry.operation_encoded().unwrap().clone(),
+            };
 
             new_db.publish_entry(&publish_entry_request).await.unwrap();
         }
 
         // Retrieve the forth entry
-        let entry_four = entries.get(3).unwrap();
+        let entry_four = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 4)
+            .unwrap();
+
+        // Retrieve the second entry
+        let invalid_skiplink = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 2)
+            .unwrap();
 
         // Reconstruct it with an invalid skiplink
         let entry_with_invalid_backlink = Entry::new(
             &entry_four.log_id(),
             Some(&entry_four.operation()),
-            Some(&entries.get(1).unwrap().hash()),
+            Some(&invalid_skiplink.hash()),
             entry_four.backlink_hash().as_ref(),
             &entry_four.seq_num(),
         )
@@ -421,10 +457,10 @@ pub mod tests {
 
         let entry_signed = sign_and_encode(&entry_with_invalid_backlink, &key_pair).unwrap();
 
-        let publish_entry_request = PublishEntryRequest(
-            entry_signed.clone(),
-            entry_four.operation_encoded().unwrap(),
-        );
+        let publish_entry_request = PublishEntryRequest {
+            entry: entry_signed.clone(),
+            operation: entry_four.operation_encoded().unwrap(),
+        };
 
         let error_response = new_db.publish_entry(&publish_entry_request).await;
 
@@ -439,32 +475,44 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn gets_entry_args(
         #[from(test_db)]
-        #[with(20, 1)]
+        #[with(20, 1, 1)]
         #[future]
         db: TestStore,
     ) {
         let db = db.await;
         // Instantiate a new store
-        let new_db = SimplestStorageProvider::default();
+        let new_db = MemoryStore::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
 
-        for entry in entries.clone() {
+        for seq_num in 1..20 {
+            let entry = entries
+                .values()
+                .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
+                .unwrap();
+
             let is_create = entry.operation().is_create();
 
             // Determine document id
             let document_id: Option<DocumentId> = match is_create {
                 true => None,
-                false => Some(entries.get(0).unwrap().hash().into()),
+                false => Some(
+                    entries
+                        .values()
+                        .find(|entry| entry.seq_num().as_u64() as usize == 1)
+                        .unwrap()
+                        .hash()
+                        .into(),
+                ),
             };
 
             // Construct entry args request
             let entry_args_request = EntryArgsRequest {
-                author: entry.author(),
-                document: document_id,
+                public_key: entry.author(),
+                document_id,
             };
 
             let entry_args_response = new_db.get_entry_args(&entry_args_request).await;
@@ -484,118 +532,130 @@ pub mod tests {
             assert_eq!(entry_args_response.unwrap(), expected_reponse);
 
             // Publish each test entry in order before next loop
-            let publish_entry_request = PublishEntryRequest(
-                entry.entry_signed(),
-                entry.operation_encoded().unwrap().clone(),
-            );
+            let publish_entry_request = PublishEntryRequest {
+                entry: entry.entry_signed(),
+                operation: entry.operation_encoded().unwrap().clone(),
+            };
 
             new_db.publish_entry(&publish_entry_request).await.unwrap();
         }
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn wrong_log_id(
         key_pair: KeyPair,
         #[from(test_db)]
-        #[with(2, 1)]
+        #[with(2, 1, 1)]
         #[future]
         db: TestStore,
     ) {
         let db = db.await;
         // Instantiate a new store
-        let new_db = SimplestStorageProvider::default();
+        let new_db = MemoryStore::default();
 
         let entries = db.store.entries.lock().unwrap().clone();
 
-        // Entry request for valid first intry in log 1
-        let publish_entry_request = PublishEntryRequest(
-            entries.get(0).unwrap().entry_signed(),
-            entries.get(0).unwrap().operation_encoded().unwrap(),
-        );
+        let entry_one = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 1)
+            .unwrap();
+
+        // Entry request for valid first entry in log 1
+        let publish_entry_request = PublishEntryRequest {
+            entry: entry_one.entry_signed(),
+            operation: entry_one.operation_encoded().unwrap(),
+        };
 
         // Publish the first valid entry
         new_db.publish_entry(&publish_entry_request).await.unwrap();
 
-        // Create a new entry with an invalid log id
+        let entry_two = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 2)
+            .unwrap();
+
+        // Create a new second entry with an invalid log id
         let entry_with_wrong_log_id = Entry::new(
-            &LogId::new(2), // This is wrong!!
-            Some(&entries.get(1).unwrap().operation()),
-            entries.get(1).unwrap().skiplink_hash().as_ref(),
-            entries.get(1).unwrap().backlink_hash().as_ref(),
-            &entries.get(1).unwrap().seq_num(),
+            &LogId::new(1), // This is wrong!!
+            Some(&entry_two.operation()),
+            entry_two.skiplink_hash().as_ref(),
+            entry_two.backlink_hash().as_ref(),
+            &entry_two.seq_num(),
         )
         .unwrap();
 
         let signed_entry_with_wrong_log_id =
             sign_and_encode(&entry_with_wrong_log_id, &key_pair).unwrap();
-        let encoded_operation =
-            OperationEncoded::try_from(&entries.get(1).unwrap().operation()).unwrap();
+        let encoded_operation = OperationEncoded::try_from(&entry_two.operation()).unwrap();
 
         // Create request and publish invalid entry
-        let request_with_wrong_log_id =
-            PublishEntryRequest(signed_entry_with_wrong_log_id, encoded_operation);
+        let request_with_wrong_log_id = PublishEntryRequest {
+            entry: signed_entry_with_wrong_log_id,
+            operation: encoded_operation,
+        };
 
         // Should error as the published entry contains an invalid log
         let error_response = new_db.publish_entry(&request_with_wrong_log_id).await;
 
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
-            "Requested log id 2 does not match expected log id 1"
+            "Requested log id 1 does not match expected log id 0"
         )
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn skiplink_does_not_exist(
         #[from(test_db)]
-        #[with(8, 1)]
+        #[with(8, 1, 1)]
         #[future]
         db: TestStore,
     ) {
         let db = db.await;
         let entries = db.store.entries.lock().unwrap().clone();
-        let logs = db.store.logs.lock().unwrap().clone();
 
-        // Init database with on document log which has an entry at seq num 4 missing
-        let log_entries_with_skiplink_missing = vec![
-            entries.get(0).unwrap().clone(),
-            entries.get(1).unwrap().clone(),
-            entries.get(2).unwrap().clone(),
-            entries.get(4).unwrap().clone(),
-            entries.get(5).unwrap().clone(),
-            entries.get(6).unwrap().clone(),
-        ];
+        // Get the entry with seq number 4
+        let entry_at_seq_num_four = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 4)
+            .unwrap();
 
-        let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(logs)),
-            entries: Arc::new(Mutex::new(log_entries_with_skiplink_missing)),
-            operations: Arc::new(Mutex::new(Vec::new())),
+        // Then remove it from the db
+        db.store
+            .entries
+            .lock()
+            .unwrap()
+            .remove(&entry_at_seq_num_four.hash());
+
+        let entry_at_seq_num_eight = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 8)
+            .unwrap();
+
+        let publish_entry_request = PublishEntryRequest {
+            entry: entry_at_seq_num_eight.entry_signed(),
+            operation: entry_at_seq_num_eight.operation_encoded().unwrap(),
         };
-
-        let entry = entries.get(7).unwrap();
-
-        let publish_entry_request =
-            PublishEntryRequest(entry.entry_signed(), entry.operation_encoded().unwrap());
 
         // Should error as an entry at seq num 8 should have a skiplink relation to the missing
         // entry at seq num 4
-        let error_response = new_db.publish_entry(&publish_entry_request).await;
+        let error_response = db.store.publish_entry(&publish_entry_request).await;
 
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
             format!(
                 "Could not find expected skiplink in database for entry with id: {}",
-                entry.hash()
+                entry_at_seq_num_eight.hash()
             )
         )
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn prev_op_does_not_exist(
         #[from(test_db)]
-        #[with(4, 1)]
+        #[with(4, 1, 1)]
         #[future]
         db: TestStore,
         operation_fields: OperationFields,
@@ -604,25 +664,21 @@ pub mod tests {
     ) {
         let db = db.await;
         let entries = db.store.entries.lock().unwrap().clone();
-        let logs = db.store.logs.lock().unwrap().clone();
 
-        // Init database with 3 valid entries
-        let three_valid_entries = vec![
-            entries.get(0).unwrap().clone(),
-            entries.get(1).unwrap().clone(),
-            entries.get(2).unwrap().clone(),
-        ];
+        // Get the entry with seq number 4
+        let entry_at_seq_num_four = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 4)
+            .unwrap();
 
-        let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(logs)),
-            entries: Arc::new(Mutex::new(three_valid_entries)),
-            operations: Arc::new(Mutex::new(Vec::new())),
-        };
+        // Then remove it from the db
+        db.store
+            .entries
+            .lock()
+            .unwrap()
+            .remove(&entry_at_seq_num_four.hash());
 
-        // Get the valid next entry
-        let next_entry = entries.get(3).unwrap();
-
-        // Recreate this entry and replace previous_operations to contain invalid OperationId
+        // Recreate entry 4 and replace previous_operations to contain invalid OperationId
         let update_operation_with_invalid_previous_operations = operation(
             Some(operation_fields.clone()),
             Some(invalid_prev_op.into()),
@@ -630,10 +686,10 @@ pub mod tests {
         );
 
         let update_entry = entry(
-            next_entry.seq_num().as_u64(),
-            next_entry.log_id().as_u64(),
-            next_entry.backlink_hash(),
-            next_entry.skiplink_hash(),
+            entry_at_seq_num_four.seq_num().as_u64(),
+            entry_at_seq_num_four.log_id().as_u64(),
+            entry_at_seq_num_four.backlink_hash(),
+            entry_at_seq_num_four.skiplink_hash(),
             Some(update_operation_with_invalid_previous_operations.clone()),
         );
 
@@ -642,9 +698,12 @@ pub mod tests {
             OperationEncoded::try_from(&update_operation_with_invalid_previous_operations).unwrap();
 
         // Publish this entry (which contains an invalid previous_operation)
-        let publish_entry_request = PublishEntryRequest(encoded_entry.clone(), encoded_operation);
+        let publish_entry_request = PublishEntryRequest {
+            entry: encoded_entry.clone(),
+            operation: encoded_operation,
+        };
 
-        let error_response = new_db.publish_entry(&publish_entry_request).await;
+        let error_response = db.store.publish_entry(&publish_entry_request).await;
 
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
@@ -656,32 +715,28 @@ pub mod tests {
     }
 
     #[rstest]
-    #[async_std::test]
+    #[tokio::test]
     async fn invalid_entry_op_pair(
         #[from(test_db)]
-        #[with(4, 1)]
+        #[with(4, 1, 1)]
         #[future]
         db: TestStore,
     ) {
         let db = db.await;
         let entries = db.store.entries.lock().unwrap().clone();
-        let logs = db.store.logs.lock().unwrap().clone();
 
-        // Init database with 3 valid entries
-        let three_valid_entries = vec![
-            entries.get(0).unwrap().clone(),
-            entries.get(1).unwrap().clone(),
-            entries.get(2).unwrap().clone(),
-        ];
+        // Get the entry with seq number 4
+        let entry_at_seq_num_four = entries
+            .values()
+            .find(|entry| entry.seq_num().as_u64() as usize == 4)
+            .unwrap();
 
-        let new_db = SimplestStorageProvider {
-            logs: Arc::new(Mutex::new(logs)),
-            entries: Arc::new(Mutex::new(three_valid_entries)),
-            operations: Arc::new(Mutex::new(Vec::new())),
-        };
-
-        // Get the valid next entry
-        let next_entry = entries.get(3).unwrap();
+        // Then remove it from the db
+        db.store
+            .entries
+            .lock()
+            .unwrap()
+            .remove(&entry_at_seq_num_four.hash());
 
         // Create a new operation which does not match the one contained in the entry hash
         let mismatched_operation = operation(
@@ -689,17 +744,25 @@ pub mod tests {
                 "poopy",
                 OperationValue::Text("This is the WRONG operation :-(".to_string()),
             )])),
-            Some(next_entry.operation_encoded().unwrap().hash().into()),
+            Some(
+                entry_at_seq_num_four
+                    .operation_encoded()
+                    .unwrap()
+                    .hash()
+                    .into(),
+            ),
             None,
         );
 
         let encoded_operation = OperationEncoded::try_from(&mismatched_operation).unwrap();
 
         // Publish this entry with an mismatching operation
-        let publish_entry_request =
-            PublishEntryRequest(next_entry.entry_signed(), encoded_operation);
+        let publish_entry_request = PublishEntryRequest {
+            entry: entry_at_seq_num_four.entry_signed(),
+            operation: encoded_operation,
+        };
 
-        let error_response = new_db.publish_entry(&publish_entry_request).await;
+        let error_response = db.store.publish_entry(&publish_entry_request).await;
 
         assert_eq!(
             format!("{}", error_response.unwrap_err()),

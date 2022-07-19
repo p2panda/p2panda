@@ -241,7 +241,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::operation::OperationId;
-    use crate::test_utils::constants::DEFAULT_HASH;
+    use crate::test_utils::constants::HASH;
     use crate::test_utils::fixtures::{document_view_id, random_hash, random_operation_id};
     use crate::Validate;
 
@@ -281,7 +281,7 @@ mod tests {
 
     #[test]
     fn debug_representation() {
-        let document_view_id = DEFAULT_HASH.parse::<DocumentViewId>().unwrap();
+        let document_view_id = HASH.parse::<DocumentViewId>().unwrap();
         assert_eq!(format!("{}", document_view_id), "496543");
 
         let operation_1 = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn string_representation() {
-        let document_view_id = DEFAULT_HASH.parse::<DocumentViewId>().unwrap();
+        let document_view_id = HASH.parse::<DocumentViewId>().unwrap();
 
         assert_eq!(
             document_view_id.to_string(),
