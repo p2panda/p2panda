@@ -27,6 +27,9 @@ pub trait LogStore<StorageLog: AsStorageLog> {
     /// Determines the next unused log_id of an author.
     async fn next_log_id(&self, author: &Author) -> Result<LogId, LogStorageError>;
 
+    /// Determines the next unused log_id of an author.
+    async fn latest_log_id(&self, author: &Author) -> Result<LogId, LogStorageError>;
+
     /// Returns registered or possible log id for a document.
     ///
     /// If no log has been previously registered for this document it
