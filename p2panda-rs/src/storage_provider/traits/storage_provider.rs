@@ -14,6 +14,7 @@ use crate::storage_provider::traits::{
 };
 use crate::storage_provider::utils::Result;
 use crate::Validate;
+use crate::test_utils::db::{EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse};
 
 /// Trait which handles all high level storage queries and insertions.
 ///
@@ -35,23 +36,19 @@ use crate::Validate;
 /// which needs defining is `get_document_by_entry`. It is also possible to over-ride the default
 /// definitions for any of the trait methods.
 #[async_trait]
-pub trait StorageProvider<
-    StorageEntry: AsStorageEntry,
-    StorageLog: AsStorageLog,
-    StorageOperation: AsVerifiedOperation,
->: EntryStore<StorageEntry> + LogStore<StorageLog> + OperationStore<StorageOperation>
-{
-    /// Params when making a request to get the next entry args for an author and document.
-    type EntryArgsRequest: AsEntryArgsRequest + Sync;
+pub trait StorageProvider: EntryStore<Self::StorageEntry> + LogStore<Self::StorageLog> + OperationStore<Self::StorageOperation>
+{    
+    // TODO: We can move these types into their own stores once we deprecate the
+    // higher level methods (publish_entry and next_entry_args) on StorageProvider.
+    
+    /// An associated type representing an entry as it passes in and out of storage. 
+    type StorageEntry: AsStorageEntry;
 
-    /// Response from a call to get next entry args for an author and document.
-    type EntryArgsResponse: AsEntryArgsResponse;
-
-    /// Params when making a request to publish a new entry.
-    type PublishEntryRequest: AsPublishEntryRequest + Sync;
-
-    /// Response from a call to publish a new entry.
-    type PublishEntryResponse: AsPublishEntryResponse;
+    /// An associated type representing a log as it passes in and out of storage. 
+    type StorageLog: AsStorageLog;
+    
+    /// An associated type representing an operation as it passes in and out of storage. 
+    type StorageOperation: AsVerifiedOperation;
 
     /// Returns the related document for any entry.
     ///
@@ -67,8 +64,8 @@ pub trait StorageProvider<
     /// document's log_id) to encode a new bamboo entry.
     async fn get_entry_args(
         &self,
-        params: &Self::EntryArgsRequest,
-    ) -> Result<Self::EntryArgsResponse> {
+        params: &EntryArgsRequest,
+    ) -> Result<EntryArgsResponse> {
         debug!(
             "Get entry args request recieved for author: {} {}",
             params.author(),
@@ -113,7 +110,7 @@ pub trait StorageProvider<
                     log_id
                 );
 
-                Ok(Self::EntryArgsResponse::new(
+                Ok(EntryArgsResponse::new(
                     Some(backlink.clone()),
                     skiplink,
                     seq_num,
@@ -128,7 +125,7 @@ pub trait StorageProvider<
                     SeqNum::default(),
                     log
                 );
-                Ok(Self::EntryArgsResponse::new(
+                Ok(EntryArgsResponse::new(
                     None,
                     None,
                     SeqNum::default(),
@@ -141,8 +138,8 @@ pub trait StorageProvider<
     /// Stores an author's Bamboo entry with operation payload in database after validating it.
     async fn publish_entry(
         &self,
-        params: &Self::PublishEntryRequest,
-    ) -> Result<Self::PublishEntryResponse> {
+        params: &PublishEntryRequest,
+    ) -> Result<PublishEntryResponse> {
         debug!(
             "Publish entry request recieved from {} containing entry: {}",
             params.entry_signed().author(),
@@ -150,7 +147,7 @@ pub trait StorageProvider<
         );
 
         // Create a storage entry.
-        let entry = StorageEntry::new(params.entry_signed(), params.operation_encoded())?;
+        let entry = Self::StorageEntry::new(params.entry_signed(), params.operation_encoded())?;
         // Validate the entry (this also maybe happened in the above constructor)
         entry.validate()?;
 
@@ -219,7 +216,7 @@ pub trait StorageProvider<
 
         // Register log in database when a new document is created
         if entry.operation().is_create() {
-            let log = StorageLog::new(
+            let log = Self::StorageLog::new(
                 &entry.author(),
                 &entry.operation().schema(),
                 &document_id,
@@ -233,7 +230,7 @@ pub trait StorageProvider<
         self.insert_entry(entry.clone()).await?;
 
         // Already return arguments for next entry creation
-        let entry_latest: StorageEntry = self
+        let entry_latest: Self::StorageEntry = self
             .get_latest_entry(&entry.author(), &entry.log_id())
             .await?
             .unwrap();
@@ -251,7 +248,7 @@ pub trait StorageProvider<
             entry.log_id()
         );
 
-        Ok(Self::PublishEntryResponse::new(
+        Ok(PublishEntryResponse::new(
             Some(entry.hash()),
             entry_hash_skiplink,
             next_seq_num,
