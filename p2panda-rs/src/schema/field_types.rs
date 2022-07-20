@@ -23,16 +23,16 @@ use crate::schema::{FieldTypeError, SchemaId};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum FieldType {
     /// Defines a boolean field.
-    Bool,
+    Boolean,
 
     /// Defines an integer number field.
-    Int,
+    Integer,
 
     /// Defines a floating point number field.
     Float,
 
     /// Defines a text string field.
-    String,
+    Text,
 
     /// Defines a [`Relation`][`crate::operation::Relation`] field that references the given
     /// schema.
@@ -55,10 +55,10 @@ impl FieldType {
     /// Serialises this field type to text.
     pub fn serialise(&self) -> String {
         match self {
-            FieldType::Bool => "bool".to_string(),
-            FieldType::Int => "int".to_string(),
+            FieldType::Boolean => "bool".to_string(),
+            FieldType::Integer => "int".to_string(),
             FieldType::Float => "float".to_string(),
-            FieldType::String => "str".to_string(),
+            FieldType::Text => "str".to_string(),
             FieldType::Relation(schema_id) => format!("relation({})", schema_id.as_str()),
             FieldType::RelationList(schema_id) => format!("relation_list({})", schema_id.as_str()),
             FieldType::PinnedRelation(schema_id) => {
@@ -83,10 +83,10 @@ impl FromStr for FieldType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // Match non-parametric field types on their plain text name
         let text_match = match s {
-            "bool" => Ok(FieldType::Bool),
-            "int" => Ok(FieldType::Int),
+            "bool" => Ok(FieldType::Boolean),
+            "int" => Ok(FieldType::Integer),
             "float" => Ok(FieldType::Float),
-            "str" => Ok(FieldType::String),
+            "str" => Ok(FieldType::Text),
             _ => Err(FieldTypeError::InvalidFieldType(s.into())),
         };
 
@@ -129,11 +129,11 @@ mod tests {
 
     #[test]
     fn serialises() {
-        assert_eq!(FieldType::Bool.serialise(), "bool");
-        assert!(OperationValue::from(FieldType::Bool).validate().is_ok());
-        assert_eq!(FieldType::Int.serialise(), "int");
+        assert_eq!(FieldType::Boolean.serialise(), "bool");
+        assert!(OperationValue::from(FieldType::Boolean).validate().is_ok());
+        assert_eq!(FieldType::Integer.serialise(), "int");
         assert_eq!(FieldType::Float.serialise(), "float");
-        assert_eq!(FieldType::String.serialise(), "str");
+        assert_eq!(FieldType::Text.serialise(), "str");
         assert_eq!(
             FieldType::Relation(SchemaId::SchemaFieldDefinition(1)).serialise(),
             "relation(schema_field_definition_v1)"
@@ -154,10 +154,10 @@ mod tests {
 
     #[test]
     fn deserialises() {
-        assert_eq!(FieldType::Bool, "bool".parse().unwrap());
-        assert_eq!(FieldType::Int, "int".parse().unwrap());
+        assert_eq!(FieldType::Boolean, "bool".parse().unwrap());
+        assert_eq!(FieldType::Integer, "int".parse().unwrap());
         assert_eq!(FieldType::Float, "float".parse().unwrap());
-        assert_eq!(FieldType::String, "str".parse().unwrap());
+        assert_eq!(FieldType::Text, "str".parse().unwrap());
         assert_eq!(
             FieldType::Relation(SchemaId::SchemaFieldDefinition(1)),
             "relation(schema_field_definition_v1)".parse().unwrap()

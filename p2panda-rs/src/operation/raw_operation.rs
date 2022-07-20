@@ -8,32 +8,34 @@ type RawVersion = u64;
 
 type RawAction = u64;
 
-type RawPreviousOperations = Option<Vec<String>>;
+type RawPreviousOperations = Vec<String>;
 
 type RawSchemaId = String;
 
-type RawFields = Option<BTreeMap<String, RawValue>>;
+type RawFields = BTreeMap<String, RawValue>;
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 enum RawValue {
     Boolean(bool),
-    Float(f64),
     Integer(i64),
-    String(String),
+    Float(f64),
+    Text(String),
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct RawOperation(
     RawVersion,
     RawAction,
-    RawPreviousOperations,
+    Option<RawPreviousOperations>,
     RawSchemaId,
-    RawFields,
+    Option<RawFields>,
 );
 
 impl RawOperation {
     pub fn to_bytes(&self) -> Vec<u8> {
-        valuable_value::compact::to_vec(self).unwrap()
+        let mut cbor_bytes = Vec::new();
+        ciborium::ser::into_writer(&self, &mut cbor_bytes).unwrap();
+        cbor_bytes
     }
 }
 
@@ -41,15 +43,13 @@ impl RawOperation {
 mod tests {
     use std::collections::BTreeMap;
 
-    use serde::Deserialize;
-
     use super::{RawFields, RawOperation, RawValue};
 
     #[test]
-    fn serialize() {
+    fn encode_decode() {
         let mut raw_fields = BTreeMap::new();
-        raw_fields.insert("name".to_owned(), RawValue::String("venue".to_owned()));
-        raw_fields.insert("type".to_owned(), RawValue::String("str".to_owned()));
+        raw_fields.insert("name".to_owned(), RawValue::Text("venue".to_owned()));
+        raw_fields.insert("type".to_owned(), RawValue::Text("str".to_owned()));
 
         let raw_operation = RawOperation(
             0,
@@ -63,25 +63,14 @@ mod tests {
         assert_eq!(
             bytes,
             vec![
-                165, 96, 96, 132, 78, 111, 110, 101, 154, 115, 99, 104, 101, 109, 97, 95, 102, 105,
-                101, 108, 100, 95, 100, 101, 102, 105, 110, 105, 116, 105, 111, 110, 95, 118, 49,
-                225, 132, 83, 111, 109, 101, 226, 132, 110, 97, 109, 101, 225, 134, 83, 116, 114,
-                105, 110, 103, 133, 118, 101, 110, 117, 101, 132, 116, 121, 112, 101, 225, 134, 83,
-                116, 114, 105, 110, 103, 131, 115, 116, 114
+                133, 0, 0, 246, 120, 26, 115, 99, 104, 101, 109, 97, 95, 102, 105, 101, 108, 100,
+                95, 100, 101, 102, 105, 110, 105, 116, 105, 111, 110, 95, 118, 49, 162, 100, 110,
+                97, 109, 101, 161, 102, 83, 116, 114, 105, 110, 103, 101, 118, 101, 110, 117, 101,
+                100, 116, 121, 112, 101, 161, 102, 83, 116, 114, 105, 110, 103, 99, 115, 116, 114
             ]
         );
-    }
 
-    #[test]
-    fn deserialize() {
-        let bytes: Vec<u8> = vec![
-            165, 96, 96, 132, 78, 111, 110, 101, 154, 115, 99, 104, 101, 109, 97, 95, 102, 105,
-            101, 108, 100, 95, 100, 101, 102, 105, 110, 105, 116, 105, 111, 110, 95, 118, 49, 225,
-            132, 83, 111, 109, 101, 226, 132, 110, 97, 109, 101, 225, 134, 83, 116, 114, 105, 110,
-            103, 133, 118, 101, 110, 117, 101, 132, 116, 121, 112, 101, 225, 134, 83, 116, 114,
-            105, 110, 103, 131, 115, 116, 114,
-        ];
-
-        RawOperation::deserialize(&bytes);
+        let decoded_operation: RawOperation = ciborium::de::from_reader(&bytes[..]).unwrap();
+        assert_eq!(decoded_operation, raw_operation);
     }
 }

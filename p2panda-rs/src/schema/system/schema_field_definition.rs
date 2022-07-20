@@ -11,8 +11,8 @@ const DESCRIPTION: &str = "Define fields for application data schemas.";
 lazy_static! {
     pub static ref SCHEMA_FIELD_DEFINITION_V1: Schema = {
         let mut fields = BTreeMap::new();
-        fields.insert("name".to_string(), FieldType::String);
-        fields.insert("type".to_string(), FieldType::String);
+        fields.insert("name".to_string(), FieldType::Text);
+        fields.insert("type".to_string(), FieldType::Text);
         Schema {
             id: SchemaId::SchemaFieldDefinition(1),
             description: DESCRIPTION.to_owned(),

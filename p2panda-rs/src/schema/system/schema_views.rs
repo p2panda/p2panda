@@ -247,7 +247,7 @@ mod tests {
         );
         bool_field.insert(
             "type",
-            DocumentViewValue::new(&operation_id, &FieldType::Bool.into()),
+            DocumentViewValue::new(&operation_id, &FieldType::Boolean.into()),
         );
 
         let document_view = DocumentView::new(&document_view_id, &bool_field);
@@ -255,7 +255,7 @@ mod tests {
         assert!(field_view.is_ok());
 
         let field_view = field_view.unwrap();
-        assert_eq!(field_view.field_type(), &FieldType::Bool);
+        assert_eq!(field_view.field_type(), &FieldType::Boolean);
         assert_eq!(field_view.name(), "is_accessible");
 
         // Create second schema field "capacity"
@@ -268,13 +268,13 @@ mod tests {
         );
         capacity_field.insert(
             "type",
-            DocumentViewValue::new(&operation_id, &FieldType::Int.into()),
+            DocumentViewValue::new(&operation_id, &FieldType::Integer.into()),
         );
 
         let document_view = DocumentView::new(&document_view_id, &capacity_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
-        assert_eq!(field_view.unwrap().field_type(), &FieldType::Int);
+        assert_eq!(field_view.unwrap().field_type(), &FieldType::Integer);
 
         // Create third schema field "ticket_price"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -310,13 +310,13 @@ mod tests {
         );
         str_field.insert(
             "type",
-            DocumentViewValue::new(&operation_id, &FieldType::String.into()),
+            DocumentViewValue::new(&operation_id, &FieldType::Text.into()),
         );
 
         let document_view = DocumentView::new(&document_view_id, &str_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
-        assert_eq!(field_view.unwrap().field_type(), &FieldType::String);
+        assert_eq!(field_view.unwrap().field_type(), &FieldType::Text);
 
         // Create fifth schema field "address"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

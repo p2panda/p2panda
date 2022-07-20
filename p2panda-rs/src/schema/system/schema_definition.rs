@@ -11,8 +11,8 @@ const DESCRIPTION: &str = "Publish data schemas for your application.";
 lazy_static! {
     pub static ref SCHEMA_DEFINITION_V1: Schema = {
         let mut fields = BTreeMap::new();
-        fields.insert("name".to_string(), FieldType::String);
-        fields.insert("description".to_string(), FieldType::String);
+        fields.insert("name".to_string(), FieldType::Text);
+        fields.insert("description".to_string(), FieldType::Text);
         fields.insert(
             "fields".to_string(),
             FieldType::PinnedRelationList(SchemaId::SchemaFieldDefinition(1)),

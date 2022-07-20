@@ -38,10 +38,10 @@ impl CddlType {
 impl From<FieldType> for CddlType {
     fn from(field_type: FieldType) -> Self {
         match field_type {
-            FieldType::Bool => CddlType::Bool,
-            FieldType::Int => CddlType::Int,
+            FieldType::Boolean => CddlType::Bool,
+            FieldType::Integer => CddlType::Int,
             FieldType::Float => CddlType::Float,
-            FieldType::String => CddlType::Tstr,
+            FieldType::Text => CddlType::Tstr,
             FieldType::Relation(_) => CddlType::Relation,
             FieldType::RelationList(_) => CddlType::RelationList,
             FieldType::PinnedRelation(_) => CddlType::PinnedRelation,
@@ -133,10 +133,10 @@ mod tests {
         let mut person = BTreeMap::new();
         let test_schema: SchemaId = SCHEMA_ID.parse().unwrap();
 
-        person.insert("name".to_string(), FieldType::String);
-        person.insert("age".to_string(), FieldType::Int);
+        person.insert("name".to_string(), FieldType::Text);
+        person.insert("age".to_string(), FieldType::Integer);
         person.insert("height".to_string(), FieldType::Float);
-        person.insert("is_cool".to_string(), FieldType::Bool);
+        person.insert("is_cool".to_string(), FieldType::Boolean);
         person.insert(
             "favorite_food".to_string(),
             FieldType::Relation(test_schema.clone()),

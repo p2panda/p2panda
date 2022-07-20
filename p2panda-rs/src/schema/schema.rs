@@ -297,7 +297,7 @@ mod tests {
     }
 
     #[rstest]
-    #[case(vec![("message", FieldType::String)])]
+    #[case(vec![("message", FieldType::Text)])]
     // @TODO: This should error but requires validation of schema instances.
     #[case(vec![])]
     fn new_schema(
@@ -317,7 +317,7 @@ mod tests {
         let result = Schema::new(
             &SchemaId::SchemaDefinition(1),
             "description",
-            vec![("wrong", FieldType::Int)],
+            vec![("wrong", FieldType::Integer)],
         );
         assert_eq!(
             format!("{}", result.unwrap_err()),
@@ -450,7 +450,7 @@ mod tests {
     fn hash_id(#[from(document_view_id)] application_schema_view_id: DocumentViewId) {
         // Validate application schema format
         let mut schema_fields = BTreeMap::new();
-        schema_fields.insert("is_real".to_string(), FieldType::Bool);
+        schema_fields.insert("is_real".to_string(), FieldType::Boolean);
         let application_schema = Schema {
             id: SchemaId::Application("event".to_string(), application_schema_view_id),
             description: "test".to_string(),
