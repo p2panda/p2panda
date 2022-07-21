@@ -17,7 +17,7 @@ Highlights are marked with a pancake 🥞
 
 - Refactor mock `Node` implementation to use `StorageProvider` traits [#383](https://github.com/p2panda/p2panda/pull/383) `rs`
 - Deserialize from string and u64 for `LogId` and `SeqNum` [#401](https://github.com/p2panda/p2panda/pull/401) `rs`
-- Consistent `as_str` and `to_string` functions [#389](https://github.com/p2panda/p2panda/pull/389) `rs`
+- Consistent `as_str` and `to_string` functions, introduce `short_repr` function [#389](https://github.com/p2panda/p2panda/pull/389) `rs`
 
 ### Fixed
 
