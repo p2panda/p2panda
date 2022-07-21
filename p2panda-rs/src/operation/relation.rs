@@ -179,6 +179,13 @@ impl PinnedRelationList {
     pub fn iter(&self) -> std::vec::IntoIter<DocumentViewId> {
         self.0.clone().into_iter()
     }
+
+    /// Get sorted view ids.
+    pub fn sorted(&self) -> Vec<DocumentViewId> {
+        let mut view_ids = self.0.clone();
+        view_ids.sort();
+        view_ids
+    }
 }
 
 impl Validate for PinnedRelationList {

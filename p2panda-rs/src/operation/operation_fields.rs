@@ -62,6 +62,10 @@ impl OperationFields {
         Ok(())
     }
 
+    pub fn insert(&mut self, name: &str, value: OperationValue) -> Result<(), OperationFieldsError> {
+        self.add(name, value)
+    }
+
     /// Overwrites an already existing field with a new value.
     pub fn update(
         &mut self,

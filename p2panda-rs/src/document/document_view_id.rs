@@ -37,7 +37,7 @@ use super::error::DocumentViewIdError;
 ///                         \
 ///                          \__ [UPDATE] (Hash: "eff..")
 /// ```
-#[derive(Clone, Debug, Eq)]
+#[derive(Clone, Debug, Eq, Ord, PartialOrd)]
 pub struct DocumentViewId(Vec<OperationId>);
 
 impl DocumentViewId {
@@ -105,6 +105,8 @@ impl Validate for DocumentViewId {
         for hash in &self.0 {
             hash.validate()?;
         }
+
+        // @TODO: Check for sorted here
 
         Ok(())
     }
@@ -216,12 +218,14 @@ impl FromStr for DocumentViewId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut operations: Vec<OperationId> = Vec::new();
+
         s.rsplit('_')
             .try_for_each::<_, Result<(), Self::Err>>(|hash_str| {
                 let hash = Hash::new(hash_str)?;
                 operations.push(hash.into());
                 Ok(())
             })?;
+
         Ok(Self::new(&operations).unwrap())
     }
 }

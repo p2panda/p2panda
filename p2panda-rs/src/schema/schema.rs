@@ -13,7 +13,7 @@ use crate::schema::system::{
 use crate::schema::{FieldType, SchemaError, SchemaId, SchemaIdError, SchemaVersion};
 
 /// The key of a schema field
-type FieldKey = String;
+pub type FieldName = String;
 
 /// A struct representing a p2panda schema.
 ///
@@ -48,7 +48,7 @@ pub struct Schema {
     pub(super) description: String,
 
     /// Maps all of the schema's field names to their respective types.
-    pub(super) fields: BTreeMap<FieldKey, FieldType>,
+    pub(super) fields: BTreeMap<FieldName, FieldType>,
 }
 
 impl Schema {
@@ -219,7 +219,7 @@ impl Schema {
 
     /// Access the schema fields.
     #[allow(unused)]
-    pub fn fields(&self) -> &BTreeMap<FieldKey, FieldType> {
+    pub fn fields(&self) -> &BTreeMap<FieldName, FieldType> {
         &self.fields
     }
 }
