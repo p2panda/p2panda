@@ -60,27 +60,25 @@ impl DocumentViewId {
         graph_tips
     }
 
-    /// Get a string representation of document view id.
-    ///
-    /// The string contains the hashes of all graph tips.
-    pub fn to_string(&self) -> String {
-        let mut id_str = String::new();
+    /// Get a short string representation of document view id.
+    pub fn short_repr(&self) -> String {
+        let mut result = String::new();
+        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
 
-        for (i, operation_id) in self.sorted().iter().enumerate() {
+        for (i, operation_id) in self.0.clone().into_iter().enumerate() {
             let separator = if i == 0 { "" } else { "_" };
-            let _ = write!(id_str, "{}{}", separator, operation_id.as_str());
+            write!(result, "{}{}", &separator, &operation_id.as_str()[offset..]).unwrap();
         }
 
-        id_str
+        result
     }
 }
 
-// Get a short string representation of document view id.
 impl Display for DocumentViewId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (i, operation_id) in self.0.clone().into_iter().enumerate() {
+        for (i, operation_id) in self.sorted().iter().enumerate() {
             let separator = if i == 0 { "" } else { "_" };
-            write!(f, "{}{}", separator, operation_id.as_short_str())?;
+            let _ = write!(f, "{}{}", &separator, operation_id.as_str());
         }
 
         Ok(())
@@ -280,27 +278,16 @@ mod tests {
     }
 
     #[test]
-    fn debug_representation() {
-        let document_view_id = HASH.parse::<DocumentViewId>().unwrap();
-        assert_eq!(format!("{}", document_view_id), "496543");
-
-        let operation_1 = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
-            .parse::<OperationId>()
-            .unwrap();
-        let operation_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
-            .parse::<OperationId>()
-            .unwrap();
-
-        let view_id_unmerged = DocumentViewId::new(&[operation_1, operation_2]).unwrap();
-        assert_eq!(format!("{}", view_id_unmerged), "496543_f16e79");
-    }
-
-    #[test]
     fn string_representation() {
         let document_view_id = HASH.parse::<DocumentViewId>().unwrap();
 
         assert_eq!(
             document_view_id.to_string(),
+            "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+        );
+
+        assert_eq!(
+            format!("{}", document_view_id),
             "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
         );
 
@@ -314,6 +301,19 @@ mod tests {
         let document_view_id = DocumentViewId::new(&[operation_1, operation_2]).unwrap();
         assert_eq!(document_view_id.to_string(), "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79");
         assert_eq!("0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79".parse::<DocumentViewId>().unwrap(), document_view_id);
+    }
+
+    #[test]
+    fn short_representation() {
+        let operation_1 = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+            .parse::<OperationId>()
+            .unwrap();
+        let operation_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
+            .parse::<OperationId>()
+            .unwrap();
+
+        let view_id_unmerged = DocumentViewId::new(&[operation_1, operation_2]).unwrap();
+        assert_eq!(view_id_unmerged.short_repr(), "496543_f16e79");
     }
 
     #[rstest]

@@ -26,14 +26,10 @@ impl OperationId {
         self.0.as_str()
     }
 
-    /// Returns hash of operation id represented as `String`.
-    pub fn to_string(&self) -> String {
-        self.0.to_string()
-    }
-
     /// Return a shortened six character representation.
-    pub fn as_short_str(&self) -> &str {
-        self.0.as_short_str()
+    pub fn short_repr(&self) -> String {
+        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
+        format!("<Operation {}>", &self.0.as_str()[offset..])
     }
 
     /// Access the inner [`crate::hash::Hash`] value of this operation id.
@@ -66,7 +62,7 @@ impl FromStr for OperationId {
 
 impl Display for OperationId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<Operation {}>", self.as_short_str())
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -102,12 +98,16 @@ mod tests {
         let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         let operation_id = OperationId::new(Hash::new(hash_str).unwrap());
 
-        // Long string representation functions
         assert_eq!(operation_id.as_str(), hash_str);
         assert_eq!(operation_id.to_string(), hash_str);
+        assert_eq!(format!("{}", operation_id), hash_str);
+    }
 
-        // Short string representation via `Display` trait and function
-        assert_eq!(format!("{}", operation_id), "<Operation 6ec805>");
-        assert_eq!(operation_id.as_short_str(), "6ec805");
+    #[test]
+    fn short_representation() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let operation_id = OperationId::new(Hash::new(hash_str).unwrap());
+
+        assert_eq!(operation_id.short_repr(), "<Operation 6ec805>");
     }
 }

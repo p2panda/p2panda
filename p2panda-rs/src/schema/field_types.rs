@@ -60,15 +60,15 @@ impl Display for FieldType {
             FieldType::Int => "int".to_string(),
             FieldType::Float => "float".to_string(),
             FieldType::String => "str".to_string(),
-            FieldType::Relation(schema_id) => format!("relation({})", schema_id.to_string()),
+            FieldType::Relation(schema_id) => format!("relation({})", schema_id),
             FieldType::RelationList(schema_id) => {
-                format!("relation_list({})", schema_id.to_string())
+                format!("relation_list({})", schema_id)
             }
             FieldType::PinnedRelation(schema_id) => {
-                format!("pinned_relation({})", schema_id.to_string())
+                format!("pinned_relation({})", schema_id)
             }
             FieldType::PinnedRelationList(schema_id) => {
-                format!("pinned_relation_list({})", schema_id.to_string())
+                format!("pinned_relation_list({})", schema_id)
             }
         };
 

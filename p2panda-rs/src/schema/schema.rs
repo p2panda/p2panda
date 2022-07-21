@@ -216,11 +216,16 @@ impl Schema {
     pub fn fields(&self) -> &BTreeMap<FieldKey, FieldType> {
         &self.fields
     }
+
+    /// Return a shortened string representation.
+    pub fn short_repr(&self) -> String {
+        format!("<Schema {}>", self.id.short_repr())
+    }
 }
 
 impl Display for Schema {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<Schema {}>", self.id)
+        write!(f, "{}", self.id)
     }
 }
 
@@ -301,13 +306,39 @@ mod tests {
         )
         .unwrap();
 
-        // Short string representation via `Display` trait and function
-        assert_eq!(format!("{}", schema), "<Schema venue 496543>");
+        assert_eq!(
+            format!("{}", schema),
+            "venue_0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+        );
 
         // Make sure the id is matching
         assert_eq!(
             schema.id().to_string(),
             "venue_0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+        );
+    }
+
+    #[rstest]
+    fn short_representation(#[from(document_view_id)] schema_view_id: DocumentViewId) {
+        let schema = Schema::new(
+            &SchemaId::Application("venue".into(), schema_view_id),
+            "Some description",
+            vec![("number", FieldType::Int)],
+        )
+        .unwrap();
+        assert_eq!(schema.short_repr(), "<Schema venue 496543>");
+
+        let schema_definition = Schema::get_system(SchemaId::SchemaDefinition(1)).unwrap();
+        assert_eq!(
+            schema_definition.short_repr(),
+            "<Schema schema_definition_v1>"
+        );
+
+        let schema_field_definition =
+            Schema::get_system(SchemaId::SchemaFieldDefinition(1)).unwrap();
+        assert_eq!(
+            schema_field_definition.short_repr(),
+            "<Schema schema_field_definition_v1>"
         );
     }
 
@@ -337,22 +368,6 @@ mod tests {
         assert_eq!(
             format!("{}", result.unwrap_err()),
             "dynamic redefinition of system schema schema_definition_v1, use `Schema::get_system` instead"
-        );
-    }
-
-    #[test]
-    fn test_all_system_schemas() {
-        let schema_definition = Schema::get_system(SchemaId::SchemaDefinition(1)).unwrap();
-        assert_eq!(
-            schema_definition.to_string(),
-            "<Schema schema_definition_v1>"
-        );
-
-        let schema_field_definition =
-            Schema::get_system(SchemaId::SchemaFieldDefinition(1)).unwrap();
-        assert_eq!(
-            schema_field_definition.to_string(),
-            "<Schema schema_field_definition_v1>"
         );
     }
 
@@ -456,9 +471,6 @@ mod tests {
 
         // Schema should return correct cddl string
         assert_eq!(expected_cddl, schema.as_cddl());
-
-        // Schema should have a string representation
-        assert_eq!(format!("{}", schema), "<Schema venue_name 496543>");
     }
 
     #[rstest]

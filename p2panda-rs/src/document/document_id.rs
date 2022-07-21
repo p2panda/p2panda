@@ -36,11 +36,17 @@ impl DocumentId {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
+
+    /// Return a shortened six character representation.
+    pub fn short_repr(&self) -> String {
+        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
+        format!("<DocumentId {}>", &self.0.as_str()[offset..])
+    }
 }
 
 impl Display for DocumentId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.as_short_str())
+        write!(f, "{}", self.0.as_str())
     }
 }
 
@@ -85,7 +91,6 @@ mod tests {
             document_id,
             DocumentId::new(hash_str.parse::<OperationId>().unwrap())
         );
-        assert_eq!(document_id.as_str(), hash_str);
 
         // Converts any `Hash` to `DocumentId`
         let document_id = DocumentId::from(hash.clone());
@@ -93,5 +98,23 @@ mod tests {
 
         // Fails when string is not a hash
         assert!("This is not a hash".parse::<DocumentId>().is_err());
+    }
+
+    #[test]
+    fn string_representation() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let document_id: DocumentId = hash_str.parse().unwrap();
+
+        assert_eq!(document_id.to_string(), hash_str);
+        assert_eq!(document_id.as_str(), hash_str);
+        assert_eq!(format!("{}", document_id), hash_str);
+    }
+
+    #[test]
+    fn short_representation() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let document_id: DocumentId = hash_str.parse().unwrap();
+
+        assert_eq!(document_id.short_repr(), "<DocumentId 6ec805>");
     }
 }

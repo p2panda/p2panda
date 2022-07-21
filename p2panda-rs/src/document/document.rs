@@ -138,11 +138,17 @@ impl Document {
     pub fn is_deleted(&self) -> IsDeleted {
         self.meta.deleted
     }
+
+    /// Return a shortened string representation.
+    pub fn short_repr(&self) -> String {
+        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
+        format!("<Document {}>", &self.id.as_str()[offset..])
+    }
 }
 
 impl Display for Document {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<Document {}>", self.id)
+        write!(f, "{}", self.id)
     }
 }
 
@@ -252,10 +258,9 @@ impl DocumentBuilder {
         let mut graph = build_graph(&self.operations)?;
 
         // If a specific document view was requested then trim the graph to that point.
-        match document_view_id {
-            Some(id) => graph = graph.trim(&id.sorted())?,
-            None => (),
-        };
+        if let Some(id) = document_view_id {
+            graph = graph.trim(&id.sorted())?;
+        }
 
         // Topologically sort the operations in the graph.
         let sorted_graph_data = graph.sort()?;
@@ -339,8 +344,13 @@ mod tests {
         let builder = DocumentBuilder::new(vec![operation]);
         let document = builder.build().unwrap();
 
-        // Short string representation via `Display` trait
-        assert_eq!(format!("{}", document), "<Document 6ec805>");
+        assert_eq!(
+            document.to_string(),
+            "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805"
+        );
+
+        // Short string representation
+        assert_eq!(document.short_repr(), "<Document 6ec805>");
 
         // Make sure the id is matching
         assert_eq!(

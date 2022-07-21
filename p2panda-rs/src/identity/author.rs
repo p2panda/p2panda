@@ -48,11 +48,6 @@ impl Author {
         self.0.as_str()
     }
 
-    /// Returns hexadecimal representation of public key bytes as `String`.
-    pub fn to_string(&self) -> String {
-        self.0.clone()
-    }
-
     /// Return a shortened six character representation.
     ///
     /// ## Example
@@ -61,17 +56,17 @@ impl Author {
     /// # use p2panda_rs::identity::Author;
     /// let pub_key = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
     /// let author = pub_key.parse::<Author>().unwrap();
-    /// assert_eq!(author.as_short_str(), "a5d982");
+    /// assert_eq!(author.short_repr(), "<Author a5d982>");
     /// ```
-    pub fn as_short_str(&self) -> &str {
+    pub fn short_repr(&self) -> String {
         let offset = PUBLIC_KEY_LENGTH * 2 - 6;
-        &self.0[offset..]
+        format!("<Author {}>", &self.0[offset..])
     }
 }
 
 impl Display for Author {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<Author {}>", self.as_short_str())
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -171,12 +166,16 @@ mod tests {
         let author_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
         let author = Author::new(author_str).unwrap();
 
-        // Long string representation functions
         assert_eq!(author_str, author.as_str());
         assert_eq!(author_str, author.to_string());
+        assert_eq!(author_str, format!("{}", author));
+    }
 
-        // Short string representation via `Display` trait and function
-        assert_eq!(format!("{}", author), "<Author a5d982>");
-        assert_eq!(author.as_short_str(), "a5d982");
+    #[test]
+    fn short_representation() {
+        let author_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
+        let author = Author::new(author_str).unwrap();
+
+        assert_eq!(author.short_repr(), "<Author a5d982>");
     }
 }

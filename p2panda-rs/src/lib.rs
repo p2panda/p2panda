@@ -59,9 +59,6 @@
     unused_import_braces,
     unused_qualifications
 )]
-// We use short string representations for user-facing `Display`, while we do want to return whole strings
-// for `to_string` functions.
-#![allow(clippy::inherent_to_string_shadow_display)]
 // This must be imported here at the root of the crate in order for the `rstest` fixture macros to
 // work as expected.
 #![allow(clippy::single_component_path_imports)]

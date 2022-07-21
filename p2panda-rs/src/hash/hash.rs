@@ -62,11 +62,6 @@ impl Hash {
         &self.0
     }
 
-    /// Returns hash as `String`.
-    pub fn to_string(&self) -> String {
-        self.0.clone()
-    }
-
     /// Return a shortened six character representation.
     ///
     /// ## Example
@@ -75,17 +70,17 @@ impl Hash {
     /// # use p2panda_rs::hash::Hash;
     /// let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
     /// let hash: Hash = hash_str.parse().unwrap();
-    /// assert_eq!(hash.as_short_str(), "6ec805");
+    /// assert_eq!(hash.short_repr(), "<Hash 6ec805>");
     /// ```
-    pub fn as_short_str(&self) -> &str {
+    pub fn short_repr(&self) -> String {
         let offset = MAX_YAMF_HASH_SIZE * 2 - 6;
-        &self.as_str()[offset..]
+        format!("<Hash {}>", &self.as_str()[offset..])
     }
 }
 
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<Hash {}>", self.as_short_str())
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -234,12 +229,16 @@ mod tests {
         let hash_str = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
         let hash = Hash::new(hash_str).unwrap();
 
-        // Long string representation functions
         assert_eq!(hash_str, hash.as_str());
         assert_eq!(hash_str, hash.to_string());
+        assert_eq!(hash_str, format!("{}", hash));
+    }
 
-        // Short string representation via `Display` trait and function
-        assert_eq!(format!("{}", hash), "<Hash 496543>");
-        assert_eq!(hash.as_short_str(), "496543");
+    #[test]
+    fn short_representation() {
+        let hash_str = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
+        let hash = Hash::new(hash_str).unwrap();
+
+        assert_eq!(hash.short_repr(), "<Hash 496543>");
     }
 }
