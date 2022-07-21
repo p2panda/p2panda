@@ -1,16 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
 use std::hash::{Hash as StdHash, Hasher};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::document::DocumentViewId;
-use crate::operation::{
-    AsOperation, OperationEncoded, OperationError, OperationFields, RawOperation,
-};
-use crate::schema::{Schema, SchemaId};
+use crate::operation::{AsOperation, OperationEncoded, OperationError, OperationFields};
+use crate::schema::SchemaId;
 use crate::Validate;
 
 /// Operation format versions to introduce API changes in the future.

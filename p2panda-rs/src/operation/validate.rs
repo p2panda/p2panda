@@ -49,7 +49,7 @@ fn verify_create_operation(
 
     match raw_fields {
         Some(fields) => {
-            let raw_fields_iter = fields.iter();
+            let mut raw_fields_iter = fields.iter();
 
             for schema_field in schema.fields() {
                 match raw_fields_iter.next() {
@@ -90,7 +90,7 @@ fn verify_update_operation(
 
     match raw_fields {
         Some(fields) => {
-            let checked_fields = 0;
+            let mut checked_fields = 0;
 
             for schema_field in schema.fields() {
                 match fields.find(schema_field.0) {

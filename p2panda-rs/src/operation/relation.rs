@@ -38,10 +38,6 @@ impl Relation {
     pub fn document_id(&self) -> &DocumentId {
         &self.0
     }
-
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
 }
 
 impl Validate for Relation {
@@ -95,10 +91,6 @@ impl PinnedRelation {
     /// Returns the pinned relation's document view id.
     pub fn view_id(&self) -> &DocumentViewId {
         &self.0
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0.as_str()
     }
 }
 

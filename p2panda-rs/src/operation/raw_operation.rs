@@ -44,11 +44,11 @@ impl From<&OperationFields> for RawFields {
         let mut raw = RawFields::new();
 
         for (name, value) in fields.iter() {
-            let raw_value = match *value {
-                OperationValue::Boolean(bool) => RawValue::Boolean(bool),
-                OperationValue::Integer(int) => RawValue::Integer(int),
-                OperationValue::Float(float) => RawValue::Float(float),
-                OperationValue::Text(str) => RawValue::Text(str),
+            let raw_value = match value {
+                OperationValue::Boolean(bool) => RawValue::Boolean(*bool),
+                OperationValue::Integer(int) => RawValue::Integer(*int),
+                OperationValue::Float(float) => RawValue::Float(*float),
+                OperationValue::Text(str) => RawValue::Text(str.to_owned()),
                 OperationValue::Relation(relation) => {
                     RawValue::Relation(relation.document_id().to_owned())
                 }

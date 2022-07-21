@@ -62,7 +62,11 @@ impl OperationFields {
         Ok(())
     }
 
-    pub fn insert(&mut self, name: &str, value: OperationValue) -> Result<(), OperationFieldsError> {
+    pub fn insert(
+        &mut self,
+        name: &str,
+        value: OperationValue,
+    ) -> Result<(), OperationFieldsError> {
         self.add(name, value)
     }
 

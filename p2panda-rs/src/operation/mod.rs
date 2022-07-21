@@ -24,7 +24,7 @@ pub use error::{
 };
 pub use operation::{Operation, OperationAction, OperationVersion};
 pub use operation_encoded::OperationEncoded;
-pub use operation_fields::{OperationField, OperationFields};
+pub use operation_fields::OperationFields;
 pub use operation_id::OperationId;
 pub use operation_value::OperationValue;
 pub use raw_operation::{RawField, RawFields, RawOperation, RawValue};
