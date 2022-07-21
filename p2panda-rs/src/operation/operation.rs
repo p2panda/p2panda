@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::TryFrom;
 use std::hash::{Hash as StdHash, Hasher};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::document::DocumentViewId;
-use crate::operation::{AsOperation, OperationEncoded, OperationError, OperationFields};
-use crate::schema::SchemaId;
+use crate::operation::{
+    AsOperation, OperationEncoded, OperationError, OperationFields, RawOperation,
+};
+use crate::schema::{Schema, SchemaId};
 use crate::Validate;
 
 /// Operation format versions to introduce API changes in the future.
@@ -17,7 +20,7 @@ use crate::Validate;
 /// support backwards compatibility for old data we can use this version number.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[serde(untagged)]
-#[repr(u8)]
+#[repr(u64)]
 pub enum OperationVersion {
     /// The default version number.
     Default = 1,
@@ -43,12 +46,20 @@ pub enum OperationAction {
 
 impl OperationAction {
     /// Returns the operation action as a string.
-    #[allow(unused)]
     pub fn as_str(&self) -> &str {
         match self {
             OperationAction::Create => "create",
             OperationAction::Update => "update",
             OperationAction::Delete => "delete",
+        }
+    }
+
+    /// Returns the operation action encoded as u64.
+    pub fn as_u64(&self) -> u64 {
+        match self {
+            OperationAction::Create => 0,
+            OperationAction::Update => 1,
+            OperationAction::Delete => 2,
         }
     }
 }
@@ -58,11 +69,7 @@ impl Serialize for OperationAction {
     where
         S: Serializer,
     {
-        serializer.serialize_str(match *self {
-            OperationAction::Create => "create",
-            OperationAction::Update => "update",
-            OperationAction::Delete => "delete",
-        })
+        serializer.serialize_u64(self.as_u64())
     }
 }
 
@@ -71,13 +78,13 @@ impl<'de> Deserialize<'de> for OperationAction {
     where
         D: Deserializer<'de>,
     {
-        let s = String::deserialize(deserializer)?;
+        let action = u64::deserialize(deserializer)?;
 
-        match s.as_str() {
-            "create" => Ok(OperationAction::Create),
-            "update" => Ok(OperationAction::Update),
-            "delete" => Ok(OperationAction::Delete),
-            _ => Err(serde::de::Error::custom("unknown operation action")),
+        match action {
+            0 => Ok(OperationAction::Create),
+            1 => Ok(OperationAction::Update),
+            2 => Ok(OperationAction::Delete),
+            _ => Err(serde::de::Error::custom("Unknown operation action")),
         }
     }
 }

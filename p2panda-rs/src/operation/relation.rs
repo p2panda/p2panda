@@ -38,6 +38,10 @@ impl Relation {
     pub fn document_id(&self) -> &DocumentId {
         &self.0
     }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
 }
 
 impl Validate for Relation {
@@ -92,6 +96,10 @@ impl PinnedRelation {
     pub fn view_id(&self) -> &DocumentViewId {
         &self.0
     }
+
+    pub fn as_str(&self) -> &str {
+        &self.0.as_str()
+    }
 }
 
 impl Validate for PinnedRelation {
@@ -125,6 +133,13 @@ impl RelationList {
     /// Returns an iterator over the `DocumentId`s in this `RelationList`
     pub fn iter(&self) -> std::vec::IntoIter<DocumentId> {
         self.0.clone().into_iter()
+    }
+
+    /// Get sorted graph tips for this view id.
+    pub fn sorted(&self) -> Vec<DocumentId> {
+        let mut document_ids = self.0.clone();
+        document_ids.sort();
+        document_ids
     }
 }
 

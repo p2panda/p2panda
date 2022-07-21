@@ -4,6 +4,8 @@
 //!
 //! Operations describe data mutations in the p2panda network. Authors send operations to create,
 //! update or delete documents or collections of data.
+mod decode;
+mod encode;
 mod error;
 #[allow(clippy::module_inception)]
 mod operation;
