@@ -14,7 +14,6 @@ use crate::storage_provider::traits::{
 };
 use crate::storage_provider::utils::Result;
 use crate::Validate;
-use crate::test_utils::db::{EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse};
 
 /// Trait which handles all high level storage queries and insertions.
 ///
@@ -37,7 +36,21 @@ use crate::test_utils::db::{EntryArgsRequest, EntryArgsResponse, PublishEntryReq
 /// definitions for any of the trait methods.
 #[async_trait]
 pub trait StorageProvider: EntryStore<Self::StorageEntry> + LogStore<Self::StorageLog> + OperationStore<Self::StorageOperation>
-{    
+{ 
+    // @TODO: These req/res types will be deprecated along with publish_entry and next_entry_args 
+
+    /// Params when making a request to get the next entry args for an author and document.
+    type EntryArgsRequest: AsEntryArgsRequest + Sync;
+
+    /// Response from a call to get next entry args for an author and document.
+    type EntryArgsResponse: AsEntryArgsResponse;
+
+    /// Params when making a request to publish a new entry.
+    type PublishEntryRequest: AsPublishEntryRequest + Sync;
+
+    /// Response from a call to publish a new entry.
+    type PublishEntryResponse: AsPublishEntryResponse;
+    
     // TODO: We can move these types into their own stores once we deprecate the
     // higher level methods (publish_entry and next_entry_args) on StorageProvider.
     
@@ -64,8 +77,8 @@ pub trait StorageProvider: EntryStore<Self::StorageEntry> + LogStore<Self::Stora
     /// document's log_id) to encode a new bamboo entry.
     async fn get_entry_args(
         &self,
-        params: &EntryArgsRequest,
-    ) -> Result<EntryArgsResponse> {
+        params: &Self::EntryArgsRequest,
+    ) -> Result<Self::EntryArgsResponse> {
         debug!(
             "Get entry args request recieved for author: {} {}",
             params.author(),
@@ -110,7 +123,7 @@ pub trait StorageProvider: EntryStore<Self::StorageEntry> + LogStore<Self::Stora
                     log_id
                 );
 
-                Ok(EntryArgsResponse::new(
+                Ok(Self::EntryArgsResponse::new(
                     Some(backlink.clone()),
                     skiplink,
                     seq_num,
@@ -125,7 +138,7 @@ pub trait StorageProvider: EntryStore<Self::StorageEntry> + LogStore<Self::Stora
                     SeqNum::default(),
                     log
                 );
-                Ok(EntryArgsResponse::new(
+                Ok(Self::EntryArgsResponse::new(
                     None,
                     None,
                     SeqNum::default(),
@@ -138,8 +151,8 @@ pub trait StorageProvider: EntryStore<Self::StorageEntry> + LogStore<Self::Stora
     /// Stores an author's Bamboo entry with operation payload in database after validating it.
     async fn publish_entry(
         &self,
-        params: &PublishEntryRequest,
-    ) -> Result<PublishEntryResponse> {
+        params: &Self::PublishEntryRequest,
+    ) -> Result<Self::PublishEntryResponse> {
         debug!(
             "Publish entry request recieved from {} containing entry: {}",
             params.entry_signed().author(),
@@ -248,7 +261,7 @@ pub trait StorageProvider: EntryStore<Self::StorageEntry> + LogStore<Self::Stora
             entry.log_id()
         );
 
-        Ok(PublishEntryResponse::new(
+        Ok(Self::PublishEntryResponse::new(
             Some(entry.hash()),
             entry_hash_skiplink,
             next_seq_num,
