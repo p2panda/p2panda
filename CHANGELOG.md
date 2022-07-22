@@ -17,6 +17,7 @@ Highlights are marked with a pancake 🥞
 
 - Refactor mock `Node` implementation to use `StorageProvider` traits [#383](https://github.com/p2panda/p2panda/pull/383) `rs`
 - Deserialize from string and u64 for `LogId` and `SeqNum` [#401](https://github.com/p2panda/p2panda/pull/401) `rs`
+- Remove generic parameters from `StorageProvider` #[408](https://github.com/p2panda/p2panda/pull/408) `rs` 
 
 ### Fixed
 
