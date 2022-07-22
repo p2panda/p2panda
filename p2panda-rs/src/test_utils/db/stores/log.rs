@@ -115,4 +115,22 @@ mod tests {
         let log_id = store.next_log_id(&author).await.unwrap();
         assert_eq!(log_id, LogId::new(1));
     }
+
+    #[rstest]
+    #[tokio::test]
+    async fn get_latest_log_id(key_pair: KeyPair, schema: SchemaId, document_id: DocumentId) {
+        // Instantiate a new store.
+        let store = MemoryStore::default();
+
+        let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
+        let log_id = store.latest_log_id(&author).await.unwrap();
+        assert_eq!(log_id, None);
+
+        let log = StorageLog::new(&author, &schema, &document_id, &LogId::default());
+
+        assert!(store.insert_log(log).await.is_ok());
+
+        let log_id = store.latest_log_id(&author).await.unwrap();
+        assert_eq!(log_id, Some(LogId::default()));
+    }
 }
