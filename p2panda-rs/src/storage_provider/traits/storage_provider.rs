@@ -35,9 +35,10 @@ use crate::Validate;
 /// which needs defining is `get_document_by_entry`. It is also possible to over-ride the default
 /// definitions for any of the trait methods.
 #[async_trait]
-pub trait StorageProvider: EntryStore<Self::StorageEntry> + LogStore<Self::StorageLog> + OperationStore<Self::StorageOperation>
-{ 
-    // @TODO: These req/res types will be deprecated along with publish_entry and next_entry_args 
+pub trait StorageProvider:
+    EntryStore<Self::StorageEntry> + LogStore<Self::StorageLog> + OperationStore<Self::StorageOperation>
+{
+    // @TODO: These req/res types will be deprecated along with publish_entry and next_entry_args
 
     /// Params when making a request to get the next entry args for an author and document.
     type EntryArgsRequest: AsEntryArgsRequest + Sync;
@@ -50,17 +51,17 @@ pub trait StorageProvider: EntryStore<Self::StorageEntry> + LogStore<Self::Stora
 
     /// Response from a call to publish a new entry.
     type PublishEntryResponse: AsPublishEntryResponse;
-    
+
     // TODO: We can move these types into their own stores once we deprecate the
     // higher level methods (publish_entry and next_entry_args) on StorageProvider.
-    
-    /// An associated type representing an entry as it passes in and out of storage. 
+
+    /// An associated type representing an entry as it passes in and out of storage.
     type StorageEntry: AsStorageEntry;
 
-    /// An associated type representing a log as it passes in and out of storage. 
+    /// An associated type representing a log as it passes in and out of storage.
     type StorageLog: AsStorageLog;
-    
-    /// An associated type representing an operation as it passes in and out of storage. 
+
+    /// An associated type representing an operation as it passes in and out of storage.
     type StorageOperation: AsVerifiedOperation;
 
     /// Returns the related document for any entry.

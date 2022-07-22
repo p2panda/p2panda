@@ -12,8 +12,10 @@ use crate::schema::SchemaId;
 use crate::storage_provider::traits::StorageProvider;
 use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog};
 use crate::storage_provider::utils::Result;
+use crate::test_utils::db::{
+    EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
+};
 use crate::test_utils::db::{StorageEntry, StorageLog};
-use crate::test_utils::db::{EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse};
 
 type AuthorPlusLogId = String;
 
@@ -40,7 +42,6 @@ pub struct MemoryStore {
 
 #[async_trait]
 impl StorageProvider for MemoryStore {
-    
     type EntryArgsRequest = EntryArgsRequest;
 
     type EntryArgsResponse = EntryArgsResponse;
@@ -48,7 +49,7 @@ impl StorageProvider for MemoryStore {
     type PublishEntryRequest = PublishEntryRequest;
 
     type PublishEntryResponse = PublishEntryResponse;
-    
+
     type StorageEntry = StorageEntry;
 
     type StorageLog = StorageLog;

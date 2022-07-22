@@ -17,7 +17,6 @@ use crate::storage_provider::traits::AsStorageEntry;
 /// the required methods for inserting and querying entries from storage.
 #[async_trait]
 pub trait EntryStore<StorageEntry: AsStorageEntry> {
-    
     /// Insert an entry into storage.
     ///
     /// Returns an error if a fatal storage error occured.
