@@ -7,9 +7,11 @@ mod field_types;
 mod schema;
 mod schema_id;
 pub mod system;
+mod validate;
 
-pub use error::{FieldTypeError, SchemaError, SchemaIdError};
+pub use error::{FieldTypeError, SchemaError, SchemaIdError, ValidationError};
 pub use field_types::FieldType;
 pub use schema::{FieldName, Schema};
 pub use schema_id::{SchemaId, SchemaVersion};
 pub use system::SYSTEM_SCHEMAS;
+pub use validate::{verify_all_fields, verify_only_given_fields};

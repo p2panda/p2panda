@@ -164,13 +164,11 @@ impl Schema {
     }
 
     /// Return a definition for this schema expressed as a CDDL string.
-    #[allow(unused)]
     pub fn as_cddl(&self) -> String {
         generate_cddl_definition(&self.fields)
     }
 
     /// Access the schema's [`SchemaId`].
-    #[allow(unused)]
     pub fn id(&self) -> &SchemaId {
         &self.id
     }
@@ -183,7 +181,6 @@ impl Schema {
     /// It has the format "<schema name>__<hashed schema document view>" for application schemas
     /// and "<schema_name>__<version>" for system schemas (note that this has two underscores,
     /// while schema id has only one).
-    #[allow(unused)]
     pub fn hash_id(&self) -> String {
         match self.id.version() {
             SchemaVersion::Application(view_id) => {
@@ -200,25 +197,21 @@ impl Schema {
     }
 
     /// Access the schema version.
-    #[allow(unused)]
     pub fn version(&self) -> SchemaVersion {
         self.id.version()
     }
 
     /// Access the schema name.
-    #[allow(unused)]
     pub fn name(&self) -> &str {
         self.id.name()
     }
 
     /// Access the schema description.
-    #[allow(unused)]
     pub fn description(&self) -> &str {
         &self.description
     }
 
     /// Access the schema fields.
-    #[allow(unused)]
     pub fn fields(&self) -> &BTreeMap<FieldName, FieldType> {
         &self.fields
     }

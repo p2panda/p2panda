@@ -1,41 +1,53 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::slice::Iter;
+use std::collections::btree_map::Iter;
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentId, DocumentViewId};
 use crate::operation::{
-    AsOperation, Operation, OperationAction, OperationError, OperationFields, OperationValue,
-    OperationVersion,
+    AsOperation, Operation, OperationAction, OperationFields, OperationValue, OperationVersion,
+    RawOperationError,
 };
 use crate::schema::{FieldName, SchemaId};
 use crate::Validate;
 
-pub type RawField = (FieldName, RawValue);
-
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
-pub struct RawFields(Vec<RawField>);
+pub struct RawFields(BTreeMap<FieldName, RawValue>);
 
 impl RawFields {
     pub fn new() -> Self {
-        Self(Vec::new())
+        Self(BTreeMap::new())
     }
 
-    pub fn find(&self, name: &str) -> Option<&RawField> {
-        self.0.iter().find(|field| field.0 == name)
+    /// Returns true when no field is given.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
-    pub fn insert(&mut self, name: &str, value: &RawValue) {
-        self.0.push((name.to_owned(), value.clone()))
-    }
-
-    pub fn iter(&self) -> Iter<RawField> {
-        self.0.iter()
-    }
-
+    /// Returns the number of fields.
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn get(&self, name: &str) -> Option<&RawValue> {
+        self.0.get(name)
+    }
+
+    pub fn insert(&mut self, name: &str, value: RawValue) -> Result<(), RawOperationError> {
+        if self.0.contains_key(name) {
+            // @TODO
+            panic!("Duplicate")
+        }
+
+        self.0.insert(name.to_owned(), value);
+
+        Ok(())
+    }
+
+    pub fn iter(&self) -> Iter<FieldName, RawValue> {
+        self.0.iter()
     }
 }
 
@@ -61,7 +73,7 @@ impl From<&OperationFields> for RawFields {
                 }
             };
 
-            raw.insert(name, &raw_value);
+            raw.insert(&name, raw_value);
         }
 
         raw
@@ -69,7 +81,7 @@ impl From<&OperationFields> for RawFields {
 }
 
 impl Validate for RawFields {
-    type Error = OperationError;
+    type Error = RawOperationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
         // @TODO
@@ -90,8 +102,23 @@ pub enum RawValue {
     PinnedRelationList(Vec<DocumentViewId>),
 }
 
+impl RawValue {
+    pub fn field_type(&self) -> &str {
+        match self {
+            RawValue::Boolean(_) => "bool",
+            RawValue::Integer(_) => "int",
+            RawValue::Float(_) => "float",
+            RawValue::Text(_) => "str",
+            RawValue::Relation(_) => "relation",
+            RawValue::RelationList(_) => "relation_list",
+            RawValue::PinnedRelation(_) => "pinned_relation",
+            RawValue::PinnedRelationList(_) => "pinned_relation_list",
+        }
+    }
+}
+
 impl Validate for RawValue {
-    type Error = OperationError;
+    type Error = RawOperationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
         // @TODO
@@ -143,7 +170,7 @@ impl From<&Operation> for RawOperation {
 }
 
 impl Validate for RawOperation {
-    type Error = OperationError;
+    type Error = RawOperationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
         // @TODO

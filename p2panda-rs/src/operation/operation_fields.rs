@@ -62,6 +62,9 @@ impl OperationFields {
         Ok(())
     }
 
+    /// Adds a new field to this instance.
+    ///
+    /// A field is a simple key/value pair.
     pub fn insert(
         &mut self,
         name: &str,

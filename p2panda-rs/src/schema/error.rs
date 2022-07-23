@@ -55,3 +55,28 @@ pub enum FieldTypeError {
     #[error(transparent)]
     RelationSchemaReference(#[from] SchemaIdError),
 }
+
+/// Custom error types for validating raw operations with schemas.
+#[derive(Error, Debug)]
+pub enum ValidationError {
+
+    /// Field with this name is required by schema.
+    #[error("missing required field: '{0}' of type {1}")]
+    MissingField(String, String),
+
+    /// One or more fields which do not belong to the schema.
+    #[error("unexpected fields found: {0}")]
+    UnexpectedFields(String),
+
+    /// Raw operation field did not match schema.
+    #[error("field '{0}' does not match schema: {1}")]
+    InvalidField(String, String),
+
+    /// Field type and schema do not match.
+    #[error("expected field name '{1}'")]
+    InvalidName(String, String),
+
+    /// Field type and schema do not match.
+    #[error("invalid field type '{0}', expected '{1}'")]
+    InvalidType(String, String),
+}

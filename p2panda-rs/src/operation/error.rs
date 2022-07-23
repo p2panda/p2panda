@@ -27,6 +27,34 @@ pub enum OperationError {
     HashError(#[from] crate::hash::HashError),
 }
 
+/// Error types for `RawOperation` struct and methods related to it.
+#[derive(Error, Debug)]
+pub enum RawOperationError {
+    /// Could not decode CBOR of raw operation.
+    #[error("invalid CBOR encoding: {0}")]
+    InvalidCBOREncoding(String),
+
+    /// Expected `fields` in CREATE or UPDATE operation.
+    #[error("expected 'fields' in CREATE or UPDATE operation")]
+    ExpectedFields,
+
+    /// Unexpected `fields` in DELETE operation.
+    #[error("unexpected 'fields' in DELETE operation")]
+    UnexpectedFields,
+
+    /// Expected `previous_operations` in UPDATE or DELETE operation.
+    #[error("expected 'previous_operations' in UPDATE or DELETE operation")]
+    ExpectedPreviousOperations,
+
+    /// Unexpected `previous_operations` in CREATE operation.
+    #[error("unexpected 'previous_operations' in CREATE operation")]
+    UnexpectedPreviousOperations,
+
+    /// Operation did not match given schema.
+    #[error(transparent)]
+    SchemaValidation(#[from] crate::schema::ValidationError),
+}
+
 /// Error types for methods of `OperationFields` struct.
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]

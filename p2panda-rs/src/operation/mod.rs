@@ -20,14 +20,15 @@ mod validate;
 mod verified_operation;
 
 pub use error::{
-    OperationEncodedError, OperationError, OperationFieldsError, VerifiedOperationError,
+    OperationEncodedError, OperationError, OperationFieldsError, RawOperationError,
+    VerifiedOperationError,
 };
 pub use operation::{Operation, OperationAction, OperationVersion};
 pub use operation_encoded::OperationEncoded;
 pub use operation_fields::OperationFields;
 pub use operation_id::OperationId;
 pub use operation_value::OperationValue;
-pub use raw_operation::{RawField, RawFields, RawOperation, RawValue};
+pub use raw_operation::{RawFields, RawOperation, RawValue};
 pub use relation::{PinnedRelation, PinnedRelationList, Relation, RelationList};
 pub use traits::{AsOperation, AsVerifiedOperation};
 pub use validate::verify_schema_and_convert;
