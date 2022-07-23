@@ -225,7 +225,7 @@ mod tests {
     use crate::operation::{OperationFields, OperationValue, RawFields, RawValue};
     use crate::schema::{FieldType, Schema, SchemaId};
     use crate::test_utils::constants::{HASH, SCHEMA_ID};
-    use crate::test_utils::fixtures::{document_id, document_view_id, schema};
+    use crate::test_utils::fixtures::{document_id, document_view_id, schema_id};
 
     use super::{
         verify_all_fields, verify_field, verify_field_name, verify_field_value,
@@ -262,7 +262,7 @@ mod tests {
             ),
             (
                 &"most_boring_animal_in_zoo".to_owned(),
-                &FieldType::Relation(schema(SCHEMA_ID))
+                &FieldType::Relation(schema_id(SCHEMA_ID))
             )
         )
         .is_err());
@@ -281,19 +281,19 @@ mod tests {
     #[case(RawValue::Boolean(true), FieldType::Boolean)]
     #[case(
         RawValue::Relation(document_id(HASH)),
-        FieldType::Relation(schema(SCHEMA_ID))
+        FieldType::Relation(schema_id(SCHEMA_ID))
     )]
     #[case(
         RawValue::PinnedRelation(document_view_id(vec![HASH])),
-        FieldType::PinnedRelation(schema(SCHEMA_ID))
+        FieldType::PinnedRelation(schema_id(SCHEMA_ID))
     )]
     #[case(
         RawValue::RelationList(vec![document_id(HASH)]),
-        FieldType::RelationList(schema(SCHEMA_ID))
+        FieldType::RelationList(schema_id(SCHEMA_ID))
     )]
     #[case(
         RawValue::PinnedRelationList(vec![document_view_id(vec![HASH])]),
-        FieldType::PinnedRelationList(schema(SCHEMA_ID))
+        FieldType::PinnedRelationList(schema_id(SCHEMA_ID))
     )]
     fn correct_field_values(#[case] raw_value: RawValue, #[case] schema_field_type: FieldType) {
         assert!(verify_field_value(&raw_value, &schema_field_type).is_ok());
@@ -322,7 +322,7 @@ mod tests {
     )]
     #[case(
         RawValue::PinnedRelation(document_view_id(vec![HASH])),
-        FieldType::RelationList(schema(SCHEMA_ID)),
+        FieldType::RelationList(schema_id(SCHEMA_ID)),
         "invalid field type 'pinned_relation', expected 'relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)'",
     )]
     fn wrong_field_values(
@@ -344,7 +344,7 @@ mod tests {
         vec![
             ("message", FieldType::Text),
             ("age", FieldType::Integer),
-            ("fans", FieldType::RelationList(schema(SCHEMA_ID))),
+            ("fans", FieldType::RelationList(schema_id(SCHEMA_ID))),
         ],
         vec![
             ("message", RawValue::Text("Hello, Mr. Handa!".into())),

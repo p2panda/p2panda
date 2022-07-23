@@ -147,7 +147,7 @@ pub mod tests {
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
     use crate::test_utils::db::{MemoryStore, StorageEntry};
     use crate::test_utils::fixtures::{
-        entry, entry_signed_encoded, key_pair, operation_encoded, random_key_pair, schema,
+        entry, entry_signed_encoded, key_pair, operation_encoded, random_key_pair, schema_id,
     };
 
     #[rstest]
@@ -215,7 +215,7 @@ pub mod tests {
         #[from(random_key_pair)] key_pair_2: KeyPair,
         entry: Entry,
         operation_encoded: OperationEncoded,
-        schema: SchemaId,
+        schema_id: SchemaId,
     ) {
         // Instantiate a new store.
         let store = MemoryStore::default();
@@ -227,7 +227,7 @@ pub mod tests {
 
         // Before an entry with this schema is inserted this method should return an empty array.
         assert!(store
-            .get_entries_by_schema(&schema)
+            .get_entries_by_schema(&schema_id)
             .await
             .unwrap()
             .is_empty());
@@ -236,7 +236,7 @@ pub mod tests {
         store.insert_entry(author_1_entry).await.unwrap();
         store.insert_entry(author_2_entry).await.unwrap();
 
-        assert_eq!(store.get_entries_by_schema(&schema).await.unwrap().len(), 2);
+        assert_eq!(store.get_entries_by_schema(&schema_id).await.unwrap().len(), 2);
     }
 
     #[rstest]

@@ -225,7 +225,7 @@ mod test {
     use rstest::rstest;
 
     use crate::test_utils::constants::SCHEMA_ID;
-    use crate::test_utils::fixtures::schema;
+    use crate::test_utils::fixtures::schema_id;
 
     use super::SchemaId;
 
@@ -338,8 +338,8 @@ mod test {
     }
 
     #[rstest]
-    fn display(schema: SchemaId) {
-        assert_eq!(format!("{}", schema), "venue 8fc78b");
+    fn display(schema_id: SchemaId) {
+        assert_eq!(format!("{}", schema_id), "venue 8fc78b");
         assert_eq!(
             format!("{}", SchemaId::SchemaDefinition(1)),
             "schema_definition_v1"

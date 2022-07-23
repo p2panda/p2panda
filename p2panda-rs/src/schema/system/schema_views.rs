@@ -188,7 +188,7 @@ mod tests {
     use crate::operation::{OperationId, OperationValue, PinnedRelationList};
     use crate::schema::system::SchemaFieldView;
     use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::{document_view_id, random_operation_id, schema};
+    use crate::test_utils::fixtures::{document_view_id, random_operation_id, schema_id};
 
     use super::{FieldType, SchemaView};
 
@@ -232,7 +232,7 @@ mod tests {
     fn field_type_from_document_view(
         #[from(random_operation_id)] operation_id: OperationId,
         document_view_id: DocumentViewId,
-        #[from(schema)] address_schema: SchemaId,
+        #[from(schema_id)] address_schema: SchemaId,
     ) {
         // Create first schema field "is_accessible"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

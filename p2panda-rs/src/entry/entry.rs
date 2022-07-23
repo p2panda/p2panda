@@ -214,19 +214,19 @@ mod tests {
     use crate::hash::Hash;
     use crate::operation::{Operation, OperationFields, OperationValue};
     use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::{entry, schema};
+    use crate::test_utils::fixtures::{entry, schema_id};
     use crate::Validate;
 
     use super::Entry;
 
     #[rstest]
-    fn validation(schema: SchemaId) {
+    fn validation(schema_id: SchemaId) {
         // Prepare sample values
         let mut fields = OperationFields::new();
         fields
             .add("test", OperationValue::Text("Hello".to_owned()))
             .unwrap();
-        let operation = Operation::new_create(schema, fields).unwrap();
+        let operation = Operation::new_create(schema_id, fields).unwrap();
         let backlink = Hash::new_from_bytes(vec![7, 8, 9]).unwrap();
 
         // The first entry in a log doesn't need and cannot have references to previous entries

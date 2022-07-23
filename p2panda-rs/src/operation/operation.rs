@@ -302,7 +302,7 @@ mod tests {
     use crate::operation::{AsOperation, OperationEncoded, OperationValue, Relation};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        operation_fields, random_document_id, random_document_view_id, schema,
+        operation_fields, random_document_id, random_document_view_id, schema_id,
     };
     use crate::test_utils::templates::many_valid_operations;
     use crate::Validate;
@@ -319,13 +319,13 @@ mod tests {
     #[rstest]
     fn operation_validation(
         operation_fields: OperationFields,
-        schema: SchemaId,
+        schema_id: SchemaId,
         #[from(random_document_view_id)] prev_op_id: DocumentViewId,
     ) {
         let invalid_create_operation_1 = Operation {
             action: OperationAction::Create,
             version: OperationVersion::Default,
-            schema: schema.clone(),
+            schema: schema_id.clone(),
             previous_operations: None,
             // CREATE operations must contain fields
             fields: None, // Error
@@ -336,7 +336,7 @@ mod tests {
         let invalid_create_operation_2 = Operation {
             action: OperationAction::Create,
             version: OperationVersion::Default,
-            schema: schema.clone(),
+            schema: schema_id.clone(),
             // CREATE operations must not contain previous_operations
             previous_operations: Some(prev_op_id.clone()), // Error
             fields: Some(operation_fields.clone()),
@@ -347,7 +347,7 @@ mod tests {
         let invalid_update_operation_1 = Operation {
             action: OperationAction::Update,
             version: OperationVersion::Default,
-            schema: schema.clone(),
+            schema: schema_id.clone(),
             // UPDATE operations must contain previous_operations
             previous_operations: None, // Error
             fields: Some(operation_fields.clone()),
@@ -358,7 +358,7 @@ mod tests {
         let invalid_update_operation_2 = Operation {
             action: OperationAction::Update,
             version: OperationVersion::Default,
-            schema: schema.clone(),
+            schema: schema_id.clone(),
             previous_operations: Some(prev_op_id.clone()),
             // UPDATE operations must contain fields
             fields: None, // Error
@@ -369,7 +369,7 @@ mod tests {
         let invalid_delete_operation_1 = Operation {
             action: OperationAction::Delete,
             version: OperationVersion::Default,
-            schema: schema.clone(),
+            schema: schema_id.clone(),
             // DELETE operations must contain previous_operations
             previous_operations: None, // Error
             fields: None,
@@ -380,7 +380,7 @@ mod tests {
         let invalid_delete_operation_2 = Operation {
             action: OperationAction::Delete,
             version: OperationVersion::Default,
-            schema,
+            schema: schema_id,
             previous_operations: Some(prev_op_id),
             // DELETE operations must not contain fields
             fields: Some(operation_fields), // Error
@@ -391,7 +391,7 @@ mod tests {
 
     #[rstest]
     fn encode_and_decode(
-        schema: SchemaId,
+        schema_id: SchemaId,
         #[from(random_document_view_id)] prev_op_id: DocumentViewId,
         #[from(random_document_id)] document_id: DocumentId,
     ) {
@@ -418,7 +418,7 @@ mod tests {
             )
             .unwrap();
 
-        let operation = Operation::new_update(schema, prev_op_id, fields).unwrap();
+        let operation = Operation::new_update(schema_id, prev_op_id, fields).unwrap();
 
         assert!(operation.is_update());
 
@@ -432,7 +432,7 @@ mod tests {
     }
 
     #[rstest]
-    fn field_ordering(schema: SchemaId) {
+    fn field_ordering(schema_id: SchemaId) {
         // Create first test operation
         let mut fields = OperationFields::new();
         fields
@@ -442,7 +442,7 @@ mod tests {
             .add("b", OperationValue::Text("penguin".to_owned()))
             .unwrap();
 
-        let first_operation = Operation::new_create(schema.clone(), fields).unwrap();
+        let first_operation = Operation::new_create(schema_id.clone(), fields).unwrap();
 
         // Create second test operation with same values but different order of fields
         let mut second_fields = OperationFields::new();
@@ -453,7 +453,7 @@ mod tests {
             .add("a", OperationValue::Text("sloth".to_owned()))
             .unwrap();
 
-        let second_operation = Operation::new_create(schema, second_fields).unwrap();
+        let second_operation = Operation::new_create(schema_id, second_fields).unwrap();
 
         assert_eq!(first_operation.to_cbor(), second_operation.to_cbor());
     }

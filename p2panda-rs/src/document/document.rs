@@ -316,8 +316,8 @@ mod tests {
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, operation, operation_fields, random_document_view_id,
-        random_key_pair, random_operation_id, random_previous_operations, schema, update_operation,
-        verified_operation,
+        random_key_pair, random_operation_id, random_previous_operations, schema_id,
+        update_operation, verified_operation,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
 
@@ -362,7 +362,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn resolve_documents(schema: SchemaId) {
+    async fn resolve_documents(schema_id: SchemaId) {
         let panda = Client::new(
             "panda".to_string(),
             KeyPair::from_private_key_str(
@@ -515,7 +515,7 @@ mod tests {
         assert!(document.is_edited());
         assert!(!document.is_deleted());
         assert_eq!(document.author(), &panda.author());
-        assert_eq!(document.schema(), &schema);
+        assert_eq!(document.schema(), &schema_id);
         assert_eq!(document.operations(), &expected_op_order);
         assert_eq!(document.view_id().graph_tips(), expected_graph_tips);
         assert_eq!(
@@ -552,7 +552,7 @@ mod tests {
         assert!(replica_1.is_edited());
         assert!(!replica_1.is_deleted());
         assert_eq!(replica_1.author(), &panda.author());
-        assert_eq!(replica_1.schema(), &schema);
+        assert_eq!(replica_1.schema(), &schema_id);
         assert_eq!(replica_1.operations(), &expected_op_order);
         assert_eq!(replica_1.view_id().graph_tips(), expected_graph_tips);
         assert_eq!(

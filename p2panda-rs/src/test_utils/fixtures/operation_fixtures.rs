@@ -123,9 +123,9 @@ pub fn some_fields(
 pub fn operation(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] previous_operations: Option<DocumentViewId>,
-    #[default(Some(SCHEMA_ID.parse().unwrap()))] schema: Option<SchemaId>,
+    #[default(Some(SCHEMA_ID.parse().unwrap()))] schema_id: Option<SchemaId>,
 ) -> Operation {
-    let schema = schema.unwrap_or_else(|| SCHEMA_ID.parse().unwrap());
+    let schema = schema_id.unwrap_or_else(|| SCHEMA_ID.parse().unwrap());
     match fields {
         // It's a CREATE operation
         Some(fields) if previous_operations.is_none() => {
@@ -152,14 +152,14 @@ pub fn operation(
 pub fn verified_operation(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] previous_operations: Option<DocumentViewId>,
-    #[default(Some(SCHEMA_ID.parse().unwrap()))] schema: Option<SchemaId>,
+    #[default(Some(SCHEMA_ID.parse().unwrap()))] schema_id: Option<SchemaId>,
     #[default(Some(public_key()))] author: Option<Author>,
     #[default(Some(random_operation_id()))] operation_id: Option<OperationId>,
 ) -> VerifiedOperation {
     VerifiedOperation::new_test_operation(
         &operation_id.unwrap_or_else(random_operation_id),
         &author.unwrap_or_else(public_key),
-        &operation(fields, previous_operations, schema),
+        &operation(fields, previous_operations, schema_id),
     )
 }
 
@@ -188,9 +188,9 @@ pub fn meta_operation(
 pub fn operation_encoded(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] previous_operations: Option<DocumentViewId>,
-    #[default(Some(SCHEMA_ID.parse().unwrap()))] schema: Option<SchemaId>,
+    #[default(Some(SCHEMA_ID.parse().unwrap()))] schema_id: Option<SchemaId>,
 ) -> OperationEncoded {
-    OperationEncoded::try_from(&operation(fields, previous_operations, schema)).unwrap()
+    OperationEncoded::try_from(&operation(fields, previous_operations, schema_id)).unwrap()
 }
 
 /// Operation who's YASMF hash in `document` is correct length but unknown hash format identifier.
