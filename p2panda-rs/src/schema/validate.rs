@@ -337,7 +337,7 @@ mod tests {
     #[case(RawValue::Float(1024.32), FieldType::Float)]
     #[case(RawValue::Boolean(true), FieldType::Boolean)]
     #[case(
-        RawValue::PinnedRelationOrRelationList(vec![HASH.to_owned()]),
+        RawValue::TextOrRelation(HASH.to_owned()),
         FieldType::Relation(schema_id(SCHEMA_ID))
     )]
     #[case(
@@ -378,9 +378,9 @@ mod tests {
         "invalid field type 'float', expected 'int'"
     )]
     #[case(
-        RawValue::PinnedRelationOrRelationList(vec![HASH.to_owned()]),
+        RawValue::TextOrRelation(HASH.to_owned()),
         FieldType::RelationList(schema_id(SCHEMA_ID)),
-        "invalid field type 'pinned_relation', expected 'relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)'",
+        "invalid field type 'str', expected 'relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)'",
     )]
     fn wrong_field_values(
         #[case] raw_value: RawValue,
