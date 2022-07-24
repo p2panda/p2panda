@@ -14,7 +14,6 @@ use crate::operation::{
     RawOperationError,
 };
 use crate::schema::{FieldName, SchemaId};
-use crate::Validate;
 
 #[derive(Serialize, Default, Debug, PartialEq)]
 pub struct RawFields(BTreeMap<FieldName, RawValue>);
@@ -158,15 +157,6 @@ impl From<&OperationFields> for RawFields {
     }
 }
 
-impl Validate for RawFields {
-    type Error = RawOperationError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        // @TODO
-        Ok(())
-    }
-}
-
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 #[serde(untagged)]
 pub enum RawValue {
@@ -188,15 +178,6 @@ impl RawValue {
             RawValue::PinnedRelationOrRelationList(_) => "str[]",
             RawValue::PinnedRelationList(_) => "str[][]",
         }
-    }
-}
-
-impl Validate for RawValue {
-    type Error = RawOperationError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        // @TODO
-        Ok(())
     }
 }
 
@@ -307,14 +288,5 @@ impl From<&Operation> for RawOperation {
             operation.previous_operations(),
             operation.fields().as_ref().map(|fields| fields.into()),
         )
-    }
-}
-
-impl Validate for RawOperation {
-    type Error = RawOperationError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        // @TODO
-        Ok(())
     }
 }
