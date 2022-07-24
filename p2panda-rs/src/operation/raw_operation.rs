@@ -136,12 +136,12 @@ pub struct RawOperation(
 );
 
 impl RawOperation {
-    pub fn version(&self) -> &OperationVersion {
-        &self.0
+    pub fn version(&self) -> OperationVersion {
+        self.0
     }
 
-    pub fn action(&self) -> &OperationAction {
-        &self.1
+    pub fn action(&self) -> OperationAction {
+        self.1
     }
 
     pub fn previous_operations(&self) -> Option<&DocumentViewId> {

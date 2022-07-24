@@ -11,7 +11,7 @@ pub fn verify_schema_and_convert(
     raw_operation: &RawOperation,
     schema: &Schema,
 ) -> Result<Operation, RawOperationError> {
-    if raw_operation.version() != &OperationVersion::Default {
+    if raw_operation.version() != OperationVersion::V1 {
         // @TODO: This will be handled during deserialization
     }
 

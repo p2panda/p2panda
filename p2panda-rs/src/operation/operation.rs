@@ -20,7 +20,16 @@ use crate::Validate;
 #[repr(u64)]
 pub enum OperationVersion {
     /// The default version number.
-    Default = 1,
+    V1 = 1,
+}
+
+impl OperationVersion {
+    /// Returns the operation version encoded as u64.
+    pub fn as_u64(&self) -> u64 {
+        match self {
+            OperationVersion::V1 => 1,
+        }
+    }
 }
 
 impl Copy for OperationVersion {}
@@ -153,7 +162,7 @@ impl Operation {
     pub fn new_create(schema: SchemaId, fields: OperationFields) -> Result<Self, OperationError> {
         let operation = Self {
             action: OperationAction::Create,
-            version: OperationVersion::Default,
+            version: OperationVersion::V1,
             schema,
             previous_operations: None,
             fields: Some(fields),
@@ -172,7 +181,7 @@ impl Operation {
     ) -> Result<Self, OperationError> {
         let operation = Self {
             action: OperationAction::Update,
-            version: OperationVersion::Default,
+            version: OperationVersion::V1,
             schema,
             previous_operations: Some(previous_operations),
             fields: Some(fields),
@@ -190,7 +199,7 @@ impl Operation {
     ) -> Result<Self, OperationError> {
         let operation = Self {
             action: OperationAction::Delete,
-            version: OperationVersion::Default,
+            version: OperationVersion::V1,
             schema,
             previous_operations: Some(previous_operations),
             fields: None,
@@ -324,7 +333,7 @@ mod tests {
     ) {
         let invalid_create_operation_1 = Operation {
             action: OperationAction::Create,
-            version: OperationVersion::Default,
+            version: OperationVersion::V1,
             schema: schema_id.clone(),
             previous_operations: None,
             // CREATE operations must contain fields
@@ -335,7 +344,7 @@ mod tests {
 
         let invalid_create_operation_2 = Operation {
             action: OperationAction::Create,
-            version: OperationVersion::Default,
+            version: OperationVersion::V1,
             schema: schema_id.clone(),
             // CREATE operations must not contain previous_operations
             previous_operations: Some(prev_op_id.clone()), // Error
@@ -346,7 +355,7 @@ mod tests {
 
         let invalid_update_operation_1 = Operation {
             action: OperationAction::Update,
-            version: OperationVersion::Default,
+            version: OperationVersion::V1,
             schema: schema_id.clone(),
             // UPDATE operations must contain previous_operations
             previous_operations: None, // Error
@@ -357,7 +366,7 @@ mod tests {
 
         let invalid_update_operation_2 = Operation {
             action: OperationAction::Update,
-            version: OperationVersion::Default,
+            version: OperationVersion::V1,
             schema: schema_id.clone(),
             previous_operations: Some(prev_op_id.clone()),
             // UPDATE operations must contain fields
@@ -368,7 +377,7 @@ mod tests {
 
         let invalid_delete_operation_1 = Operation {
             action: OperationAction::Delete,
-            version: OperationVersion::Default,
+            version: OperationVersion::V1,
             schema: schema_id.clone(),
             // DELETE operations must contain previous_operations
             previous_operations: None, // Error
@@ -379,7 +388,7 @@ mod tests {
 
         let invalid_delete_operation_2 = Operation {
             action: OperationAction::Delete,
-            version: OperationVersion::Default,
+            version: OperationVersion::V1,
             schema: schema_id,
             previous_operations: Some(prev_op_id),
             // DELETE operations must not contain fields
