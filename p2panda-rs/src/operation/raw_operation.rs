@@ -39,13 +39,11 @@ impl RawFields {
 
     pub fn insert(&mut self, name: &str, value: RawValue) -> Result<(), RawOperationError> {
         if self.0.contains_key(name) {
-            // @TODO
-            panic!("Duplicate")
+            Err(RawOperationError::DuplicateFieldName(name.to_owned()))
+        } else {
+            self.0.insert(name.to_owned(), value);
+            Ok(())
         }
-
-        self.0.insert(name.to_owned(), value);
-
-        Ok(())
     }
 
     pub fn iter(&self) -> Iter<FieldName, RawValue> {
@@ -79,7 +77,7 @@ impl<'de> Deserialize<'de> for RawFields {
                     // encoding
                     if last_field_name.cmp(&field_name) == Ordering::Greater {
                         return Err(serde::de::Error::custom(format!(
-                            "Encountered unsorted field name: '{}' should be before '{}'",
+                            "encountered unsorted field name: '{}' should be before '{}'",
                             field_name, last_field_name,
                         )));
                     }
@@ -88,7 +86,7 @@ impl<'de> Deserialize<'de> for RawFields {
                     fields.insert(&field_name, field_value).map_err(|_| {
                         // Fail if field names are duplicate to ensure canonic encoding
                         serde::de::Error::custom(format!(
-                            "Encountered duplicate field key '{}'",
+                            "encountered duplicate field key '{}'",
                             field_name
                         ))
                     })?;

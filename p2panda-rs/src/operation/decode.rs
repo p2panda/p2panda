@@ -4,8 +4,19 @@ use crate::operation::{verify_schema_and_convert, Operation, RawOperation, RawOp
 use crate::schema::Schema;
 
 pub fn decode_operation(bytes: &[u8], schema: &Schema) -> Result<Operation, RawOperationError> {
-    let raw_operation: RawOperation = ciborium::de::from_reader(bytes)
-        .map_err(|err| RawOperationError::InvalidCBOREncoding(err.to_string()))?;
+    let raw_operation: RawOperation =
+        ciborium::de::from_reader(bytes).map_err(|err| match err {
+            ciborium::de::Error::Io(err) => RawOperationError::DecoderFailed(err.to_string()),
+            ciborium::de::Error::Syntax(err) => {
+                RawOperationError::InvalidCBOREncoding(err.to_string())
+            }
+            ciborium::de::Error::Semantic(_, err) => {
+                RawOperationError::InvalidEncoding(err.to_string())
+            }
+            ciborium::de::Error::RecursionLimitExceeded => {
+                RawOperationError::DecoderFailed("Recursion limit exceeded".into())
+            }
+        })?;
 
     let operation = verify_schema_and_convert(&raw_operation, schema)?;
     Ok(operation)
@@ -58,7 +69,91 @@ mod tests {
             .expect("Could not create schema");
 
         let bytes = encode_cbor(raw_operation.expect("Invalid CBOR value"));
-        println!("{}", hex::encode(&bytes));
         decode_operation(&bytes, &schema).unwrap();
+    }
+
+    #[rstest]
+    #[case::incomplete_hash(
+        vec![
+            ("country", FieldType::Relation(schema_id.clone())),
+        ],
+        cbor!([
+            1, 0, SCHEMA_ID,
+            {
+                "country" => "0020",
+            },
+        ]),
+        // @TODO: Improve error messages
+        "field 'country' does not match schema: invalid document id: invalid hash length 2 bytes, expected 34 bytes"
+    )]
+    #[case::invalid_hex_encoding(
+        vec![
+            ("country", FieldType::Relation(schema_id.clone())),
+        ],
+        cbor!([
+            1, 0, SCHEMA_ID,
+            {
+                "country" => "xyz",
+            },
+        ]),
+        // @TODO: Improve error messages
+        "field 'country' does not match schema: invalid document id: invalid hex encoding in hash string"
+    )]
+    #[case::missing_field(
+        vec![
+            ("national_dish", FieldType::Text),
+        ],
+        cbor!([
+            1, 0, SCHEMA_ID,
+            {
+                "vegan_friendly" => true,
+            },
+        ]),
+        "field 'vegan_friendly' does not match schema: expected field name 'national_dish'"
+    )]
+    #[case::unordered_field_names(
+        vec![
+            ("a", FieldType::Text),
+            ("b", FieldType::Text),
+        ],
+        cbor!([
+            1, 0, SCHEMA_ID,
+            {
+                "b" => "test",
+                "a" => "test",
+            },
+        ]),
+        "encountered unsorted field name: 'a' should be before 'b'"
+    )]
+    #[case::duplicate_field_names(
+        vec![
+            ("a", FieldType::Text),
+        ],
+        cbor!([
+            1, 0, SCHEMA_ID,
+            {
+                "a" => "test",
+                "a" => "test",
+            },
+        ]),
+        "encountered duplicate field key 'a'"
+    )]
+    fn wrong_operation_fields(
+        #[from(schema_id)] schema_id: SchemaId,
+        #[case] schema_fields: Vec<(&str, FieldType)>,
+        #[case] raw_operation: Result<Value, Error>,
+        #[case] expected: &str,
+    ) {
+        let schema = Schema::new(&schema_id, "Some schema description", schema_fields)
+            .expect("Could not create schema");
+
+        let bytes = encode_cbor(raw_operation.expect("Invalid CBOR value"));
+        assert_eq!(
+            decode_operation(&bytes, &schema)
+                .err()
+                .expect("Expect error")
+                .to_string(),
+            expected
+        );
     }
 }

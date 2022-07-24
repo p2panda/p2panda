@@ -30,9 +30,17 @@ pub enum OperationError {
 /// Error types for `RawOperation` struct and methods related to it.
 #[derive(Error, Debug)]
 pub enum RawOperationError {
+    /// Could not decode CBOR due to internal error.
+    #[error("{0}")]
+    DecoderFailed(String),
+
     /// Could not decode CBOR of raw operation.
-    #[error("invalid CBOR encoding: {0}")]
+    #[error("{0}")]
     InvalidCBOREncoding(String),
+
+    /// Could not decode p2panda data of raw operation.
+    #[error("{0}")]
+    InvalidEncoding(String),
 
     /// Expected `fields` in CREATE or UPDATE operation.
     #[error("expected 'fields' in CREATE or UPDATE operation")]
@@ -49,6 +57,10 @@ pub enum RawOperationError {
     /// Unexpected `previous_operations` in CREATE operation.
     #[error("unexpected 'previous_operations' in CREATE operation")]
     UnexpectedPreviousOperations,
+
+    /// Detected duplicate field name in operation.
+    #[error("found duplicate field '{0}'")]
+    DuplicateFieldName(String),
 
     /// Operation did not match given schema.
     #[error(transparent)]
