@@ -236,7 +236,10 @@ pub mod tests {
         store.insert_entry(author_1_entry).await.unwrap();
         store.insert_entry(author_2_entry).await.unwrap();
 
-        assert_eq!(store.get_entries_by_schema(&schema_id).await.unwrap().len(), 2);
+        assert_eq!(
+            store.get_entries_by_schema(&schema_id).await.unwrap().len(),
+            2
+        );
     }
 
     #[rstest]

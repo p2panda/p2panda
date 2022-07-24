@@ -82,5 +82,4 @@ pub enum ValidationError {
     /// Field value is not correctly encoded.
     #[error("invalid {0}: {1}")]
     InvalidValue(String, String),
-
 }

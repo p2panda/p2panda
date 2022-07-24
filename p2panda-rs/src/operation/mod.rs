@@ -19,6 +19,8 @@ mod traits;
 mod validate;
 mod verified_operation;
 
+pub use decode::decode_operation;
+pub use encode::encode_operation;
 pub use error::{
     OperationEncodedError, OperationError, OperationFieldsError, RawOperationError,
     VerifiedOperationError,

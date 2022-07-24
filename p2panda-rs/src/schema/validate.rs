@@ -30,7 +30,7 @@ pub fn verify_all_fields(
                     })?;
 
                 validated_fields
-                    .insert(&validated_name, validated_value)
+                    .insert(validated_name, validated_value)
                     // Unwrap here as we already checked during deserialization and population of
                     // the raw fields that there are no duplicates
                     .expect("Duplicate key name detected in raw fields");
@@ -74,7 +74,7 @@ pub fn verify_only_given_fields(
                     )?;
 
                 validated_fields
-                    .insert(&validated_name, validated_value)
+                    .insert(validated_name, validated_value)
                     // Unwrap here as we already checked during deserialization and population of
                     // the raw fields that there are no duplicates
                     .expect("Duplicate key name detected in raw fields");
@@ -82,7 +82,7 @@ pub fn verify_only_given_fields(
             None => {
                 // Found a field which is not known to schema! We add it to a list so we can
                 // display it later in an error message
-                unexpected_fields.push(format!("'{}'", raw_name.to_owned()));
+                unexpected_fields.push(format!("'{}'", raw_name));
             }
         };
     }
@@ -437,7 +437,7 @@ mod tests {
         // Construct raw fields
         let mut raw_fields = RawFields::new();
         for (raw_field_name, raw_field_value) in fields {
-            raw_fields.insert(&raw_field_name, raw_field_value).unwrap();
+            raw_fields.insert(raw_field_name, raw_field_value).unwrap();
         }
 
         // Check if fields match the schema
@@ -508,7 +508,7 @@ mod tests {
         // Construct raw fields
         let mut raw_fields = RawFields::new();
         for (raw_field_name, raw_field_value) in fields {
-            raw_fields.insert(&raw_field_name, raw_field_value).unwrap();
+            raw_fields.insert(raw_field_name, raw_field_value).unwrap();
         }
 
         // Check if fields match the schema
@@ -559,7 +559,7 @@ mod tests {
         // Construct raw fields
         let mut raw_fields = RawFields::new();
         for (raw_field_name, raw_field_value) in fields {
-            raw_fields.insert(&raw_field_name, raw_field_value).unwrap();
+            raw_fields.insert(raw_field_name, raw_field_value).unwrap();
         }
 
         // Check if fields match the schema

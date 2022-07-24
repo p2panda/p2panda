@@ -16,7 +16,7 @@ use crate::operation::{
 use crate::schema::{FieldName, SchemaId};
 use crate::Validate;
 
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Default, Debug, PartialEq)]
 pub struct RawFields(BTreeMap<FieldName, RawValue>);
 
 impl RawFields {
@@ -151,7 +151,7 @@ impl From<&OperationFields> for RawFields {
 
             // Unwrap here because we already know that there are no duplicates in
             // `OperationFields`
-            raw.insert(&name, raw_value).unwrap();
+            raw.insert(name, raw_value).unwrap();
         }
 
         raw

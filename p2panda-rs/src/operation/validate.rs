@@ -2,8 +2,7 @@
 
 use crate::document::DocumentViewId;
 use crate::operation::{
-    Operation, OperationAction, OperationFields, OperationVersion, RawFields, RawOperation,
-    RawOperationError,
+    Operation, OperationAction, OperationVersion, RawFields, RawOperation, RawOperationError,
 };
 use crate::schema::{verify_all_fields, verify_only_given_fields, Schema};
 
@@ -19,17 +18,17 @@ pub fn verify_schema_and_convert(
         OperationAction::Create => verify_create_operation(
             raw_operation.previous_operations(),
             raw_operation.fields(),
-            &schema,
+            schema,
         ),
         OperationAction::Update => verify_update_operation(
             raw_operation.previous_operations(),
             raw_operation.fields(),
-            &schema,
+            schema,
         ),
         OperationAction::Delete => verify_delete_operation(
             raw_operation.previous_operations(),
             raw_operation.fields(),
-            &schema,
+            schema,
         ),
     }
 }
@@ -44,7 +43,7 @@ fn verify_create_operation(
     }
 
     let validated_fields = match raw_fields {
-        Some(fields) => verify_all_fields(&fields, &schema)?,
+        Some(fields) => verify_all_fields(fields, schema)?,
         None => return Err(RawOperationError::ExpectedFields),
     };
 
@@ -57,10 +56,8 @@ fn verify_update_operation(
     raw_fields: Option<&RawFields>,
     schema: &Schema,
 ) -> Result<Operation, RawOperationError> {
-    let mut validated_fields = OperationFields::new();
-
     let validated_fields = match raw_fields {
-        Some(fields) => verify_only_given_fields(&fields, &schema)?,
+        Some(fields) => verify_only_given_fields(fields, schema)?,
         None => return Err(RawOperationError::ExpectedFields),
     };
 
@@ -95,8 +92,6 @@ fn verify_delete_operation(
                     .unwrap(),
             )
         }
-        None => {
-            return Err(RawOperationError::ExpectedPreviousOperations);
-        }
+        None => Err(RawOperationError::ExpectedPreviousOperations),
     }
 }
