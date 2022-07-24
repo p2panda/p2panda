@@ -47,6 +47,7 @@ impl Validate for OperationValue {
 
     fn validate(&self) -> Result<(), Self::Error> {
         match self {
+            // @TODO: Do the others as well
             Self::Relation(relation) => relation.validate(),
             Self::RelationList(relations) => relations.validate(),
             _ => Ok(()),

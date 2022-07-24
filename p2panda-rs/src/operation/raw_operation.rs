@@ -8,7 +8,7 @@ use std::fmt;
 use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 
-use crate::document::{DocumentId, DocumentViewId};
+use crate::document::DocumentViewId;
 use crate::operation::{
     AsOperation, Operation, OperationAction, OperationFields, OperationValue, OperationVersion,
     RawOperationError,
@@ -114,17 +114,39 @@ impl From<&OperationFields> for RawFields {
                 OperationValue::Boolean(bool) => RawValue::Boolean(*bool),
                 OperationValue::Integer(int) => RawValue::Integer(*int),
                 OperationValue::Float(float) => RawValue::Float(*float),
-                OperationValue::Text(str) => RawValue::Text(str.to_owned()),
+                OperationValue::Text(str) => RawValue::TextOrRelation(str.to_owned()),
                 OperationValue::Relation(relation) => {
-                    RawValue::Relation(relation.document_id().to_owned())
+                    RawValue::TextOrRelation(relation.document_id().as_str().to_owned())
                 }
-                OperationValue::RelationList(list) => RawValue::RelationList(list.sorted()),
-                OperationValue::PinnedRelation(relation) => {
-                    RawValue::PinnedRelation(relation.view_id().to_owned())
-                }
-                OperationValue::PinnedRelationList(list) => {
-                    RawValue::PinnedRelationList(list.sorted())
-                }
+                OperationValue::RelationList(list) => RawValue::PinnedRelationOrRelationList(
+                    list.sorted()
+                        .iter()
+                        // @TODO: Improve conversion after `to_string` PR got merged
+                        .map(|document_id| document_id.as_str().to_owned())
+                        .collect(),
+                ),
+                OperationValue::PinnedRelation(relation) => RawValue::PinnedRelationOrRelationList(
+                    relation
+                        .view_id()
+                        .sorted()
+                        .iter()
+                        // @TODO: Improve conversion after `to_string` PR got merged
+                        .map(|operation_id| operation_id.as_str().to_owned())
+                        .collect(),
+                ),
+                OperationValue::PinnedRelationList(list) => RawValue::PinnedRelationList(
+                    list.sorted()
+                        .iter()
+                        .map(|document_view_id| {
+                            document_view_id
+                                .sorted()
+                                .iter()
+                                // @TODO: Improve conversion after `to_string` PR got merged
+                                .map(|operation_id| operation_id.as_str().to_owned())
+                                .collect()
+                        })
+                        .collect(),
+                ),
             };
 
             // Unwrap here because we already know that there are no duplicates in
@@ -151,11 +173,9 @@ pub enum RawValue {
     Boolean(bool),
     Integer(i64),
     Float(f64),
-    Text(String),
-    Relation(DocumentId),
-    PinnedRelation(DocumentViewId),
-    RelationList(Vec<DocumentId>),
-    PinnedRelationList(Vec<DocumentViewId>),
+    TextOrRelation(String),
+    PinnedRelationOrRelationList(Vec<String>),
+    PinnedRelationList(Vec<Vec<String>>),
 }
 
 impl RawValue {
@@ -164,11 +184,9 @@ impl RawValue {
             RawValue::Boolean(_) => "bool",
             RawValue::Integer(_) => "int",
             RawValue::Float(_) => "float",
-            RawValue::Text(_) => "str",
-            RawValue::Relation(_) => "relation",
-            RawValue::RelationList(_) => "relation_list",
-            RawValue::PinnedRelation(_) => "pinned_relation",
-            RawValue::PinnedRelationList(_) => "pinned_relation_list",
+            RawValue::TextOrRelation(_) => "str",
+            RawValue::PinnedRelationOrRelationList(_) => "str[]",
+            RawValue::PinnedRelationList(_) => "str[][]",
         }
     }
 }

@@ -106,7 +106,7 @@ impl Validate for DocumentViewId {
             hash.validate()?;
         }
 
-        // @TODO: Check for sorted here
+        // @TODO: Check for sorted here and duplicates
 
         Ok(())
     }

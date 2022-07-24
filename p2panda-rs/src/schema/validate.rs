@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-&3.0-or-later
 
+use crate::document::{DocumentId, DocumentViewId};
 use crate::operation::{
-    OperationFields, OperationValue, PinnedRelation, PinnedRelationList, RawFields, RawValue,
-    Relation, RelationList,
+    OperationFields, OperationId, OperationValue, PinnedRelation, PinnedRelationList, RawFields,
+    RawValue, Relation, RelationList,
 };
 use crate::schema::{FieldName, FieldType, Schema, ValidationError};
+use crate::Validate;
 
 /// @TODO
 ///
@@ -154,7 +156,7 @@ fn verify_field_value(
             }
         }
         FieldType::Text => {
-            if let RawValue::Text(str) = raw_value {
+            if let RawValue::TextOrRelation(str) = raw_value {
                 Ok(OperationValue::Text(str.to_owned()))
             } else {
                 Err(ValidationError::InvalidType(
@@ -164,9 +166,11 @@ fn verify_field_value(
             }
         }
         FieldType::Relation(_) => {
-            if let RawValue::Relation(document_id) = raw_value {
+            if let RawValue::TextOrRelation(document_id_str) = raw_value {
                 Ok(OperationValue::Relation(Relation::new(
-                    document_id.to_owned(),
+                    document_id_str.parse::<DocumentId>().map_err(|err| {
+                        ValidationError::InvalidValue("document id".into(), err.to_string())
+                    })?,
                 )))
             } else {
                 Err(ValidationError::InvalidType(
@@ -176,11 +180,24 @@ fn verify_field_value(
             }
         }
         FieldType::RelationList(_) => {
-            if let RawValue::RelationList(document_ids) = raw_value {
-                // @TODO: Is this sorted? Are there duplicates?
-                Ok(OperationValue::RelationList(RelationList::new(
-                    document_ids.to_owned(),
-                )))
+            if let RawValue::PinnedRelationOrRelationList(document_ids) = raw_value {
+                let relation_list: Result<Vec<DocumentId>, ValidationError> = document_ids
+                    .iter()
+                    .map(|document_id_str| {
+                        document_id_str.parse::<DocumentId>().map_err(|err| {
+                            ValidationError::InvalidValue("document id".into(), err.to_string())
+                        })
+                    })
+                    .collect();
+
+                let value = OperationValue::RelationList(RelationList::new(relation_list?));
+
+                // @TODO: Check if relation list is sorted and without any duplicates
+                value.validate().map_err(|err| {
+                    ValidationError::InvalidValue("list of document ids".into(), err.to_string())
+                })?;
+
+                Ok(value)
             } else {
                 Err(ValidationError::InvalidType(
                     raw_value.field_type().to_owned(),
@@ -189,11 +206,23 @@ fn verify_field_value(
             }
         }
         FieldType::PinnedRelation(_) => {
-            if let RawValue::PinnedRelation(document_view_id) = raw_value {
-                // @TODO: Is this sorted? Are there duplicates?
-                Ok(OperationValue::PinnedRelation(PinnedRelation::new(
-                    document_view_id.to_owned(),
-                )))
+            if let RawValue::PinnedRelationOrRelationList(operation_ids_vec) = raw_value {
+                let operation_ids: Result<Vec<OperationId>, ValidationError> = operation_ids_vec
+                    .iter()
+                    .map(|operation_id_str| {
+                        operation_id_str.parse::<OperationId>().map_err(|err| {
+                            ValidationError::InvalidValue("operation id".into(), err.to_string())
+                        })
+                    })
+                    .collect();
+
+                // @TODO: Check if relation list is sorted and without any duplicates
+                let pinned_relation = DocumentViewId::new(&operation_ids?).map_err(|err| {
+                    ValidationError::InvalidValue("document view id".into(), err.to_string())
+                })?;
+
+                let value = OperationValue::PinnedRelation(PinnedRelation::new(pinned_relation));
+                Ok(value)
             } else {
                 Err(ValidationError::InvalidType(
                     raw_value.field_type().to_owned(),
@@ -202,10 +231,38 @@ fn verify_field_value(
             }
         }
         FieldType::PinnedRelationList(_) => {
-            if let RawValue::PinnedRelationList(document_view_ids) = raw_value {
+            if let RawValue::PinnedRelationList(document_view_ids_vec) = raw_value {
+                let document_view_ids: Result<Vec<DocumentViewId>, ValidationError> =
+                    document_view_ids_vec
+                        .iter()
+                        .map(|operation_ids_vec| {
+                            let operation_ids: Result<Vec<OperationId>, ValidationError> =
+                                operation_ids_vec
+                                    .iter()
+                                    .map(|operation_id_str| {
+                                        operation_id_str.parse::<OperationId>().map_err(|err| {
+                                            ValidationError::InvalidValue(
+                                                "operation id".into(),
+                                                err.to_string(),
+                                            )
+                                        })
+                                    })
+                                    .collect();
+
+                            let view_id = DocumentViewId::new(&operation_ids?).map_err(|err| {
+                                ValidationError::InvalidValue(
+                                    "document view id".into(),
+                                    err.to_string(),
+                                )
+                            })?;
+
+                            Ok(view_id)
+                        })
+                        .collect();
+
                 // @TODO: Is this sorted? Are there duplicates?
                 Ok(OperationValue::PinnedRelationList(PinnedRelationList::new(
-                    document_view_ids.to_owned(),
+                    document_view_ids?,
                 )))
             } else {
                 Err(ValidationError::InvalidType(
@@ -225,7 +282,7 @@ mod tests {
     use crate::operation::{OperationFields, OperationValue, RawFields, RawValue};
     use crate::schema::{FieldType, Schema, SchemaId};
     use crate::test_utils::constants::{HASH, SCHEMA_ID};
-    use crate::test_utils::fixtures::{document_id, document_view_id, schema_id};
+    use crate::test_utils::fixtures::{document_view_id, schema_id};
 
     use super::{
         verify_all_fields, verify_field, verify_field_name, verify_field_value,
@@ -238,7 +295,7 @@ mod tests {
         assert!(verify_field(
             (
                 &"cutest_animal_in_zoo".to_owned(),
-                &RawValue::Text("Panda".into()),
+                &RawValue::TextOrRelation("Panda".into()),
             ),
             (&"cutest_animal_in_zoo".to_owned(), &FieldType::Text)
         )
@@ -248,7 +305,7 @@ mod tests {
         assert!(verify_field(
             (
                 &"most_boring_animal_in_zoo".to_owned(),
-                &RawValue::Text("Llama".into()),
+                &RawValue::TextOrRelation("Llama".into()),
             ),
             (&"cutest_animal_in_zoo".to_owned(), &FieldType::Text)
         )
@@ -258,7 +315,7 @@ mod tests {
         assert!(verify_field(
             (
                 &"most_boring_animal_in_zoo".to_owned(),
-                &RawValue::Text("Llama".into()),
+                &RawValue::TextOrRelation("Llama".into()),
             ),
             (
                 &"most_boring_animal_in_zoo".to_owned(),
@@ -275,24 +332,24 @@ mod tests {
     }
 
     #[rstest]
-    #[case(RawValue::Text("Handa".into()), FieldType::Text)]
+    #[case(RawValue::TextOrRelation("Handa".into()), FieldType::Text)]
     #[case(RawValue::Integer(512), FieldType::Integer)]
     #[case(RawValue::Float(1024.32), FieldType::Float)]
     #[case(RawValue::Boolean(true), FieldType::Boolean)]
     #[case(
-        RawValue::Relation(document_id(HASH)),
+        RawValue::PinnedRelationOrRelationList(vec![HASH.to_owned()]),
         FieldType::Relation(schema_id(SCHEMA_ID))
     )]
     #[case(
-        RawValue::PinnedRelation(document_view_id(vec![HASH])),
+        RawValue::PinnedRelationOrRelationList(vec![HASH.to_owned()]),
         FieldType::PinnedRelation(schema_id(SCHEMA_ID))
     )]
     #[case(
-        RawValue::RelationList(vec![document_id(HASH)]),
+        RawValue::PinnedRelationOrRelationList(vec![HASH.to_owned()]),
         FieldType::RelationList(schema_id(SCHEMA_ID))
     )]
     #[case(
-        RawValue::PinnedRelationList(vec![document_view_id(vec![HASH])]),
+        RawValue::PinnedRelationList(vec![vec![HASH.to_owned()]]),
         FieldType::PinnedRelationList(schema_id(SCHEMA_ID))
     )]
     fn correct_field_values(#[case] raw_value: RawValue, #[case] schema_field_type: FieldType) {
@@ -301,7 +358,7 @@ mod tests {
 
     #[rstest]
     #[case(
-        RawValue::Text("The Zookeeper".into()),
+        RawValue::TextOrRelation("The Zookeeper".into()),
         FieldType::Integer,
         "invalid field type 'str', expected 'int'",
     )]
@@ -321,7 +378,7 @@ mod tests {
         "invalid field type 'float', expected 'int'"
     )]
     #[case(
-        RawValue::PinnedRelation(document_view_id(vec![HASH])),
+        RawValue::PinnedRelationOrRelationList(vec![HASH.to_owned()]),
         FieldType::RelationList(schema_id(SCHEMA_ID)),
         "invalid field type 'pinned_relation', expected 'relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)'",
     )]
@@ -347,9 +404,9 @@ mod tests {
             ("fans", FieldType::RelationList(schema_id(SCHEMA_ID))),
         ],
         vec![
-            ("message", RawValue::Text("Hello, Mr. Handa!".into())),
+            ("message", RawValue::TextOrRelation("Hello, Mr. Handa!".into())),
             ("age", RawValue::Integer(41)),
-            ("fans", RawValue::RelationList(vec![document_id(HASH)])),
+            ("fans", RawValue::PinnedRelationOrRelationList(vec![HASH.to_owned()])),
         ],
     )]
     #[case(
@@ -360,7 +417,7 @@ mod tests {
         ],
         vec![
             ("c", RawValue::Boolean(false)),
-            ("b", RawValue::Text("Panda-San!".into())),
+            ("b", RawValue::TextOrRelation("Panda-San!".into())),
             ("a", RawValue::Integer(6)),
         ],
     )]
@@ -394,8 +451,8 @@ mod tests {
             ("message", FieldType::Text),
         ],
         vec![
-            ("fans", RawValue::RelationList(vec![document_id(HASH)])),
-            ("message", RawValue::Text("Hello, Mr. Handa!".into())),
+            ("fans", RawValue::PinnedRelationOrRelationList(vec![HASH.to_owned()])),
+            ("message", RawValue::TextOrRelation("Hello, Mr. Handa!".into())),
         ],
         "field 'fans' does not match schema: expected field name 'message'"
     )]
@@ -406,7 +463,7 @@ mod tests {
             ("message", FieldType::Text),
         ],
         vec![
-            ("message", RawValue::Text("Panda-San!".into())),
+            ("message", RawValue::TextOrRelation("Panda-San!".into())),
         ],
         "field 'message' does not match schema: expected field name 'age'"
     )]
@@ -419,8 +476,8 @@ mod tests {
         ],
         vec![
             ("is_boring", RawValue::Boolean(false)),
-            ("cuteness_level", RawValue::Text("Very high! I promise!".into())),
-            ("name", RawValue::Text("The really not boring Llama!!!".into())),
+            ("cuteness_level", RawValue::TextOrRelation("Very high! I promise!".into())),
+            ("name", RawValue::TextOrRelation("The really not boring Llama!!!".into())),
         ],
         "field 'cuteness_level' does not match schema: invalid field type 'str', expected 'float'"
     )]
@@ -472,7 +529,7 @@ mod tests {
             ("is_cute", FieldType::Boolean),
         ],
         vec![
-            ("message", RawValue::Text("Hello, Mr. Handa!".into())),
+            ("message", RawValue::TextOrRelation("Hello, Mr. Handa!".into())),
         ],
     )]
     #[case(
@@ -483,7 +540,7 @@ mod tests {
         ],
         vec![
             ("age", RawValue::Integer(41)),
-            ("message", RawValue::Text("Hello, Mr. Handa!".into())),
+            ("message", RawValue::TextOrRelation("Hello, Mr. Handa!".into())),
         ],
     )]
     fn correct_only_given_fields(
@@ -518,7 +575,7 @@ mod tests {
             ("is_cute", FieldType::Boolean),
         ],
         vec![
-            ("spam", RawValue::Text("PANDA IS THE CUTEST!".into())),
+            ("spam", RawValue::TextOrRelation("PANDA IS THE CUTEST!".into())),
         ],
         "unexpected fields found: 'spam'",
     )]
@@ -531,8 +588,8 @@ mod tests {
         vec![
             ("is_cute", RawValue::Boolean(false)),
             ("age", RawValue::Integer(41)),
-            ("message", RawValue::Text("Hello, Mr. Handa!".into())),
-            ("response", RawValue::Text("Good bye!".into())),
+            ("message", RawValue::TextOrRelation("Hello, Mr. Handa!".into())),
+            ("response", RawValue::TextOrRelation("Good bye!".into())),
         ],
         "unexpected fields found: 'message', 'response'",
     )]
@@ -600,7 +657,7 @@ mod tests {
         // Construct raw fields
         let mut raw_fields = RawFields::new();
         raw_fields
-            .insert("icecream", RawValue::Text("Almond".into()))
+            .insert("icecream", RawValue::TextOrRelation("Almond".into()))
             .unwrap();
         raw_fields.insert("degree", RawValue::Float(6.12)).unwrap();
 

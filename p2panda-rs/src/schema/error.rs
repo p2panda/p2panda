@@ -59,7 +59,6 @@ pub enum FieldTypeError {
 /// Custom error types for validating raw operations with schemas.
 #[derive(Error, Debug)]
 pub enum ValidationError {
-
     /// Field with this name is required by schema.
     #[error("missing required field: '{0}' of type {1}")]
     MissingField(String, String),
@@ -79,4 +78,9 @@ pub enum ValidationError {
     /// Field type and schema do not match.
     #[error("invalid field type '{0}', expected '{1}'")]
     InvalidType(String, String),
+
+    /// Field value is not correctly encoded.
+    #[error("invalid {0}: {1}")]
+    InvalidValue(String, String),
+
 }

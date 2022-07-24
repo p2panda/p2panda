@@ -43,7 +43,7 @@ mod tests {
             {
                 "country" => HASH,
                 "national_dish" => "Pumpkin",
-                "vegan_friendly" => "true",
+                "vegan_friendly" => true,
                 "yummyness" => 8,
                 "yumsimumsiness" => 7.2,
             },

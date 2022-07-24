@@ -139,6 +139,7 @@ impl Validate for RelationList {
     type Error = HashError;
 
     fn validate(&self) -> Result<(), Self::Error> {
+        // @TODO: Check if they are sorted and without duplicates
         for document_id in &self.0 {
             document_id.validate()?;
         }
