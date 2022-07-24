@@ -121,60 +121,62 @@ impl Serialize for DocumentViewId {
     }
 }
 
-struct DocumentViewIdVisitor;
-
-impl<'de> Visitor<'de> for DocumentViewIdVisitor {
-    type Value = DocumentViewId;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("sequence of operation id strings")
-    }
-
-    fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
-    where
-        S: SeqAccess<'de>,
-    {
-        let mut op_ids: Vec<OperationId> = Vec::new();
-        let mut prev_id = None;
-
-        while let Some(seq_value) = seq.next_element::<String>()? {
-            // Try and parse next value as `OperationId`
-            let operation_id = match seq_value.parse::<OperationId>() {
-                Ok(operation_id) => operation_id,
-                Err(hash_err) => {
-                    return Err(serde::de::Error::custom(format!(
-                        "Error parsing document view id at position {}: {}",
-                        op_ids.len(),
-                        hash_err
-                    )))
-                }
-            };
-
-            // Check that consecutive ids are sorted
-            if prev_id.is_some() && prev_id.unwrap() > operation_id {
-                return Err(serde::de::Error::custom(format!(
-                    "Encountered unsorted value in document view id at position {}",
-                    op_ids.len()
-                )));
-            }
-            op_ids.push(operation_id.clone());
-            prev_id = Some(operation_id);
-        }
-
-        let document_view_id = DocumentViewId::new(&op_ids);
-
-        match document_view_id {
-            Ok(id) => Ok(id),
-            Err(err) => Err(serde::de::Error::custom(err.to_string())),
-        }
-    }
-}
-
 impl<'de> Deserialize<'de> for DocumentViewId {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
+        struct DocumentViewIdVisitor;
+
+        impl<'de> Visitor<'de> for DocumentViewIdVisitor {
+            type Value = DocumentViewId;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("sequence of operation id strings")
+            }
+
+            fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
+            where
+                S: SeqAccess<'de>,
+            {
+                let mut op_ids: Vec<OperationId> = Vec::new();
+                let mut prev_id = None;
+
+                // @TODO: Is it possible to do the conversion in one step?
+                while let Some(seq_value) = seq.next_element::<String>()? {
+                    // Try and parse next value as `OperationId`
+                    let operation_id = match seq_value.parse::<OperationId>() {
+                        Ok(operation_id) => operation_id,
+                        Err(hash_err) => {
+                            return Err(serde::de::Error::custom(format!(
+                                "Error parsing document view id at position {}: {}",
+                                op_ids.len(),
+                                hash_err
+                            )))
+                        }
+                    };
+
+                    // Check that consecutive ids are sorted
+                    if prev_id.is_some() && prev_id.unwrap() > operation_id {
+                        return Err(serde::de::Error::custom(format!(
+                            "Encountered unsorted value in document view id at position {}",
+                            op_ids.len()
+                        )));
+                    }
+
+                    op_ids.push(operation_id.clone());
+                    prev_id = Some(operation_id);
+                }
+
+                let document_view_id = DocumentViewId::new(&op_ids);
+
+                match document_view_id {
+                    Ok(id) => Ok(id),
+                    Err(err) => Err(serde::de::Error::custom(err.to_string())),
+                }
+            }
+        }
+
         deserializer.deserialize_seq(DocumentViewIdVisitor)
     }
 }

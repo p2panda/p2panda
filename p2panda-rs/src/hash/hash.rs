@@ -25,7 +25,7 @@ pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
 /// to the Bamboo specification.
 ///
 /// [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
-#[derive(Clone, Debug, Ord, PartialOrd, Serialize, Deserialize, PartialEq, Eq, StdHash)]
+#[derive(Clone, Debug, Ord, PartialOrd, Serialize, PartialEq, Eq, StdHash)]
 pub struct Hash(String);
 
 impl Hash {
@@ -130,6 +130,21 @@ impl TryFrom<String> for Hash {
 
     fn try_from(str: String) -> Result<Self, Self::Error> {
         Self::new(&str)
+    }
+}
+
+impl<'de> Deserialize<'de> for Hash {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let hash_str: &str = Deserialize::deserialize(deserializer)?;
+
+        let hash = Hash::new(hash_str).map_err(|err| {
+            serde::de::Error::custom(format!("Invalid yasmf hash encoding: {}", err))
+        })?;
+
+        Ok(hash)
     }
 }
 

@@ -394,7 +394,6 @@ pub mod tests {
 
         let error_response = new_db.publish_entry(&publish_entry_request).await;
 
-        println!("{:#?}", error_response);
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
             format!(
@@ -464,7 +463,6 @@ pub mod tests {
 
         let error_response = new_db.publish_entry(&publish_entry_request).await;
 
-        println!("{:#?}", error_response);
         assert_eq!(
             format!("{}", error_response.unwrap_err()),
             format!(

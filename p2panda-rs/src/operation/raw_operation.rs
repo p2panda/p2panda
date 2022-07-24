@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::cmp::Ordering;
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
+use std::fmt;
 
+use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentId, DocumentViewId};
@@ -13,7 +16,7 @@ use crate::operation::{
 use crate::schema::{FieldName, SchemaId};
 use crate::Validate;
 
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Serialize, Debug, PartialEq)]
 pub struct RawFields(BTreeMap<FieldName, RawValue>);
 
 impl RawFields {
@@ -51,6 +54,57 @@ impl RawFields {
     }
 }
 
+impl<'de> Deserialize<'de> for RawFields {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct RawFieldsVisitor;
+
+        impl<'de> Visitor<'de> for RawFieldsVisitor {
+            type Value = RawFields;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("p2panda operation fields")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let mut fields = RawFields::new();
+                let mut last_field_name: String = String::new();
+
+                while let Some(field_name) = map.next_key::<String>()? {
+                    // Check that field names are sorted lexicographically to ensure canonic
+                    // encoding
+                    if last_field_name.cmp(&field_name) == Ordering::Greater {
+                        return Err(serde::de::Error::custom(format!(
+                            "Encountered unsorted field name: '{}' should be before '{}'",
+                            field_name, last_field_name,
+                        )));
+                    }
+
+                    let field_value: RawValue = map.next_value()?;
+                    fields.insert(&field_name, field_value).map_err(|_| {
+                        // Fail if field names are duplicate to ensure canonic encoding
+                        serde::de::Error::custom(format!(
+                            "Encountered duplicate field key '{}'",
+                            field_name
+                        ))
+                    })?;
+
+                    last_field_name = field_name;
+                }
+
+                Ok(fields)
+            }
+        }
+
+        deserializer.deserialize_map(RawFieldsVisitor)
+    }
+}
+
 impl From<&OperationFields> for RawFields {
     fn from(fields: &OperationFields) -> Self {
         let mut raw = RawFields::new();
@@ -73,7 +127,9 @@ impl From<&OperationFields> for RawFields {
                 }
             };
 
-            raw.insert(&name, raw_value);
+            // Unwrap here because we already know that there are no duplicates in
+            // `OperationFields`
+            raw.insert(&name, raw_value).unwrap();
         }
 
         raw
@@ -126,12 +182,12 @@ impl Validate for RawValue {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Serialize, Debug, PartialEq)]
 pub struct RawOperation(
     OperationVersion,
     OperationAction,
-    #[serde(skip_serializing_if = "Option::is_none")] Option<DocumentViewId>,
     SchemaId,
+    #[serde(skip_serializing_if = "Option::is_none")] Option<DocumentViewId>,
     #[serde(skip_serializing_if = "Option::is_none")] Option<RawFields>,
 );
 
@@ -144,16 +200,83 @@ impl RawOperation {
         self.1
     }
 
-    pub fn previous_operations(&self) -> Option<&DocumentViewId> {
-        self.2.as_ref()
+    pub fn schema_id(&self) -> &SchemaId {
+        &self.2
     }
 
-    pub fn schema_id(&self) -> &SchemaId {
-        &self.3
+    pub fn previous_operations(&self) -> Option<&DocumentViewId> {
+        self.3.as_ref()
     }
 
     pub fn fields(&self) -> Option<&RawFields> {
         self.4.as_ref()
+    }
+}
+
+impl<'de> Deserialize<'de> for RawOperation {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct RawOperationVisitor;
+
+        impl<'de> Visitor<'de> for RawOperationVisitor {
+            type Value = RawOperation;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("p2panda operation")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let version: OperationVersion = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::custom("Missing version field"))?;
+
+                let action: OperationAction = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::custom("Missing action field"))?;
+
+                let schema_id: SchemaId = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::custom("Missing schema field"))?;
+
+                let previous_operations = match action {
+                    OperationAction::Create => None,
+                    OperationAction::Update | OperationAction::Delete => {
+                        let document_view_id: DocumentViewId =
+                            seq.next_element()?.ok_or_else(|| {
+                                serde::de::Error::custom("Missing previous_operations field")
+                            })?;
+
+                        Some(document_view_id)
+                    }
+                };
+
+                let fields = match action {
+                    OperationAction::Create | OperationAction::Update => {
+                        let raw_fields: RawFields = seq
+                            .next_element()?
+                            .ok_or_else(|| serde::de::Error::custom("Missing fields"))?;
+
+                        Some(raw_fields)
+                    }
+                    OperationAction::Delete => None,
+                };
+
+                Ok(RawOperation(
+                    version,
+                    action,
+                    schema_id,
+                    previous_operations,
+                    fields,
+                ))
+            }
+        }
+
+        deserializer.deserialize_seq(RawOperationVisitor)
     }
 }
 
@@ -162,8 +285,8 @@ impl From<&Operation> for RawOperation {
         RawOperation(
             operation.version(),
             operation.action(),
-            operation.previous_operations(),
             operation.schema(),
+            operation.previous_operations(),
             operation.fields().as_ref().map(|fields| fields.into()),
         )
     }

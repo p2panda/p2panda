@@ -216,8 +216,6 @@ mod tests {
         #[case] value: impl Serialize + Sized,
         #[case] expected_result: Option<SeqNum>,
     ) {
-        println!("{}", u64::MAX);
-
         fn convert<T: Serialize + Sized>(value: T) -> Result<SeqNum, Box<dyn std::error::Error>> {
             let mut cbor_bytes = Vec::new();
             ciborium::ser::into_writer(&value, &mut cbor_bytes)?;
