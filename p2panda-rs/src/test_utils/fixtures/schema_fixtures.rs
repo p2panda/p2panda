@@ -18,9 +18,9 @@ pub fn schema_id(#[default(SCHEMA_ID)] schema_id_str: &str) -> SchemaId {
 /// Default value can be overridden at testing time by passing in a custom schema id string.
 #[fixture]
 pub fn schema(
+    #[default(vec![("address", FieldType::Text)])] fields: Vec<(&str, FieldType)>,
     #[default(schema_id(SCHEMA_ID))] schema_id: SchemaId,
     #[default("Test schema")] description: &str,
-    #[default(vec![("address", FieldType::Text)])] fields: Vec<(&str, FieldType)>,
 ) -> Schema {
     Schema::new(&schema_id, description, fields).unwrap()
 }
