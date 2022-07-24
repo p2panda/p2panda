@@ -300,30 +300,47 @@ mod tests {
     }
 
     #[rstest]
-    #[should_panic(expected = "invalid field type 'str', expected 'int'")]
     #[case(
         RawValue::Text("The Zookeeper".into()),
         FieldType::Integer,
+        "invalid field type 'str', expected 'int'",
     )]
-    #[should_panic(expected = "invalid field type 'int', expected 'str'")]
-    #[case(RawValue::Integer(13), FieldType::Text)]
-    #[should_panic(expected = "invalid field type 'bool', expected 'float'")]
-    #[case(RawValue::Boolean(true), FieldType::Float)]
-    #[should_panic(expected = "invalid field type 'float', expected 'int'")]
-    #[case(RawValue::Float(123.123), FieldType::Integer)]
-    #[should_panic(
-        expected = "invalid field type 'pinned_relation', expected 'relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)'"
+    #[case(
+        RawValue::Integer(13),
+        FieldType::Text,
+        "invalid field type 'int', expected 'str'"
+    )]
+    #[case(
+        RawValue::Boolean(true),
+        FieldType::Float,
+        "invalid field type 'bool', expected 'float'"
+    )]
+    #[case(
+        RawValue::Float(123.123),
+        FieldType::Integer,
+        "invalid field type 'float', expected 'int'"
     )]
     #[case(
         RawValue::PinnedRelation(document_view_id(vec![HASH])),
         FieldType::RelationList(schema_id(SCHEMA_ID)),
+        "invalid field type 'pinned_relation', expected 'relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)'",
     )]
-    fn wrong_field_values(#[case] raw_value: RawValue, #[case] schema_field_type: FieldType) {
-        verify_field_value(&raw_value, &schema_field_type).unwrap();
+    fn wrong_field_values(
+        #[case] raw_value: RawValue,
+        #[case] schema_field_type: FieldType,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(
+            verify_field_value(&raw_value, &schema_field_type)
+                .err()
+                .expect("Expected error")
+                .to_string(),
+            expected.to_string()
+        );
     }
 
     #[rstest]
-    #[case::ordered(
+    #[case(
         vec![
             ("message", FieldType::Text),
             ("age", FieldType::Integer),
@@ -335,7 +352,7 @@ mod tests {
             ("fans", RawValue::RelationList(vec![document_id(HASH)])),
         ],
     )]
-    #[case::unordered(
+    #[case(
         vec![
             ("b", FieldType::Text),
             ("a", FieldType::Integer),
@@ -371,8 +388,8 @@ mod tests {
     }
 
     #[rstest]
-    #[should_panic(expected = "field 'fans' does not match schema: expected field name 'message'")]
-    #[case::unknown_field(
+    // Unknown raw field
+    #[case(
         vec![
             ("message", FieldType::Text),
         ],
@@ -380,9 +397,10 @@ mod tests {
             ("fans", RawValue::RelationList(vec![document_id(HASH)])),
             ("message", RawValue::Text("Hello, Mr. Handa!".into())),
         ],
+        "field 'fans' does not match schema: expected field name 'message'"
     )]
-    #[should_panic(expected = "field 'message' does not match schema: expected field name 'age'")]
-    #[case::missing_field(
+    // Missing raw field
+    #[case(
         vec![
             ("age", FieldType::Integer),
             ("message", FieldType::Text),
@@ -390,11 +408,10 @@ mod tests {
         vec![
             ("message", RawValue::Text("Panda-San!".into())),
         ],
+        "field 'message' does not match schema: expected field name 'age'"
     )]
-    #[should_panic(
-        expected = "field 'cuteness_level' does not match schema: invalid field type 'str', expected 'float'"
-    )]
-    #[case::wrong_field_type(
+    // Wrong field type
+    #[case(
         vec![
             ("is_boring", FieldType::Boolean),
             ("cuteness_level", FieldType::Float),
@@ -405,22 +422,23 @@ mod tests {
             ("cuteness_level", RawValue::Text("Very high! I promise!".into())),
             ("name", RawValue::Text("The really not boring Llama!!!".into())),
         ],
+        "field 'cuteness_level' does not match schema: invalid field type 'str', expected 'float'"
     )]
-    #[should_panic(
-        expected = "field 'is_cute' does not match schema: expected field name 'is_boring'"
-    )]
-    #[case::wrong_field_name(
+    // Wrong field name
+    #[case(
         vec![
             ("is_boring", FieldType::Boolean),
         ],
         vec![
             ("is_cute", RawValue::Boolean(false)),
         ],
+        "field 'is_cute' does not match schema: expected field name 'is_boring'",
     )]
     fn wrong_all_fields(
         #[from(document_view_id)] schema_view_id: DocumentViewId,
         #[case] schema_fields: Vec<(&str, FieldType)>,
         #[case] fields: Vec<(&str, RawValue)>,
+        #[case] expected: &str,
     ) {
         // Construct a schema
         let schema = Schema::new(
@@ -437,11 +455,17 @@ mod tests {
         }
 
         // Check if fields match the schema
-        verify_all_fields(&raw_fields, &schema).unwrap();
+        assert_eq!(
+            verify_all_fields(&raw_fields, &schema)
+                .err()
+                .expect("Expected error")
+                .to_string(),
+            expected
+        );
     }
 
     #[rstest]
-    #[case::ordered(
+    #[case(
         vec![
             ("message", FieldType::Text),
             ("age", FieldType::Integer),
@@ -451,7 +475,7 @@ mod tests {
             ("message", RawValue::Text("Hello, Mr. Handa!".into())),
         ],
     )]
-    #[case::unordered(
+    #[case(
         vec![
             ("message", FieldType::Text),
             ("age", FieldType::Integer),
@@ -486,8 +510,8 @@ mod tests {
     }
 
     #[rstest]
-    #[should_panic(expected = "unexpected fields found: 'spam'")]
-    #[case::missing_raw_field(
+    // Missing raw field
+    #[case(
         vec![
             ("message", FieldType::Text),
             ("age", FieldType::Integer),
@@ -496,9 +520,10 @@ mod tests {
         vec![
             ("spam", RawValue::Text("PANDA IS THE CUTEST!".into())),
         ],
+        "unexpected fields found: 'spam'",
     )]
-    #[should_panic(expected = "unexpected fields found: 'message', 'response'")]
-    #[case::too_many_fields(
+    // Too many fields
+    #[case(
         vec![
             ("age", FieldType::Integer),
             ("is_cute", FieldType::Boolean),
@@ -509,11 +534,10 @@ mod tests {
             ("message", RawValue::Text("Hello, Mr. Handa!".into())),
             ("response", RawValue::Text("Good bye!".into())),
         ],
+        "unexpected fields found: 'message', 'response'",
     )]
-    #[should_panic(
-        expected = "field 'age' does not match schema: invalid field type 'float', expected 'int'"
-    )]
-    #[case::wrong_type(
+    // Wrong type
+    #[case(
         vec![
             ("age", FieldType::Integer),
             ("is_cute", FieldType::Boolean),
@@ -521,20 +545,23 @@ mod tests {
         vec![
             ("age", RawValue::Float(41.34)),
         ],
+        "field 'age' does not match schema: invalid field type 'float', expected 'int'",
     )]
-    #[should_panic(expected = "unexpected fields found: 'rage'")]
-    #[case::wrong_name(
+    // Wrong name
+    #[case(
         vec![
             ("age", FieldType::Integer),
         ],
         vec![
             ("rage", RawValue::Integer(100)),
         ],
+        "unexpected fields found: 'rage'",
     )]
     fn wrong_only_given_fields(
         #[from(document_view_id)] schema_view_id: DocumentViewId,
         #[case] schema_fields: Vec<(&str, FieldType)>,
         #[case] fields: Vec<(&str, RawValue)>,
+        #[case] expected: &str,
     ) {
         // Construct a schema
         let schema = Schema::new(
@@ -551,7 +578,13 @@ mod tests {
         }
 
         // Check if fields match the schema
-        verify_only_given_fields(&raw_fields, &schema).unwrap();
+        assert_eq!(
+            verify_only_given_fields(&raw_fields, &schema)
+                .err()
+                .expect("Expect error")
+                .to_string(),
+            expected
+        );
     }
 
     #[rstest]
