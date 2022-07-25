@@ -4,7 +4,7 @@ use std::hash::Hash as StdHash;
 
 use crate::entry::{decode_entry, EntrySigned};
 use crate::identity::Author;
-use crate::operation::{AsVerifiedOperation, Operation, OperationEncoded, VerifiedOperationError};
+use crate::operation::{AsVerifiedOperation, EncodedOperation, Operation, VerifiedOperationError};
 use crate::Validate;
 
 use super::OperationId;
@@ -51,13 +51,13 @@ impl AsVerifiedOperation for VerifiedOperation {
     }
 
     /// Returns a new `VerifiedOperation` instance constructed from an `EntrySigned`
-    /// and an `OperationEncoded`.
+    /// and an `EncodedOperation`.
     ///
     /// This constructor verifies that the passed operation matches the one encoded
     /// in the passed signed entry.
     fn new_from_entry(
         entry_encoded: &EntrySigned,
-        operation_encoded: &OperationEncoded,
+        operation_encoded: &EncodedOperation,
     ) -> Result<Self, VerifiedOperationError> {
         let operation = Operation::from(operation_encoded);
 
@@ -129,7 +129,7 @@ mod tests {
     use crate::entry::EntrySigned;
     use crate::identity::{Author, KeyPair};
     use crate::operation::{
-        AsOperation, AsVerifiedOperation, Operation, OperationEncoded, OperationId, OperationValue,
+        AsOperation, AsVerifiedOperation, EncodedOperation, Operation, OperationId, OperationValue,
         VerifiedOperation,
     };
     use crate::test_utils::constants::{test_fields, SCHEMA_ID};
@@ -146,7 +146,7 @@ mod tests {
     #[case(operation_encoded(Some(operation_fields(vec![("message", OperationValue::Text("Not the right message".to_string()))])), None, Some(SCHEMA_ID.parse().unwrap())))]
     fn create_verified_operation(
         entry_signed_encoded: EntrySigned,
-        #[case] operation_encoded: OperationEncoded,
+        #[case] operation_encoded: EncodedOperation,
     ) {
         let verified_operation =
             VerifiedOperation::new_from_entry(&entry_signed_encoded, &operation_encoded);

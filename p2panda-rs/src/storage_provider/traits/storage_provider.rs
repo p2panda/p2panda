@@ -270,7 +270,7 @@ pub mod tests {
     use crate::entry::{sign_and_encode, Entry, LogId};
     use crate::identity::KeyPair;
     use crate::operation::{
-        AsOperation, OperationEncoded, OperationFields, OperationId, OperationValue,
+        AsOperation, EncodedOperation, OperationFields, OperationId, OperationValue,
     };
     use crate::storage_provider::traits::test_utils::{test_db, TestStore};
     use crate::storage_provider::traits::{
@@ -585,7 +585,7 @@ pub mod tests {
 
         let signed_entry_with_wrong_log_id =
             sign_and_encode(&entry_with_wrong_log_id, &key_pair).unwrap();
-        let encoded_operation = OperationEncoded::try_from(&entry_two.operation()).unwrap();
+        let encoded_operation = EncodedOperation::try_from(&entry_two.operation()).unwrap();
 
         // Create request and publish invalid entry
         let request_with_wrong_log_id = PublishEntryRequest {
@@ -693,7 +693,7 @@ pub mod tests {
 
         let encoded_entry = sign_and_encode(&update_entry, &key_pair).unwrap();
         let encoded_operation =
-            OperationEncoded::try_from(&update_operation_with_invalid_previous_operations).unwrap();
+            EncodedOperation::try_from(&update_operation_with_invalid_previous_operations).unwrap();
 
         // Publish this entry (which contains an invalid previous_operation)
         let publish_entry_request = PublishEntryRequest {
@@ -752,7 +752,7 @@ pub mod tests {
             None,
         );
 
-        let encoded_operation = OperationEncoded::try_from(&mismatched_operation).unwrap();
+        let encoded_operation = EncodedOperation::try_from(&mismatched_operation).unwrap();
 
         // Publish this entry with an mismatching operation
         let publish_entry_request = PublishEntryRequest {

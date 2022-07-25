@@ -4,7 +4,7 @@ use crate::document::DocumentId;
 use crate::entry::{EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{Operation, OperationEncoded};
+use crate::operation::{EncodedOperation, Operation};
 use crate::schema::SchemaId;
 use crate::Validate;
 
@@ -22,7 +22,7 @@ pub trait AsStorageEntry:
     /// Construct an instance of the struct implementing `AsStorageEntry`
     fn new(
         entry: &EntrySigned,
-        operation: &OperationEncoded,
+        operation: &EncodedOperation,
     ) -> Result<Self, Self::AsStorageEntryError>;
 
     /// Returns the author of this entry.

@@ -2,11 +2,11 @@
 name = "p2panda-rs"
 version = "0.4.0"
 authors = [
-  "sophiiistika <sophiiistika@mailbox.org>",
   "adz <x12@adz.garden>",
-  "sandreae <contact@samandreae.com>",
   "cafca <cafca@001.land>",
   "pietgeursen <pietgeursen@gmail.com>",
+  "sandreae <contact@samandreae.com>",
+  "sophiiistika <sophiiistika@mailbox.org>",
 ]
 edition = "2018"
 description = "All the things a panda needs"
@@ -31,9 +31,6 @@ testing = ["dep:rstest", "dep:rstest_reuse", "dep:varu64", "dep:tokio"]
 arrayvec = "^0.5.2"
 async-trait = "^0.1.56"
 bamboo-rs-core-ed25519-yasmf = "^0.1.1"
-cddl-cat = { version = "^0.6.1", default-features = false, features = [
-  "serde_cbor",
-] }
 ciborium = "^0.2.0"
 ed25519 = "^1.5.2"
 ed25519-dalek = "^1.0.1"
@@ -53,13 +50,9 @@ serde-wasm-bindgen = "^0.4.3"
 serde_repr = "^0.1.8"
 thiserror = "^1.0.31"
 tls_codec = { version = "^0.2.0", features = ["derive", "serde_serialize"] }
+tokio = { version = "1.19.2", features = [ "rt", "macros", "rt-multi-thread" ], optional = true }
 varu64 = { version = "^0.7.0", default-features = false, optional = true }
 yasmf-hash = "^0.1.1"
-tokio = { version = "1.19.2", features = [
-  "rt",
-  "macros",
-  "rt-multi-thread",
-], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rand = "^0.7.3"

@@ -11,22 +11,22 @@ use serde::Deserialize;
 
 use crate::entry::{Entry, EntrySigned, EntrySignedError, LogId, SeqNum, SIGNATURE_SIZE};
 use crate::hash::{Hash, HASH_SIZE};
-use crate::operation::{Operation, OperationEncoded};
+use crate::operation::{Operation, EncodedOperation};
 
 /// Method to decode an entry and optionally its payload.
 ///
-/// Takes [`EntrySigned`] and optionally [`OperationEncoded`] as arguments, returns a decoded and
+/// Takes [`EntrySigned`] and optionally [`EncodedOperation`] as arguments, returns a decoded and
 /// unsigned [`Entry`].
 ///
 /// Entries are separated from the operations they refer to and serve as "off-chain data". Since
 /// operations can independently be deleted they have to be passed on as an optional argument.
 ///
-/// When a [`OperationEncoded`] is passed it will automatically check its integrity with this
+/// When a [`EncodedOperation`] is passed it will automatically check its integrity with this
 /// [`Entry`] by comparing their hashes. Valid operations will be included in the returned
 /// [`Entry`], if an invalid operation is passed an error will be returned.
 pub fn decode_entry(
     entry_encoded: &EntrySigned,
-    operation_encoded: Option<&OperationEncoded>,
+    operation_encoded: Option<&EncodedOperation>,
 ) -> Result<Entry, EntrySignedError> {
     let entry: BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> =
         entry_encoded.into();

@@ -11,7 +11,7 @@ use varu64::encode as varu64_encode;
 use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::{Blake3ArrayVec, Hash};
 use crate::identity::KeyPair;
-use crate::operation::{Operation, OperationEncoded};
+use crate::operation::{Operation, EncodedOperation};
 
 use crate::test_utils::constants::test_fields;
 use crate::test_utils::fixtures::{key_pair, operation, operation_fields, random_hash};
@@ -209,7 +209,7 @@ pub fn entry_signed_encoded_unvalidated(
     // Encode the operation if it exists.
     match operation {
         Some(operation) => {
-            let operation_encoded = OperationEncoded::try_from(&operation).unwrap();
+            let operation_encoded = EncodedOperation::try_from(&operation).unwrap();
             // Encode the payload size
             let operation_size = operation_encoded.size();
             next_byte_num += varu64_encode(operation_size, &mut entry_bytes[next_byte_num..]);

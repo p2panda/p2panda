@@ -8,7 +8,7 @@ use crate::document::DocumentViewId;
 use crate::entry::EntrySigned;
 use crate::identity::Author;
 use crate::operation::{
-    AsVerifiedOperation, Operation, OperationEncoded, OperationFields, OperationId, OperationValue,
+    AsVerifiedOperation, EncodedOperation, Operation, OperationFields, OperationId, OperationValue,
     VerifiedOperation,
 };
 use crate::schema::SchemaId;
@@ -166,7 +166,7 @@ pub fn verified_operation(
 /// Fixture which injects an encoded operation string into a test method.
 #[fixture]
 pub fn encoded_create_string(operation: Operation) -> String {
-    OperationEncoded::try_from(&operation)
+    EncodedOperation::try_from(&operation)
         .unwrap()
         .as_str()
         .to_owned()
@@ -178,24 +178,24 @@ pub fn encoded_create_string(operation: Operation) -> String {
 #[fixture]
 pub fn meta_operation(
     entry_signed_encoded: EntrySigned,
-    operation_encoded: OperationEncoded,
+    operation_encoded: EncodedOperation,
 ) -> VerifiedOperation {
     VerifiedOperation::new_from_entry(&entry_signed_encoded, &operation_encoded).unwrap()
 }
 
-/// Fixture which injects an `OperationEncoded` into a test method.
+/// Fixture which injects an `EncodedOperation` into a test method.
 #[fixture]
 pub fn operation_encoded(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] previous_operations: Option<DocumentViewId>,
     #[default(Some(SCHEMA_ID.parse().unwrap()))] schema_id: Option<SchemaId>,
-) -> OperationEncoded {
-    OperationEncoded::try_from(&operation(fields, previous_operations, schema_id)).unwrap()
+) -> EncodedOperation {
+    EncodedOperation::try_from(&operation(fields, previous_operations, schema_id)).unwrap()
 }
 
 /// Operation who's YASMF hash in `document` is correct length but unknown hash format identifier.
 #[fixture]
-pub fn operation_encoded_invalid_relation_fields() -> OperationEncoded {
+pub fn operation_encoded_invalid_relation_fields() -> EncodedOperation {
     // {
     //   "action": "create",
     //   "schema": "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
@@ -207,7 +207,7 @@ pub fn operation_encoded_invalid_relation_fields() -> OperationEncoded {
     //     }
     //   }
     // }
-    OperationEncoded::new("A466616374696F6E6663726561746566736368656D61784A76656E75655F30303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696F6E01666669656C6473A1696C6F636174696F6E73A264747970656872656C6174696F6E6576616C756578443833653230343337333866326235636463643362366362306662623832666531323539303564306637356531363438386133386433393566663566396435656138326235").unwrap()
+    EncodedOperation::new("A466616374696F6E6663726561746566736368656D61784A76656E75655F30303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696F6E01666669656C6473A1696C6F636174696F6E73A264747970656872656C6174696F6E6576616C756578443833653230343337333866326235636463643362366362306662623832666531323539303564306637356531363438386133386433393566663566396435656138326235").unwrap()
 }
 
 /// Helper method for easily constructing a CREATE operation.

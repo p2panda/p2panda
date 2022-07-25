@@ -3,7 +3,7 @@
 use crate::document::DocumentId;
 use crate::entry::{decode_entry, EntrySigned};
 use crate::identity::Author;
-use crate::operation::OperationEncoded;
+use crate::operation::EncodedOperation;
 use crate::storage_provider::traits::{AsEntryArgsRequest, AsPublishEntryRequest};
 use crate::storage_provider::ValidationError;
 use crate::Validate;
@@ -17,7 +17,7 @@ pub struct PublishEntryRequest {
     pub entry: EntrySigned,
 
     /// The encoded operation.
-    pub operation: OperationEncoded,
+    pub operation: EncodedOperation,
 }
 
 impl AsPublishEntryRequest for PublishEntryRequest {
@@ -25,7 +25,7 @@ impl AsPublishEntryRequest for PublishEntryRequest {
         &self.entry
     }
 
-    fn operation_encoded(&self) -> &OperationEncoded {
+    fn operation_encoded(&self) -> &EncodedOperation {
         &self.operation
     }
 }

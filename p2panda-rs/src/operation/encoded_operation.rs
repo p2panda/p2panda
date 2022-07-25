@@ -6,21 +6,14 @@ use std::hash::Hash as StdHash;
 use serde::{Deserialize, Serialize};
 
 use crate::hash::Hash;
-use crate::operation::{Operation, OperationEncodedError};
+use crate::operation::{Operation, EncodedOperationError};
 use crate::Validate;
 
-/// Operation represented in hex encoded CBOR format.
+/// Operation represented in hex encoded format.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, StdHash)]
-pub struct OperationEncoded(String);
+pub struct EncodedOperation(String);
 
-impl OperationEncoded {
-    /// Validates and wraps encoded operation string into a new `OperationEncoded` instance.
-    pub fn new(value: &str) -> Result<OperationEncoded, OperationEncodedError> {
-        let inner = Self(value.to_owned());
-        inner.validate()?;
-        Ok(inner)
-    }
-
+impl EncodedOperation {
     /// Returns the hash of this operation.
     pub fn hash(&self) -> Hash {
         // Unwrap as we already know that the inner value is valid
@@ -46,8 +39,8 @@ impl OperationEncoded {
 }
 
 /// Returns an encoded version of this operation.
-impl TryFrom<&Operation> for OperationEncoded {
-    type Error = OperationEncodedError;
+impl TryFrom<&Operation> for EncodedOperation {
+    type Error = EncodedOperationError;
 
     fn try_from(operation: &Operation) -> Result<Self, Self::Error> {
         // @TODO
@@ -55,13 +48,23 @@ impl TryFrom<&Operation> for OperationEncoded {
     }
 }
 
-impl Validate for OperationEncoded {
-    type Error = OperationEncodedError;
+impl Validate for EncodedOperation {
+    type Error = EncodedOperationError;
 
     /// Checks encoded operation value against hex format.
     fn validate(&self) -> Result<(), Self::Error> {
-        hex::decode(&self.0).map_err(|_| OperationEncodedError::InvalidHexEncoding)?;
+        hex::decode(&self.0).map_err(|_| EncodedOperationError::InvalidHexEncoding)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+impl EncodedOperation {
+    /// Validates and wraps encoded operation string into a new `EncodedOperation` instance.
+    pub fn new(value: &str) -> Result<EncodedOperation, EncodedOperationError> {
+        let inner = Self(value.to_owned());
+        inner.validate()?;
+        Ok(inner)
     }
 }
 
@@ -82,19 +85,19 @@ mod tests {
     use crate::test_utils::templates::version_fixtures;
     use crate::Validate;
 
-    use super::OperationEncoded;
+    use super::EncodedOperation;
 
     #[rstest]
     fn validate(encoded_create_string: String) {
         // Invalid hex string
-        assert!(OperationEncoded::new("123456789Z").is_err());
+        assert!(EncodedOperation::new("123456789Z").is_err());
 
         // Valid CREATE operation
-        assert!(OperationEncoded::new(&encoded_create_string).is_ok());
+        assert!(EncodedOperation::new(&encoded_create_string).is_ok());
     }
 
     #[rstest]
-    fn decode_invalid_relation_fields(operation_encoded_invalid_relation_fields: OperationEncoded) {
+    fn decode_invalid_relation_fields(operation_encoded_invalid_relation_fields: EncodedOperation) {
         let operation = Operation::try_from(&operation_encoded_invalid_relation_fields).unwrap();
         assert!(operation.validate().is_err());
     }
@@ -139,7 +142,7 @@ mod tests {
         )]
         update_operation: Operation,
     ) {
-        let operation_encoded = OperationEncoded::try_from(&update_operation).unwrap();
+        let operation_encoded = EncodedOperation::try_from(&update_operation).unwrap();
         let operation = Operation::try_from(&operation_encoded).unwrap();
 
         assert!(operation.is_update());

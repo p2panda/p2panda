@@ -5,7 +5,7 @@ use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 
 use crate::hash::Hash;
-use crate::operation::OperationEncoded;
+use crate::operation::EncodedOperation;
 use crate::wasm::{
     encode_create_operation, encode_delete_operation, encode_update_operation, OperationFields,
 };
@@ -187,7 +187,7 @@ fn encodes_operations() {
     // ~~~~~~
 
     // Get hash from CREATE operation
-    let document_id = OperationEncoded::new(&create_operation.unwrap())
+    let document_id = EncodedOperation::new(&create_operation.unwrap())
         .unwrap()
         .hash();
 
@@ -205,7 +205,7 @@ fn encodes_operations() {
     // ~~~~~~
 
     // Get hash from UPDATE operation
-    let update_op_hash = OperationEncoded::new(&update_operation.unwrap())
+    let update_op_hash = EncodedOperation::new(&update_operation.unwrap())
         .unwrap()
         .hash();
 

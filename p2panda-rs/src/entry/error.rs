@@ -51,9 +51,9 @@ pub enum EntrySignedError {
     #[error(transparent)]
     HashError(#[from] crate::hash::HashError),
 
-    /// Handle errors from `OperationEncoded` struct.
+    /// Handle errors from `EncodedOperation` struct.
     #[error(transparent)]
-    OperationEncodedError(#[from] crate::operation::OperationEncodedError),
+    EncodedOperationError(#[from] crate::operation::EncodedOperationError),
 
     /// Handle errors from encoding bamboo_rs_core_ed25519_yasmf entries.
     #[error(transparent)]

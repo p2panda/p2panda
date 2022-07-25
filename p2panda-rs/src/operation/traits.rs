@@ -4,7 +4,7 @@ use crate::document::DocumentViewId;
 use crate::entry::EntrySigned;
 use crate::identity::Author;
 use crate::operation::{
-    Operation, OperationAction, OperationEncoded, OperationFields, OperationId, OperationVersion,
+    Operation, OperationAction, EncodedOperation, OperationFields, OperationId, OperationVersion,
 };
 use crate::schema::SchemaId;
 use crate::Validate;
@@ -15,8 +15,8 @@ pub trait AsOperation {
     /// Returns action type of operation.
     fn action(&self) -> OperationAction;
 
-    /// Returns schema of operation.
-    fn schema(&self) -> SchemaId;
+    /// Returns schema id of operation.
+    fn schema_id(&self) -> SchemaId;
 
     /// Returns version of operation.
     fn version(&self) -> OperationVersion;
@@ -77,13 +77,13 @@ pub trait AsVerifiedOperation:
     ) -> Result<Self, Self::VerifiedOperationError>;
 
     /// Returns a new `VerifiedOperation` instance constructed from an `EntrySigned`
-    /// and an `OperationEncoded`.
+    /// and an `EncodedOperation`.
     ///
     /// Should return an error if the payload signature encoded in the passed entry
     /// does not match the passes encoded operation.
     fn new_from_entry(
         entry_encoded: &EntrySigned,
-        operation_encoded: &OperationEncoded,
+        operation_encoded: &EncodedOperation,
     ) -> Result<Self, Self::VerifiedOperationError>;
 
     /// Returns the identifier for this operation.
@@ -102,9 +102,9 @@ impl<T: AsVerifiedOperation> AsOperation for T {
         self.operation().action()
     }
 
-    /// Returns schema of operation.
-    fn schema(&self) -> SchemaId {
-        self.operation().schema()
+    /// Returns schema if of operation.
+    fn schema_id(&self) -> SchemaId {
+        self.operation().schema_id()
     }
 
     /// Returns version of operation.

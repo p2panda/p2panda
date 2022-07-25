@@ -14,13 +14,13 @@ use p2panda_rs::{
 };
 use p2panda_rs::{
     entry::{sign_and_encode, Entry, LogId, SeqNum},
-    operation::{Operation, OperationEncoded, OperationFields, OperationValue},
+    operation::{EncodedOperation, Operation, OperationFields, OperationValue},
     schema::SchemaId,
 };
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
 /// Encode an [`Entry`] and [`Operation`] given some string payload
-fn run_encode(payload: &str, key_pair: &KeyPair) -> (EntrySigned, OperationEncoded) {
+fn run_encode(payload: &str, key_pair: &KeyPair) -> (EntrySigned, EncodedOperation) {
     let mut fields = OperationFields::new();
     fields
         .add("payload", OperationValue::Text(payload.to_owned()))
@@ -42,12 +42,12 @@ fn run_encode(payload: &str, key_pair: &KeyPair) -> (EntrySigned, OperationEncod
     .unwrap();
 
     let entry_encoded = sign_and_encode(&entry, key_pair).unwrap();
-    let operation_encoded = OperationEncoded::try_from(&operation).unwrap();
+    let operation_encoded = EncodedOperation::try_from(&operation).unwrap();
     (entry_encoded, operation_encoded)
 }
 
 /// Decode an [`Entry`] and [`Operation`] from their encoded forms.
-fn run_decode(entry_encoded: &EntrySigned, operation_encoded: &OperationEncoded) {
+fn run_decode(entry_encoded: &EntrySigned, operation_encoded: &EncodedOperation) {
     decode_entry(entry_encoded, Some(operation_encoded)).unwrap();
     Operation::try_from(operation_encoded).unwrap();
 }

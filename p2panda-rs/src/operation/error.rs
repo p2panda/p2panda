@@ -80,13 +80,13 @@ pub enum OperationFieldsError {
     UnknownField,
 }
 
-/// Custom error types for `OperationEncoded`.
+/// Custom error types for `EncodedOperation`.
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
-pub enum OperationEncodedError {
+pub enum EncodedOperationError {
     /// Encoded operation string contains invalid hex characters.
     #[error("invalid hex encoding in operation")]
-    InvalidHexEncoding,
+    InvalidHexEncoding(#[from] hex::FromHexError),
 }
 
 /// Error types for methods of `VerifiedOperation` struct.
@@ -98,7 +98,7 @@ pub enum VerifiedOperationError {
 
     /// Encoded operation data is invalid.
     #[error(transparent)]
-    OperationEncodedError(#[from] OperationEncodedError),
+    EncodedOperationError(#[from] EncodedOperationError),
 
     /// Invalid operation found.
     #[error(transparent)]

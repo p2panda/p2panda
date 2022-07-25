@@ -8,7 +8,7 @@ use wasm_bindgen::JsValue;
 
 use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
-use crate::operation::{Operation, OperationEncoded};
+use crate::operation::{Operation, EncodedOperation};
 use crate::wasm::error::jserr;
 use crate::wasm::serde::serialize_to_js;
 use crate::wasm::KeyPair;
@@ -56,7 +56,7 @@ pub fn sign_encode_entry(
     let seq_num = jserr!(SeqNum::new(seq_num));
 
     // Convert to Operation
-    let operation_encoded = jserr!(OperationEncoded::new(&encoded_operation));
+    let operation_encoded = jserr!(EncodedOperation::new(&encoded_operation));
     let operation = jserr!(Operation::try_from(&operation_encoded));
 
     // Create Entry instance
@@ -90,7 +90,7 @@ pub fn decode_entry(
     // Convert encoded operation
     let operation_encoded = match operation_encoded {
         Some(msg) => {
-            let inner = jserr!(OperationEncoded::new(&msg));
+            let inner = jserr!(EncodedOperation::new(&msg));
             Some(inner)
         }
         None => None,

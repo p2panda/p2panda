@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::entry::EntrySignedError;
 use crate::hash::{Blake3ArrayVec, Hash, HASH_SIZE};
 use crate::identity::Author;
-use crate::operation::OperationEncoded;
+use crate::operation::EncodedOperation;
 use crate::Validate;
 
 /// Size of p2panda entries' signatures.
@@ -89,14 +89,14 @@ impl EntrySigned {
         self.0.len() as u64 / 2
     }
 
-    /// Takes an [`OperationEncoded`] and validates it against the operation hash encoded in this
+    /// Takes an [`EncodedOperation`] and validates it against the operation hash encoded in this
     /// `EntrySigned`.
     ///
-    /// Returns a result containing the [`OperationEncoded`] or an [`EntrySignedError`] if the
+    /// Returns a result containing the [`EncodedOperation`] or an [`EntrySignedError`] if the
     /// operation hashes didn't match.
     pub fn validate_operation(
         &self,
-        operation_encoded: &OperationEncoded,
+        operation_encoded: &EncodedOperation,
     ) -> Result<(), EntrySignedError> {
         // Convert to Entry from bamboo_rs_core_ed25519_yasmf first
         let entry: BambooEntry = self.into();
@@ -162,7 +162,7 @@ mod tests {
 
     use crate::entry::{sign_and_encode, Entry, EntrySigned};
     use crate::identity::KeyPair;
-    use crate::operation::OperationEncoded;
+    use crate::operation::EncodedOperation;
     use crate::test_utils::constants::{test_fields, HASH, PRIVATE_KEY};
     use crate::test_utils::fixtures::{
         entry_signed_encoded, entry_signed_encoded_unvalidated, key_pair, operation,
@@ -187,7 +187,7 @@ mod tests {
     }
 
     #[rstest]
-    fn test_payload_hash(entry_signed_encoded: EntrySigned, operation_encoded: OperationEncoded) {
+    fn test_payload_hash(entry_signed_encoded: EntrySigned, operation_encoded: EncodedOperation) {
         let expected_payload_hash = operation_encoded.hash();
         assert_eq!(entry_signed_encoded.payload_hash(), expected_payload_hash)
     }

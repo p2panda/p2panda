@@ -9,7 +9,7 @@ use crate::entry::{sign_and_encode, Entry, EntrySigned};
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::{
-    AsOperation, AsVerifiedOperation, Operation, OperationEncoded, OperationValue, PinnedRelation,
+    AsOperation, AsVerifiedOperation, Operation, EncodedOperation, OperationValue, PinnedRelation,
     PinnedRelationList, Relation, RelationList, VerifiedOperation,
 };
 use crate::schema::SchemaId;
@@ -301,7 +301,7 @@ pub async fn send_to_store(
 
     // Encode both the entry and operation.
     let entry = sign_and_encode(&next_entry, key_pair)?;
-    let operation_encoded = OperationEncoded::try_from(operation)?;
+    let operation_encoded = EncodedOperation::try_from(operation)?;
 
     // Publish the entry and get the next entry args.
     let publish_entry_request = PublishEntryRequest {

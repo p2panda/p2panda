@@ -3,7 +3,7 @@
 use crate::entry::{decode_entry, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::{Operation, OperationEncoded, OperationId};
+use crate::operation::{EncodedOperation, Operation, OperationId};
 use crate::storage_provider::errors::EntryStorageError;
 use crate::storage_provider::traits::AsStorageEntry;
 use crate::storage_provider::ValidationError;
@@ -25,7 +25,7 @@ pub struct StorageEntry {
     pub log_id: LogId,
 
     /// Payload of entry, can be deleted.
-    pub payload_bytes: Option<OperationEncoded>,
+    pub payload_bytes: Option<EncodedOperation>,
 
     /// Hash of payload data.
     pub payload_hash: OperationId,
@@ -47,7 +47,7 @@ impl StorageEntry {
     }
 
     /// Get the encoded operation.
-    pub fn operation_encoded(&self) -> Option<OperationEncoded> {
+    pub fn operation_encoded(&self) -> Option<EncodedOperation> {
         self.payload_bytes.clone()
     }
 }
@@ -58,7 +58,7 @@ impl AsStorageEntry for StorageEntry {
 
     fn new(
         entry: &EntrySigned,
-        operation: &OperationEncoded,
+        operation: &EncodedOperation,
     ) -> Result<Self, Self::AsStorageEntryError> {
         let entry_decoded = decode_entry(entry, None).unwrap();
 

@@ -3,7 +3,7 @@
 use crate::document::DocumentId;
 use crate::entry::EntrySigned;
 use crate::identity::Author;
-use crate::operation::OperationEncoded;
+use crate::operation::EncodedOperation;
 use crate::Validate;
 
 /// A request to retrieve the next entry args for an author and document.
@@ -20,8 +20,8 @@ pub trait AsPublishEntryRequest: Validate {
     /// Returns the EntrySigned parameter
     fn entry_signed(&self) -> &EntrySigned;
 
-    /// Returns the OperationEncoded parameter
+    /// Returns the EncodedOperation parameter
     ///
     /// Currently not optional.
-    fn operation_encoded(&self) -> &OperationEncoded;
+    fn operation_encoded(&self) -> &EncodedOperation;
 }

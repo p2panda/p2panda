@@ -9,7 +9,7 @@ use rstest_reuse::apply;
 
 use crate::entry::{decode_entry, sign_and_encode, Entry, LogId, SeqNum};
 use crate::identity::KeyPair;
-use crate::operation::{AsOperation, Operation, OperationEncoded};
+use crate::operation::{AsOperation, Operation, EncodedOperation};
 use crate::test_utils::fixtures::{key_pair, Fixture};
 
 use crate::test_utils::templates::{many_valid_entries, version_fixtures};
@@ -18,7 +18,7 @@ use crate::test_utils::templates::{many_valid_entries, version_fixtures};
 #[apply(many_valid_entries)]
 fn entry_encoding_decoding(#[case] entry: Entry, key_pair: KeyPair) {
     // Encode Operation
-    let encoded_operation = OperationEncoded::try_from(entry.operation().unwrap()).unwrap();
+    let encoded_operation = EncodedOperation::try_from(entry.operation().unwrap()).unwrap();
 
     // Sign and encode Entry
     let signed_encoded_entry = sign_and_encode(&entry, &key_pair).unwrap();
@@ -46,7 +46,7 @@ fn sign_and_encode_roundtrip(#[case] entry: Entry, key_pair: KeyPair) {
 
     // Make an unsigned, decoded p2panda entry from the signed and encoded form. This is adding the
     // operation back
-    let operation_encoded = OperationEncoded::try_from(entry.operation().unwrap()).unwrap();
+    let operation_encoded = EncodedOperation::try_from(entry.operation().unwrap()).unwrap();
     let entry_decoded: Entry =
         decode_entry(&entry_first_encoded, Some(&operation_encoded)).unwrap();
 
@@ -82,13 +82,13 @@ fn fixture_sign_encode(#[case] fixture: Fixture) {
 /// Test decoding an operation from version fixtures.
 #[apply(version_fixtures)]
 fn fixture_decode_operation(#[case] fixture: Fixture) {
-    // Decode fixture OperationEncoded
+    // Decode fixture EncodedOperation
     let operation = Operation::try_from(&fixture.operation_encoded).unwrap();
     let operation_fields = operation.fields().unwrap();
 
     let fixture_operation_fields = fixture.entry.operation().unwrap().fields().unwrap();
 
-    // Decoded fixture OperationEncoded values should match fixture Entry operation values.
+    // Decoded fixture EncodedOperation values should match fixture Entry operation values.
     //
     // Note: Would be an improvement if we iterate over fields instead of using hard coded keys.
     assert_eq!(

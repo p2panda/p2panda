@@ -310,7 +310,7 @@ mod tests {
     use crate::document::{DocumentId, DocumentViewId};
     use crate::identity::KeyPair;
     use crate::operation::{
-        AsOperation, AsVerifiedOperation, OperationEncoded, OperationId, OperationValue,
+        AsOperation, AsVerifiedOperation, EncodedOperation, OperationId, OperationValue,
         VerifiedOperation,
     };
     use crate::schema::SchemaId;
@@ -660,7 +660,7 @@ mod tests {
 
         let operation_two = VerifiedOperation::new_from_entry(
             &entry_two,
-            &OperationEncoded::try_from(&operation_with_wrong_prev_ops).unwrap(),
+            &EncodedOperation::try_from(&operation_with_wrong_prev_ops).unwrap(),
         )
         .unwrap();
 

@@ -87,7 +87,7 @@ use crate::entry::{decode_entry, EntrySigned};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{
-    AsOperation, AsVerifiedOperation, Operation, OperationEncoded, OperationId, VerifiedOperation,
+    AsOperation, AsVerifiedOperation, Operation, EncodedOperation, OperationId, VerifiedOperation,
 };
 use crate::storage_provider::traits::test_utils::send_to_store;
 use crate::storage_provider::traits::{
@@ -130,7 +130,7 @@ impl Node {
     pub async fn publish_entry(
         &mut self,
         entry: &EntrySigned,
-        operation: &OperationEncoded,
+        operation: &EncodedOperation,
     ) -> Result<PublishEntryResponse> {
         let publish_entry_request = PublishEntryRequest {
             entry: entry.clone(),
@@ -282,7 +282,7 @@ mod tests {
     use crate::document::{DocumentId, DocumentViewId};
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
-    use crate::operation::{OperationEncoded, OperationValue};
+    use crate::operation::{EncodedOperation, OperationValue};
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, key_pair, private_key, update_operation,
     };
@@ -677,7 +677,7 @@ mod tests {
                 &entry_args.seq_num,
             );
 
-            let encoded_operation = OperationEncoded::try_from(&operation).unwrap();
+            let encoded_operation = EncodedOperation::try_from(&operation).unwrap();
 
             let result = node_2.publish_entry(&entry, &encoded_operation).await;
             assert!(result.is_ok());

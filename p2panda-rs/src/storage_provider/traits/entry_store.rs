@@ -198,7 +198,7 @@ pub mod tests {
     use crate::entry::{sign_and_encode, Entry};
     use crate::hash::Hash;
     use crate::identity::KeyPair;
-    use crate::operation::{Operation, OperationEncoded};
+    use crate::operation::{EncodedOperation, Operation};
     use crate::storage_provider::traits::test_utils::{test_db, TestStore};
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
     use crate::test_utils::constants::SKIPLINK_SEQ_NUMS;
@@ -285,7 +285,7 @@ pub mod tests {
     #[tokio::test]
     async fn try_get_backlink_invalid_skiplink(
         key_pair: KeyPair,
-        operation_encoded: OperationEncoded,
+        operation_encoded: EncodedOperation,
         #[from(test_db)]
         #[with(4, 1, 1)]
         #[future]
@@ -430,7 +430,7 @@ pub mod tests {
     #[tokio::test]
     async fn try_get_skiplink_invalid_skiplink(
         key_pair: KeyPair,
-        operation_encoded: OperationEncoded,
+        operation_encoded: EncodedOperation,
         #[from(test_db)]
         #[with(4, 1, 1)]
         #[future]

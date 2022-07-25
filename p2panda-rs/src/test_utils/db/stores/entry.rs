@@ -141,7 +141,7 @@ pub mod tests {
 
     use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
     use crate::identity::{Author, KeyPair};
-    use crate::operation::OperationEncoded;
+    use crate::operation::EncodedOperation;
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::test_utils::{test_db, TestStore};
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
@@ -154,7 +154,7 @@ pub mod tests {
     #[tokio::test]
     async fn insert_get_entry(
         entry_signed_encoded: EntrySigned,
-        operation_encoded: OperationEncoded,
+        operation_encoded: EncodedOperation,
     ) {
         // Instantiate a new store.
         let store = MemoryStore::default();
@@ -181,7 +181,7 @@ pub mod tests {
     #[tokio::test]
     async fn get_latest_entry(
         entry_signed_encoded: EntrySigned,
-        operation_encoded: OperationEncoded,
+        operation_encoded: EncodedOperation,
     ) {
         // Instantiate a new store.
         let store = MemoryStore::default();
@@ -214,7 +214,7 @@ pub mod tests {
         #[from(random_key_pair)] key_pair_1: KeyPair,
         #[from(random_key_pair)] key_pair_2: KeyPair,
         entry: Entry,
-        operation_encoded: OperationEncoded,
+        operation_encoded: EncodedOperation,
         schema_id: SchemaId,
     ) {
         // Instantiate a new store.

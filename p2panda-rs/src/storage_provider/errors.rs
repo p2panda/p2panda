@@ -5,7 +5,7 @@ use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::{EntryError, EntrySignedError, LogIdError, SeqNumError};
 use crate::hash::{Hash, HashError};
 use crate::identity::AuthorError;
-use crate::operation::{OperationEncodedError, OperationError, OperationId};
+use crate::operation::{EncodedOperationError, OperationError, OperationId};
 
 /// Data validation errors which can occur in the storage traits.
 #[derive(thiserror::Error, Debug)]
@@ -32,7 +32,7 @@ pub enum ValidationError {
 
     /// Error returned from validating p2panda-rs `OperationEncoded` data types.
     #[error(transparent)]
-    OperationEncodedValidation(#[from] OperationEncodedError),
+    EncodedOperation(#[from] EncodedOperationError),
 
     /// Error returned from validating p2panda-rs `LogId` data types.
     #[error(transparent)]

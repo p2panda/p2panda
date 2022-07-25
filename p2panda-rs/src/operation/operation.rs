@@ -1,121 +1,112 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::hash::{Hash as StdHash, Hasher};
-
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
 use crate::document::DocumentViewId;
-use crate::operation::{AsOperation, OperationEncoded, OperationError, OperationFields};
-use crate::schema::SchemaId;
-use crate::Validate;
+use crate::operation::{
+    AsOperation, OperationAction, OperationError, OperationFields, OperationValue, OperationVersion,
+};
+use crate::schema::{Schema, SchemaId};
 
-/// Operation format versions to introduce API changes in the future.
-///
-/// Operations contain the actual data of applications in the p2panda network and will be stored
-/// for an indefinite time on different machines. To allow an upgrade path in the future and
-/// support backwards compatibility for old data we can use this version number.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum OperationVersion {
-    /// The latest version number.
-    V1,
+pub struct OperationBuilder {
+    action: OperationAction,
+    schema: Schema,
+    previous_operations: Option<DocumentViewId>,
+    fields: Option<OperationFields>,
 }
 
-impl OperationVersion {
-    /// Returns the operation version encoded as u64.
-    pub fn as_u64(&self) -> u64 {
-        match self {
-            OperationVersion::V1 => 1,
-        }
-    }
-}
-
-impl Serialize for OperationVersion {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_u64(self.as_u64())
-    }
-}
-
-impl<'de> Deserialize<'de> for OperationVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let version = u64::deserialize(deserializer)?;
-
-        match version {
-            1 => Ok(OperationVersion::V1),
-            _ => Err(serde::de::Error::custom(format!(
-                "unsupported operation version {}",
-                version
-            ))),
-        }
-    }
-}
-
-/// Operations are categorised by their action type.
-///
-/// An action defines the operation format and if this operation creates, updates or deletes a data
-/// document.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum OperationAction {
-    /// Operation creates a new document.
-    Create,
-
-    /// Operation updates an existing document.
-    Update,
-
-    /// Operation deletes an existing document.
-    Delete,
-}
-
-impl OperationAction {
-    /// Returns the operation action as a string.
-    pub fn as_str(&self) -> &str {
-        match self {
-            OperationAction::Create => "create",
-            OperationAction::Update => "update",
-            OperationAction::Delete => "delete",
+impl OperationBuilder {
+    pub fn new(schema: &Schema) -> Self {
+        Self {
+            action: OperationAction::Create,
+            schema: schema.to_owned(),
+            previous_operations: None,
+            fields: None,
         }
     }
 
-    /// Returns the operation action encoded as u64.
-    pub fn as_u64(&self) -> u64 {
-        match self {
-            OperationAction::Create => 0,
-            OperationAction::Update => 1,
-            OperationAction::Delete => 2,
-        }
+    pub fn action(mut self, action: &OperationAction) -> Self {
+        self.action = action.to_owned();
+        self
     }
-}
 
-impl Serialize for OperationAction {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_u64(self.as_u64())
+    pub fn schema(mut self, schema: &Schema) -> Self {
+        self.schema = schema.to_owned();
+        self
     }
-}
 
-impl<'de> Deserialize<'de> for OperationAction {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let action = u64::deserialize(deserializer)?;
+    pub fn previous_operations(mut self, previous_operations: &DocumentViewId) -> Self {
+        self.previous_operations = Some(previous_operations.to_owned());
+        self
+    }
 
-        match action {
-            0 => Ok(OperationAction::Create),
-            1 => Ok(OperationAction::Update),
-            2 => Ok(OperationAction::Delete),
-            _ => Err(serde::de::Error::custom(format!(
-                "unknown operation action {}",
-                action
-            ))),
+    pub fn insert(mut self, name: &str, value: OperationValue) -> Self {
+        if self.fields.is_none() {
+            self.fields = Some(OperationFields::new());
         }
+
+        if let Err(_) = self.fields.unwrap().insert(name, value) {
+            // Silently fail as `OperationFields` warns us on duplicate fields which is not
+            // important for the builder flow
+        }
+
+        self
+    }
+
+    pub fn build(&self) -> Result<Operation, OperationError> {
+        let operation = match self.action {
+            OperationAction::Create => {
+                match self.fields {
+                    Some(fields) => {
+                        // @TODO: Schema validation
+                        Ok(())
+                    }
+                    None => Err(OperationError::EmptyFields),
+                }?;
+
+                Operation {
+                    action: OperationAction::Create,
+                    version: OperationVersion::V1,
+                    schema: self.schema,
+                    previous_operations: None,
+                    fields: self.fields,
+                }
+            }
+            OperationAction::Update => {
+                match self.fields {
+                    Some(fields) => {
+                        // @TODO: Schema validation
+                        Ok(())
+                    }
+                    None => Err(OperationError::EmptyFields),
+                }?;
+
+                if self.previous_operations.is_none() {
+                    return Err(OperationError::EmptyPreviousOperations);
+                }
+
+                Operation {
+                    action: OperationAction::Update,
+                    version: OperationVersion::V1,
+                    schema: self.schema,
+                    previous_operations: self.previous_operations,
+                    fields: self.fields,
+                }
+            }
+            OperationAction::Delete => {
+                if self.previous_operations.is_none() {
+                    return Err(OperationError::EmptyPreviousOperations);
+                }
+
+                Operation {
+                    action: OperationAction::Delete,
+                    version: OperationVersion::V1,
+                    schema: self.schema,
+                    previous_operations: self.previous_operations,
+                    fields: None,
+                }
+            }
+        };
+
+        Ok(operation)
     }
 }
 
@@ -135,102 +126,21 @@ impl<'de> Deserialize<'de> for OperationAction {
 /// was published.
 #[derive(Clone, Debug)]
 pub struct Operation {
-    /// Version schema of this operation.
+    /// Version of this operation.
     version: OperationVersion,
 
     /// Describes if this operation creates, updates or deletes data.
     action: OperationAction,
 
-    /// Hash of schema describing format of operation fields.
-    schema: SchemaId,
+    /// Schema matching this operation.
+    schema: Schema,
 
-    /// Optional DocumentViewId containing the operation ids directly preceding this one
-    /// in the document.
+    /// Optional document view id containing the operation ids directly preceding this one in the
+    /// document.
     previous_operations: Option<DocumentViewId>,
 
     /// Optional fields map holding the operation data.
     fields: Option<OperationFields>,
-}
-
-impl Operation {
-    /// Returns new CREATE operation.
-    ///
-    /// ## Example
-    ///
-    /// ```
-    /// # extern crate p2panda_rs;
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// use p2panda_rs::hash::Hash;
-    /// use p2panda_rs::operation::{AsOperation, Operation, OperationFields, OperationValue};
-    /// use p2panda_rs::schema::SchemaId;
-    ///
-    /// let msg_schema = SchemaId::new("zoo_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
-    /// let mut msg_fields = OperationFields::new();
-    ///
-    /// msg_fields
-    ///     .add(
-    ///         "Zoo",
-    ///         OperationValue::Text("Pandas, Doggos, Cats, and Parrots!".to_owned()),
-    ///     )
-    ///     .unwrap();
-    ///
-    /// let create_operation = Operation::new_create(msg_schema, msg_fields)?;
-    ///
-    /// assert_eq!(AsOperation::is_create(&create_operation), true);
-    ///
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn new_create(schema: SchemaId, fields: OperationFields) -> Result<Self, OperationError> {
-        let operation = Self {
-            action: OperationAction::Create,
-            version: OperationVersion::V1,
-            schema,
-            previous_operations: None,
-            fields: Some(fields),
-        };
-
-        operation.validate()?;
-
-        Ok(operation)
-    }
-
-    /// Returns new UPDATE operation.
-    pub fn new_update(
-        schema: SchemaId,
-        previous_operations: DocumentViewId,
-        fields: OperationFields,
-    ) -> Result<Self, OperationError> {
-        let operation = Self {
-            action: OperationAction::Update,
-            version: OperationVersion::V1,
-            schema,
-            previous_operations: Some(previous_operations),
-            fields: Some(fields),
-        };
-
-        operation.validate()?;
-
-        Ok(operation)
-    }
-
-    /// Returns new DELETE operation.
-    pub fn new_delete(
-        schema: SchemaId,
-        previous_operations: DocumentViewId,
-    ) -> Result<Self, OperationError> {
-        let operation = Self {
-            action: OperationAction::Delete,
-            version: OperationVersion::V1,
-            schema,
-            previous_operations: Some(previous_operations),
-            fields: None,
-        };
-
-        operation.validate()?;
-
-        Ok(operation)
-    }
 }
 
 impl AsOperation for Operation {
@@ -244,9 +154,9 @@ impl AsOperation for Operation {
         self.version.to_owned()
     }
 
-    /// Returns schema of operation.
-    fn schema(&self) -> SchemaId {
-        self.schema.to_owned()
+    /// Returns schema id of operation.
+    fn schema_id(&self) -> SchemaId {
+        self.schema.id().to_owned()
     }
 
     /// Returns application data fields of operation.
@@ -260,63 +170,6 @@ impl AsOperation for Operation {
     }
 }
 
-/// Decodes an encoded operation and returns it.
-impl From<&OperationEncoded> for Operation {
-    fn from(operation_encoded: &OperationEncoded) -> Self {
-        // @TODO: Use raw operation as an extra step
-        unimplemented!();
-    }
-}
-
-impl PartialEq for Operation {
-    fn eq(&self, other: &Self) -> bool {
-        // @TODO
-        unimplemented!();
-    }
-}
-
-impl Eq for Operation {}
-
-impl StdHash for Operation {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        // @TODO
-        unimplemented!();
-    }
-}
-
-impl Validate for Operation {
-    type Error = OperationError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        // CREATE and UPDATE operations can not have empty fields.
-        if !self.is_delete() && (!self.has_fields() || self.fields().unwrap().is_empty()) {
-            return Err(OperationError::EmptyFields);
-        }
-
-        // DELETE must have empty fields
-        if self.is_delete() && self.has_fields() {
-            return Err(OperationError::DeleteWithFields);
-        }
-
-        // UPDATE and DELETE operations must contain previous_operations.
-        if !self.is_create() && (!self.has_previous_operations()) {
-            return Err(OperationError::EmptyPreviousOperations);
-        }
-
-        // CREATE operations must not contain previous_operations.
-        if self.is_create() && (self.has_previous_operations()) {
-            return Err(OperationError::ExistingPreviousOperations);
-        }
-
-        // Validate fields
-        if self.has_fields() {
-            self.fields().unwrap().validate()?;
-        }
-
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -326,7 +179,7 @@ mod tests {
     use rstest_reuse::apply;
 
     use crate::document::{DocumentId, DocumentViewId};
-    use crate::operation::{AsOperation, OperationEncoded, OperationValue, Relation};
+    use crate::operation::{AsOperation, EncodedOperation, OperationValue, Relation};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         operation_fields, random_document_id, random_document_view_id, schema_id,
@@ -450,7 +303,7 @@ mod tests {
         assert!(operation.is_update());
 
         // Encode operation ...
-        let encoded = OperationEncoded::try_from(&operation).unwrap();
+        let encoded = EncodedOperation::try_from(&operation).unwrap();
 
         // ... and decode it again
         let operation_restored = Operation::try_from(&encoded).unwrap();
@@ -511,7 +364,7 @@ mod tests {
 
     #[apply(many_valid_operations)]
     fn many_valid_operations_should_encode(#[case] operation: Operation) {
-        assert!(OperationEncoded::try_from(&operation).is_ok())
+        assert!(EncodedOperation::try_from(&operation).is_ok())
     }
 
     #[apply(many_valid_operations)]

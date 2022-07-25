@@ -14,7 +14,7 @@
 //! use std::convert::TryFrom;
 //!
 //! use p2panda_rs::operation::AsOperation;
-//! use p2panda_rs::operation::{OperationEncoded, OperationValue};
+//! use p2panda_rs::operation::{EncodedOperation, OperationValue};
 //! use p2panda_rs::test_utils::constants::SCHEMA_ID;
 //! use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
 //! use p2panda_rs::test_utils::fixtures::{
@@ -48,7 +48,7 @@
 //!     args.backlink.as_ref(),
 //!     &args.seq_num
 //! );
-//! let operation_encoded = OperationEncoded::try_from(&operation)?;
+//! let operation_encoded = EncodedOperation::try_from(&operation)?;
 //!
 //! node.publish_entry(&entry_encoded, &operation_encoded).await?;
 //!
