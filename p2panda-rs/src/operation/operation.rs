@@ -3,7 +3,6 @@
 use std::hash::{Hash as StdHash, Hasher};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::document::DocumentViewId;
 use crate::operation::{AsOperation, OperationEncoded, OperationError, OperationFields};
@@ -15,12 +14,10 @@ use crate::Validate;
 /// Operations contain the actual data of applications in the p2panda network and will be stored
 /// for an indefinite time on different machines. To allow an upgrade path in the future and
 /// support backwards compatibility for old data we can use this version number.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
-#[serde(untagged)]
-#[repr(u64)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum OperationVersion {
     /// The default version number.
-    V1 = 1,
+    V1,
 }
 
 impl OperationVersion {
@@ -32,7 +29,31 @@ impl OperationVersion {
     }
 }
 
-impl Copy for OperationVersion {}
+impl Serialize for OperationVersion {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u64(self.as_u64())
+    }
+}
+
+impl<'de> Deserialize<'de> for OperationVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let version = u64::deserialize(deserializer)?;
+
+        match version {
+            1 => Ok(OperationVersion::V1),
+            _ => Err(serde::de::Error::custom(format!(
+                "unsupported operation version {}",
+                version
+            ))),
+        }
+    }
+}
 
 /// Operations are categorised by their action type.
 ///
@@ -90,7 +111,10 @@ impl<'de> Deserialize<'de> for OperationAction {
             0 => Ok(OperationAction::Create),
             1 => Ok(OperationAction::Update),
             2 => Ok(OperationAction::Delete),
-            _ => Err(serde::de::Error::custom("Unknown operation action")),
+            _ => Err(serde::de::Error::custom(format!(
+                "unknown operation action {}",
+                action
+            ))),
         }
     }
 }
@@ -106,27 +130,25 @@ impl<'de> Deserialize<'de> for OperationAction {
 /// entire graph and no more UPDATE operations should be published.
 ///
 /// All UPDATE and DELETE operations have a `previous_operations` field which contains a vector of
-/// operation ids which identify the known branch tips at the time of publication. These allow
-/// us to build the graph and retain knowledge of the graph state at the time the specific
-/// operation was published.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// operation ids which identify the known branch tips at the time of publication. These allow us
+/// to build the graph and retain knowledge of the graph state at the time the specific operation
+/// was published.
+#[derive(Clone, Debug)]
 pub struct Operation {
+    /// Version schema of this operation.
+    version: OperationVersion,
+
     /// Describes if this operation creates, updates or deletes data.
     action: OperationAction,
 
     /// Hash of schema describing format of operation fields.
     schema: SchemaId,
 
-    /// Version schema of this operation.
-    version: OperationVersion,
-
     /// Optional DocumentViewId containing the operation ids directly preceding this one
     /// in the document.
-    #[serde(skip_serializing_if = "Option::is_none")]
     previous_operations: Option<DocumentViewId>,
 
     /// Optional fields map holding the operation data.
-    #[serde(skip_serializing_if = "Option::is_none")]
     fields: Option<OperationFields>,
 }
 
@@ -209,13 +231,6 @@ impl Operation {
 
         Ok(operation)
     }
-
-    /// Encodes operation in CBOR format and returns bytes.
-    pub fn to_cbor(&self) -> Vec<u8> {
-        let mut cbor_bytes = Vec::new();
-        ciborium::ser::into_writer(&self, &mut cbor_bytes).unwrap();
-        cbor_bytes
-    }
 }
 
 impl AsOperation for Operation {
@@ -248,13 +263,15 @@ impl AsOperation for Operation {
 /// Decodes an encoded operation and returns it.
 impl From<&OperationEncoded> for Operation {
     fn from(operation_encoded: &OperationEncoded) -> Self {
-        ciborium::de::from_reader(&operation_encoded.to_bytes()[..]).unwrap()
+        // @TODO: Use raw operation as an extra step
+        unimplemented!();
     }
 }
 
 impl PartialEq for Operation {
     fn eq(&self, other: &Self) -> bool {
-        self.to_cbor() == other.to_cbor()
+        // @TODO
+        unimplemented!();
     }
 }
 
@@ -262,7 +279,8 @@ impl Eq for Operation {}
 
 impl StdHash for Operation {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.to_cbor().hash(state);
+        // @TODO
+        unimplemented!();
     }
 }
 
@@ -464,7 +482,8 @@ mod tests {
 
         let second_operation = Operation::new_create(schema_id, second_fields).unwrap();
 
-        assert_eq!(first_operation.to_cbor(), second_operation.to_cbor());
+        // @TODO
+        // assert_eq!(first_operation.to_cbor(), second_operation.to_cbor());
     }
 
     #[test]

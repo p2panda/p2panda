@@ -50,8 +50,8 @@ impl TryFrom<&Operation> for OperationEncoded {
     type Error = OperationEncodedError;
 
     fn try_from(operation: &Operation) -> Result<Self, Self::Error> {
-        let encoded = hex::encode(&operation.to_cbor());
-        OperationEncoded::new(&encoded)
+        // @TODO
+        unimplemented!();
     }
 }
 

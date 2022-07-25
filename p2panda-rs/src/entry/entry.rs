@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
-use serde::{Deserialize, Serialize};
 
 use crate::entry::{EntryError, LogId, SeqNum};
 use crate::hash::Hash;
@@ -99,8 +98,7 @@ use crate::Validate;
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone)]
 pub struct Entry {
     /// Hash of previous Bamboo entry.
     entry_hash_backlink: Option<Hash>,

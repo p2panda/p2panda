@@ -3,8 +3,6 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
-
 use crate::operation::{OperationError, OperationFieldsError, OperationValue};
 use crate::Validate;
 
@@ -30,7 +28,7 @@ use crate::Validate;
 ///     .unwrap();
 /// }
 /// ```
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct OperationFields(BTreeMap<String, OperationValue>);
 
 impl OperationFields {
