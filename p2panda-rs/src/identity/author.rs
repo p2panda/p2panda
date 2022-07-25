@@ -48,6 +48,11 @@ impl Author {
         self.0.as_str()
     }
 
+    // @TODO
+    pub fn to_bytes(&self) -> Vec<u8> {
+        hex::decode(self.0).unwrap()
+    }
+
     /// Return a shortened six character representation.
     ///
     /// ## Example
@@ -71,11 +76,17 @@ impl Display for Author {
 }
 
 /// Convert Ed25519 `PublicKey` to `Author` instance.
-impl TryFrom<PublicKey> for Author {
-    type Error = AuthorError;
+impl From<&PublicKey> for Author {
+    fn from(public_key: &PublicKey) -> Self {
+        // Unwrap as we already trust that `PublicKey` is correct
+        Self::new(&hex::encode(public_key.to_bytes())).unwrap()
+    }
+}
 
-    fn try_from(public_key: PublicKey) -> Result<Self, Self::Error> {
-        Self::new(&hex::encode(public_key.to_bytes()))
+impl From<&Author> for PublicKey {
+    fn from(author: &Author) -> Self {
+        // Unwrap as we already trust that `Author` is correct
+        PublicKey::from_bytes(&author.to_bytes()).unwrap()
     }
 }
 

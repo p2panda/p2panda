@@ -22,7 +22,7 @@ mod validate;
 mod verified_operation;
 
 pub use decode::decode_operation;
-pub use encode::encode_operation;
+pub use encode::{encode_operation, encode_raw_operation};
 pub use encoded_operation::EncodedOperation;
 pub use error::{
     EncodedOperationError, OperationError, OperationFieldsError, RawOperationError,

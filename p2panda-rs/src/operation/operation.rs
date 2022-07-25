@@ -38,7 +38,20 @@ impl OperationBuilder {
         self
     }
 
-    pub fn insert(mut self, name: &str, value: OperationValue) -> Self {
+    pub fn fields(mut self, fields: &[(&str, OperationValue)]) -> Self {
+        let mut operation_fields = OperationFields::new();
+
+        for (field_name, field_value) in fields {
+            operation_fields
+                .insert(field_name, field_value.to_owned())
+                .unwrap();
+        }
+
+        self.fields = Some(operation_fields);
+        self
+    }
+
+    pub fn insert_field(mut self, name: &str, value: OperationValue) -> Self {
         if self.fields.is_none() {
             self.fields = Some(OperationFields::new());
         }
@@ -124,7 +137,7 @@ impl OperationBuilder {
 /// operation ids which identify the known branch tips at the time of publication. These allow us
 /// to build the graph and retain knowledge of the graph state at the time the specific operation
 /// was published.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Operation {
     /// Version of this operation.
     version: OperationVersion,
@@ -170,7 +183,7 @@ impl AsOperation for Operation {
     }
 }
 
-#[cfg(test)]
+/* #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
     use std::convert::TryFrom;
@@ -179,13 +192,12 @@ mod tests {
     use rstest_reuse::apply;
 
     use crate::document::{DocumentId, DocumentViewId};
-    use crate::operation::{AsOperation, EncodedOperation, OperationValue, Relation};
+    use crate::operation::{EncodedOperation, OperationValue, Relation};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
         operation_fields, random_document_id, random_document_view_id, schema_id,
     };
     use crate::test_utils::templates::many_valid_operations;
-    use crate::Validate;
 
     use super::{Operation, OperationAction, OperationFields, OperationVersion};
 
@@ -375,4 +387,4 @@ mod tests {
         let key_value_retrieved = hash_map.get(&operation).unwrap().to_owned();
         assert_eq!(key_value, key_value_retrieved)
     }
-}
+} */

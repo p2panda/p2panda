@@ -80,7 +80,8 @@ pub trait StorageProvider<
         );
 
         // Validate the entry args request parameters.
-        params.validate()?;
+        // @TODO
+        // params.validate()?;
 
         // Determine log_id for this document. If this is the very first operation in the document
         // graph, the `document` value is None and we will return the next free log id
@@ -212,7 +213,7 @@ pub trait StorageProvider<
         // and skiplinks
         bamboo_rs_core_ed25519_yasmf::verify(
             &entry.entry_bytes(),
-            Some(&params.operation_encoded().to_bytes()),
+            Some(&params.operation_encoded().into_bytes()),
             entry_skiplink_bytes.as_deref(),
             entry_backlink_bytes.as_deref(),
         )?;
@@ -221,7 +222,7 @@ pub trait StorageProvider<
         if entry.operation().is_create() {
             let log = StorageLog::new(
                 &entry.author(),
-                &entry.operation().schema(),
+                &entry.operation().schema_id(),
                 &document_id,
                 &entry.log_id(),
             );

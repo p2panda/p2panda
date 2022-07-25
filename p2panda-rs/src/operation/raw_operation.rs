@@ -282,7 +282,7 @@ impl From<&Operation> for RawOperation {
         RawOperation(
             operation.version(),
             operation.action(),
-            operation.schema(),
+            operation.schema_id(),
             operation.previous_operations(),
             operation.fields().as_ref().map(|fields| fields.into()),
         )

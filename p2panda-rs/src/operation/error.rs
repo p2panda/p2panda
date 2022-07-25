@@ -30,6 +30,10 @@ pub enum OperationError {
 /// Error types for `RawOperation` struct and methods related to it.
 #[derive(Error, Debug)]
 pub enum RawOperationError {
+    /// Could not encode to CBOR due to internal error.
+    #[error("{0}")]
+    EncoderFailed(String),
+
     /// Could not decode CBOR due to internal error.
     #[error("{0}")]
     DecoderFailed(String),
@@ -87,6 +91,10 @@ pub enum EncodedOperationError {
     /// Encoded operation string contains invalid hex characters.
     #[error("invalid hex encoding in operation")]
     InvalidHexEncoding(#[from] hex::FromHexError),
+
+    /// Something went wrong with encoding or decoding from / to raw operation.
+    #[error(transparent)]
+    RawOperationError(#[from] RawOperationError),
 }
 
 /// Error types for methods of `VerifiedOperation` struct.

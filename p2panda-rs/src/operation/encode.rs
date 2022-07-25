@@ -1,15 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::operation::{Operation, OperationError, RawOperation};
+use crate::operation::{Operation, RawOperation, RawOperationError};
 
-pub fn encode_operation(operation: &Operation) -> Result<Vec<u8>, OperationError> {
+pub fn encode_operation(operation: &Operation) -> Result<Vec<u8>, RawOperationError> {
     // Convert to raw operation format
     let raw_operation: RawOperation = operation.into();
 
     // Encode as CBOR byte sequence
+    let cbor_bytes = encode_raw_operation(&raw_operation)?;
+
+    Ok(cbor_bytes)
+}
+
+pub fn encode_raw_operation(raw_operation: &RawOperation) -> Result<Vec<u8>, RawOperationError> {
     let mut cbor_bytes = Vec::new();
+
     ciborium::ser::into_writer(&raw_operation, &mut cbor_bytes)
-        .map_err(|_| OperationError::EmptyPreviousOperations)?; // @TODO: Correct error type
+        .map_err(|err| RawOperationError::EncoderFailed(err.to_string()))?;
 
     Ok(cbor_bytes)
 }

@@ -9,19 +9,21 @@
 //! [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 mod decode;
 mod encode;
+mod encoded_entry;
 #[allow(clippy::module_inception)]
 mod entry;
-mod entry_signed;
 mod error;
 mod log_id;
 mod seq_num;
 #[cfg(test)]
 mod tests;
+mod validate;
 
 pub use decode::decode_entry;
-pub use encode::sign_and_encode;
-pub use entry::Entry;
-pub use entry_signed::{EntrySigned, SIGNATURE_SIZE};
-pub use error::{EntryError, EntrySignedError, LogIdError, SeqNumError};
+pub use encode::{encode_entry, sign_entry};
+pub use encoded_entry::EncodedEntry;
+pub use entry::{Entry, EntryBuilder};
+pub use error::{EntryBuilderError, EntryError, EntrySignedError, LogIdError, SeqNumError};
 pub use log_id::LogId;
 pub use seq_num::SeqNum;
+pub use validate::verify_payload;

@@ -1,74 +1,75 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
+use std::fmt::Display;
 use std::hash::Hash as StdHash;
 
 use serde::{Deserialize, Serialize};
 
 use crate::hash::Hash;
-use crate::operation::{Operation, EncodedOperationError};
-use crate::Validate;
+use crate::operation::{encode_operation, encode_raw_operation, Operation, RawOperation};
+use crate::serde::{deserialize_hex, serialize_hex};
 
-/// Operation represented in hex encoded format.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, StdHash)]
-pub struct EncodedOperation(String);
+/// Wrapper type for operation bytes.
+#[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
+pub struct EncodedOperation(
+    #[serde(serialize_with = "serialize_hex", deserialize_with = "deserialize_hex")] Vec<u8>,
+);
 
 impl EncodedOperation {
     /// Returns the hash of this operation.
     pub fn hash(&self) -> Hash {
-        // Unwrap as we already know that the inner value is valid
-        Hash::new_from_bytes(self.to_bytes()).unwrap()
+        Hash::new_from_bytes(self.0)
     }
 
-    /// Returns encoded operation as string.
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
+    /// Returns operation as bytes.
+    pub fn into_bytes(&self) -> Vec<u8> {
+        self.0
     }
 
-    /// Decodes hex encoding and returns operation as bytes.
-    pub fn to_bytes(&self) -> Vec<u8> {
-        // Unwrap as we already know that the inner value is valid
-        hex::decode(&self.0).unwrap()
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0[..]
     }
 
     /// Returns payload size (number of bytes) of encoded operation.
     pub fn size(&self) -> u64 {
-        // Divide by 2 as every byte is represented by 2 hex chars
-        self.0.len() as u64 / 2
+        self.0.len() as u64
     }
 }
 
-/// Returns an encoded version of this operation.
-impl TryFrom<&Operation> for EncodedOperation {
-    type Error = EncodedOperationError;
-
-    fn try_from(operation: &Operation) -> Result<Self, Self::Error> {
-        // @TODO
-        unimplemented!();
+impl Display for EncodedOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(self.0))
     }
 }
 
-impl Validate for EncodedOperation {
-    type Error = EncodedOperationError;
+impl From<&Operation> for EncodedOperation {
+    fn from(operation: &Operation) -> Self {
+        let bytes = encode_operation(operation).unwrap();
+        Self(bytes)
+    }
+}
 
-    /// Checks encoded operation value against hex format.
-    fn validate(&self) -> Result<(), Self::Error> {
-        hex::decode(&self.0).map_err(|_| EncodedOperationError::InvalidHexEncoding)?;
-        Ok(())
+impl From<&RawOperation> for EncodedOperation {
+    fn from(raw_operation: &RawOperation) -> Self {
+        let bytes = encode_raw_operation(raw_operation).unwrap();
+        Self(bytes)
     }
 }
 
 #[cfg(test)]
 impl EncodedOperation {
-    /// Validates and wraps encoded operation string into a new `EncodedOperation` instance.
-    pub fn new(value: &str) -> Result<EncodedOperation, EncodedOperationError> {
-        let inner = Self(value.to_owned());
-        inner.validate()?;
-        Ok(inner)
+    pub fn new(bytes: &[u8]) -> EncodedOperation {
+        Self(bytes.to_owned())
+    }
+
+    pub fn from_str(value: &str) -> EncodedOperation {
+        let bytes = hex::decode(value).expect("invalid hexadecimal value");
+        Self(bytes)
     }
 }
 
-#[cfg(test)]
+// @TODO: Move this to decode, encode tests
+/* #[cfg(test)]
 mod tests {
     use std::convert::TryFrom;
 
@@ -172,4 +173,4 @@ mod tests {
             ]))
         );
     }
-}
+} */

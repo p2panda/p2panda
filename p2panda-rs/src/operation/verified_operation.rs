@@ -118,7 +118,7 @@ impl Validate for VerifiedOperation {
     }
 }
 
-#[cfg(test)]
+/* #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
     use std::convert::TryFrom;
@@ -230,4 +230,4 @@ mod tests {
         let key_value_retrieved = hash_map.get(&verified_operation).unwrap().to_owned();
         assert_eq!(key_value, key_value_retrieved)
     }
-}
+} */

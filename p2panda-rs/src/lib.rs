@@ -70,12 +70,13 @@ extern crate proptest;
 
 pub mod document;
 pub mod entry;
-pub mod graph;
 pub mod hash;
 pub mod identity;
 pub mod operation;
 pub mod schema;
 pub mod secret_group;
+pub mod serde;
+pub mod serde;
 pub mod storage_provider;
 #[cfg(any(feature = "testing", test))]
 pub mod test_utils;

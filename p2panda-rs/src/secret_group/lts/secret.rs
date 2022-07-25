@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn group_id_hash_encoding() {
-        let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]);
 
         let secret = LongTermSecret::new(
             group_instance_id.clone(),
@@ -171,8 +171,8 @@ mod tests {
                 .random_vec(ciphersuite.aead_key_length())
                 .unwrap();
 
-            let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
-            let group_instance_id_2 = Hash::new_from_bytes(vec![4, 5, 6]).unwrap();
+            let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]);
+            let group_instance_id_2 = Hash::new_from_bytes(vec![4, 5, 6]);
 
             let secret = LongTermSecret::new(
                 group_instance_id.clone(),

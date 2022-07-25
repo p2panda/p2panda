@@ -9,5 +9,5 @@ use crate::hash::Hash;
 #[fixture]
 pub fn random_hash() -> Hash {
     let random_data = rand::thread_rng().gen::<[u8; 32]>().to_vec();
-    Hash::new_from_bytes(random_data).unwrap()
+    Hash::new_from_bytes(random_data)
 }

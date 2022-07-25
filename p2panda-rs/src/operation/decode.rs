@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::operation::{verify_schema_and_convert, Operation, RawOperation, RawOperationError};
+use crate::operation::{
+    verify_schema_and_convert, EncodedOperation, Operation, RawOperation, RawOperationError,
+};
 use crate::schema::Schema;
 
-pub fn decode_operation(bytes: &[u8], schema: &Schema) -> Result<Operation, RawOperationError> {
+pub fn decode_operation(
+    encoded_operation: &EncodedOperation,
+    schema: &Schema,
+) -> Result<Operation, RawOperationError> {
+    let bytes = encoded_operation.as_bytes();
+
     let raw_operation: RawOperation =
         ciborium::de::from_reader(bytes).map_err(|err| match err {
             ciborium::de::Error::Io(err) => RawOperationError::DecoderFailed(err.to_string()),
@@ -29,16 +36,17 @@ mod tests {
     use ciborium::value::{Error, Value};
     use rstest::rstest;
 
+    use crate::operation::EncodedOperation;
     use crate::schema::{FieldType, Schema, SchemaId};
     use crate::test_utils::constants::{HASH, SCHEMA_ID};
     use crate::test_utils::fixtures::schema_id;
 
     use super::decode_operation;
 
-    fn encode_cbor(value: Value) -> Vec<u8> {
+    fn encode_cbor(value: Value) -> EncodedOperation {
         let mut cbor_bytes = Vec::new();
         ciborium::ser::into_writer(&value, &mut cbor_bytes).unwrap();
-        cbor_bytes
+        EncodedOperation::new(&cbor_bytes)
     }
 
     #[rstest]
@@ -64,13 +72,13 @@ mod tests {
     fn valid_operations(
         #[from(schema_id)] schema_id: SchemaId,
         #[case] schema_fields: Vec<(&str, FieldType)>,
-        #[case] raw_operation: Result<Value, Error>,
+        #[case] cbor: Result<Value, Error>,
     ) {
         let schema = Schema::new(&schema_id, "Some schema description", schema_fields)
             .expect("Could not create schema");
 
-        let bytes = encode_cbor(raw_operation.expect("Invalid CBOR value"));
-        assert!(decode_operation(&bytes, &schema).is_ok());
+        let encoded_operation = encode_cbor(cbor.expect("Invalid CBOR value"));
+        assert!(decode_operation(&encoded_operation, &schema).is_ok());
     }
 
     #[rstest]
