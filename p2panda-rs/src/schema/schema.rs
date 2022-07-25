@@ -5,7 +5,6 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-use crate::cddl::generate_cddl_definition;
 use crate::document::DocumentViewHash;
 use crate::schema::system::{
     get_schema_definition, get_schema_field_definition, SchemaFieldView, SchemaView,
@@ -161,11 +160,6 @@ impl Schema {
             SchemaId::SchemaFieldDefinition(version) => get_schema_field_definition(version),
             _ => Err(SchemaIdError::UnknownSystemSchema(schema_id.as_str())),
         }
-    }
-
-    /// Return a definition for this schema expressed as a CDDL string.
-    pub fn as_cddl(&self) -> String {
-        generate_cddl_definition(&self.fields)
     }
 
     /// Access the schema's [`SchemaId`].
@@ -426,14 +420,6 @@ mod tests {
         );
         assert_eq!(schema.description(), "Describes a venue");
         assert_eq!(schema.fields().len(), 2);
-
-        let expected_cddl = "capacity = { type: \"int\", value: int, }\n".to_string()
-            + "is_accessible = { type: \"bool\", value: bool, }\n"
-            + "create-fields = { capacity, is_accessible }\n"
-            + "update-fields = { + ( capacity // is_accessible ) }";
-
-        // Schema should return correct cddl string
-        assert_eq!(expected_cddl, schema.as_cddl());
 
         // Schema should have a string representation
         assert_eq!(format!("{}", schema), "<Schema venue_name 496543>");
