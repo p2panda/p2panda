@@ -93,12 +93,18 @@ pub trait Validate {
 }
 
 /// Trait used by p2panda structs for human-facing functionality, like better readability.
+///
+/// Please note: Most structs already provide string representation methods which can be used for
+/// debugging with additional type information (`Debug`) or lossless string representations of the
+/// data (`Display`). `Display` implementations return a string which can safely be parsed back
+/// into the struct again. `Human` takes a third approach which is potentially destructive and aims
+/// at easier to read strings.
 pub trait Human {
     /// Returns a shorter representation of the type.
     ///
     /// Since p2panda values can at times be very long (for example hashes) this method can be used
-    /// to implement a shorter representation of the value, which is destructive but anyway mean't
-    /// for humans and not computers.
+    /// to implement a shorter representation of the value, which is destructive but easier to read
+    /// for humans (and not computers).
     fn display(&self) -> String;
 }
 
