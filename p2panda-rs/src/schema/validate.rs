@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-&3.0-or-later
 
 use crate::document::{DocumentId, DocumentViewId};
+use crate::hash::HashError;
 use crate::operation::{
     OperationFields, OperationId, OperationValue, PinnedRelation, PinnedRelationList, RawFields,
     RawValue, Relation, RelationList,
@@ -168,9 +169,7 @@ fn verify_field_value(
         FieldType::Relation(_) => {
             if let RawValue::TextOrRelation(document_id_str) = raw_value {
                 Ok(OperationValue::Relation(Relation::new(
-                    document_id_str.parse::<DocumentId>().map_err(|err| {
-                        ValidationError::InvalidValue("document id".into(), err.to_string())
-                    })?,
+                    document_id_str.parse::<DocumentId>()?,
                 )))
             } else {
                 Err(ValidationError::InvalidType(
@@ -181,21 +180,17 @@ fn verify_field_value(
         }
         FieldType::RelationList(_) => {
             if let RawValue::PinnedRelationOrRelationList(document_ids) = raw_value {
-                let relation_list: Result<Vec<DocumentId>, ValidationError> = document_ids
+                let relation_list: Result<Vec<DocumentId>, HashError> = document_ids
                     .iter()
-                    .map(|document_id_str| {
-                        document_id_str.parse::<DocumentId>().map_err(|err| {
-                            ValidationError::InvalidValue("document id".into(), err.to_string())
-                        })
-                    })
+                    .map(|document_id_str| document_id_str.parse::<DocumentId>())
                     .collect();
 
                 let value = OperationValue::RelationList(RelationList::new(relation_list?));
 
                 // @TODO: Check if relation list is sorted and without any duplicates
-                value.validate().map_err(|err| {
-                    ValidationError::InvalidValue("list of document ids".into(), err.to_string())
-                })?;
+                value
+                    .validate()
+                    .map_err(|err| ValidationError::InvalidSequenceEncoding(err.to_string()))?;
 
                 Ok(value)
             } else {
@@ -207,19 +202,14 @@ fn verify_field_value(
         }
         FieldType::PinnedRelation(_) => {
             if let RawValue::PinnedRelationOrRelationList(operation_ids_vec) = raw_value {
-                let operation_ids: Result<Vec<OperationId>, ValidationError> = operation_ids_vec
+                let operation_ids: Result<Vec<OperationId>, HashError> = operation_ids_vec
                     .iter()
-                    .map(|operation_id_str| {
-                        operation_id_str.parse::<OperationId>().map_err(|err| {
-                            ValidationError::InvalidValue("operation id".into(), err.to_string())
-                        })
-                    })
+                    .map(|operation_id_str| operation_id_str.parse::<OperationId>())
                     .collect();
 
                 // @TODO: Check if relation list is sorted and without any duplicates
-                let pinned_relation = DocumentViewId::new(&operation_ids?).map_err(|err| {
-                    ValidationError::InvalidValue("document view id".into(), err.to_string())
-                })?;
+                let pinned_relation = DocumentViewId::new(&operation_ids?)
+                    .map_err(|err| ValidationError::InvalidSequenceEncoding(err.to_string()))?;
 
                 let value = OperationValue::PinnedRelation(PinnedRelation::new(pinned_relation));
                 Ok(value)
@@ -236,24 +226,14 @@ fn verify_field_value(
                     document_view_ids_vec
                         .iter()
                         .map(|operation_ids_vec| {
-                            let operation_ids: Result<Vec<OperationId>, ValidationError> =
+                            let operation_ids: Result<Vec<OperationId>, HashError> =
                                 operation_ids_vec
                                     .iter()
-                                    .map(|operation_id_str| {
-                                        operation_id_str.parse::<OperationId>().map_err(|err| {
-                                            ValidationError::InvalidValue(
-                                                "operation id".into(),
-                                                err.to_string(),
-                                            )
-                                        })
-                                    })
+                                    .map(|operation_id_str| operation_id_str.parse::<OperationId>())
                                     .collect();
 
                             let view_id = DocumentViewId::new(&operation_ids?).map_err(|err| {
-                                ValidationError::InvalidValue(
-                                    "document view id".into(),
-                                    err.to_string(),
-                                )
+                                ValidationError::InvalidSequenceEncoding(err.to_string())
                             })?;
 
                             Ok(view_id)

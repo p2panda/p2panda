@@ -19,6 +19,7 @@ pub fn decode_operation(bytes: &[u8], schema: &Schema) -> Result<Operation, RawO
         })?;
 
     let operation = verify_schema_and_convert(&raw_operation, schema)?;
+
     Ok(operation)
 }
 
@@ -69,7 +70,7 @@ mod tests {
             .expect("Could not create schema");
 
         let bytes = encode_cbor(raw_operation.expect("Invalid CBOR value"));
-        decode_operation(&bytes, &schema).unwrap();
+        assert!(decode_operation(&bytes, &schema).is_ok());
     }
 
     #[rstest]
@@ -83,8 +84,7 @@ mod tests {
                 "country" => "0020",
             },
         ]),
-        // @TODO: Improve error messages
-        "field 'country' does not match schema: invalid document id: invalid hash length 2 bytes, expected 34 bytes"
+        "field 'country' does not match schema: invalid hash length 2 bytes, expected 34 bytes"
     )]
     #[case::invalid_hex_encoding(
         vec![
@@ -96,8 +96,7 @@ mod tests {
                 "country" => "xyz",
             },
         ]),
-        // @TODO: Improve error messages
-        "field 'country' does not match schema: invalid document id: invalid hex encoding in hash string"
+        "field 'country' does not match schema: invalid hex encoding in hash string"
     )]
     #[case::missing_field(
         vec![

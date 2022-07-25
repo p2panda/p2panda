@@ -141,7 +141,7 @@ impl<'de> Deserialize<'de> for Hash {
         let hash_str: String = Deserialize::deserialize(deserializer)?;
 
         let hash = Hash::new(&hash_str).map_err(|err| {
-            serde::de::Error::custom(format!("Invalid yasmf hash encoding: {}", err))
+            serde::de::Error::custom(format!("invalid yasmf hash encoding: {}", err))
         })?;
 
         Ok(hash)

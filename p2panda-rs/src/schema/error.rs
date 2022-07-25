@@ -79,7 +79,12 @@ pub enum ValidationError {
     #[error("invalid field type '{0}', expected '{1}'")]
     InvalidType(String, String),
 
-    /// Field value is not correctly encoded.
-    #[error("invalid {0}: {1}")]
-    InvalidValue(String, String),
+    /// Sequences of operation ids or document ids need to be sorted lexicographically and can't
+    /// contain duplicates.
+    #[error("invalid sequence encoding, {0}")]
+    InvalidSequenceEncoding(String),
+
+    /// Expected hash value (operation id, document id, ..) was not correctly encoded.
+    #[error(transparent)]
+    InvalidHashEncoding(#[from] crate::hash::HashError),
 }
