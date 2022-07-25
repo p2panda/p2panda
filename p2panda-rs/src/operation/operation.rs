@@ -16,7 +16,7 @@ use crate::Validate;
 /// support backwards compatibility for old data we can use this version number.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum OperationVersion {
-    /// The default version number.
+    /// The latest version number.
     V1,
 }
 
