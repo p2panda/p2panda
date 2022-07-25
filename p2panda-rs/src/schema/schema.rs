@@ -9,6 +9,7 @@ use crate::schema::system::{
     get_schema_definition, get_schema_field_definition, SchemaFieldView, SchemaView,
 };
 use crate::schema::{FieldType, SchemaError, SchemaId, SchemaIdError, SchemaVersion};
+use crate::Human;
 
 /// The key of a schema field
 type FieldKey = String;
@@ -216,16 +217,17 @@ impl Schema {
     pub fn fields(&self) -> &BTreeMap<FieldKey, FieldType> {
         &self.fields
     }
-
-    /// Return a shortened string representation.
-    pub fn short_repr(&self) -> String {
-        format!("<Schema {}>", self.id.short_repr())
-    }
 }
 
 impl Display for Schema {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.id)
+    }
+}
+
+impl Human for Schema {
+    fn display(&self) -> String {
+        format!("<Schema {}>", self.id.display())
     }
 }
 
@@ -241,6 +243,7 @@ mod tests {
     use crate::schema::system::{SchemaFieldView, SchemaView};
     use crate::schema::{FieldType, Schema, SchemaId, SchemaVersion};
     use crate::test_utils::fixtures::{document_view_id, random_operation_id};
+    use crate::Human;
 
     fn create_schema_view(
         fields: &PinnedRelationList,
@@ -326,18 +329,15 @@ mod tests {
             vec![("number", FieldType::Int)],
         )
         .unwrap();
-        assert_eq!(schema.short_repr(), "<Schema venue 496543>");
+        assert_eq!(schema.display(), "<Schema venue 496543>");
 
         let schema_definition = Schema::get_system(SchemaId::SchemaDefinition(1)).unwrap();
-        assert_eq!(
-            schema_definition.short_repr(),
-            "<Schema schema_definition_v1>"
-        );
+        assert_eq!(schema_definition.display(), "<Schema schema_definition_v1>");
 
         let schema_field_definition =
             Schema::get_system(SchemaId::SchemaFieldDefinition(1)).unwrap();
         assert_eq!(
-            schema_field_definition.short_repr(),
+            schema_field_definition.display(),
             "<Schema schema_field_definition_v1>"
         );
     }

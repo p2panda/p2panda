@@ -9,7 +9,7 @@ use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
 use serde::{Deserialize, Serialize};
 
 use crate::identity::AuthorError;
-use crate::Validate;
+use crate::{Human, Validate};
 
 /// Authors are hex encoded Ed25519 public key strings.
 #[derive(Clone, Debug, Serialize, Eq, StdHash, Deserialize, PartialEq)]
@@ -47,26 +47,29 @@ impl Author {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
+}
 
+impl Display for Author {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl Human for Author {
     /// Return a shortened six character representation.
     ///
     /// ## Example
     ///
     /// ```
     /// # use p2panda_rs::identity::Author;
+    /// # use p2panda_rs::Human;
     /// let pub_key = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
     /// let author = pub_key.parse::<Author>().unwrap();
-    /// assert_eq!(author.short_repr(), "<Author a5d982>");
+    /// assert_eq!(author.display(), "<Author a5d982>");
     /// ```
-    pub fn short_repr(&self) -> String {
+    fn display(&self) -> String {
         let offset = PUBLIC_KEY_LENGTH * 2 - 6;
         format!("<Author {}>", &self.0[offset..])
-    }
-}
-
-impl Display for Author {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_str())
     }
 }
 
@@ -117,6 +120,7 @@ mod tests {
     use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
 
     use crate::identity::AuthorError;
+    use crate::Human;
 
     use super::Author;
 
@@ -176,6 +180,6 @@ mod tests {
         let author_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
         let author = Author::new(author_str).unwrap();
 
-        assert_eq!(author.short_repr(), "<Author a5d982>");
+        assert_eq!(author.display(), "<Author a5d982>");
     }
 }

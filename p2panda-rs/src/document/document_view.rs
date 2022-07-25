@@ -6,6 +6,7 @@ use std::fmt::Display;
 
 use crate::document::DocumentViewId;
 use crate::document::{DocumentViewFields, DocumentViewValue};
+use crate::Human;
 
 type FieldKey = String;
 
@@ -68,16 +69,17 @@ impl DocumentView {
     pub fn fields(&self) -> &DocumentViewFields {
         &self.fields
     }
-
-    /// Return a shortened six character representation.
-    pub fn short_repr(&self) -> String {
-        format!("<DocumentView {}>", self.id.short_repr())
-    }
 }
 
 impl Display for DocumentView {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.id)
+    }
+}
+
+impl Human for DocumentView {
+    fn display(&self) -> String {
+        format!("<DocumentView {}>", self.id.display())
     }
 }
 
@@ -94,6 +96,7 @@ mod tests {
     use crate::test_utils::fixtures::{
         document_id, document_view_id, operation_fields, verified_operation,
     };
+    use crate::Human;
 
     use super::{DocumentView, DocumentViewId};
 
@@ -236,6 +239,6 @@ mod tests {
             format!("{}", document_view),
             "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
         );
-        assert_eq!(document_view.short_repr(), "<DocumentView 496543_f16e79>");
+        assert_eq!(document_view.display(), "<DocumentView 496543_f16e79>");
     }
 }

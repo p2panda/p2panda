@@ -6,7 +6,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 use crate::hash::{Hash, HashError};
-use crate::Validate;
+use crate::{Human, Validate};
 
 /// Uniquely identifies an [`Operation`](crate::operation::Operation).
 ///
@@ -24,12 +24,6 @@ impl OperationId {
     /// Returns hash of operation id represented as `&str`.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
-    }
-
-    /// Return a shortened six character representation.
-    pub fn short_repr(&self) -> String {
-        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
-        format!("<Operation {}>", &self.0.as_str()[offset..])
     }
 
     /// Access the inner [`crate::hash::Hash`] value of this operation id.
@@ -66,12 +60,20 @@ impl Display for OperationId {
     }
 }
 
+impl Human for OperationId {
+    fn display(&self) -> String {
+        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
+        format!("<Operation {}>", &self.0.as_str()[offset..])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
 
     use crate::hash::Hash;
     use crate::test_utils::fixtures::random_hash;
+    use crate::Human;
 
     use super::OperationId;
 
@@ -108,6 +110,6 @@ mod tests {
         let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         let operation_id = OperationId::new(Hash::new(hash_str).unwrap());
 
-        assert_eq!(operation_id.short_repr(), "<Operation 6ec805>");
+        assert_eq!(operation_id.display(), "<Operation 6ec805>");
     }
 }

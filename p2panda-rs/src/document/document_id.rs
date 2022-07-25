@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::hash::{Hash, HashError};
 use crate::operation::OperationId;
-use crate::Validate;
+use crate::{Human, Validate};
 
 /// Identifier of a document.
 ///
@@ -36,17 +36,18 @@ impl DocumentId {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
-
-    /// Return a shortened six character representation.
-    pub fn short_repr(&self) -> String {
-        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
-        format!("<DocumentId {}>", &self.0.as_str()[offset..])
-    }
 }
 
 impl Display for DocumentId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0.as_str())
+    }
+}
+
+impl Human for DocumentId {
+    fn display(&self) -> String {
+        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
+        format!("<DocumentId {}>", &self.0.as_str()[offset..])
     }
 }
 
@@ -79,6 +80,7 @@ mod tests {
     use crate::hash::Hash;
     use crate::operation::OperationId;
     use crate::test_utils::fixtures::random_hash;
+    use crate::Human;
 
     use super::DocumentId;
 
@@ -115,6 +117,6 @@ mod tests {
         let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         let document_id: DocumentId = hash_str.parse().unwrap();
 
-        assert_eq!(document_id.short_repr(), "<DocumentId 6ec805>");
+        assert_eq!(document_id.display(), "<DocumentId 6ec805>");
     }
 }

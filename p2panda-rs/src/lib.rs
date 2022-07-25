@@ -92,6 +92,16 @@ pub trait Validate {
     fn validate(&self) -> Result<(), Self::Error>;
 }
 
+/// Trait used by p2panda structs for human-facing functionality, like better readability.
+pub trait Human {
+    /// Returns a shorter representation of the type.
+    ///
+    /// Since p2panda values can at times be very long (for example hashes) this method can be used
+    /// to implement a shorter representation of the value, which is destructive but anyway mean't
+    /// for humans and not computers.
+    fn display(&self) -> String;
+}
+
 /// Init pretty_env_logger before the test suite runs to handle logging outputs.
 ///
 /// We output log information using the `log` crate. In itself this doesn't print

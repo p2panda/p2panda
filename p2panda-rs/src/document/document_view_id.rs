@@ -8,7 +8,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::hash::Hash;
 use crate::operation::OperationId;
-use crate::Validate;
+use crate::{Human, Validate};
 
 use super::error::DocumentViewIdError;
 
@@ -59,19 +59,6 @@ impl DocumentViewId {
         graph_tips.sort();
         graph_tips
     }
-
-    /// Get a short string representation of document view id.
-    pub fn short_repr(&self) -> String {
-        let mut result = String::new();
-        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
-
-        for (i, operation_id) in self.0.clone().into_iter().enumerate() {
-            let separator = if i == 0 { "" } else { "_" };
-            write!(result, "{}{}", &separator, &operation_id.as_str()[offset..]).unwrap();
-        }
-
-        result
-    }
 }
 
 impl Display for DocumentViewId {
@@ -82,6 +69,20 @@ impl Display for DocumentViewId {
         }
 
         Ok(())
+    }
+}
+
+impl Human for DocumentViewId {
+    fn display(&self) -> String {
+        let mut result = String::new();
+        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
+
+        for (i, operation_id) in self.0.clone().into_iter().enumerate() {
+            let separator = if i == 0 { "" } else { "_" };
+            write!(result, "{}{}", &separator, &operation_id.as_str()[offset..]).unwrap();
+        }
+
+        result
     }
 }
 
@@ -241,7 +242,7 @@ mod tests {
     use crate::operation::OperationId;
     use crate::test_utils::constants::HASH;
     use crate::test_utils::fixtures::{document_view_id, random_hash, random_operation_id};
-    use crate::Validate;
+    use crate::{Human, Validate};
 
     use super::DocumentViewId;
 
@@ -313,7 +314,7 @@ mod tests {
             .unwrap();
 
         let view_id_unmerged = DocumentViewId::new(&[operation_1, operation_2]).unwrap();
-        assert_eq!(view_id_unmerged.short_repr(), "496543_f16e79");
+        assert_eq!(view_id_unmerged.display(), "496543_f16e79");
     }
 
     #[rstest]

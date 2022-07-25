@@ -10,6 +10,7 @@ use crate::graph::Graph;
 use crate::identity::Author;
 use crate::operation::{AsOperation, AsVerifiedOperation, OperationId, VerifiedOperation};
 use crate::schema::SchemaId;
+use crate::Human;
 
 /// Construct a graph from a list of operations.
 pub(super) fn build_graph(
@@ -138,17 +139,18 @@ impl Document {
     pub fn is_deleted(&self) -> IsDeleted {
         self.meta.deleted
     }
-
-    /// Return a shortened string representation.
-    pub fn short_repr(&self) -> String {
-        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
-        format!("<Document {}>", &self.id.as_str()[offset..])
-    }
 }
 
 impl Display for Document {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.id)
+    }
+}
+
+impl Human for Document {
+    fn display(&self) -> String {
+        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
+        format!("<Document {}>", &self.id.as_str()[offset..])
     }
 }
 
@@ -326,6 +328,7 @@ mod tests {
         schema, update_operation, verified_operation,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
+    use crate::Human;
 
     use super::{reduce, DocumentBuilder};
 
@@ -350,7 +353,7 @@ mod tests {
         );
 
         // Short string representation
-        assert_eq!(document.short_repr(), "<Document 6ec805>");
+        assert_eq!(document.display(), "<Document 6ec805>");
 
         // Make sure the id is matching
         assert_eq!(

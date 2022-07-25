@@ -17,6 +17,7 @@
 # extern crate p2panda_rs;
 # #[tokio::main]
 # async fn main() -> p2panda_rs::storage_provider::utils::Result<()> {
+# use p2panda_rs::Human;
 # use p2panda_rs::hash::Hash;
 # use p2panda_rs::identity::KeyPair;
 # use p2panda_rs::operation::{OperationValue, VerifiedOperation, AsVerifiedOperation};
@@ -127,7 +128,7 @@ let document = DocumentBuilder::new(operations.clone()).build();
 assert!(document.is_ok());
 
 let document = document.unwrap();
-assert_eq!(document.short_repr(), "<Document 70e829>");
+assert_eq!(document.display(), "<Document 70e829>");
 
 // This process already builds, sorts and reduces the document. We can now
 // access the derived view to check it's values.

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::fmt;
+use std::fmt::Display;
 use std::str::FromStr;
 
 use serde::de::Visitor;
@@ -10,6 +11,7 @@ use yasmf_hash::MAX_YAMF_HASH_SIZE;
 use crate::document::DocumentViewId;
 use crate::operation::OperationId;
 use crate::schema::error::SchemaIdError;
+use crate::Human;
 
 /// Spelling of _schema definition_ schema
 pub(super) const SCHEMA_DEFINITION_NAME: &str = "schema_definition";
@@ -128,14 +130,6 @@ impl SchemaId {
         ))
     }
 
-    /// Get a short string representation of string id.
-    pub fn short_repr(&self) -> String {
-        match self {
-            SchemaId::Application(name, view_id) => format!("{} {}", name, view_id.short_repr()),
-            system_schema => format!("{}", system_schema),
-        }
-    }
-
     /// Access the schema name.
     pub fn name(&self) -> &str {
         match self {
@@ -155,7 +149,7 @@ impl SchemaId {
     }
 }
 
-impl fmt::Display for SchemaId {
+impl Display for SchemaId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SchemaId::Application(name, view_id) => {
@@ -173,6 +167,15 @@ impl fmt::Display for SchemaId {
             SchemaId::SchemaFieldDefinition(version) => {
                 write!(f, "{}_v{}", SCHEMA_FIELD_DEFINITION_NAME, version)
             }
+        }
+    }
+}
+
+impl Human for SchemaId {
+    fn display(&self) -> String {
+        match self {
+            SchemaId::Application(name, view_id) => format!("{} {}", name, view_id.display()),
+            system_schema => format!("{}", system_schema),
         }
     }
 }
@@ -227,6 +230,7 @@ mod test {
 
     use crate::test_utils::constants::SCHEMA_ID;
     use crate::test_utils::fixtures::schema;
+    use crate::Human;
 
     use super::SchemaId;
 
@@ -356,9 +360,9 @@ mod test {
 
     #[rstest]
     fn short_representation(schema: SchemaId) {
-        assert_eq!(schema.short_repr(), "venue 8fc78b");
+        assert_eq!(schema.display(), "venue 8fc78b");
         assert_eq!(
-            SchemaId::SchemaDefinition(1).short_repr(),
+            SchemaId::SchemaDefinition(1).display(),
             "schema_definition_v1"
         );
     }
