@@ -2,11 +2,13 @@
 
 use bamboo_rs_core_ed25519_yasmf::Signature as BambooSignature;
 
+/// Wrapper type around bytes representing an Ed25519 signature.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signature(Vec<u8>);
 
 impl Signature {
-    pub fn to_bytes(&self) -> Vec<u8> {
+    /// Returns signature as bytes.
+    pub fn into_bytes(&self) -> Vec<u8> {
         self.0
     }
 }

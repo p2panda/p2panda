@@ -4,7 +4,74 @@
 //!
 //! Bamboo entries are the main data type of p2panda. Entries are organised in a distributed,
 //! single-writer append-only log structure, created and signed by holders of private keys and
-//! stored inside the node database.
+//! stored inside the node's database.
+//!
+//! ## De- & Encoding
+//!
+//! Entries can be created programmatically via the API or decoded from raw bytes. In both cases
+//! different validation steps need to be applied to make sure the entry is well formed.
+//!
+//! Use the `EntryBuilder` to create an `Entry` instance through the API. It serves as an interface
+//! to set the entry arguments and the `Operation` payload and to sign it with a private `KeyPair`
+//! which will result in the final `Entry`.
+//!
+//! To derive an `Entry` from bytes, use the `EncodedEntry` struct which allows you to deserialize
+//! the data into the final `Entry`.
+//!
+//! Here is an overview of the methods to create or decode an entry:
+//!
+//! ```
+//!             ┌────────────┐                         ┌─────┐
+//!  bytes ───► │EncodedEntry│ ────decode_entry()────► │Entry│
+//!             └────────────┘                         └─────┘
+//! ┌───────┐                                             ▲
+//! │KeyPair│ ──────────┐                                 │
+//! └───────┘           │                                 │
+//!                     │                                 │
+//! ┌────────────┐      ▼                                 │
+//! │EntryBuilder├────sign()──────────────────────────────┘
+//! └────────────┘
+//! ```
+//!
+//! Please note that `Entry` in itself is immutable, there are only these two approaches to arrive
+//! at it while both approaches apply all means to validate the integrity and correct encoding of
+//! the entry as per specification.
+//!
+//! `Entry` structs can be encoded again into their raw bytes form like that:
+//!
+//! ```
+//! ┌─────┐                     ┌────────────┐
+//! │Entry│ ──encode_entry()──► │EncodedEntry│ ─────► bytes
+//! └─────┘                     └────────────┘
+//! ```
+//!
+//! ## Validation
+//!
+//! It is recommended to use the `decode_operation_with_entry` inside the `operation` module. It
+//! applies almost all possible checks after an entry and operation arrived on your machine.
+//!
+//! Please note that currently no high-level method in this crate will check for log integrity of
+//! your entry, since this requires some sort of persistence layer. Please check this manually with
+//! the help of the `validate_log_integrity` method.
+//!
+//! Here is an overview of all given validation methods:
+//!
+//!     1. Correct hexadecimal encoding (when using human-readable encoding format) (#1)
+//!     2. Correct Bamboo encoding as per specification (#2)
+//!     3. Check if back- and skiplinks are correctly set for given sequence number (#3)
+//!     4. Verify log-integrity (matching back- & skiplink entries, author, log id) (#4)
+//!     5. Verify signature (#5)
+//!     6. Check if payload matches claimed hash and size (#6)
+//!
+//! They are used in the following methods:
+//!
+//!     * `"bytes"` --deserialize--> `EncodedEntry` (#1)
+//!     * `EncodedEntry` --decode_entry--> `Entry` (#2, #3, #5)
+//!     * `EntryBuilder` --sign--> `Entry` (#3)
+//!     * `Entry` --encode_entry--> `EncodedEntry` (#3)
+//!     *  log id, key pair, etc. --sign_and_encode_entry--> `EncodedEntry` (#3)
+//!
+//! See `operations` and `schema` module for more validation methods around operations (#6).
 //!
 //! [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 pub mod decode;

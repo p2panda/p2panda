@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::entry::error::SeqNumError;
 use crate::serde::StringOrU64;
-use crate::Validate;
 
 /// Start counting entries from here.
 pub const FIRST_SEQ_NUM: u64 = 1;
@@ -36,8 +35,12 @@ impl SeqNum {
     /// ```
     pub fn new(value: u64) -> Result<Self, SeqNumError> {
         let seq_num = Self(value);
-        seq_num.validate()?;
-        Ok(seq_num)
+
+        if seq_num < FIRST_SEQ_NUM {
+            Err(SeqNumError::NotZeroOrNegative)
+        } else {
+            Ok(seq_num)
+        }
     }
 
     /// Return sequence number of the previous entry (backlink).
@@ -84,19 +87,6 @@ impl SeqNum {
 impl Default for SeqNum {
     fn default() -> Self {
         Self::new(FIRST_SEQ_NUM).unwrap()
-    }
-}
-
-impl Validate for SeqNum {
-    type Error = SeqNumError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        // Numbers have to be larger than zero
-        if self.0 < FIRST_SEQ_NUM {
-            return Err(SeqNumError::NotZeroOrNegative);
-        }
-
-        Ok(())
     }
 }
 

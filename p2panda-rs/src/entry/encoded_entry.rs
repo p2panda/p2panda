@@ -9,6 +9,13 @@ use crate::hash::Hash;
 use crate::serde::{deserialize_hex, serialize_hex};
 
 /// Wrapper type for Bamboo entry bytes.
+///
+/// This struct can be used to deserialize an hex-encoded string into bytes when using a
+/// human-readable encoding format. No validation is applied whatsoever, except of checking if it
+/// is a valid hex-string.
+///
+/// To validate these bytes use the `decode_entry` method to apply all checks and to get an `Entry`
+/// instance. Read the module-level documentation for more information.
 #[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub struct EncodedEntry(
     #[serde(serialize_with = "serialize_hex", deserialize_with = "deserialize_hex")] Vec<u8>,
@@ -22,8 +29,7 @@ impl EncodedEntry {
 
     /// Returns entry as bytes.
     pub fn into_bytes(&self) -> Vec<u8> {
-        // Unwrap as we already know that the inner value is valid
-        hex::decode(&self.0).unwrap()
+        self.0
     }
 
     /// Returns payload size (number of bytes) of total encoded entry.

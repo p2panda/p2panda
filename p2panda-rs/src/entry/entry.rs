@@ -13,147 +13,71 @@ use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::EncodedOperation;
 
-/// Entry of an append-only log based on [`Bamboo`] specification.
-///
-/// Bamboo entries are the main data type of p2panda. They describe the actual data in the p2p
-/// network and are shared between nodes. Entries are organised in a distributed, single-writer
-/// append-only log structure, created and signed by holders of private keys and stored inside the
-/// node database.
-///
-/// Entries are separated from the actual (off-chain) data to be able to delete application data
-/// without loosing the integrity of the log. Payload data is formatted as "operations" in p2panda.
-/// Each entry only holds a hash of the operation payload, this is why an [`Operation`] instance is
-/// required during entry signing.
-///
-/// [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
-///
-/// ## Example
-///
-/// ```
-/// # extern crate p2panda_rs;
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// use p2panda_rs::entry::{Entry, LogId, SeqNum};
-/// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
-/// use p2panda_rs::hash::Hash;
-/// use p2panda_rs::schema::SchemaId;
-/// # let schema_id = "chat_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
-///
-/// // == FIRST ENTRY IN NEW LOG ==
-///
-/// // Create schema id
-/// let schema_id = SchemaId::new(schema_id)?;
-///
-/// // Create a OperationFields instance and add a text field string with the key "title"
-/// let mut fields = OperationFields::new();
-/// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
-///
-/// // Create an operation containing the above fields
-/// let operation = Operation::new_create(schema_id, fields)?;
-///
-/// // Create the first Entry in a log
-/// let entry = Entry::new(
-///     &LogId::default(),
-///     Some(&operation),
-///     None,
-///     None,
-///     &SeqNum::new(1)?,
-/// )?;
-/// # Ok(())
-/// # }
-/// ```
-/// ## Example
-/// ```
-/// # extern crate p2panda_rs;
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// use p2panda_rs::entry::{Entry, LogId, SeqNum};
-/// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
-/// use p2panda_rs::hash::Hash;
-/// use p2panda_rs::schema::SchemaId;
-///
-/// // == ENTRY IN EXISTING LOG ==
-/// # let backlink_hash_string = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
-/// # let schema_id = "chat_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
-///
-/// // Create schema
-/// let schema_id = SchemaId::new(schema_id)?;
-///
-/// // Create a OperationFields instance and add a text field string with the key "title"
-/// let mut fields = OperationFields::new();
-/// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
-///
-/// // Create an operation containing the above fields
-/// let operation = Operation::new_create(schema_id, fields)?;
-///
-/// // Create log ID from u64
-/// let log_id = LogId::new(1);
-///
-/// // Create sequence number from u64
-/// let seq_no = SeqNum::new(2)?;
-///
-/// // Create backlink hash from string
-/// let backlink_hash = Hash::new(&backlink_hash_string)?;
-///
-/// // Create entry
-/// let next_entry = Entry::new(
-///     &log_id,
-///     Some(&operation),
-///     None,
-///     Some(&backlink_hash),
-///     &seq_no,
-/// )?;
-/// # Ok(())
-/// # }
-/// ```
+/// Create and sign new `Entry` instances.
 #[derive(Clone, Debug, Default)]
 pub struct EntryBuilder {
-    /// Hash of previous Bamboo entry.
-    backlink: Option<Hash>,
-
-    /// Hash of skiplink Bamboo entry.
-    skiplink: Option<Hash>,
-
     /// Used log for this entry.
     log_id: LogId,
 
     /// Sequence number of this entry.
     seq_num: SeqNum,
+
+    /// Hash of skiplink Bamboo entry.
+    skiplink: Option<Hash>,
+
+    /// Hash of previous Bamboo entry.
+    backlink: Option<Hash>,
 }
 
 impl EntryBuilder {
+    /// Returns a new instance of `EntryBuilder`.
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn backlink(mut self, hash: &Hash) -> Self {
-        self.backlink = Some(hash.to_owned());
-        self
-    }
-
-    pub fn skiplink(mut self, hash: &Hash) -> Self {
-        self.skiplink = Some(hash.to_owned());
-        self
-    }
-
+    /// Set log id of entry.
     pub fn log_id(mut self, log_id: &LogId) -> Self {
         self.log_id = log_id.to_owned();
         self
     }
 
+    /// Set sequence number of entry.
     pub fn seq_num(mut self, seq_num: &SeqNum) -> Self {
         self.seq_num = seq_num.to_owned();
         self
     }
 
+    /// Set skiplink hash of entry.
+    pub fn skiplink(mut self, hash: &Hash) -> Self {
+        self.skiplink = Some(hash.to_owned());
+        self
+    }
+
+    /// Set backlink hash of entry.
+    pub fn backlink(mut self, hash: &Hash) -> Self {
+        self.backlink = Some(hash.to_owned());
+        self
+    }
+
+    /// Signs entry and secures payload with the author's key pair, returns a new `Entry` instance.
+    ///
+    /// An `EncodedOperation` is required here as the entry payload. The entry is "pointing" at the
+    /// payload to secure and authenticate it. Later on, the payload can theoretically be deleted
+    /// when it is not needed anymore.
+    ///
+    /// Using this method we can assume that the entry will be correctly signed. This applies only
+    /// basic checks if the backlink and skiplink is correctly set for the given sequence number
+    /// (#3). Please note though that this method not check for correct log integrity!
     pub fn sign(
         mut self,
         encoded_operation: &EncodedOperation,
         key_pair: &KeyPair,
     ) -> Result<Entry, EntryBuilderError> {
         let entry = sign_entry(
-            self.backlink.as_ref(),
-            self.skiplink.as_ref(),
             &self.log_id,
             &self.seq_num,
+            self.skiplink.as_ref(),
+            self.backlink.as_ref(),
             &encoded_operation,
             &key_pair,
         )?;
@@ -162,9 +86,22 @@ impl EntryBuilder {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, StdHash)]
+/// Entry of an append-only log based on [`Bamboo`] specification.
+///
+/// Bamboo entries are the main data type of p2panda. They describe the actual data in the p2p
+/// network and are shared between nodes. Entries are organised in a distributed, single-writer
+/// append-only log structure, created and signed by holders of private keys and stored inside the
+/// node's database.
+///
+/// Entries are separated from the actual (off-chain) data to be able to delete application data
+/// without loosing the integrity of the log. Payload data is formatted as "operations" in p2panda.
+/// Each entry only holds a hash of the operation payload, this is why an [`Operation`] instance is
+/// required during entry signing.
+///
+/// [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
+#[derive(Debug, Clone, Eq, PartialEq, StdHash)]
 pub struct Entry {
-    // Author of this entry.
+    /// Author of this entry.
     author: Author,
 
     /// Used log for this entry.
@@ -269,7 +206,7 @@ impl TryFrom<BambooEntry<&[u8], &[u8]>> for Entry {
         Ok(Entry {
             author: (&entry.author).into(),
             log_id: entry.log_id.into(),
-            seq_num: SeqNum::new(entry.seq_num)?,
+            seq_num: entry.seq_num.try_into()?,
             skiplink,
             backlink,
             payload_hash,

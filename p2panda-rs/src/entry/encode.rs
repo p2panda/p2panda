@@ -3,66 +3,36 @@
 use bamboo_rs_core_ed25519_yasmf::entry::{is_lipmaa_required, MAX_ENTRY_SIZE};
 use bamboo_rs_core_ed25519_yasmf::{Entry as BambooEntry, Signature as BambooSignature};
 
-use crate::entry::error::EntrySignedError;
+use crate::entry::error::EncodeEntryError;
+use crate::entry::validate::validate_links;
 use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::EncodedOperation;
 
-/// Takes an [`Entry`] and a [`KeyPair`], returns signed and encoded entry bytes in form of an
-/// [`EncodedEntry`] instance.
+/// Takes entry arguments (log id, sequence number, etc.), operation payload and a [`KeyPair`],
+/// returns signed `Entry` instance.
 ///
-/// After conversion the result is ready to be sent to a p2panda node.
+/// The result can be converted to an `EncodedEntry` using the `encode_entry` method and is then
+/// ready to be sent to a p2panda node.
 ///
-/// ## Example
-///
-/// ```
-/// # extern crate p2panda_rs;
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// use p2panda_rs::entry::{sign_and_encode, Entry, EncodedEntry, LogId, SeqNum};
-/// use p2panda_rs::identity::KeyPair;
-/// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
-/// use p2panda_rs::schema::SchemaId;
-///
-/// // Generate Ed25519 key pair to sign entry with
-/// let key_pair = KeyPair::new();
-///
-/// // Create operation
-/// let schema_id =
-///     SchemaId::new("venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
-/// let mut fields = OperationFields::new();
-/// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
-/// let operation = Operation::new_create(schema_id, fields)?;
-///
-/// // Create entry
-/// let entry = Entry::new(
-///     &LogId::default(),
-///     Some(&operation),
-///     None,
-///     None,
-///     &SeqNum::new(1)?,
-/// )?;
-///
-/// // Sign and encode entry
-/// let entry_signed_encoded = sign_and_encode(&entry, &key_pair)?;
-/// # Ok(())
-/// # }
-/// ```
+/// Using this method we can assume that the entry will be correctly signed. This applies only
+/// basic checks if the backlink and skiplink is correctly set for the given sequence number (#3).
+/// Please note though that this method not check for correct log integrity!
 pub fn sign_entry(
-    backlink_hash: Option<&Hash>,
-    skiplink_hash: Option<&Hash>,
     log_id: &LogId,
     seq_num: &SeqNum,
+    skiplink_hash: Option<&Hash>,
+    backlink_hash: Option<&Hash>,
     payload: &EncodedOperation,
     key_pair: &KeyPair,
-) -> Result<Entry, EntrySignedError> {
+) -> Result<Entry, EncodeEntryError> {
     // Generate payload hash and size from operation bytes
     let payload_hash = payload.hash();
     let payload_size = payload.size();
 
     // Convert entry links to bamboo-rs `YasmfHash` type
     let backlink = backlink_hash.map(|link| link.into());
-
     let lipmaa_link = if is_lipmaa_required(seq_num.as_u64()) {
         skiplink_hash.map(|link| link.into())
     } else {
@@ -93,9 +63,9 @@ pub fn sign_entry(
 
     // Sign entry
     let signature = key_pair.sign(&entry_bytes[..entry_size]);
-    let signature_bytes = signature.to_bytes();
+    let signature_bytes = signature.into_bytes();
 
-    Ok(Entry {
+    let signed_entry = Entry {
         author: key_pair.public_key().into(),
         log_id: log_id.to_owned(),
         seq_num: seq_num.to_owned(),
@@ -104,11 +74,21 @@ pub fn sign_entry(
         payload_size,
         payload_hash,
         signature: signature_bytes[..].into(),
-    })
+    };
+
+    // Make sure the links are correct (#3)
+    validate_links(&signed_entry)?;
+
+    Ok(signed_entry)
 }
 
-pub fn encode_entry(entry: &Entry) -> Result<EncodedEntry, EntrySignedError> {
-    let signature_bytes = entry.signature().to_bytes();
+/// Encodes an entry into bytes and returns them as `EncodedEntry` instance. After encoding this is
+/// ready to be sent to a p2panda node.
+///
+/// This method only fails if something went wrong with the encoder or if a backlink was provided
+/// on an entry with sequence number 1 (#3).
+pub fn encode_entry(entry: &Entry) -> Result<EncodedEntry, EncodeEntryError> {
+    let signature_bytes = entry.signature().into_bytes();
 
     let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
         is_end_of_feed: false,
@@ -123,9 +103,41 @@ pub fn encode_entry(entry: &Entry) -> Result<EncodedEntry, EntrySignedError> {
     };
 
     let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
+
+    // Together with signing the entry before, one could think that encoding the entry a second
+    // time is a waste, but actually it is the only way to do signatures. This step is not
+    // redundant.
+    //
+    // Calling this also checks if the backlink is not set for the first entry (#3).
     let signed_entry_size = entry.encode(&mut entry_bytes)?;
 
     Ok(EncodedEntry::from(&entry_bytes[..signed_entry_size]))
+}
+
+/// High-level method which applies both signing and encoding an entry into one step, returns an
+/// `EncodedEntry` instance which is ready to be sent to a p2panda node.
+///
+/// See low-level methods for details.
+pub fn sign_and_encode_entry(
+    log_id: &LogId,
+    seq_num: &SeqNum,
+    skiplink_hash: Option<&Hash>,
+    backlink_hash: Option<&Hash>,
+    payload: &EncodedOperation,
+    key_pair: &KeyPair,
+) -> Result<EncodedEntry, EncodeEntryError> {
+    let entry = sign_entry(
+        log_id,
+        seq_num,
+        skiplink_hash,
+        backlink_hash,
+        payload,
+        key_pair,
+    )?;
+
+    let encoded_entry = encode_entry(&entry)?;
+
+    Ok(encoded_entry)
 }
 
 #[cfg(test)]

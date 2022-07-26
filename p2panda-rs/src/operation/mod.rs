@@ -3,7 +3,10 @@
 //! Create, encode and decode p2panda operations.
 //!
 //! Operations describe data mutations in the p2panda network. Authors send operations to create,
-//! update or delete documents or collections of data.
+//! update or delete documents.
+//!
+//! Every operations contains application data which is formed after a schema. To be able to decode
+//! an operation, a schema aids with getting the data out of the operation and validation.
 pub mod decode;
 pub mod encode;
 mod encoded_operation;

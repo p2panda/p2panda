@@ -8,68 +8,55 @@ pub enum EntryBuilderError {
     #[error("entry does not contain any operation")]
     OperationMissing,
 
-    /// Handle errors from `EntrySigned` struct.
     #[error(transparent)]
-    EntrySignedError(#[from] EntrySignedError),
+    EncodeEntryError(#[from] EncodeEntryError),
 }
 
-/// Error types for methods of `Entry` struct.
-#[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
-pub enum EntryError {
-    /// Handle errors from `Hash` struct.
-    #[error(transparent)]
-    HashError(#[from] crate::hash::HashError),
-
-    /// Handle errors from `SeqNum` struct.
-    #[error(transparent)]
-    SeqNumError(#[from] SeqNumError),
-}
-
-/// Custom error types for `EntrySigned`.
-#[derive(Error, Debug)]
-pub enum EntrySignedError {
+pub enum EncodeEntryError {
     /// Links should not be set when first entry in log.
     #[error("backlink and skiplink not valid for this sequence number")]
     InvalidLinks,
 
-    /// Encoded entry string contains invalid hex characters.
-    #[error("invalid hex encoding in entry")]
-    InvalidHexEncoding,
-
-    /// Can not sign and encode an entry without a `Operation`.
-    #[error("entry does not contain any operation")]
-    OperationMissing,
-
-    /// Backlink is required for entry encoding.
-    #[error("entry requires backlink for encoding")]
-    BacklinkMissing,
-
-    /// Skiplink is required for entry encoding.
-    #[error("entry requires skiplink for encoding")]
-    SkiplinkMissing,
-
-    /// Backlink and skiplink hashes should be different.
-    #[error("backlink and skiplink are identical")]
-    BacklinkAndSkiplinkIdentical,
-
-    /// Handle errors from `Entry` struct.
+    /// Handle errors from encoding `bamboo_rs_core_ed25519_yasmf` entries.
     #[error(transparent)]
-    EntryError(#[from] EntryError),
+    BambooEncodeError(#[from] bamboo_rs_core_ed25519_yasmf::entry::encode::Error),
+}
+
+#[derive(Error, Debug)]
+pub enum DecodeEntryError {
+    /// Handle errors from `SeqNum` struct.
+    #[error(transparent)]
+    SeqNumError(#[from] SeqNumError),
+
+    /// Handle errors from entry validation.
+    #[error(transparent)]
+    ValidateEntryError(#[from] ValidateEntryError),
 
     /// Handle errors from `Hash` struct.
     #[error(transparent)]
     HashError(#[from] crate::hash::HashError),
 
-    /// Handle errors from encoding bamboo_rs_core_ed25519_yasmf entries.
-    #[error(transparent)]
-    BambooEncodeError(#[from] bamboo_rs_core_ed25519_yasmf::entry::encode::Error),
-
     /// Handle errors from decoding bamboo_rs_core_ed25519_yasmf entries.
     #[error(transparent)]
     BambooDecodeError(#[from] bamboo_rs_core_ed25519_yasmf::entry::decode::Error),
+}
 
-    /// Handle errors from ed25519_dalek crate.
+#[derive(Error, Debug)]
+pub enum ValidateEntryError {
+    /// Operation needs to match payload hash of encoded entry.
+    #[error("operation needs to match payload hash of encoded entry")]
+    PayloadHashMismatch,
+
+    /// Operation needs to match payload size of encoded entry.
+    #[error("operation needs to match payload size of encoded entry")]
+    PayloadSizeMismatch,
+
+    /// Invalid configuration of backlink and skiplink hashes for this sequence number.
+    #[error("backlink and skiplink not valid for this sequence number")]
+    InvalidLinks,
+
+    /// Handle errors from `ed25519_dalek` crate.
     #[error(transparent)]
     Ed25519SignatureError(#[from] ed25519_dalek::SignatureError),
 }
@@ -92,32 +79,4 @@ pub enum LogIdError {
     /// Conversion to u64 from string failed.
     #[error("string contains invalid u64 value")]
     InvalidU64String,
-}
-
-/// Custom error types for `LogId`.
-#[derive(Error, Debug)]
-pub enum DecodeEntryError {
-    /// Handle errors from `Hash` struct.
-    #[error(transparent)]
-    HashError(#[from] crate::hash::HashError),
-
-    /// Handle errors from `SeqNum` struct.
-    #[error(transparent)]
-    SeqNumError(#[from] SeqNumError),
-
-    /// Handle errors from decoding bamboo_rs_core_ed25519_yasmf entries.
-    #[error(transparent)]
-    BambooDecodeError(#[from] bamboo_rs_core_ed25519_yasmf::entry::decode::Error),
-}
-
-/// Custom error types for `LogId`.
-#[derive(Error, Debug)]
-pub enum ValidateEntryError {
-    /// Operation needs to match payload hash of encoded entry.
-    #[error("operation needs to match payload hash of encoded entry")]
-    PayloadHashMismatch,
-
-    /// Operation needs to match payload size of encoded entry.
-    #[error("operation needs to match payload size of encoded entry")]
-    PayloadSizeMismatch,
 }

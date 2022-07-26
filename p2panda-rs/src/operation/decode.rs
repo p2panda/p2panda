@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::entry::{decode_entry, verify_payload, EncodedEntry};
+use crate::entry::decode::decode_entry;
+use crate::entry::validate::validate_payload;
+use crate::entry::EncodedEntry;
 use crate::operation::error::DecodeOperationError;
 use crate::operation::plain::PlainOperation;
 use crate::operation::validate::validate_operation;
 use crate::operation::{EncodedOperation, Operation, VerifiedOperation};
-
 use crate::schema::Schema;
 
 pub fn decode_operation(
@@ -39,7 +40,7 @@ pub fn decode_operation_with_entry(
     let entry = decode_entry(&entry_encoded)?;
 
     // Verify that the entry belongs to this operation
-    verify_payload(&entry, &operation_encoded)?;
+    validate_payload(&entry, &operation_encoded)?;
 
     // The operation id is the result of a hashing function over the entry bytes
     let operation_id = entry_encoded.hash().into();
