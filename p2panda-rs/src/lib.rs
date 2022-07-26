@@ -76,7 +76,6 @@ pub mod operation;
 pub mod schema;
 pub mod secret_group;
 pub mod serde;
-pub mod serde;
 pub mod storage_provider;
 #[cfg(any(feature = "testing", test))]
 pub mod test_utils;

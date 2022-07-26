@@ -87,7 +87,7 @@ use crate::entry::{decode_entry, EntrySigned};
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{
-    AsOperation, AsVerifiedOperation, Operation, EncodedOperation, OperationId, VerifiedOperation,
+    AsOperation, AsVerifiedOperation, EncodedOperation, Operation, OperationId, VerifiedOperation,
 };
 use crate::storage_provider::traits::test_utils::send_to_store;
 use crate::storage_provider::traits::{

@@ -4,9 +4,8 @@ use std::hash::Hash as StdHash;
 
 use crate::entry::Entry;
 use crate::identity::Author;
-use crate::operation::{AsVerifiedOperation, Operation, VerifiedOperationError};
-
-use super::OperationId;
+use crate::operation::traits::AsVerifiedOperation;
+use crate::operation::{Operation, OperationId};
 
 /// An operation which has been encoded and published on a signed entry.
 ///
@@ -29,8 +28,6 @@ pub struct VerifiedOperation {
 }
 
 impl AsVerifiedOperation for VerifiedOperation {
-    type VerifiedOperationError = VerifiedOperationError;
-
     /// Returns the identifier for this operation.
     fn operation_id(&self) -> &OperationId {
         &self.operation_id

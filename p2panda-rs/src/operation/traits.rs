@@ -1,13 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::document::DocumentViewId;
-use crate::entry::EntrySigned;
 use crate::identity::Author;
+use crate::operation::plain::PlainFields;
 use crate::operation::{
-    EncodedOperation, Operation, OperationAction, OperationFields, OperationId, OperationVersion,
+    Operation, OperationAction, OperationFields, OperationId, OperationVersion,
 };
-use crate::schema::SchemaId;
-use crate::Validate;
+use crate::schema::{Schema, SchemaId};
+
+pub trait Actionable {
+    fn version(&self) -> OperationVersion;
+    fn action(&self) -> OperationAction;
+    fn previous_operations(&self) -> Option<&DocumentViewId>;
+}
+
+pub trait Schematic {
+    fn schema(&self) -> &Schema;
+    fn fields(&self) -> Option<&PlainFields>;
+}
 
 /// Trait to be implemented on [`Operation`] and
 /// [`VerifiedOperation`][crate::operation::VerifiedOperation] structs.
@@ -63,10 +73,7 @@ pub trait AsOperation {
 /// [`StorageProvider`][crate::storage_provider::traits::StorageProvider] implementations should
 /// implement this for a data structure that represents an operation as it is stored in the
 /// database.
-pub trait AsVerifiedOperation: Sized + Clone + Send + Sync + PartialEq + std::fmt::Debug {
-    /// Error type for `AsVerifiedOperation`
-    type VerifiedOperationError: 'static + std::error::Error + Send + Sync;
-
+pub trait AsVerifiedOperation {
     /// Returns the identifier for this operation.
     fn operation_id(&self) -> &OperationId;
 

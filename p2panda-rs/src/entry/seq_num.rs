@@ -7,8 +7,8 @@ use std::str::FromStr;
 use bamboo_rs_core_ed25519_yasmf::lipmaa;
 use serde::{Deserialize, Serialize};
 
-use crate::entry::decode::StringOrU64;
-use crate::entry::SeqNumError;
+use crate::entry::error::SeqNumError;
+use crate::serde::StringOrU64;
 use crate::Validate;
 
 /// Start counting entries from here.

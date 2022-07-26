@@ -7,26 +7,21 @@
 //! stored inside the node database.
 //!
 //! [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
-mod decode;
-mod encode;
+pub mod decode;
+pub mod encode;
 mod encoded_entry;
 #[allow(clippy::module_inception)]
 mod entry;
-mod error;
+pub mod error;
 mod log_id;
 mod seq_num;
+mod signature;
 #[cfg(test)]
 mod tests;
-mod validate;
+pub mod validate;
 
-pub use decode::decode_entry;
-pub use encode::{encode_entry, sign_entry};
 pub use encoded_entry::EncodedEntry;
 pub use entry::{Entry, EntryBuilder};
-pub use error::{
-    DecodeEntryError, EntryBuilderError, EntryError, EntrySignedError, LogIdError, SeqNumError,
-    ValidateEntryError,
-};
 pub use log_id::LogId;
 pub use seq_num::SeqNum;
-pub use validate::verify_payload;
+pub use signature::Signature;

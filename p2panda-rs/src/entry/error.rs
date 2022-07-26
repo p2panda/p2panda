@@ -8,10 +8,6 @@ pub enum EntryBuilderError {
     #[error("entry does not contain any operation")]
     OperationMissing,
 
-    /// Handle errors from `EncodedOperation` struct.
-    #[error(transparent)]
-    EncodedOperationError(#[from] crate::operation::EncodedOperationError),
-
     /// Handle errors from `EntrySigned` struct.
     #[error(transparent)]
     EntrySignedError(#[from] EntrySignedError),
@@ -32,7 +28,6 @@ pub enum EntryError {
 
 /// Custom error types for `EntrySigned`.
 #[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
 pub enum EntrySignedError {
     /// Links should not be set when first entry in log.
     #[error("backlink and skiplink not valid for this sequence number")]
@@ -66,10 +61,6 @@ pub enum EntrySignedError {
     #[error(transparent)]
     HashError(#[from] crate::hash::HashError),
 
-    /// Handle errors from `EncodedOperation` struct.
-    #[error(transparent)]
-    EncodedOperationError(#[from] crate::operation::EncodedOperationError),
-
     /// Handle errors from encoding bamboo_rs_core_ed25519_yasmf entries.
     #[error(transparent)]
     BambooEncodeError(#[from] bamboo_rs_core_ed25519_yasmf::entry::encode::Error),
@@ -85,7 +76,6 @@ pub enum EntrySignedError {
 
 /// Custom error types for `SeqNum`.
 #[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
 pub enum SeqNumError {
     /// Sequence numbers are always positive.
     #[error("sequence number can not be zero or negative")]
@@ -98,7 +88,6 @@ pub enum SeqNumError {
 
 /// Custom error types for `LogId`.
 #[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
 pub enum LogIdError {
     /// Conversion to u64 from string failed.
     #[error("string contains invalid u64 value")]

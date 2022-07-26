@@ -1,22 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::operation::{Operation, RawOperation, RawOperationError};
+use crate::operation::error::EncodeOperationError;
+use crate::operation::plain::PlainOperation;
+use crate::operation::Operation;
 
-pub fn encode_operation(operation: &Operation) -> Result<Vec<u8>, RawOperationError> {
-    // Convert to raw operation format
-    let raw_operation: RawOperation = operation.into();
+pub fn encode_operation(operation: &Operation) -> Result<Vec<u8>, EncodeOperationError> {
+    // Convert to plain operation format
+    let plain: PlainOperation = operation.into();
 
     // Encode as CBOR byte sequence
-    let cbor_bytes = encode_raw_operation(&raw_operation)?;
+    let cbor_bytes = encode_plain_operation(&plain)?;
 
     Ok(cbor_bytes)
 }
 
-pub fn encode_raw_operation(raw_operation: &RawOperation) -> Result<Vec<u8>, RawOperationError> {
+pub fn encode_plain_operation(plain: &PlainOperation) -> Result<Vec<u8>, EncodeOperationError> {
     let mut cbor_bytes = Vec::new();
 
-    ciborium::ser::into_writer(&raw_operation, &mut cbor_bytes)
-        .map_err(|err| RawOperationError::EncoderFailed(err.to_string()))?;
+    ciborium::ser::into_writer(&plain, &mut cbor_bytes).map_err(|err| match err {
+        ciborium::ser::Error::Io(err) => EncodeOperationError::EncoderIOFailed(err.to_string()),
+        ciborium::ser::Error::Value(err) => EncodeOperationError::EncoderFailed(err.to_string()),
+    })?;
 
     Ok(cbor_bytes)
 }

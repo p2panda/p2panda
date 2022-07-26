@@ -47,4 +47,3 @@ impl<'de> Deserialize<'de> for OperationVersion {
         }
     }
 }
-

@@ -4,5 +4,5 @@
 mod hex_str;
 mod u64_str;
 
-pub use hex_str::{serialize_hex, deserialize_hex};
+pub use hex_str::{deserialize_hex, serialize_hex};
 pub use u64_str::StringOrU64;

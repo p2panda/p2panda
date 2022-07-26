@@ -2,39 +2,40 @@
 
 use crate::document::{DocumentId, DocumentViewId};
 use crate::hash::HashError;
+use crate::operation::plain::{PlainFields, PlainValue};
 use crate::operation::{
-    OperationFields, OperationId, OperationValue, PinnedRelation, PinnedRelationList, RawFields,
-    RawValue, Relation, RelationList,
+    OperationFields, OperationId, OperationValue, PinnedRelation, PinnedRelationList, Relation,
+    RelationList,
 };
 use crate::schema::{FieldName, FieldType, Schema, ValidationError};
 use crate::Validate;
 
 /// @TODO
 ///
-/// Both `Schema` and `RawFields` uses a `BTreeMap` internally which gives us the guarantee that
+/// Both `Schema` and `PlainFields` uses a `BTreeMap` internally which gives us the guarantee that
 /// all fields are sorted. Through this ordering we can compare them easily.
 pub fn verify_all_fields(
-    fields: &RawFields,
+    fields: &PlainFields,
     schema: &Schema,
 ) -> Result<OperationFields, ValidationError> {
     let mut validated_fields = OperationFields::new();
-    let mut raw_fields = fields.iter();
+    let mut plain_fields = fields.iter();
 
     // Iterate through both field lists at the same time, since they are both sorted already we can
     // compare them in every iteration step
     for schema_field in schema.fields() {
-        match raw_fields.next() {
-            Some((raw_name, raw_value)) => {
+        match plain_fields.next() {
+            Some((plain_name, plain_value)) => {
                 let (validated_name, validated_value) =
-                    verify_field((raw_name, raw_value), schema_field).map_err(|err| {
-                        ValidationError::InvalidField(raw_name.to_owned(), err.to_string())
+                    verify_field((plain_name, plain_value), schema_field).map_err(|err| {
+                        ValidationError::InvalidField(plain_name.to_owned(), err.to_string())
                     })?;
 
                 validated_fields
                     .insert(validated_name, validated_value)
                     // Unwrap here as we already checked during deserialization and population of
-                    // the raw fields that there are no duplicates
-                    .expect("Duplicate key name detected in raw fields");
+                    // the plain fields that there are no duplicates
+                    .expect("Duplicate key name detected in plain fields");
 
                 Ok(())
             }
@@ -47,7 +48,7 @@ pub fn verify_all_fields(
 
     // Collect last fields (if there is any) we can consider unexpected
     let unexpected_fields: Vec<FieldName> =
-        raw_fields.map(|field| format!("'{}'", field.0)).collect();
+        plain_fields.map(|field| format!("'{}'", field.0)).collect();
 
     if unexpected_fields.is_empty() {
         Ok(validated_fields)
@@ -59,31 +60,31 @@ pub fn verify_all_fields(
 }
 
 pub fn verify_only_given_fields(
-    fields: &RawFields,
+    fields: &PlainFields,
     schema: &Schema,
 ) -> Result<OperationFields, ValidationError> {
     let mut validated_fields = OperationFields::new();
     let mut unexpected_fields: Vec<FieldName> = Vec::new();
 
-    // Go through all given raw fields and check if they are known to the schema
-    for (raw_name, raw_value) in fields.iter() {
-        match schema.fields().get(raw_name) {
+    // Go through all given plain fields and check if they are known to the schema
+    for (plain_name, plain_value) in fields.iter() {
+        match schema.fields().get(plain_name) {
             Some(schema_field) => {
                 let (validated_name, validated_value) =
-                    verify_field((raw_name, raw_value), (raw_name, schema_field)).map_err(
-                        |err| ValidationError::InvalidField(raw_name.to_owned(), err.to_string()),
+                    verify_field((plain_name, plain_value), (plain_name, schema_field)).map_err(
+                        |err| ValidationError::InvalidField(plain_name.to_owned(), err.to_string()),
                     )?;
 
                 validated_fields
                     .insert(validated_name, validated_value)
                     // Unwrap here as we already checked during deserialization and population of
-                    // the raw fields that there are no duplicates
-                    .expect("Duplicate key name detected in raw fields");
+                    // the plain fields that there are no duplicates
+                    .expect("Duplicate key name detected in plain fields");
             }
             None => {
                 // Found a field which is not known to schema! We add it to a list so we can
                 // display it later in an error message
-                unexpected_fields.push(format!("'{}'", raw_name));
+                unexpected_fields.push(format!("'{}'", plain_name));
             }
         };
     }
@@ -98,23 +99,23 @@ pub fn verify_only_given_fields(
 }
 
 fn verify_field<'a>(
-    raw_field: (&'a FieldName, &RawValue),
+    plain_field: (&'a FieldName, &PlainValue),
     schema_field: (&FieldName, &FieldType),
 ) -> Result<(&'a FieldName, OperationValue), ValidationError> {
-    let validated_name = verify_field_name(raw_field.0, schema_field.0)?;
-    let validated_value = verify_field_value(raw_field.1, schema_field.1)?;
+    let validated_name = verify_field_name(plain_field.0, schema_field.0)?;
+    let validated_value = verify_field_value(plain_field.1, schema_field.1)?;
     Ok((validated_name, validated_value))
 }
 
 fn verify_field_name<'a>(
-    raw_field_name: &'a FieldName,
+    plain_field_name: &'a FieldName,
     schema_field_name: &FieldName,
 ) -> Result<&'a FieldName, ValidationError> {
-    if raw_field_name == schema_field_name {
-        Ok(raw_field_name)
+    if plain_field_name == schema_field_name {
+        Ok(plain_field_name)
     } else {
         Err(ValidationError::InvalidName(
-            raw_field_name.to_owned(),
+            plain_field_name.to_owned(),
             schema_field_name.to_owned(),
         ))
     }
@@ -122,64 +123,64 @@ fn verify_field_name<'a>(
 
 /// Note: This does NOT verify if the pinned document view follows the given schema
 fn verify_field_value(
-    raw_value: &RawValue,
+    plain_value: &PlainValue,
     schema_field_type: &FieldType,
 ) -> Result<OperationValue, ValidationError> {
     match schema_field_type {
         FieldType::Boolean => {
-            if let RawValue::Boolean(bool) = raw_value {
+            if let PlainValue::Boolean(bool) = plain_value {
                 Ok(OperationValue::Boolean(*bool))
             } else {
                 Err(ValidationError::InvalidType(
-                    raw_value.field_type().to_owned(),
+                    plain_value.field_type().to_owned(),
                     schema_field_type.serialise(),
                 ))
             }
         }
         FieldType::Integer => {
-            if let RawValue::Integer(int) = raw_value {
+            if let PlainValue::Integer(int) = plain_value {
                 Ok(OperationValue::Integer(*int))
             } else {
                 Err(ValidationError::InvalidType(
-                    raw_value.field_type().to_owned(),
+                    plain_value.field_type().to_owned(),
                     schema_field_type.serialise(),
                 ))
             }
         }
         FieldType::Float => {
-            if let RawValue::Float(float) = raw_value {
+            if let PlainValue::Float(float) = plain_value {
                 Ok(OperationValue::Float(*float))
             } else {
                 Err(ValidationError::InvalidType(
-                    raw_value.field_type().to_owned(),
+                    plain_value.field_type().to_owned(),
                     schema_field_type.serialise(),
                 ))
             }
         }
         FieldType::Text => {
-            if let RawValue::TextOrRelation(str) = raw_value {
+            if let PlainValue::TextOrRelation(str) = plain_value {
                 Ok(OperationValue::Text(str.to_owned()))
             } else {
                 Err(ValidationError::InvalidType(
-                    raw_value.field_type().to_owned(),
+                    plain_value.field_type().to_owned(),
                     schema_field_type.serialise(),
                 ))
             }
         }
         FieldType::Relation(_) => {
-            if let RawValue::TextOrRelation(document_id_str) = raw_value {
+            if let PlainValue::TextOrRelation(document_id_str) = plain_value {
                 Ok(OperationValue::Relation(Relation::new(
                     document_id_str.parse::<DocumentId>()?,
                 )))
             } else {
                 Err(ValidationError::InvalidType(
-                    raw_value.field_type().to_owned(),
+                    plain_value.field_type().to_owned(),
                     schema_field_type.serialise(),
                 ))
             }
         }
         FieldType::RelationList(_) => {
-            if let RawValue::PinnedRelationOrRelationList(document_ids) = raw_value {
+            if let PlainValue::PinnedRelationOrRelationList(document_ids) = plain_value {
                 let relation_list: Result<Vec<DocumentId>, HashError> = document_ids
                     .iter()
                     .map(|document_id_str| document_id_str.parse::<DocumentId>())
@@ -195,13 +196,13 @@ fn verify_field_value(
                 Ok(value)
             } else {
                 Err(ValidationError::InvalidType(
-                    raw_value.field_type().to_owned(),
+                    plain_value.field_type().to_owned(),
                     schema_field_type.serialise(),
                 ))
             }
         }
         FieldType::PinnedRelation(_) => {
-            if let RawValue::PinnedRelationOrRelationList(operation_ids_vec) = raw_value {
+            if let PlainValue::PinnedRelationOrRelationList(operation_ids_vec) = plain_value {
                 let operation_ids: Result<Vec<OperationId>, HashError> = operation_ids_vec
                     .iter()
                     .map(|operation_id_str| operation_id_str.parse::<OperationId>())
@@ -215,13 +216,13 @@ fn verify_field_value(
                 Ok(value)
             } else {
                 Err(ValidationError::InvalidType(
-                    raw_value.field_type().to_owned(),
+                    plain_value.field_type().to_owned(),
                     schema_field_type.serialise(),
                 ))
             }
         }
         FieldType::PinnedRelationList(_) => {
-            if let RawValue::PinnedRelationList(document_view_ids_vec) = raw_value {
+            if let PlainValue::PinnedRelationList(document_view_ids_vec) = plain_value {
                 let document_view_ids: Result<Vec<DocumentViewId>, ValidationError> =
                     document_view_ids_vec
                         .iter()
@@ -246,7 +247,7 @@ fn verify_field_value(
                 )))
             } else {
                 Err(ValidationError::InvalidType(
-                    raw_value.field_type().to_owned(),
+                    plain_value.field_type().to_owned(),
                     schema_field_type.serialise(),
                 ))
             }
@@ -259,7 +260,8 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::DocumentViewId;
-    use crate::operation::{OperationFields, OperationValue, RawFields, RawValue};
+    use crate::operation::plain::{PlainFields, PlainValue};
+    use crate::operation::{OperationFields, OperationValue};
     use crate::schema::{FieldType, Schema, SchemaId};
     use crate::test_utils::constants::{HASH, SCHEMA_ID};
     use crate::test_utils::fixtures::{document_view_id, schema_id};
@@ -275,7 +277,7 @@ mod tests {
         assert!(verify_field(
             (
                 &"cutest_animal_in_zoo".to_owned(),
-                &RawValue::TextOrRelation("Panda".into()),
+                &PlainValue::TextOrRelation("Panda".into()),
             ),
             (&"cutest_animal_in_zoo".to_owned(), &FieldType::Text)
         )
@@ -285,7 +287,7 @@ mod tests {
         assert!(verify_field(
             (
                 &"most_boring_animal_in_zoo".to_owned(),
-                &RawValue::TextOrRelation("Llama".into()),
+                &PlainValue::TextOrRelation("Llama".into()),
             ),
             (&"cutest_animal_in_zoo".to_owned(), &FieldType::Text)
         )
@@ -295,7 +297,7 @@ mod tests {
         assert!(verify_field(
             (
                 &"most_boring_animal_in_zoo".to_owned(),
-                &RawValue::TextOrRelation("Llama".into()),
+                &PlainValue::TextOrRelation("Llama".into()),
             ),
             (
                 &"most_boring_animal_in_zoo".to_owned(),
@@ -312,63 +314,63 @@ mod tests {
     }
 
     #[rstest]
-    #[case(RawValue::TextOrRelation("Handa".into()), FieldType::Text)]
-    #[case(RawValue::Integer(512), FieldType::Integer)]
-    #[case(RawValue::Float(1024.32), FieldType::Float)]
-    #[case(RawValue::Boolean(true), FieldType::Boolean)]
+    #[case(PlainValue::TextOrRelation("Handa".into()), FieldType::Text)]
+    #[case(PlainValue::Integer(512), FieldType::Integer)]
+    #[case(PlainValue::Float(1024.32), FieldType::Float)]
+    #[case(PlainValue::Boolean(true), FieldType::Boolean)]
     #[case(
-        RawValue::TextOrRelation(HASH.to_owned()),
+        PlainValue::TextOrRelation(HASH.to_owned()),
         FieldType::Relation(schema_id(SCHEMA_ID))
     )]
     #[case(
-        RawValue::PinnedRelationOrRelationList(vec![HASH.to_owned()]),
+        PlainValue::PinnedRelationOrRelationList(vec![HASH.to_owned()]),
         FieldType::PinnedRelation(schema_id(SCHEMA_ID))
     )]
     #[case(
-        RawValue::PinnedRelationOrRelationList(vec![HASH.to_owned()]),
+        PlainValue::PinnedRelationOrRelationList(vec![HASH.to_owned()]),
         FieldType::RelationList(schema_id(SCHEMA_ID))
     )]
     #[case(
-        RawValue::PinnedRelationList(vec![vec![HASH.to_owned()]]),
+        PlainValue::PinnedRelationList(vec![vec![HASH.to_owned()]]),
         FieldType::PinnedRelationList(schema_id(SCHEMA_ID))
     )]
-    fn correct_field_values(#[case] raw_value: RawValue, #[case] schema_field_type: FieldType) {
-        assert!(verify_field_value(&raw_value, &schema_field_type).is_ok());
+    fn correct_field_values(#[case] plain_value: PlainValue, #[case] schema_field_type: FieldType) {
+        assert!(verify_field_value(&plain_value, &schema_field_type).is_ok());
     }
 
     #[rstest]
     #[case(
-        RawValue::TextOrRelation("The Zookeeper".into()),
+        PlainValue::TextOrRelation("The Zookeeper".into()),
         FieldType::Integer,
         "invalid field type 'str', expected 'int'",
     )]
     #[case(
-        RawValue::Integer(13),
+        PlainValue::Integer(13),
         FieldType::Text,
         "invalid field type 'int', expected 'str'"
     )]
     #[case(
-        RawValue::Boolean(true),
+        PlainValue::Boolean(true),
         FieldType::Float,
         "invalid field type 'bool', expected 'float'"
     )]
     #[case(
-        RawValue::Float(123.123),
+        PlainValue::Float(123.123),
         FieldType::Integer,
         "invalid field type 'float', expected 'int'"
     )]
     #[case(
-        RawValue::TextOrRelation(HASH.to_owned()),
+        PlainValue::TextOrRelation(HASH.to_owned()),
         FieldType::RelationList(schema_id(SCHEMA_ID)),
         "invalid field type 'str', expected 'relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)'",
     )]
     fn wrong_field_values(
-        #[case] raw_value: RawValue,
+        #[case] plain_value: PlainValue,
         #[case] schema_field_type: FieldType,
         #[case] expected: &str,
     ) {
         assert_eq!(
-            verify_field_value(&raw_value, &schema_field_type)
+            verify_field_value(&plain_value, &schema_field_type)
                 .err()
                 .expect("Expected error")
                 .to_string(),
@@ -384,9 +386,9 @@ mod tests {
             ("fans", FieldType::RelationList(schema_id(SCHEMA_ID))),
         ],
         vec![
-            ("message", RawValue::TextOrRelation("Hello, Mr. Handa!".into())),
-            ("age", RawValue::Integer(41)),
-            ("fans", RawValue::PinnedRelationOrRelationList(vec![HASH.to_owned()])),
+            ("message", PlainValue::TextOrRelation("Hello, Mr. Handa!".into())),
+            ("age", PlainValue::Integer(41)),
+            ("fans", PlainValue::PinnedRelationOrRelationList(vec![HASH.to_owned()])),
         ],
     )]
     #[case(
@@ -396,15 +398,15 @@ mod tests {
             ("c", FieldType::Boolean),
         ],
         vec![
-            ("c", RawValue::Boolean(false)),
-            ("b", RawValue::TextOrRelation("Panda-San!".into())),
-            ("a", RawValue::Integer(6)),
+            ("c", PlainValue::Boolean(false)),
+            ("b", PlainValue::TextOrRelation("Panda-San!".into())),
+            ("a", PlainValue::Integer(6)),
         ],
     )]
     fn correct_all_fields(
         #[from(document_view_id)] schema_view_id: DocumentViewId,
         #[case] schema_fields: Vec<(&str, FieldType)>,
-        #[case] fields: Vec<(&str, RawValue)>,
+        #[case] fields: Vec<(&str, PlainValue)>,
     ) {
         // Construct a schema
         let schema = Schema::new(
@@ -414,36 +416,38 @@ mod tests {
         )
         .unwrap();
 
-        // Construct raw fields
-        let mut raw_fields = RawFields::new();
-        for (raw_field_name, raw_field_value) in fields {
-            raw_fields.insert(raw_field_name, raw_field_value).unwrap();
+        // Construct plain fields
+        let mut plain_fields = PlainFields::new();
+        for (plain_field_name, plain_field_value) in fields {
+            plain_fields
+                .insert(plain_field_name, plain_field_value)
+                .unwrap();
         }
 
         // Check if fields match the schema
-        assert!(verify_all_fields(&raw_fields, &schema).is_ok());
+        assert!(verify_all_fields(&plain_fields, &schema).is_ok());
     }
 
     #[rstest]
-    // Unknown raw field
+    // Unknown plain field
     #[case(
         vec![
             ("message", FieldType::Text),
         ],
         vec![
-            ("fans", RawValue::PinnedRelationOrRelationList(vec![HASH.to_owned()])),
-            ("message", RawValue::TextOrRelation("Hello, Mr. Handa!".into())),
+            ("fans", PlainValue::PinnedRelationOrRelationList(vec![HASH.to_owned()])),
+            ("message", PlainValue::TextOrRelation("Hello, Mr. Handa!".into())),
         ],
         "field 'fans' does not match schema: expected field name 'message'"
     )]
-    // Missing raw field
+    // Missing plain field
     #[case(
         vec![
             ("age", FieldType::Integer),
             ("message", FieldType::Text),
         ],
         vec![
-            ("message", RawValue::TextOrRelation("Panda-San!".into())),
+            ("message", PlainValue::TextOrRelation("Panda-San!".into())),
         ],
         "field 'message' does not match schema: expected field name 'age'"
     )]
@@ -455,9 +459,9 @@ mod tests {
             ("name", FieldType::Text),
         ],
         vec![
-            ("is_boring", RawValue::Boolean(false)),
-            ("cuteness_level", RawValue::TextOrRelation("Very high! I promise!".into())),
-            ("name", RawValue::TextOrRelation("The really not boring Llama!!!".into())),
+            ("is_boring", PlainValue::Boolean(false)),
+            ("cuteness_level", PlainValue::TextOrRelation("Very high! I promise!".into())),
+            ("name", PlainValue::TextOrRelation("The really not boring Llama!!!".into())),
         ],
         "field 'cuteness_level' does not match schema: invalid field type 'str', expected 'float'"
     )]
@@ -467,14 +471,14 @@ mod tests {
             ("is_boring", FieldType::Boolean),
         ],
         vec![
-            ("is_cute", RawValue::Boolean(false)),
+            ("is_cute", PlainValue::Boolean(false)),
         ],
         "field 'is_cute' does not match schema: expected field name 'is_boring'",
     )]
     fn wrong_all_fields(
         #[from(document_view_id)] schema_view_id: DocumentViewId,
         #[case] schema_fields: Vec<(&str, FieldType)>,
-        #[case] fields: Vec<(&str, RawValue)>,
+        #[case] fields: Vec<(&str, PlainValue)>,
         #[case] expected: &str,
     ) {
         // Construct a schema
@@ -485,15 +489,17 @@ mod tests {
         )
         .unwrap();
 
-        // Construct raw fields
-        let mut raw_fields = RawFields::new();
-        for (raw_field_name, raw_field_value) in fields {
-            raw_fields.insert(raw_field_name, raw_field_value).unwrap();
+        // Construct plain fields
+        let mut plain_fields = PlainFields::new();
+        for (plain_field_name, plain_field_value) in fields {
+            plain_fields
+                .insert(plain_field_name, plain_field_value)
+                .unwrap();
         }
 
         // Check if fields match the schema
         assert_eq!(
-            verify_all_fields(&raw_fields, &schema)
+            verify_all_fields(&plain_fields, &schema)
                 .err()
                 .expect("Expected error")
                 .to_string(),
@@ -509,7 +515,7 @@ mod tests {
             ("is_cute", FieldType::Boolean),
         ],
         vec![
-            ("message", RawValue::TextOrRelation("Hello, Mr. Handa!".into())),
+            ("message", PlainValue::TextOrRelation("Hello, Mr. Handa!".into())),
         ],
     )]
     #[case(
@@ -519,14 +525,14 @@ mod tests {
             ("is_cute", FieldType::Boolean),
         ],
         vec![
-            ("age", RawValue::Integer(41)),
-            ("message", RawValue::TextOrRelation("Hello, Mr. Handa!".into())),
+            ("age", PlainValue::Integer(41)),
+            ("message", PlainValue::TextOrRelation("Hello, Mr. Handa!".into())),
         ],
     )]
     fn correct_only_given_fields(
         #[from(document_view_id)] schema_view_id: DocumentViewId,
         #[case] schema_fields: Vec<(&str, FieldType)>,
-        #[case] fields: Vec<(&str, RawValue)>,
+        #[case] fields: Vec<(&str, PlainValue)>,
     ) {
         // Construct a schema
         let schema = Schema::new(
@@ -536,18 +542,20 @@ mod tests {
         )
         .unwrap();
 
-        // Construct raw fields
-        let mut raw_fields = RawFields::new();
-        for (raw_field_name, raw_field_value) in fields {
-            raw_fields.insert(raw_field_name, raw_field_value).unwrap();
+        // Construct plain fields
+        let mut plain_fields = PlainFields::new();
+        for (plain_field_name, plain_field_value) in fields {
+            plain_fields
+                .insert(plain_field_name, plain_field_value)
+                .unwrap();
         }
 
         // Check if fields match the schema
-        assert!(verify_only_given_fields(&raw_fields, &schema).is_ok());
+        assert!(verify_only_given_fields(&plain_fields, &schema).is_ok());
     }
 
     #[rstest]
-    // Missing raw field
+    // Missing plain field
     #[case(
         vec![
             ("message", FieldType::Text),
@@ -555,7 +563,7 @@ mod tests {
             ("is_cute", FieldType::Boolean),
         ],
         vec![
-            ("spam", RawValue::TextOrRelation("PANDA IS THE CUTEST!".into())),
+            ("spam", PlainValue::TextOrRelation("PANDA IS THE CUTEST!".into())),
         ],
         "unexpected fields found: 'spam'",
     )]
@@ -566,10 +574,10 @@ mod tests {
             ("is_cute", FieldType::Boolean),
         ],
         vec![
-            ("is_cute", RawValue::Boolean(false)),
-            ("age", RawValue::Integer(41)),
-            ("message", RawValue::TextOrRelation("Hello, Mr. Handa!".into())),
-            ("response", RawValue::TextOrRelation("Good bye!".into())),
+            ("is_cute", PlainValue::Boolean(false)),
+            ("age", PlainValue::Integer(41)),
+            ("message", PlainValue::TextOrRelation("Hello, Mr. Handa!".into())),
+            ("response", PlainValue::TextOrRelation("Good bye!".into())),
         ],
         "unexpected fields found: 'message', 'response'",
     )]
@@ -580,7 +588,7 @@ mod tests {
             ("is_cute", FieldType::Boolean),
         ],
         vec![
-            ("age", RawValue::Float(41.34)),
+            ("age", PlainValue::Float(41.34)),
         ],
         "field 'age' does not match schema: invalid field type 'float', expected 'int'",
     )]
@@ -590,14 +598,14 @@ mod tests {
             ("age", FieldType::Integer),
         ],
         vec![
-            ("rage", RawValue::Integer(100)),
+            ("rage", PlainValue::Integer(100)),
         ],
         "unexpected fields found: 'rage'",
     )]
     fn wrong_only_given_fields(
         #[from(document_view_id)] schema_view_id: DocumentViewId,
         #[case] schema_fields: Vec<(&str, FieldType)>,
-        #[case] fields: Vec<(&str, RawValue)>,
+        #[case] fields: Vec<(&str, PlainValue)>,
         #[case] expected: &str,
     ) {
         // Construct a schema
@@ -608,15 +616,17 @@ mod tests {
         )
         .unwrap();
 
-        // Construct raw fields
-        let mut raw_fields = RawFields::new();
-        for (raw_field_name, raw_field_value) in fields {
-            raw_fields.insert(&raw_field_name, raw_field_value).unwrap();
+        // Construct plain fields
+        let mut plain_fields = PlainFields::new();
+        for (plain_field_name, plain_field_value) in fields {
+            plain_fields
+                .insert(&plain_field_name, plain_field_value)
+                .unwrap();
         }
 
         // Check if fields match the schema
         assert_eq!(
-            verify_only_given_fields(&raw_fields, &schema)
+            verify_only_given_fields(&plain_fields, &schema)
                 .err()
                 .expect("Expect error")
                 .to_string(),
@@ -634,12 +644,14 @@ mod tests {
         )
         .unwrap();
 
-        // Construct raw fields
-        let mut raw_fields = RawFields::new();
-        raw_fields
-            .insert("icecream", RawValue::TextOrRelation("Almond".into()))
+        // Construct plain fields
+        let mut plain_fields = PlainFields::new();
+        plain_fields
+            .insert("icecream", PlainValue::TextOrRelation("Almond".into()))
             .unwrap();
-        raw_fields.insert("degree", RawValue::Float(6.12)).unwrap();
+        plain_fields
+            .insert("degree", PlainValue::Float(6.12))
+            .unwrap();
 
         // Construct expected operation fields
         let mut fields = OperationFields::new();
@@ -651,9 +663,9 @@ mod tests {
             .unwrap();
 
         // Verification methods should give us the validated operation fields
-        assert_eq!(verify_all_fields(&raw_fields, &schema).unwrap(), fields);
+        assert_eq!(verify_all_fields(&plain_fields, &schema).unwrap(), fields);
         assert_eq!(
-            verify_only_given_fields(&raw_fields, &schema).unwrap(),
+            verify_only_given_fields(&plain_fields, &schema).unwrap(),
             fields
         );
     }

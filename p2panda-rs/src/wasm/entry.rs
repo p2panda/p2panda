@@ -8,7 +8,7 @@ use wasm_bindgen::JsValue;
 
 use crate::entry::{decode_entry as decode, sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::Hash;
-use crate::operation::{Operation, EncodedOperation};
+use crate::operation::{EncodedOperation, Operation};
 use crate::wasm::error::jserr;
 use crate::wasm::serde::serialize_to_js;
 use crate::wasm::KeyPair;

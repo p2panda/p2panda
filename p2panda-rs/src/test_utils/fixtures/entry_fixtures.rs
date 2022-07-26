@@ -11,7 +11,7 @@ use varu64::encode as varu64_encode;
 use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
 use crate::hash::{Blake3ArrayVec, Hash};
 use crate::identity::KeyPair;
-use crate::operation::{Operation, EncodedOperation};
+use crate::operation::{EncodedOperation, Operation};
 
 use crate::test_utils::constants::test_fields;
 use crate::test_utils::fixtures::{key_pair, operation, operation_fields, random_hash};

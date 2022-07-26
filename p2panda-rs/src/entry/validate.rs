@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::entry::{Entry, ValidateEntryError};
+use crate::entry::error::ValidateEntryError;
+use crate::entry::Entry;
 use crate::operation::EncodedOperation;
 
 pub fn verify_payload(entry: &Entry, payload: &EncodedOperation) -> Result<(), ValidateEntryError> {

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::hash::Hash as StdHash;
-
 use crate::document::DocumentViewId;
-use crate::operation::{
-    AsOperation, OperationAction, OperationError, OperationFields, OperationValue, OperationVersion,
-};
+use crate::operation::error::ValidateOperationError;
+use crate::operation::plain::PlainFields;
+use crate::operation::traits::{Actionable, AsOperation, Schematic};
+use crate::operation::validate::validate_operation;
+use crate::operation::{OperationAction, OperationFields, OperationValue, OperationVersion};
 use crate::schema::{Schema, SchemaId};
 
 pub struct OperationBuilder {
@@ -66,60 +66,16 @@ impl OperationBuilder {
         self
     }
 
-    pub fn build(&self) -> Result<Operation, OperationError> {
-        let operation = match self.action {
-            OperationAction::Create => {
-                match self.fields {
-                    Some(fields) => {
-                        // @TODO: Schema validation
-                        Ok(())
-                    }
-                    None => Err(OperationError::EmptyFields),
-                }?;
-
-                Operation {
-                    action: OperationAction::Create,
-                    version: OperationVersion::V1,
-                    schema: self.schema,
-                    previous_operations: None,
-                    fields: self.fields,
-                }
-            }
-            OperationAction::Update => {
-                match self.fields {
-                    Some(fields) => {
-                        // @TODO: Schema validation
-                        Ok(())
-                    }
-                    None => Err(OperationError::EmptyFields),
-                }?;
-
-                if self.previous_operations.is_none() {
-                    return Err(OperationError::EmptyPreviousOperations);
-                }
-
-                Operation {
-                    action: OperationAction::Update,
-                    version: OperationVersion::V1,
-                    schema: self.schema,
-                    previous_operations: self.previous_operations,
-                    fields: self.fields,
-                }
-            }
-            OperationAction::Delete => {
-                if self.previous_operations.is_none() {
-                    return Err(OperationError::EmptyPreviousOperations);
-                }
-
-                Operation {
-                    action: OperationAction::Delete,
-                    version: OperationVersion::V1,
-                    schema: self.schema,
-                    previous_operations: self.previous_operations,
-                    fields: None,
-                }
-            }
+    pub fn build(&self) -> Result<Operation, ValidateOperationError> {
+        let operation = Operation {
+            action: self.action,
+            version: OperationVersion::V1,
+            schema: self.schema,
+            previous_operations: self.previous_operations,
+            fields: self.fields,
         };
+
+        validate_operation(&operation, &self.schema)?;
 
         Ok(operation)
     }
@@ -159,14 +115,14 @@ pub struct Operation {
 }
 
 impl AsOperation for Operation {
-    /// Returns action type of operation.
-    fn action(&self) -> OperationAction {
-        self.action.to_owned()
-    }
-
     /// Returns version of operation.
     fn version(&self) -> OperationVersion {
         self.version.to_owned()
+    }
+
+    /// Returns action type of operation.
+    fn action(&self) -> OperationAction {
+        self.action.to_owned()
     }
 
     /// Returns schema id of operation.
@@ -174,14 +130,38 @@ impl AsOperation for Operation {
         self.schema.id().to_owned()
     }
 
+    /// Returns known previous operations vector of this operation.
+    fn previous_operations(&self) -> Option<DocumentViewId> {
+        self.previous_operations.clone()
+    }
+
     /// Returns application data fields of operation.
     fn fields(&self) -> Option<OperationFields> {
         self.fields.clone()
     }
+}
 
-    /// Returns known previous operations vector of this operation.
-    fn previous_operations(&self) -> Option<DocumentViewId> {
-        self.previous_operations.clone()
+impl Actionable for Operation {
+    fn version(&self) -> OperationVersion {
+        self.version
+    }
+
+    fn action(&self) -> OperationAction {
+        self.action
+    }
+
+    fn previous_operations(&self) -> Option<&DocumentViewId> {
+        self.previous_operations.as_ref()
+    }
+}
+
+impl Schematic for Operation {
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    fn fields(&self) -> Option<&PlainFields> {
+        self.fields.map(|fields| fields.into())
     }
 }
 

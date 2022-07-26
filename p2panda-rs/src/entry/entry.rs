@@ -5,33 +5,13 @@ use std::hash::Hash as StdHash;
 
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use bamboo_rs_core_ed25519_yasmf::Entry as BambooEntry;
-use bamboo_rs_core_ed25519_yasmf::Signature as BambooSignature;
 
-use crate::entry::{sign_entry, DecodeEntryError, EntryBuilderError, LogId, SeqNum};
+use crate::entry::encode::sign_entry;
+use crate::entry::error::{DecodeEntryError, EntryBuilderError};
+use crate::entry::{LogId, SeqNum, Signature};
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::EncodedOperation;
-
-#[derive(Debug, Clone, PartialEq, StdHash)]
-pub(crate) struct Signature(Vec<u8>);
-
-impl Signature {
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.0
-    }
-}
-
-impl From<BambooSignature<&[u8]>> for Signature {
-    fn from(signature: BambooSignature<&[u8]>) -> Self {
-        Self(signature.0.to_owned())
-    }
-}
-
-impl From<&[u8]> for Signature {
-    fn from(bytes: &[u8]) -> Self {
-        Self(bytes.to_owned())
-    }
-}
 
 /// Entry of an append-only log based on [`Bamboo`] specification.
 ///

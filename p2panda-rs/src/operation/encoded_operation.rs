@@ -6,7 +6,9 @@ use std::hash::Hash as StdHash;
 use serde::{Deserialize, Serialize};
 
 use crate::hash::Hash;
-use crate::operation::{encode_operation, encode_raw_operation, Operation, RawOperation};
+use crate::operation::encode::{encode_operation, encode_plain_operation};
+use crate::operation::plain::PlainOperation;
+use crate::operation::Operation;
 use crate::serde::{deserialize_hex, serialize_hex};
 
 /// Wrapper type for operation bytes.
@@ -49,9 +51,9 @@ impl From<&Operation> for EncodedOperation {
     }
 }
 
-impl From<&RawOperation> for EncodedOperation {
-    fn from(raw_operation: &RawOperation) -> Self {
-        let bytes = encode_raw_operation(raw_operation).unwrap();
+impl From<&PlainOperation> for EncodedOperation {
+    fn from(raw_operation: &PlainOperation) -> Self {
+        let bytes = encode_plain_operation(raw_operation).unwrap();
         Self(bytes)
     }
 }

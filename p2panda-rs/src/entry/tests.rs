@@ -1,14 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Tests for the `entry` module.
-//!
-//! These tests utilise parameter injection and templates from `test_utils` module.
 use std::convert::TryFrom;
 
 use rstest::rstest;
 use rstest_reuse::apply;
 
-use crate::entry::{decode_entry, Entry, LogId, SeqNum};
+use crate::entry::{Entry, LogId, SeqNum};
 use crate::identity::KeyPair;
 use crate::operation::{AsOperation, EncodedOperation, Operation};
 use crate::test_utils::fixtures::{key_pair, Fixture};

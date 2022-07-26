@@ -4,7 +4,8 @@ use std::convert::TryInto;
 
 use bamboo_rs_core_ed25519_yasmf::decode;
 
-use crate::entry::{DecodeEntryError, EncodedEntry, Entry};
+use crate::entry::error::DecodeEntryError;
+use crate::entry::{EncodedEntry, Entry};
 
 /// Method to decode an entry.
 pub fn decode_entry(entry_encoded: &EncodedEntry) -> Result<Entry, DecodeEntryError> {

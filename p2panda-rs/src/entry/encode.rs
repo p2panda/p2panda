@@ -3,7 +3,8 @@
 use bamboo_rs_core_ed25519_yasmf::entry::{is_lipmaa_required, MAX_ENTRY_SIZE};
 use bamboo_rs_core_ed25519_yasmf::{Entry as BambooEntry, Signature as BambooSignature};
 
-use crate::entry::{EncodedEntry, Entry, EntrySignedError, LogId, SeqNum};
+use crate::entry::error::EntrySignedError;
+use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::EncodedOperation;
@@ -102,7 +103,6 @@ pub fn sign_entry(
         backlink: backlink_hash.cloned(),
         payload_size,
         payload_hash,
-        payload: Some(payload.to_owned()),
         signature: signature_bytes[..].into(),
     })
 }

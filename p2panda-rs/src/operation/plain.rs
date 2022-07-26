@@ -9,16 +9,17 @@ use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 
 use crate::document::DocumentViewId;
+use crate::operation::error::FieldsError;
+use crate::operation::traits::{Actionable, AsOperation, Schematic};
 use crate::operation::{
-    AsOperation, Operation, OperationAction, OperationFields, OperationValue, OperationVersion,
-    RawOperationError,
+    Operation, OperationAction, OperationFields, OperationValue, OperationVersion,
 };
-use crate::schema::{FieldName, SchemaId};
+use crate::schema::{FieldName, Schema, SchemaId};
 
 #[derive(Serialize, Default, Debug, PartialEq)]
-pub struct RawFields(BTreeMap<FieldName, RawValue>);
+pub struct PlainFields(BTreeMap<FieldName, PlainValue>);
 
-impl RawFields {
+impl PlainFields {
     pub fn new() -> Self {
         Self(BTreeMap::new())
     }
@@ -33,25 +34,25 @@ impl RawFields {
         self.0.len()
     }
 
-    pub fn get(&self, name: &str) -> Option<&RawValue> {
+    pub fn get(&self, name: &str) -> Option<&PlainValue> {
         self.0.get(name)
     }
 
-    pub fn insert(&mut self, name: &str, value: RawValue) -> Result<(), RawOperationError> {
+    pub fn insert(&mut self, name: &str, value: PlainValue) -> Result<(), FieldsError> {
         if self.0.contains_key(name) {
-            Err(RawOperationError::DuplicateFieldName(name.to_owned()))
+            Err(FieldsError::DuplicateFieldName(name.to_owned()))
         } else {
             self.0.insert(name.to_owned(), value);
             Ok(())
         }
     }
 
-    pub fn iter(&self) -> Iter<FieldName, RawValue> {
+    pub fn iter(&self) -> Iter<FieldName, PlainValue> {
         self.0.iter()
     }
 }
 
-impl<'de> Deserialize<'de> for RawFields {
+impl<'de> Deserialize<'de> for PlainFields {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -59,7 +60,7 @@ impl<'de> Deserialize<'de> for RawFields {
         struct RawFieldsVisitor;
 
         impl<'de> Visitor<'de> for RawFieldsVisitor {
-            type Value = RawFields;
+            type Value = PlainFields;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("p2panda operation fields")
@@ -69,7 +70,7 @@ impl<'de> Deserialize<'de> for RawFields {
             where
                 A: serde::de::MapAccess<'de>,
             {
-                let mut fields = RawFields::new();
+                let mut fields = PlainFields::new();
                 let mut last_field_name: String = String::new();
 
                 while let Some(field_name) = map.next_key::<String>()? {
@@ -82,7 +83,7 @@ impl<'de> Deserialize<'de> for RawFields {
                         )));
                     }
 
-                    let field_value: RawValue = map.next_value()?;
+                    let field_value: PlainValue = map.next_value()?;
                     fields.insert(&field_name, field_value).map_err(|_| {
                         // Fail if field names are duplicate to ensure canonic encoding
                         serde::de::Error::custom(format!(
@@ -102,36 +103,38 @@ impl<'de> Deserialize<'de> for RawFields {
     }
 }
 
-impl From<&OperationFields> for RawFields {
+impl From<&OperationFields> for PlainFields {
     fn from(fields: &OperationFields) -> Self {
-        let mut raw = RawFields::new();
+        let mut raw = PlainFields::new();
 
         for (name, value) in fields.iter() {
             let raw_value = match value {
-                OperationValue::Boolean(bool) => RawValue::Boolean(*bool),
-                OperationValue::Integer(int) => RawValue::Integer(*int),
-                OperationValue::Float(float) => RawValue::Float(*float),
-                OperationValue::Text(str) => RawValue::TextOrRelation(str.to_owned()),
+                OperationValue::Boolean(bool) => PlainValue::Boolean(*bool),
+                OperationValue::Integer(int) => PlainValue::Integer(*int),
+                OperationValue::Float(float) => PlainValue::Float(*float),
+                OperationValue::Text(str) => PlainValue::TextOrRelation(str.to_owned()),
                 OperationValue::Relation(relation) => {
-                    RawValue::TextOrRelation(relation.document_id().as_str().to_owned())
+                    PlainValue::TextOrRelation(relation.document_id().as_str().to_owned())
                 }
-                OperationValue::RelationList(list) => RawValue::PinnedRelationOrRelationList(
+                OperationValue::RelationList(list) => PlainValue::PinnedRelationOrRelationList(
                     list.sorted()
                         .iter()
                         // @TODO: Improve conversion after `to_string` PR got merged
                         .map(|document_id| document_id.as_str().to_owned())
                         .collect(),
                 ),
-                OperationValue::PinnedRelation(relation) => RawValue::PinnedRelationOrRelationList(
-                    relation
-                        .view_id()
-                        .sorted()
-                        .iter()
-                        // @TODO: Improve conversion after `to_string` PR got merged
-                        .map(|operation_id| operation_id.as_str().to_owned())
-                        .collect(),
-                ),
-                OperationValue::PinnedRelationList(list) => RawValue::PinnedRelationList(
+                OperationValue::PinnedRelation(relation) => {
+                    PlainValue::PinnedRelationOrRelationList(
+                        relation
+                            .view_id()
+                            .sorted()
+                            .iter()
+                            // @TODO: Improve conversion after `to_string` PR got merged
+                            .map(|operation_id| operation_id.as_str().to_owned())
+                            .collect(),
+                    )
+                }
+                OperationValue::PinnedRelationList(list) => PlainValue::PinnedRelationList(
                     list.sorted()
                         .iter()
                         .map(|document_view_id| {
@@ -157,7 +160,7 @@ impl From<&OperationFields> for RawFields {
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 #[serde(untagged)]
-pub enum RawValue {
+pub enum PlainValue {
     Boolean(bool),
     Integer(i64),
     Float(f64),
@@ -166,51 +169,53 @@ pub enum RawValue {
     PinnedRelationList(Vec<Vec<String>>),
 }
 
-impl RawValue {
+impl PlainValue {
     pub fn field_type(&self) -> &str {
         match self {
-            RawValue::Boolean(_) => "bool",
-            RawValue::Integer(_) => "int",
-            RawValue::Float(_) => "float",
-            RawValue::TextOrRelation(_) => "str",
-            RawValue::PinnedRelationOrRelationList(_) => "str[]",
-            RawValue::PinnedRelationList(_) => "str[][]",
+            PlainValue::Boolean(_) => "bool",
+            PlainValue::Integer(_) => "int",
+            PlainValue::Float(_) => "float",
+            PlainValue::TextOrRelation(_) => "str",
+            PlainValue::PinnedRelationOrRelationList(_) => "str[]",
+            PlainValue::PinnedRelationList(_) => "str[][]",
         }
     }
 }
 
 #[derive(Serialize, Debug, PartialEq)]
-pub struct RawOperation(
+pub struct PlainOperation(
     OperationVersion,
     OperationAction,
     SchemaId,
     #[serde(skip_serializing_if = "Option::is_none")] Option<DocumentViewId>,
-    #[serde(skip_serializing_if = "Option::is_none")] Option<RawFields>,
+    #[serde(skip_serializing_if = "Option::is_none")] Option<PlainFields>,
 );
 
-impl RawOperation {
-    pub fn version(&self) -> OperationVersion {
+impl Actionable for PlainOperation {
+    fn version(&self) -> OperationVersion {
         self.0
     }
 
-    pub fn action(&self) -> OperationAction {
+    fn action(&self) -> OperationAction {
         self.1
     }
 
-    pub fn schema_id(&self) -> &SchemaId {
+    fn previous_operations(&self) -> Option<&DocumentViewId> {
+        self.3.as_ref()
+    }
+}
+
+impl Schematic for PlainOperation {
+    fn schema(&self) -> &Schema {
         &self.2
     }
 
-    pub fn previous_operations(&self) -> Option<&DocumentViewId> {
-        self.3.as_ref()
-    }
-
-    pub fn fields(&self) -> Option<&RawFields> {
+    fn fields(&self) -> Option<&PlainFields> {
         self.4.as_ref()
     }
 }
 
-impl<'de> Deserialize<'de> for RawOperation {
+impl<'de> Deserialize<'de> for PlainOperation {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -218,7 +223,7 @@ impl<'de> Deserialize<'de> for RawOperation {
         struct RawOperationVisitor;
 
         impl<'de> Visitor<'de> for RawOperationVisitor {
-            type Value = RawOperation;
+            type Value = PlainOperation;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("p2panda operation")
@@ -254,7 +259,7 @@ impl<'de> Deserialize<'de> for RawOperation {
 
                 let fields = match action {
                     OperationAction::Create | OperationAction::Update => {
-                        let raw_fields: RawFields = seq
+                        let raw_fields: PlainFields = seq
                             .next_element()?
                             .ok_or_else(|| serde::de::Error::custom("Missing fields"))?;
 
@@ -263,7 +268,7 @@ impl<'de> Deserialize<'de> for RawOperation {
                     OperationAction::Delete => None,
                 };
 
-                Ok(RawOperation(
+                Ok(PlainOperation(
                     version,
                     action,
                     schema_id,
@@ -277,9 +282,9 @@ impl<'de> Deserialize<'de> for RawOperation {
     }
 }
 
-impl From<&Operation> for RawOperation {
+impl From<&Operation> for PlainOperation {
     fn from(operation: &Operation) -> Self {
-        RawOperation(
+        PlainOperation(
             operation.version(),
             operation.action(),
             operation.schema_id(),

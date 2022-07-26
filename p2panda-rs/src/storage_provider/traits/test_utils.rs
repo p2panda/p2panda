@@ -9,7 +9,7 @@ use crate::entry::{sign_and_encode, Entry, EntrySigned};
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::{
-    AsOperation, AsVerifiedOperation, Operation, EncodedOperation, OperationValue, PinnedRelation,
+    AsOperation, AsVerifiedOperation, EncodedOperation, Operation, OperationValue, PinnedRelation,
     PinnedRelationList, Relation, RelationList, VerifiedOperation,
 };
 use crate::schema::SchemaId;

@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::entry::{decode_entry, EncodedEntry, verify_payload};
-use crate::operation::{
-    verify_schema_and_convert, CBORError, DecodeOperationError, EncodedOperation, Operation,
-    RawOperation, VerifiedOperation,
-};
+use crate::entry::{decode_entry, verify_payload, EncodedEntry};
+use crate::operation::error::DecodeOperationError;
+use crate::operation::plain::PlainOperation;
+use crate::operation::validate::validate_operation;
+use crate::operation::{EncodedOperation, Operation, VerifiedOperation};
+
 use crate::schema::Schema;
 
 pub fn decode_operation(
@@ -13,15 +14,18 @@ pub fn decode_operation(
 ) -> Result<Operation, DecodeOperationError> {
     let bytes = encoded_operation.as_bytes();
 
-    let raw_operation: RawOperation =
-        ciborium::de::from_reader(bytes).map_err(|err| match err {
-            ciborium::de::Error::Io(err) => CBORError::DecoderIOFailed(err.to_string()),
-            ciborium::de::Error::Syntax(err) => CBORError::InvalidCBOR(err.to_string()),
-            ciborium::de::Error::Semantic(_, err) => CBORError::InvalidOperation(err.to_string()),
-            ciborium::de::Error::RecursionLimitExceeded => CBORError::RecursionLimitExceeded,
-        })?;
+    let plain: PlainOperation = ciborium::de::from_reader(bytes).map_err(|err| match err {
+        ciborium::de::Error::Io(err) => DecodeOperationError::DecoderIOFailed(err.to_string()),
+        ciborium::de::Error::Syntax(err) => {
+            DecodeOperationError::InvalidCBOREncoding(err.to_string())
+        }
+        ciborium::de::Error::Semantic(_, err) => {
+            DecodeOperationError::InvalidEncoding(err.to_string())
+        }
+        ciborium::de::Error::RecursionLimitExceeded => DecodeOperationError::RecursionLimitExceeded,
+    })?;
 
-    let operation = verify_schema_and_convert(&raw_operation, schema)?;
+    let operation = validate_operation(&plain, schema)?;
 
     Ok(operation)
 }

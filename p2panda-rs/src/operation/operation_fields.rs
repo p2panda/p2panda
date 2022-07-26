@@ -3,8 +3,8 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
-use crate::operation::{OperationError, OperationFieldsError, OperationValue};
-use crate::Validate;
+use crate::operation::error::FieldsError;
+use crate::operation::OperationValue;
 
 /// Operation fields are used to store application data. They are implemented as a simple key/value
 /// store with support for a limited number of data types (see [`OperationValue`] for further
@@ -50,9 +50,9 @@ impl OperationFields {
     /// Adds a new field to this instance.
     ///
     /// A field is a simple key/value pair.
-    pub fn add(&mut self, name: &str, value: OperationValue) -> Result<(), OperationFieldsError> {
+    pub fn add(&mut self, name: &str, value: OperationValue) -> Result<(), FieldsError> {
         if self.0.contains_key(name) {
-            return Err(OperationFieldsError::FieldDuplicate);
+            return Err(FieldsError::FieldDuplicate);
         }
 
         self.0.insert(name.to_owned(), value);
@@ -63,22 +63,14 @@ impl OperationFields {
     /// Adds a new field to this instance.
     ///
     /// A field is a simple key/value pair.
-    pub fn insert(
-        &mut self,
-        name: &str,
-        value: OperationValue,
-    ) -> Result<(), OperationFieldsError> {
+    pub fn insert(&mut self, name: &str, value: OperationValue) -> Result<(), FieldsError> {
         self.add(name, value)
     }
 
     /// Overwrites an already existing field with a new value.
-    pub fn update(
-        &mut self,
-        name: &str,
-        value: OperationValue,
-    ) -> Result<(), OperationFieldsError> {
+    pub fn update(&mut self, name: &str, value: OperationValue) -> Result<(), FieldsError> {
         if !self.0.contains_key(name) {
-            return Err(OperationFieldsError::UnknownField);
+            return Err(FieldsError::UnknownField);
         }
 
         self.0.insert(name.to_owned(), value);
@@ -87,9 +79,9 @@ impl OperationFields {
     }
 
     /// Removes an existing field from this instance.
-    pub fn remove(&mut self, name: &str) -> Result<(), OperationFieldsError> {
+    pub fn remove(&mut self, name: &str) -> Result<(), FieldsError> {
         if !self.0.contains_key(name) {
-            return Err(OperationFieldsError::UnknownField);
+            return Err(FieldsError::UnknownField);
         }
 
         self.0.remove(name);
@@ -114,18 +106,6 @@ impl OperationFields {
     /// Returns an iterator of existing operation fields.
     pub fn iter(&self) -> Iter<String, OperationValue> {
         self.0.iter()
-    }
-}
-
-impl Validate for OperationFields {
-    type Error = OperationError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        for (_, value) in self.iter() {
-            value.validate()?;
-        }
-
-        Ok(())
     }
 }
 

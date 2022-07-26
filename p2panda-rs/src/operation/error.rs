@@ -2,34 +2,42 @@
 
 use thiserror::Error;
 
-/// Error types for methods of `Operation` struct.
-#[allow(missing_copy_implementations)]
 #[derive(Error, Debug)]
-pub enum OperationError {
-    /// Invalid attempt to create an operation without any fields data.
-    #[error("operation fields can not be empty")]
-    EmptyFields,
+pub enum EncodeOperationError {
+    #[error("cbor encoder failed {0}")]
+    EncoderIOFailed(String),
 
-    /// Invalid attempt to create a delete operation with fields.
-    #[error("DELETE operation must not have fields")]
-    DeleteWithFields,
-
-    /// Invalid attempt to create an operation without any previous operations data.
-    #[error("previous_operations field can not be empty")]
-    EmptyPreviousOperations,
-
-    /// Invalid attempt to create an operation with previous operations data.
-    #[error("previous_operations field should be empty")]
-    ExistingPreviousOperations,
-
-    /// Invalid hash found.
-    #[error(transparent)]
-    HashError(#[from] crate::hash::HashError),
+    /// CBOR encoder could not serialize this value.
+    #[error("cbor encoder failed serializing value {0}")]
+    EncoderFailed(String),
 }
 
-/// Error types for `RawOperation` struct and methods related to it.
 #[derive(Error, Debug)]
-pub enum RawOperationError {
+pub enum DecodeOperationError {
+    #[error("cbor decoder failed {0}")]
+    DecoderIOFailed(String),
+
+    #[error("invalid cbor encoding {0}")]
+    InvalidCBOREncoding(String),
+
+    #[error("{0}")]
+    InvalidEncoding(String),
+
+    #[error("cbor decoder exceeded recursion limit")]
+    RecursionLimitExceeded,
+
+    #[error(transparent)]
+    DecodeEntryError(#[from] crate::entry::error::DecodeEntryError),
+
+    #[error(transparent)]
+    ValidateOperationError(#[from] ValidateOperationError),
+
+    #[error(transparent)]
+    ValidateEntryError(#[from] crate::entry::error::ValidateEntryError),
+}
+
+#[derive(Error, Debug)]
+pub enum ValidateOperationError {
     /// Could not encode to CBOR due to internal error.
     #[error("{0}")]
     EncoderFailed(String),
@@ -71,84 +79,15 @@ pub enum RawOperationError {
     SchemaValidation(#[from] crate::schema::ValidationError),
 }
 
-/// Error types for methods of `OperationFields` struct.
+/// Error types for methods of plain fields or operation fields.
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
-pub enum OperationFieldsError {
+pub enum FieldsError {
     /// Detected duplicate field when adding a new one.
-    #[error("field already exists")]
-    FieldDuplicate,
+    #[error("field '{0}' already exists")]
+    FieldDuplicate(String),
 
     /// Tried to interact with an unknown field.
     #[error("field does not exist")]
     UnknownField,
-}
-
-/// Custom error types for `EncodedOperation`.
-#[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
-pub enum EncodedOperationError {
-    /// Encoded operation string contains invalid hex characters.
-    #[error("invalid hex encoding in operation")]
-    InvalidHexEncoding(#[from] hex::FromHexError),
-
-    /// Something went wrong with encoding or decoding from / to raw operation.
-    #[error(transparent)]
-    RawOperationError(#[from] RawOperationError),
-}
-
-/// Error types for methods of `VerifiedOperation` struct.
-#[derive(Error, Debug)]
-pub enum VerifiedOperationError {
-    /// Invalid encoded entry found.
-    #[error(transparent)]
-    EntrySignedError(#[from] crate::entry::EntrySignedError),
-
-    /// Encoded operation data is invalid.
-    #[error(transparent)]
-    EncodedOperationError(#[from] EncodedOperationError),
-
-    /// Invalid operation found.
-    #[error(transparent)]
-    OperationError(#[from] OperationError),
-
-    /// Invalid author found.
-    #[error(transparent)]
-    AuthorError(#[from] crate::identity::AuthorError),
-
-    /// Invalid operation id hash found.
-    #[error(transparent)]
-    HashError(#[from] crate::hash::HashError),
-}
-
-/// Error types for CBOR decoder methods.
-#[derive(Error, Debug)]
-pub enum CBORError {
-    #[error("decoder failed with {0}")]
-    DecoderIOFailed(String),
-
-    #[error("invalid CBOR encoding {0}")]
-    InvalidCBOR(String),
-
-    #[error("{0}")]
-    InvalidOperation(String),
-
-    #[error("recursion limit of CBOR decoder was reached")]
-    RecursionLimitExceeded,
-}
-
-/// Error types for CBOR decoder methods.
-#[derive(Error, Debug)]
-pub enum DecodeOperationError {
-    #[error(transparent)]
-    CBORError(#[from] CBORError),
-
-    #[error(transparent)]
-    DecodeEntryError(#[from] crate::entry::DecodeEntryError),
-
-    #[error(transparent)]
-    RawOperationError(#[from] RawOperationError),
-
-    #[error(transparent)]
-    ValidateEntryError(#[from] crate::entry::ValidateEntryError),
 }

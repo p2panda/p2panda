@@ -1,97 +1,88 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::document::DocumentViewId;
-use crate::operation::{
-    Operation, OperationAction, OperationVersion, RawFields, RawOperation, RawOperationError,
-};
+use crate::operation::error::ValidateOperationError;
+use crate::operation::plain::PlainFields;
+use crate::operation::traits::{Actionable, Schematic};
+use crate::operation::{Operation, OperationAction, OperationVersion};
 use crate::schema::{verify_all_fields, verify_only_given_fields, Schema};
 
-pub fn verify_schema_and_convert(
-    raw_operation: &RawOperation,
+pub fn validate_operation<O: Actionable + Schematic>(
+    operation: O,
     schema: &Schema,
-) -> Result<Operation, RawOperationError> {
-    if raw_operation.version() != OperationVersion::V1 {
-        // @TODO: This will be handled during deserialization
-    }
+) -> Result<Operation, ValidateOperationError> {
+    let previous_operations = operation.previous_operations();
+    let fields = operation.fields();
 
-    match raw_operation.action() {
-        OperationAction::Create => verify_create_operation(
-            raw_operation.previous_operations(),
-            raw_operation.fields(),
-            schema,
-        ),
-        OperationAction::Update => verify_update_operation(
-            raw_operation.previous_operations(),
-            raw_operation.fields(),
-            schema,
-        ),
-        OperationAction::Delete => verify_delete_operation(
-            raw_operation.previous_operations(),
-            raw_operation.fields(),
-            schema,
-        ),
+    match operation.action() {
+        OperationAction::Create => validate_create_operation(previous_operations, fields, schema),
+        OperationAction::Update => validate_update_operation(previous_operations, fields, schema),
+        OperationAction::Delete => validate_delete_operation(previous_operations, fields, schema),
     }
 }
 
-fn verify_create_operation(
-    raw_previous_operations: Option<&DocumentViewId>,
-    raw_fields: Option<&RawFields>,
+fn validate_create_operation(
+    plain_previous_operations: Option<&DocumentViewId>,
+    plain_fields: Option<&PlainFields>,
     schema: &Schema,
-) -> Result<Operation, RawOperationError> {
-    if raw_previous_operations.is_some() {
-        return Err(RawOperationError::UnexpectedPreviousOperations);
+) -> Result<Operation, ValidateOperationError> {
+    if plain_previous_operations.is_some() {
+        return Err(ValidateOperationError::UnexpectedPreviousOperations);
     }
 
-    let validated_fields = match raw_fields {
+    let validated_fields = match plain_fields {
         Some(fields) => verify_all_fields(fields, schema)?,
-        None => return Err(RawOperationError::ExpectedFields),
+        None => return Err(ValidateOperationError::ExpectedFields),
     };
 
-    // Unwrap here as we already should have done all validation before
-    Ok(Operation::new_create(schema.id().to_owned(), validated_fields).unwrap())
+    Ok(Operation {
+        version: OperationVersion::V1,
+        action: OperationAction::Create,
+        schema: schema.to_owned(),
+        previous_operations: None,
+        fields: Some(validated_fields),
+    })
 }
 
-fn verify_update_operation(
-    raw_previous_operations: Option<&DocumentViewId>,
-    raw_fields: Option<&RawFields>,
+fn validate_update_operation(
+    plain_previous_operations: Option<&DocumentViewId>,
+    plain_fields: Option<&PlainFields>,
     schema: &Schema,
-) -> Result<Operation, RawOperationError> {
-    let validated_fields = match raw_fields {
+) -> Result<Operation, ValidateOperationError> {
+    let validated_fields = match plain_fields {
         Some(fields) => verify_only_given_fields(fields, schema)?,
-        None => return Err(RawOperationError::ExpectedFields),
+        None => return Err(ValidateOperationError::ExpectedFields),
     };
 
-    match raw_previous_operations {
-        Some(previous_operations) => {
-            Ok(Operation::new_update(
-                schema.id().to_owned(),
-                previous_operations.to_owned(),
-                validated_fields,
-            )
-            // Unwrap here as we already should have done all validation before
-            .unwrap())
-        }
-        None => Err(RawOperationError::ExpectedPreviousOperations),
+    match plain_previous_operations {
+        Some(previous_operations) => Ok(Operation {
+            version: OperationVersion::V1,
+            action: OperationAction::Update,
+            schema: schema.to_owned(),
+            previous_operations: Some(previous_operations.to_owned()),
+            fields: Some(validated_fields),
+        }),
+        None => Err(ValidateOperationError::ExpectedPreviousOperations),
     }
 }
 
-fn verify_delete_operation(
-    raw_previous_operations: Option<&DocumentViewId>,
-    raw_fields: Option<&RawFields>,
+fn validate_delete_operation(
+    plain_previous_operations: Option<&DocumentViewId>,
+    plain_fields: Option<&PlainFields>,
     schema: &Schema,
-) -> Result<Operation, RawOperationError> {
-    if raw_fields.is_some() {
-        return Err(RawOperationError::UnexpectedFields);
+) -> Result<Operation, ValidateOperationError> {
+    if plain_fields.is_some() {
+        return Err(ValidateOperationError::UnexpectedFields);
     }
 
-    match raw_previous_operations {
-        Some(previous_operations) => {
-            Ok(
-                Operation::new_delete(schema.id().to_owned(), previous_operations.to_owned())
-                    // Unwrap here as we already should have done all validation before
-                    .unwrap(),
-            )
-        }
-        None => Err(RawOperationError::ExpectedPreviousOperations),
+    match plain_previous_operations {
+        Some(previous_operations) => Ok(Operation {
+            version: OperationVersion::V1,
+            action: OperationAction::Delete,
+            schema: schema.to_owned(),
+            previous_operations: Some(previous_operations),
+            fields: None,
+        }),
+        None => Err(ValidateOperationError::ExpectedPreviousOperations),
     }
 }

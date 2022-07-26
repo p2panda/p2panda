@@ -7,7 +7,7 @@ use wasm_bindgen::JsValue;
 
 use crate::document::DocumentViewId;
 use crate::operation::{
-    Operation, EncodedOperation, OperationFields as OperationFieldsNonWasm, OperationId,
+    EncodedOperation, Operation, OperationFields as OperationFieldsNonWasm, OperationId,
     OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
 use crate::schema::SchemaId;
