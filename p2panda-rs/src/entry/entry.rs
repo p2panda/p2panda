@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::{TryFrom, TryInto};
+use std::hash::Hash as StdHash;
+
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
+use bamboo_rs_core_ed25519_yasmf::Entry as BambooEntry;
 use bamboo_rs_core_ed25519_yasmf::Signature as BambooSignature;
 
-use crate::entry::{EntryBuilderError, LogId, SeqNum};
+use crate::entry::{sign_entry, DecodeEntryError, EntryBuilderError, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
-use crate::operation::{EncodedOperation, Operation};
+use crate::operation::EncodedOperation;
 
-use super::encode::sign_entry;
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, StdHash)]
 pub(crate) struct Signature(Vec<u8>);
 
 impl Signature {
@@ -135,9 +137,6 @@ pub struct EntryBuilder {
 
     /// Sequence number of this entry.
     seq_num: SeqNum,
-
-    /// Operation payload of entry.
-    payload: Option<EncodedOperation>,
 }
 
 impl EntryBuilder {
@@ -165,20 +164,17 @@ impl EntryBuilder {
         self
     }
 
-    pub fn operation(mut self, operation: &Operation) -> Self {
-        self.payload = Some(EncodedOperation::from(operation));
-        self
-    }
-
-    pub fn sign(mut self, key_pair: &KeyPair) -> Result<Entry, EntryBuilderError> {
+    pub fn sign(
+        mut self,
+        encoded_operation: &EncodedOperation,
+        key_pair: &KeyPair,
+    ) -> Result<Entry, EntryBuilderError> {
         let entry = sign_entry(
             self.backlink.as_ref(),
             self.skiplink.as_ref(),
             &self.log_id,
             &self.seq_num,
-            &self
-                .payload
-                .ok_or_else(|| EntryBuilderError::OperationMissing)?,
+            &encoded_operation,
             &key_pair,
         )?;
 
@@ -186,7 +182,7 @@ impl EntryBuilder {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, StdHash)]
 pub struct Entry {
     // Author of this entry.
     author: Author,
@@ -209,16 +205,13 @@ pub struct Entry {
     /// Hash of payload.
     payload_hash: Hash,
 
-    /// Operation payload of entry, can be deleted.
-    payload: Option<EncodedOperation>,
-
     /// Ed25519 signature of entry.
     signature: Signature,
 }
 
 impl Entry {
-    /// Returns author of entry.
-    pub fn author(&self) -> &Author {
+    /// Returns public key of entry.
+    pub fn public_key(&self) -> &Author {
         &self.author
     }
 
@@ -267,19 +260,42 @@ impl Entry {
         self.seq_num.skiplink_seq_num()
     }
 
-    /// Returns operation payload of entry.
-    pub fn operation(&self) -> Option<&EncodedOperation> {
-        self.payload.as_ref()
-    }
-
-    /// Returns true if entry contains operation.
-    pub fn has_operation(&self) -> bool {
-        self.payload.is_some()
-    }
-
     /// Returns true if skiplink has to be given.
     pub fn is_skiplink_required(&self) -> bool {
         is_lipmaa_required(self.seq_num.as_u64())
+    }
+}
+
+impl TryFrom<BambooEntry<&[u8], &[u8]>> for Entry {
+    type Error = DecodeEntryError;
+
+    fn try_from(entry: BambooEntry<&[u8], &[u8]>) -> Result<Self, Self::Error> {
+        // Convert all hashes into our types
+        let backlink: Option<Hash> = match entry.backlink {
+            Some(link) => Some((&link).try_into()?),
+            None => None,
+        };
+
+        let skiplink: Option<Hash> = match entry.lipmaa_link {
+            Some(link) => Some((&link).try_into()?),
+            None => None,
+        };
+
+        let payload_hash: Hash = (&entry.payload_hash).try_into()?;
+
+        // Unwrap as we know that there is a signature coming from bamboo
+        let signature = entry.sig.expect("signature expected").into();
+
+        Ok(Entry {
+            author: (&entry.author).into(),
+            log_id: entry.log_id.into(),
+            seq_num: SeqNum::new(entry.seq_num)?,
+            skiplink,
+            backlink,
+            payload_hash,
+            payload_size: entry.payload_size,
+            signature,
+        })
     }
 }
 

@@ -42,10 +42,6 @@ pub enum EntrySignedError {
     #[error("invalid hex encoding in entry")]
     InvalidHexEncoding,
 
-    /// Operation needs to match payload hash of encoded entry.
-    #[error("operation needs to match payload hash of encoded entry")]
-    OperationHashMismatch,
-
     /// Can not sign and encode an entry without a `Operation`.
     #[error("entry does not contain any operation")]
     OperationMissing,
@@ -65,10 +61,6 @@ pub enum EntrySignedError {
     /// Handle errors from `Entry` struct.
     #[error(transparent)]
     EntryError(#[from] EntryError),
-
-    /// Handle errors from `SeqNum` struct.
-    #[error(transparent)]
-    SeqNumError(#[from] SeqNumError),
 
     /// Handle errors from `Hash` struct.
     #[error(transparent)]
@@ -111,4 +103,32 @@ pub enum LogIdError {
     /// Conversion to u64 from string failed.
     #[error("string contains invalid u64 value")]
     InvalidU64String,
+}
+
+/// Custom error types for `LogId`.
+#[derive(Error, Debug)]
+pub enum DecodeEntryError {
+    /// Handle errors from `Hash` struct.
+    #[error(transparent)]
+    HashError(#[from] crate::hash::HashError),
+
+    /// Handle errors from `SeqNum` struct.
+    #[error(transparent)]
+    SeqNumError(#[from] SeqNumError),
+
+    /// Handle errors from decoding bamboo_rs_core_ed25519_yasmf entries.
+    #[error(transparent)]
+    BambooDecodeError(#[from] bamboo_rs_core_ed25519_yasmf::entry::decode::Error),
+}
+
+/// Custom error types for `LogId`.
+#[derive(Error, Debug)]
+pub enum ValidateEntryError {
+    /// Operation needs to match payload hash of encoded entry.
+    #[error("operation needs to match payload hash of encoded entry")]
+    PayloadHashMismatch,
+
+    /// Operation needs to match payload size of encoded entry.
+    #[error("operation needs to match payload size of encoded entry")]
+    PayloadSizeMismatch,
 }

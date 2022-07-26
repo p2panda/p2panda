@@ -120,3 +120,35 @@ pub enum VerifiedOperationError {
     #[error(transparent)]
     HashError(#[from] crate::hash::HashError),
 }
+
+/// Error types for CBOR decoder methods.
+#[derive(Error, Debug)]
+pub enum CBORError {
+    #[error("decoder failed with {0}")]
+    DecoderIOFailed(String),
+
+    #[error("invalid CBOR encoding {0}")]
+    InvalidCBOR(String),
+
+    #[error("{0}")]
+    InvalidOperation(String),
+
+    #[error("recursion limit of CBOR decoder was reached")]
+    RecursionLimitExceeded,
+}
+
+/// Error types for CBOR decoder methods.
+#[derive(Error, Debug)]
+pub enum DecodeOperationError {
+    #[error(transparent)]
+    CBORError(#[from] CBORError),
+
+    #[error(transparent)]
+    DecodeEntryError(#[from] crate::entry::DecodeEntryError),
+
+    #[error(transparent)]
+    RawOperationError(#[from] RawOperationError),
+
+    #[error(transparent)]
+    ValidateEntryError(#[from] crate::entry::ValidateEntryError),
+}

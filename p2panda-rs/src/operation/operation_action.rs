@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 ///
 /// An action defines the operation format and if this operation creates, updates or deletes a data
 /// document.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum OperationAction {
     /// Operation creates a new document.
     Create,
@@ -65,4 +65,3 @@ impl<'de> Deserialize<'de> for OperationAction {
         }
     }
 }
-

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::hash::Hash as StdHash;
+
 use crate::document::DocumentViewId;
 use crate::operation::{
     AsOperation, OperationAction, OperationError, OperationFields, OperationValue, OperationVersion,

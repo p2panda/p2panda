@@ -4,7 +4,7 @@ use crate::document::DocumentViewId;
 use crate::entry::EntrySigned;
 use crate::identity::Author;
 use crate::operation::{
-    Operation, OperationAction, EncodedOperation, OperationFields, OperationId, OperationVersion,
+    EncodedOperation, Operation, OperationAction, OperationFields, OperationId, OperationVersion,
 };
 use crate::schema::SchemaId;
 use crate::Validate;
@@ -63,28 +63,9 @@ pub trait AsOperation {
 /// [`StorageProvider`][crate::storage_provider::traits::StorageProvider] implementations should
 /// implement this for a data structure that represents an operation as it is stored in the
 /// database.
-pub trait AsVerifiedOperation:
-    Sized + Clone + Send + Sync + Validate + PartialEq + std::fmt::Debug
-{
+pub trait AsVerifiedOperation: Sized + Clone + Send + Sync + PartialEq + std::fmt::Debug {
     /// Error type for `AsVerifiedOperation`
     type VerifiedOperationError: 'static + std::error::Error + Send + Sync;
-
-    /// Returns a new `VerifiedOperation` instance.
-    fn new(
-        public_key: &Author,
-        operation_id: &OperationId,
-        operation: &Operation,
-    ) -> Result<Self, Self::VerifiedOperationError>;
-
-    /// Returns a new `VerifiedOperation` instance constructed from an `EntrySigned`
-    /// and an `EncodedOperation`.
-    ///
-    /// Should return an error if the payload signature encoded in the passed entry
-    /// does not match the passes encoded operation.
-    fn new_from_entry(
-        entry_encoded: &EntrySigned,
-        operation_encoded: &EncodedOperation,
-    ) -> Result<Self, Self::VerifiedOperationError>;
 
     /// Returns the identifier for this operation.
     fn operation_id(&self) -> &OperationId;

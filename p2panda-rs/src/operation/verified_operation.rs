@@ -2,10 +2,9 @@
 
 use std::hash::Hash as StdHash;
 
-use crate::entry::{decode_entry, EntrySigned};
+use crate::entry::Entry;
 use crate::identity::Author;
-use crate::operation::{AsVerifiedOperation, EncodedOperation, Operation, VerifiedOperationError};
-use crate::Validate;
+use crate::operation::{AsVerifiedOperation, Operation, VerifiedOperationError};
 
 use super::OperationId;
 
@@ -15,106 +14,54 @@ use super::OperationId;
 /// [operation id][OperationId] is only available on [`VerifiedOperation`] and not on
 /// [`Operation`] because it is derived from the hash of the signed entry an operation is encoded
 /// on.
-#[derive(Debug, Clone, Eq, PartialEq, StdHash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VerifiedOperation {
-    /// The hash of the entry this operation was published with.
+    /// Identifier of the operation.
+    ///
+    /// The operation id is the entry hash.
     operation_id: OperationId,
 
-    /// The public key of the author who published this operation.
-    public_key: Author,
-
-    /// The actual operation this struct wraps.
+    /// Operation, which is the payload of the entry.
     operation: Operation,
+
+    /// Entry which was used to publish this operation.
+    entry: Entry,
 }
 
 impl AsVerifiedOperation for VerifiedOperation {
     type VerifiedOperationError = VerifiedOperationError;
 
-    /// Returns a new `VerifiedOperation` instance.
-    ///
-    /// Use `VerifiedOperation::new_from_entry()` instead if you want to validate that the operation
-    /// was signed by this public key.
-    fn new(
-        public_key: &Author,
-        operation_id: &OperationId,
-        operation: &Operation,
-    ) -> Result<Self, VerifiedOperationError> {
-        let verified_operation = Self {
-            public_key: public_key.clone(),
-            operation_id: operation_id.clone(),
-            operation: operation.clone(),
-        };
-
-        verified_operation.validate()?;
-
-        Ok(verified_operation)
-    }
-
-    /// Returns a new `VerifiedOperation` instance constructed from an `EntrySigned`
-    /// and an `EncodedOperation`.
-    ///
-    /// This constructor verifies that the passed operation matches the one encoded
-    /// in the passed signed entry.
-    fn new_from_entry(
-        entry_encoded: &EntrySigned,
-        operation_encoded: &EncodedOperation,
-    ) -> Result<Self, VerifiedOperationError> {
-        let operation = Operation::from(operation_encoded);
-
-        // This verifies that the entry and operation are correctly matching.
-        decode_entry(entry_encoded, Some(operation_encoded))?;
-
-        let verified_operation = Self {
-            operation_id: entry_encoded.hash().into(),
-            public_key: entry_encoded.author(),
-            operation,
-        };
-
-        verified_operation.validate()?;
-
-        Ok(verified_operation)
-    }
     /// Returns the identifier for this operation.
     fn operation_id(&self) -> &OperationId {
         &self.operation_id
-    }
-
-    /// Returns the public key of the author of this operation.
-    fn public_key(&self) -> &Author {
-        &self.public_key
     }
 
     /// Returns the wrapped operation.
     fn operation(&self) -> &Operation {
         &self.operation
     }
-}
 
-#[cfg(any(feature = "testing", test))]
-impl VerifiedOperation {
-    /// Create a verified operation from it's unverified parts for testing.
-    pub fn new_test_operation(
-        id: &OperationId,
-        public_key: &Author,
-        operation: &Operation,
-    ) -> Self {
-        Self {
-            operation_id: id.clone(),
-            public_key: public_key.clone(),
-            operation: operation.clone(),
-        }
+    /// Returns the public key of the author of this operation.
+    fn public_key(&self) -> &Author {
+        &self.entry.public_key()
     }
 }
 
-impl Validate for VerifiedOperation {
-    type Error = VerifiedOperationError;
+impl StdHash for VerifiedOperation {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.operation_id().hash(state)
+    }
+}
 
-    fn validate(&self) -> Result<(), Self::Error> {
-        self.operation.validate()?;
-        self.public_key.validate()?;
-        self.operation_id.validate()?;
-
-        Ok(())
+#[cfg(test)]
+impl VerifiedOperation {
+    /// Create a verified operation from it's unverified parts for testing.
+    pub fn new(entry: &Entry, operation: &Operation, operation_id: &OperationId) -> Self {
+        Self {
+            operation_id: operation_id.to_owned(),
+            operation: operation.to_owned(),
+            entry: entry.to_owned(),
+        }
     }
 }
 

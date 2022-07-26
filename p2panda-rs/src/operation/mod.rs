@@ -25,8 +25,8 @@ pub use decode::decode_operation;
 pub use encode::{encode_operation, encode_raw_operation};
 pub use encoded_operation::EncodedOperation;
 pub use error::{
-    EncodedOperationError, OperationError, OperationFieldsError, RawOperationError,
-    VerifiedOperationError,
+    CBORError, DecodeOperationError, EncodedOperationError, OperationError, OperationFieldsError,
+    RawOperationError, VerifiedOperationError,
 };
 pub use operation::{Operation, OperationBuilder};
 pub use operation_action::OperationAction;

@@ -23,7 +23,10 @@ pub use decode::decode_entry;
 pub use encode::{encode_entry, sign_entry};
 pub use encoded_entry::EncodedEntry;
 pub use entry::{Entry, EntryBuilder};
-pub use error::{EntryBuilderError, EntryError, EntrySignedError, LogIdError, SeqNumError};
+pub use error::{
+    DecodeEntryError, EntryBuilderError, EntryError, EntrySignedError, LogIdError, SeqNumError,
+    ValidateEntryError,
+};
 pub use log_id::LogId;
 pub use seq_num::SeqNum;
 pub use validate::verify_payload;

@@ -1,33 +1,53 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::entry::{decode_entry, EncodedEntry, verify_payload};
 use crate::operation::{
-    verify_schema_and_convert, EncodedOperation, Operation, RawOperation, RawOperationError,
+    verify_schema_and_convert, CBORError, DecodeOperationError, EncodedOperation, Operation,
+    RawOperation, VerifiedOperation,
 };
 use crate::schema::Schema;
 
 pub fn decode_operation(
     encoded_operation: &EncodedOperation,
     schema: &Schema,
-) -> Result<Operation, RawOperationError> {
+) -> Result<Operation, DecodeOperationError> {
     let bytes = encoded_operation.as_bytes();
 
     let raw_operation: RawOperation =
         ciborium::de::from_reader(bytes).map_err(|err| match err {
-            ciborium::de::Error::Io(err) => RawOperationError::DecoderFailed(err.to_string()),
-            ciborium::de::Error::Syntax(err) => {
-                RawOperationError::InvalidCBOREncoding(err.to_string())
-            }
-            ciborium::de::Error::Semantic(_, err) => {
-                RawOperationError::InvalidEncoding(err.to_string())
-            }
-            ciborium::de::Error::RecursionLimitExceeded => {
-                RawOperationError::DecoderFailed("Recursion limit exceeded".into())
-            }
+            ciborium::de::Error::Io(err) => CBORError::DecoderIOFailed(err.to_string()),
+            ciborium::de::Error::Syntax(err) => CBORError::InvalidCBOR(err.to_string()),
+            ciborium::de::Error::Semantic(_, err) => CBORError::InvalidOperation(err.to_string()),
+            ciborium::de::Error::RecursionLimitExceeded => CBORError::RecursionLimitExceeded,
         })?;
 
     let operation = verify_schema_and_convert(&raw_operation, schema)?;
 
     Ok(operation)
+}
+
+pub fn decode_operation_with_entry(
+    entry_encoded: &EncodedEntry,
+    operation_encoded: &EncodedOperation,
+    schema: &Schema,
+) -> Result<VerifiedOperation, DecodeOperationError> {
+    // Decode entry
+    let entry = decode_entry(&entry_encoded)?;
+
+    // Verify that the entry belongs to this operation
+    verify_payload(&entry, &operation_encoded)?;
+
+    // The operation id is the result of a hashing function over the entry bytes
+    let operation_id = entry_encoded.hash().into();
+
+    // Decode operation with the help of a schema
+    let operation = decode_operation(&operation_encoded, &schema)?;
+
+    Ok(VerifiedOperation {
+        entry,
+        operation,
+        operation_id,
+    })
 }
 
 #[cfg(test)]
