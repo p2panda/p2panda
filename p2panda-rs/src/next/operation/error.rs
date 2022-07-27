@@ -57,6 +57,9 @@ pub enum ValidateOperationError {
     #[error("{0}")]
     InvalidEncoding(String),
 
+    #[error("Operation schema id not matching with given schema: {0}, expected: {1}")]
+    SchemaNotMatching(String, String),
+
     /// Expected `fields` in CREATE or UPDATE operation.
     #[error("expected 'fields' in CREATE or UPDATE operation")]
     ExpectedFields,

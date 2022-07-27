@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::Human;
 use crate::next::document::DocumentViewId;
 use crate::next::entry::validate::{validate_log_integrity, validate_payload};
 use crate::next::entry::{EncodedEntry, Entry};
@@ -47,7 +48,13 @@ pub fn validate_operation<O: Actionable + Schematic>(
     let previous_operations = operation.previous_operations();
     let fields = operation.fields();
 
-    // @TODO: Make sure the schema id and given schema matches
+    // Make sure the schema id and given schema matches
+    if operation.schema_id() != schema.id() {
+        return Err(ValidateOperationError::SchemaNotMatching(
+            operation.schema_id().display(),
+            schema.id().display(),
+        ));
+    }
 
     match operation.action() {
         OperationAction::Create => validate_create_operation(previous_operations, fields, schema),
