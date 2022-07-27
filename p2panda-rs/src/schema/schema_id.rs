@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::fmt;
-use std::fmt::Display;
+use std::fmt::{Display, Write};
 use std::str::FromStr;
 
 use serde::de::Visitor;
@@ -173,10 +173,16 @@ impl Display for SchemaId {
 
 impl Human for SchemaId {
     fn display(&self) -> String {
+        let mut rv = String::new();
+        write!(rv, "<Schema ").unwrap();
         match self {
-            SchemaId::Application(name, view_id) => format!("{} {}", name, view_id.display()),
-            system_schema => format!("{}", system_schema),
+            SchemaId::Application(name, view_id) => {
+                write!(rv, "{}_{}", name, view_id.to_short_string()).unwrap()
+            }
+            system_schema => write!(rv, "{}", system_schema).unwrap(),
         }
+        write!(rv, ">").unwrap();
+        rv
     }
 }
 
@@ -360,10 +366,10 @@ mod test {
 
     #[rstest]
     fn short_representation(schema: SchemaId) {
-        assert_eq!(schema.display(), "venue 8fc78b");
+        assert_eq!(schema.display(), "<Schema venue_8fc78b>");
         assert_eq!(
             SchemaId::SchemaDefinition(1).display(),
-            "schema_definition_v1"
+            "<Schema schema_definition_v1>"
         );
     }
 }

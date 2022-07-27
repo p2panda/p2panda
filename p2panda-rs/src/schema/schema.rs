@@ -227,7 +227,7 @@ impl Display for Schema {
 
 impl Human for Schema {
     fn display(&self) -> String {
-        format!("<Schema {}>", self.id.display())
+        self.id.display()
     }
 }
 
@@ -329,7 +329,7 @@ mod tests {
             vec![("number", FieldType::Int)],
         )
         .unwrap();
-        assert_eq!(schema.display(), "<Schema venue 496543>");
+        assert_eq!(schema.display(), "<Schema venue_496543>");
 
         let schema_definition = Schema::get_system(SchemaId::SchemaDefinition(1)).unwrap();
         assert_eq!(schema_definition.display(), "<Schema schema_definition_v1>");

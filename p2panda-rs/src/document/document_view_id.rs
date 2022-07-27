@@ -59,6 +59,22 @@ impl DocumentViewId {
         graph_tips.sort();
         graph_tips
     }
+
+    /// Can be used as a human-readable representation of a document view id.
+    ///
+    /// The return value contains all view graph tips' last 6 characters
+    /// concatenated with an underscore.
+    pub fn to_short_string(&self) -> String {
+        let mut result = String::new();
+
+        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
+
+        for (i, operation_id) in self.0.clone().into_iter().enumerate() {
+            let separator = if i == 0 { "" } else { "_" };
+            write!(result, "{}{}", &separator, &operation_id.as_str()[offset..]).unwrap();
+        }
+        result
+    }
 }
 
 impl Display for DocumentViewId {
@@ -74,15 +90,7 @@ impl Display for DocumentViewId {
 
 impl Human for DocumentViewId {
     fn display(&self) -> String {
-        let mut result = String::new();
-        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
-
-        for (i, operation_id) in self.0.clone().into_iter().enumerate() {
-            let separator = if i == 0 { "" } else { "_" };
-            write!(result, "{}{}", &separator, &operation_id.as_str()[offset..]).unwrap();
-        }
-
-        result
+        format!("<DocumentView {}>", self.to_short_string())
     }
 }
 
@@ -314,7 +322,7 @@ mod tests {
             .unwrap();
 
         let view_id_unmerged = DocumentViewId::new(&[operation_1, operation_2]).unwrap();
-        assert_eq!(view_id_unmerged.display(), "496543_f16e79");
+        assert_eq!(view_id_unmerged.display(), "<DocumentView 496543_f16e79>");
     }
 
     #[rstest]
