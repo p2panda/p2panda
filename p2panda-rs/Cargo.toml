@@ -31,13 +31,11 @@ testing = ["dep:rstest", "dep:rstest_reuse", "dep:varu64", "dep:tokio"]
 arrayvec = "^0.5.2"
 async-trait = "^0.1.56"
 bamboo-rs-core-ed25519-yasmf = "^0.1.1"
-cddl-cat = { version = "^0.6.1", default-features = false, features = [
-  "serde_cbor",
-] }
+cddl-cat = { version = "^0.6.1", default-features = false, features = [ "serde_cbor", ] }
 ciborium = "^0.2.0"
 ed25519 = "^1.5.2"
 ed25519-dalek = "^1.0.1"
-hex = "^0.4.3"
+hex = { version = "^0.4.3", features = ["serde"] }
 lazy_static = "^1.4.0"
 lipmaa-link = "^0.2.2"
 log = "^0.4.17"
@@ -53,13 +51,9 @@ serde-wasm-bindgen = "^0.4.3"
 serde_repr = "^0.1.8"
 thiserror = "^1.0.31"
 tls_codec = { version = "^0.2.0", features = ["derive", "serde_serialize"] }
+tokio = { version = "1.19.2", features = [ "rt", "macros", "rt-multi-thread", ], optional = true }
 varu64 = { version = "^0.7.0", default-features = false, optional = true }
 yasmf-hash = "^0.1.1"
-tokio = { version = "1.19.2", features = [
-  "rt",
-  "macros",
-  "rt-multi-thread",
-], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rand = "^0.7.3"
