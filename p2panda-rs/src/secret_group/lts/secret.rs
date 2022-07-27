@@ -112,8 +112,8 @@ impl LongTermSecret {
         // The used secret does not match the ciphertexts group instance hash
         if ciphertext.group_instance_id()? != self.group_instance_id()? {
             return Err(LongTermSecretError::GroupNotMatching(
-                self.group_instance_id()?.as_str().into(),
-                ciphertext.group_instance_id()?.as_str().into(),
+                self.group_instance_id()?.to_string(),
+                ciphertext.group_instance_id()?.to_string(),
             ));
         }
 

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::fmt::Display;
 use std::str::FromStr;
 
 use lazy_static::lazy_static;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
 
 use crate::operation::OperationValue;
 use crate::schema::{FieldTypeError, SchemaId};
@@ -20,7 +20,7 @@ use crate::schema::{FieldTypeError, SchemaId};
 /// field_definition.add("name", OperationValue::Text("document_title".to_string()));
 /// field_definition.add("type", FieldType::String.into());
 /// ```
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum FieldType {
     /// Defines a boolean field.
     Bool,
@@ -51,29 +51,34 @@ pub enum FieldType {
     PinnedRelationList(SchemaId),
 }
 
-impl FieldType {
-    /// Serialises this field type to text.
-    pub fn serialise(&self) -> String {
-        match self {
+/// Returns string representation of this field type.
+impl Display for FieldType {
+    // Note: This automatically implements the `to_string` function as well.
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let field_type_str = match self {
             FieldType::Bool => "bool".to_string(),
             FieldType::Int => "int".to_string(),
             FieldType::Float => "float".to_string(),
             FieldType::String => "str".to_string(),
-            FieldType::Relation(schema_id) => format!("relation({})", schema_id.as_str()),
-            FieldType::RelationList(schema_id) => format!("relation_list({})", schema_id.as_str()),
+            FieldType::Relation(schema_id) => format!("relation({})", schema_id),
+            FieldType::RelationList(schema_id) => {
+                format!("relation_list({})", schema_id)
+            }
             FieldType::PinnedRelation(schema_id) => {
-                format!("pinned_relation({})", schema_id.as_str())
+                format!("pinned_relation({})", schema_id)
             }
             FieldType::PinnedRelationList(schema_id) => {
-                format!("pinned_relation_list({})", schema_id.as_str())
+                format!("pinned_relation_list({})", schema_id)
             }
-        }
+        };
+
+        write!(f, "{}", field_type_str)
     }
 }
 
 impl From<FieldType> for OperationValue {
     fn from(field_type: FieldType) -> OperationValue {
-        OperationValue::Text(field_type.serialise())
+        OperationValue::Text(field_type.to_string())
     }
 }
 
@@ -123,37 +128,34 @@ impl FromStr for FieldType {
 
 #[cfg(test)]
 mod tests {
-    use crate::operation::OperationValue;
     use crate::schema::{FieldType, SchemaId};
-    use crate::Validate;
 
     #[test]
-    fn serialises() {
-        assert_eq!(FieldType::Bool.serialise(), "bool");
-        assert!(OperationValue::from(FieldType::Bool).validate().is_ok());
-        assert_eq!(FieldType::Int.serialise(), "int");
-        assert_eq!(FieldType::Float.serialise(), "float");
-        assert_eq!(FieldType::String.serialise(), "str");
+    fn to_string() {
+        assert_eq!(FieldType::Bool.to_string(), "bool");
+        assert_eq!(FieldType::Int.to_string(), "int");
+        assert_eq!(FieldType::Float.to_string(), "float");
+        assert_eq!(FieldType::String.to_string(), "str");
         assert_eq!(
-            FieldType::Relation(SchemaId::SchemaFieldDefinition(1)).serialise(),
+            FieldType::Relation(SchemaId::SchemaFieldDefinition(1)).to_string(),
             "relation(schema_field_definition_v1)"
         );
         assert_eq!(
-            FieldType::RelationList(SchemaId::SchemaFieldDefinition(1)).serialise(),
+            FieldType::RelationList(SchemaId::SchemaFieldDefinition(1)).to_string(),
             "relation_list(schema_field_definition_v1)"
         );
         assert_eq!(
-            FieldType::PinnedRelation(SchemaId::SchemaFieldDefinition(1)).serialise(),
+            FieldType::PinnedRelation(SchemaId::SchemaFieldDefinition(1)).to_string(),
             "pinned_relation(schema_field_definition_v1)"
         );
         assert_eq!(
-            FieldType::PinnedRelationList(SchemaId::SchemaFieldDefinition(1)).serialise(),
+            FieldType::PinnedRelationList(SchemaId::SchemaFieldDefinition(1)).to_string(),
             "pinned_relation_list(schema_field_definition_v1)"
         );
     }
 
     #[test]
-    fn deserialises() {
+    fn from_str() {
         assert_eq!(FieldType::Bool, "bool".parse().unwrap());
         assert_eq!(FieldType::Int, "int".parse().unwrap());
         assert_eq!(FieldType::Float, "float".parse().unwrap());

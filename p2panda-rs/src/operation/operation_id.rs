@@ -6,7 +6,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 use crate::hash::{Hash, HashError};
-use crate::Validate;
+use crate::{Human, Validate};
 
 /// Uniquely identifies an [`Operation`](crate::operation::Operation).
 ///
@@ -21,7 +21,7 @@ impl OperationId {
         Self(entry_hash)
     }
 
-    /// Extracts a string slice from the operation id's hash.
+    /// Returns hash of operation id represented as `&str`.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
@@ -56,7 +56,14 @@ impl FromStr for OperationId {
 
 impl Display for OperationId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<Operation {}>", self.as_hash().short_str())
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl Human for OperationId {
+    fn display(&self) -> String {
+        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
+        format!("<Operation {}>", &self.0.as_str()[offset..])
     }
 }
 
@@ -66,25 +73,43 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::test_utils::fixtures::random_hash;
+    use crate::Human;
 
     use super::OperationId;
 
-    #[rstest]
-    fn conversion(#[from(random_hash)] hash: Hash) {
+    #[test]
+    fn from_str() {
         // Converts any string to `OperationId`
         let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         let operation_id: OperationId = hash_str.parse().unwrap();
         assert_eq!(operation_id, OperationId::new(Hash::new(hash_str).unwrap()));
-        assert_eq!(operation_id.as_str(), hash_str);
-
-        // Display impl
-        assert_eq!(format!("{}", operation_id), "<Operation 6ec805>");
-
-        // Converts any `Hash` to `OperationId`
-        let operation_id = OperationId::from(hash.clone());
-        assert_eq!(operation_id, OperationId::new(hash));
 
         // Fails when string is not a hash
         assert!("This is not a hash".parse::<OperationId>().is_err());
+    }
+
+    #[rstest]
+    fn from_hash(#[from(random_hash)] hash: Hash) {
+        // Converts any `Hash` to `OperationId`
+        let operation_id = OperationId::from(hash.clone());
+        assert_eq!(operation_id, OperationId::new(hash));
+    }
+
+    #[test]
+    fn string_representation() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let operation_id = OperationId::new(Hash::new(hash_str).unwrap());
+
+        assert_eq!(operation_id.as_str(), hash_str);
+        assert_eq!(operation_id.to_string(), hash_str);
+        assert_eq!(format!("{}", operation_id), hash_str);
+    }
+
+    #[test]
+    fn short_representation() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let operation_id = OperationId::new(Hash::new(hash_str).unwrap());
+
+        assert_eq!(operation_id.display(), "<Operation 6ec805>");
     }
 }

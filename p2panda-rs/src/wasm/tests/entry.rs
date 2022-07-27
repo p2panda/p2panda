@@ -85,13 +85,6 @@ fn encodes_decodes_entries() {
     assert!(result.is_ok());
 
     // This entry should have a backlink and is invalid
-    let result = sign_encode_entry(
-        &key_pair,
-        operation_encoded.as_str().into(),
-        None,
-        None,
-        3,
-        1,
-    );
+    let result = sign_encode_entry(&key_pair, operation_encoded.to_string(), None, None, 3, 1);
     assert!(result.is_err());
 }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
+use std::fmt::Display;
 use std::hash::Hash as StdHash;
 
 use serde::{Deserialize, Serialize};
@@ -27,7 +28,7 @@ impl OperationEncoded {
         Hash::new_from_bytes(self.to_bytes()).unwrap()
     }
 
-    /// Returns encoded operation as string.
+    /// Returns hex-encoded operation as `&str`.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
@@ -42,6 +43,12 @@ impl OperationEncoded {
     pub fn size(&self) -> u64 {
         // Divide by 2 as every byte is represented by 2 hex chars
         self.0.len() as u64 / 2
+    }
+}
+
+impl Display for OperationEncoded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -76,13 +83,19 @@ mod tests {
     use crate::operation::{AsOperation, Operation, OperationValue, Relation, RelationList};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{
-        encoded_create_string, operation, operation_encoded_invalid_relation_fields,
-        operation_fields, random_document_id, random_document_view_id, schema, Fixture,
+        encoded_create_string, operation, operation_encoded,
+        operation_encoded_invalid_relation_fields, operation_fields, random_document_id,
+        random_document_view_id, schema, Fixture,
     };
     use crate::test_utils::templates::version_fixtures;
     use crate::Validate;
 
     use super::OperationEncoded;
+
+    #[rstest]
+    fn string_representation(#[from(operation_encoded)] operation: OperationEncoded) {
+        assert_eq!(operation.as_str(), &operation.to_string());
+    }
 
     #[rstest]
     fn validate(encoded_create_string: String) {

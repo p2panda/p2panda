@@ -62,6 +62,6 @@ mod tests {
     fn default_schema() {
         let venue_schema_hash: OperationId = Hash::new_from_bytes(vec![3, 2, 1]).unwrap().into();
         let schema = SchemaId::new_application("venue", &venue_schema_hash.into());
-        assert_eq!(schema.as_str(), SCHEMA_ID)
+        assert_eq!(schema.to_string(), SCHEMA_ID)
     }
 }

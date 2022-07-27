@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::fmt;
+use std::fmt::Display;
 use std::str::FromStr;
 
 use serde::de::Visitor;
@@ -10,6 +11,7 @@ use yasmf_hash::MAX_YAMF_HASH_SIZE;
 use crate::document::DocumentViewId;
 use crate::operation::OperationId;
 use crate::schema::error::SchemaIdError;
+use crate::Human;
 
 /// Spelling of _schema definition_ schema
 pub(super) const SCHEMA_DEFINITION_NAME: &str = "schema_definition";
@@ -128,26 +130,6 @@ impl SchemaId {
         ))
     }
 
-    /// Returns schema id as string slice.
-    pub fn as_str(&self) -> String {
-        match self {
-            SchemaId::Application(name, view_id) => {
-                let mut schema_id = name.to_string();
-                for op_id in view_id.sorted().into_iter() {
-                    schema_id.push('_');
-                    schema_id.push_str(op_id.as_hash().as_str());
-                }
-                schema_id
-            }
-            SchemaId::SchemaDefinition(version) => {
-                format!("{}_v{}", SCHEMA_DEFINITION_NAME, version)
-            }
-            SchemaId::SchemaFieldDefinition(version) => {
-                format!("{}_v{}", SCHEMA_FIELD_DEFINITION_NAME, version)
-            }
-        }
-    }
-
     /// Access the schema name.
     pub fn name(&self) -> &str {
         match self {
@@ -167,11 +149,33 @@ impl SchemaId {
     }
 }
 
-impl fmt::Display for SchemaId {
+impl Display for SchemaId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SchemaId::Application(name, view_id) => write!(f, "{} {}", name, view_id),
-            system_schema => write!(f, "{}", system_schema.as_str()),
+            SchemaId::Application(name, view_id) => {
+                write!(f, "{}", name)?;
+
+                for op_id in view_id.sorted().into_iter() {
+                    write!(f, "_{}", op_id.as_str())?;
+                }
+
+                Ok(())
+            }
+            SchemaId::SchemaDefinition(version) => {
+                write!(f, "{}_v{}", SCHEMA_DEFINITION_NAME, version)
+            }
+            SchemaId::SchemaFieldDefinition(version) => {
+                write!(f, "{}_v{}", SCHEMA_FIELD_DEFINITION_NAME, version)
+            }
+        }
+    }
+}
+
+impl Human for SchemaId {
+    fn display(&self) -> String {
+        match self {
+            SchemaId::Application(name, view_id) => format!("{} {}", name, view_id.display()),
+            system_schema => format!("{}", system_schema),
         }
     }
 }
@@ -207,7 +211,7 @@ impl Serialize for SchemaId {
     where
         S: Serializer,
     {
-        serializer.serialize_str(&self.as_str())
+        serializer.serialize_str(&self.to_string())
     }
 }
 
@@ -226,6 +230,7 @@ mod test {
 
     use crate::test_utils::constants::SCHEMA_ID;
     use crate::test_utils::fixtures::schema;
+    use crate::Human;
 
     use super::SchemaId;
 
@@ -320,26 +325,29 @@ mod test {
             .unwrap()
         );
 
-        assert_eq!(format!("{}", appl_schema), "venue 8fc78b");
-
         let schema = SchemaId::new("schema_definition_v50").unwrap();
         assert_eq!(schema, SchemaId::SchemaDefinition(50));
-        assert_eq!(format!("{}", schema), "schema_definition_v50");
 
         let schema_field = SchemaId::new("schema_field_definition_v1").unwrap();
         assert_eq!(schema_field, SchemaId::SchemaFieldDefinition(1));
-        assert_eq!(format!("{}", schema_field), "schema_field_definition_v1");
     }
 
     #[test]
-    fn parse_schema_type() {
+    fn from_str() {
         let schema: SchemaId = "schema_definition_v1".parse().unwrap();
         assert_eq!(schema, SchemaId::SchemaDefinition(1));
     }
 
     #[rstest]
-    fn display(schema: SchemaId) {
-        assert_eq!(format!("{}", schema), "venue 8fc78b");
+    fn string_representation(schema: SchemaId) {
+        assert_eq!(
+            schema.to_string(),
+            "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+        );
+        assert_eq!(
+            format!("{}", schema),
+            "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+        );
         assert_eq!(
             format!("{}", SchemaId::SchemaDefinition(1)),
             "schema_definition_v1"
@@ -347,6 +355,15 @@ mod test {
         assert_eq!(
             format!("{}", SchemaId::SchemaFieldDefinition(1)),
             "schema_field_definition_v1"
+        );
+    }
+
+    #[rstest]
+    fn short_representation(schema: SchemaId) {
+        assert_eq!(schema.display(), "venue 8fc78b");
+        assert_eq!(
+            SchemaId::SchemaDefinition(1).display(),
+            "schema_definition_v1"
         );
     }
 }

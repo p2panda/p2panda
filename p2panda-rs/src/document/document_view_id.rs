@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::fmt;
+use std::fmt::{Display, Write};
 use std::str::FromStr;
 
 use serde::de::{SeqAccess, Visitor};
@@ -8,7 +8,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::hash::Hash;
 use crate::operation::OperationId;
-use crate::Validate;
+use crate::{Human, Validate};
 
 use super::error::DocumentViewIdError;
 
@@ -59,25 +59,30 @@ impl DocumentViewId {
         graph_tips.sort();
         graph_tips
     }
+}
 
-    /// Get a string representation of all graph tips in this view id.
-    pub fn as_str(&self) -> String {
-        let mut id_str = "".to_string();
+impl Display for DocumentViewId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (i, operation_id) in self.sorted().iter().enumerate() {
             let separator = if i == 0 { "" } else { "_" };
-            id_str += format!("{}{}", separator, operation_id.as_hash().as_str()).as_str();
+            let _ = write!(f, "{}{}", &separator, operation_id.as_str());
         }
-        id_str
+
+        Ok(())
     }
 }
 
-impl fmt::Display for DocumentViewId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Human for DocumentViewId {
+    fn display(&self) -> String {
+        let mut result = String::new();
+        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
+
         for (i, operation_id) in self.0.clone().into_iter().enumerate() {
             let separator = if i == 0 { "" } else { "_" };
-            write!(f, "{}{}", separator, operation_id.as_hash().short_str())?;
+            write!(result, "{}{}", &separator, &operation_id.as_str()[offset..]).unwrap();
         }
-        Ok(())
+
+        result
     }
 }
 
@@ -124,7 +129,7 @@ struct DocumentViewIdVisitor;
 impl<'de> Visitor<'de> for DocumentViewIdVisitor {
     type Value = DocumentViewId;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         formatter.write_str("sequence of operation id strings")
     }
 
@@ -237,7 +242,7 @@ mod tests {
     use crate::operation::OperationId;
     use crate::test_utils::constants::HASH;
     use crate::test_utils::fixtures::{document_view_id, random_hash, random_operation_id};
-    use crate::Validate;
+    use crate::{Human, Validate};
 
     use super::DocumentViewId;
 
@@ -274,26 +279,16 @@ mod tests {
     }
 
     #[test]
-    fn debug_representation() {
-        let document_view_id = HASH.parse::<DocumentViewId>().unwrap();
-        assert_eq!(format!("{}", document_view_id), "496543");
-
-        let operation_1 = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
-            .parse::<OperationId>()
-            .unwrap();
-        let operation_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
-            .parse::<OperationId>()
-            .unwrap();
-        let view_id_unmerged = DocumentViewId::new(&[operation_1, operation_2]).unwrap();
-        assert_eq!(format!("{}", view_id_unmerged), "496543_f16e79");
-    }
-
-    #[test]
     fn string_representation() {
         let document_view_id = HASH.parse::<DocumentViewId>().unwrap();
 
         assert_eq!(
-            document_view_id.as_str(),
+            document_view_id.to_string(),
+            "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+        );
+
+        assert_eq!(
+            format!("{}", document_view_id),
             "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
         );
 
@@ -303,9 +298,23 @@ mod tests {
         let operation_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
             .parse::<OperationId>()
             .unwrap();
+
         let document_view_id = DocumentViewId::new(&[operation_1, operation_2]).unwrap();
-        assert_eq!(document_view_id.as_str(), "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79");
+        assert_eq!(document_view_id.to_string(), "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79");
         assert_eq!("0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79".parse::<DocumentViewId>().unwrap(), document_view_id);
+    }
+
+    #[test]
+    fn short_representation() {
+        let operation_1 = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+            .parse::<OperationId>()
+            .unwrap();
+        let operation_2 = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79"
+            .parse::<OperationId>()
+            .unwrap();
+
+        let view_id_unmerged = DocumentViewId::new(&[operation_1, operation_2]).unwrap();
+        assert_eq!(view_id_unmerged.display(), "496543_f16e79");
     }
 
     #[rstest]

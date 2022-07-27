@@ -97,6 +97,7 @@ mod tests {
     use crate::operation::{
         OperationId, PinnedRelation, PinnedRelationList, Relation, RelationList,
     };
+    use crate::schema::FieldType;
     use crate::test_utils::fixtures::{random_document_id, random_operation_id};
     use crate::Validate;
 
@@ -104,15 +105,19 @@ mod tests {
 
     #[rstest]
     #[allow(clippy::too_many_arguments)]
-    fn all_field_types(#[from(random_operation_id)] operation_id: OperationId) {
+    fn to_field_type(#[from(random_operation_id)] operation_id: OperationId) {
         let bool = OperationValue::Boolean(true);
         assert_eq!(bool.field_type(), "bool");
+
         let int = OperationValue::Integer(1);
         assert_eq!(int.field_type(), "int");
+
         let float = OperationValue::Float(0.1);
         assert_eq!(float.field_type(), "float");
+
         let text = OperationValue::Text("Hello".to_string());
         assert_eq!(text.field_type(), "str");
+
         let relation =
             OperationValue::Relation(Relation::new(DocumentId::new(operation_id.clone())));
         assert_eq!(relation.field_type(), "relation");
@@ -131,6 +136,11 @@ mod tests {
             vec![DocumentViewId::new(&[operation_id]).unwrap()],
         ));
         assert_eq!(pinned_relation_list.field_type(), "pinned_relation_list");
+    }
+
+    #[rstest]
+    fn from_field_type() {
+        assert!(OperationValue::from(FieldType::Bool).validate().is_ok());
     }
 
     #[rstest]
