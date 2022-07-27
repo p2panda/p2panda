@@ -49,6 +49,20 @@ impl LogStore<StorageLog> for MemoryStore {
         let next_log_id = author_logs.count();
         Ok(LogId::new(next_log_id as u64))
     }
+
+    async fn latest_log_id(&self, author: &Author) -> Result<Option<LogId>, LogStorageError> {
+        let logs = self.logs.lock().unwrap();
+
+        let author_logs = logs.values().filter(|log| log.author() == *author);
+        let log_count = author_logs.count();
+
+        if log_count == 0 {
+            Ok(None)
+        } else {
+            let latest_log_id = log_count - 1;
+            Ok(Some(LogId::new(latest_log_id as u64)))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -100,5 +114,23 @@ mod tests {
 
         let log_id = store.next_log_id(&author).await.unwrap();
         assert_eq!(log_id, LogId::new(1));
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn get_latest_log_id(key_pair: KeyPair, schema: SchemaId, document_id: DocumentId) {
+        // Instantiate a new store.
+        let store = MemoryStore::default();
+
+        let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
+        let log_id = store.latest_log_id(&author).await.unwrap();
+        assert_eq!(log_id, None);
+
+        let log = StorageLog::new(&author, &schema, &document_id, &LogId::default());
+
+        assert!(store.insert_log(log).await.is_ok());
+
+        let log_id = store.latest_log_id(&author).await.unwrap();
+        assert_eq!(log_id, Some(LogId::default()));
     }
 }

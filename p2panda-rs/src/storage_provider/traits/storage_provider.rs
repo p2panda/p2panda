@@ -35,12 +35,11 @@ use crate::Validate;
 /// which needs defining is `get_document_by_entry`. It is also possible to over-ride the default
 /// definitions for any of the trait methods.
 #[async_trait]
-pub trait StorageProvider<
-    StorageEntry: AsStorageEntry,
-    StorageLog: AsStorageLog,
-    StorageOperation: AsVerifiedOperation,
->: EntryStore<StorageEntry> + LogStore<StorageLog> + OperationStore<StorageOperation>
+pub trait StorageProvider:
+    EntryStore<Self::StorageEntry> + LogStore<Self::StorageLog> + OperationStore<Self::StorageOperation>
 {
+    // @TODO: These req/res types will be deprecated along with publish_entry and next_entry_args
+
     /// Params when making a request to get the next entry args for an author and document.
     type EntryArgsRequest: AsEntryArgsRequest + Sync;
 
@@ -52,6 +51,18 @@ pub trait StorageProvider<
 
     /// Response from a call to publish a new entry.
     type PublishEntryResponse: AsPublishEntryResponse;
+
+    // TODO: We can move these types into their own stores once we deprecate the
+    // higher level methods (publish_entry and next_entry_args) on StorageProvider.
+
+    /// An associated type representing an entry as it passes in and out of storage.
+    type StorageEntry: AsStorageEntry;
+
+    /// An associated type representing a log as it passes in and out of storage.
+    type StorageLog: AsStorageLog;
+
+    /// An associated type representing an operation as it passes in and out of storage.
+    type StorageOperation: AsVerifiedOperation;
 
     /// Returns the related document for any entry.
     ///
@@ -150,7 +161,7 @@ pub trait StorageProvider<
         );
 
         // Create a storage entry.
-        let entry = StorageEntry::new(params.entry_signed(), params.operation_encoded())?;
+        let entry = Self::StorageEntry::new(params.entry_signed(), params.operation_encoded())?;
         // Validate the entry (this also maybe happened in the above constructor)
         entry.validate()?;
 
@@ -219,7 +230,7 @@ pub trait StorageProvider<
 
         // Register log in database when a new document is created
         if entry.operation().is_create() {
-            let log = StorageLog::new(
+            let log = Self::StorageLog::new(
                 &entry.author(),
                 &entry.operation().schema(),
                 &document_id,
@@ -233,7 +244,7 @@ pub trait StorageProvider<
         self.insert_entry(entry.clone()).await?;
 
         // Already return arguments for next entry creation
-        let entry_latest: StorageEntry = self
+        let entry_latest: Self::StorageEntry = self
             .get_latest_entry(&entry.author(), &entry.log_id())
             .await?
             .unwrap();
