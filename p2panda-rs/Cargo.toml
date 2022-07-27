@@ -31,7 +31,6 @@ testing = ["dep:rstest", "dep:rstest_reuse", "dep:varu64", "dep:tokio"]
 arrayvec = "^0.5.2"
 async-trait = "^0.1.56"
 bamboo-rs-core-ed25519-yasmf = "^0.1.1"
-cddl-cat = { version = "^0.6.1", default-features = false, features = [ "serde_cbor", ] }
 ciborium = "^0.2.0"
 ed25519 = "^1.5.2"
 ed25519-dalek = "^1.0.1"
