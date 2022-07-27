@@ -27,6 +27,9 @@ pub enum DecodeOperationError {
     RecursionLimitExceeded,
 
     #[error(transparent)]
+    EncodeEntryError(#[from] crate::entry::error::EncodeEntryError),
+
+    #[error(transparent)]
     DecodeEntryError(#[from] crate::entry::error::DecodeEntryError),
 
     #[error(transparent)]
@@ -76,7 +79,7 @@ pub enum ValidateOperationError {
 
     /// Operation did not match given schema.
     #[error(transparent)]
-    SchemaValidation(#[from] crate::schema::ValidationError),
+    SchemaValidation(#[from] crate::schema::error::ValidationError),
 }
 
 /// Error types for methods of plain fields or operation fields.
@@ -90,4 +93,22 @@ pub enum FieldsError {
     /// Tried to interact with an unknown field.
     #[error("field does not exist")]
     UnknownField,
+}
+
+#[derive(Error, Debug)]
+pub enum VerifiedOperationError {
+    #[error(transparent)]
+    ValidateOperationError(#[from] ValidateOperationError),
+
+    #[error(transparent)]
+    SchemaValidation(#[from] crate::schema::error::ValidationError),
+
+    #[error(transparent)]
+    EncodeEntryError(#[from] crate::entry::error::EncodeEntryError),
+
+    #[error(transparent)]
+    DecodeEntryError(#[from] crate::entry::error::DecodeEntryError),
+
+    #[error(transparent)]
+    ValidateEntryError(#[from] crate::entry::error::ValidateEntryError),
 }

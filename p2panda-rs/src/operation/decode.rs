@@ -1,18 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::entry::decode::decode_entry;
-use crate::entry::validate::validate_payload;
-use crate::entry::EncodedEntry;
+use crate::entry::validate::{validate_log_integrity, validate_payload};
+use crate::entry::{EncodedEntry, Entry};
 use crate::operation::error::DecodeOperationError;
 use crate::operation::plain::PlainOperation;
 use crate::operation::validate::validate_operation;
-use crate::operation::{EncodedOperation, Operation, VerifiedOperation};
+use crate::operation::{EncodedOperation, VerifiedOperation};
 use crate::schema::Schema;
 
 pub fn decode_operation(
     encoded_operation: &EncodedOperation,
-    schema: &Schema,
-) -> Result<Operation, DecodeOperationError> {
+) -> Result<PlainOperation, DecodeOperationError> {
     let bytes = encoded_operation.as_bytes();
 
     let plain: PlainOperation = ciborium::de::from_reader(bytes).map_err(|err| match err {
@@ -26,33 +24,7 @@ pub fn decode_operation(
         ciborium::de::Error::RecursionLimitExceeded => DecodeOperationError::RecursionLimitExceeded,
     })?;
 
-    let operation = validate_operation(&plain, schema)?;
-
-    Ok(operation)
-}
-
-pub fn decode_operation_with_entry(
-    entry_encoded: &EncodedEntry,
-    operation_encoded: &EncodedOperation,
-    schema: &Schema,
-) -> Result<VerifiedOperation, DecodeOperationError> {
-    // Decode entry
-    let entry = decode_entry(&entry_encoded)?;
-
-    // Verify that the entry belongs to this operation
-    validate_payload(&entry, &operation_encoded)?;
-
-    // The operation id is the result of a hashing function over the entry bytes
-    let operation_id = entry_encoded.hash().into();
-
-    // Decode operation with the help of a schema
-    let operation = decode_operation(&operation_encoded, &schema)?;
-
-    Ok(VerifiedOperation {
-        entry,
-        operation,
-        operation_id,
-    })
+    Ok(plain)
 }
 
 #[cfg(test)]

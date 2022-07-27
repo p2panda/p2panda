@@ -16,8 +16,6 @@ use crate::operation::{Operation, OperationId};
 #[derive(Debug, Clone, PartialEq)]
 pub struct VerifiedOperation {
     /// Identifier of the operation.
-    ///
-    /// The operation id is the entry hash.
     operation_id: OperationId,
 
     /// Operation, which is the payload of the entry.
@@ -25,6 +23,13 @@ pub struct VerifiedOperation {
 
     /// Entry which was used to publish this operation.
     entry: Entry,
+}
+
+impl VerifiedOperation {
+    /// Returns the entry related to this operation.
+    pub fn entry(&self) -> &Entry {
+        &self.entry
+    }
 }
 
 impl AsVerifiedOperation for VerifiedOperation {

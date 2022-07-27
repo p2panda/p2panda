@@ -1,11 +1,44 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::document::DocumentViewId;
-use crate::operation::error::ValidateOperationError;
-use crate::operation::plain::PlainFields;
+use crate::entry::validate::{validate_log_integrity, validate_payload};
+use crate::entry::{EncodedEntry, Entry};
+use crate::operation::error::{ValidateOperationError, VerifiedOperationError};
+use crate::operation::plain::{PlainFields, PlainOperation};
 use crate::operation::traits::{Actionable, Schematic};
-use crate::operation::{Operation, OperationAction, OperationVersion};
-use crate::schema::{verify_all_fields, verify_only_given_fields, Schema};
+use crate::operation::{
+    EncodedOperation, Operation, OperationAction, OperationVersion, VerifiedOperation,
+};
+use crate::schema::validate::{validate_all_fields, validate_only_given_fields};
+use crate::schema::Schema;
+
+pub fn validate_operation_with_entry(
+    entry: &Entry,
+    entry_encoded: &EncodedEntry,
+    skiplink_entry: Option<&Entry>,
+    backlink_entry: Option<&Entry>,
+    plain_operation: &PlainOperation,
+    operation_encoded: &EncodedOperation,
+    schema: &Schema,
+) -> Result<VerifiedOperation, VerifiedOperationError> {
+    // Verify that the entry belongs to this operation
+    validate_payload(&entry, &operation_encoded)?;
+
+    // Verify that the entries links are correct
+    validate_log_integrity(&entry, &skiplink_entry, &backlink_entry)?;
+
+    // The operation id is the result of a hashing function over the entry bytes.
+    let operation_id = entry_encoded.hash().into();
+
+    // Validate and convert plain operation with the help of a schema
+    let operation = validate_operation(&plain_operation, &schema)?;
+
+    Ok(VerifiedOperation {
+        entry,
+        operation,
+        operation_id,
+    })
+}
 
 pub fn validate_operation<O: Actionable + Schematic>(
     operation: O,
@@ -31,7 +64,7 @@ fn validate_create_operation(
     }
 
     let validated_fields = match plain_fields {
-        Some(fields) => verify_all_fields(fields, schema)?,
+        Some(fields) => validate_all_fields(fields, schema)?,
         None => return Err(ValidateOperationError::ExpectedFields),
     };
 
@@ -50,7 +83,7 @@ fn validate_update_operation(
     schema: &Schema,
 ) -> Result<Operation, ValidateOperationError> {
     let validated_fields = match plain_fields {
-        Some(fields) => verify_only_given_fields(fields, schema)?,
+        Some(fields) => validate_only_given_fields(fields, schema)?,
         None => return Err(ValidateOperationError::ExpectedFields),
     };
 

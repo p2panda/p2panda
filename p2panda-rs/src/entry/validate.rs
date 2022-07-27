@@ -4,7 +4,7 @@ use crate::entry::error::ValidateEntryError;
 use crate::entry::Entry;
 use crate::operation::EncodedOperation;
 
-/// Checks if backlink- and skiplink are correctly set for the given sequence number (#3).
+/// Checks if backlink- and skiplink are correctly set for the given sequence number (#E3).
 ///
 /// First entries do not contain any links. Every other entry has to contain a back- and skiplink
 /// unless they are equal, in which case the skiplink can be omitted.
@@ -22,7 +22,7 @@ pub fn validate_links(entry: &Entry) -> Result<(), ValidateEntryError> {
     }
 }
 
-/// Checks if entry is correctly placed in its log (#4).
+/// Checks if entry is correctly placed in its log (#E4).
 ///
 /// The following validation steps are applied:
 ///
@@ -41,13 +41,13 @@ pub fn validate_log_integrity(
     unimplemented!();
 }
 
-/// Checks if the entry is authentic by verifying the public key with the given signature (#5).
+/// Checks if the entry is authentic by verifying the public key with the given signature (#E5).
 pub fn validate_signature(entry: &Entry) -> Result<(), ValidateEntryError> {
     // @TODO
     unimplemented!();
 }
 
-/// Checks if the claimed payload hash and size matches the actual data (#6).
+/// Checks if the claimed payload hash and size matches the actual data (#E6).
 pub fn validate_payload(
     entry: &Entry,
     payload: &EncodedOperation,

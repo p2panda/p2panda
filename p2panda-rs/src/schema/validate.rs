@@ -14,7 +14,7 @@ use crate::Validate;
 ///
 /// Both `Schema` and `PlainFields` uses a `BTreeMap` internally which gives us the guarantee that
 /// all fields are sorted. Through this ordering we can compare them easily.
-pub fn verify_all_fields(
+pub fn validate_all_fields(
     fields: &PlainFields,
     schema: &Schema,
 ) -> Result<OperationFields, ValidationError> {
@@ -27,7 +27,7 @@ pub fn verify_all_fields(
         match plain_fields.next() {
             Some((plain_name, plain_value)) => {
                 let (validated_name, validated_value) =
-                    verify_field((plain_name, plain_value), schema_field).map_err(|err| {
+                    validate_field((plain_name, plain_value), schema_field).map_err(|err| {
                         ValidationError::InvalidField(plain_name.to_owned(), err.to_string())
                     })?;
 
@@ -59,7 +59,7 @@ pub fn verify_all_fields(
     }
 }
 
-pub fn verify_only_given_fields(
+pub fn validate_only_given_fields(
     fields: &PlainFields,
     schema: &Schema,
 ) -> Result<OperationFields, ValidationError> {
@@ -71,7 +71,7 @@ pub fn verify_only_given_fields(
         match schema.fields().get(plain_name) {
             Some(schema_field) => {
                 let (validated_name, validated_value) =
-                    verify_field((plain_name, plain_value), (plain_name, schema_field)).map_err(
+                    validate_field((plain_name, plain_value), (plain_name, schema_field)).map_err(
                         |err| ValidationError::InvalidField(plain_name.to_owned(), err.to_string()),
                     )?;
 
@@ -98,16 +98,16 @@ pub fn verify_only_given_fields(
     }
 }
 
-fn verify_field<'a>(
+fn validate_field<'a>(
     plain_field: (&'a FieldName, &PlainValue),
     schema_field: (&FieldName, &FieldType),
 ) -> Result<(&'a FieldName, OperationValue), ValidationError> {
-    let validated_name = verify_field_name(plain_field.0, schema_field.0)?;
-    let validated_value = verify_field_value(plain_field.1, schema_field.1)?;
+    let validated_name = validate_field_name(plain_field.0, schema_field.0)?;
+    let validated_value = validate_field_value(plain_field.1, schema_field.1)?;
     Ok((validated_name, validated_value))
 }
 
-fn verify_field_name<'a>(
+fn validate_field_name<'a>(
     plain_field_name: &'a FieldName,
     schema_field_name: &FieldName,
 ) -> Result<&'a FieldName, ValidationError> {
@@ -121,8 +121,8 @@ fn verify_field_name<'a>(
     }
 }
 
-/// Note: This does NOT verify if the pinned document view follows the given schema
-fn verify_field_value(
+/// Note: This does NOT validate if the pinned document view follows the given schema
+fn validate_field_value(
     plain_value: &PlainValue,
     schema_field_type: &FieldType,
 ) -> Result<OperationValue, ValidationError> {
@@ -267,14 +267,14 @@ mod tests {
     use crate::test_utils::fixtures::{document_view_id, schema_id};
 
     use super::{
-        verify_all_fields, verify_field, verify_field_name, verify_field_value,
-        verify_only_given_fields,
+        validate_all_fields, validate_field, validate_field_name, validate_field_value,
+        validate_only_given_fields,
     };
 
     #[test]
     fn correct_and_invalid_field() {
         // Field names and value types are matching
-        assert!(verify_field(
+        assert!(validate_field(
             (
                 &"cutest_animal_in_zoo".to_owned(),
                 &PlainValue::TextOrRelation("Panda".into()),
@@ -284,7 +284,7 @@ mod tests {
         .is_ok());
 
         // Wrong field name
-        assert!(verify_field(
+        assert!(validate_field(
             (
                 &"most_boring_animal_in_zoo".to_owned(),
                 &PlainValue::TextOrRelation("Llama".into()),
@@ -294,7 +294,7 @@ mod tests {
         .is_err());
 
         // Wrong field value
-        assert!(verify_field(
+        assert!(validate_field(
             (
                 &"most_boring_animal_in_zoo".to_owned(),
                 &PlainValue::TextOrRelation("Llama".into()),
@@ -309,8 +309,8 @@ mod tests {
 
     #[test]
     fn field_name() {
-        assert!(verify_field_name(&"same".to_owned(), &"same".to_owned()).is_ok());
-        assert!(verify_field_name(&"but".to_owned(), &"different".to_owned()).is_err());
+        assert!(validate_field_name(&"same".to_owned(), &"same".to_owned()).is_ok());
+        assert!(validate_field_name(&"but".to_owned(), &"different".to_owned()).is_err());
     }
 
     #[rstest]
@@ -335,7 +335,7 @@ mod tests {
         FieldType::PinnedRelationList(schema_id(SCHEMA_ID))
     )]
     fn correct_field_values(#[case] plain_value: PlainValue, #[case] schema_field_type: FieldType) {
-        assert!(verify_field_value(&plain_value, &schema_field_type).is_ok());
+        assert!(validate_field_value(&plain_value, &schema_field_type).is_ok());
     }
 
     #[rstest]
@@ -370,7 +370,7 @@ mod tests {
         #[case] expected: &str,
     ) {
         assert_eq!(
-            verify_field_value(&plain_value, &schema_field_type)
+            validate_field_value(&plain_value, &schema_field_type)
                 .err()
                 .expect("Expected error")
                 .to_string(),
@@ -425,7 +425,7 @@ mod tests {
         }
 
         // Check if fields match the schema
-        assert!(verify_all_fields(&plain_fields, &schema).is_ok());
+        assert!(validate_all_fields(&plain_fields, &schema).is_ok());
     }
 
     #[rstest]
@@ -499,7 +499,7 @@ mod tests {
 
         // Check if fields match the schema
         assert_eq!(
-            verify_all_fields(&plain_fields, &schema)
+            validate_all_fields(&plain_fields, &schema)
                 .err()
                 .expect("Expected error")
                 .to_string(),
@@ -551,7 +551,7 @@ mod tests {
         }
 
         // Check if fields match the schema
-        assert!(verify_only_given_fields(&plain_fields, &schema).is_ok());
+        assert!(validate_only_given_fields(&plain_fields, &schema).is_ok());
     }
 
     #[rstest]
@@ -626,7 +626,7 @@ mod tests {
 
         // Check if fields match the schema
         assert_eq!(
-            verify_only_given_fields(&plain_fields, &schema)
+            validate_only_given_fields(&plain_fields, &schema)
                 .err()
                 .expect("Expect error")
                 .to_string(),
@@ -663,9 +663,9 @@ mod tests {
             .unwrap();
 
         // Verification methods should give us the validated operation fields
-        assert_eq!(verify_all_fields(&plain_fields, &schema).unwrap(), fields);
+        assert_eq!(validate_all_fields(&plain_fields, &schema).unwrap(), fields);
         assert_eq!(
-            verify_only_given_fields(&plain_fields, &schema).unwrap(),
+            validate_only_given_fields(&plain_fields, &schema).unwrap(),
             fields
         );
     }

@@ -12,29 +12,29 @@ use crate::entry::{EncodedEntry, Entry};
 ///
 /// The following validation steps are applied:
 ///
-///     1. Check correct Bamboo encoding as per specification (#2)
-///     2. Check if back- and skiplinks are correctly set for given sequence number (#3)
-///     3. Verify signature (#5)
+///     1. Check correct Bamboo encoding as per specification (#E2)
+///     2. Check if back- and skiplinks are correctly set for given sequence number (#E3)
+///     3. Verify signature (#E5)
 ///
 /// Please note: This method does almost all validation checks required as per specification to
 /// make sure the entry is well-formed and correctly signed, with two exceptions:
 ///
 ///     1. This is NOT checking for the log integrity as this requires knowledge about other
 ///        entries / some sort of persistence layer. Use the `validate_log_integrity` method
-///        manually to check this as well. (#4)
-///     2. This is NOT checking the payload integrity and authenticity. (#6)
+///        manually to check this as well. (#E4)
+///     2. This is NOT checking the payload integrity and authenticity. (#E6)
 ///
 /// Check out the `decode_operation_with_entry` method in the `operation` module if you're
 /// interested in full verification of both entries and operations.
 pub fn decode_entry(entry_encoded: &EncodedEntry) -> Result<Entry, DecodeEntryError> {
     // Decode the bamboo entry as per specification. This checks if the encoding is correct plus
-    // performs a similar check as we do with `validate_links` (#2 and #3)
+    // performs a similar check as we do with `validate_links` (#E2 and #E3)
     let bamboo_entry = decode(&entry_encoded.into_bytes())?;
 
     // Convert from external crate type to our `Entry` struct
     let entry: Entry = bamboo_entry.try_into()?;
 
-    // Check the signature (#5)
+    // Check the signature (#E5)
     validate_signature(&entry)?;
 
     Ok(entry)

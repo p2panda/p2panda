@@ -7,6 +7,76 @@
 //!
 //! Every operations contains application data which is formed after a schema. To be able to decode
 //! an operation, a schema aids with getting the data out of the operation and validation.
+//!
+//! ## De- & Encoding
+//!
+//! ```
+//!              ┌────────────────┐
+//!              │OperationBuilder├──────────build()──────────────┐
+//!              └────────────────┘            ▲                  │
+//!                                            │                  │
+//!                                            │                  │
+//!                                            │                  ▼
+//!                                         ┌──┴───┐          ┌─────────┐
+//!                                         │Schema│          │Operation│
+//!                                         └──┬───┘          └─────────┘
+//!                                            │                  ▲
+//!                           Lookup Schema    │                  │
+//!                                            │                  │
+//!              ┌──────────────┐              ▼                  │
+//!              │PlainOperation├───────validate_operation()──────┘
+//!              └──────────────┘
+//!                     ▲
+//!                     │
+//!             decode_operation()
+//!                     │
+//!             ┌───────┴────────┐
+//! bytes ────► │EncodedOperation│
+//!             └────────────────┘
+//!
+//!
+//! ```
+//!
+//! ```
+//! ┌─────────┐                           ┌────────────────┐
+//! │Operation│ ───encode_operation()───► │EncodedOperation│ ────► bytes
+//! └─────────┘                           └────────────────┘
+//! ```
+//!
+//! ```
+//!                                                                  Look-Up
+//!
+//!             ┌────────────┐                       ┌─────┐    ┌─────┐    ┌─────┐
+//!  bytes ───► │EncodedEntry├────decode_entry()────►│Entry│    │Entry│    │Entry│
+//!             └──────┬─────┘                       └──┬──┘    └─────┘    └─────┘
+//!                    │                                │
+//!                    └───────────────────────────┐    │       Skiplink   Backlink
+//!                                                │    │          │          │
+//!             ┌────────────────┐                 │    │          │          │
+//!  bytes ───► │EncodedOperation├─────────────┐   │    │          │          │
+//!             └───────┬────────┘             │   │    │          │          │
+//!                     │                      │   │    │          │          │
+//!             decode_operation()             │   │    │          │          │
+//!                     │            Look-Up   │   │    │          │          │
+//!                     ▼                      │   │    │          │          │
+//!              ┌──────────────┐    ┌──────┐  │   │    │          │          │
+//!              │PlainOperation│    │Schema│  │   │    │          │          │
+//!              └──────┬───────┘    └──┬───┘  │   │    │          │          │
+//!                     │               │      │   │    │          │          │
+//!                     │               │      │   │    │          │          │
+//!                     │               │      │   │    │          │          │
+//!                     │               │      │   │    │          │          │
+//!                     │               ▼      ▼   ▼    ▼          ▼          │
+//!                     └───────────►  validate_operation_and_entry() ◄───────┘
+//!                                                 │
+//!                                                 │
+//!                                                 │
+//!                                                 │
+//!                                                 ▼
+//!                                         ┌─────────────────┐
+//!                                         │VerifiedOperation│
+//!                                         └─────────────────┘
+//! ```
 pub mod decode;
 pub mod encode;
 mod encoded_operation;

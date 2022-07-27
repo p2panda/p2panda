@@ -47,8 +47,7 @@
 //!
 //! ## Validation
 //!
-//! It is recommended to use the `decode_operation_with_entry` inside the `operation` module. It
-//! applies almost all possible checks after an entry and operation arrived on your machine.
+//! The above high-level methods will automatically do different sorts of validation checks.
 //!
 //! Please note that currently no high-level method in this crate will check for log integrity of
 //! your entry, since this requires some sort of persistence layer. Please check this manually with
@@ -56,22 +55,14 @@
 //!
 //! Here is an overview of all given validation methods:
 //!
-//!     1. Correct hexadecimal encoding (when using human-readable encoding format) (#1)
-//!     2. Correct Bamboo encoding as per specification (#2)
-//!     3. Check if back- and skiplinks are correctly set for given sequence number (#3)
-//!     4. Verify log-integrity (matching back- & skiplink entries, author, log id) (#4)
-//!     5. Verify signature (#5)
-//!     6. Check if payload matches claimed hash and size (#6)
+//!     1. Correct hexadecimal encoding (when using human-readable encoding format) (#E1)
+//!     2. Correct Bamboo encoding as per specification (#E2)
+//!     3. Check if back- and skiplinks are correctly set for given sequence number (#E3)
+//!     4. Verify log-integrity (matching back- & skiplink entries, author, log id) (#E4)
+//!     5. Verify signature (#E5)
+//!     6. Check if payload matches claimed hash and size (#E6)
 //!
-//! They are used in the following methods:
-//!
-//!     * `"bytes"` --deserialize--> `EncodedEntry` (#1)
-//!     * `EncodedEntry` --decode_entry--> `Entry` (#2, #3, #5)
-//!     * `EntryBuilder` --sign--> `Entry` (#3)
-//!     * `Entry` --encode_entry--> `EncodedEntry` (#3)
-//!     *  log id, key pair, etc. --sign_and_encode_entry--> `EncodedEntry` (#3)
-//!
-//! See `operations` and `schema` module for more validation methods around operations (#6).
+//! See `operations` and `schema` module for more validation methods around operations (#E6).
 //!
 //! [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 pub mod decode;

@@ -17,7 +17,7 @@ use crate::operation::EncodedOperation;
 /// ready to be sent to a p2panda node.
 ///
 /// Using this method we can assume that the entry will be correctly signed. This applies only
-/// basic checks if the backlink and skiplink is correctly set for the given sequence number (#3).
+/// basic checks if the backlink and skiplink is correctly set for the given sequence number (#E3).
 /// Please note though that this method not check for correct log integrity!
 pub fn sign_entry(
     log_id: &LogId,
@@ -76,7 +76,7 @@ pub fn sign_entry(
         signature: signature_bytes[..].into(),
     };
 
-    // Make sure the links are correct (#3)
+    // Make sure the links are correct (#E3)
     validate_links(&signed_entry)?;
 
     Ok(signed_entry)
@@ -86,7 +86,7 @@ pub fn sign_entry(
 /// ready to be sent to a p2panda node.
 ///
 /// This method only fails if something went wrong with the encoder or if a backlink was provided
-/// on an entry with sequence number 1 (#3).
+/// on an entry with sequence number 1 (#E3).
 pub fn encode_entry(entry: &Entry) -> Result<EncodedEntry, EncodeEntryError> {
     let signature_bytes = entry.signature().into_bytes();
 
@@ -108,7 +108,7 @@ pub fn encode_entry(entry: &Entry) -> Result<EncodedEntry, EncodeEntryError> {
     // time is a waste, but actually it is the only way to do signatures. This step is not
     // redundant.
     //
-    // Calling this also checks if the backlink is not set for the first entry (#3).
+    // Calling this also checks if the backlink is not set for the first entry (#E3).
     let signed_entry_size = entry.encode(&mut entry_bytes)?;
 
     Ok(EncodedEntry::from(&entry_bytes[..signed_entry_size]))

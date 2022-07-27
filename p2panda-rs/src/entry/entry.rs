@@ -67,7 +67,7 @@ impl EntryBuilder {
     ///
     /// Using this method we can assume that the entry will be correctly signed. This applies only
     /// basic checks if the backlink and skiplink is correctly set for the given sequence number
-    /// (#3). Please note though that this method not check for correct log integrity!
+    /// (#E3). Please note though that this method not check for correct log integrity!
     pub fn sign(
         mut self,
         encoded_operation: &EncodedOperation,
