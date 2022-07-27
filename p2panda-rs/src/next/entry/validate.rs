@@ -62,3 +62,84 @@ pub fn validate_payload(
 
     Ok(())
 }
+
+// @TODO: Needs refactoring
+/* #[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use crate::entry::{LogId, SeqNum};
+    use crate::hash::Hash;
+    use crate::operation::{Operation, OperationFields, OperationValue};
+    use crate::schema::SchemaId;
+    use crate::test_utils::fixtures::{entry, schema};
+    use crate::Validate;
+
+    use super::Entry;
+
+    #[rstest]
+    fn validation(schema: SchemaId) {
+        // Prepare sample values
+        let mut fields = OperationFields::new();
+        fields
+            .add("test", OperationValue::Text("Hello".to_owned()))
+            .unwrap();
+        let operation = Operation::new_create(schema, fields).unwrap();
+        let backlink = Hash::new_from_bytes(vec![7, 8, 9]).unwrap();
+
+        // The first entry in a log doesn't need and cannot have references to previous entries
+        assert!(Entry::new(
+            &LogId::default(),
+            Some(&operation),
+            None,
+            None,
+            &SeqNum::new(1).unwrap()
+        )
+        .is_ok());
+
+        // Try to pass them over anyways, it will be invalidated
+        assert!(Entry::new(
+            &LogId::default(),
+            Some(&operation),
+            Some(&backlink),
+            Some(&backlink),
+            &SeqNum::new(1).unwrap()
+        )
+        .is_err());
+
+        // Any following entry requires backlinks
+        assert!(Entry::new(
+            &LogId::default(),
+            Some(&operation),
+            Some(&backlink),
+            Some(&backlink),
+            &SeqNum::new(2).unwrap()
+        )
+        .is_ok());
+
+        // We can omit the skiplink here as it is the same as the backlink
+        assert!(Entry::new(
+            &LogId::default(),
+            Some(&operation),
+            None,
+            Some(&backlink),
+            &SeqNum::new(2).unwrap()
+        )
+        .is_ok());
+
+        // We need a backlink here
+        assert!(Entry::new(
+            &LogId::default(),
+            Some(&operation),
+            None,
+            None,
+            &SeqNum::new(2).unwrap()
+        )
+        .is_err());
+    }
+
+    #[rstest]
+    pub fn validate_many(entry: Entry) {
+        assert!(entry.validate().is_ok())
+    }
+} */

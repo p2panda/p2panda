@@ -190,8 +190,8 @@ fn validate_field_value(
 
                 // @TODO: Check if relation list is sorted and without any duplicates
                 /* value
-                    .validate()
-                    .map_err(|err| ValidationError::InvalidSequenceEncoding(err.to_string()))?; */
+                .validate()
+                .map_err(|err| ValidationError::InvalidSequenceEncoding(err.to_string()))?; */
 
                 Ok(value)
             } else {

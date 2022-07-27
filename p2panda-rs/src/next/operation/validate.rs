@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::Human;
 use crate::next::document::DocumentViewId;
 use crate::next::entry::validate::{validate_log_integrity, validate_payload};
 use crate::next::entry::{EncodedEntry, Entry};
@@ -12,6 +11,7 @@ use crate::next::operation::{
 };
 use crate::next::schema::validate::{validate_all_fields, validate_only_given_fields};
 use crate::next::schema::Schema;
+use crate::Human;
 
 pub fn validate_operation_with_entry(
     entry: &Entry,
