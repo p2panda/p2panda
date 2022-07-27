@@ -187,7 +187,7 @@ pub fn entry_signed_encoded_unvalidated(
     // Encode the lipmaa link
     next_byte_num = match skiplink {
         Some(lipmaa_link) => {
-            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(lipmaa_link)
+            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(&lipmaa_link)
                 .encode(&mut entry_bytes[next_byte_num..])
                 .unwrap();
             next_byte_num
@@ -198,7 +198,7 @@ pub fn entry_signed_encoded_unvalidated(
     // Encode the backlink link
     next_byte_num = match backlink {
         Some(backlink) => {
-            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(backlink)
+            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(&backlink)
                 .encode(&mut entry_bytes[next_byte_num..])
                 .unwrap();
             next_byte_num
@@ -216,7 +216,7 @@ pub fn entry_signed_encoded_unvalidated(
 
             // Encode the payload hash
             let operation_hash = operation_encoded.hash();
-            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(operation_hash)
+            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(&operation_hash)
                 .encode(&mut entry_bytes[next_byte_num..])
                 .unwrap();
         }

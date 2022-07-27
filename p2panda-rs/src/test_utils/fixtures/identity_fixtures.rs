@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
-
 use rstest::fixture;
 
 use crate::identity::{Author, KeyPair};
@@ -17,7 +15,7 @@ pub fn private_key() -> String {
 #[fixture]
 pub fn public_key() -> Author {
     let key_pair = KeyPair::from_private_key_str(PRIVATE_KEY).unwrap();
-    Author::try_from(key_pair.public_key().to_owned()).unwrap()
+    Author::from(key_pair.public_key())
 }
 
 /// Fixture which injects the default KeyPair into a test method. Default value can be overridden

@@ -38,13 +38,13 @@ impl EntrySigned {
 
     /// Generates and returns YASMF BLAKE3 hash of encoded entry.
     pub fn hash(&self) -> Hash {
-        Hash::new_from_bytes(self.to_bytes()).unwrap()
+        Hash::new_from_bytes(&self.to_bytes())
     }
 
     /// Returns `Author` who signed this entry.
     pub fn author(&self) -> Author {
         let entry: BambooEntry = self.into();
-        Author::try_from(entry.author).unwrap()
+        Author::from(&entry.author)
     }
 
     /// Returns Ed25519 signature of this entry.
@@ -60,8 +60,7 @@ impl EntrySigned {
     /// Returns the hash of the payload of this entry.
     pub fn payload_hash(&self) -> Hash {
         let bamboo_entry: BambooEntry = self.into();
-        // Unwrap because we know it was already validated on creating the p2panda entry
-        bamboo_entry.payload_hash.try_into().unwrap()
+        (&bamboo_entry.payload_hash).into()
     }
 
     /// Returns hex-encoded entry as `&str`.
@@ -103,7 +102,7 @@ impl EntrySigned {
         let entry: BambooEntry = self.into();
 
         // Operation hash must match if it doesn't return an error
-        let yasmf_hash: YasmfHash<Blake3ArrayVec> = (&operation_encoded.hash()).to_owned().into();
+        let yasmf_hash: YasmfHash<Blake3ArrayVec> = (&operation_encoded.hash()).into();
         if yasmf_hash != entry.payload_hash {
             return Err(EntrySignedError::OperationHashMismatch);
         }

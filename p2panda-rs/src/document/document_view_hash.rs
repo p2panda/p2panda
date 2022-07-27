@@ -42,14 +42,13 @@ impl From<Hash> for DocumentViewHash {
 
 impl From<&DocumentViewId> for DocumentViewHash {
     fn from(document_view_id: &DocumentViewId) -> Self {
-        let graph_tip_bytes = document_view_id
+        let graph_tip_bytes: Vec<u8> = document_view_id
             .sorted()
             .into_iter()
             .flat_map(|graph_tip| graph_tip.as_hash().to_bytes())
             .collect();
 
-        // Unwrap here as the content should be validated at this point
-        Self::new(Hash::new_from_bytes(graph_tip_bytes).unwrap())
+        Self::new(Hash::new_from_bytes(&graph_tip_bytes))
     }
 }
 

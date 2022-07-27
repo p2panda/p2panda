@@ -58,12 +58,12 @@ pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned,
     let operation_size = operation_encoded.size();
 
     // Convert entry links to bamboo-rs `YasmfHash` type
-    let backlink = entry.backlink_hash().map(|link| link.to_owned().into());
+    let backlink = entry.backlink_hash().map(|link| link.into());
     let lipmaa_link = if entry.is_skiplink_required() {
         if entry.skiplink_hash().is_none() {
             return Err(EntrySignedError::SkiplinkMissing);
         }
-        entry.skiplink_hash().map(|link| link.to_owned().into())
+        entry.skiplink_hash().map(|link| link.into())
     } else {
         // Omit skiplink when it is the same as backlink, this saves us some bytes
         None
@@ -74,7 +74,7 @@ pub fn sign_and_encode(entry: &Entry, key_pair: &KeyPair) -> Result<EntrySigned,
     let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
         log_id: entry.log_id().as_u64(),
         is_end_of_feed: false,
-        payload_hash: operation_hash.into(),
+        payload_hash: (&operation_hash).into(),
         payload_size: operation_size,
         author: key_pair.public_key().to_owned(),
         seq_num: entry.seq_num().as_u64(),

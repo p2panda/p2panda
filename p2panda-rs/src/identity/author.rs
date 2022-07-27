@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
@@ -43,6 +42,11 @@ impl Author {
         Ok(author)
     }
 
+    pub fn to_bytes(&self) -> Vec<u8> {
+        // Unwrap as we already checked the inner hex values
+        hex::decode(&self.0).unwrap()
+    }
+
     /// Returns hexadecimal representation of public key bytes as `&str`.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
@@ -74,11 +78,17 @@ impl Human for Author {
 }
 
 /// Convert ed25519_dalek `PublicKey` to `Author` instance.
-impl TryFrom<PublicKey> for Author {
-    type Error = AuthorError;
+impl From<&PublicKey> for Author {
+    fn from(public_key: &PublicKey) -> Self {
+        // Unwrap as we already trust that `PublicKey` is correct
+        Self::new(&hex::encode(public_key.to_bytes())).unwrap()
+    }
+}
 
-    fn try_from(public_key: PublicKey) -> Result<Self, Self::Error> {
-        Self::new(&hex::encode(public_key.to_bytes()))
+impl From<&Author> for PublicKey {
+    fn from(author: &Author) -> Self {
+        // Unwrap as we already trust that `Author` is correct
+        PublicKey::from_bytes(&author.to_bytes()).unwrap()
     }
 }
 
@@ -115,8 +125,6 @@ impl Validate for Author {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryInto;
-
     use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
 
     use crate::identity::AuthorError;
@@ -153,7 +161,7 @@ mod tests {
         let public_key = PublicKey::from_bytes(&public_key_bytes).unwrap();
 
         // Convert `ed25519_dalek` `PublicKey` into `Author` instance
-        let author: Author = public_key.try_into().unwrap();
+        let author: Author = (&public_key).into();
         assert_eq!(author.to_string(), hex::encode(public_key_bytes));
     }
 

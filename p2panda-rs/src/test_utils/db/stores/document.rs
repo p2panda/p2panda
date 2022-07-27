@@ -94,7 +94,7 @@ impl DocumentStore for MemoryStore {
     /// Get the most recent view for all documents which follow the passed schema.
     ///
     /// Returns a vector of `DocumentView`, or an empty vector if none were found. Returns
-    /// an error when a fatal storage error occured.  
+    /// an error when a fatal storage error occured.
     async fn get_documents_by_schema(
         &self,
         schema_id: &SchemaId,
@@ -114,9 +114,9 @@ impl DocumentStore for MemoryStore {
 
 #[cfg(test)]
 mod tests {
-    use rstest::rstest;
-    use std::convert::TryFrom;
     use std::str::FromStr;
+
+    use rstest::rstest;
 
     use crate::document::{
         DocumentBuilder, DocumentView, DocumentViewFields, DocumentViewId, DocumentViewValue,
@@ -172,7 +172,8 @@ mod tests {
         db: TestStore,
     ) {
         let db = db.await;
-        let author = Author::try_from(db.test_data.key_pairs[0].public_key().to_owned()).unwrap();
+
+        let author = Author::from(db.test_data.key_pairs[0].public_key());
 
         // Get one entry from the pre-polulated db
         let entry = db
@@ -252,7 +253,8 @@ mod tests {
         db: TestStore,
     ) {
         let db = db.await;
-        let author = Author::try_from(db.test_data.key_pairs[0].public_key().to_owned()).unwrap();
+
+        let author = Author::from(db.test_data.key_pairs[0].public_key());
         let schema_id = SchemaId::from_str(SCHEMA_ID).unwrap();
 
         let log_id = LogId::default();

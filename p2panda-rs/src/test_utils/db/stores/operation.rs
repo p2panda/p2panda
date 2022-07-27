@@ -87,7 +87,6 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
-    use std::convert::TryFrom;
 
     use crate::document::DocumentId;
     use crate::entry::LogId;
@@ -227,7 +226,8 @@ mod tests {
         db: TestStore,
     ) {
         let db = db.await;
-        let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
+
+        let author = Author::from(key_pair.public_key());
 
         let latest_entry = db
             .store

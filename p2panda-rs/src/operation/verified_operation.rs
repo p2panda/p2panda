@@ -121,7 +121,6 @@ impl Validate for VerifiedOperation {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::convert::TryFrom;
 
     use rstest::rstest;
     use rstest_reuse::apply;
@@ -159,7 +158,7 @@ mod tests {
         operation_id: OperationId,
         #[from(operation)] operation: Operation,
     ) {
-        let author = Author::try_from(*key_pair.public_key()).unwrap();
+        let author = Author::from(key_pair.public_key());
         let verified_operation = VerifiedOperation::new(&author, &operation_id, &operation);
         assert!(verified_operation.is_ok());
         let verified_operation = verified_operation.unwrap();

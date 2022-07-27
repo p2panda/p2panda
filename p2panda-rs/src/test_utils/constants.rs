@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Constants used across the test_utils module for default values.
-
 use crate::operation::OperationValue;
 
 /// The default test hash, used when a hash is needed for testing, it's the default hash in
@@ -47,20 +46,21 @@ pub fn test_fields() -> Vec<(&'static str, OperationValue)> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::hash::Hash;
     use crate::operation::OperationId;
     use crate::schema::SchemaId;
 
+    use super::*;
+
     #[test]
     fn default_hash() {
-        let default_hash = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let default_hash = Hash::new_from_bytes(&[1, 2, 3]);
         assert_eq!(default_hash.as_str(), HASH)
     }
 
     #[test]
     fn default_schema() {
-        let venue_schema_hash: OperationId = Hash::new_from_bytes(vec![3, 2, 1]).unwrap().into();
+        let venue_schema_hash: OperationId = Hash::new_from_bytes(&[3, 2, 1]).into();
         let schema = SchemaId::new_application("venue", &venue_schema_hash.into());
         assert_eq!(schema.to_string(), SCHEMA_ID)
     }

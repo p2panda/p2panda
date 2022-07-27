@@ -190,7 +190,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use std::sync::{Arc, Mutex};
 
     use rstest::rstest;
@@ -305,7 +305,7 @@ pub mod tests {
             &entry_at_seq_num_four.log_id(),
             Some(&Operation::from(&operation_encoded)),
             entry_at_seq_num_four.skiplink_hash().as_ref(),
-            Some(&Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
+            Some(&Hash::new_from_bytes(&[1, 2, 3])),
             &entry_at_seq_num_four.seq_num(),
         )
         .unwrap();
@@ -449,7 +449,7 @@ pub mod tests {
         let entry_at_seq_num_four_with_wrong_skiplink = Entry::new(
             &entry_at_seq_num_four.log_id(),
             Some(&Operation::from(&operation_encoded)),
-            Some(&Hash::new_from_bytes(vec![1, 2, 3]).unwrap()),
+            Some(&Hash::new_from_bytes(&[1, 2, 3])),
             entry_at_seq_num_four.backlink_hash().as_ref(),
             &entry_at_seq_num_four.seq_num(),
         )

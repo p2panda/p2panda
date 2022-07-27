@@ -435,9 +435,8 @@ impl SecretGroup {
 
     /// Returns the hash of this `SecretGroup` instance.
     pub fn group_instance_id(&self) -> Hash {
-        let group_id_bytes = self.mls_group.group_id().as_slice().to_vec();
-        // Unwrap here since we already trusted the user input
-        Hash::new_from_bytes(group_id_bytes).unwrap()
+        let group_id_bytes = self.mls_group.group_id().as_slice();
+        Hash::new_from_bytes(group_id_bytes)
     }
 
     /// Returns the current epoch of the long-term secret or None if no long-term secret was
@@ -461,7 +460,7 @@ mod tests {
 
     #[test]
     fn group_lts_epochs() {
-        let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let group_instance_id = Hash::new_from_bytes(&[1, 2, 3]);
         let key_pair = KeyPair::new();
         let provider = MlsProvider::new();
         let member = SecretGroupMember::new(&provider, &key_pair).unwrap();
@@ -485,7 +484,7 @@ mod tests {
             }
         }
 
-        let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let group_instance_id = Hash::new_from_bytes(&[1, 2, 3]);
         let key_pair = KeyPair::new();
         let provider = MlsProvider::new();
         let member = SecretGroupMember::new(&provider, &key_pair).unwrap();
@@ -521,7 +520,7 @@ mod tests {
 
     #[test]
     fn group_ownership() {
-        let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let group_instance_id = Hash::new_from_bytes(&[1, 2, 3]);
         let key_pair = KeyPair::new();
         let provider = MlsProvider::new();
         let owner = SecretGroupMember::new(&provider, &key_pair).unwrap();
@@ -546,7 +545,7 @@ mod tests {
     #[test]
     fn group_members() {
         // Create group
-        let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let group_instance_id = Hash::new_from_bytes(&[1, 2, 3]);
         let key_pair = KeyPair::new();
         let provider = MlsProvider::new();
         let owner = SecretGroupMember::new(&provider, &key_pair).unwrap();

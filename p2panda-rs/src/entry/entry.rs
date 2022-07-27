@@ -227,7 +227,7 @@ mod tests {
             .add("test", OperationValue::Text("Hello".to_owned()))
             .unwrap();
         let operation = Operation::new_create(schema, fields).unwrap();
-        let backlink = Hash::new_from_bytes(vec![7, 8, 9]).unwrap();
+        let backlink = Hash::new_from_bytes(&[7, 8, 9]);
 
         // The first entry in a log doesn't need and cannot have references to previous entries
         assert!(Entry::new(

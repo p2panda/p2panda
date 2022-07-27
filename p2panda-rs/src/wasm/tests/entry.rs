@@ -68,13 +68,13 @@ fn encodes_decodes_entries() {
         &key_pair,
         operation_encoded.as_str().into(),
         Some(
-            Hash::new_from_bytes(vec![0, 1, 2])
+            Hash::new_from_bytes(&[0, 1, 2])
                 .unwrap()
                 .as_str()
                 .to_string(),
         ),
         Some(
-            Hash::new_from_bytes(vec![1, 2, 3])
+            Hash::new_from_bytes(&[1, 2, 3])
                 .unwrap()
                 .as_str()
                 .to_string(),

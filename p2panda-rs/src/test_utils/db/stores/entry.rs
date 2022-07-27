@@ -134,9 +134,7 @@ impl EntryStore<StorageEntry> for MemoryStore {
 }
 
 #[cfg(test)]
-pub mod tests {
-    use std::convert::TryFrom;
-
+mod tests {
     use rstest::rstest;
 
     use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
@@ -301,7 +299,8 @@ pub mod tests {
         db: TestStore,
     ) {
         let db = db.await;
-        let author = Author::try_from(*key_pair.public_key()).unwrap();
+
+        let author = Author::from(key_pair.public_key());
         let log_id = LogId::default();
 
         let five_entries = db
@@ -336,7 +335,8 @@ pub mod tests {
         db: TestStore,
     ) {
         let db = db.await;
-        let author = Author::try_from(*key_pair.public_key()).unwrap();
+
+        let author = Author::from(key_pair.public_key());
         let log_id = LogId::default();
 
         let cert_pool = db

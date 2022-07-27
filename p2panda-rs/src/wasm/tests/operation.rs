@@ -174,7 +174,7 @@ fn encodes_operations() {
     // CREATE
     // ~~~~~~
 
-    let hash = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+    let hash = Hash::new_from_bytes(&[1, 2, 3]);
     let schema = JsValue::from_str(&format!("test_{}", hash.as_str()));
 
     // Encode as CREATE operation

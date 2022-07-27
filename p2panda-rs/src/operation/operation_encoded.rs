@@ -25,7 +25,7 @@ impl OperationEncoded {
     /// Returns the hash of this operation.
     pub fn hash(&self) -> Hash {
         // Unwrap as we already know that the inner value is valid
-        Hash::new_from_bytes(self.to_bytes()).unwrap()
+        Hash::new_from_bytes(&self.to_bytes())
     }
 
     /// Returns hex-encoded operation as `&str`.

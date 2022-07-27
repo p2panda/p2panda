@@ -58,9 +58,7 @@ pub trait LogStore<StorageLog: AsStorageLog> {
 }
 
 #[cfg(test)]
-pub mod tests {
-    use std::convert::TryFrom;
-
+mod tests {
     use rstest::rstest;
 
     use crate::entry::LogId;
@@ -77,9 +75,10 @@ pub mod tests {
         db: TestStore,
     ) {
         let db = db.await;
+
         let document_id = db.test_data.documents.get(0).unwrap();
         let key_pair = db.test_data.key_pairs.get(0).unwrap();
-        let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
+        let author = Author::from(key_pair.public_key());
 
         let log_id = db
             .store

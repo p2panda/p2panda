@@ -40,12 +40,12 @@ pub fn decode_entry(
     };
 
     let entry_hash_backlink: Option<Hash> = match entry.backlink {
-        Some(link) => Some(link.try_into()?),
+        Some(link) => Some((&link).into()),
         None => None,
     };
 
     let entry_hash_skiplink: Option<Hash> = match entry.lipmaa_link {
-        Some(link) => Some(link.try_into()?),
+        Some(link) => Some((&link).into()),
         None => None,
     };
 

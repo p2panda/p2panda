@@ -67,8 +67,6 @@ impl LogStore<StorageLog> for MemoryStore {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryFrom;
-
     use rstest::rstest;
 
     use crate::document::DocumentId;
@@ -85,7 +83,7 @@ mod tests {
         // Instantiate a new store.
         let store = MemoryStore::default();
 
-        let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
+        let author = Author::from(key_pair.public_key());
         let log = StorageLog::new(&author, &schema, &document_id, &LogId::default());
 
         // Insert a log into the store.
@@ -104,7 +102,7 @@ mod tests {
         // Instantiate a new store.
         let store = MemoryStore::default();
 
-        let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
+        let author = Author::from(key_pair.public_key());
         let log_id = store.next_log_id(&author).await.unwrap();
         assert_eq!(log_id, LogId::default());
 
@@ -122,7 +120,7 @@ mod tests {
         // Instantiate a new store.
         let store = MemoryStore::default();
 
-        let author = Author::try_from(key_pair.public_key().to_owned()).unwrap();
+        let author = Author::from(key_pair.public_key());
         let log_id = store.latest_log_id(&author).await.unwrap();
         assert_eq!(log_id, None);
 

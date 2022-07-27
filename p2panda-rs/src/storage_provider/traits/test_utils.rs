@@ -264,7 +264,7 @@ pub async fn send_to_store(
     key_pair: &KeyPair,
 ) -> Result<(EntrySigned, PublishEntryResponse)> {
     // Get an Author from the key_pair.
-    let author = Author::try_from(key_pair.public_key().to_owned())?;
+    let author = Author::from(key_pair.public_key());
 
     let document_id = if operation.is_create() {
         None

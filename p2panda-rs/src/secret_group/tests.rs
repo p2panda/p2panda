@@ -18,7 +18,7 @@ fn long_term_secret_evolution() {
     let billie_member = SecretGroupMember::new(&billie_provider, &billie_key_pair).unwrap();
 
     // Billie creates a new `SecretGroup`
-    let secret_group_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+    let secret_group_id = Hash::new_from_bytes(&[1, 2, 3]);
     let mut billie_group =
         SecretGroup::new(&billie_provider, &secret_group_id, &billie_member).unwrap();
     assert!(billie_group.is_active());
@@ -188,7 +188,7 @@ fn sender_ratchet_evolution() {
     let billie_member = SecretGroupMember::new(&billie_provider, &billie_key_pair).unwrap();
 
     // Billie creates a new `SecretGroup`
-    let secret_group_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+    let secret_group_id = Hash::new_from_bytes(&[1, 2, 3]);
     let mut billie_group =
         SecretGroup::new(&billie_provider, &secret_group_id, &billie_member).unwrap();
     assert!(billie_group.is_active());

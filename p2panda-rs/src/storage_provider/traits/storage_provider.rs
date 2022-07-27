@@ -272,7 +272,7 @@ pub trait StorageProvider:
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use std::convert::TryFrom;
 
     use rstest::rstest;
