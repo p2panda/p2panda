@@ -69,6 +69,7 @@ use rstest_reuse;
 extern crate proptest;
 
 pub mod cddl;
+pub mod next;
 pub mod document;
 pub mod entry;
 pub mod graph;
