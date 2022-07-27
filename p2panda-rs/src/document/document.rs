@@ -10,6 +10,7 @@ use crate::graph::Graph;
 use crate::identity::Author;
 use crate::operation::{AsOperation, AsVerifiedOperation, OperationId, VerifiedOperation};
 use crate::schema::SchemaId;
+use crate::Human;
 
 /// Construct a graph from a list of operations.
 pub(super) fn build_graph(
@@ -142,7 +143,14 @@ impl Document {
 
 impl Display for Document {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<Document {}>", self.id)
+        write!(f, "{}", self.id)
+    }
+}
+
+impl Human for Document {
+    fn display(&self) -> String {
+        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
+        format!("<Document {}>", &self.id.as_str()[offset..])
     }
 }
 
@@ -252,10 +260,9 @@ impl DocumentBuilder {
         let mut graph = build_graph(&self.operations)?;
 
         // If a specific document view was requested then trim the graph to that point.
-        match document_view_id {
-            Some(id) => graph = graph.trim(&id.sorted())?,
-            None => (),
-        };
+        if let Some(id) = document_view_id {
+            graph = graph.trim(&id.sorted())?;
+        }
 
         // Topologically sort the operations in the graph.
         let sorted_graph_data = graph.sort()?;
@@ -314,22 +321,55 @@ mod tests {
         VerifiedOperation,
     };
     use crate::schema::SchemaId;
+    use crate::test_utils::constants::SCHEMA_ID;
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, operation, operation_fields, random_document_view_id,
-        random_key_pair, random_operation_id, random_previous_operations, schema, update_operation,
-        verified_operation,
+        create_operation, delete_operation, operation, operation_fields, public_key,
+        random_document_view_id, random_key_pair, random_operation_id, random_previous_operations,
+        schema, update_operation, verified_operation,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
+    use crate::Human;
 
     use super::{reduce, DocumentBuilder};
+
+    #[rstest]
+    fn string_representation(
+        #[from(verified_operation)]
+        #[with(
+            Some(operation_fields(vec![("username", OperationValue::Text("Yahooo!".into()))])),
+            None,
+            Some(SCHEMA_ID.parse().unwrap()),
+            Some(public_key()),
+            Some("0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805".parse().unwrap())
+        )]
+        operation: VerifiedOperation,
+    ) {
+        let builder = DocumentBuilder::new(vec![operation]);
+        let document = builder.build().unwrap();
+
+        assert_eq!(
+            document.to_string(),
+            "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805"
+        );
+
+        // Short string representation
+        assert_eq!(document.display(), "<Document 6ec805>");
+
+        // Make sure the id is matching
+        assert_eq!(
+            document.id().as_str(),
+            "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805"
+        );
+    }
 
     #[rstest]
     fn reduces_operations(
         #[from(verified_operation)] create_operation: VerifiedOperation,
         #[from(verified_operation)]
         #[with(
-            Some(operation_fields(vec![("username", OperationValue::Text("Yahooo!".into()))])), Some(random_previous_operations(1)))
-        ]
+            Some(operation_fields(vec![("username", OperationValue::Text("Yahooo!".into()))])),
+            Some(random_previous_operations(1))
+        )]
         update_operation: VerifiedOperation,
         #[from(verified_operation)]
         #[with(None, Some(random_previous_operations(1)))]
@@ -354,6 +394,7 @@ mod tests {
 
         let (reduced_delete, is_edited, is_deleted) =
             reduce(&[create_operation, update_operation, delete_operation]);
+
         // The value remains the same, but the deleted flag is true now.
         assert!(reduced_delete.is_none());
         assert!(is_edited);

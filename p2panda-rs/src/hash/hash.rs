@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
 use crate::hash::HashError;
-use crate::Validate;
+use crate::{Human, Validate};
 
 /// Size of p2panda entries' hashes.
 pub const HASH_SIZE: usize = BLAKE3_HASH_SIZE;
@@ -57,30 +57,33 @@ impl Hash {
         hex::decode(&self.0).unwrap()
     }
 
-    /// Returns hash as hex string.
+    /// Returns hash as `&str`.
     pub fn as_str(&self) -> &str {
-        self.0.as_str()
+        &self.0
     }
+}
 
+impl fmt::Display for Hash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl Human for Hash {
     /// Return a shortened six character representation.
     ///
     /// ## Example
     ///
     /// ```
     /// # use p2panda_rs::hash::Hash;
+    /// # use p2panda_rs::Human;
     /// let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
     /// let hash: Hash = hash_str.parse().unwrap();
-    /// assert_eq!(hash.short_str(), "6ec805");
+    /// assert_eq!(hash.display(), "<Hash 6ec805>");
     /// ```
-    pub fn short_str(&self) -> &str {
+    fn display(&self) -> String {
         let offset = MAX_YAMF_HASH_SIZE * 2 - 6;
-        &self.as_str()[offset..]
-    }
-}
-
-impl fmt::Display for Hash {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<Hash {}>", self.short_str())
+        format!("<Hash {}>", &self.as_str()[offset..])
     }
 }
 
@@ -165,6 +168,8 @@ mod tests {
 
     use yasmf_hash::YasmfHash;
 
+    use crate::Human;
+
     use super::{Blake3ArrayVec, Hash};
 
     #[test]
@@ -208,7 +213,7 @@ mod tests {
     }
 
     #[test]
-    fn convert_string() {
+    fn from_string() {
         let hash_str = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
 
         // Using TryFrom<&str>
@@ -222,8 +227,23 @@ mod tests {
         // Using TryFrom<String>
         let hash_from_string = Hash::try_from(String::from(hash_str)).unwrap();
         assert_eq!(hash_str, hash_from_string.as_str());
+    }
 
-        // Display impl
-        assert_eq!(format!("{}", hash_from_string), "<Hash 496543>");
+    #[test]
+    fn string_representation() {
+        let hash_str = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
+        let hash = Hash::new(hash_str).unwrap();
+
+        assert_eq!(hash_str, hash.as_str());
+        assert_eq!(hash_str, hash.to_string());
+        assert_eq!(hash_str, format!("{}", hash));
+    }
+
+    #[test]
+    fn short_representation() {
+        let hash_str = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
+        let hash = Hash::new(hash_str).unwrap();
+
+        assert_eq!(hash.display(), "<Hash 496543>");
     }
 }

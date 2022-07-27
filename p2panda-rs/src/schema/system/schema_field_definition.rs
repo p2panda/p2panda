@@ -11,8 +11,10 @@ const DESCRIPTION: &str = "Define fields for application data schemas.";
 lazy_static! {
     pub static ref SCHEMA_FIELD_DEFINITION_V1: Schema = {
         let mut fields = BTreeMap::new();
+
         fields.insert("name".to_string(), FieldType::String);
         fields.insert("type".to_string(), FieldType::String);
+
         Schema {
             id: SchemaId::SchemaFieldDefinition(1),
             description: DESCRIPTION.to_owned(),
@@ -26,7 +28,7 @@ pub fn get_schema_field_definition(version: u8) -> Result<&'static Schema, Schem
     match version {
         1 => Ok(&SCHEMA_FIELD_DEFINITION_V1),
         _ => Err(SchemaIdError::UnknownSystemSchema(
-            SchemaId::SchemaFieldDefinition(version).as_str(),
+            SchemaId::SchemaFieldDefinition(version).to_string(),
         )),
     }
 }

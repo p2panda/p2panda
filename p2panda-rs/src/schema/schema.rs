@@ -3,14 +3,13 @@
 use std::collections::BTreeMap;
 use std::fmt::Display;
 
-use serde::{Deserialize, Serialize};
-
 use crate::cddl::generate_cddl_definition;
 use crate::document::DocumentViewHash;
 use crate::schema::system::{
     get_schema_definition, get_schema_field_definition, SchemaFieldView, SchemaView,
 };
 use crate::schema::{FieldType, SchemaError, SchemaId, SchemaIdError, SchemaVersion};
+use crate::Human;
 
 /// The key of a schema field
 type FieldKey = String;
@@ -39,7 +38,7 @@ type FieldKey = String;
 // @NOTE: Fields on this struct are `pub(super)` to enable making static instances of system
 // schemas from their respective files in the `./system` subdirectory. Making system schema
 // instances is not supported by `Schema::new()` to prevent their dynamic redefinition.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Schema {
     /// The application schema id for this schema.
     pub(super) id: SchemaId,
@@ -159,7 +158,7 @@ impl Schema {
         match schema_id {
             SchemaId::SchemaDefinition(version) => get_schema_definition(version),
             SchemaId::SchemaFieldDefinition(version) => get_schema_field_definition(version),
-            _ => Err(SchemaIdError::UnknownSystemSchema(schema_id.as_str())),
+            _ => Err(SchemaIdError::UnknownSystemSchema(schema_id.to_string())),
         }
     }
 
@@ -187,11 +186,7 @@ impl Schema {
     pub fn hash_id(&self) -> String {
         match self.id.version() {
             SchemaVersion::Application(view_id) => {
-                format!(
-                    "{}__{}",
-                    self.name(),
-                    DocumentViewHash::from(&view_id).as_str()
-                )
+                format!("{}__{}", self.name(), DocumentViewHash::from(&view_id))
             }
             SchemaVersion::System(version) => {
                 format!("{}__{}", self.name(), &version.to_string())
@@ -226,7 +221,13 @@ impl Schema {
 
 impl Display for Schema {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<Schema {}>", self.id)
+        write!(f, "{}", self.id)
+    }
+}
+
+impl Human for Schema {
+    fn display(&self) -> String {
+        format!("<Schema {}>", self.id.display())
     }
 }
 
@@ -242,6 +243,7 @@ mod tests {
     use crate::schema::system::{SchemaFieldView, SchemaView};
     use crate::schema::{FieldType, Schema, SchemaId, SchemaVersion};
     use crate::test_utils::fixtures::{document_view_id, random_operation_id};
+    use crate::Human;
 
     fn create_schema_view(
         fields: &PinnedRelationList,
@@ -249,6 +251,7 @@ mod tests {
         operation_id: &OperationId,
     ) -> SchemaView {
         let mut schema = DocumentViewFields::new();
+
         schema.insert(
             "name",
             DocumentViewValue::new(
@@ -270,6 +273,7 @@ mod tests {
                 &OperationValue::PinnedRelationList(fields.clone()),
             ),
         );
+
         let schema_view: SchemaView = DocumentView::new(view_id, &schema).try_into().unwrap();
         schema_view
     }
@@ -294,6 +298,48 @@ mod tests {
             .try_into()
             .unwrap();
         capacity_field_view
+    }
+
+    #[rstest]
+    fn string_representation(#[from(document_view_id)] schema_view_id: DocumentViewId) {
+        let schema = Schema::new(
+            &SchemaId::Application("venue".into(), schema_view_id),
+            "Some description",
+            vec![("number", FieldType::Int)],
+        )
+        .unwrap();
+
+        assert_eq!(
+            format!("{}", schema),
+            "venue_0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+        );
+
+        // Make sure the id is matching
+        assert_eq!(
+            schema.id().to_string(),
+            "venue_0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
+        );
+    }
+
+    #[rstest]
+    fn short_representation(#[from(document_view_id)] schema_view_id: DocumentViewId) {
+        let schema = Schema::new(
+            &SchemaId::Application("venue".into(), schema_view_id),
+            "Some description",
+            vec![("number", FieldType::Int)],
+        )
+        .unwrap();
+        assert_eq!(schema.display(), "<Schema venue 496543>");
+
+        let schema_definition = Schema::get_system(SchemaId::SchemaDefinition(1)).unwrap();
+        assert_eq!(schema_definition.display(), "<Schema schema_definition_v1>");
+
+        let schema_field_definition =
+            Schema::get_system(SchemaId::SchemaFieldDefinition(1)).unwrap();
+        assert_eq!(
+            schema_field_definition.display(),
+            "<Schema schema_field_definition_v1>"
+        );
     }
 
     #[rstest]
@@ -322,22 +368,6 @@ mod tests {
         assert_eq!(
             format!("{}", result.unwrap_err()),
             "dynamic redefinition of system schema schema_definition_v1, use `Schema::get_system` instead"
-        );
-    }
-
-    #[test]
-    fn test_all_system_schemas() {
-        let schema_definition = Schema::get_system(SchemaId::SchemaDefinition(1)).unwrap();
-        assert_eq!(
-            schema_definition.to_string(),
-            "<Schema schema_definition_v1>"
-        );
-
-        let schema_field_definition =
-            Schema::get_system(SchemaId::SchemaFieldDefinition(1)).unwrap();
-        assert_eq!(
-            schema_field_definition.to_string(),
-            "<Schema schema_field_definition_v1>"
         );
     }
 
@@ -441,9 +471,6 @@ mod tests {
 
         // Schema should return correct cddl string
         assert_eq!(expected_cddl, schema.as_cddl());
-
-        // Schema should have a string representation
-        assert_eq!(format!("{}", schema), "<Schema venue_name 496543>");
     }
 
     #[rstest]
