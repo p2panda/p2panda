@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use serde::{Deserialize, Serialize};
-
 use crate::hash::HashError;
 use crate::next::document::error::DocumentViewIdError;
 use crate::next::document::{DocumentId, DocumentViewId};
@@ -25,7 +23,7 @@ use crate::Validate;
 ///     |
 /// Document: [Comment "This was great!"]
 /// ```
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Relation(DocumentId);
 
 impl Relation {
@@ -40,6 +38,7 @@ impl Relation {
     }
 }
 
+// @TODO: Check if we still need this
 impl Validate for Relation {
     type Error = HashError;
 
@@ -79,7 +78,7 @@ impl Validate for Relation {
 /// Pinned relations give us immutability and the option to restore a historical state across
 /// documents. However, most cases will probably only need unpinned relations: For example when
 /// referring to a user-profile you probably want to always get the _latest_ version.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PinnedRelation(DocumentViewId);
 
 impl PinnedRelation {
@@ -94,6 +93,7 @@ impl PinnedRelation {
     }
 }
 
+// @TODO: Check if we still need this
 impl Validate for PinnedRelation {
     type Error = DocumentViewIdError;
 
@@ -113,7 +113,7 @@ impl IntoIterator for PinnedRelation {
 }
 
 /// A `RelationList` can be used to reference multiple foreign documents from a document field.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RelationList(Vec<DocumentId>);
 
 impl RelationList {
@@ -135,6 +135,7 @@ impl RelationList {
     }
 }
 
+// @TODO: Check if we still need this
 impl Validate for RelationList {
     type Error = HashError;
 
@@ -159,7 +160,7 @@ impl IntoIterator for RelationList {
 }
 
 /// A `PinnedRelationList` can be used to reference multiple documents views.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PinnedRelationList(Vec<DocumentViewId>);
 
 impl PinnedRelationList {
@@ -181,6 +182,7 @@ impl PinnedRelationList {
     }
 }
 
+// @TODO: Check if we still need this
 impl Validate for PinnedRelationList {
     type Error = DocumentViewIdError;
 

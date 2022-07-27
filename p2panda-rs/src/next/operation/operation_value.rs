@@ -1,58 +1,33 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use serde::{Deserialize, Serialize};
-
-use crate::hash::HashError;
 use crate::next::operation::{PinnedRelation, PinnedRelationList, Relation, RelationList};
-use crate::Validate;
 
 /// Enum of possible data types which can be added to the operations fields as values.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum OperationValue {
     /// Boolean value.
-    #[serde(rename = "bool")]
     Boolean(bool),
 
     /// Signed integer value.
-    #[serde(rename = "int")]
     Integer(i64),
 
     /// Floating point value.
-    #[serde(rename = "float")]
     Float(f64),
 
     /// String value.
-    #[serde(rename = "str")]
     String(String),
 
     /// Reference to a document.
-    #[serde(rename = "relation")]
     Relation(Relation),
 
     /// Reference to a list of documents.
-    #[serde(rename = "relation_list")]
     RelationList(RelationList),
 
     /// Reference to a document view.
-    #[serde(rename = "pinned_relation")]
     PinnedRelation(PinnedRelation),
 
     /// Reference to a list of document views.
-    #[serde(rename = "pinned_relation_list")]
     PinnedRelationList(PinnedRelationList),
-}
-
-impl Validate for OperationValue {
-    type Error = HashError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        match self {
-            // @TODO: Do the others as well
-            Self::Relation(relation) => relation.validate(),
-            Self::RelationList(relations) => relations.validate(),
-            _ => Ok(()),
-        }
-    }
 }
 
 impl OperationValue {
@@ -68,23 +43,6 @@ impl OperationValue {
             OperationValue::PinnedRelation(_) => "pinned_relation",
             OperationValue::PinnedRelationList(_) => "pinned_relation_list",
         }
-    }
-}
-
-#[cfg(test)]
-// Methods only used for testing of (invalid) operation values.
-impl OperationValue {
-    /// Encodes an operation value encoded and returns CBOR hex string.
-    pub(super) fn serialize(&self) -> String {
-        let mut cbor_bytes = Vec::new();
-        ciborium::ser::into_writer(&self, &mut cbor_bytes).unwrap();
-        hex::encode(cbor_bytes)
-    }
-
-    /// Decodes an operation value encoded as CBOR hex string and returns it.
-    pub(super) fn deserialize_str(str: &str) -> Self {
-        let bytes = hex::decode(str).unwrap();
-        ciborium::de::from_reader(&bytes[..]).unwrap()
     }
 }
 
@@ -136,7 +94,9 @@ mod tests {
         assert_eq!(pinned_relation_list.field_type(), "pinned_relation_list");
     }
 
-    #[rstest]
+    // @TODO: This is not really possible without schemas anymore, could this be moved to operation
+    // decoding and validation?
+    /* #[rstest]
     #[allow(clippy::too_many_arguments)]
     fn encode_decode_relations(
         #[from(random_operation_id)] operation_1: OperationId,
@@ -184,9 +144,11 @@ mod tests {
             pinned_relation_list,
             OperationValue::deserialize_str(&pinned_relation_list.serialize())
         );
-    }
+    } */
 
-    #[rstest]
+    // @TODO: This is not really possible without schemas anymore, could this be moved to operation
+    // decoding and validation?
+    /* #[rstest]
     fn validation_ok(
         #[from(random_document_id)] document_1: DocumentId,
         #[from(random_document_id)] document_2: DocumentId,
@@ -213,9 +175,10 @@ mod tests {
         ]);
         let value = OperationValue::PinnedRelationList(pinned_relation_list);
         assert!(value.validate().is_ok());
-    }
+    } */
 
-    // @TODO: This is not really possible without schemas anymore
+    // @TODO: This is not really possible without schemas anymore, could this be moved to operation
+    // decoding and validation?
     /* #[test]
     fn validation_invalid_relations() {
         // "relation_list" operation value with invalid hash:
@@ -240,7 +203,9 @@ mod tests {
         assert!(value.validate().is_err());
     } */
 
-    #[test]
+    // @TODO: This is not really possible without schemas anymore, could this be moved to operation
+    // decoding and validation?
+    /* #[test]
     fn validation_relation_lists_can_be_empty() {
         let pinned_relation_list = PinnedRelationList::new(vec![]);
         let value = OperationValue::PinnedRelationList(pinned_relation_list);
@@ -249,5 +214,5 @@ mod tests {
         let relation_list = RelationList::new(vec![]);
         let value = OperationValue::RelationList(relation_list);
         assert!(value.validate().is_ok());
-    }
+    } */
 }

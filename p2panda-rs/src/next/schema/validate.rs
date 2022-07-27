@@ -9,7 +9,6 @@ use crate::next::operation::{
 };
 use crate::next::schema::error::ValidationError;
 use crate::next::schema::{FieldName, FieldType, Schema};
-use crate::Validate;
 
 /// @TODO
 ///
@@ -190,9 +189,9 @@ fn validate_field_value(
                 let value = OperationValue::RelationList(RelationList::new(relation_list?));
 
                 // @TODO: Check if relation list is sorted and without any duplicates
-                value
+                /* value
                     .validate()
-                    .map_err(|err| ValidationError::InvalidSequenceEncoding(err.to_string()))?;
+                    .map_err(|err| ValidationError::InvalidSequenceEncoding(err.to_string()))?; */
 
                 Ok(value)
             } else {
