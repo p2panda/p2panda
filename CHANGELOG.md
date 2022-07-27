@@ -18,15 +18,15 @@ Highlights are marked with a pancake 🥞
 - Refactor mock `Node` implementation to use `StorageProvider` traits [#383](https://github.com/p2panda/p2panda/pull/383) `rs`
 - Deserialize from string and u64 for `LogId` and `SeqNum` [#401](https://github.com/p2panda/p2panda/pull/401) `rs`
 - Add latest_log_id method to `LogStore` [#413](https://github.com/p2panda/p2panda/pull/413) `rs`
-- Remove generic parameters from `StorageProvider` [#408](https://github.com/p2panda/p2panda/pull/408) `rs` 
+- Remove generic parameters from `StorageProvider` [#408](https://github.com/p2panda/p2panda/pull/408) `rs`
 - Consistent `as_str` and `to_string` functions, introduce `Human` trait with `display` method for short strings [#389](https://github.com/p2panda/p2panda/pull/389) `rs`
-- Update `Human` impl for `SchemaId` and `DocumentViewId` [#414](https://github.com/p2panda/p2panda/pull/414) `rs`
 
 ### Fixed
 
 - Set log id default to `0` [#398](https://github.com/p2panda/p2panda/pull/398) `rs`
 - Fix iterator implementations for `SeqNum` and `LogId` [#404](https://github.com/p2panda/p2panda/pull/404) `rs`
 - Fix system schema CDDL definitions [#393](https://github.com/p2panda/p2panda/pull/393) `rs`
+- Fix `Human` impl for `SchemaId` and `DocumentViewId` [#414](https://github.com/p2panda/p2panda/pull/414) `rs`
 
 ## [0.4.0]
 
