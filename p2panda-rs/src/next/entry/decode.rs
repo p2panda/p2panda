@@ -12,17 +12,17 @@ use crate::next::entry::{EncodedEntry, Entry};
 ///
 /// The following validation steps are applied:
 ///
-///     1. Check correct Bamboo encoding as per specification (#E2)
-///     2. Check if back- and skiplinks are correctly set for given sequence number (#E3)
-///     3. Verify signature (#E5)
+/// 1. Check correct Bamboo encoding as per specification (#E2)
+/// 2. Check if back- and skiplinks are correctly set for given sequence number (#E3)
+/// 3. Verify signature (#E5)
 ///
 /// Please note: This method does almost all validation checks required as per specification to
 /// make sure the entry is well-formed and correctly signed, with two exceptions:
 ///
-///     1. This is NOT checking for the log integrity as this requires knowledge about other
-///        entries / some sort of persistence layer. Use the `validate_log_integrity` method
-///        manually to check this as well. (#E4)
-///     2. This is NOT checking the payload integrity and authenticity. (#E6)
+/// 1. This is NOT checking for the log integrity as this requires knowledge about other entries /
+///    some sort of persistence layer. Use the `validate_log_integrity` method manually to check
+///    this as well. (#E4)
+/// 2. This is NOT checking the payload integrity and authenticity. (#E6)
 ///
 /// Check out the `decode_operation_with_entry` method in the `operation` module if you're
 /// interested in full verification of both entries and operations.

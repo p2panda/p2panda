@@ -103,7 +103,6 @@ mod tests {
     use super::OperationValue;
 
     #[rstest]
-    #[allow(clippy::too_many_arguments)]
     fn to_field_type(#[from(random_operation_id)] operation_id: OperationId) {
         let bool = OperationValue::Boolean(true);
         assert_eq!(bool.field_type(), "bool");
@@ -135,11 +134,6 @@ mod tests {
             vec![DocumentViewId::new(&[operation_id]).unwrap()],
         ));
         assert_eq!(pinned_relation_list.field_type(), "pinned_relation_list");
-    }
-
-    #[rstest]
-    fn from_field_type() {
-        assert!(OperationValue::from(FieldType::Boolean).validate().is_ok());
     }
 
     #[rstest]
@@ -221,7 +215,8 @@ mod tests {
         assert!(value.validate().is_ok());
     }
 
-    #[test]
+    // @TODO: This is not really possible without schemas anymore
+    /* #[test]
     fn validation_invalid_relations() {
         // "relation_list" operation value with invalid hash:
         //
@@ -243,7 +238,7 @@ mod tests {
             "A264747970656872656C6174696F6E6576616C75657254686973206973206E6F7420612068617368";
         let value: OperationValue = OperationValue::deserialize_str(invalid_hash);
         assert!(value.validate().is_err());
-    }
+    } */
 
     #[test]
     fn validation_relation_lists_can_be_empty() {

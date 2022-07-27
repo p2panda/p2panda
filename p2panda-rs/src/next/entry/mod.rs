@@ -20,7 +20,7 @@
 //!
 //! Here is an overview of the methods to create or decode an entry:
 //!
-//! ```
+//! ```text
 //!             ┌────────────┐                         ┌─────┐
 //!  bytes ───► │EncodedEntry│ ────decode_entry()────► │Entry│
 //!             └────────────┘                         └─────┘
@@ -39,7 +39,7 @@
 //!
 //! `Entry` structs can be encoded again into their raw bytes form like that:
 //!
-//! ```
+//! ```text
 //! ┌─────┐                     ┌────────────┐
 //! │Entry│ ──encode_entry()──► │EncodedEntry│ ─────► bytes
 //! └─────┘                     └────────────┘
@@ -55,12 +55,12 @@
 //!
 //! Here is an overview of all given validation methods:
 //!
-//!     1. Correct hexadecimal encoding (when using human-readable encoding format) (#E1)
-//!     2. Correct Bamboo encoding as per specification (#E2)
-//!     3. Check if back- and skiplinks are correctly set for given sequence number (#E3)
-//!     4. Verify log-integrity (matching back- & skiplink entries, author, log id) (#E4)
-//!     5. Verify signature (#E5)
-//!     6. Check if payload matches claimed hash and size (#E6)
+//! 1. Correct hexadecimal encoding (when using human-readable encoding format) (#E1)
+//! 2. Correct Bamboo encoding as per specification (#E2)
+//! 3. Check if back- and skiplinks are correctly set for given sequence number (#E3)
+//! 4. Verify log-integrity (matching back- & skiplink entries, author, log id) (#E4)
+//! 5. Verify signature (#E5)
+//! 6. Check if payload matches claimed hash and size (#E6)
 //!
 //! See `operations` and `schema` module for more validation methods around operations (#E6).
 //!

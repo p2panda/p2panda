@@ -26,9 +26,9 @@ pub fn validate_links(entry: &Entry) -> Result<(), ValidateEntryError> {
 ///
 /// The following validation steps are applied:
 ///
-///     1. Are the claimed backlink and skiplink entries part of the same log?
-///     2. Are the claimed backlinks and skiplinks published by the same key?
-///     3. Are the claimed backlink and skiplink hashes matching with what is in the log?
+/// 1. Are the claimed backlink and skiplink entries part of the same log?
+/// 2. Are the claimed backlinks and skiplinks published by the same key?
+/// 3. Are the claimed backlink and skiplink hashes matching with what is in the log?
 ///
 /// This method requires knowledge about other entries. Use this together with your storage
 /// provider implementation.
@@ -38,13 +38,13 @@ pub fn validate_log_integrity(
     backlink_entry: Option<&Entry>,
 ) -> Result<(), ValidateEntryError> {
     // @TODO
-    unimplemented!();
+    Ok(())
 }
 
 /// Checks if the entry is authentic by verifying the public key with the given signature (#E5).
 pub fn validate_signature(entry: &Entry) -> Result<(), ValidateEntryError> {
     // @TODO
-    unimplemented!();
+    Ok(())
 }
 
 /// Checks if the claimed payload hash and size matches the actual data (#E6).

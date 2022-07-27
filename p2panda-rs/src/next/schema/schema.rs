@@ -83,11 +83,12 @@ impl Schema {
     pub fn new(
         id: &SchemaId,
         description: &str,
-        fields: Vec<(&str, FieldType)>,
+        fields: Vec<(impl ToString, FieldType)>,
     ) -> Result<Self, SchemaError> {
         let mut field_map: BTreeMap<String, FieldType> = BTreeMap::new();
+
         for (field_name, field_type) in fields {
-            field_map.insert(field_name.to_owned(), field_type.to_owned());
+            field_map.insert(field_name.to_string(), field_type.to_owned());
         }
 
         if let SchemaId::Application(_, _) = id {

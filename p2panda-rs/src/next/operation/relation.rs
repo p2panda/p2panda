@@ -2,8 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::document::DocumentViewIdError;
 use crate::hash::HashError;
+use crate::next::document::error::DocumentViewIdError;
 use crate::next::document::{DocumentId, DocumentViewId};
 use crate::next::operation::OperationId;
 use crate::Validate;

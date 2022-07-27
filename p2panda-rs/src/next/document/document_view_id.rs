@@ -6,8 +6,8 @@ use std::str::FromStr;
 use serde::de::{SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::document::DocumentViewIdError;
 use crate::hash::Hash;
+use crate::next::document::error::DocumentViewIdError;
 use crate::next::operation::OperationId;
 use crate::{Human, Validate};
 

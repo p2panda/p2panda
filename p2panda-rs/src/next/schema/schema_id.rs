@@ -324,7 +324,10 @@ mod test {
             .unwrap()
         );
 
-        assert_eq!(format!("{}", appl_schema), "venue 8fc78b");
+        assert_eq!(
+            format!("{}", appl_schema),
+            "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+        );
 
         let schema = SchemaId::new("schema_definition_v50").unwrap();
         assert_eq!(schema, SchemaId::SchemaDefinition(50));

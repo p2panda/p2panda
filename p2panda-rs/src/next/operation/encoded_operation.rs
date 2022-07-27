@@ -6,15 +6,14 @@ use std::hash::Hash as StdHash;
 use serde::{Deserialize, Serialize};
 
 use crate::hash::Hash;
-use crate::next::operation::encode::{encode_operation, encode_plain_operation};
-use crate::next::operation::plain::PlainOperation;
-use crate::next::operation::Operation;
 use crate::next::serde::{deserialize_hex, serialize_hex};
 
 /// Wrapper type for operation bytes.
+// @TODO: Fix pub(crate) visibility
 #[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub struct EncodedOperation(
-    #[serde(serialize_with = "serialize_hex", deserialize_with = "deserialize_hex")] Vec<u8>,
+    #[serde(serialize_with = "serialize_hex", deserialize_with = "deserialize_hex")]
+    pub(crate)  Vec<u8>,
 );
 
 impl EncodedOperation {
@@ -41,20 +40,6 @@ impl EncodedOperation {
 impl Display for EncodedOperation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", hex::encode(&self.0))
-    }
-}
-
-impl From<&Operation> for EncodedOperation {
-    fn from(operation: &Operation) -> Self {
-        let bytes = encode_operation(operation).unwrap();
-        Self(bytes)
-    }
-}
-
-impl From<&PlainOperation> for EncodedOperation {
-    fn from(raw_operation: &PlainOperation) -> Self {
-        let bytes = encode_plain_operation(raw_operation).unwrap();
-        Self(bytes)
     }
 }
 

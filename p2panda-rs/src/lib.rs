@@ -23,7 +23,7 @@
 //! # use p2panda_rs::schema::SchemaId;
 //! # use p2panda_rs::document::{DocumentId, DocumentViewId};
 //! # let profile_schema_view_id = OperationId::from(
-//! #     Hash::new_from_bytes(&[1, 2, 3])?
+//! #     Hash::new_from_bytes(&[1, 2, 3])
 //! # );
 //! # let profile_schema = SchemaId::new_application("profile", &profile_schema_view_id.into());
 //! // Generate new Ed25519 key pair

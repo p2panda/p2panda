@@ -34,12 +34,10 @@ impl SeqNum {
     /// # }
     /// ```
     pub fn new(value: u64) -> Result<Self, SeqNumError> {
-        let seq_num = Self(value);
-
-        if seq_num < SeqNum::default() {
+        if value < FIRST_SEQ_NUM {
             Err(SeqNumError::NotZeroOrNegative)
         } else {
-            Ok(seq_num)
+            Ok(Self(value))
         }
     }
 

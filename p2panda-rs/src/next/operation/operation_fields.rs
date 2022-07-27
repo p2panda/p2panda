@@ -21,7 +21,8 @@ use crate::next::operation::OperationValue;
 /// ```
 /// # extern crate p2panda_rs;
 /// # fn main() -> () {
-/// # use p2panda_rs::operation::{OperationFields, OperationValue, AsOperation};
+/// # use p2panda_rs::next::operation::{OperationFields, OperationValue};
+/// # use p2panda_rs::next::operation::traits::{AsOperation};
 /// let mut fields = OperationFields::new();
 /// fields
 ///     .add("title", OperationValue::String("Hello, Panda!".to_owned()))

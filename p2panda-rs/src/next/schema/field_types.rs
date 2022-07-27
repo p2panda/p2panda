@@ -15,8 +15,8 @@ use crate::next::schema::SchemaId;
 /// Implements conversion to `OperationValue`:
 ///
 /// ```
-/// # use p2panda_rs::operation::{OperationFields, OperationValue};
-/// # use p2panda_rs::schema::FieldType;
+/// # use p2panda_rs::next::operation::{OperationFields, OperationValue};
+/// # use p2panda_rs::next::schema::FieldType;
 /// let mut field_definition = OperationFields::new();
 /// field_definition.add("name", OperationValue::String("document_title".to_string()));
 /// field_definition.add("type", FieldType::String.into());
