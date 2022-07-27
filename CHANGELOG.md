@@ -20,6 +20,7 @@ Highlights are marked with a pancake 🥞
 - Add latest_log_id method to `LogStore` [#413](https://github.com/p2panda/p2panda/pull/413) `rs`
 - Remove generic parameters from `StorageProvider` [#408](https://github.com/p2panda/p2panda/pull/408) `rs` 
 - Consistent `as_str` and `to_string` functions, introduce `Human` trait with `display` method for short strings [#389](https://github.com/p2panda/p2panda/pull/389) `rs`
+- Update `Human` impl for `SchemaId` and `DocumentViewId` [#414](https://github.com/p2panda/p2panda/pull/414) `rs`
 
 ### Fixed
 
