@@ -230,11 +230,11 @@ mod tests {
     )]
     #[case::invalid_previous_operations_hex(
         cbor!([1, 2, SCHEMA_ID, ["this is not a hash"] ]),
-        "Error parsing document view id at position 0: invalid hex encoding in hash string"
+        "error parsing document view id at position 0: invalid hex encoding in hash string"
     )]
     #[case::invalid_previous_operations_incomplete(
         cbor!([1, 2, SCHEMA_ID, ["0020"] ]),
-        "Error parsing document view id at position 0: invalid hash length 2 bytes, expected 34 bytes"
+        "error parsing document view id at position 0: invalid hash length 2 bytes, expected 34 bytes"
     )]
     #[case::invalid_previous_operations_array(
         cbor!([1, 2, SCHEMA_ID, {} ]),
@@ -274,7 +274,7 @@ mod tests {
     )]
     #[case::missing_previous_operations_delete(
         cbor!([1, 2, SCHEMA_ID ]),
-        "missing previous_operations field for this operation action"
+        "missing previous_operations for this operation action"
     )]
     #[case::missing_fields_create(
         cbor!([1, 0, SCHEMA_ID ]),

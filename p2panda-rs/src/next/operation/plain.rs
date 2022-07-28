@@ -252,7 +252,7 @@ impl<'de> Deserialize<'de> for PlainOperation {
                         let document_view_id: DocumentViewId =
                             seq.next_element()?.ok_or_else(|| {
                                 serde::de::Error::custom(
-                                    "missing previous_operations field for this operation action",
+                                    "missing previous_operations for this operation action",
                                 )
                             })?;
 

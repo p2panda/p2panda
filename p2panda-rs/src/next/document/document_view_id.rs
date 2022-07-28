@@ -148,7 +148,7 @@ impl<'de> Visitor<'de> for DocumentViewIdVisitor {
                 Ok(operation_id) => operation_id,
                 Err(hash_err) => {
                     return Err(serde::de::Error::custom(format!(
-                        "Error parsing document view id at position {}: {}",
+                        "error parsing document view id at position {}: {}",
                         op_ids.len(),
                         hash_err
                     )))
@@ -158,7 +158,7 @@ impl<'de> Visitor<'de> for DocumentViewIdVisitor {
             // Check that consecutive ids are sorted
             if prev_id.is_some() && prev_id.unwrap() > operation_id {
                 return Err(serde::de::Error::custom(format!(
-                    "Encountered unsorted value in document view id at position {}",
+                    "encountered unsorted value in document view id at position {}",
                     op_ids.len()
                 )));
             }
@@ -366,7 +366,7 @@ mod tests {
 
         let expected_result = ciborium::de::Error::<std::io::Error>::Semantic(
             None,
-            "Encountered unsorted value in document view id at position 1".to_string(),
+            "encountered unsorted value in document view id at position 1".to_string(),
         );
 
         assert_eq!(result.unwrap_err().to_string(), expected_result.to_string());
@@ -403,7 +403,7 @@ mod tests {
 
         let expected_result = ciborium::de::Error::<std::io::Error>::Semantic(
             None,
-            "Error parsing document view id at position 1: invalid hash length 32 bytes, expected 34 bytes".to_string()
+            "error parsing document view id at position 1: invalid hash length 32 bytes, expected 34 bytes".to_string()
         );
 
         assert_eq!(result.unwrap_err().to_string(), expected_result.to_string());
