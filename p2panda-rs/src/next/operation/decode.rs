@@ -1,11 +1,31 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Methods to decode an operation and validate it against its claimed schema.
+//!
+//! To derive an `Operation` from bytes or a hexadecimal string, use the `EncodedOperation` struct
+//! and apply the `decode_operation` method, which returns a `PlainOperation` instance, allowing
+//! you to access the "header" information of the operation, like the schema id, operation action
+//! and version.
+//!
+//! ```text
+//!             ┌────────────────┐                             ┌──────────────┐
+//!  bytes ───► │EncodedOperation│ ────decode_operation()────► │PlainOperation│
+//!             └────────────────┘                             └──────────────┘
+//! ```
+//!
+//! Move on to `operation::validate` for methods to check the `PlainOperation` against the claimed
+//! `Schema` instance to eventually get the `Operation` instance.
 use crate::next::operation::error::DecodeOperationError;
 use crate::next::operation::plain::PlainOperation;
-use crate::next::operation::validate::validate_operation;
-use crate::next::operation::{EncodedOperation, Operation};
-use crate::next::schema::Schema;
+use crate::next::operation::EncodedOperation;
 
+/// Method to decode an operation.
+///
+/// In this process the following validation steps are applied:
+///
+/// 1. @TODO
+/// 2. @TODO
+/// 3. @TODO
 pub fn decode_operation(
     encoded_operation: &EncodedOperation,
 ) -> Result<PlainOperation, DecodeOperationError> {
@@ -26,15 +46,6 @@ pub fn decode_operation(
     Ok(plain_operation)
 }
 
-pub fn decode_and_validate_operation(
-    encoded_operation: &EncodedOperation,
-    schema: &Schema,
-) -> Result<Operation, DecodeOperationError> {
-    let plain_operation = decode_operation(&encoded_operation)?;
-    let operation = validate_operation(&plain_operation, &schema)?;
-    Ok(operation)
-}
-
 #[cfg(test)]
 mod tests {
     use ciborium::cbor;
@@ -43,12 +54,11 @@ mod tests {
     use rstest_reuse::apply;
 
     use crate::next::operation::EncodedOperation;
-    use crate::next::schema::{FieldType, Schema, SchemaId};
     use crate::next::test_utils::constants::{HASH, SCHEMA_ID};
-    use crate::next::test_utils::fixtures::{schema_id, Fixture};
+    use crate::next::test_utils::fixtures::Fixture;
     use crate::next::test_utils::templates::version_fixtures;
 
-    use super::{decode_and_validate_operation, decode_operation};
+    use super::decode_operation;
 
     fn encode_cbor(value: Value) -> EncodedOperation {
         let mut cbor_bytes = Vec::new();
@@ -57,92 +67,7 @@ mod tests {
     }
 
     #[rstest]
-    #[case(
-        vec![
-            ("country", FieldType::Relation(schema_id.clone())),
-            ("national_dish", FieldType::String),
-            ("vegan_friendly", FieldType::Boolean),
-            ("yummyness", FieldType::Integer),
-            ("yumsimumsiness", FieldType::Float),
-        ],
-        cbor!([
-            1, 0, SCHEMA_ID,
-            {
-                "country" => HASH,
-                "national_dish" => "Pumpkin",
-                "vegan_friendly" => true,
-                "yummyness" => 8,
-                "yumsimumsiness" => 7.2,
-            },
-        ]),
-    )]
-    fn valid_operations(
-        #[from(schema_id)] schema_id: SchemaId,
-        #[case] schema_fields: Vec<(&str, FieldType)>,
-        #[case] cbor: Result<Value, Error>,
-    ) {
-        let schema = Schema::new(&schema_id, "Some schema description", schema_fields)
-            .expect("Could not create schema");
-
-        let encoded_operation = encode_cbor(cbor.expect("Invalid CBOR value"));
-        assert!(decode_and_validate_operation(&encoded_operation, &schema).is_ok());
-    }
-
-    #[rstest]
-    #[case::incomplete_hash(
-        vec![
-            ("country", FieldType::Relation(schema_id.clone())),
-        ],
-        cbor!([
-            1, 0, SCHEMA_ID,
-            {
-                "country" => "0020",
-            },
-        ]),
-        "field 'country' does not match schema: invalid hash length 2 bytes, expected 34 bytes"
-    )]
-    #[case::invalid_hex_encoding(
-        vec![
-            ("country", FieldType::Relation(schema_id.clone())),
-        ],
-        cbor!([
-            1, 0, SCHEMA_ID,
-            {
-                "country" => "xyz",
-            },
-        ]),
-        "field 'country' does not match schema: invalid hex encoding in hash string"
-    )]
-    #[case::missing_field(
-        vec![
-            ("national_dish", FieldType::String),
-        ],
-        cbor!([
-            1, 0, SCHEMA_ID,
-            {
-                "vegan_friendly" => true,
-            },
-        ]),
-        "field 'vegan_friendly' does not match schema: expected field name 'national_dish'"
-    )]
-    #[case::unordered_field_names(
-        vec![
-            ("a", FieldType::String),
-            ("b", FieldType::String),
-        ],
-        cbor!([
-            1, 0, SCHEMA_ID,
-            {
-                "b" => "test",
-                "a" => "test",
-            },
-        ]),
-        "encountered unsorted field name: 'a' should be before 'b'"
-    )]
     #[case::duplicate_field_names(
-        vec![
-            ("a", FieldType::String),
-        ],
         cbor!([
             1, 0, SCHEMA_ID,
             {
@@ -152,18 +77,23 @@ mod tests {
         ]),
         "encountered duplicate field key 'a'"
     )]
-    fn wrong_operation_fields(
-        #[from(schema_id)] schema_id: SchemaId,
-        #[case] schema_fields: Vec<(&str, FieldType)>,
+    #[case::unordered_field_names(
+        cbor!([
+            1, 0, SCHEMA_ID,
+            {
+                "b" => "test",
+                "a" => "test",
+            },
+        ]),
+        "encountered unsorted field name: 'a' should be before 'b'"
+    )]
+    fn wrong_operation_fields_encoding(
         #[case] raw_operation: Result<Value, Error>,
         #[case] expected: &str,
     ) {
-        let schema = Schema::new(&schema_id, "Some schema description", schema_fields)
-            .expect("Could not create schema");
-
         let bytes = encode_cbor(raw_operation.expect("Invalid CBOR value"));
         assert_eq!(
-            decode_and_validate_operation(&bytes, &schema)
+            decode_operation(&bytes)
                 .err()
                 .expect("Expect error")
                 .to_string(),
@@ -305,7 +235,7 @@ mod tests {
 
     #[apply(version_fixtures)]
     fn decode_fixture_operation(#[case] fixture: Fixture) {
-        // Decoding and validating operation fixture should succeed
-        assert!(decode_and_validate_operation(&fixture.operation_encoded, &fixture.schema).is_ok());
+        // Decoding operation fixture should succeed
+        assert!(decode_operation(&fixture.operation_encoded).is_ok());
     }
 }

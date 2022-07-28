@@ -4,7 +4,6 @@ use std::cmp::Ordering;
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 use std::fmt;
-use std::marker::PhantomData;
 
 use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
