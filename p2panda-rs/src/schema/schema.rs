@@ -647,6 +647,8 @@ mod tests {
         .is_err());
     }
 
+    // Exclude wasm which doesn't support `Node`
+    #[cfg(not(target_arch = "wasm32"))]
     #[rstest]
     #[tokio::test]
     // Override because Clippy does not recognise that `matches` consumes its parameters
