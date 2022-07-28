@@ -2,7 +2,8 @@
 
 //! Collection of low-level validation methods for entries.
 //!
-//! Encoding is checked in the regarding methods of the bamboo crate.
+//! You fill not find methods her to check the encoding of Bamboo entries, as this is handled
+//! inside the external bamboo-rs crate.
 use crate::next::entry::error::ValidateEntryError;
 use crate::next::entry::Entry;
 use crate::next::operation::EncodedOperation;

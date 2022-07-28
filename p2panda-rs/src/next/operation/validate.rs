@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Collection of low-level validation methods for operations.
 use crate::next::document::DocumentViewId;
 use crate::next::entry::validate::{validate_log_integrity, validate_payload};
 use crate::next::entry::{EncodedEntry, Entry};
@@ -13,6 +14,62 @@ use crate::next::schema::validate::{validate_all_fields, validate_only_given_fie
 use crate::next::schema::Schema;
 use crate::Human;
 
+/// Main method for complete verification of an operation and entry pair as per Bamboo and p2panda
+/// specification.
+///
+/// Use this method for a complete check of all untrusted, incoming entries and operations. Since
+/// this crate does not supply a persistence layer there are some preparations to be done by the
+/// implementer to use this method:
+///
+/// 1. Decode the incoming entry
+/// 2. Decode the incoming operation
+/// 3. Look up a `Schema` instance (for example in a schema provider) via the schema id you
+///    received from the decoded `PlainOperation`
+/// 4. Look up `Entry` instances for the back- & skiplinks claimed by the decoded entry
+/// 5. Use decoded and encoded data for this method to apply all checks and create a
+///    `VerifiedOperation` instance which guarantees authenticity, log integrity, correct operation
+///    format, schema validity etc.
+///
+/// This method applies the following validation steps:
+///
+/// 1. @TODO
+/// 2. @TODO
+/// 3. @TODO
+///
+/// ```text
+///                                                                  Look-Up
+///
+///             ┌────────────┐                       ┌─────┐    ┌─────┐    ┌─────┐
+///  bytes ───► │EncodedEntry├────decode_entry()────►│Entry│    │Entry│    │Entry│
+///             └──────┬─────┘                       └──┬──┘    └─────┘    └─────┘
+///                    │                                │
+///                    └───────────────────────────┐    │       Skiplink   Backlink
+///                                                │    │          │          │
+///             ┌────────────────┐                 │    │          │          │
+///  bytes ───► │EncodedOperation├─────────────┐   │    │          │          │
+///             └───────┬────────┘             │   │    │          │          │
+///                     │                      │   │    │          │          │
+///             decode_operation()             │   │    │          │          │
+///                     │            Look-Up   │   │    │          │          │
+///                     ▼                      │   │    │          │          │
+///              ┌──────────────┐    ┌──────┐  │   │    │          │          │
+///              │PlainOperation│    │Schema│  │   │    │          │          │
+///              └──────┬───────┘    └──┬───┘  │   │    │          │          │
+///                     │               │      │   │    │          │          │
+///                     │               │      │   │    │          │          │
+///                     │               │      │   │    │          │          │
+///                     │               │      │   │    │          │          │
+///                     │               ▼      ▼   ▼    ▼          ▼          │
+///                     └───────────►  validate_operation_and_entry() ◄───────┘
+///                                                 │
+///                                                 │
+///                                                 │
+///                                                 │
+///                                                 ▼
+///                                         ┌─────────────────┐
+///                                         │VerifiedOperation│
+///                                         └─────────────────┘
+/// ```
 pub fn validate_operation_with_entry(
     entry: &Entry,
     entry_encoded: &EncodedEntry,
@@ -41,6 +98,7 @@ pub fn validate_operation_with_entry(
     })
 }
 
+/// Checks the fields of an operation-like data type against a schema.
 pub fn validate_operation<O: Actionable + Schematic>(
     operation: &O,
     schema: &Schema,
@@ -63,6 +121,10 @@ pub fn validate_operation<O: Actionable + Schematic>(
     }
 }
 
+/// Validates a CREATE operation.
+///
+/// This method checks if a) all necessary header informations are complete b) _all_ fields against
+/// the given schema.
 fn validate_create_operation(
     plain_previous_operations: Option<&DocumentViewId>,
     plain_fields: Option<PlainFields>,
@@ -86,6 +148,10 @@ fn validate_create_operation(
     })
 }
 
+/// Validates an UPDATE operation.
+///
+/// This method checks a) if all necessary header informations are complete b) _only_ given fields
+/// against the claimed schema.
 fn validate_update_operation(
     plain_previous_operations: Option<&DocumentViewId>,
     plain_fields: Option<PlainFields>,
@@ -108,6 +174,9 @@ fn validate_update_operation(
     }
 }
 
+/// Validates a DELETE operation.
+///
+/// This method checks if all necessary header informations are complete.
 fn validate_delete_operation(
     plain_previous_operations: Option<&DocumentViewId>,
     plain_fields: Option<PlainFields>,
