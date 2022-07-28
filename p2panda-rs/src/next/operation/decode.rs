@@ -42,11 +42,13 @@ mod tests {
     use ciborium::cbor;
     use ciborium::value::{Error, Value};
     use rstest::rstest;
+    use rstest_reuse::apply;
 
     use crate::next::operation::EncodedOperation;
     use crate::next::schema::{FieldType, Schema, SchemaId};
-    use crate::next::test_utils::fixtures::schema_id;
-    use crate::test_utils::constants::{HASH, SCHEMA_ID};
+    use crate::next::test_utils::constants::{HASH, SCHEMA_ID};
+    use crate::next::test_utils::fixtures::{schema_id, Fixture};
+    use crate::next::test_utils::templates::version_fixtures;
 
     use super::decode_and_validate_operation;
 
@@ -169,5 +171,11 @@ mod tests {
                 .to_string(),
             expected
         );
+    }
+
+    #[apply(version_fixtures)]
+    fn decode_fixture_operation(#[case] fixture: Fixture) {
+        // Decoding and validating operation fixture should succeed
+        assert!(decode_and_validate_operation(&fixture.operation_encoded, &fixture.schema).is_ok());
     }
 }
