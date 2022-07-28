@@ -14,7 +14,7 @@ use crate::next::operation::{Operation, OperationId};
 /// [`Operation`] because it is derived from the hash of the signed entry an operation is encoded
 /// on.
 // @TODO: Fix pub(crate) visibility
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct VerifiedOperation {
     /// Identifier of the operation.
     pub(crate) operation_id: OperationId,
@@ -47,6 +47,12 @@ impl AsVerifiedOperation for VerifiedOperation {
     /// Returns the public key of the author of this operation.
     fn public_key(&self) -> &Author {
         &self.entry.public_key()
+    }
+}
+
+impl PartialEq for VerifiedOperation {
+    fn eq(&self, other: &Self) -> bool {
+        self.operation_id() == other.operation_id()
     }
 }
 
