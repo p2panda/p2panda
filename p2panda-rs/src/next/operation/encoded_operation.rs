@@ -68,10 +68,9 @@ mod tests {
     use crate::next::schema::SchemaId;
     use crate::next::test_utils::fixtures::{
         encoded_create_string, encoded_operation, operation, operation_fields, random_document_id,
-        random_document_view_id, schema,
+        random_document_view_id, schema, Fixture,
     };
-    use crate::test_utils::fixtures::Fixture;
-    use crate::test_utils::templates::version_fixtures;
+    use crate::next::test_utils::templates::version_fixtures;
 
     use super::EncodedOperation;
 

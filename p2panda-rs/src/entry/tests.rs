@@ -12,7 +12,7 @@ use crate::identity::KeyPair;
 use crate::operation::{AsOperation, Operation, OperationEncoded};
 use crate::test_utils::fixtures::{key_pair, Fixture};
 
-use crate::test_utils::templates::{many_valid_entries, version_fixtures};
+use crate::test_utils::templates::{legacy_version_fixtures, many_valid_entries};
 
 /// Test encoding and decoding entries.
 #[apply(many_valid_entries)]
@@ -67,7 +67,7 @@ fn sign_and_encode_roundtrip(#[case] entry: Entry, key_pair: KeyPair) {
 }
 
 /// Test signing and encoding from version fixtures.
-#[apply(version_fixtures)]
+#[apply(legacy_version_fixtures)]
 fn fixture_sign_encode(#[case] fixture: Fixture) {
     // Sign and encode fixture Entry
     let entry_signed_encoded = sign_and_encode(&fixture.entry, &fixture.key_pair).unwrap();
@@ -80,7 +80,7 @@ fn fixture_sign_encode(#[case] fixture: Fixture) {
 }
 
 /// Test decoding an operation from version fixtures.
-#[apply(version_fixtures)]
+#[apply(legacy_version_fixtures)]
 fn fixture_decode_operation(#[case] fixture: Fixture) {
     // Decode fixture OperationEncoded
     let operation = Operation::try_from(&fixture.operation_encoded).unwrap();
@@ -103,7 +103,7 @@ fn fixture_decode_operation(#[case] fixture: Fixture) {
 }
 
 /// Test decoding an entry from version fixtures.
-#[apply(version_fixtures)]
+#[apply(legacy_version_fixtures)]
 fn fixture_decode_entry(#[case] fixture: Fixture) {
     // Decode fixture EntrySigned
     let entry = decode_entry(

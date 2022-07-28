@@ -7,6 +7,6 @@ use rstest_reuse::template;
 #[export]
 #[rstest]
 #[case::v0_3_0($crate::test_utils::fixtures::v0_3_0_fixture())]
-fn version_fixtures(#[case] fixture: Fixture) {}
+fn legacy_version_fixtures(#[case] fixture: Fixture) {}
 
-pub use version_fixtures;
+pub use legacy_version_fixtures;

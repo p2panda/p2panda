@@ -59,6 +59,17 @@ mod tests {
     use crate::next::test_utils::fixtures::Fixture;
     use crate::next::test_utils::templates::version_fixtures;
 
+    use super::decode_entry;
+
     #[apply(version_fixtures)]
-    fn decode_fixture_entry(#[case] fixture: Fixture) {}
+    fn decode_fixture_entry(#[case] fixture: Fixture) {
+        // Decode `EncodedEntry` fixture
+        let entry = decode_entry(&fixture.entry_encoded).unwrap();
+
+        // Decoded `Entry` values should match fixture `Entry` values
+        assert_eq!(entry.log_id(), fixture.entry.log_id());
+        assert_eq!(entry.seq_num(), fixture.entry.seq_num());
+        assert_eq!(entry.skiplink(), fixture.entry.skiplink());
+        assert_eq!(entry.backlink(), fixture.entry.backlink());
+    }
 }

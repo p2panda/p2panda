@@ -99,24 +99,4 @@ fn fixture_decode_operation(#[case] fixture: Fixture) {
         fixture_operation_fields.get("name").unwrap()
     );
 }
-
-/// Test decoding an entry from version fixtures.
-#[apply(version_fixtures)]
-fn fixture_decode_entry(#[case] fixture: Fixture) {
-    // Decode fixture EntrySigned
-    let entry = decode_entry(
-        &fixture.entry_signed_encoded,
-        Some(&fixture.operation_encoded),
-    )
-    .unwrap();
-
-    // Decoded Entry values should match fixture Entry values
-    assert_eq!(
-        entry.operation().unwrap(),
-        fixture.entry.operation().unwrap()
-    );
-    assert_eq!(entry.seq_num(), fixture.entry.seq_num());
-    assert_eq!(entry.backlink_hash(), fixture.entry.backlink_hash());
-    assert_eq!(entry.skiplink_hash(), fixture.entry.skiplink_hash());
-    assert_eq!(entry.log_id(), fixture.entry.log_id());
-} */
+*/

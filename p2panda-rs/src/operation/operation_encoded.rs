@@ -87,7 +87,7 @@ mod tests {
         operation_encoded_invalid_relation_fields, operation_fields, random_document_id,
         random_document_view_id, schema, Fixture,
     };
-    use crate::test_utils::templates::version_fixtures;
+    use crate::test_utils::templates::legacy_version_fixtures;
     use crate::Validate;
 
     use super::OperationEncoded;
@@ -112,7 +112,7 @@ mod tests {
         assert!(operation.validate().is_err());
     }
 
-    #[apply(version_fixtures)]
+    #[apply(legacy_version_fixtures)]
     fn decode(#[case] fixture: Fixture) {
         let operation = Operation::try_from(&fixture.operation_encoded).unwrap();
         assert!(operation.validate().is_ok());
