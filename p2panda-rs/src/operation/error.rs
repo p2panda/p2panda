@@ -25,6 +25,10 @@ pub enum OperationError {
     /// Invalid hash found.
     #[error(transparent)]
     HashError(#[from] crate::hash::HashError),
+
+    /// Error from operation fields.
+    #[error(transparent)]
+    OperationFieldsError(#[from] OperationFieldsError),
 }
 
 /// Error types for methods of `OperationFields` struct.
