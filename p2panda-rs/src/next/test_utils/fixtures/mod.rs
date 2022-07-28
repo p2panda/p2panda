@@ -4,7 +4,9 @@
 mod document_fixtures;
 mod operation_fixtures;
 mod schema_fixtures;
+mod version_fixtures;
 
 pub use document_fixtures::*;
 pub use operation_fixtures::*;
 pub use schema_fixtures::*;
+pub use version_fixtures::*;

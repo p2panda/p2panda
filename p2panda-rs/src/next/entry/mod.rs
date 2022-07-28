@@ -82,6 +82,8 @@ pub mod error;
 mod log_id;
 mod seq_num;
 mod signature;
+#[cfg(test)]
+mod tests;
 pub mod validate;
 
 pub use encoded_entry::EncodedEntry;
