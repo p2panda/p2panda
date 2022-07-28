@@ -62,9 +62,9 @@ impl DocumentViewId {
 
     /// Can be used as a human-readable representation of a document view id.
     ///
-    /// The return value contains all view graph tips' last 6 characters
-    /// concatenated with an underscore.
-    pub fn to_short_string(&self) -> String {
+    /// The return value contains all view graph tips' last 6 characters concatenated with an
+    /// underscore.
+    pub(crate) fn to_short_string(&self) -> String {
         let mut result = String::new();
 
         let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
