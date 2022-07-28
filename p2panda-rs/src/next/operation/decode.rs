@@ -21,18 +21,17 @@ use crate::next::operation::EncodedOperation;
 
 /// Method to decode an operation.
 ///
-/// In this process the following validation steps are applied:
+/// This method validates against:
 ///
-/// 1. @TODO
-/// 2. @TODO
-/// 3. @TODO
+/// 1. Correct canonic operation format as per specification (#OP2)
+/// 2. Ensures canonic field values format (sorted arrays, no duplicates) (#OP3)
 pub fn decode_operation(
     encoded_operation: &EncodedOperation,
 ) -> Result<PlainOperation, DecodeOperationError> {
-    let bytes = encoded_operation.as_bytes();
+    let bytes = encoded_operation.into_bytes();
 
     let plain_operation: PlainOperation =
-        ciborium::de::from_reader(bytes).map_err(|err| match err {
+        ciborium::de::from_reader(&bytes[..]).map_err(|err| match err {
             ciborium::de::Error::Io(err) => DecodeOperationError::DecoderIOFailed(err.to_string()),
             ciborium::de::Error::Syntax(pos) => DecodeOperationError::InvalidCBOREncoding(pos),
             ciborium::de::Error::Semantic(_, err) => {
@@ -87,10 +86,7 @@ mod tests {
         ]),
         "encountered unsorted field name: 'a' should be before 'b'"
     )]
-    fn wrong_operation_fields_encoding(
-        #[case] raw_operation: Result<Value, Error>,
-        #[case] expected: &str,
-    ) {
+    fn wrong_canonic_encoding(#[case] raw_operation: Result<Value, Error>, #[case] expected: &str) {
         let bytes = encode_cbor(raw_operation.expect("Invalid CBOR value"));
         assert_eq!(
             decode_operation(&bytes)
@@ -175,27 +171,27 @@ mod tests {
         "invalid type: integer `12`, expected string"
     )]
     #[case::invalid_fields_key_type_2(
-        cbor!([1, 0, SCHEMA_ID, { "a" => "value", "b" => { "nested" => "wrong "} } ]),
+        cbor!([1, 0, SCHEMA_ID, { "a" => "value", "b" => { "nested" => "wrong " } }]),
         "data did not match any variant of untagged enum PlainValue"
     )]
     #[case::invalid_fields_value_type(
-        cbor!([1, 0, SCHEMA_ID, { "some" => { "nested" => "map" } } ]),
+        cbor!([1, 0, SCHEMA_ID, { "some" => { "nested" => "map" } }]),
         "data did not match any variant of untagged enum PlainValue"
     )]
     #[case::missing_schema_create(
-        cbor!([1, 0, { "is_cute" => true } ]),
+        cbor!([1, 0, { "is_cute" => true }]),
         "invalid type: map, expected schema id as string"
     )]
     #[case::missing_schema_update(
-        cbor!([1, 1, [HASH, HASH], { "is_cute" => true } ]),
+        cbor!([1, 1, [HASH, HASH], { "is_cute" => true }]),
         "invalid type: sequence, expected schema id as string"
     )]
     #[case::missing_schema_delete(
-        cbor!([1, 2, [HASH] ]),
+        cbor!([1, 2, [HASH]]),
         "invalid type: sequence, expected schema id as string"
     )]
     #[case::invalid_previous_operations_create(
-        cbor!([1, 0, SCHEMA_ID, [HASH], { "is_cute" => true } ]),
+        cbor!([1, 0, SCHEMA_ID, [HASH], { "is_cute" => true }]),
         "invalid type: sequence, expected map"
     )]
     #[case::missing_previous_operations_update(

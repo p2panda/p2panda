@@ -114,32 +114,29 @@ impl From<&OperationFields> for PlainFields {
                     PlainValue::StringOrRelation(relation.document_id().as_str().to_owned())
                 }
                 OperationValue::RelationList(list) => PlainValue::PinnedRelationOrRelationList(
-                    list.sorted()
-                        .iter()
-                        // @TODO: Improve conversion after `to_string` PR got merged
-                        .map(|document_id| document_id.as_str().to_owned())
+                    list.to_owned()
+                        .into_iter()
+                        .map(|document_id| document_id.to_string())
                         .collect(),
                 ),
                 OperationValue::PinnedRelation(relation) => {
                     PlainValue::PinnedRelationOrRelationList(
                         relation
                             .view_id()
-                            .sorted()
-                            .iter()
-                            // @TODO: Improve conversion after `to_string` PR got merged
-                            .map(|operation_id| operation_id.as_str().to_owned())
+                            .to_owned()
+                            .into_iter()
+                            .map(|operation_id| operation_id.to_string())
                             .collect(),
                     )
                 }
                 OperationValue::PinnedRelationList(list) => PlainValue::PinnedRelationList(
-                    list.sorted()
-                        .iter()
+                    list.to_owned()
+                        .into_iter()
                         .map(|document_view_id| {
                             document_view_id
-                                .sorted()
-                                .iter()
-                                // @TODO: Improve conversion after `to_string` PR got merged
-                                .map(|operation_id| operation_id.as_str().to_owned())
+                                .to_owned()
+                                .into_iter()
+                                .map(|operation_id| operation_id.to_string())
                                 .collect()
                         })
                         .collect(),

@@ -74,8 +74,7 @@ mod tests {
         let text = OperationValue::String("Hello".to_string());
         assert_eq!(text.field_type(), "str");
 
-        let relation =
-            OperationValue::Relation(Relation::new(DocumentId::new(operation_id.clone())));
+        let relation = OperationValue::Relation(Relation::new(DocumentId::new(&operation_id)));
         assert_eq!(relation.field_type(), "relation");
 
         let pinned_relation = OperationValue::PinnedRelation(PinnedRelation::new(
@@ -83,9 +82,8 @@ mod tests {
         ));
         assert_eq!(pinned_relation.field_type(), "pinned_relation");
 
-        let relation_list = OperationValue::RelationList(RelationList::new(vec![DocumentId::new(
-            operation_id.clone(),
-        )]));
+        let relation_list =
+            OperationValue::RelationList(RelationList::new(vec![DocumentId::new(&operation_id)]));
         assert_eq!(relation_list.field_type(), "relation_list");
 
         let pinned_relation_list = OperationValue::PinnedRelationList(PinnedRelationList::new(

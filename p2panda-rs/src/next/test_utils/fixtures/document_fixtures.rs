@@ -5,7 +5,7 @@ use rstest::fixture;
 use crate::next::document::{DocumentId, DocumentViewId};
 use crate::next::operation::OperationId;
 use crate::next::test_utils::constants::HASH;
-use crate::test_utils::fixtures::random_hash;
+use crate::next::test_utils::fixtures::random_hash;
 
 /// Returns constant document id.
 #[fixture]
@@ -16,10 +16,15 @@ pub fn document_id(#[default(HASH)] hash_str: &str) -> DocumentId {
 /// Returns constant document view id.
 #[fixture]
 pub fn document_view_id(#[default(vec![HASH])] operation_id_str_vec: Vec<&str>) -> DocumentViewId {
-    let operation_ids: Vec<OperationId> = operation_id_str_vec
+    let mut operation_ids: Vec<OperationId> = operation_id_str_vec
         .into_iter()
         .map(|hash| hash.parse::<OperationId>().unwrap())
         .collect();
+
+    // Make sure the operation ids are sorted, otherwise validation will fail when creating the
+    // document view id
+    operation_ids.sort();
+
     DocumentViewId::new(&operation_ids).unwrap()
 }
 

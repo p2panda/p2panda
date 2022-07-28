@@ -15,7 +15,7 @@ use crate::next::operation::error::EncodeOperationError;
 use crate::next::operation::plain::PlainOperation;
 use crate::next::operation::{EncodedOperation, Operation};
 
-/// Encodes an operation.
+/// Encodes an operation in canonic format.
 pub fn encode_operation(operation: &Operation) -> Result<EncodedOperation, EncodeOperationError> {
     // Convert to plain operation format
     let plain: PlainOperation = operation.into();
@@ -26,7 +26,7 @@ pub fn encode_operation(operation: &Operation) -> Result<EncodedOperation, Encod
     Ok(encoded_operation)
 }
 
-/// Encodes a `PlainOperation` instance.
+/// Encodes a `PlainOperation` instance in canonic format.
 pub fn encode_plain_operation(
     plain: &PlainOperation,
 ) -> Result<EncodedOperation, EncodeOperationError> {
@@ -37,5 +37,5 @@ pub fn encode_plain_operation(
         ciborium::ser::Error::Value(err) => EncodeOperationError::EncoderFailed(err.to_string()),
     })?;
 
-    Ok(EncodedOperation(cbor_bytes))
+    Ok(EncodedOperation::from_bytes(&cbor_bytes))
 }

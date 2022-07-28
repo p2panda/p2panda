@@ -70,6 +70,7 @@ impl SchemaId {
                 )
             })?
             .1;
+
         let is_system_schema =
             rightmost_section.starts_with('v') && rightmost_section.len() < MAX_YAMF_HASH_SIZE * 2;
 
@@ -82,52 +83,6 @@ impl SchemaId {
     /// Returns a `SchemaId` given an application schema's name and view id.
     pub fn new_application(name: &str, view_id: &DocumentViewId) -> Self {
         Self::Application(name.to_string(), view_id.clone())
-    }
-
-    fn parse_system_schema_str(id_str: &str) -> Result<Self, SchemaIdError> {
-        let (name, version_str) = id_str.rsplit_once('_').unwrap();
-        let version = version_str[1..].parse::<u8>().map_err(|_| {
-            SchemaIdError::MalformedSchemaId(
-                id_str.to_string(),
-                "couldn't parse system schema version".to_string(),
-            )
-        })?;
-        match name {
-            SCHEMA_DEFINITION_NAME => Ok(Self::SchemaDefinition(version)),
-            SCHEMA_FIELD_DEFINITION_NAME => Ok(Self::SchemaFieldDefinition(version)),
-            _ => Err(SchemaIdError::UnknownSystemSchema(name.to_string())),
-        }
-    }
-
-    /// Read an application schema id from a string.
-    ///
-    /// Parses the schema id by iteratively splitting sections from the right at `_` until the
-    /// remainder is shorter than an operation id. Each section is parsed as an operation id
-    /// and the last (leftmost) section is parsed as the schema's name.
-    fn parse_application_schema_str(id_str: &str) -> Result<Self, SchemaIdError> {
-        let mut operation_ids = vec![];
-        let mut remainder = id_str;
-        while let Some((left, right)) = remainder.rsplit_once('_') {
-            operation_ids.push(right.parse::<OperationId>()?);
-
-            // If the remainder is no longer than an entry hash we assume that it's the schema name.
-            // By breaking here we allow the schema name to contain underscores as well.
-            remainder = left;
-            if remainder.len() < MAX_YAMF_HASH_SIZE * 2 {
-                break;
-            }
-        }
-
-        if remainder.is_empty() {
-            return Err(SchemaIdError::MissingApplicationSchemaName(
-                id_str.to_string(),
-            ));
-        }
-
-        Ok(SchemaId::Application(
-            remainder.to_string(),
-            DocumentViewId::new(&operation_ids).unwrap(),
-        ))
     }
 
     /// Access the schema name.
@@ -149,15 +104,69 @@ impl SchemaId {
     }
 }
 
+impl SchemaId {
+    /// Read a system schema id from a string.
+    fn parse_system_schema_str(id_str: &str) -> Result<Self, SchemaIdError> {
+        let (name, version_str) = id_str.rsplit_once('_').unwrap();
+
+        let version = version_str[1..].parse::<u8>().map_err(|_| {
+            SchemaIdError::MalformedSchemaId(
+                id_str.to_string(),
+                "couldn't parse system schema version".to_string(),
+            )
+        })?;
+
+        match name {
+            SCHEMA_DEFINITION_NAME => Ok(Self::SchemaDefinition(version)),
+            SCHEMA_FIELD_DEFINITION_NAME => Ok(Self::SchemaFieldDefinition(version)),
+            _ => Err(SchemaIdError::UnknownSystemSchema(name.to_string())),
+        }
+    }
+
+    /// Read an application schema id from a string.
+    ///
+    /// Parses the schema id by iteratively splitting sections from the right at `_` until the
+    /// remainder is shorter than an operation id. Each section is parsed as an operation id
+    /// and the last (leftmost) section is parsed as the schema's name.
+    fn parse_application_schema_str(id_str: &str) -> Result<Self, SchemaIdError> {
+        let mut operation_ids = vec![];
+        let mut remainder = id_str;
+
+        while let Some((left, right)) = remainder.rsplit_once('_') {
+            let operation_id: OperationId = right.parse()?;
+            operation_ids.push(operation_id);
+
+            // If the remainder is no longer than an entry hash we assume that it's the schema
+            // name. By breaking here we allow the schema name to contain underscores as well.
+            remainder = left;
+            if remainder.len() < MAX_YAMF_HASH_SIZE * 2 {
+                break;
+            }
+        }
+
+        if remainder.is_empty() {
+            return Err(SchemaIdError::MissingApplicationSchemaName(
+                id_str.to_string(),
+            ));
+        }
+
+        Ok(SchemaId::Application(
+            remainder.to_string(),
+            DocumentViewId::new(&operation_ids)?,
+        ))
+    }
+}
+
 impl Display for SchemaId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SchemaId::Application(name, view_id) => {
                 write!(f, "{}", name)?;
 
-                for op_id in view_id.sorted().into_iter() {
-                    write!(f, "_{}", op_id.as_str())?;
-                }
+                view_id
+                    .to_owned()
+                    .into_iter()
+                    .try_for_each(|op_id| write!(f, "_{}", op_id.as_str()))?;
 
                 Ok(())
             }

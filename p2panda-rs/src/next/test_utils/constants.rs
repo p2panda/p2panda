@@ -69,7 +69,7 @@ pub fn test_fields() -> Vec<(&'static str, OperationValue)> {
 
 #[cfg(test)]
 mod tests {
-    use crate::hash::Hash;
+    use crate::next::hash::Hash;
     use crate::next::operation::OperationId;
     use crate::next::schema::SchemaId;
 

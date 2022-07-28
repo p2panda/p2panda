@@ -99,6 +99,13 @@ pub fn validate_operation_with_entry(
 }
 
 /// Checks the fields of an operation-like data type against a schema.
+///
+/// This method checks against:
+///
+/// 1. Correct operation format (#OP2)
+/// 2. Correct canonic operation field values, like document view ids of pinned relations (no
+///    duplicates, sorted) (#OP3)
+/// 3. Schema matches the given operation fields (#OP4)
 pub fn validate_operation<O: Actionable + Schematic>(
     operation: &O,
     schema: &Schema,
@@ -122,9 +129,6 @@ pub fn validate_operation<O: Actionable + Schematic>(
 }
 
 /// Validates a CREATE operation.
-///
-/// This method checks if a) all necessary header informations are complete b) _all_ fields against
-/// the given schema.
 fn validate_create_operation(
     plain_previous_operations: Option<&DocumentViewId>,
     plain_fields: Option<PlainFields>,
@@ -149,9 +153,6 @@ fn validate_create_operation(
 }
 
 /// Validates an UPDATE operation.
-///
-/// This method checks a) if all necessary header informations are complete b) _only_ given fields
-/// against the claimed schema.
 fn validate_update_operation(
     plain_previous_operations: Option<&DocumentViewId>,
     plain_fields: Option<PlainFields>,
@@ -175,8 +176,6 @@ fn validate_update_operation(
 }
 
 /// Validates a DELETE operation.
-///
-/// This method checks if all necessary header informations are complete.
 fn validate_delete_operation(
     plain_previous_operations: Option<&DocumentViewId>,
     plain_fields: Option<PlainFields>,

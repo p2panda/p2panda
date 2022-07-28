@@ -69,8 +69,17 @@
 //! The above mentioned high-level methods will automatically do different sorts of validation
 //! checks. All low-level methods can also be used independently, depending on your implementation:
 //!
-//! 1. @TODO ..
-//! 2. @TODO ..
+//! 1. Correct hexadecimal encoding (when using human-readable encoding format) (#OP1)
+//! 2. Correct operation format as per specification, including canonic format checks against
+//!    duplicate and unsorted operation fields (#OP2)
+//! 3. Correct canonic operation field values, like document ids and document view ids (no
+//!    duplicates, sorted, when no semantic value is given by that) as per specification (#OP3)
+//! 4. Operation fields match the claimed schema (#OP4)
+//!
+//! Both #OP2 and #OP3 check against the canonic format but in separate steps, this is required as
+//! we can only check for the correct format of the operation field values, like document view ids
+//! _after_ we obtained the schema, while we can already check the correct operation format
+//! _before_.
 //!
 //! This module also provides a high-level method `validate_operation_and_entry` which will apply
 //! _all_ checks required to verify the integrity of an operation and entry. This includes all

@@ -2,12 +2,10 @@
 
 use thiserror::Error;
 
-use crate::hash::HashError;
 use crate::next::operation::OperationId;
 
 /// Error types for methods of `DocumentBuilder` struct.
-#[allow(missing_copy_implementations)]
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum DocumentBuilderError {
     /// No create operation found.
     #[error("Every document must contain one create operation")]
@@ -39,8 +37,7 @@ pub enum DocumentBuilderError {
 }
 
 /// Error types for methods of `Document` struct.
-#[allow(missing_copy_implementations)]
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum DocumentError {
     /// Handle errors from validating CBOR schemas.
     #[error(transparent)]
@@ -52,8 +49,7 @@ pub enum DocumentError {
 }
 
 /// Custom error types for `DocumentView`.
-#[allow(missing_copy_implementations)]
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum DocumentViewError {
     /// TryFrom operation must be CREATE.
     #[error("Operation must be instantiated from a CREATE operation")]
@@ -64,19 +60,26 @@ pub enum DocumentViewError {
     NotUpdateOrDeleteOperation,
 }
 
-/// Error types for `DocumentViewId`
-#[allow(missing_copy_implementations)]
-#[derive(Error, Debug, Clone)]
+/// Error types for `DocumentViewId`.
+#[derive(Error, Debug)]
 pub enum DocumentViewIdError {
-    /// Document view ids must contain sorted operation ids
+    /// Document view ids must contain sorted operation ids.
     #[error("Expected sorted operation ids in document view id")]
     UnsortedOperationIds,
 
-    /// Document view ids must contain at least one operation ids
+    /// Document view ids must contain at least one operation ids.
     #[error("Expected one or more operation ids")]
     ZeroOperationIds,
 
-    /// Handle errors from validating operation id hashes
+    /// Handle errors from validating operation id hashes.
     #[error(transparent)]
-    InvalidOperationId(#[from] HashError),
+    InvalidOperationId(#[from] crate::next::operation::error::OperationIdError),
+}
+
+/// Error types for `DocumentId`.
+#[derive(Error, Debug)]
+pub enum DocumentIdError {
+    /// Handle errors from validating operation ids.
+    #[error(transparent)]
+    OperationIdError(#[from] crate::next::operation::error::OperationIdError),
 }

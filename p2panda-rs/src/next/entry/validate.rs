@@ -73,7 +73,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::entry::{LogId, SeqNum};
-    use crate::hash::Hash;
+    use crate::next::hash::Hash;
     use crate::operation::{Operation, OperationFields, OperationValue};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{entry, schema};

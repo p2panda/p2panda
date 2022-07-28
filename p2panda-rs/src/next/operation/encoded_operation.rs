@@ -5,18 +5,33 @@ use std::hash::Hash as StdHash;
 
 use serde::{Deserialize, Serialize};
 
-use crate::hash::Hash;
+use crate::next::hash::Hash;
 use crate::next::serde::{deserialize_hex, serialize_hex};
 
 /// Wrapper type for operation bytes.
-// @TODO: Fix pub(crate) visibility
+///
+/// This struct can be used to deserialize an hex-encoded string into bytes when using a
+/// human-readable encoding format. No validation is applied whatsoever, except of checking if it
+/// is a valid hex-string (#OP1).
+///
+/// To validate these bytes use the `decode_operation` method to get an `PlainOperation` instance.
+/// From there you can derive a `Schema` to finally validate the operation with
+/// `validate_operation`. Read the module-level documentation for more information.
 #[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub struct EncodedOperation(
-    #[serde(serialize_with = "serialize_hex", deserialize_with = "deserialize_hex")]
-    pub(crate)  Vec<u8>,
+    #[serde(serialize_with = "serialize_hex", deserialize_with = "deserialize_hex")] Vec<u8>,
 );
 
 impl EncodedOperation {
+    /// Returns new `EncodedOperation` instance from given bytes.
+    ///
+    /// This does not apply any validation and should only be used in methods where all checks have
+    /// taken place before.
+    // @TODO: Check pub(crate) visibility
+    pub(crate) fn from_bytes(bytes: &[u8]) -> Self {
+        Self(bytes.to_owned())
+    }
+
     /// Returns the hash of this operation.
     pub fn hash(&self) -> Hash {
         Hash::new_from_bytes(&self.0)
@@ -25,10 +40,6 @@ impl EncodedOperation {
     /// Returns operation as bytes.
     pub fn into_bytes(&self) -> Vec<u8> {
         self.0.clone()
-    }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.0[..]
     }
 
     /// Returns payload size (number of bytes) of encoded operation.

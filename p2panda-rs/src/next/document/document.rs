@@ -255,14 +255,14 @@ impl DocumentBuilder {
             return Err(DocumentBuilderError::OperationSchemaNotMatching);
         }
 
-        let document_id = DocumentId::new(create_operation.operation_id().clone());
+        let document_id = DocumentId::new(&create_operation.operation_id().clone());
 
         // Build the graph.
         let mut graph = build_graph(&self.operations)?;
 
         // If a specific document view was requested then trim the graph to that point.
         if let Some(id) = document_view_id {
-            graph = graph.trim(&id.sorted())?;
+            graph = graph.trim(&id.graph_tips())?;
         }
 
         // Topologically sort the operations in the graph.
@@ -286,6 +286,7 @@ impl DocumentBuilder {
         };
 
         // Construct the document view id
+        // @TODO: How can we unwrap here?
         let document_view_id = DocumentViewId::new(&graph_tips).unwrap();
 
         // Construct the document view, from the reduced values and the document view id

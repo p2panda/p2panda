@@ -84,11 +84,28 @@ pub mod test_utils;
 pub mod wasm;
 
 /// Trait used by p2panda structs to validate arguments.
+// @TODO: Replace this step by step with `Canonic` (see below)
 pub trait Validate {
     /// Validation error type.
     type Error: std::fmt::Debug + std::error::Error + Send + Sync + 'static;
 
     /// Validates p2panda data type instance.
+    fn validate(&self) -> Result<(), Self::Error>;
+}
+
+/// Trait used by p2panda structs to validate core data types against its canonic format defined by
+/// the p2panda specification.
+///
+/// Data types can implement this trait to allow methods to safely deliver canonically encoded
+/// representations or check against it when receiving data from the outside.
+pub trait Canonic {
+    /// Validation error type.
+    type Error: std::fmt::Debug + std::error::Error + Send + Sync + 'static;
+
+    /// Returns canonic representation of this data type.
+    fn canonic(&self) -> Self;
+
+    /// Checks p2panda data type against its canonic format.
     fn validate(&self) -> Result<(), Self::Error>;
 }
 

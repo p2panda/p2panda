@@ -6,11 +6,11 @@ use std::hash::Hash as StdHash;
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use bamboo_rs_core_ed25519_yasmf::Entry as BambooEntry;
 
-use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::next::entry::encode::sign_entry;
 use crate::next::entry::error::EntryBuilderError;
 use crate::next::entry::{LogId, SeqNum, Signature};
+use crate::next::hash::Hash;
 use crate::next::operation::EncodedOperation;
 
 /// Create and sign new `Entry` instances.

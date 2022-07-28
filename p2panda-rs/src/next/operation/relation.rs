@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::hash::HashError;
-use crate::next::document::error::DocumentViewIdError;
+use std::convert::TryFrom;
+
+use crate::next::document::error::DocumentIdError;
 use crate::next::document::{DocumentId, DocumentViewId};
+use crate::next::operation::error::{
+    PinnedRelationError, PinnedRelationListError, RelationError, RelationListError,
+};
 use crate::next::operation::OperationId;
-use crate::Validate;
+use crate::Canonic;
 
 /// Field type representing references to other documents.
 ///
@@ -38,12 +42,16 @@ impl Relation {
     }
 }
 
-// @TODO: Check if we still need this
-impl Validate for Relation {
-    type Error = HashError;
+impl Canonic for Relation {
+    type Error = RelationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        self.0.validate()
+        self.0.validate()?;
+        Ok(())
+    }
+
+    fn canonic(&self) -> Self {
+        self.clone()
     }
 }
 
@@ -93,12 +101,16 @@ impl PinnedRelation {
     }
 }
 
-// @TODO: Check if we still need this
-impl Validate for PinnedRelation {
-    type Error = DocumentViewIdError;
+impl Canonic for PinnedRelation {
+    type Error = PinnedRelationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        self.0.validate()
+        self.0.validate()?;
+        Ok(())
+    }
+
+    fn canonic(&self) -> Self {
+        Self(self.0.canonic())
     }
 }
 
@@ -113,6 +125,9 @@ impl IntoIterator for PinnedRelation {
 }
 
 /// A `RelationList` can be used to reference multiple foreign documents from a document field.
+///
+/// The item order and occurrences inside a relation list are defined by the developers and users
+/// and have semantic meaning, for this reason we do not check against duplicates or ordering here.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RelationList(Vec<DocumentId>);
 
@@ -121,31 +136,36 @@ impl RelationList {
     pub fn new(relations: Vec<DocumentId>) -> Self {
         Self(relations)
     }
-
-    /// Returns an iterator over the `DocumentId`s in this `RelationList`
-    pub fn iter(&self) -> std::vec::IntoIter<DocumentId> {
-        self.0.clone().into_iter()
-    }
-
-    /// Get sorted graph tips for this view id.
-    pub fn sorted(&self) -> Vec<DocumentId> {
-        let mut document_ids = self.0.clone();
-        document_ids.sort();
-        document_ids
-    }
 }
 
-// @TODO: Check if we still need this
-impl Validate for RelationList {
-    type Error = HashError;
+impl Canonic for RelationList {
+    type Error = RelationListError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        // @TODO: Check if they are sorted and without duplicates
+        // Note that we do NOT check for duplicates and ordering here as this information is
+        // semantic!
         for document_id in &self.0 {
             document_id.validate()?;
         }
 
         Ok(())
+    }
+
+    fn canonic(&self) -> Self {
+        self.clone()
+    }
+}
+
+impl TryFrom<&[String]> for RelationList {
+    type Error = RelationListError;
+
+    fn try_from(str_list: &[String]) -> Result<Self, Self::Error> {
+        let document_ids: Result<Vec<DocumentId>, DocumentIdError> = str_list
+            .iter()
+            .map(|document_id_str| document_id_str.parse::<DocumentId>())
+            .collect();
+
+        Ok(Self(document_ids?))
     }
 }
 
@@ -160,6 +180,10 @@ impl IntoIterator for RelationList {
 }
 
 /// A `PinnedRelationList` can be used to reference multiple documents views.
+///
+/// The item order and occurrences inside a pinned relation list are defined by the developers and
+/// users and have semantic meaning, for this reason we do not check against duplicates or ordering
+/// here.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PinnedRelationList(Vec<DocumentViewId>);
 
@@ -168,30 +192,23 @@ impl PinnedRelationList {
     pub fn new(relations: Vec<DocumentViewId>) -> Self {
         Self(relations)
     }
-
-    /// Returns an iterator over the `DocumentViewId`s in this `PinnedRelationList`
-    pub fn iter(&self) -> std::vec::IntoIter<DocumentViewId> {
-        self.0.clone().into_iter()
-    }
-
-    /// Get sorted view ids.
-    pub fn sorted(&self) -> Vec<DocumentViewId> {
-        let mut view_ids = self.0.clone();
-        view_ids.sort();
-        view_ids
-    }
 }
 
-// @TODO: Check if we still need this
-impl Validate for PinnedRelationList {
-    type Error = DocumentViewIdError;
+impl Canonic for PinnedRelationList {
+    type Error = PinnedRelationListError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        for document_view in &self.0 {
-            document_view.validate()?;
+        // Note that we do NOT check for duplicates and ordering here as this information is
+        // semantic!
+        for document_view_id in &self.0 {
+            document_view_id.validate()?;
         }
 
         Ok(())
+    }
+
+    fn canonic(&self) -> Self {
+        self.clone()
     }
 }
 
@@ -209,11 +226,11 @@ impl IntoIterator for PinnedRelationList {
 mod tests {
     use rstest::rstest;
 
-    use crate::hash::Hash;
     use crate::next::document::{DocumentId, DocumentViewId};
+    use crate::next::hash::Hash;
     use crate::next::test_utils::fixtures::random_document_id;
-    use crate::test_utils::fixtures::random_hash;
-    use crate::Validate;
+    use crate::next::test_utils::fixtures::random_hash;
+    use crate::Canonic;
 
     use super::{PinnedRelation, PinnedRelationList, Relation, RelationList};
 
@@ -249,8 +266,8 @@ mod tests {
         }
 
         let relation_list = RelationList::new(vec![
-            DocumentId::new(hash_1.clone().into()),
-            DocumentId::new(hash_2.clone().into()),
+            DocumentId::new(&hash_1.clone().into()),
+            DocumentId::new(&hash_2.clone().into()),
         ]);
 
         for document_id in relation_list {

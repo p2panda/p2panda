@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::{TryFrom, TryInto};
 use std::fmt::{Display, Write};
 use std::str::FromStr;
 
-use serde::de::{SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::hash::Hash;
 use crate::next::document::error::DocumentViewIdError;
+use crate::next::hash::Hash;
+use crate::next::operation::error::OperationIdError;
 use crate::next::operation::OperationId;
-use crate::{Human, Validate};
+use crate::{Canonic, Human};
 
 /// The identifier of a document view.
 ///
@@ -47,22 +48,47 @@ impl DocumentViewId {
         Ok(document_view_id)
     }
 
-    /// Get the graph tip ids of this view id.
+    /// Get the operation ids of this view id.
     pub fn graph_tips(&self) -> &[OperationId] {
         self.0.as_slice()
     }
+}
 
-    /// Get sorted graph tips for this view id.
-    pub fn sorted(&self) -> Vec<OperationId> {
+impl Canonic for DocumentViewId {
+    type Error = DocumentViewIdError;
+
+    /// Checks document view id against canonic format.
+    ///
+    /// This verifies if the document view id is not empty and constituting operation ids are
+    /// sorted, do not contain any duplicates and represent valid hashes (#OP3).
+    fn validate(&self) -> Result<(), Self::Error> {
+        // Check if at least one operation id is given
+        if self.0.is_empty() {
+            return Err(DocumentViewIdError::ZeroOperationIds);
+        };
+
+        // @TODO: Check if operation ids are sorted
+        // @TODO: Check that there are no duplicates
+
+        // Check if the given operation ids are correct
+        for operation_id in &self.0 {
+            operation_id.validate()?;
+        }
+
+        Ok(())
+    }
+
+    fn canonic(&self) -> Self {
+        // @TODO: Remove duplicates
         let mut graph_tips = self.0.clone();
         graph_tips.sort();
-        graph_tips
+        Self(graph_tips)
     }
 }
 
 impl Display for DocumentViewId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (i, operation_id) in self.sorted().iter().enumerate() {
+        for (i, operation_id) in self.canonic().into_iter().enumerate() {
             let separator = if i == 0 { "" } else { "_" };
             let _ = write!(f, "{}{}", &separator, operation_id.as_str());
         }
@@ -76,7 +102,7 @@ impl Human for DocumentViewId {
         let mut result = String::new();
         let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
 
-        for (i, operation_id) in self.0.clone().into_iter().enumerate() {
+        for (i, operation_id) in self.canonic().into_iter().enumerate() {
             let separator = if i == 0 { "" } else { "_" };
             write!(result, "{}{}", &separator, &operation_id.as_str()[offset..]).unwrap();
         }
@@ -85,93 +111,45 @@ impl Human for DocumentViewId {
     }
 }
 
+impl TryFrom<&[String]> for DocumentViewId {
+    type Error = DocumentViewIdError;
+
+    fn try_from(str_list: &[String]) -> Result<Self, Self::Error> {
+        let operation_ids: Result<Vec<OperationId>, OperationIdError> = str_list
+            .iter()
+            .map(|operation_id_str| operation_id_str.parse::<OperationId>())
+            .collect();
+
+        operation_ids?.as_slice().try_into()
+    }
+}
+
+impl TryFrom<&[OperationId]> for DocumentViewId {
+    type Error = DocumentViewIdError;
+
+    fn try_from(value: &[OperationId]) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
 impl std::hash::Hash for DocumentViewId {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.sorted().hash(state);
+        self.canonic().hash(state);
     }
 }
 
 impl PartialEq for DocumentViewId {
     fn eq(&self, other: &Self) -> bool {
-        self.sorted() == other.sorted()
+        self.canonic() == other.canonic()
     }
 }
 
-// @TODO: Evaluate if we still need this
-impl Validate for DocumentViewId {
-    type Error = DocumentViewIdError;
-
-    /// Checks that constituting operation ids are sorted and represent valid hashes.
-    fn validate(&self) -> Result<(), Self::Error> {
-        if self.0.is_empty() {
-            return Err(DocumentViewIdError::ZeroOperationIds);
-        };
-
-        for hash in &self.0 {
-            hash.validate()?;
-        }
-
-        Ok(())
-    }
-}
-
-// @TODO: Evaluate validation flow here
 impl Serialize for DocumentViewId {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        self.sorted().serialize(serializer)
-    }
-}
-
-// @TODO: Evaluate validation flow here
-struct DocumentViewIdVisitor;
-
-impl<'de> Visitor<'de> for DocumentViewIdVisitor {
-    type Value = DocumentViewId;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("sequence of operation id strings")
-    }
-
-    fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
-    where
-        S: SeqAccess<'de>,
-    {
-        let mut op_ids: Vec<OperationId> = Vec::new();
-        let mut prev_id = None;
-
-        while let Some(seq_value) = seq.next_element::<String>()? {
-            // Try and parse next value as `OperationId`
-            let operation_id = match seq_value.parse::<OperationId>() {
-                Ok(operation_id) => operation_id,
-                Err(hash_err) => {
-                    return Err(serde::de::Error::custom(format!(
-                        "error parsing document view id at position {}: {}",
-                        op_ids.len(),
-                        hash_err
-                    )))
-                }
-            };
-
-            // Check that consecutive ids are sorted
-            if prev_id.is_some() && prev_id.unwrap() > operation_id {
-                return Err(serde::de::Error::custom(format!(
-                    "encountered unsorted value in document view id at position {}",
-                    op_ids.len()
-                )));
-            }
-            op_ids.push(operation_id.clone());
-            prev_id = Some(operation_id);
-        }
-
-        let document_view_id = DocumentViewId::new(&op_ids);
-
-        match document_view_id {
-            Ok(id) => Ok(id),
-            Err(err) => Err(serde::de::Error::custom(err.to_string())),
-        }
+        self.canonic().serialize(serializer)
     }
 }
 
@@ -180,17 +158,15 @@ impl<'de> Deserialize<'de> for DocumentViewId {
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_seq(DocumentViewIdVisitor)
-    }
-}
+        // Deserialize into `DocumentViewId` struct
+        let document_view_id: DocumentViewId = Deserialize::deserialize(deserializer)?;
 
-impl IntoIterator for DocumentViewId {
-    type Item = OperationId;
+        // Check against canonic format
+        document_view_id.validate().map_err(|err| {
+            serde::de::Error::custom(format!("invalid document view id, {}", err))
+        })?;
 
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        Ok(document_view_id)
     }
 }
 
@@ -217,19 +193,31 @@ impl From<Hash> for DocumentViewId {
 /// Convenience method converting a hash string into a document view id.
 ///
 /// Converts a string formatted document view id into a `DocumentViewId`. Expects multi-hash ids to
-/// be hash strings seperated by an `_` character.
+/// be hash strings separated by an `_` character.
 impl FromStr for DocumentViewId {
     type Err = DocumentViewIdError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut operations: Vec<OperationId> = Vec::new();
+
         s.rsplit('_')
             .try_for_each::<_, Result<(), Self::Err>>(|hash_str| {
-                let hash = Hash::new(hash_str)?;
-                operations.push(hash.into());
+                let operation_id = OperationId::from_str(hash_str)?;
+                operations.push(operation_id.into());
                 Ok(())
             })?;
+
         Ok(Self::new(&operations).unwrap())
+    }
+}
+
+impl IntoIterator for DocumentViewId {
+    type Item = OperationId;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 
@@ -240,12 +228,12 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::hash::Hash;
+    use crate::next::hash::Hash;
     use crate::next::operation::OperationId;
+    use crate::next::test_utils::constants::HASH;
+    use crate::next::test_utils::fixtures::random_hash;
     use crate::next::test_utils::fixtures::{document_view_id, random_operation_id};
-    use crate::test_utils::constants::HASH;
-    use crate::test_utils::fixtures::random_hash;
-    use crate::{Human, Validate};
+    use crate::{Canonic, Human};
 
     use super::DocumentViewId;
 
@@ -267,7 +255,7 @@ mod tests {
         );
 
         // Converts an `OperationId` to `DocumentViewId`
-        let document_id: DocumentViewId = OperationId::new(hash.clone()).into();
+        let document_id: DocumentViewId = OperationId::new(&hash.clone()).into();
         assert_eq!(document_id, DocumentViewId::new(&[hash.into()]).unwrap());
 
         // Fails when string is not a hash
@@ -371,6 +359,7 @@ mod tests {
 
         assert_eq!(result.unwrap_err().to_string(), expected_result.to_string());
 
+        // @TODO: Move this into own test
         // However, unsorted values in an id are sorted during serialisation
         let mut reversed_ids = vec![operation_id_1, operation_id_2];
         reversed_ids.sort();

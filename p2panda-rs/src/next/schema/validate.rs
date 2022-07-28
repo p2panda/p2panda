@@ -1,19 +1,31 @@
 // SPDX-License-Identifier: AGPL-&3.0-or-later
 
-use crate::hash::HashError;
+use std::convert::TryInto;
+
+use crate::next::document::error::{DocumentIdError, DocumentViewIdError};
 use crate::next::document::{DocumentId, DocumentViewId};
+use crate::next::operation::error::RelationListError;
 use crate::next::operation::plain::{PlainFields, PlainValue};
 use crate::next::operation::{
-    OperationFields, OperationId, OperationValue, PinnedRelation, PinnedRelationList, Relation,
-    RelationList,
+    OperationFields, OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
 use crate::next::schema::error::ValidationError;
 use crate::next::schema::{FieldName, FieldType, Schema};
 
-/// @TODO
+/// Checks if all fields of the schema match with the operation fields.
 ///
-/// Both `Schema` and `PlainFields` uses a `BTreeMap` internally which gives us the guarantee that
-/// all fields are sorted. Through this ordering we can compare them easily.
+/// This can be used to safely validate a CREATE operation, as this operation needs to contain
+/// _all_ fields of the schema.
+///
+/// The following validation steps are applied:
+///
+/// 1. Pinned relations (document view id), pinned relation lists and relation lists are sorted in
+///    canonic format and without duplicates when no semantic value is given by that (#OP3)
+/// 2. Operation fields match the claimed schema (#OP4)
+///
+/// Please note: This does NOT validate if the related document or view follows the given schema.
+/// This can only be done with knowledge about external documents which requires a persistence
+/// layer and is usually handled during materialization.
 pub fn validate_all_fields(
     fields: &PlainFields,
     schema: &Schema,
@@ -21,8 +33,9 @@ pub fn validate_all_fields(
     let mut validated_fields = OperationFields::new();
     let mut plain_fields = fields.iter();
 
-    // Iterate through both field lists at the same time, since they are both sorted already we can
-    // compare them in every iteration step
+    // Iterate through both field lists at the same time. Both `Schema` and `PlainFields` uses a
+    // `BTreeMap` internally which gives us the guarantee that all fields are sorted. Through this
+    // ordering we can compare them easily.
     for schema_field in schema.fields() {
         match plain_fields.next() {
             Some((plain_name, plain_value)) => {
@@ -59,6 +72,20 @@ pub fn validate_all_fields(
     }
 }
 
+/// Checks if given operation fields match the schema.
+///
+/// This can be used to safely validate an UPDATE operation, as this operation needs to contain at
+/// least only _one_ fields of the schema.
+///
+/// The following validation steps are applied:
+///
+/// 1. Pinned relations (document view id), pinned relation lists and relation lists are sorted in
+///    canonic format and without duplicates when no semantic value is given by that (#OP3)
+/// 2. Operation fields match the claimed schema (#OP4)
+///
+/// Please note: This does NOT validate if the related document or view follows the given schema.
+/// This can only be done with knowledge about external documents which requires a persistence
+/// layer and is usually handled during materialization.
 pub fn validate_only_given_fields(
     fields: &PlainFields,
     schema: &Schema,
@@ -98,6 +125,7 @@ pub fn validate_only_given_fields(
     }
 }
 
+/// Validates name and type of an operation field by matching it against a schema field.
 fn validate_field<'a>(
     plain_field: (&'a FieldName, &PlainValue),
     schema_field: (&FieldName, &FieldType),
@@ -107,6 +135,7 @@ fn validate_field<'a>(
     Ok((validated_name, validated_value))
 }
 
+/// Validates name of an operation field by matching it against a schema field name.
 fn validate_field_name<'a>(
     plain_field_name: &'a FieldName,
     schema_field_name: &FieldName,
@@ -121,7 +150,7 @@ fn validate_field_name<'a>(
     }
 }
 
-/// Note: This does NOT validate if the pinned document view follows the given schema
+/// Validates value of an operation field by matching it against a schema field type.
 fn validate_field_value(
     plain_value: &PlainValue,
     schema_field_type: &FieldType,
@@ -169,9 +198,13 @@ fn validate_field_value(
         }
         FieldType::Relation(_) => {
             if let PlainValue::StringOrRelation(document_id_str) = plain_value {
-                Ok(OperationValue::Relation(Relation::new(
-                    document_id_str.parse::<DocumentId>()?,
-                )))
+                // Convert string to document id, check for correctness
+                let document_id: DocumentId =
+                    document_id_str.parse().map_err(|err: DocumentIdError| {
+                        ValidationError::InvalidValue(err.to_string())
+                    })?;
+
+                Ok(OperationValue::Relation(Relation::new(document_id)))
             } else {
                 Err(ValidationError::InvalidType(
                     plain_value.field_type().to_owned(),
@@ -180,20 +213,20 @@ fn validate_field_value(
             }
         }
         FieldType::RelationList(_) => {
-            if let PlainValue::PinnedRelationOrRelationList(document_ids) = plain_value {
-                let relation_list: Result<Vec<DocumentId>, HashError> = document_ids
-                    .iter()
-                    .map(|document_id_str| document_id_str.parse::<DocumentId>())
-                    .collect();
+            if let PlainValue::PinnedRelationOrRelationList(document_ids_str) = plain_value {
+                // Convert list of strings to list of document ids aka a relation list
+                let relation_list: RelationList =
+                    document_ids_str
+                        .as_slice()
+                        .try_into()
+                        .map_err(|err: RelationListError| {
+                            // Detected an invalid document id
+                            ValidationError::InvalidValue(err.to_string())
+                        })?;
 
-                let value = OperationValue::RelationList(RelationList::new(relation_list?));
-
-                // @TODO: Check if relation list is sorted and without any duplicates
-                /* value
-                .validate()
-                .map_err(|err| ValidationError::InvalidSequenceEncoding(err.to_string()))?; */
-
-                Ok(value)
+                // Note that we do NOT check for duplicates and ordering here as this information
+                // is semantic!
+                Ok(OperationValue::RelationList(relation_list))
             } else {
                 Err(ValidationError::InvalidType(
                     plain_value.field_type().to_owned(),
@@ -202,18 +235,19 @@ fn validate_field_value(
             }
         }
         FieldType::PinnedRelation(_) => {
-            if let PlainValue::PinnedRelationOrRelationList(operation_ids_vec) = plain_value {
-                let operation_ids: Result<Vec<OperationId>, HashError> = operation_ids_vec
-                    .iter()
-                    .map(|operation_id_str| operation_id_str.parse::<OperationId>())
-                    .collect();
+            if let PlainValue::PinnedRelationOrRelationList(operation_ids_str) = plain_value {
+                // Convert list of strings to list of operation ids aka a document view id, this
+                // checks if list of operation ids is sorted and without any duplicates
+                let document_view_id: DocumentViewId = operation_ids_str
+                    .as_slice()
+                    .try_into()
+                    .map_err(|err: DocumentViewIdError| {
+                        ValidationError::InvalidDocumentViewId(err.to_string())
+                    })?;
 
-                // @TODO: Check if relation list is sorted and without any duplicates
-                let pinned_relation = DocumentViewId::new(&operation_ids?)
-                    .map_err(|err| ValidationError::InvalidSequenceEncoding(err.to_string()))?;
-
-                let value = OperationValue::PinnedRelation(PinnedRelation::new(pinned_relation));
-                Ok(value)
+                Ok(OperationValue::PinnedRelation(PinnedRelation::new(
+                    document_view_id,
+                )))
             } else {
                 Err(ValidationError::InvalidType(
                     plain_value.field_type().to_owned(),
@@ -226,22 +260,23 @@ fn validate_field_value(
                 let document_view_ids: Result<Vec<DocumentViewId>, ValidationError> =
                     document_view_ids_vec
                         .iter()
-                        .map(|operation_ids_vec| {
-                            let operation_ids: Result<Vec<OperationId>, HashError> =
-                                operation_ids_vec
-                                    .iter()
-                                    .map(|operation_id_str| operation_id_str.parse::<OperationId>())
-                                    .collect();
+                        .map(|operation_ids_str| {
+                            // Convert list of strings to list of operation ids aka a document view
+                            // id, this checks if list of operation ids is sorted and without any
+                            // duplicates
+                            let document_view_id: DocumentViewId = operation_ids_str
+                                .as_slice()
+                                .try_into()
+                                .map_err(|err: DocumentViewIdError| {
+                                    ValidationError::InvalidDocumentViewId(err.to_string())
+                                })?;
 
-                            let view_id = DocumentViewId::new(&operation_ids?).map_err(|err| {
-                                ValidationError::InvalidSequenceEncoding(err.to_string())
-                            })?;
-
-                            Ok(view_id)
+                            Ok(document_view_id)
                         })
                         .collect();
 
-                // @TODO: Is this sorted? Are there duplicates?
+                // Note that we do NOT check for duplicates and ordering of the document view ids
+                // as this information is semantic
                 Ok(OperationValue::PinnedRelationList(PinnedRelationList::new(
                     document_view_ids?,
                 )))

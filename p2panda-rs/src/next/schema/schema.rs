@@ -111,8 +111,11 @@ impl Schema {
         schema: SchemaView,
         fields: Vec<SchemaFieldView>,
     ) -> Result<Schema, SchemaError> {
+        let schema_fields_iter = schema.fields().to_owned().into_iter();
+        let schema_fields_len = schema_fields_iter.len();
+
         // Validate that the passed `SchemaFields` are the correct ones for this `Schema`.
-        for schema_field in schema.fields().iter() {
+        for schema_field in schema_fields_iter {
             match fields
                 .iter()
                 .find(|schema_field_view| schema_field_view.id() == &schema_field)
@@ -123,7 +126,7 @@ impl Schema {
         }
 
         // And that no extra fields were passed
-        if fields.iter().len() > schema.fields().iter().len() {
+        if fields.iter().len() > schema_fields_len {
             return Err(SchemaError::InvalidFields);
         }
 

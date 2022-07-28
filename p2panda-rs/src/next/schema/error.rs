@@ -5,16 +5,8 @@ use thiserror::Error;
 use crate::next::schema::SchemaId;
 
 /// Custom errors related to `SchemaId`.
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum SchemaIdError {
-    /// Handle errors from validating operation id hashes.
-    #[error(transparent)]
-    DocumentViewIdError(#[from] crate::document::DocumentViewIdError),
-
-    /// Invalid hash in schema id.
-    #[error("encountered invalid hash while parsing application schema id: {0}")]
-    HashError(#[from] crate::hash::HashError),
-
     /// Encountered a malformed schema id.
     #[error("malformed schema id `{0}`: {1}")]
     MalformedSchemaId(String, String),
@@ -26,10 +18,22 @@ pub enum SchemaIdError {
     /// Invalid system schema id.
     #[error("unsupported system schema: {0}")]
     UnknownSystemSchema(String),
+
+    /// Invalid hash in schema id.
+    #[error("encountered invalid hash while parsing application schema id: {0}")]
+    HashError(#[from] crate::next::hash::error::HashError),
+
+    /// Handle errors from validating document view ids.
+    #[error(transparent)]
+    DocumentViewIdError(#[from] crate::next::document::error::DocumentViewIdError),
+
+    /// Handle errors from validating operation ids.
+    #[error(transparent)]
+    OperationIdError(#[from] crate::next::operation::error::OperationIdError),
 }
 
 /// Custom errors related to `Schema`.
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum SchemaError {
     /// Invalid fields in schema.
     #[error("invalid fields found for this schema")]
@@ -79,12 +83,11 @@ pub enum ValidationError {
     #[error("invalid field type '{0}', expected '{1}'")]
     InvalidType(String, String),
 
-    /// Sequences of operation ids or document ids need to be sorted lexicographically and can't
-    /// contain duplicates.
-    #[error("invalid sequence encoding, {0}")]
-    InvalidSequenceEncoding(String),
+    /// Field value is not correctly formatted.
+    #[error("invalid value format, {0}")]
+    InvalidValue(String),
 
-    /// Expected hash value (operation id, document id, ..) was not correctly encoded.
-    #[error(transparent)]
-    InvalidHashEncoding(#[from] crate::hash::HashError),
+    /// Field value is not in canonic format.
+    #[error("non-canonic document view id, {0}")]
+    InvalidDocumentViewId(String),
 }

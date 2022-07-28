@@ -5,14 +5,14 @@ use std::hash::Hash as StdHash;
 
 use serde::{Deserialize, Serialize};
 
-use crate::hash::Hash;
+use crate::next::hash::Hash;
 use crate::next::serde::{deserialize_hex, serialize_hex};
 
 /// Wrapper type for Bamboo entry bytes.
 ///
 /// This struct can be used to deserialize an hex-encoded string into bytes when using a
 /// human-readable encoding format. No validation is applied whatsoever, except of checking if it
-/// is a valid hex-string.
+/// is a valid hex-string (#E1).
 ///
 /// To validate these bytes use the `decode_entry` method to apply all checks and to get an `Entry`
 /// instance. Read the module-level documentation for more information.
@@ -27,7 +27,7 @@ impl EncodedEntry {
     /// This does not apply any validation and should only be used in methods where all checks have
     /// taken place before.
     // @TODO: Check pub(crate) visibility
-    pub(crate) fn from_bytes(bytes: &[u8]) -> EncodedEntry {
+    pub(crate) fn from_bytes(bytes: &[u8]) -> Self {
         Self(bytes.to_owned())
     }
 

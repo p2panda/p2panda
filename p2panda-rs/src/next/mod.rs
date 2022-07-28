@@ -3,6 +3,7 @@
 //! Temporary module which will guide us through this massive refactoring.
 pub mod document;
 pub mod entry;
+pub mod hash;
 pub mod operation;
 pub mod schema;
 pub mod serde;

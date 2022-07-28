@@ -15,8 +15,8 @@ use crate::next::operation::{
 };
 use crate::next::schema::Schema;
 use crate::next::test_utils::constants;
-use crate::next::test_utils::fixtures::{document_view_id, schema};
-use crate::test_utils::fixtures::{key_pair, random_hash};
+use crate::next::test_utils::fixtures::{document_view_id, random_hash, schema};
+use crate::test_utils::fixtures::key_pair;
 
 /// Returns constant testing operation id.
 #[fixture]
@@ -40,9 +40,15 @@ pub fn operation_value() -> OperationValue {
 #[fixture]
 pub fn random_previous_operations(#[default(1)] num: u32) -> DocumentViewId {
     let mut previous_operations: Vec<OperationId> = Vec::new();
+
     for _ in 0..num {
         previous_operations.push(random_hash().into())
     }
+
+    // Make sure the random hashes are sorted, otherwise validation will fail when creating the
+    // document view id
+    previous_operations.sort();
+
     DocumentViewId::new(&previous_operations).unwrap()
 }
 
