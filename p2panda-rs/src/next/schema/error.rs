@@ -84,7 +84,7 @@ pub enum ValidationError {
     InvalidType(String, String),
 
     /// Field value is not correctly formatted.
-    #[error("invalid value format, {0}")]
+    #[error("{0}")]
     InvalidValue(String),
 
     /// Field value is not in canonic format.

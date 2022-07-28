@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
 use crate::next::hash::error::HashError;
-use crate::{Canonic, Human};
+use crate::{Human, Validate};
 
 /// Size of p2panda entries' hashes.
 pub const HASH_SIZE: usize = BLAKE3_HASH_SIZE;
@@ -66,7 +66,7 @@ impl Hash {
     }
 }
 
-impl Canonic for Hash {
+impl Validate for Hash {
     type Error = HashError;
 
     fn validate(&self) -> Result<(), Self::Error> {
@@ -86,12 +86,6 @@ impl Canonic for Hash {
             }
             Err(_) => Err(HashError::InvalidHexEncoding),
         }
-    }
-
-    fn canonic(&self) -> Self {
-        // Just returns itself again, there is nothing we can do to make it _more_ canonic. You
-        // probably don't want to call this method for `Hash`!
-        self.clone()
     }
 }
 
@@ -124,14 +118,12 @@ impl<'de> Deserialize<'de> for Hash {
     where
         D: serde::Deserializer<'de>,
     {
-        // Deserialize into `Hash` struct
-        let hash: Hash = Deserialize::deserialize(deserializer)?;
+        // Deserialize hash string
+        let hash: String = Deserialize::deserialize(deserializer)?;
 
-        // Validate format
-        hash.validate()
-            .map_err(|err| serde::de::Error::custom(format!("invalid hash, {}", err)))?;
-
-        Ok(hash)
+        // Convert and validate format
+        hash.try_into()
+            .map_err(|err| serde::de::Error::custom(format!("invalid hash, {}", err)))
     }
 }
 

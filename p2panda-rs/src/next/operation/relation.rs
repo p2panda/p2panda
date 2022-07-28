@@ -8,7 +8,7 @@ use crate::next::operation::error::{
     PinnedRelationError, PinnedRelationListError, RelationError, RelationListError,
 };
 use crate::next::operation::OperationId;
-use crate::Canonic;
+use crate::Validate;
 
 /// Field type representing references to other documents.
 ///
@@ -42,16 +42,12 @@ impl Relation {
     }
 }
 
-impl Canonic for Relation {
+impl Validate for Relation {
     type Error = RelationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
         self.0.validate()?;
         Ok(())
-    }
-
-    fn canonic(&self) -> Self {
-        self.clone()
     }
 }
 
@@ -101,16 +97,12 @@ impl PinnedRelation {
     }
 }
 
-impl Canonic for PinnedRelation {
+impl Validate for PinnedRelation {
     type Error = PinnedRelationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
         self.0.validate()?;
         Ok(())
-    }
-
-    fn canonic(&self) -> Self {
-        Self(self.0.canonic())
     }
 }
 
@@ -138,7 +130,7 @@ impl RelationList {
     }
 }
 
-impl Canonic for RelationList {
+impl Validate for RelationList {
     type Error = RelationListError;
 
     fn validate(&self) -> Result<(), Self::Error> {
@@ -149,10 +141,6 @@ impl Canonic for RelationList {
         }
 
         Ok(())
-    }
-
-    fn canonic(&self) -> Self {
-        self.clone()
     }
 }
 
@@ -194,7 +182,7 @@ impl PinnedRelationList {
     }
 }
 
-impl Canonic for PinnedRelationList {
+impl Validate for PinnedRelationList {
     type Error = PinnedRelationListError;
 
     fn validate(&self) -> Result<(), Self::Error> {
@@ -205,10 +193,6 @@ impl Canonic for PinnedRelationList {
         }
 
         Ok(())
-    }
-
-    fn canonic(&self) -> Self {
-        self.clone()
     }
 }
 
@@ -230,7 +214,7 @@ mod tests {
     use crate::next::hash::Hash;
     use crate::next::test_utils::fixtures::random_document_id;
     use crate::next::test_utils::fixtures::random_hash;
-    use crate::Canonic;
+    use crate::Validate;
 
     use super::{PinnedRelation, PinnedRelationList, Relation, RelationList};
 

@@ -7,7 +7,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::next::hash::Hash;
 use crate::next::operation::error::OperationIdError;
-use crate::{Canonic, Human};
+use crate::{Human, Validate};
 
 /// Uniquely identifies an [`Operation`](crate::operation::Operation).
 ///
@@ -33,16 +33,12 @@ impl OperationId {
     }
 }
 
-impl Canonic for OperationId {
+impl Validate for OperationId {
     type Error = OperationIdError;
 
     fn validate(&self) -> Result<(), Self::Error> {
         self.0.validate()?;
         Ok(())
-    }
-
-    fn canonic(&self) -> Self {
-        Self(self.0.canonic())
     }
 }
 
@@ -78,15 +74,14 @@ impl<'de> Deserialize<'de> for OperationId {
     where
         D: Deserializer<'de>,
     {
-        // Deserialize into `OperationId` struct
-        let operation_id: OperationId = Deserialize::deserialize(deserializer)?;
+        // Deserialize into `Hash` struct
+        let hash: Hash = Deserialize::deserialize(deserializer)?;
 
-        // Check against canonic format
-        operation_id
-            .validate()
+        // Check format
+        hash.validate()
             .map_err(|err| serde::de::Error::custom(format!("invalid operation id, {}", err)))?;
 
-        Ok(operation_id)
+        Ok(Self(hash))
     }
 }
 

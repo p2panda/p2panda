@@ -10,7 +10,7 @@ use crate::next::document::error::DocumentViewIdError;
 use crate::next::hash::Hash;
 use crate::next::operation::error::OperationIdError;
 use crate::next::operation::OperationId;
-use crate::{Canonic, Human};
+use crate::{Human, Validate};
 
 /// The identifier of a document view.
 ///
@@ -52,9 +52,17 @@ impl DocumentViewId {
     pub fn graph_tips(&self) -> &[OperationId] {
         self.0.as_slice()
     }
+
+    /// Return sorted and de-duplicated list of operation ids.
+    fn canonic(&self) -> Vec<OperationId> {
+        // @TODO: Remove duplicates
+        let mut graph_tips = self.0.clone();
+        graph_tips.sort();
+        graph_tips
+    }
 }
 
-impl Canonic for DocumentViewId {
+impl Validate for DocumentViewId {
     type Error = DocumentViewIdError;
 
     /// Checks document view id against canonic format.
@@ -76,13 +84,6 @@ impl Canonic for DocumentViewId {
         }
 
         Ok(())
-    }
-
-    fn canonic(&self) -> Self {
-        // @TODO: Remove duplicates
-        let mut graph_tips = self.0.clone();
-        graph_tips.sort();
-        Self(graph_tips)
     }
 }
 
@@ -158,11 +159,11 @@ impl<'de> Deserialize<'de> for DocumentViewId {
     where
         D: Deserializer<'de>,
     {
-        // Deserialize into `DocumentViewId` struct
-        let document_view_id: DocumentViewId = Deserialize::deserialize(deserializer)?;
+        // Deserialize into list of operation ids
+        let operation_ids: Vec<OperationId> = Deserialize::deserialize(deserializer)?;
 
-        // Check against canonic format
-        document_view_id.validate().map_err(|err| {
+        // Create and validate document view id
+        let document_view_id = DocumentViewId::new(operation_ids.as_slice()).map_err(|err| {
             serde::de::Error::custom(format!("invalid document view id, {}", err))
         })?;
 
@@ -233,7 +234,7 @@ mod tests {
     use crate::next::test_utils::constants::HASH;
     use crate::next::test_utils::fixtures::random_hash;
     use crate::next::test_utils::fixtures::{document_view_id, random_operation_id};
-    use crate::{Canonic, Human};
+    use crate::{Human, Validate};
 
     use super::DocumentViewId;
 

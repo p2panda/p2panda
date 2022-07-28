@@ -7,7 +7,7 @@ use std::str::FromStr;
 use crate::next::document::error::DocumentIdError;
 use crate::next::hash::Hash;
 use crate::next::operation::OperationId;
-use crate::{Canonic, Human};
+use crate::{Human, Validate};
 
 /// Identifier of a document.
 ///
@@ -51,16 +51,12 @@ impl Human for DocumentId {
     }
 }
 
-impl Canonic for DocumentId {
+impl Validate for DocumentId {
     type Error = DocumentIdError;
 
     fn validate(&self) -> Result<(), Self::Error> {
         self.0.validate()?;
         Ok(())
-    }
-
-    fn canonic(&self) -> Self {
-        self.clone()
     }
 }
 
