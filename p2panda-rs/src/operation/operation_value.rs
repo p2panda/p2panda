@@ -88,6 +88,36 @@ impl OperationValue {
     }
 }
 
+impl From<bool> for OperationValue {
+    fn from(value: bool) -> Self {
+        OperationValue::Boolean(value)
+    }
+}
+
+impl From<f64> for OperationValue {
+    fn from(value: f64) -> Self {
+        OperationValue::Float(value)
+    }
+}
+
+impl From<i64> for OperationValue {
+    fn from(value: i64) -> Self {
+        OperationValue::Integer(value)
+    }
+}
+
+impl From<String> for OperationValue {
+    fn from(value: String) -> Self {
+        OperationValue::Text(value)
+    }
+}
+
+impl From<&str> for OperationValue {
+    fn from(value: &str) -> Self {
+        OperationValue::Text(value.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -102,6 +132,18 @@ mod tests {
     use crate::Validate;
 
     use super::OperationValue;
+
+    #[test]
+    fn converstion() {
+        assert_eq!(OperationValue::Boolean(true), true.into());
+        assert_eq!(OperationValue::Float(1.5), 1.5.into());
+        assert_eq!(OperationValue::Integer(3), 3.into());
+        assert_eq!(OperationValue::Text("hellö".to_string()), "hellö".into());
+        assert_eq!(
+            OperationValue::Text("hellö".to_string()),
+            "hellö".to_string().into()
+        );
+    }
 
     #[rstest]
     #[allow(clippy::too_many_arguments)]
