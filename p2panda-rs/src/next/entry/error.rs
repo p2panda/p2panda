@@ -1,55 +1,49 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Error types for creating, encoding, decoding or validating entries and their regarding data
+//! types like sequence numbers or log ids.
 use thiserror::Error;
 
+/// Errors from `EntryBuilder` struct.
 #[derive(Error, Debug)]
 pub enum EntryBuilderError {
-    /// Handle errors from `EncodedOperation` struct.
-    #[error("entry does not contain any operation")]
-    OperationMissing,
-
+    /// Handle errors from `entry::encode` module.
     #[error(transparent)]
     EncodeEntryError(#[from] EncodeEntryError),
 }
 
+/// Errors from `entry::encode` module.
 #[derive(Error, Debug)]
 pub enum EncodeEntryError {
-    /// Links should not be set when first entry in log.
-    #[error("backlink and skiplink not valid for this sequence number")]
-    InvalidLinks,
-
+    /// Handle errors from `entry::validate` module.
     #[error(transparent)]
     ValidateEntryError(#[from] ValidateEntryError),
-
-    #[error(transparent)]
-    AuthorError(#[from] crate::identity::AuthorError),
 
     /// Handle errors from encoding `bamboo_rs_core_ed25519_yasmf` entries.
     #[error(transparent)]
     BambooEncodeError(#[from] bamboo_rs_core_ed25519_yasmf::entry::encode::Error),
 }
 
+/// Errors from `entry::decode` module.
 #[derive(Error, Debug)]
 pub enum DecodeEntryError {
-    /// Handle errors from `SeqNum` struct.
-    #[error(transparent)]
-    SeqNumError(#[from] SeqNumError),
-
-    /// Handle errors from entry validation.
+    /// Handle errors from `entry::validate` module.
     #[error(transparent)]
     ValidateEntryError(#[from] ValidateEntryError),
 
-    /// Handle errors from `Hash` struct.
-    #[error(transparent)]
-    HashError(#[from] crate::hash::HashError),
-
-    /// Handle errors from decoding bamboo_rs_core_ed25519_yasmf entries.
+    /// Handle errors from decoding `bamboo_rs_core_ed25519_yasmf` entries.
     #[error(transparent)]
     BambooDecodeError(#[from] bamboo_rs_core_ed25519_yasmf::entry::decode::Error),
 }
 
+/// Errors from `entry::validate` module.
 #[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
 pub enum ValidateEntryError {
+    /// Invalid configuration of backlink and skiplink hashes for this sequence number.
+    #[error("backlink and skiplink not valid for this sequence number")]
+    InvalidLinks,
+
     /// Operation needs to match payload hash of encoded entry.
     #[error("operation needs to match payload hash of encoded entry")]
     PayloadHashMismatch,
@@ -57,18 +51,11 @@ pub enum ValidateEntryError {
     /// Operation needs to match payload size of encoded entry.
     #[error("operation needs to match payload size of encoded entry")]
     PayloadSizeMismatch,
-
-    /// Invalid configuration of backlink and skiplink hashes for this sequence number.
-    #[error("backlink and skiplink not valid for this sequence number")]
-    InvalidLinks,
-
-    /// Handle errors from `ed25519_dalek` crate.
-    #[error(transparent)]
-    Ed25519SignatureError(#[from] ed25519_dalek::SignatureError),
 }
 
-/// Custom error types for `SeqNum`.
+/// Errors from `SeqNum` struct.
 #[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
 pub enum SeqNumError {
     /// Sequence numbers are always positive.
     #[error("sequence number can not be zero or negative")]
@@ -79,8 +66,9 @@ pub enum SeqNumError {
     InvalidU64String,
 }
 
-/// Custom error types for `LogId`.
+/// Errors from `LogId` struct.
 #[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
 pub enum LogIdError {
     /// Conversion to u64 from string failed.
     #[error("string contains invalid u64 value")]

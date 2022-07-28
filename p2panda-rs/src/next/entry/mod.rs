@@ -6,17 +6,21 @@
 //! single-writer append-only log structure, created and signed by holders of private keys and
 //! stored inside the node's database.
 //!
-//! ## De- & Encoding
+//! Entries contain p2panda operations as their payload, giving them security against malicious
+//! behaviour in a distributed system and authenticity with digital signatures.
 //!
-//! Entries can be created programmatically via the API or decoded from raw bytes. In both cases
-//! different validation steps need to be applied to make sure the entry is well formed.
+//! ## Decoding
+//!
+//! Entries can be created programmatically via the API (`EntryBuilder`) or decoded from raw bytes
+//! (`EncodedEntry`). In both cases different validation steps need to be applied to make sure the
+//! entry is well formed.
 //!
 //! Use the `EntryBuilder` to create an `Entry` instance through the API. It serves as an interface
 //! to set the entry arguments and the `Operation` payload and to sign it with a private `KeyPair`
 //! which will result in the final `Entry`.
 //!
-//! To derive an `Entry` from bytes, use the `EncodedEntry` struct which allows you to deserialize
-//! the data into the final `Entry`.
+//! To derive an `Entry` from bytes, use the `EncodedEntry` struct which allows you to decode the
+//! data into the final `Entry`.
 //!
 //! Here is an overview of the methods to create or decode an entry:
 //!
@@ -33,9 +37,11 @@
 //! └────────────┘
 //! ```
 //!
-//! Please note that `Entry` in itself is immutable, there are only these two approaches to arrive
-//! at it while both approaches apply all means to validate the integrity and correct encoding of
-//! the entry as per specification.
+//! Please note that `Entry` in itself is immutable and can not directly be deserialized, there are
+//! only these above mentioned approaches to arrive at it. Both approaches apply all means to
+//! validate the integrity and correct encoding of the entry as per specification.
+//!
+//! ## Encoding
 //!
 //! `Entry` structs can be encoded again into their raw bytes form like that:
 //!
@@ -47,13 +53,8 @@
 //!
 //! ## Validation
 //!
-//! The above high-level methods will automatically do different sorts of validation checks.
-//!
-//! Please note that currently no high-level method in this crate will check for log integrity of
-//! your entry, since this requires some sort of persistence layer. Please check this manually with
-//! the help of the `validate_log_integrity` method.
-//!
-//! Here is an overview of all given validation methods:
+//! The above high-level methods will automatically do different sorts of validation checks. All
+//! low-level methods can also be used independently, depending on your implementation:
 //!
 //! 1. Correct hexadecimal encoding (when using human-readable encoding format) (#E1)
 //! 2. Correct Bamboo encoding as per specification (#E2)
@@ -62,7 +63,14 @@
 //! 5. Verify signature (#E5)
 //! 6. Check if payload matches claimed hash and size (#E6)
 //!
-//! See `operations` and `schema` module for more validation methods around operations (#E6).
+//! Please note that almost all validation can take place without any external information, except
+//! of checking for log integrity. This requires some sort of persistence layer where past entries
+//! are stored which is not in scope of this crate. You can check this manually with the help of
+//! the `validate_log_integrity` method.
+//!
+//! See `operations` and `schema` module for more validation methods around operations (#E6). There
+//! you will also find the complete flow which will cover validation on both entries and
+//! operations, applying all checks required as per specification.
 //!
 //! [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 pub mod decode;

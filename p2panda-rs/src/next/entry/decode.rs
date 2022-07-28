@@ -1,16 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryInto;
-
+//! Methods to decode an entry.
+//!
+//! To derive an `Entry` from bytes or a hexadecimal string, use the `EncodedEntry` struct and
+//! apply the `decode_entry` method, which allows you to decode the encoded entry into the final
+//! `Entry` instance.
+//!
+//! ```text
+//!             ┌────────────┐                         ┌─────┐
+//!  bytes ───► │EncodedEntry│ ────decode_entry()────► │Entry│
+//!             └────────────┘                         └─────┘
+//! ```
 use bamboo_rs_core_ed25519_yasmf::decode;
 
 use crate::next::entry::error::DecodeEntryError;
 use crate::next::entry::validate::validate_signature;
 use crate::next::entry::{EncodedEntry, Entry};
 
-/// Method to validate and decode an entry.
+/// Method to decode an entry.
 ///
-/// The following validation steps are applied:
+/// In this process the following validation steps are applied:
 ///
 /// 1. Check correct Bamboo encoding as per specification (#E2)
 /// 2. Check if back- and skiplinks are correctly set for given sequence number (#E3)
@@ -34,7 +43,7 @@ pub fn decode_entry(entry_encoded: &EncodedEntry) -> Result<Entry, DecodeEntryEr
     let bamboo_entry = decode(&bytes)?;
 
     // Convert from external crate type to our `Entry` struct
-    let entry: Entry = bamboo_entry.try_into()?;
+    let entry: Entry = bamboo_entry.into();
 
     // Check the signature (#E5)
     validate_signature(&entry)?;

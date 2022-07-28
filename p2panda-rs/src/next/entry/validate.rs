@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Collection of low-level validation methods for entries.
+//!
+//! Encoding is checked in the regarding methods of the bamboo crate.
 use crate::next::entry::error::ValidateEntryError;
 use crate::next::entry::Entry;
 use crate::next::operation::EncodedOperation;

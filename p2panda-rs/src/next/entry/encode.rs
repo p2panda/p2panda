@@ -1,5 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Methods to sign and encode an entry.
+//!
+//! Create a new `Entry` instance using the `EntryBuilder` or the alternative low-level
+//! `sign_entry` method which takes in the entry arguments and `KeyPair` for signing. Use
+//! `encode_entry` to create an `EncodedEntry` instance which can then be serialised and sent to a
+//! p2panda node.
+//!
+//! ```text
+//! ┌─────┐                     ┌────────────┐
+//! │Entry│ ──encode_entry()──► │EncodedEntry│ ─────► bytes
+//! └─────┘                     └────────────┘
+//! ```
 use bamboo_rs_core_ed25519_yasmf::entry::{is_lipmaa_required, MAX_ENTRY_SIZE};
 use bamboo_rs_core_ed25519_yasmf::{Entry as BambooEntry, Signature as BambooSignature};
 
@@ -44,7 +56,7 @@ pub fn sign_entry(
     //
     // See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding details and definition of
     // entry fields.
-    let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
+    let entry: BambooEntry<_, &[u8]> = BambooEntry {
         is_end_of_feed: false,
         author: key_pair.public_key().to_owned(),
         log_id: log_id.as_u64(),
@@ -90,7 +102,7 @@ pub fn sign_entry(
 pub fn encode_entry(entry: &Entry) -> Result<EncodedEntry, EncodeEntryError> {
     let signature_bytes = entry.signature().into_bytes();
 
-    let mut entry: BambooEntry<_, &[u8]> = BambooEntry {
+    let entry: BambooEntry<_, &[u8]> = BambooEntry {
         is_end_of_feed: false,
         author: entry.public_key().into(),
         log_id: entry.log_id().as_u64(),
@@ -111,7 +123,7 @@ pub fn encode_entry(entry: &Entry) -> Result<EncodedEntry, EncodeEntryError> {
     // Calling this also checks if the backlink is not set for the first entry (#E3).
     let signed_entry_size = entry.encode(&mut entry_bytes)?;
 
-    Ok(EncodedEntry::from(&entry_bytes[..signed_entry_size]))
+    Ok(EncodedEntry::from_bytes(&entry_bytes[..signed_entry_size]))
 }
 
 /// High-level method which applies both signing and encoding an entry into one step, returns an

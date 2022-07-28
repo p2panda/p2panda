@@ -22,6 +22,15 @@ pub struct EncodedEntry(
 );
 
 impl EncodedEntry {
+    /// Returns new `EncodedEntry` instance from given bytes.
+    ///
+    /// This does not apply any validation and should only be used in methods where all checks have
+    /// taken place before.
+    // @TODO: Check pub(crate) visibility
+    pub(crate) fn from_bytes(bytes: &[u8]) -> EncodedEntry {
+        Self(bytes.to_owned())
+    }
+
     /// Generates and returns hash of encoded entry.
     pub fn hash(&self) -> Hash {
         Hash::new_from_bytes(&self.0)
@@ -41,12 +50,6 @@ impl EncodedEntry {
 impl Display for EncodedEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", hex::encode(&self.0))
-    }
-}
-
-impl From<&[u8]> for EncodedEntry {
-    fn from(bytes: &[u8]) -> Self {
-        Self(bytes.to_owned())
     }
 }
 

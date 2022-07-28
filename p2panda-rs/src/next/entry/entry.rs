@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 use std::hash::Hash as StdHash;
 
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
@@ -9,7 +9,7 @@ use bamboo_rs_core_ed25519_yasmf::Entry as BambooEntry;
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::next::entry::encode::sign_entry;
-use crate::next::entry::error::{DecodeEntryError, EntryBuilderError};
+use crate::next::entry::error::EntryBuilderError;
 use crate::next::entry::{LogId, SeqNum, Signature};
 use crate::next::operation::EncodedOperation;
 
@@ -61,15 +61,15 @@ impl EntryBuilder {
 
     /// Signs entry and secures payload with the author's key pair, returns a new `Entry` instance.
     ///
-    /// An `EncodedOperation` is required here as the entry payload. The entry is "pointing" at the
-    /// payload to secure and authenticate it. Later on, the payload can theoretically be deleted
-    /// when it is not needed anymore.
+    /// An `EncodedOperation` is required here for the entry payload. The entry is "pointing" at
+    /// the payload to secure and authenticate it. Later on, the payload can theoretically be
+    /// deleted when it is not needed anymore.
     ///
     /// Using this method we can assume that the entry will be correctly signed. This applies only
     /// basic checks if the backlink and skiplink is correctly set for the given sequence number
-    /// (#E3). Please note though that this method not check for correct log integrity!
+    /// (#E3). Please note though that this method can not check for correct log integrity!
     pub fn sign(
-        mut self,
+        &self,
         encoded_operation: &EncodedOperation,
         key_pair: &KeyPair,
     ) -> Result<Entry, EntryBuilderError> {
@@ -97,6 +97,10 @@ impl EntryBuilder {
 /// without loosing the integrity of the log. Payload data is formatted as "operations" in p2panda.
 /// Each entry only holds a hash of the operation payload, this is why an [`Operation`] instance is
 /// required during entry signing.
+///
+/// It is not possible to directly create an `Entry` instance without validation, use the
+/// `EntryBuilder` to programmatically create and sign one or decode it from bytes via the
+/// `EncodedEntry` struct.
 ///
 /// [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 // @TODO: Fix pub(crate) visibility
@@ -184,10 +188,8 @@ impl Entry {
     }
 }
 
-impl TryFrom<BambooEntry<&[u8], &[u8]>> for Entry {
-    type Error = DecodeEntryError;
-
-    fn try_from(entry: BambooEntry<&[u8], &[u8]>) -> Result<Self, Self::Error> {
+impl From<BambooEntry<&[u8], &[u8]>> for Entry {
+    fn from(entry: BambooEntry<&[u8], &[u8]>) -> Self {
         // Convert all hashes into our types
         let backlink: Option<Hash> = match entry.backlink {
             Some(link) => Some((&link).into()),
@@ -201,18 +203,22 @@ impl TryFrom<BambooEntry<&[u8], &[u8]>> for Entry {
 
         let payload_hash: Hash = (&entry.payload_hash).into();
 
-        // Unwrap as we know that there is a signature coming from bamboo
+        // Unwrap as we assume that there IS a signature coming from bamboo struct at this point
         let signature = entry.sig.expect("signature expected").into();
 
-        Ok(Entry {
+        // Unwrap as the sequence number was already checked when decoding the bytes into the
+        // bamboo struct
+        let seq_num = entry.seq_num.try_into().expect("invalid sequence number");
+
+        Entry {
             author: (&entry.author).into(),
             log_id: entry.log_id.into(),
-            seq_num: entry.seq_num.try_into()?,
+            seq_num,
             skiplink,
             backlink,
             payload_hash,
             payload_size: entry.payload_size,
             signature,
-        })
+        }
     }
 }
