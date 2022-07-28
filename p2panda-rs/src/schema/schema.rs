@@ -313,8 +313,7 @@ mod tests {
     use crate::operation::{OperationId, OperationValue, PinnedRelationList};
     use crate::schema::system::{SchemaFieldView, SchemaView};
     use crate::schema::{FieldType, Schema, SchemaId, SchemaVersion};
-    use crate::test_utils::fixtures::{document_view_id, random_key_pair, random_operation_id};
-    use crate::test_utils::mocks::{send_to_node, Client, Node};
+    use crate::test_utils::fixtures::{document_view_id, random_operation_id};
     use crate::Human;
 
     fn create_schema_view(
@@ -646,9 +645,18 @@ mod tests {
         )
         .is_err());
     }
+}
+// Exclude wasm which doesn't support `Node`
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(test)]
+mod tests_wasm_not_invited {
+    use rstest::rstest;
 
-    // Exclude wasm which doesn't support `Node`
-    #[cfg(not(target_arch = "wasm32"))]
+    use crate::operation::OperationValue;
+    use crate::schema::{FieldType, Schema};
+    use crate::test_utils::fixtures::random_key_pair;
+    use crate::test_utils::mocks::{send_to_node, Client, Node};
+
     #[rstest]
     #[tokio::test]
     // Override because Clippy does not recognise that `matches` consumes its parameters
