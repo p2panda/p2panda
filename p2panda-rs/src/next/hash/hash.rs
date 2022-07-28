@@ -123,7 +123,7 @@ impl<'de> Deserialize<'de> for Hash {
 
         // Convert and validate format
         hash.try_into()
-            .map_err(|err| serde::de::Error::custom(format!("invalid hash, {}", err)))
+            .map_err(|err: HashError| serde::de::Error::custom(err.to_string()))
     }
 }
 

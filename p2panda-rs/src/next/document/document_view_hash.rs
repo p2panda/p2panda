@@ -43,7 +43,7 @@ impl From<Hash> for DocumentViewHash {
 impl From<&DocumentViewId> for DocumentViewHash {
     fn from(document_view_id: &DocumentViewId) -> Self {
         let graph_tip_bytes: Vec<u8> = document_view_id
-            .to_owned()
+            .canonic()
             .into_iter()
             .flat_map(|graph_tip| graph_tip.as_hash().to_bytes())
             .collect();
@@ -68,6 +68,7 @@ mod tests {
         #[from(random_operation_id)] operation_id_1: OperationId,
         #[from(random_operation_id)] operation_id_2: OperationId,
     ) {
+        // @TODO: This will fail as soon as we check against sorted operations
         let view_id_1 =
             DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]).unwrap();
         let view_hash_1 = DocumentViewHash::from(&view_id_1);

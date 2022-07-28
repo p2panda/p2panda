@@ -54,7 +54,7 @@ impl DocumentViewId {
     }
 
     /// Return sorted and de-duplicated list of operation ids.
-    fn canonic(&self) -> Vec<OperationId> {
+    pub(crate) fn canonic(&self) -> Vec<OperationId> {
         // @TODO: Remove duplicates
         let mut graph_tips = self.0.clone();
         graph_tips.sort();
