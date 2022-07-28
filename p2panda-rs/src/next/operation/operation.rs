@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::next::document::DocumentViewId;
-use crate::next::operation::error::ValidateOperationError;
+use crate::next::operation::error::OperationBuilderError;
 use crate::next::operation::plain::PlainFields;
 use crate::next::operation::traits::{Actionable, AsOperation, Schematic};
 use crate::next::operation::validate::validate_operation;
@@ -54,7 +54,7 @@ impl OperationBuilder {
         self
     }
 
-    pub fn build(&self) -> Result<Operation, ValidateOperationError> {
+    pub fn build(&self) -> Result<Operation, OperationBuilderError> {
         let operation = Operation {
             action: self.action,
             version: OperationVersion::V1,
