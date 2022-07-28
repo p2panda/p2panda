@@ -17,8 +17,8 @@ pub enum DecodeOperationError {
     #[error("cbor decoder failed {0}")]
     DecoderIOFailed(String),
 
-    #[error("invalid cbor encoding {0}")]
-    InvalidCBOREncoding(String),
+    #[error("invalid cbor encoding at byte {0}")]
+    InvalidCBOREncoding(usize),
 
     #[error("{0}")]
     InvalidEncoding(String),

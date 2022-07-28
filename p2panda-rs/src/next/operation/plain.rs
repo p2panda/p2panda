@@ -234,24 +234,26 @@ impl<'de> Deserialize<'de> for PlainOperation {
             where
                 A: serde::de::SeqAccess<'de>,
             {
-                let version: OperationVersion = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::custom("missing version field"))?;
+                let version: OperationVersion = seq.next_element()?.ok_or_else(|| {
+                    serde::de::Error::custom("missing version field in operation format")
+                })?;
 
-                let action: OperationAction = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::custom("missing action field"))?;
+                let action: OperationAction = seq.next_element()?.ok_or_else(|| {
+                    serde::de::Error::custom("missing action field in operation format")
+                })?;
 
-                let schema_id: SchemaId = seq
-                    .next_element()?
-                    .ok_or_else(|| serde::de::Error::custom("missing schema field"))?;
+                let schema_id: SchemaId = seq.next_element()?.ok_or_else(|| {
+                    serde::de::Error::custom("missing schema id field in operation format")
+                })?;
 
                 let previous_operations = match action {
                     OperationAction::Create => None,
                     OperationAction::Update | OperationAction::Delete => {
                         let document_view_id: DocumentViewId =
                             seq.next_element()?.ok_or_else(|| {
-                                serde::de::Error::custom("missing previous_operations field")
+                                serde::de::Error::custom(
+                                    "missing previous_operations field for this operation action",
+                                )
                             })?;
 
                         Some(document_view_id)
@@ -260,9 +262,9 @@ impl<'de> Deserialize<'de> for PlainOperation {
 
                 let fields = match action {
                     OperationAction::Create | OperationAction::Update => {
-                        let raw_fields: PlainFields = seq
-                            .next_element()?
-                            .ok_or_else(|| serde::de::Error::custom("missing fields"))?;
+                        let raw_fields: PlainFields = seq.next_element()?.ok_or_else(|| {
+                            serde::de::Error::custom("missing fields for this operation action")
+                        })?;
 
                         Some(raw_fields)
                     }
@@ -273,7 +275,7 @@ impl<'de> Deserialize<'de> for PlainOperation {
                     Some(items_left) => {
                         if items_left > 0 {
                             return Err(serde::de::Error::custom(
-                                "invalid operation format, found too many items",
+                                "too many items for this operation action",
                             ));
                         }
                     }

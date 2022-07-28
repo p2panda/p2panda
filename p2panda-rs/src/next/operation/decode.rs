@@ -14,9 +14,7 @@ pub fn decode_operation(
     let plain_operation: PlainOperation =
         ciborium::de::from_reader(bytes).map_err(|err| match err {
             ciborium::de::Error::Io(err) => DecodeOperationError::DecoderIOFailed(err.to_string()),
-            ciborium::de::Error::Syntax(err) => {
-                DecodeOperationError::InvalidCBOREncoding(err.to_string())
-            }
+            ciborium::de::Error::Syntax(pos) => DecodeOperationError::InvalidCBOREncoding(pos),
             ciborium::de::Error::Semantic(_, err) => {
                 DecodeOperationError::InvalidEncoding(err.to_string())
             }
@@ -186,13 +184,25 @@ mod tests {
         cbor!("01"),
         "invalid type: string, expected array"
     )]
+    #[case::missing_version(
+        cbor!([]),
+        "missing version field in operation format"
+    )]
     #[case::invalid_version(
         cbor!(["this is not a version", 0, SCHEMA_ID, { "name" => "Panda" }]),
         "invalid type: string, expected integer"
     )]
-    #[case::unsupported_version(
+    #[case::unsupported_version_1(
         cbor!([100, 0, SCHEMA_ID, { "name" => "Panda" }]),
         "unsupported operation version 100"
+    )]
+    #[case::unsupported_version_2(
+        cbor!([0, 0, SCHEMA_ID, { "name" => "Panda" }]),
+        "unsupported operation version 0"
+    )]
+    #[case::missing_action(
+        cbor!([1]),
+        "missing action field in operation format"
     )]
     #[case::invalid_action(
         cbor!([1, "this is not an action", SCHEMA_ID, { "is_cute" => true } ]),
@@ -201,6 +211,10 @@ mod tests {
     #[case::unsupported_action(
         cbor!([1, 100, SCHEMA_ID, { "is_cute" => true } ]),
         "unknown operation action 100"
+    )]
+    #[case::missing_schema_id(
+        cbor!([1, 0]),
+        "missing schema id field in operation format"
     )]
     #[case::invalid_schema_id_incomplete(
         cbor!([1, 0, "venue_0020", { "name" => "Panda" } ]),
@@ -260,23 +274,23 @@ mod tests {
     )]
     #[case::missing_previous_operations_delete(
         cbor!([1, 2, SCHEMA_ID ]),
-        "missing previous_operations field"
+        "missing previous_operations field for this operation action"
     )]
     #[case::missing_fields_create(
         cbor!([1, 0, SCHEMA_ID ]),
-        "missing fields"
+        "missing fields for this operation action"
     )]
     #[case::missing_fields_update(
         cbor!([1, 1, SCHEMA_ID, [HASH] ]),
-        "missing fields"
+        "missing fields for this operation action"
     )]
     #[case::invalid_fields_delete(
         cbor!([1, 2, SCHEMA_ID, [HASH], { "is_wrong" => true }]),
-        "invalid operation format, found too many items"
+        "too many items for this operation action"
     )]
     #[case::too_many_items_create(
         cbor!([1, 0, SCHEMA_ID, { "is_cute" => true }, { "is_cute" => true }]),
-        "invalid operation format, found too many items"
+        "too many items for this operation action"
     )]
     fn wrong_operation_format(#[case] raw_operation: Result<Value, Error>, #[case] expected: &str) {
         let bytes = encode_cbor(raw_operation.expect("Invalid CBOR value"));
