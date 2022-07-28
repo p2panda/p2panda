@@ -66,8 +66,8 @@
 //!
 //! ## Validation
 //!
-//! The above high-level methods will automatically do different sorts of validation checks. All
-//! low-level methods can also be used independently, depending on your implementation:
+//! The above mentioned high-level methods will automatically do different sorts of validation
+//! checks. All low-level methods can also be used independently, depending on your implementation:
 //!
 //! 1. @TODO ..
 //! 2. @TODO ..
