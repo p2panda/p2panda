@@ -56,9 +56,9 @@ mod tests {
     use rstest::rstest;
     use rstest_reuse::apply;
 
-    /* use crate::test_utils::fixtures::Fixture;
+    use crate::next::test_utils::fixtures::Fixture;
+    use crate::next::test_utils::templates::version_fixtures;
 
     #[apply(version_fixtures)]
-    fn decode_fixture_entry(#[case] fixture: Fixture) {
-    } */
+    fn decode_fixture_entry(#[case] fixture: Fixture) {}
 }
