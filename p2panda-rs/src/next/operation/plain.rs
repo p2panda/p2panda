@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::marker::PhantomData;
 
 use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
@@ -235,22 +236,22 @@ impl<'de> Deserialize<'de> for PlainOperation {
             {
                 let version: OperationVersion = seq
                     .next_element()?
-                    .ok_or_else(|| serde::de::Error::custom("Missing version field"))?;
+                    .ok_or_else(|| serde::de::Error::custom("missing version field"))?;
 
                 let action: OperationAction = seq
                     .next_element()?
-                    .ok_or_else(|| serde::de::Error::custom("Missing action field"))?;
+                    .ok_or_else(|| serde::de::Error::custom("missing action field"))?;
 
                 let schema_id: SchemaId = seq
                     .next_element()?
-                    .ok_or_else(|| serde::de::Error::custom("Missing schema field"))?;
+                    .ok_or_else(|| serde::de::Error::custom("missing schema field"))?;
 
                 let previous_operations = match action {
                     OperationAction::Create => None,
                     OperationAction::Update | OperationAction::Delete => {
                         let document_view_id: DocumentViewId =
                             seq.next_element()?.ok_or_else(|| {
-                                serde::de::Error::custom("Missing previous_operations field")
+                                serde::de::Error::custom("missing previous_operations field")
                             })?;
 
                         Some(document_view_id)
@@ -261,11 +262,22 @@ impl<'de> Deserialize<'de> for PlainOperation {
                     OperationAction::Create | OperationAction::Update => {
                         let raw_fields: PlainFields = seq
                             .next_element()?
-                            .ok_or_else(|| serde::de::Error::custom("Missing fields"))?;
+                            .ok_or_else(|| serde::de::Error::custom("missing fields"))?;
 
                         Some(raw_fields)
                     }
                     OperationAction::Delete => None,
+                };
+
+                match seq.size_hint() {
+                    Some(items_left) => {
+                        if items_left > 0 {
+                            return Err(serde::de::Error::custom(
+                                "invalid operation format, found too many items",
+                            ));
+                        }
+                    }
+                    None => (),
                 };
 
                 Ok(PlainOperation(

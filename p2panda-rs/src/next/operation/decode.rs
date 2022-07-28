@@ -50,7 +50,7 @@ mod tests {
     use crate::next::test_utils::fixtures::{schema_id, Fixture};
     use crate::next::test_utils::templates::version_fixtures;
 
-    use super::decode_and_validate_operation;
+    use super::{decode_and_validate_operation, decode_operation};
 
     fn encode_cbor(value: Value) -> EncodedOperation {
         let mut cbor_bytes = Vec::new();
@@ -166,6 +166,122 @@ mod tests {
         let bytes = encode_cbor(raw_operation.expect("Invalid CBOR value"));
         assert_eq!(
             decode_and_validate_operation(&bytes, &schema)
+                .err()
+                .expect("Expect error")
+                .to_string(),
+            expected
+        );
+    }
+
+    #[rstest]
+    #[case::garbage_1(
+        cbor!({ "action" => "oldschool", "version" => 1 }),
+        "invalid type: map, expected array"
+    )]
+    #[case::garbage_2(
+        cbor!([1, 2, 3, 4, 5, 6, 7, 8, 9]),
+        "invalid type: integer `3`, expected schema id as string"
+    )]
+    #[case::garbage_3(
+        cbor!("01"),
+        "invalid type: string, expected array"
+    )]
+    #[case::invalid_version(
+        cbor!(["this is not a version", 0, SCHEMA_ID, { "name" => "Panda" }]),
+        "invalid type: string, expected integer"
+    )]
+    #[case::unsupported_version(
+        cbor!([100, 0, SCHEMA_ID, { "name" => "Panda" }]),
+        "unsupported operation version 100"
+    )]
+    #[case::invalid_action(
+        cbor!([1, "this is not an action", SCHEMA_ID, { "is_cute" => true } ]),
+        "invalid type: string, expected integer"
+    )]
+    #[case::unsupported_action(
+        cbor!([1, 100, SCHEMA_ID, { "is_cute" => true } ]),
+        "unknown operation action 100"
+    )]
+    #[case::invalid_schema_id_incomplete(
+        cbor!([1, 0, "venue_0020", { "name" => "Panda" } ]),
+        "encountered invalid hash while parsing application schema id: invalid hash length 2 bytes, expected 34 bytes"
+    )]
+    #[case::invalid_schema_id_hex(
+        cbor!([1, 0, "this is not a hash", { "name" => "Panda" } ]),
+        "malformed schema id `this is not a hash`: doesn't contain an underscore"
+    )]
+    #[case::invalid_schema_id_name_missing(
+        cbor!([1, 0, HASH, { "name" => "Panda" } ]),
+        "malformed schema id `0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543`: doesn't contain an underscore"
+    )]
+    #[case::invalid_previous_operations_hex(
+        cbor!([1, 2, SCHEMA_ID, ["this is not a hash"] ]),
+        "Error parsing document view id at position 0: invalid hex encoding in hash string"
+    )]
+    #[case::invalid_previous_operations_incomplete(
+        cbor!([1, 2, SCHEMA_ID, ["0020"] ]),
+        "Error parsing document view id at position 0: invalid hash length 2 bytes, expected 34 bytes"
+    )]
+    #[case::invalid_previous_operations_array(
+        cbor!([1, 2, SCHEMA_ID, {} ]),
+        "invalid type: map, expected array"
+    )]
+    #[case::invalid_fields_key_type_1(
+        cbor!([1, 0, SCHEMA_ID, { 12 => "Panda" } ]),
+        "invalid type: integer `12`, expected string"
+    )]
+    #[case::invalid_fields_key_type_2(
+        cbor!([1, 0, SCHEMA_ID, { "a" => "value", "b" => { "nested" => "wrong "} } ]),
+        "data did not match any variant of untagged enum PlainValue"
+    )]
+    #[case::invalid_fields_value_type(
+        cbor!([1, 0, SCHEMA_ID, { "some" => { "nested" => "map" } } ]),
+        "data did not match any variant of untagged enum PlainValue"
+    )]
+    #[case::missing_schema_create(
+        cbor!([1, 0, { "is_cute" => true } ]),
+        "invalid type: map, expected schema id as string"
+    )]
+    #[case::missing_schema_update(
+        cbor!([1, 1, [HASH, HASH], { "is_cute" => true } ]),
+        "invalid type: sequence, expected schema id as string"
+    )]
+    #[case::missing_schema_delete(
+        cbor!([1, 2, [HASH] ]),
+        "invalid type: sequence, expected schema id as string"
+    )]
+    #[case::invalid_previous_operations_create(
+        cbor!([1, 0, SCHEMA_ID, [HASH], { "is_cute" => true } ]),
+        "invalid type: sequence, expected map"
+    )]
+    #[case::missing_previous_operations_update(
+        cbor!([1, 1, SCHEMA_ID, { "is_cute" => true } ]),
+        "invalid type: map, expected array"
+    )]
+    #[case::missing_previous_operations_delete(
+        cbor!([1, 2, SCHEMA_ID ]),
+        "missing previous_operations field"
+    )]
+    #[case::missing_fields_create(
+        cbor!([1, 0, SCHEMA_ID ]),
+        "missing fields"
+    )]
+    #[case::missing_fields_update(
+        cbor!([1, 1, SCHEMA_ID, [HASH] ]),
+        "missing fields"
+    )]
+    #[case::invalid_fields_delete(
+        cbor!([1, 2, SCHEMA_ID, [HASH], { "is_wrong" => true }]),
+        "invalid operation format, found too many items"
+    )]
+    #[case::too_many_items_create(
+        cbor!([1, 0, SCHEMA_ID, { "is_cute" => true }, { "is_cute" => true }]),
+        "invalid operation format, found too many items"
+    )]
+    fn wrong_operation_format(#[case] raw_operation: Result<Value, Error>, #[case] expected: &str) {
+        let bytes = encode_cbor(raw_operation.expect("Invalid CBOR value"));
+        assert_eq!(
+            decode_operation(&bytes)
                 .err()
                 .expect("Expect error")
                 .to_string(),
