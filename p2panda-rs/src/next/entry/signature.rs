@@ -3,26 +3,34 @@
 use std::hash::Hash as StdHash;
 
 use bamboo_rs_core_ed25519_yasmf::Signature as BambooSignature;
+use ed25519_dalek::Signature as Ed25519Signature;
 
-/// Wrapper type around bytes representing an Ed25519 signature.
-#[derive(Debug, Clone, Eq, PartialEq, StdHash)]
-pub struct Signature(Vec<u8>);
+/// Ed25519 signature.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct Signature(Ed25519Signature);
 
 impl Signature {
     /// Returns signature as bytes.
     pub fn into_bytes(&self) -> Vec<u8> {
-        self.0.clone()
+        self.0.to_bytes().to_vec()
     }
 }
 
 impl From<BambooSignature<&[u8]>> for Signature {
     fn from(signature: BambooSignature<&[u8]>) -> Self {
-        Self(signature.0.to_owned())
+        // Unwrap here as the signature from bamboo should already be checked
+        Signature(Ed25519Signature::from_bytes(signature.0).unwrap())
     }
 }
 
-impl From<&[u8]> for Signature {
-    fn from(bytes: &[u8]) -> Self {
-        Self(bytes.to_owned())
+impl From<Ed25519Signature> for Signature {
+    fn from(signature: Ed25519Signature) -> Self {
+        Self(signature)
+    }
+}
+
+impl StdHash for Signature {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.into_bytes().hash(state)
     }
 }

@@ -218,14 +218,39 @@ impl From<BambooEntry<&[u8], &[u8]>> for Entry {
 mod tests {
     use rstest::rstest;
 
-    use crate::identity::KeyPair;
-    use crate::next::entry::SeqNum;
+    use crate::identity::{Author, KeyPair};
+    use crate::next::entry::{LogId, SeqNum};
     use crate::next::hash::Hash;
     use crate::next::operation::EncodedOperation;
     use crate::next::test_utils::fixtures::{encoded_operation, random_hash};
     use crate::test_utils::fixtures::key_pair;
 
     use super::EntryBuilder;
+
+    #[rstest]
+    fn entry_builder(
+        #[from(random_hash)] entry_hash: Hash,
+        encoded_operation: EncodedOperation,
+        key_pair: KeyPair,
+    ) {
+        let log_id = LogId::new(92);
+        let seq_num = SeqNum::new(14002).unwrap();
+
+        let entry = EntryBuilder::new()
+            .log_id(&log_id)
+            .seq_num(&seq_num)
+            .backlink(&entry_hash)
+            .sign(&encoded_operation, &key_pair)
+            .unwrap();
+
+        assert_eq!(entry.public_key(), &Author::from(key_pair.public_key()));
+        assert_eq!(entry.log_id(), &log_id);
+        assert_eq!(entry.seq_num(), &seq_num);
+        assert_eq!(entry.skiplink(), None);
+        assert_eq!(entry.backlink(), Some(&entry_hash));
+        assert_eq!(entry.payload_hash(), &encoded_operation.hash());
+        assert_eq!(entry.payload_size(), encoded_operation.size());
+    }
 
     #[rstest]
     fn entry_builder_validation(
@@ -271,5 +296,47 @@ mod tests {
             .backlink(&entry_hash_1)
             .sign(&encoded_operation, &key_pair)
             .is_err());
+    }
+
+    #[rstest]
+    fn entry_links_methods(
+        #[from(random_hash)] entry_hash_1: Hash,
+        #[from(random_hash)] entry_hash_2: Hash,
+        encoded_operation: EncodedOperation,
+        key_pair: KeyPair,
+    ) {
+        // First entry does not return any backlink or skiplink sequence number
+        let entry = EntryBuilder::new()
+            .sign(&encoded_operation, &key_pair)
+            .unwrap();
+
+        assert_eq!(entry.seq_num_backlink(), None);
+        // @TODO: This fails ..
+        // https://github.com/p2panda/p2panda/issues/417
+        assert_eq!(entry.seq_num_skiplink(), None);
+        assert_eq!(entry.is_skiplink_required(), false);
+
+        // Second entry returns sequence number for backlink
+        let entry = EntryBuilder::new()
+            .seq_num(&SeqNum::new(2).unwrap())
+            .backlink(&entry_hash_1)
+            .sign(&encoded_operation, &key_pair)
+            .unwrap();
+
+        assert_eq!(entry.seq_num_backlink(), Some(SeqNum::new(1).unwrap()));
+        assert_eq!(entry.seq_num_skiplink(), None);
+        assert_eq!(entry.is_skiplink_required(), false);
+
+        // Fourth entry returns sequence number for backlink and skiplink
+        let entry = EntryBuilder::new()
+            .seq_num(&SeqNum::new(4).unwrap())
+            .backlink(&entry_hash_1)
+            .skiplink(&entry_hash_2)
+            .sign(&encoded_operation, &key_pair)
+            .unwrap();
+
+        assert_eq!(entry.seq_num_backlink(), Some(SeqNum::new(3).unwrap()));
+        assert_eq!(entry.seq_num_skiplink(), Some(SeqNum::new(1).unwrap()));
+        assert_eq!(entry.is_skiplink_required(), true);
     }
 }

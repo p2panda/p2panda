@@ -75,7 +75,6 @@ pub fn sign_entry(
 
     // Sign entry
     let signature = key_pair.sign(&entry_bytes[..entry_size]);
-    let signature_bytes = signature.to_bytes();
 
     let signed_entry = Entry {
         author: key_pair.public_key().into(),
@@ -85,7 +84,7 @@ pub fn sign_entry(
         backlink: backlink_hash.cloned(),
         payload_size,
         payload_hash,
-        signature: signature_bytes[..].into(),
+        signature: signature.into(),
     };
 
     // Make sure the links are correct (#E3)
