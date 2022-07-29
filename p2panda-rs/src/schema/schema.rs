@@ -121,7 +121,7 @@ impl Schema {
     /// #
     /// # #[rstest]
     /// # fn main(#[from(document_view_id)] schema_document_view_id: DocumentViewId) {
-    ///
+    /// #
     /// # let from_field_view_id = random_operation_id();
     /// # let to_field_view_id = random_operation_id();
     /// // Assuming you have created two fields beforehand:
@@ -129,8 +129,8 @@ impl Schema {
     ///     "chess_move",
     ///     "a move in my chess game",
     ///     vec![from_field_view_id, to_field_view_id].into()
-    /// );
-    /// assert!(create_operation.is_ok());
+    /// ).unwrap();
+    /// assert!(create_operation.validate().is_ok());
     /// # }
     /// # }
     /// ```
@@ -165,8 +165,8 @@ impl Schema {
     /// let create_operation: Operation = Schema::create_field(
     ///     "field_name",
     ///     FieldType::String,
-    /// );
-    /// assert!(create_operation.is_ok());
+    /// ).unwrap();
+    /// assert!(create_operation.validate().is_ok());
     /// # }
     /// # }
     /// ```
