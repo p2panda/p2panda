@@ -26,7 +26,6 @@ impl EncodedEntry {
     ///
     /// This does not apply any validation and should only be used in methods where all checks have
     /// taken place before.
-    // @TODO: Check pub(crate) visibility
     pub(crate) fn from_bytes(bytes: &[u8]) -> Self {
         Self(bytes.to_owned())
     }

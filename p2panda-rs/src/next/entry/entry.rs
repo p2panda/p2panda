@@ -103,7 +103,6 @@ impl EntryBuilder {
 /// `EncodedEntry` struct.
 ///
 /// [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
-// @TODO: Fix pub(crate) visibility
 #[derive(Debug, Clone, Eq, PartialEq, StdHash)]
 pub struct Entry {
     /// Author of this entry.
@@ -212,5 +211,65 @@ impl From<BambooEntry<&[u8], &[u8]>> for Entry {
             payload_size: entry.payload_size,
             signature,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use crate::identity::KeyPair;
+    use crate::next::entry::SeqNum;
+    use crate::next::hash::Hash;
+    use crate::next::operation::EncodedOperation;
+    use crate::next::test_utils::fixtures::{encoded_operation, random_hash};
+    use crate::test_utils::fixtures::key_pair;
+
+    use super::EntryBuilder;
+
+    #[rstest]
+    fn entry_builder_validation(
+        #[from(random_hash)] entry_hash_1: Hash,
+        #[from(random_hash)] entry_hash_2: Hash,
+        encoded_operation: EncodedOperation,
+        key_pair: KeyPair,
+    ) {
+        // The first entry in a log doesn't need and cannot have references to previous entries
+        assert!(EntryBuilder::new()
+            .sign(&encoded_operation, &key_pair)
+            .is_ok());
+
+        // Can not have back- and skiplinks on first entry
+        assert!(EntryBuilder::new()
+            .skiplink(&entry_hash_1)
+            .backlink(&entry_hash_2)
+            .sign(&encoded_operation, &key_pair)
+            .is_err());
+
+        // Needs backlink on second entry
+        assert!(EntryBuilder::new()
+            .seq_num(&SeqNum::new(2).unwrap())
+            .backlink(&entry_hash_1)
+            .sign(&encoded_operation, &key_pair)
+            .is_ok());
+
+        assert!(EntryBuilder::new()
+            .seq_num(&SeqNum::new(2).unwrap())
+            .sign(&encoded_operation, &key_pair)
+            .is_err());
+
+        // Needs skiplink on forth entry
+        assert!(EntryBuilder::new()
+            .seq_num(&SeqNum::new(4).unwrap())
+            .backlink(&entry_hash_1)
+            .skiplink(&entry_hash_2)
+            .sign(&encoded_operation, &key_pair)
+            .is_ok());
+
+        assert!(EntryBuilder::new()
+            .seq_num(&SeqNum::new(4).unwrap())
+            .backlink(&entry_hash_1)
+            .sign(&encoded_operation, &key_pair)
+            .is_err());
     }
 }

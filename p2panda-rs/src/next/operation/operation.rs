@@ -84,7 +84,6 @@ impl OperationBuilder {
 /// operation ids which identify the known branch tips at the time of publication. These allow us
 /// to build the graph and retain knowledge of the graph state at the time the specific operation
 /// was published.
-// @TODO: Fix pub(crate) visibility
 #[derive(Clone, Debug, PartialEq)]
 pub struct Operation {
     /// Version of this operation.
