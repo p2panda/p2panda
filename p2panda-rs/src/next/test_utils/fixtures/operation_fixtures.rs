@@ -49,7 +49,7 @@ pub fn random_previous_operations(#[default(1)] num: u32) -> DocumentViewId {
     // document view id
     previous_operations.sort();
 
-    DocumentViewId::new(&previous_operations).unwrap()
+    DocumentViewId::new(&previous_operations)
 }
 
 /// Returns operation fields populated with test values.

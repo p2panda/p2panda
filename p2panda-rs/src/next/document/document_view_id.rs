@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::fmt::{Display, Write};
+use std::hash::Hash as StdHash;
+use std::slice::Iter;
 use std::str::FromStr;
 
 use serde::{Deserialize, Deserializer, Serialize};
@@ -37,14 +39,27 @@ use crate::{Human, Validate};
 ///                         \
 ///                          \__ [UPDATE] (Hash: "eff..")
 /// ```
-#[derive(Clone, Debug, Ord, PartialOrd, Eq)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, StdHash, Serialize)]
 pub struct DocumentViewId(Vec<OperationId>);
 
 impl DocumentViewId {
     /// Create a new document view id.
-    pub fn new(graph_tips: &[OperationId]) -> Result<Self, DocumentViewIdError> {
-        let document_view_id = Self(graph_tips.to_vec());
-        document_view_id.validate()?;
+    pub fn new(graph_tips: &[OperationId]) -> Self {
+        // @TODO: Remove duplicates
+        let mut graph_tips = graph_tips.to_owned();
+        graph_tips.sort();
+        Self(graph_tips)
+    }
+
+    fn from_untrusted(graph_tips: Vec<OperationId>) -> Result<Self, DocumentViewIdError> {
+        // Create document view id with potentially invalid data
+        let document_view_id = Self(graph_tips);
+
+        // Make sure its sorted and does not contain any duplicates (#OP3)
+        document_view_id
+            .validate()
+            .map_err(|_| DocumentViewIdError::UnsortedOperationIds)?;
+
         Ok(document_view_id)
     }
 
@@ -53,12 +68,9 @@ impl DocumentViewId {
         self.0.as_slice()
     }
 
-    /// Return sorted and de-duplicated list of operation ids.
-    pub(crate) fn canonic(&self) -> Vec<OperationId> {
-        // @TODO: Remove duplicates
-        let mut graph_tips = self.0.clone();
-        graph_tips.sort();
-        graph_tips
+    /// Get the operation ids of this view id.
+    pub fn iter(&self) -> Iter<OperationId> {
+        self.graph_tips().iter()
     }
 }
 
@@ -89,7 +101,7 @@ impl Validate for DocumentViewId {
 
 impl Display for DocumentViewId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (i, operation_id) in self.canonic().into_iter().enumerate() {
+        for (i, operation_id) in self.iter().enumerate() {
             let separator = if i == 0 { "" } else { "_" };
             let _ = write!(f, "{}{}", &separator, operation_id.as_str());
         }
@@ -103,7 +115,7 @@ impl Human for DocumentViewId {
         let mut result = String::new();
         let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
 
-        for (i, operation_id) in self.canonic().into_iter().enumerate() {
+        for (i, operation_id) in self.iter().enumerate() {
             let separator = if i == 0 { "" } else { "_" };
             write!(result, "{}{}", &separator, &operation_id.as_str()[offset..]).unwrap();
         }
@@ -121,36 +133,13 @@ impl TryFrom<&[String]> for DocumentViewId {
             .map(|operation_id_str| operation_id_str.parse::<OperationId>())
             .collect();
 
-        operation_ids?.as_slice().try_into()
+        Self::from_untrusted(operation_ids?)
     }
 }
 
-impl TryFrom<&[OperationId]> for DocumentViewId {
-    type Error = DocumentViewIdError;
-
-    fn try_from(value: &[OperationId]) -> Result<Self, Self::Error> {
+impl From<&[OperationId]> for DocumentViewId {
+    fn from(value: &[OperationId]) -> Self {
         Self::new(value)
-    }
-}
-
-impl std::hash::Hash for DocumentViewId {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.canonic().hash(state);
-    }
-}
-
-impl PartialEq for DocumentViewId {
-    fn eq(&self, other: &Self) -> bool {
-        self.canonic() == other.canonic()
-    }
-}
-
-impl Serialize for DocumentViewId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.canonic().serialize(serializer)
     }
 }
 
@@ -162,12 +151,8 @@ impl<'de> Deserialize<'de> for DocumentViewId {
         // Deserialize into list of operation ids
         let operation_ids: Vec<OperationId> = Deserialize::deserialize(deserializer)?;
 
-        // Create and validate document view id
-        let document_view_id = DocumentViewId::new(operation_ids.as_slice()).map_err(|err| {
-            serde::de::Error::custom(format!("invalid document view id, {}", err))
-        })?;
-
-        Ok(document_view_id)
+        Self::from_untrusted(operation_ids)
+            .map_err(|err| serde::de::Error::custom(format!("invalid document view id, {}", err)))
     }
 }
 
@@ -177,7 +162,7 @@ impl<'de> Deserialize<'de> for DocumentViewId {
 /// only consists of one graph tip hash.
 impl From<OperationId> for DocumentViewId {
     fn from(operation_id: OperationId) -> Self {
-        Self::new(&[operation_id]).unwrap()
+        Self::new(&[operation_id])
     }
 }
 
@@ -187,7 +172,7 @@ impl From<OperationId> for DocumentViewId {
 /// consists of one graph tip hash.
 impl From<Hash> for DocumentViewId {
     fn from(hash: Hash) -> Self {
-        Self::new(&[hash.into()]).unwrap()
+        Self::new(&[hash.into()])
     }
 }
 
@@ -208,17 +193,7 @@ impl FromStr for DocumentViewId {
                 Ok(())
             })?;
 
-        Ok(Self::new(&operations).unwrap())
-    }
-}
-
-impl IntoIterator for DocumentViewId {
-    type Item = OperationId;
-
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        Self::from_untrusted(operations)
     }
 }
 
@@ -245,19 +220,16 @@ mod tests {
         let document_id: DocumentViewId = hash_str.parse().unwrap();
         assert_eq!(
             document_id,
-            DocumentViewId::new(&[hash_str.parse::<OperationId>().unwrap()]).unwrap()
+            DocumentViewId::new(&[hash_str.parse::<OperationId>().unwrap()])
         );
 
         // Converts a `Hash` to `DocumentViewId`
         let document_id: DocumentViewId = hash.clone().into();
-        assert_eq!(
-            document_id,
-            DocumentViewId::new(&[hash.clone().into()]).unwrap()
-        );
+        assert_eq!(document_id, DocumentViewId::new(&[hash.clone().into()]));
 
         // Converts an `OperationId` to `DocumentViewId`
         let document_id: DocumentViewId = OperationId::new(&hash.clone()).into();
-        assert_eq!(document_id, DocumentViewId::new(&[hash.into()]).unwrap());
+        assert_eq!(document_id, DocumentViewId::new(&[hash.into()]));
 
         // Fails when string is not a hash
         assert!("This is not a hash".parse::<DocumentViewId>().is_err());
@@ -265,7 +237,7 @@ mod tests {
 
     #[rstest]
     fn iterates(document_view_id: DocumentViewId) {
-        for hash in document_view_id {
+        for hash in document_view_id.graph_tips() {
             assert!(hash.validate().is_ok());
         }
     }
@@ -291,7 +263,7 @@ mod tests {
             .parse::<OperationId>()
             .unwrap();
 
-        let document_view_id = DocumentViewId::new(&[operation_1, operation_2]).unwrap();
+        let document_view_id = DocumentViewId::new(&[operation_1, operation_2]);
         assert_eq!(document_view_id.to_string(), "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79");
         assert_eq!("0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543_0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79".parse::<DocumentViewId>().unwrap(), document_view_id);
     }
@@ -305,7 +277,7 @@ mod tests {
             .parse::<OperationId>()
             .unwrap();
 
-        let view_id_unmerged = DocumentViewId::new(&[operation_1, operation_2]).unwrap();
+        let view_id_unmerged = DocumentViewId::new(&[operation_1, operation_2]);
         assert_eq!(view_id_unmerged.display(), "496543_f16e79");
     }
 
@@ -314,9 +286,8 @@ mod tests {
         #[from(random_operation_id)] operation_id_1: OperationId,
         #[from(random_operation_id)] operation_id_2: OperationId,
     ) {
-        let view_id_1 =
-            DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]).unwrap();
-        let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]).unwrap();
+        let view_id_1 = DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]);
+        let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);
         assert_eq!(view_id_1, view_id_2);
     }
 
@@ -327,9 +298,8 @@ mod tests {
     ) {
         let mut hasher_1 = DefaultHasher::default();
         let mut hasher_2 = DefaultHasher::default();
-        let view_id_1 =
-            DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]).unwrap();
-        let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]).unwrap();
+        let view_id_1 = DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]);
+        let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);
         view_id_1.hash(&mut hasher_1);
         view_id_2.hash(&mut hasher_2);
         assert_eq!(hasher_1.finish(), hasher_2.finish());
@@ -365,7 +335,7 @@ mod tests {
         let mut reversed_ids = vec![operation_id_1, operation_id_2];
         reversed_ids.sort();
         reversed_ids.reverse();
-        let view_id_unsorted = DocumentViewId::new(&reversed_ids).unwrap();
+        let view_id_unsorted = DocumentViewId::new(&reversed_ids);
 
         let mut cbor_bytes = Vec::new();
         ciborium::ser::into_writer(&view_id_unsorted, &mut cbor_bytes).unwrap();

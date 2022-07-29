@@ -152,7 +152,7 @@ impl SchemaId {
 
         Ok(SchemaId::Application(
             remainder.to_string(),
-            DocumentViewId::new(&operation_ids)?,
+            DocumentViewId::new(&operation_ids),
         ))
     }
 }
@@ -164,8 +164,7 @@ impl Display for SchemaId {
                 write!(f, "{}", name)?;
 
                 view_id
-                    .to_owned()
-                    .into_iter()
+                    .iter()
                     .try_for_each(|op_id| write!(f, "_{}", op_id.as_str()))?;
 
                 Ok(())

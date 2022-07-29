@@ -111,14 +111,11 @@ impl Schema {
         schema: SchemaView,
         fields: Vec<SchemaFieldView>,
     ) -> Result<Schema, SchemaError> {
-        let schema_fields_iter = schema.fields().to_owned().into_iter();
-        let schema_fields_len = schema_fields_iter.len();
-
         // Validate that the passed `SchemaFields` are the correct ones for this `Schema`.
-        for schema_field in schema_fields_iter {
+        for schema_field in schema.fields().iter() {
             match fields
                 .iter()
-                .find(|schema_field_view| schema_field_view.id() == &schema_field)
+                .find(|schema_field_view| schema_field_view.id() == schema_field)
             {
                 Some(_) => Ok(()),
                 None => Err(SchemaError::InvalidFields),
@@ -126,7 +123,7 @@ impl Schema {
         }
 
         // And that no extra fields were passed
-        if fields.iter().len() > schema_fields_len {
+        if fields.iter().len() > schema.fields().len() {
             return Err(SchemaError::InvalidFields);
         }
 
@@ -403,12 +400,11 @@ mod tests {
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         let fields = PinnedRelationList::new(vec![
-            DocumentViewId::new(&[relation_operation_id_1.clone()]).unwrap(),
+            DocumentViewId::new(&[relation_operation_id_1.clone()]),
             DocumentViewId::new(&[
                 relation_operation_id_2.clone(),
                 relation_operation_id_3.clone(),
-            ])
-            .unwrap(),
+            ]),
         ]);
 
         let schema_view = create_schema_view(&fields, &schema_view_id, &field_operation_id);
@@ -429,7 +425,7 @@ mod tests {
         let capacity_field_view = create_field(
             "capacity",
             "int",
-            &DocumentViewId::new(&[relation_operation_id_2, relation_operation_id_3]).unwrap(),
+            &DocumentViewId::new(&[relation_operation_id_2, relation_operation_id_3]),
             &field_operation_id,
         );
 

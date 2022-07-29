@@ -114,8 +114,7 @@ impl From<&OperationFields> for PlainFields {
                     PlainValue::StringOrRelation(relation.document_id().as_str().to_owned())
                 }
                 OperationValue::RelationList(list) => PlainValue::PinnedRelationOrRelationList(
-                    list.to_owned()
-                        .into_iter()
+                    list.iter()
                         .map(|document_id| document_id.to_string())
                         .collect(),
                 ),
@@ -123,19 +122,16 @@ impl From<&OperationFields> for PlainFields {
                     PlainValue::PinnedRelationOrRelationList(
                         relation
                             .view_id()
-                            .to_owned()
-                            .into_iter()
+                            .iter()
                             .map(|operation_id| operation_id.to_string())
                             .collect(),
                     )
                 }
                 OperationValue::PinnedRelationList(list) => PlainValue::PinnedRelationList(
-                    list.to_owned()
-                        .into_iter()
+                    list.iter()
                         .map(|document_view_id| {
                             document_view_id
-                                .to_owned()
-                                .into_iter()
+                                .iter()
                                 .map(|operation_id| operation_id.to_string())
                                 .collect()
                         })

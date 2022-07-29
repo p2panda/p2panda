@@ -27,7 +27,7 @@ pub(super) fn build_graph(
     // Add links between operations in the graph.
     for operation in operations {
         if let Some(previous_operations) = operation.previous_operations() {
-            for previous in previous_operations {
+            for previous in previous_operations.iter() {
                 let success = graph.add_link(&previous, operation.operation_id());
                 if !success {
                     return Err(DocumentBuilderError::InvalidOperationLink(
@@ -286,8 +286,7 @@ impl DocumentBuilder {
         };
 
         // Construct the document view id
-        // @TODO: How can we unwrap here?
-        let document_view_id = DocumentViewId::new(&graph_tips).unwrap();
+        let document_view_id = DocumentViewId::new(&graph_tips);
 
         // Construct the document view, from the reduced values and the document view id
         let document_view = if is_deleted {

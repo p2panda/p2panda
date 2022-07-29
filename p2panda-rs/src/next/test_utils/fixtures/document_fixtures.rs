@@ -16,16 +16,12 @@ pub fn document_id(#[default(HASH)] hash_str: &str) -> DocumentId {
 /// Returns constant document view id.
 #[fixture]
 pub fn document_view_id(#[default(vec![HASH])] operation_id_str_vec: Vec<&str>) -> DocumentViewId {
-    let mut operation_ids: Vec<OperationId> = operation_id_str_vec
+    let operation_ids: Vec<OperationId> = operation_id_str_vec
         .into_iter()
         .map(|hash| hash.parse::<OperationId>().unwrap())
         .collect();
 
-    // Make sure the operation ids are sorted, otherwise validation will fail when creating the
-    // document view id
-    operation_ids.sort();
-
-    DocumentViewId::new(&operation_ids).unwrap()
+    DocumentViewId::new(&operation_ids)
 }
 
 /// Generates random document id.

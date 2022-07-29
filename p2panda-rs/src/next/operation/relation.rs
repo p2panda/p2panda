@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
+use std::slice::Iter;
 
 use crate::next::document::error::DocumentIdError;
 use crate::next::document::{DocumentId, DocumentViewId};
@@ -95,6 +96,10 @@ impl PinnedRelation {
     pub fn view_id(&self) -> &DocumentViewId {
         &self.0
     }
+
+    pub fn iter(&self) -> Iter<OperationId> {
+        self.0.iter()
+    }
 }
 
 impl Validate for PinnedRelation {
@@ -103,16 +108,6 @@ impl Validate for PinnedRelation {
     fn validate(&self) -> Result<(), Self::Error> {
         self.0.validate()?;
         Ok(())
-    }
-}
-
-impl IntoIterator for PinnedRelation {
-    type Item = OperationId;
-
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
     }
 }
 
@@ -127,6 +122,14 @@ impl RelationList {
     /// Returns a new list of relations.
     pub fn new(relations: Vec<DocumentId>) -> Self {
         Self(relations)
+    }
+
+    pub fn iter(&self) -> Iter<DocumentId> {
+        self.0.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
@@ -157,16 +160,6 @@ impl TryFrom<&[String]> for RelationList {
     }
 }
 
-impl IntoIterator for RelationList {
-    type Item = DocumentId;
-
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
 /// A `PinnedRelationList` can be used to reference multiple documents views.
 ///
 /// The item order and occurrences inside a pinned relation list are defined by the developers and
@@ -179,6 +172,14 @@ impl PinnedRelationList {
     /// Returns a new list of pinned relations.
     pub fn new(relations: Vec<DocumentViewId>) -> Self {
         Self(relations)
+    }
+
+    pub fn iter(&self) -> Iter<DocumentViewId> {
+        self.0.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
@@ -193,16 +194,6 @@ impl Validate for PinnedRelationList {
         }
 
         Ok(())
-    }
-}
-
-impl IntoIterator for PinnedRelationList {
-    type Item = DocumentViewId;
-
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
     }
 }
 
@@ -241,11 +232,12 @@ mod tests {
 
     #[rstest]
     fn iterates(#[from(random_hash)] hash_1: Hash, #[from(random_hash)] hash_2: Hash) {
-        let pinned_relation = PinnedRelation::new(
-            DocumentViewId::new(&[hash_1.clone().into(), hash_2.clone().into()]).unwrap(),
-        );
+        let pinned_relation = PinnedRelation::new(DocumentViewId::new(&[
+            hash_1.clone().into(),
+            hash_2.clone().into(),
+        ]));
 
-        for hash in pinned_relation {
+        for hash in pinned_relation.iter() {
             assert!(hash.validate().is_ok());
         }
 
@@ -254,7 +246,7 @@ mod tests {
             DocumentId::new(&hash_2.clone().into()),
         ]);
 
-        for document_id in relation_list {
+        for document_id in relation_list.iter() {
             assert!(document_id.validate().is_ok());
         }
 
@@ -263,8 +255,8 @@ mod tests {
             DocumentViewId::from(hash_2),
         ]);
 
-        for pinned_relation in pinned_relation_list {
-            for hash in pinned_relation {
+        for pinned_relation in pinned_relation_list.iter() {
+            for hash in pinned_relation.graph_tips() {
                 assert!(hash.validate().is_ok());
             }
         }

@@ -162,10 +162,10 @@ mod tests {
         #[from(random_operation_id)] operation_id_5: OperationId,
         #[from(random_operation_id)] operation_id_6: OperationId,
     ) {
-        let document_view_id_1 = DocumentViewId::new(&[operation_id_1, operation_id_2]).unwrap();
-        let document_view_id_2 = DocumentViewId::new(&[operation_id_3]).unwrap();
+        let document_view_id_1 = DocumentViewId::new(&[operation_id_1, operation_id_2]);
+        let document_view_id_2 = DocumentViewId::new(&[operation_id_3]);
         let document_view_id_3 =
-            DocumentViewId::new(&[operation_id_4, operation_id_5, operation_id_6]).unwrap();
+            DocumentViewId::new(&[operation_id_4, operation_id_5, operation_id_6]);
 
         let relations = PinnedRelationList::new(vec![
             document_view_id_1,
