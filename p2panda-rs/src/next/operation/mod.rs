@@ -72,7 +72,7 @@
 //! 1. Correct hexadecimal encoding (when using human-readable encoding format) (#OP1)
 //! 2. Correct operation format as per specification, including canonic format checks against
 //!    duplicate and unsorted operation fields (#OP2)
-//! 3. Correct canonic operation field values, like document ids and document view ids (no
+//! 3. Correctly formatted and canonic operation field values, like document view ids (no
 //!    duplicates, sorted, when no semantic value is given by that) as per specification (#OP3)
 //! 4. Operation fields match the claimed schema (#OP4)
 //!

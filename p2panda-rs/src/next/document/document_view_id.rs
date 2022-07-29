@@ -44,6 +44,8 @@ pub struct DocumentViewId(Vec<OperationId>);
 
 impl DocumentViewId {
     /// Create a new document view id.
+    ///
+    /// The given operation ids will automatically be sorted and de-duplicated.
     pub fn new(graph_tips: &[OperationId]) -> Self {
         // @TODO: Remove duplicates
         let mut graph_tips = graph_tips.to_owned();
@@ -51,6 +53,13 @@ impl DocumentViewId {
         Self(graph_tips)
     }
 
+    /// Create a new document view id from an untrusted source.
+    ///
+    /// This does _not_ automatically sort and de-duplicate the given operation ids but validates
+    /// them instead and returns an error if invalid.
+    ///
+    /// Use this method internally to ensure that document view ids from untrusted sources are
+    /// checked.
     pub(crate) fn from_untrusted(
         graph_tips: Vec<OperationId>,
     ) -> Result<Self, DocumentViewIdError> {
@@ -90,7 +99,7 @@ impl Validate for DocumentViewId {
         let mut prev_operation_id: Option<&OperationId> = None;
 
         for operation_id in &self.0 {
-            // Check if the given operation ids are correct
+            // Check if the given operation ids are correctly formatted
             operation_id.validate()?;
 
             // Check if it is sorted, this indirectly also checks against duplicates
@@ -135,6 +144,16 @@ impl Human for DocumentViewId {
     }
 }
 
+impl<'de> Deserialize<'de> for DocumentViewId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let operation_ids: Vec<OperationId> = Deserialize::deserialize(deserializer)?;
+        Self::from_untrusted(operation_ids).map_err(serde::de::Error::custom)
+    }
+}
+
 impl TryFrom<&[String]> for DocumentViewId {
     type Error = DocumentViewIdError;
 
@@ -149,19 +168,8 @@ impl TryFrom<&[String]> for DocumentViewId {
 }
 
 impl From<&[OperationId]> for DocumentViewId {
-    fn from(value: &[OperationId]) -> Self {
-        Self::new(value)
-    }
-}
-
-impl<'de> Deserialize<'de> for DocumentViewId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Deserialize into list of operation ids
-        let operation_ids: Vec<OperationId> = Deserialize::deserialize(deserializer)?;
-        Self::from_untrusted(operation_ids).map_err(serde::de::Error::custom)
+    fn from(operation_ids: &[OperationId]) -> Self {
+        Self::new(operation_ids)
     }
 }
 
@@ -171,7 +179,7 @@ impl<'de> Deserialize<'de> for DocumentViewId {
 /// only consists of one graph tip hash.
 impl From<OperationId> for DocumentViewId {
     fn from(operation_id: OperationId) -> Self {
-        Self::new(&[operation_id])
+        Self(vec![operation_id])
     }
 }
 
@@ -181,7 +189,7 @@ impl From<OperationId> for DocumentViewId {
 /// consists of one graph tip hash.
 impl From<Hash> for DocumentViewId {
     fn from(hash: Hash) -> Self {
-        Self::new(&[hash.into()])
+        Self(vec![hash.into()])
     }
 }
 
