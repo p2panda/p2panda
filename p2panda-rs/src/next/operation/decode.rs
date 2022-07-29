@@ -161,7 +161,7 @@ mod tests {
               { "name" => "Panda" }
             ]
         ),
-        "@TODO"
+        "encountered invalid document view id while parsing application schema id: expected sorted operation ids in document view id"
     )]
     #[case::non_canonic_schema_id_duplicates(
         cbor!(

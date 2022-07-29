@@ -24,7 +24,7 @@ pub enum SchemaIdError {
     HashError(#[from] crate::next::hash::error::HashError),
 
     /// Handle errors from validating document view ids.
-    #[error("encountered invalid hash while parsing application schema id: {0}")]
+    #[error("encountered invalid document view id while parsing application schema id: {0}")]
     DocumentViewIdError(#[from] crate::next::document::error::DocumentViewIdError),
 
     /// Handle errors from validating operation ids.

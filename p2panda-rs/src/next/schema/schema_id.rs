@@ -144,6 +144,10 @@ impl SchemaId {
             }
         }
 
+        // Since we've built the array from the back, we have to reverse it again to get the
+        // original order
+        operation_ids.reverse();
+
         if remainder.is_empty() {
             return Err(SchemaIdError::MissingApplicationSchemaName(
                 id_str.to_string(),
