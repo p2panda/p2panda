@@ -8,15 +8,15 @@ use crate::next::operation::OperationId;
 #[derive(Error, Debug)]
 pub enum DocumentBuilderError {
     /// No create operation found.
-    #[error("Every document must contain one create operation")]
+    #[error("every document must contain one create operation")]
     NoCreateOperation,
 
     /// A document can only have one create operation.
-    #[error("Multiple create operations found")]
+    #[error("multiple CREATE operations found")]
     MoreThanOneCreateOperation,
 
     /// All operations in a document must follow the same schema.
-    #[error("All operations in a document must follow the same schema")]
+    #[error("all operations in a document must follow the same schema")]
     OperationSchemaNotMatching,
 
     /// To resolve a document the schema must be set.
@@ -24,7 +24,7 @@ pub enum DocumentBuilderError {
     SchemaMustBeSet,
 
     /// An operation with invalid id or previous operations was added to the document.
-    #[error("Operation {0} cannot be connected to the document graph")]
+    #[error("operation {0} cannot be connected to the document graph")]
     InvalidOperationLink(OperationId),
 
     /// Handle errors when sorting the graph.
@@ -52,11 +52,11 @@ pub enum DocumentError {
 #[derive(Error, Debug)]
 pub enum DocumentViewError {
     /// TryFrom operation must be CREATE.
-    #[error("Operation must be instantiated from a CREATE operation")]
+    #[error("operation must be instantiated from a CREATE operation")]
     NotCreateOperation,
 
     /// Operation passed to `update()` must be UPDATE or DELETE.
-    #[error("Operation passed to update() must be UPDATE or DELETE")]
+    #[error("operation passed to update() must be UPDATE or DELETE")]
     NotUpdateOrDeleteOperation,
 }
 
@@ -64,11 +64,11 @@ pub enum DocumentViewError {
 #[derive(Error, Debug)]
 pub enum DocumentViewIdError {
     /// Document view ids must contain sorted operation ids.
-    #[error("Expected sorted operation ids in document view id")]
+    #[error("expected sorted operation ids in document view id")]
     UnsortedOperationIds,
 
     /// Document view ids must contain at least one operation ids.
-    #[error("Expected one or more operation ids")]
+    #[error("expected one or more operation ids")]
     ZeroOperationIds,
 
     /// Handle errors from validating operation id hashes.

@@ -58,6 +58,10 @@ impl<'de> Deserialize<'de> for PlainOperation {
                 formatter.write_str("p2panda operation")
             }
 
+            // @TODO: It would be nice to get more contextual error messages here, but sadly the
+            // `ciborium::de::Error` types are hard to work with and we can not extract the
+            // underlying error message easily (`Display` uses `Debug` internally).
+            // See: https://docs.rs/ciborium/latest/src/ciborium/de/error.rs.html#62
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
             where
                 A: serde::de::SeqAccess<'de>,

@@ -51,14 +51,14 @@ impl DocumentViewId {
         Self(graph_tips)
     }
 
-    fn from_untrusted(graph_tips: Vec<OperationId>) -> Result<Self, DocumentViewIdError> {
+    pub(crate) fn from_untrusted(
+        graph_tips: Vec<OperationId>,
+    ) -> Result<Self, DocumentViewIdError> {
         // Create document view id with potentially invalid data
         let document_view_id = Self(graph_tips);
 
         // Make sure its sorted and does not contain any duplicates (#OP3)
-        document_view_id
-            .validate()
-            .map_err(|_| DocumentViewIdError::UnsortedOperationIds)?;
+        document_view_id.validate()?;
 
         Ok(document_view_id)
     }
@@ -87,12 +87,23 @@ impl Validate for DocumentViewId {
             return Err(DocumentViewIdError::ZeroOperationIds);
         };
 
-        // @TODO: Check if operation ids are sorted
-        // @TODO: Check that there are no duplicates
+        let mut prev_operation_id: Option<&OperationId> = None;
 
-        // Check if the given operation ids are correct
         for operation_id in &self.0 {
+            // Check if the given operation ids are correct
             operation_id.validate()?;
+
+            // Check if it is sorted, this indirectly also checks against duplicates
+            match prev_operation_id {
+                Some(prev) => {
+                    if prev > operation_id {
+                        return Err(DocumentViewIdError::UnsortedOperationIds);
+                    }
+                }
+                None => (),
+            }
+
+            prev_operation_id = Some(operation_id);
         }
 
         Ok(())
@@ -150,9 +161,7 @@ impl<'de> Deserialize<'de> for DocumentViewId {
     {
         // Deserialize into list of operation ids
         let operation_ids: Vec<OperationId> = Deserialize::deserialize(deserializer)?;
-
-        Self::from_untrusted(operation_ids)
-            .map_err(|err| serde::de::Error::custom(format!("invalid document view id, {}", err)))
+        Self::from_untrusted(operation_ids).map_err(serde::de::Error::custom)
     }
 }
 
@@ -186,7 +195,7 @@ impl FromStr for DocumentViewId {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut operations: Vec<OperationId> = Vec::new();
 
-        s.rsplit('_')
+        s.split('_')
             .try_for_each::<_, Result<(), Self::Err>>(|hash_str| {
                 let operation_id = OperationId::from_str(hash_str)?;
                 operations.push(operation_id);
@@ -317,15 +326,14 @@ mod tests {
         ];
         let mut cbor_bytes = Vec::new();
         ciborium::ser::into_writer(&unsorted_hashes, &mut cbor_bytes).unwrap();
-        let unsorted_operation_ids = hex::encode(cbor_bytes);
 
         // Construct document view id by deserialising CBOR data
         let result: Result<DocumentViewId, ciborium::de::Error<std::io::Error>> =
-            ciborium::de::from_reader(&hex::decode(unsorted_operation_ids).unwrap()[..]);
+            ciborium::de::from_reader(&cbor_bytes[..]);
 
         let expected_result = ciborium::de::Error::<std::io::Error>::Semantic(
             None,
-            "encountered unsorted value in document view id at position 1".to_string(),
+            "expected sorted operation ids in document view id".to_string(),
         );
 
         assert_eq!(result.unwrap_err().to_string(), expected_result.to_string());
@@ -363,7 +371,7 @@ mod tests {
 
         let expected_result = ciborium::de::Error::<std::io::Error>::Semantic(
             None,
-            "error parsing document view id at position 1: invalid hash length 32 bytes, expected 34 bytes".to_string()
+            "invalid hash length 32 bytes, expected 34 bytes".to_string(),
         );
 
         assert_eq!(result.unwrap_err().to_string(), expected_result.to_string());

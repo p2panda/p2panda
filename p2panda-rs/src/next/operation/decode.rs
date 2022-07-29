@@ -152,17 +152,54 @@ mod tests {
         cbor!([1, 0, HASH, { "name" => "Panda" } ]),
         "malformed schema id `0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543`: doesn't contain an underscore"
     )]
+    #[case::non_canonic_schema_id_unsorted(
+        cbor!(
+            [
+              1,
+              0,
+              "venue_00209a75d6f1440c188fa52555c8cdd60b3988e468e1db2e469b7d4425a225eba8ec_0020175257cbf0259eac4b4832695134ac9b2858d7c7cb6c199af8cf22a1db2dbc45",
+              { "name" => "Panda" }
+            ]
+        ),
+        "@TODO"
+    )]
+    #[case::non_canonic_schema_id_duplicates(
+        cbor!(
+            [
+              1,
+              0,
+              "venue_00209a75d6f1440c188fa52555c8cdd60b3988e468e1db2e469b7d4425a225eba8ec_00209a75d6f1440c188fa52555c8cdd60b3988e468e1db2e469b7d4425a225eba8ec",
+              { "name" => "Panda" }
+            ]
+        ),
+        "@TODO"
+    )]
     #[case::invalid_previous_operations_hex(
         cbor!([1, 2, SCHEMA_ID, ["this is not a hash"] ]),
-        "error parsing document view id at position 0: invalid hex encoding in hash string"
+        "invalid hex encoding in hash string"
     )]
     #[case::invalid_previous_operations_incomplete(
         cbor!([1, 2, SCHEMA_ID, ["0020"] ]),
-        "error parsing document view id at position 0: invalid hash length 2 bytes, expected 34 bytes"
+        "invalid hash length 2 bytes, expected 34 bytes"
     )]
     #[case::invalid_previous_operations_array(
         cbor!([1, 2, SCHEMA_ID, {} ]),
         "invalid type: map, expected array"
+    )]
+    #[case::non_canonic_previous_operations_unsorted(
+        cbor!([1, 2, SCHEMA_ID, [
+              "0020f0b5a6e87e1a039f18857ee1c0792fd24fe1b3ad962c8950cba6c10290b619e3",
+              "002044ed67b81c26cf2f7c3eb908cf4620d18a0ac3d79bf70d64b2f02d965466a8f0"
+        ]]),
+        "expected sorted operation ids in document view id"
+    )]
+    #[case::non_canonic_previous_operations_duplicates(
+        cbor!([1, 2, SCHEMA_ID, [
+              "002044ed67b81c26cf2f7c3eb908cf4620d18a0ac3d79bf70d64b2f02d965466a8f0",
+              "0020f0b5a6e87e1a039f18857ee1c0792fd24fe1b3ad962c8950cba6c10290b619e3",
+              "002044ed67b81c26cf2f7c3eb908cf4620d18a0ac3d79bf70d64b2f02d965466a8f0"
+        ]]),
+        "expected sorted operation ids in document view id"
     )]
     #[case::invalid_fields_key_type_1(
         cbor!([1, 0, SCHEMA_ID, { 12 => "Panda" } ]),

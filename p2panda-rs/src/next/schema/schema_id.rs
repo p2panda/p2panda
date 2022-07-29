@@ -152,7 +152,7 @@ impl SchemaId {
 
         Ok(SchemaId::Application(
             remainder.to_string(),
-            DocumentViewId::new(&operation_ids),
+            DocumentViewId::from_untrusted(operation_ids)?,
         ))
     }
 }
