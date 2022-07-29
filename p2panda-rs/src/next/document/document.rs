@@ -28,7 +28,7 @@ pub(super) fn build_graph(
     for operation in operations {
         if let Some(previous_operations) = operation.previous_operations() {
             for previous in previous_operations.iter() {
-                let success = graph.add_link(&previous, operation.operation_id());
+                let success = graph.add_link(previous, operation.operation_id());
                 if !success {
                     return Err(DocumentBuilderError::InvalidOperationLink(
                         operation.operation_id().to_owned(),
@@ -262,7 +262,7 @@ impl DocumentBuilder {
 
         // If a specific document view was requested then trim the graph to that point.
         if let Some(id) = document_view_id {
-            graph = graph.trim(&id.graph_tips())?;
+            graph = graph.trim(id.graph_tips())?;
         }
 
         // Topologically sort the operations in the graph.

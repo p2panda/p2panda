@@ -182,7 +182,7 @@ impl Schema {
                 format!("{}__{}", self.name(), DocumentViewHash::from(&view_id))
             }
             SchemaVersion::System(version) => {
-                format!("{}__{}", self.name(), version.to_string())
+                format!("{}__{}", self.name(), version)
             }
         }
     }

@@ -116,6 +116,7 @@ impl Validate for PinnedRelation {
 /// The item order and occurrences inside a relation list are defined by the developers and users
 /// and have semantic meaning, for this reason we do not check against duplicates or ordering here.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::len_without_is_empty)]
 pub struct RelationList(Vec<DocumentId>);
 
 impl RelationList {
@@ -166,6 +167,7 @@ impl TryFrom<&[String]> for RelationList {
 /// users and have semantic meaning, for this reason we do not check against duplicates or ordering
 /// here.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::len_without_is_empty)]
 pub struct PinnedRelationList(Vec<DocumentViewId>);
 
 impl PinnedRelationList {

@@ -34,9 +34,7 @@ pub fn decode_operation(
         ciborium::de::from_reader(&bytes[..]).map_err(|err| match err {
             ciborium::de::Error::Io(err) => DecodeOperationError::DecoderIOFailed(err.to_string()),
             ciborium::de::Error::Syntax(pos) => DecodeOperationError::InvalidCBOREncoding(pos),
-            ciborium::de::Error::Semantic(_, err) => {
-                DecodeOperationError::InvalidEncoding(err.to_string())
-            }
+            ciborium::de::Error::Semantic(_, err) => DecodeOperationError::InvalidEncoding(err),
             ciborium::de::Error::RecursionLimitExceeded => {
                 DecodeOperationError::RecursionLimitExceeded
             }

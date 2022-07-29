@@ -8,6 +8,7 @@ use crate::next::operation::validate::validate_operation;
 use crate::next::operation::{OperationAction, OperationFields, OperationValue, OperationVersion};
 use crate::next::schema::{Schema, SchemaId};
 
+#[derive(Debug)]
 pub struct OperationBuilder {
     action: OperationAction,
     schema: Schema,
@@ -150,11 +151,7 @@ impl Schematic for Operation {
     }
 
     fn fields(&self) -> Option<PlainFields> {
-        if let Some(inner) = &self.fields {
-            Some(PlainFields::from(inner))
-        } else {
-            None
-        }
+        self.fields.as_ref().map(PlainFields::from)
     }
 }
 

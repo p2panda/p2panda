@@ -8,6 +8,7 @@ use serde::de::Visitor;
 use serde::Deserialize;
 
 /// Visitor which can be used to deserialize a `String` or `u64` integer to a type T.
+#[derive(Debug, Default)]
 pub struct StringOrU64<T>(PhantomData<T>);
 
 impl<T> StringOrU64<T> {

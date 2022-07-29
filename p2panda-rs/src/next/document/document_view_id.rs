@@ -189,7 +189,7 @@ impl FromStr for DocumentViewId {
         s.rsplit('_')
             .try_for_each::<_, Result<(), Self::Err>>(|hash_str| {
                 let operation_id = OperationId::from_str(hash_str)?;
-                operations.push(operation_id.into());
+                operations.push(operation_id);
                 Ok(())
             })?;
 

@@ -34,7 +34,7 @@ pub fn encode_plain_operation(
 
     ciborium::ser::into_writer(&plain, &mut cbor_bytes).map_err(|err| match err {
         ciborium::ser::Error::Io(err) => EncodeOperationError::EncoderIOFailed(err.to_string()),
-        ciborium::ser::Error::Value(err) => EncodeOperationError::EncoderFailed(err.to_string()),
+        ciborium::ser::Error::Value(err) => EncodeOperationError::EncoderFailed(err),
     })?;
 
     Ok(EncodedOperation::from_bytes(&cbor_bytes))

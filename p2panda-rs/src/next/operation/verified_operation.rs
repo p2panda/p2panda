@@ -46,7 +46,7 @@ impl AsVerifiedOperation for VerifiedOperation {
 
     /// Returns the public key of the author of this operation.
     fn public_key(&self) -> &Author {
-        &self.entry.public_key()
+        self.entry.public_key()
     }
 }
 

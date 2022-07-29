@@ -39,15 +39,8 @@ pub fn decode_entry(
         None => None,
     };
 
-    let entry_hash_backlink: Option<Hash> = match entry.backlink {
-        Some(link) => Some((&link).into()),
-        None => None,
-    };
-
-    let entry_hash_skiplink: Option<Hash> = match entry.lipmaa_link {
-        Some(link) => Some((&link).into()),
-        None => None,
-    };
+    let entry_hash_backlink: Option<Hash> = entry.backlink.map(|link| (&link).into());
+    let entry_hash_skiplink: Option<Hash> = entry.lipmaa_link.map(|link| (&link).into());
 
     Ok(Entry::new(
         &LogId::new(entry.log_id),

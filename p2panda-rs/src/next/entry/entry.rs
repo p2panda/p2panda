@@ -78,8 +78,8 @@ impl EntryBuilder {
             &self.seq_num,
             self.skiplink.as_ref(),
             self.backlink.as_ref(),
-            &encoded_operation,
-            &key_pair,
+            encoded_operation,
+            key_pair,
         )?;
 
         Ok(entry)
@@ -191,16 +191,8 @@ impl Entry {
 impl From<BambooEntry<&[u8], &[u8]>> for Entry {
     fn from(entry: BambooEntry<&[u8], &[u8]>) -> Self {
         // Convert all hashes into our types
-        let backlink: Option<Hash> = match entry.backlink {
-            Some(link) => Some((&link).into()),
-            None => None,
-        };
-
-        let skiplink: Option<Hash> = match entry.lipmaa_link {
-            Some(link) => Some((&link).into()),
-            None => None,
-        };
-
+        let backlink: Option<Hash> = entry.backlink.map(|link| (&link).into());
+        let skiplink: Option<Hash> = entry.lipmaa_link.map(|link| (&link).into());
         let payload_hash: Hash = (&entry.payload_hash).into();
 
         // Unwrap as we assume that there IS a signature coming from bamboo struct at this point
