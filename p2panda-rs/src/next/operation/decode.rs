@@ -172,7 +172,7 @@ mod tests {
               { "name" => "Panda" }
             ]
         ),
-        "@TODO"
+        "encountered invalid document view id while parsing application schema id: expected sorted operation ids in document view id"
     )]
     #[case::invalid_previous_operations_hex(
         cbor!([1, 2, SCHEMA_ID, ["this is not a hash"] ]),

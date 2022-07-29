@@ -96,7 +96,7 @@ impl Validate for DocumentViewId {
             // Check if it is sorted, this indirectly also checks against duplicates
             match prev_operation_id {
                 Some(prev) => {
-                    if prev > operation_id {
+                    if prev >= operation_id {
                         return Err(DocumentViewIdError::UnsortedOperationIds);
                     }
                 }
