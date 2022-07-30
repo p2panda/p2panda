@@ -2,6 +2,7 @@
 
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
@@ -120,12 +121,25 @@ impl Validate for OperationFields {
     }
 }
 
+impl TryFrom<Vec<(&str, OperationValue)>> for OperationFields {
+    type Error = OperationFieldsError;
+
+    fn try_from(spec: Vec<(&str, OperationValue)>) -> Result<Self, Self::Error> {
+        let mut operation_fields = OperationFields::new();
+        for field in spec {
+            operation_fields.add(field.0, field.1)?;
+        }
+        Ok(operation_fields)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
+
     use rstest::rstest;
 
     use crate::document::DocumentViewId;
-
     use crate::operation::{OperationId, PinnedRelationList};
     use crate::test_utils::fixtures::random_operation_id;
 
@@ -184,5 +198,15 @@ mod tests {
         let value = OperationValue::PinnedRelationList(relations);
         let mut fields = OperationFields::new();
         assert!(fields.add("locations", value).is_ok());
+    }
+
+    #[test]
+    fn easy_operation_fields() {
+        assert!(OperationFields::try_from(vec![("name", "boppety".into())]).is_ok());
+
+        assert!(
+            OperationFields::try_from(vec![("name", "boppety".into()), ("name", true.into())])
+                .is_err()
+        );
     }
 }

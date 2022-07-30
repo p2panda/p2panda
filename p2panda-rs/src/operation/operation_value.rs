@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::document::{DocumentId, DocumentViewId};
 use crate::hash::HashError;
 use crate::operation::{PinnedRelation, PinnedRelationList, Relation, RelationList};
 use crate::Validate;
@@ -88,6 +89,60 @@ impl OperationValue {
     }
 }
 
+impl From<bool> for OperationValue {
+    fn from(value: bool) -> Self {
+        OperationValue::Boolean(value)
+    }
+}
+
+impl From<f64> for OperationValue {
+    fn from(value: f64) -> Self {
+        OperationValue::Float(value)
+    }
+}
+
+impl From<i64> for OperationValue {
+    fn from(value: i64) -> Self {
+        OperationValue::Integer(value)
+    }
+}
+
+impl From<String> for OperationValue {
+    fn from(value: String) -> Self {
+        OperationValue::Text(value)
+    }
+}
+
+impl From<&str> for OperationValue {
+    fn from(value: &str) -> Self {
+        OperationValue::Text(value.to_string())
+    }
+}
+
+impl From<DocumentId> for OperationValue {
+    fn from(value: DocumentId) -> Self {
+        OperationValue::Relation(Relation::new(value))
+    }
+}
+
+impl From<Vec<DocumentId>> for OperationValue {
+    fn from(value: Vec<DocumentId>) -> Self {
+        OperationValue::RelationList(RelationList::new(value))
+    }
+}
+
+impl From<DocumentViewId> for OperationValue {
+    fn from(value: DocumentViewId) -> Self {
+        OperationValue::PinnedRelation(PinnedRelation::new(value))
+    }
+}
+
+impl From<Vec<DocumentViewId>> for OperationValue {
+    fn from(value: Vec<DocumentViewId>) -> Self {
+        OperationValue::PinnedRelationList(PinnedRelationList::new(value))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -98,10 +153,45 @@ mod tests {
         OperationId, PinnedRelation, PinnedRelationList, Relation, RelationList,
     };
     use crate::schema::FieldType;
-    use crate::test_utils::fixtures::{random_document_id, random_operation_id};
+    use crate::test_utils::fixtures::{
+        document_id, document_view_id, random_document_id, random_operation_id,
+    };
     use crate::Validate;
 
     use super::OperationValue;
+
+    #[rstest]
+    fn conversion(document_id: DocumentId, document_view_id: DocumentViewId) {
+        // Scalar types
+        assert_eq!(OperationValue::Boolean(true), true.into());
+        assert_eq!(OperationValue::Float(1.5), 1.5.into());
+        assert_eq!(OperationValue::Integer(3), 3.into());
+        assert_eq!(OperationValue::Text("hellö".to_string()), "hellö".into());
+        assert_eq!(
+            OperationValue::Text("hellö".to_string()),
+            "hellö".to_string().into()
+        );
+
+        // Relation types
+        assert_eq!(
+            OperationValue::Relation(Relation::new(document_id.clone())),
+            document_id.clone().into()
+        );
+        assert_eq!(
+            OperationValue::RelationList(RelationList::new(vec![document_id.clone()])),
+            vec![document_id].into()
+        );
+        assert_eq!(
+            OperationValue::PinnedRelation(PinnedRelation::new(document_view_id.clone())),
+            document_view_id.clone().into()
+        );
+        assert_eq!(
+            OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
+                document_view_id.clone()
+            ])),
+            vec![document_view_id.clone()].into()
+        );
+    }
 
     #[rstest]
     #[allow(clippy::too_many_arguments)]
