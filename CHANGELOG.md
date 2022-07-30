@@ -12,14 +12,16 @@ Highlights are marked with a pancake 🥞
 ### Added
 
 - `MemoryStore` in memory implementation of storage traits [#383](https://github.com/p2panda/p2panda/pull/383) `rs`
+- Helpers and conversion implementations to create schemas and operations more easily [#416](https://github.com/p2panda/p2panda/pull/416) `rs`
 
 ### Changed
 
 - Refactor mock `Node` implementation to use `StorageProvider` traits [#383](https://github.com/p2panda/p2panda/pull/383) `rs`
 - Deserialize from string and u64 for `LogId` and `SeqNum` [#401](https://github.com/p2panda/p2panda/pull/401) `rs`
 - Add latest_log_id method to `LogStore` [#413](https://github.com/p2panda/p2panda/pull/413) `rs`
-- Remove generic parameters from `StorageProvider` [#408](https://github.com/p2panda/p2panda/pull/408) `rs` 
+- Remove generic parameters from `StorageProvider` [#408](https://github.com/p2panda/p2panda/pull/408) `rs`
 - Consistent `as_str` and `to_string` functions, introduce `Human` trait with `display` method for short strings [#389](https://github.com/p2panda/p2panda/pull/389) `rs`
+- Update `Human` impl for `SchemaId` and `DocumentViewId` [#414](https://github.com/p2panda/p2panda/pull/414) `rs`
 
 ### Fixed
 

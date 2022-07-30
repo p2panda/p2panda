@@ -125,23 +125,18 @@ impl Operation {
     /// ```
     /// # extern crate p2panda_rs;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// use p2panda_rs::hash::Hash;
+    /// use std::convert::TryFrom;
     /// use p2panda_rs::operation::{AsOperation, Operation, OperationFields, OperationValue};
     /// use p2panda_rs::schema::SchemaId;
     ///
-    /// let msg_schema = SchemaId::new("zoo_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
-    /// let mut msg_fields = OperationFields::new();
+    /// let schema_id = SchemaId::new("zoo_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b")?;
+    /// let operation_fields = OperationFields::try_from(vec![
+    ///     ("zoo_animals", "Pandas, Doggos, Cats, and Parrots!".into()),
+    ///     ("favourite_number", 5.into())
+    /// ])?;
+    /// let create_operation = Operation::new_create(schema_id, operation_fields)?;
     ///
-    /// msg_fields
-    ///     .add(
-    ///         "Zoo",
-    ///         OperationValue::Text("Pandas, Doggos, Cats, and Parrots!".to_owned()),
-    ///     )
-    ///     .unwrap();
-    ///
-    /// let create_operation = Operation::new_create(msg_schema, msg_fields)?;
-    ///
-    /// assert_eq!(AsOperation::is_create(&create_operation), true);
+    /// assert_eq!(Operation::is_create(&create_operation), true);
     ///
     /// # Ok(())
     /// # }
@@ -289,14 +284,14 @@ impl Validate for Operation {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::convert::TryFrom;
+    use std::convert::{TryFrom, TryInto};
 
     use rstest::rstest;
     use rstest_reuse::apply;
 
     use crate::document::{DocumentId, DocumentViewId};
     use crate::operation::{AsOperation, OperationEncoded, OperationValue, Relation};
-    use crate::schema::SchemaId;
+    use crate::schema::{FieldType, SchemaId};
     use crate::test_utils::fixtures::{
         operation_fields, random_document_id, random_document_view_id, schema,
     };
@@ -489,5 +484,19 @@ mod tests {
         hash_map.insert(&operation, key_value.clone());
         let key_value_retrieved = hash_map.get(&operation).unwrap().to_owned();
         assert_eq!(key_value, key_value_retrieved)
+    }
+
+    #[test]
+    fn shorthand() {
+        let op = Operation::new_create(
+            SchemaId::SchemaFieldDefinition(1),
+            vec![
+                ("name", "field_name".into()),
+                ("type", FieldType::String.into()),
+            ]
+            .try_into()
+            .unwrap(),
+        );
+        assert!(op.is_ok());
     }
 }

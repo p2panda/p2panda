@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
 use std::fmt::Display;
 
-use crate::document::DocumentViewHash;
+use crate::document::{DocumentViewHash, DocumentViewId};
+use crate::operation::{Operation, OperationError, OperationFields};
 use crate::schema::system::{
     get_schema_definition, get_schema_field_definition, SchemaFieldView, SchemaView,
 };
@@ -102,6 +104,75 @@ impl Schema {
         } else {
             Err(SchemaError::DynamicSystemSchema(id.clone()))
         }
+    }
+
+    /// Returns a create operation that can be sent to a node to create a schema.
+    ///
+    /// This requires you to have created field definitions for this schema before (see
+    /// [`Schema::create_field()`])
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # #[cfg(test)]
+    /// # mod doc_test {
+    /// # use p2panda_rs::test_utils::fixtures::{random_operation_id};
+    /// #
+    /// # #[rstest]
+    /// # fn main(#[from(document_view_id)] schema_document_view_id: DocumentViewId) {
+    /// #
+    /// # let from_field_view_id = random_operation_id();
+    /// # let to_field_view_id = random_operation_id();
+    /// // Assuming you have created two fields beforehand:
+    /// let create_operation: Operation = Schema::create(
+    ///     "chess_move",
+    ///     "a move in my chess game",
+    ///     vec![from_field_view_id, to_field_view_id].into()
+    /// ).unwrap();
+    /// assert!(create_operation.validate().is_ok());
+    /// # }
+    /// # }
+    /// ```
+    pub fn create(
+        name: &str,
+        description: &str,
+        field_view_ids: Vec<DocumentViewId>,
+    ) -> Result<Operation, OperationError> {
+        let fields = OperationFields::try_from(vec![
+            ("name", name.into()),
+            ("description", description.into()),
+            ("fields", field_view_ids.into()),
+        ])?;
+        Operation::new_create(SchemaId::SchemaDefinition(1), fields)
+    }
+
+    /// Returns a create operation that can be sent to a node to create a schema.
+    ///
+    /// This requires you to have created field definitions for this schema before (see
+    /// [`Schema::create_field()`])
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # #[cfg(test)]
+    /// # mod doc_test {
+    /// # extern crate p2panda_rs;
+    /// use p2panda_rs::schema::field_types::FieldType;
+    ///
+    /// # #[rstest]
+    /// # fn main(#[from(document_view_id)] schema_document_view_id: DocumentViewId) {
+    /// let create_operation: Operation = Schema::create_field(
+    ///     "field_name",
+    ///     FieldType::String,
+    /// ).unwrap();
+    /// assert!(create_operation.validate().is_ok());
+    /// # }
+    /// # }
+    /// ```
+    pub fn create_field(name: &str, field_type: FieldType) -> Result<Operation, OperationError> {
+        let fields =
+            OperationFields::try_from(vec![("name", name.into()), ("type", field_type.into())])?;
+        Operation::new_create(SchemaId::SchemaFieldDefinition(1), fields)
     }
 
     /// Instantiate a new `Schema` from a `SchemaView` and it's `SchemaFieldView`s.
@@ -219,7 +290,7 @@ impl Display for Schema {
 
 impl Human for Schema {
     fn display(&self) -> String {
-        format!("<Schema {}>", self.id.display())
+        self.id.display()
     }
 }
 
@@ -321,7 +392,7 @@ mod tests {
             vec![("number", FieldType::Int)],
         )
         .unwrap();
-        assert_eq!(schema.display(), "<Schema venue 496543>");
+        assert_eq!(schema.display(), "<Schema venue_496543>");
 
         let schema_definition = Schema::get_system(SchemaId::SchemaDefinition(1)).unwrap();
         assert_eq!(schema_definition.display(), "<Schema schema_definition_v1>");
@@ -557,5 +628,48 @@ mod tests {
             ]
         )
         .is_err());
+    }
+}
+// Exclude wasm which doesn't support `Node`
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(test)]
+mod tests_wasm_not_invited {
+    use rstest::rstest;
+
+    use crate::operation::OperationValue;
+    use crate::schema::{FieldType, Schema};
+    use crate::test_utils::fixtures::random_key_pair;
+    use crate::test_utils::mocks::{send_to_node, Client, Node};
+
+    #[rstest]
+    #[tokio::test]
+    // Override because Clippy does not recognise that `matches` consumes its parameters
+    #[allow(unused_variables)]
+    async fn schema_create() {
+        let key_pair = random_key_pair();
+        let client = Client::new("🐧".to_string(), key_pair);
+        let mut node = Node::new();
+
+        // Create schema field definition
+        let operation = Schema::create_field("title", FieldType::Bool).unwrap();
+        let (field_entry, _) = send_to_node(&mut node, &client, &operation).await.unwrap();
+
+        // Create schema definition
+        let operation = Schema::create(
+            "books",
+            "books in my library",
+            vec![field_entry.as_str().parse().unwrap()].into(),
+        )
+        .unwrap();
+        let (schema_view_id, _) = send_to_node(&mut node, &client, &operation).await.unwrap();
+
+        // Retrieve materialised value
+        let docs = node.documents();
+        let doc = docs.get(&schema_view_id.as_str().parse().unwrap()).unwrap();
+        let test_value = doc.view().unwrap().get("fields").unwrap().value();
+
+        // Assert
+        let expected = OperationValue::Text("title".to_string());
+        assert!(matches!(test_value, expected));
     }
 }

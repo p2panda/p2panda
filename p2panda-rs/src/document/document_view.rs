@@ -79,7 +79,7 @@ impl Display for DocumentView {
 
 impl Human for DocumentView {
     fn display(&self) -> String {
-        format!("<DocumentView {}>", self.id.display())
+        self.id.display()
     }
 }
 
