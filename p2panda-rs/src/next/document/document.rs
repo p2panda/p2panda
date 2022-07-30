@@ -2,12 +2,12 @@
 
 use std::fmt::Display;
 
-use crate::graph::Graph;
-use crate::identity::Author;
 use crate::next::document::error::DocumentBuilderError;
 use crate::next::document::{
     DocumentId, DocumentView, DocumentViewFields, DocumentViewId, DocumentViewValue,
 };
+use crate::next::graph::Graph;
+use crate::next::identity::Author;
 use crate::next::operation::traits::{AsOperation, AsVerifiedOperation};
 use crate::next::operation::{OperationId, VerifiedOperation};
 use crate::next::schema::SchemaId;
@@ -315,10 +315,10 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::identity::KeyPair;
     use crate::next::document::{
         DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue,
     };
+    use crate::next::identity::KeyPair;
     use crate::next::operation::traits::{AsOperation, AsVerifiedOperation};
     use crate::next::operation::{
         EncodedOperation, OperationId, OperationValue, VerifiedOperation,
@@ -326,11 +326,10 @@ mod tests {
     use crate::next::schema::SchemaId;
     use crate::next::test_utils::constants::SCHEMA_ID;
     use crate::next::test_utils::fixtures::{
-        create_operation, delete_operation, operation, operation_fields, random_document_view_id,
-        random_operation_id, random_previous_operations, schema, update_operation,
-        verified_operation,
+        create_operation, delete_operation, operation, operation_fields, public_key,
+        random_document_view_id, random_key_pair, random_operation_id, random_previous_operations,
+        schema, update_operation, verified_operation,
     };
-    use crate::test_utils::fixtures::{public_key, random_key_pair};
     use crate::test_utils::mocks::{send_to_node, Client, Node};
     use crate::Human;
 

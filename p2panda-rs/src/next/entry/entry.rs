@@ -6,11 +6,11 @@ use std::hash::Hash as StdHash;
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use bamboo_rs_core_ed25519_yasmf::Entry as BambooEntry;
 
-use crate::identity::{Author, KeyPair};
 use crate::next::entry::encode::sign_entry;
 use crate::next::entry::error::EntryBuilderError;
 use crate::next::entry::{LogId, SeqNum, Signature};
 use crate::next::hash::Hash;
+use crate::next::identity::{Author, KeyPair};
 use crate::next::operation::EncodedOperation;
 
 /// Create and sign new `Entry` instances.
@@ -218,12 +218,11 @@ impl From<BambooEntry<&[u8], &[u8]>> for Entry {
 mod tests {
     use rstest::rstest;
 
-    use crate::identity::{Author, KeyPair};
     use crate::next::entry::{LogId, SeqNum};
     use crate::next::hash::Hash;
+    use crate::next::identity::{Author, KeyPair};
     use crate::next::operation::EncodedOperation;
-    use crate::next::test_utils::fixtures::{encoded_operation, random_hash};
-    use crate::test_utils::fixtures::key_pair;
+    use crate::next::test_utils::fixtures::{encoded_operation, key_pair, random_hash};
 
     use super::EntryBuilder;
 

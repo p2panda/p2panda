@@ -2,10 +2,10 @@
 
 use rstest::fixture;
 
-use crate::identity::KeyPair;
 use crate::next::document::DocumentViewId;
 use crate::next::entry::encode::{encode_entry, sign_entry};
 use crate::next::entry::{LogId, SeqNum};
+use crate::next::identity::KeyPair;
 use crate::next::operation::encode::{encode_operation, encode_plain_operation};
 use crate::next::operation::plain::PlainOperation;
 use crate::next::operation::validate::validate_operation_with_entry;
@@ -15,8 +15,7 @@ use crate::next::operation::{
 };
 use crate::next::schema::Schema;
 use crate::next::test_utils::constants;
-use crate::next::test_utils::fixtures::{document_view_id, random_hash, schema};
-use crate::test_utils::fixtures::key_pair;
+use crate::next::test_utils::fixtures::{document_view_id, key_pair, random_hash, schema};
 
 /// Returns constant testing operation id.
 #[fixture]

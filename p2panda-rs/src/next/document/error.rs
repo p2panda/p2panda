@@ -27,13 +27,13 @@ pub enum DocumentBuilderError {
     #[error("operation {0} cannot be connected to the document graph")]
     InvalidOperationLink(OperationId),
 
-    /// Handle errors when sorting the graph.
-    #[error(transparent)]
-    GraphSortingError(#[from] crate::graph::GraphError),
-
     /// Handle errors from validating CBOR schemas.
     #[error(transparent)]
     DocumentViewError(#[from] DocumentViewError),
+
+    /// Handle errors when sorting the graph.
+    #[error(transparent)]
+    GraphSortingError(#[from] crate::next::graph::error::GraphError),
 }
 
 /// Error types for methods of `Document` struct.
@@ -45,7 +45,7 @@ pub enum DocumentError {
 
     /// Handle errors when sorting the graph.
     #[error(transparent)]
-    GraphSortingError(#[from] crate::graph::GraphError),
+    GraphSortingError(#[from] crate::next::graph::error::GraphError),
 }
 
 /// Custom error types for `DocumentView`.

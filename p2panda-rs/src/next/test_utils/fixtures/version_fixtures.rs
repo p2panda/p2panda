@@ -3,14 +3,13 @@
 //! Hard-coded fixtures with valid and invalid byte encodings for testing.
 use rstest::fixture;
 
-use crate::identity::KeyPair;
 use crate::next::entry::decode::decode_entry;
 use crate::next::entry::{EncodedEntry, Entry};
+use crate::next::identity::KeyPair;
 use crate::next::operation::EncodedOperation;
 use crate::next::schema::{FieldType, Schema};
 use crate::next::test_utils::constants::SCHEMA_ID;
-use crate::next::test_utils::fixtures::schema_id;
-use crate::test_utils::fixtures::key_pair;
+use crate::next::test_utils::fixtures::{key_pair, schema_id};
 
 /// Fixture struct which contains versioned p2panda data for testing.
 #[derive(Debug)]

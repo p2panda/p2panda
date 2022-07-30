@@ -2,8 +2,8 @@
 
 use std::hash::Hash as StdHash;
 
-use crate::identity::Author;
 use crate::next::entry::Entry;
+use crate::next::identity::Author;
 use crate::next::operation::traits::AsVerifiedOperation;
 use crate::next::operation::{Operation, OperationId};
 
@@ -82,7 +82,7 @@ mod tests {
     use rstest::rstest;
     use rstest_reuse::apply;
 
-    use crate::identity::{Author, KeyPair};
+    use crate::next::identity::{Author, KeyPair};
     use crate::next::entry::EncodedEntry;
     use crate::next::operation::traits::{AsOperation, AsVerifiedOperation};
     use crate::next::operation::{

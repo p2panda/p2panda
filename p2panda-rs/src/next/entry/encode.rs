@@ -15,11 +15,11 @@
 use bamboo_rs_core_ed25519_yasmf::entry::{is_lipmaa_required, MAX_ENTRY_SIZE};
 use bamboo_rs_core_ed25519_yasmf::{Entry as BambooEntry, Signature as BambooSignature};
 
-use crate::identity::KeyPair;
 use crate::next::entry::error::EncodeEntryError;
 use crate::next::entry::validate::validate_links;
 use crate::next::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::next::hash::Hash;
+use crate::next::identity::KeyPair;
 use crate::next::operation::EncodedOperation;
 
 /// Takes entry arguments (log id, sequence number, etc.), operation payload and a [`KeyPair`],

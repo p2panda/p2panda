@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Interfaces for interactions for operation-like structs.
-use crate::identity::Author;
 use crate::next::document::DocumentViewId;
+use crate::next::identity::Author;
 use crate::next::operation::plain::PlainFields;
 use crate::next::operation::{
     Operation, OperationAction, OperationFields, OperationId, OperationVersion,
