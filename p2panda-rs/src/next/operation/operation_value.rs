@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::next::operation::{PinnedRelation, PinnedRelationList, Relation, RelationList};
+use crate::next::{
+    document::{DocumentId, DocumentViewId},
+    operation::{PinnedRelation, PinnedRelationList, Relation, RelationList},
+};
 
 /// Enum of possible data types which can be added to the operations fields as values.
 #[derive(Clone, Debug, PartialEq)]
@@ -46,6 +49,60 @@ impl OperationValue {
     }
 }
 
+impl From<bool> for OperationValue {
+    fn from(value: bool) -> Self {
+        OperationValue::Boolean(value)
+    }
+}
+
+impl From<f64> for OperationValue {
+    fn from(value: f64) -> Self {
+        OperationValue::Float(value)
+    }
+}
+
+impl From<i64> for OperationValue {
+    fn from(value: i64) -> Self {
+        OperationValue::Integer(value)
+    }
+}
+
+impl From<String> for OperationValue {
+    fn from(value: String) -> Self {
+        OperationValue::String(value)
+    }
+}
+
+impl From<&str> for OperationValue {
+    fn from(value: &str) -> Self {
+        OperationValue::String(value.to_string())
+    }
+}
+
+impl From<DocumentId> for OperationValue {
+    fn from(value: DocumentId) -> Self {
+        OperationValue::Relation(Relation::new(value))
+    }
+}
+
+impl From<Vec<DocumentId>> for OperationValue {
+    fn from(value: Vec<DocumentId>) -> Self {
+        OperationValue::RelationList(RelationList::new(value))
+    }
+}
+
+impl From<DocumentViewId> for OperationValue {
+    fn from(value: DocumentViewId) -> Self {
+        OperationValue::PinnedRelation(PinnedRelation::new(value))
+    }
+}
+
+impl From<Vec<DocumentViewId>> for OperationValue {
+    fn from(value: Vec<DocumentViewId>) -> Self {
+        OperationValue::PinnedRelationList(PinnedRelationList::new(value))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -55,7 +112,9 @@ mod tests {
         OperationId, PinnedRelation, PinnedRelationList, Relation, RelationList,
     };
     use crate::next::schema::FieldType;
-    use crate::next::test_utils::fixtures::{random_document_id, random_operation_id};
+    use crate::next::test_utils::fixtures::{
+        document_id, document_view_id, random_document_id, random_operation_id,
+    };
     use crate::Validate;
 
     use super::OperationValue;
@@ -91,6 +150,39 @@ mod tests {
             vec![DocumentViewId::new(&[operation_id])],
         ));
         assert_eq!(pinned_relation_list.field_type(), "pinned_relation_list");
+    }
+
+    #[rstest]
+    fn conversion(document_id: DocumentId, document_view_id: DocumentViewId) {
+        // Scalar types
+        assert_eq!(OperationValue::Boolean(true), true.into());
+        assert_eq!(OperationValue::Float(1.5), 1.5.into());
+        assert_eq!(OperationValue::Integer(3), 3.into());
+        assert_eq!(OperationValue::String("hellö".to_string()), "hellö".into());
+        assert_eq!(
+            OperationValue::String("hellö".to_string()),
+            "hellö".to_string().into()
+        );
+
+        // Relation types
+        assert_eq!(
+            OperationValue::Relation(Relation::new(document_id.clone())),
+            document_id.clone().into()
+        );
+        assert_eq!(
+            OperationValue::RelationList(RelationList::new(vec![document_id.clone()])),
+            vec![document_id].into()
+        );
+        assert_eq!(
+            OperationValue::PinnedRelation(PinnedRelation::new(document_view_id.clone())),
+            document_view_id.clone().into()
+        );
+        assert_eq!(
+            OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
+                document_view_id.clone()
+            ])),
+            vec![document_view_id.clone()].into()
+        );
     }
 
     // @TODO: This is not really possible without schemas anymore, could this be moved to operation

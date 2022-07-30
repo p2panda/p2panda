@@ -3,7 +3,8 @@
 use std::collections::BTreeMap;
 use std::fmt::Display;
 
-use crate::next::document::DocumentViewHash;
+use crate::next::document::{DocumentViewHash, DocumentViewId};
+use crate::next::operation::{Operation, OperationBuilder};
 use crate::next::schema::error::{SchemaError, SchemaIdError};
 use crate::next::schema::system::{
     get_schema_definition, get_schema_field_definition, SchemaFieldView, SchemaView,
@@ -138,6 +139,80 @@ impl Schema {
             description: schema.description().to_owned(),
             fields: fields_map,
         })
+    }
+
+    /// Returns a create operation that can be sent to a node to create a schema.
+    ///
+    /// This requires you to have created field definitions for this schema before (see
+    /// [`Schema::create_field()`])
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # #[cfg(test)]
+    /// # mod doc_test {
+    /// # use p2panda_rs::test_utils::fixtures::{random_operation_id};
+    /// #
+    /// # #[rstest]
+    /// # fn main(#[from(document_view_id)] schema_document_view_id: DocumentViewId) {
+    /// #
+    /// # let from_field_view_id = random_operation_id();
+    /// # let to_field_view_id = random_operation_id();
+    /// // Assuming you have created two fields beforehand:
+    /// let create_operation: Operation = Schema::create(
+    ///     "chess_move",
+    ///     "a move in my chess game",
+    ///     vec![from_field_view_id, to_field_view_id].into()
+    /// );
+    /// # }
+    /// # }
+    /// ```
+    pub fn create(name: &str, description: &str, field_view_ids: Vec<DocumentViewId>) -> Operation {
+        // Unwrap here as we know that this schema exists
+        let schema = Self::get_system(SchemaId::SchemaDefinition(1)).unwrap();
+
+        OperationBuilder::new(&schema)
+            .fields(&[
+                ("name", name.into()),
+                ("description", description.into()),
+                ("fields", field_view_ids.into()),
+            ])
+            .build()
+            // Unwrap here as we know that the operation matches the schema
+            .unwrap()
+    }
+
+    /// Returns a create operation that can be sent to a node to create a schema.
+    ///
+    /// This requires you to have created field definitions for this schema before (see
+    /// [`Schema::create_field()`])
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # #[cfg(test)]
+    /// # mod doc_test {
+    /// # extern crate p2panda_rs;
+    /// use p2panda_rs::schema::field_types::FieldType;
+    ///
+    /// # #[rstest]
+    /// # fn main(#[from(document_view_id)] schema_document_view_id: DocumentViewId) {
+    /// let create_operation: Operation = Schema::create_field(
+    ///     "field_name",
+    ///     FieldType::String,
+    /// );
+    /// # }
+    /// # }
+    /// ```
+    pub fn create_field(name: &str, field_type: FieldType) -> Operation {
+        // Unwrap here as we know that this schema exists
+        let schema = Self::get_system(SchemaId::SchemaFieldDefinition(1)).unwrap();
+
+        OperationBuilder::new(&schema)
+            .fields(&[("name", name.into()), ("type", field_type.into())])
+            .build()
+            // Unwrap here as we know that the operation matches the schema
+            .unwrap()
     }
 
     /// Return a static `Schema` instance for a system schema.
