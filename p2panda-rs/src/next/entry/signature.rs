@@ -40,3 +40,10 @@ impl StdHash for Signature {
         self.into_bytes().hash(state)
     }
 }
+
+#[cfg(test)]
+impl Signature {
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        Self(Ed25519Signature::from_bytes(bytes).unwrap())
+    }
+}

@@ -134,4 +134,3 @@ mod tests {
         assert_eq!(result, Test(12));
     }
 }
-

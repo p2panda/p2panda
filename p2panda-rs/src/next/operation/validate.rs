@@ -4,6 +4,7 @@
 use crate::next::document::DocumentViewId;
 use crate::next::entry::validate::{validate_log_integrity, validate_payload};
 use crate::next::entry::{EncodedEntry, Entry};
+use crate::next::hash::Hash;
 use crate::next::operation::error::{ValidateOperationError, VerifiedOperationError};
 use crate::next::operation::plain::{PlainFields, PlainOperation};
 use crate::next::operation::traits::{Actionable, Schematic};
@@ -74,7 +75,9 @@ pub fn validate_operation_with_entry(
     entry: &Entry,
     entry_encoded: &EncodedEntry,
     skiplink_entry: Option<&Entry>,
+    skiplink_entry_hash: Option<&Hash>,
     backlink_entry: Option<&Entry>,
+    backlink_entry_hash: Option<&Hash>,
     plain_operation: &PlainOperation,
     operation_encoded: &EncodedOperation,
     schema: &Schema,
@@ -83,7 +86,13 @@ pub fn validate_operation_with_entry(
     validate_payload(entry, operation_encoded)?;
 
     // Verify that the entries links are correct
-    validate_log_integrity(entry, skiplink_entry, backlink_entry)?;
+    validate_log_integrity(
+        entry,
+        skiplink_entry,
+        skiplink_entry_hash,
+        backlink_entry,
+        backlink_entry_hash,
+    )?;
 
     // The operation id is the result of a hashing function over the entry bytes.
     let operation_id = entry_encoded.hash().into();

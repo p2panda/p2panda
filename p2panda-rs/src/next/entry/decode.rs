@@ -38,9 +38,6 @@ use crate::next::entry::{EncodedEntry, Entry};
 pub fn decode_entry(entry_encoded: &EncodedEntry) -> Result<Entry, DecodeEntryError> {
     let bytes = entry_encoded.into_bytes();
 
-    // Check the signature (#E5)
-    validate_signature(&entry_encoded)?;
-
     // Decode the bamboo entry as per specification (#E2)
     let bamboo_entry = decode(&bytes)?;
 
@@ -50,6 +47,9 @@ pub fn decode_entry(entry_encoded: &EncodedEntry) -> Result<Entry, DecodeEntryEr
     // Validate links (#E3). The bamboo-rs crate does check for valid links but not if back- &
     // skiplinks are identical (this is optional but we enforce it)
     validate_links(&entry)?;
+
+    // Check the signature (#E5)
+    validate_signature(entry.public_key(), entry.signature(), &entry_encoded)?;
 
     Ok(entry)
 }

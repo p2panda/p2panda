@@ -167,6 +167,8 @@ pub fn verified_operation(
         &entry_encoded,
         None,
         None,
+        None,
+        None,
         &operation_plain,
         &operation_encoded,
         &schema,

@@ -4,6 +4,8 @@
 //! types like sequence numbers or log ids.
 use thiserror::Error;
 
+use crate::next::entry::LogId;
+
 /// Errors from `EntryBuilder` struct.
 #[derive(Error, Debug)]
 pub enum EntryBuilderError {
@@ -55,6 +57,34 @@ pub enum ValidateEntryError {
     /// Backlink and skiplink hashes should be different.
     #[error("backlink and skiplink are identical")]
     BacklinkAndSkiplinkIdentical,
+
+    /// Backlink entry does not match log id.
+    #[error("entry is in log id {0} but backlink entry in log id {1}")]
+    WrongBacklinkLogId(u64, u64),
+
+    /// Skiplink entry does not match log id.
+    #[error("entry is in log id {0} but skiplink entry in log id {1}")]
+    WrongSkiplinkLogId(u64, u64),
+
+    /// Backlink entry from database has a different author.
+    #[error("claimed author does not match backlink entry")]
+    WrongBacklinkAuthor,
+
+    /// Backlink entry from database has a different hash.
+    #[error("claimed hash does not match backlink entry")]
+    WrongBacklinkHash,
+
+    /// Skiplink entry from database has a different author.
+    #[error("claimed author does not match skiplink entry")]
+    WrongSkiplinkAuthor,
+
+    /// Skiplink entry from database has a different hash.
+    #[error("claimed hash does not match skiplink entry")]
+    WrongSkiplinkHash,
+
+    /// Could not verify authorship of entry.
+    #[error("signature invalid")]
+    KeyPairError(#[from] crate::next::identity::error::KeyPairError),
 }
 
 /// Errors from `SeqNum` struct.

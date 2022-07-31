@@ -110,6 +110,21 @@ impl OperationFields {
     }
 }
 
+impl From<Vec<(&str, OperationValue)>> for OperationFields {
+    fn from(spec: Vec<(&str, OperationValue)>) -> Self {
+        let mut operation_fields = OperationFields::new();
+
+        for field in spec {
+            if let Err(_) = operation_fields.add(field.0, field.1) {
+                // Silently ignore duplicates errors .. the underlying data type takes care of that
+                // for us!
+            }
+        }
+
+        operation_fields
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
