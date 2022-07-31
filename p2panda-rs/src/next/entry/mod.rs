@@ -82,12 +82,10 @@ pub mod error;
 mod log_id;
 mod seq_num;
 mod signature;
-#[cfg(test)]
-mod tests;
 pub mod validate;
 
-pub use encoded_entry::EncodedEntry;
+pub use encoded_entry::{EncodedEntry, SIGNATURE_SIZE};
 pub use entry::{Entry, EntryBuilder};
 pub use log_id::LogId;
-pub use seq_num::SeqNum;
+pub use seq_num::{SeqNum, FIRST_SEQ_NUM};
 pub use signature::Signature;

@@ -3,10 +3,14 @@
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 
+use bamboo_rs_core_ed25519_yasmf::ED25519_SIGNATURE_SIZE;
 use serde::{Deserialize, Serialize};
 
 use crate::next::hash::Hash;
 use crate::next::serde::{deserialize_hex, serialize_hex};
+
+/// Size of p2panda entries' signatures.
+pub const SIGNATURE_SIZE: usize = ED25519_SIGNATURE_SIZE;
 
 /// Wrapper type for Bamboo entry bytes.
 ///
@@ -43,6 +47,16 @@ impl EncodedEntry {
     /// Returns payload size (number of bytes) of total encoded entry.
     pub fn size(&self) -> u64 {
         self.0.len() as u64
+    }
+
+    /// Returns only those bytes of a signed entry that don't contain the signature.
+    ///
+    /// Encoded entries contains both a signature as well as the bytes that were signed. In order
+    /// to verify the signature you need access to only the bytes that were used during signing.
+    pub fn unsigned_bytes(&self) -> Vec<u8> {
+        let bytes = self.into_bytes();
+        let signature_offset = bytes.len() - SIGNATURE_SIZE;
+        bytes[..signature_offset].into()
     }
 }
 

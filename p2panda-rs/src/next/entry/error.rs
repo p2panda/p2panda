@@ -51,6 +51,10 @@ pub enum ValidateEntryError {
     /// Operation needs to match payload size of encoded entry.
     #[error("operation needs to match payload size of encoded entry")]
     PayloadSizeMismatch,
+
+    /// Backlink and skiplink hashes should be different.
+    #[error("backlink and skiplink are identical")]
+    BacklinkAndSkiplinkIdentical,
 }
 
 /// Errors from `SeqNum` struct.

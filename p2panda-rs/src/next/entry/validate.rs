@@ -4,8 +4,10 @@
 //!
 //! You fill not find methods her to check the encoding of Bamboo entries, as this is handled
 //! inside the external bamboo-rs crate.
+use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
+
 use crate::next::entry::error::ValidateEntryError;
-use crate::next::entry::Entry;
+use crate::next::entry::{EncodedEntry, Entry};
 use crate::next::operation::EncodedOperation;
 
 /// Checks if backlink- and skiplink are correctly set for the given sequence number (#E3).
@@ -23,7 +25,13 @@ pub fn validate_links(entry: &Entry) -> Result<(), ValidateEntryError> {
         (false, true, false, false) => Ok(()),
         (false, true, true, _) => Ok(()),
         (_, _, _, _) => Err(ValidateEntryError::InvalidLinks),
+    }?;
+
+    if is_lipmaa_required(entry.seq_num().as_u64()) && entry.backlink() == entry.skiplink() {
+        return Err(ValidateEntryError::BacklinkAndSkiplinkIdentical);
     }
+
+    Ok(())
 }
 
 /// Checks if entry is correctly placed in its log (#E4).
@@ -46,7 +54,7 @@ pub fn validate_log_integrity(
 }
 
 /// Checks if the entry is authentic by verifying the public key with the given signature (#E5).
-pub fn validate_signature(entry: &Entry) -> Result<(), ValidateEntryError> {
+pub fn validate_signature(entry: &EncodedEntry) -> Result<(), ValidateEntryError> {
     // @TODO
     Ok(())
 }
@@ -66,84 +74,3 @@ pub fn validate_payload(
 
     Ok(())
 }
-
-// @TODO: Needs refactoring
-/* #[cfg(test)]
-mod tests {
-    use rstest::rstest;
-
-    use crate::entry::{LogId, SeqNum};
-    use crate::next::hash::Hash;
-    use crate::operation::{Operation, OperationFields, OperationValue};
-    use crate::schema::SchemaId;
-    use crate::next::test_utils::fixtures::{entry, schema};
-    use crate::Validate;
-
-    use super::Entry;
-
-    #[rstest]
-    fn validation(schema: SchemaId) {
-        // Prepare sample values
-        let mut fields = OperationFields::new();
-        fields
-            .add("test", OperationValue::Text("Hello".to_owned()))
-            .unwrap();
-        let operation = Operation::new_create(schema, fields).unwrap();
-        let backlink = Hash::new_from_bytes(vec![7, 8, 9]).unwrap();
-
-        // The first entry in a log doesn't need and cannot have references to previous entries
-        assert!(Entry::new(
-            &LogId::default(),
-            Some(&operation),
-            None,
-            None,
-            &SeqNum::new(1).unwrap()
-        )
-        .is_ok());
-
-        // Try to pass them over anyways, it will be invalidated
-        assert!(Entry::new(
-            &LogId::default(),
-            Some(&operation),
-            Some(&backlink),
-            Some(&backlink),
-            &SeqNum::new(1).unwrap()
-        )
-        .is_err());
-
-        // Any following entry requires backlinks
-        assert!(Entry::new(
-            &LogId::default(),
-            Some(&operation),
-            Some(&backlink),
-            Some(&backlink),
-            &SeqNum::new(2).unwrap()
-        )
-        .is_ok());
-
-        // We can omit the skiplink here as it is the same as the backlink
-        assert!(Entry::new(
-            &LogId::default(),
-            Some(&operation),
-            None,
-            Some(&backlink),
-            &SeqNum::new(2).unwrap()
-        )
-        .is_ok());
-
-        // We need a backlink here
-        assert!(Entry::new(
-            &LogId::default(),
-            Some(&operation),
-            None,
-            None,
-            &SeqNum::new(2).unwrap()
-        )
-        .is_err());
-    }
-
-    #[rstest]
-    pub fn validate_many(entry: Entry) {
-        assert!(entry.validate().is_ok())
-    }
-} */

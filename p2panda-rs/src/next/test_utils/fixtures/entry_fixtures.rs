@@ -8,15 +8,15 @@ use lipmaa_link::is_skip_link;
 use rstest::fixture;
 use varu64::encode as varu64_encode;
 
-use crate::next::entry::encode::sign_entry;
-use crate::next::entry::Entry;
+use crate::next::entry::encode::{encode_entry, sign_entry};
+use crate::next::entry::{EncodedEntry, Entry};
 use crate::next::hash::{Blake3ArrayVec, Hash};
 use crate::next::identity::KeyPair;
 use crate::next::operation::encode::encode_operation;
 use crate::next::operation::Operation;
 use crate::next::test_utils::fixtures::{key_pair, operation, random_hash};
 
-/// Fixture which injects an `Entry` into a test method.
+/// Creates an `Entry`.
 ///
 /// Default values are those of the first entry in log number 1. The default payload is a CREATE
 /// operation containing the default testing fields. All values can be overridden at testing time
@@ -44,12 +44,10 @@ pub fn entry(
     .unwrap()
 }
 
-/// Fixture which injects an `Entry` with auto generated valid values for backlink, skiplink and
-/// operation.
+/// Creates an `Entry` with auto generated valid values for backlink, skiplink and operation.
 ///
-/// seq_num and log_id can be overridden at testing time by passing in custom values. The
+/// `seq_num` and `log_id` can be overridden at testing time by passing in custom values. The
 /// `#[with()]` tag can be used to partially change default values.
-/// ```
 #[fixture]
 pub fn entry_auto_gen_links(
     #[default(1)] seq_num: u64,
@@ -70,8 +68,32 @@ pub fn entry_auto_gen_links(
     entry(seq_num, log_id, backlink, skiplink, operation, key_pair)
 }
 
-/// Fixture which injects the default testing EntrySigned into a test method WITHOUT any validation
-/// during construction.
+/// Returns default encoded entry.
+#[fixture]
+pub fn encoded_entry(
+    #[default(1)] seq_num: u64,
+    #[default(0)] log_id: u64,
+    #[default(None)] backlink: Option<Hash>,
+    #[default(None)] skiplink: Option<Hash>,
+    #[from(operation)] operation: Operation,
+    #[from(key_pair)] key_pair: KeyPair,
+) -> EncodedEntry {
+    let encoded_operation = encode_operation(&operation).unwrap();
+
+    let entry = sign_entry(
+        &log_id.into(),
+        &seq_num.try_into().unwrap(),
+        skiplink.as_ref(),
+        backlink.as_ref(),
+        &encoded_operation,
+        &key_pair,
+    )
+    .unwrap();
+
+    encode_entry(&entry).unwrap()
+}
+
+/// Creates encoded entry which was created WITHOUT any validation.
 ///
 /// Default values can be overridden at testing time by passing in custom entry and key pair.
 #[fixture]
@@ -80,9 +102,9 @@ pub fn entry_signed_encoded_unvalidated(
     #[default(0)] log_id: u64,
     #[default(None)] backlink: Option<Hash>,
     #[default(None)] skiplink: Option<Hash>,
-    #[from(operation)] operation: Operation,
+    #[default(None)] operation: Option<Operation>,
     #[from(key_pair)] key_pair: KeyPair,
-) -> String {
+) -> EncodedEntry {
     let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
     let mut next_byte_num = 0;
 
@@ -124,18 +146,23 @@ pub fn entry_signed_encoded_unvalidated(
         _ => next_byte_num,
     };
 
-    // Encode the operation
-    let operation_encoded = encode_operation(&operation).unwrap();
+    // Encode the operation if it exists
+    match operation {
+        Some(operation) => {
+            let operation_encoded = encode_operation(&operation).unwrap();
 
-    // Encode the payload size
-    let operation_size = operation_encoded.size();
-    next_byte_num += varu64_encode(operation_size, &mut entry_bytes[next_byte_num..]);
+            // Encode the payload size
+            let operation_size = operation_encoded.size();
+            next_byte_num += varu64_encode(operation_size, &mut entry_bytes[next_byte_num..]);
 
-    // Encode the payload hash
-    let operation_hash = operation_encoded.hash();
-    next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(&operation_hash)
-        .encode(&mut entry_bytes[next_byte_num..])
-        .unwrap();
+            // Encode the payload hash
+            let operation_hash = operation_encoded.hash();
+            next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(&operation_hash)
+                .encode(&mut entry_bytes[next_byte_num..])
+                .unwrap();
+        }
+        None => (),
+    };
 
     // Attach signature
     let signature = key_pair.sign(&entry_bytes[..next_byte_num]);
@@ -145,6 +172,5 @@ pub fn entry_signed_encoded_unvalidated(
     // Trim bytes
     next_byte_num += sig.encode(&mut entry_bytes[next_byte_num..]).unwrap();
 
-    // Return hex encoded entry bytes
-    hex::encode(&entry_bytes[..next_byte_num])
+    EncodedEntry::from_bytes(&entry_bytes[..next_byte_num])
 }

@@ -29,6 +29,12 @@ impl From<Ed25519Signature> for Signature {
     }
 }
 
+impl From<&Signature> for Ed25519Signature {
+    fn from(signature: &Signature) -> Self {
+        signature.0.to_owned()
+    }
+}
+
 impl StdHash for Signature {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.into_bytes().hash(state)

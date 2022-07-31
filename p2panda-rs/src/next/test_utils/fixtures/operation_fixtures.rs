@@ -14,12 +14,14 @@ use crate::next::operation::{
     OperationVersion, VerifiedOperation,
 };
 use crate::next::schema::Schema;
-use crate::next::test_utils::constants;
-use crate::next::test_utils::fixtures::{document_view_id, key_pair, random_hash, schema};
+use crate::next::test_utils::constants::{test_fields, HASH, SCHEMA_ID};
+use crate::next::test_utils::fixtures::{
+    document_view_id, key_pair, random_hash, schema, schema_fields, schema_id,
+};
 
 /// Returns constant testing operation id.
 #[fixture]
-pub fn operation_id(#[default(constants::HASH)] hash_str: &str) -> OperationId {
+pub fn operation_id(#[default(HASH)] hash_str: &str) -> OperationId {
     hash_str.parse().unwrap()
 }
 
@@ -54,7 +56,7 @@ pub fn random_previous_operations(#[default(1)] num: u32) -> DocumentViewId {
 /// Returns operation fields populated with test values.
 #[fixture]
 pub fn operation_fields(
-    #[default(constants::test_fields())] fields_vec: Vec<(&str, OperationValue)>,
+    #[default(test_fields())] fields_vec: Vec<(&str, OperationValue)>,
 ) -> OperationFields {
     let mut operation_fields = OperationFields::new();
     for (key, value) in fields_vec.iter() {
@@ -68,7 +70,7 @@ pub fn operation_fields(
 /// Returns operation fields wrapped in an option.
 #[fixture]
 pub fn some_fields(
-    #[default(constants::test_fields())] fields_vec: Vec<(&str, OperationValue)>,
+    #[default(test_fields())] fields_vec: Vec<(&str, OperationValue)>,
 ) -> Option<OperationFields> {
     Some(operation_fields(fields_vec))
 }
@@ -109,6 +111,26 @@ pub fn operation(
             previous_operations,
             fields: None,
         },
+    }
+}
+
+/// Returns an constant CREATE operation.
+#[fixture]
+pub fn operation_with_schema() -> Operation {
+    let schema_id = schema_id(SCHEMA_ID);
+
+    let schema = schema(
+        schema_fields(test_fields(), schema_id.clone()),
+        schema_id,
+        "Test schema",
+    );
+
+    Operation {
+        version: OperationVersion::V1,
+        action: OperationAction::Create,
+        schema,
+        previous_operations: None,
+        fields: some_fields(test_fields()),
     }
 }
 
@@ -173,7 +195,7 @@ pub fn encoded_operation(
 /// Helper method for easily constructing a CREATE operation.
 #[fixture]
 pub fn create_operation(
-    #[default(constants::test_fields())] fields: Vec<(&str, OperationValue)>,
+    #[default(test_fields())] fields: Vec<(&str, OperationValue)>,
     #[from(schema)] schema: Schema,
 ) -> Operation {
     operation(Some(operation_fields(fields.to_vec())), None, schema)
@@ -182,7 +204,7 @@ pub fn create_operation(
 /// Helper method for easily constructing an UPDATE operation.
 #[fixture]
 pub fn update_operation(
-    #[default(constants::test_fields())] fields: Vec<(&str, OperationValue)>,
+    #[default(test_fields())] fields: Vec<(&str, OperationValue)>,
     #[from(document_view_id)] previous_operations: DocumentViewId,
     #[from(schema)] schema: Schema,
 ) -> Operation {

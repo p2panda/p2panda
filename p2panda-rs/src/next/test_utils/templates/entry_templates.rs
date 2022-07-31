@@ -12,13 +12,10 @@ use rstest_reuse::template;
     1,
     None,
     None,
-    Some($crate::next::test_utils::fixtures::operation(
-        Some($crate::next::test_utils::fixtures::operation_fields(
-            $crate::next::test_utils::constants::test_fields()
-        )),
-        None,
-        None
-    ))
+    $crate::next::test_utils::fixtures::operation_with_schema(),
+    $crate::next::test_utils::fixtures::key_pair(
+        $crate::next::test_utils::constants::PRIVATE_KEY
+    )
 ))]
 #[allow(unused_qualifications)]
 #[case::entry_with_backlink($crate::next::test_utils::fixtures::entry(
@@ -26,15 +23,10 @@ use rstest_reuse::template;
     1,
     Some($crate::next::test_utils::constants::HASH.parse().unwrap()),
     None,
-    Some($crate::next::test_utils::fixtures::operation(
-        Some(
-            $crate::next::test_utils::fixtures::operation_fields(
-                $crate::next::test_utils::constants::test_fields()
-            )
-        ),
-        None,
-        None
-    ))
+    $crate::next::test_utils::fixtures::operation_with_schema(),
+    $crate::next::test_utils::fixtures::key_pair(
+        $crate::next::test_utils::constants::PRIVATE_KEY
+    )
 ))]
 #[allow(unused_qualifications)]
 #[case::entry_with_backlink_and_skiplink($crate::next::test_utils::fixtures::entry(
@@ -42,15 +34,10 @@ use rstest_reuse::template;
     1,
     Some($crate::next::test_utils::constants::HASH.parse().unwrap()),
     Some($crate::next::test_utils::fixtures::random_hash()),
-    Some($crate::next::test_utils::fixtures::operation(
-        Some(
-            $crate::next::test_utils::fixtures::operation_fields(
-                $crate::next::test_utils::constants::test_fields()
-            )
-        ),
-        None,
-        None
-    ))
+    $crate::next::test_utils::fixtures::operation_with_schema(),
+    $crate::next::test_utils::fixtures::key_pair(
+        $crate::next::test_utils::constants::PRIVATE_KEY
+    )
 ))]
 #[allow(unused_qualifications)]
 #[case::skiplink_can_be_omitted_when_sam_as_backlink($crate::next::test_utils::fixtures::entry(
@@ -58,15 +45,10 @@ use rstest_reuse::template;
     1,
     Some($crate::next::test_utils::constants::HASH.parse().unwrap()),
     None,
-    Some($crate::next::test_utils::fixtures::operation(
-        Some(
-            $crate::next::test_utils::fixtures::operation_fields(
-                $crate::next::test_utils::constants::test_fields()
-            )
-        ),
-        None,
-        None
-    ))
+    $crate::next::test_utils::fixtures::operation_with_schema(),
+    $crate::next::test_utils::fixtures::key_pair(
+        $crate::next::test_utils::constants::PRIVATE_KEY
+    )
 ))]
 fn many_valid_entries(#[case] entry: Entry) {}
 
