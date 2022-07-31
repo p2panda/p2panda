@@ -298,9 +298,9 @@ mod tests {
     use crate::next::operation::plain::{PlainFields, PlainValue};
     use crate::next::operation::{OperationFields, OperationValue};
     use crate::next::schema::{FieldType, Schema, SchemaId};
+    use crate::next::test_utils::constants::{HASH, SCHEMA_ID};
     use crate::next::test_utils::fixtures::document_view_id;
     use crate::next::test_utils::fixtures::schema_id;
-    use crate::test_utils::constants::{HASH, SCHEMA_ID};
 
     use super::{
         validate_all_fields, validate_field, validate_field_name, validate_field_value,

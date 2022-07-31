@@ -76,7 +76,7 @@ mod tests {
     use crate::next::hash::Hash;
     use crate::operation::{Operation, OperationFields, OperationValue};
     use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::{entry, schema};
+    use crate::next::test_utils::fixtures::{entry, schema};
     use crate::Validate;
 
     use super::Entry;

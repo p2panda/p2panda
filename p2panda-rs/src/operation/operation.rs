@@ -295,7 +295,7 @@ mod tests {
     use crate::test_utils::fixtures::{
         operation_fields, random_document_id, random_document_view_id, schema,
     };
-    use crate::test_utils::templates::many_valid_operations;
+    use crate::test_utils::templates::legacy_many_valid_operations;
     use crate::Validate;
 
     use super::{Operation, OperationAction, OperationFields, OperationVersion};
@@ -472,12 +472,12 @@ mod tests {
         );
     }
 
-    #[apply(many_valid_operations)]
+    #[apply(legacy_many_valid_operations)]
     fn many_valid_operations_should_encode(#[case] operation: Operation) {
         assert!(OperationEncoded::try_from(&operation).is_ok())
     }
 
-    #[apply(many_valid_operations)]
+    #[apply(legacy_many_valid_operations)]
     fn it_hashes(#[case] operation: Operation) {
         let mut hash_map = HashMap::new();
         let key_value = "Value identified by a hash".to_string();

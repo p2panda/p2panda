@@ -6,8 +6,8 @@ mod entry_templates;
 mod operation_templates;
 mod version_fixture_templates;
 
-pub use entry_templates::many_valid_entries;
+pub use entry_templates::legacy_many_valid_entries;
 pub use operation_templates::{
-    implements_as_operation, many_valid_operations, many_verified_operations,
+    legacy_implements_as_operation, legacy_many_valid_operations, legacy_many_verified_operations,
 };
 pub use version_fixture_templates::legacy_version_fixtures;

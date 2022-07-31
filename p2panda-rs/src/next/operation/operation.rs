@@ -169,7 +169,7 @@ mod tests {
     use crate::next::test_utils::fixtures::{
         operation_fields, random_document_id, random_document_view_id, schema_id,
     };
-    use crate::test_utils::templates::many_valid_operations;
+    use crate::next::test_utils::templates::many_valid_operations;
     use crate::Validate;
 
     use super::{Operation, OperationAction, OperationFields, OperationVersion};

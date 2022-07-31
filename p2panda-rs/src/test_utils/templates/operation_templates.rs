@@ -54,7 +54,7 @@ use rstest_reuse::template;
         None
     )
 )]
-fn many_valid_operations(#[case] operation: Operation) {}
+fn legacy_many_valid_operations(#[case] operation: Operation) {}
 
 /// This template contains various types of valid meta-operation.
 #[template]
@@ -84,7 +84,7 @@ fn many_valid_operations(#[case] operation: Operation) {}
     None,
     None
 ))]
-fn many_verified_operations(#[case] operation: VerifiedOperation) {}
+fn legacy_many_verified_operations(#[case] operation: VerifiedOperation) {}
 
 /// This template contains examples of all structs which implement the `AsOperation` trait.
 #[template]
@@ -131,8 +131,8 @@ fn many_verified_operations(#[case] operation: VerifiedOperation) {}
     None,
     None
 ))]
-fn implements_as_operation(#[case] operation: impl AsOperation) {}
+fn legacy_implements_as_operation(#[case] operation: impl AsOperation) {}
 
-pub use implements_as_operation;
-pub use many_valid_operations;
-pub use many_verified_operations;
+pub use legacy_implements_as_operation;
+pub use legacy_many_valid_operations;
+pub use legacy_many_verified_operations;

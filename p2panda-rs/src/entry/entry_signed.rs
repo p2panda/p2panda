@@ -182,7 +182,7 @@ mod tests {
         entry_signed_encoded, entry_signed_encoded_unvalidated, key_pair, operation,
         operation_encoded, operation_fields, random_hash,
     };
-    use crate::test_utils::templates::many_valid_entries;
+    use crate::test_utils::templates::legacy_many_valid_entries;
 
     #[rstest]
     fn string_representation(entry_signed_encoded: EntrySigned) {
@@ -367,7 +367,7 @@ mod tests {
         );
     }
 
-    #[apply(many_valid_entries)]
+    #[apply(legacy_many_valid_entries)]
     fn it_hashes(#[case] entry: Entry, key_pair: KeyPair) {
         let entry_first_encoded = sign_and_encode(&entry, &key_pair).unwrap();
         let mut hash_map = HashMap::new();

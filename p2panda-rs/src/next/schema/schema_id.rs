@@ -239,8 +239,8 @@ impl<'de> Deserialize<'de> for SchemaId {
 mod test {
     use rstest::rstest;
 
+    use crate::next::test_utils::constants::SCHEMA_ID;
     use crate::next::test_utils::fixtures::schema_id;
-    use crate::test_utils::constants::SCHEMA_ID;
     use crate::Human;
 
     use super::SchemaId;

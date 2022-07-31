@@ -11,11 +11,10 @@ use crate::entry::{decode_entry, sign_and_encode, Entry, LogId, SeqNum};
 use crate::identity::KeyPair;
 use crate::operation::{AsOperation, Operation, OperationEncoded};
 use crate::test_utils::fixtures::{key_pair, Fixture};
-
-use crate::test_utils::templates::{legacy_version_fixtures, many_valid_entries};
+use crate::test_utils::templates::{legacy_many_valid_entries, legacy_version_fixtures};
 
 /// Test encoding and decoding entries.
-#[apply(many_valid_entries)]
+#[apply(legacy_many_valid_entries)]
 fn entry_encoding_decoding(#[case] entry: Entry, key_pair: KeyPair) {
     // Encode Operation
     let encoded_operation = OperationEncoded::try_from(entry.operation().unwrap()).unwrap();
@@ -38,7 +37,7 @@ fn entry_encoding_decoding(#[case] entry: Entry, key_pair: KeyPair) {
 }
 
 /// Test decoding an entry then signing and encoding it again.
-#[apply(many_valid_entries)]
+#[apply(legacy_many_valid_entries)]
 fn sign_and_encode_roundtrip(#[case] entry: Entry, key_pair: KeyPair) {
     // Sign a p2panda entry. For this encoding, the entry is converted into a bamboo-rs-core entry,
     // which means that it also doesn't contain the operation anymore

@@ -56,6 +56,6 @@ use rstest_reuse::template;
         None
     ))
 ))]
-fn many_valid_entries(#[case] entry: Entry) {}
+fn legacy_many_valid_entries(#[case] entry: Entry) {}
 
-pub use many_valid_entries;
+pub use legacy_many_valid_entries;
