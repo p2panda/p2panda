@@ -47,9 +47,14 @@ impl DocumentViewId {
     ///
     /// The given operation ids will automatically be sorted and de-duplicated.
     pub fn new(graph_tips: &[OperationId]) -> Self {
-        // @TODO: Remove duplicates
         let mut graph_tips = graph_tips.to_owned();
+
+        // Make sure all operations are sorted
         graph_tips.sort();
+
+        // Make sure all operations are de-duplicated
+        graph_tips.dedup();
+
         Self(graph_tips)
     }
 
@@ -231,6 +236,57 @@ mod tests {
     use super::DocumentViewId;
 
     #[rstest]
+    fn constructor_converts_to_canonic_format() {
+        let operation_id_1: OperationId =
+            "00201413ae916e6745ab715c1f5ab49c47d6773c3c0febd970ecf1039beed203b472"
+                .parse()
+                .unwrap();
+        let operation_id_2: OperationId =
+            "0020266fe901ea7d3efa983f12d145089d29480064b0da7393a8c0779af7488c7f0d"
+                .parse()
+                .unwrap();
+        let operation_id_3: OperationId =
+            "0020387b96cfdc7ac155eff0a9941400dee4a21e7cf18dcccefbf0a46a7c0138bbf5"
+                .parse()
+                .unwrap();
+        let operation_id_4: OperationId =
+            "002047e8d17a2edb41621beec8c710ee71a1b2ea81d356f05cd466526b269a7b2493"
+                .parse()
+                .unwrap();
+
+        // Everything is in order
+        let document_view_id_1 = DocumentViewId::new(&[
+            operation_id_1.clone(),
+            operation_id_2.clone(),
+            operation_id_3.clone(),
+            operation_id_4.clone(),
+        ]);
+        assert!(document_view_id_1.validate().is_ok());
+
+        // Unordered operations will be sorted and deduplicated
+        let document_view_id_2 = DocumentViewId::new(&[
+            operation_id_3.clone(),
+            operation_id_3.clone(),
+            operation_id_2.clone(),
+            operation_id_4.clone(),
+            operation_id_1.clone(),
+            operation_id_4.clone(),
+        ]);
+        assert!(document_view_id_2.validate().is_ok());
+        assert_eq!(document_view_id_2.graph_tips().len(), 4);
+
+        assert!(DocumentViewId::from_untrusted(vec![
+            operation_id_3.clone(),
+            operation_id_3.clone(),
+            operation_id_2.clone(),
+            operation_id_4.clone(),
+            operation_id_1.clone(),
+            operation_id_4.clone(),
+        ])
+        .is_err());
+    }
+
+    #[rstest]
     fn conversion(#[from(random_hash)] hash: Hash) {
         // Converts a string to `DocumentViewId`
         let hash_str = "0020d3235c8fe6f58608200851b83cd8482808eb81e4c6b4b17805bba57da9f16e79";
@@ -346,7 +402,6 @@ mod tests {
 
         assert_eq!(result.unwrap_err().to_string(), expected_result.to_string());
 
-        // @TODO: Move this into own test
         // However, unsorted values in an id are sorted during serialisation
         let mut reversed_ids = vec![operation_id_1, operation_id_2];
         reversed_ids.sort();

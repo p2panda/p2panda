@@ -97,6 +97,7 @@ impl PinnedRelation {
         &self.0
     }
 
+    /// Returns iterator over operation ids.
     pub fn iter(&self) -> Iter<OperationId> {
         self.0.iter()
     }
@@ -125,10 +126,12 @@ impl RelationList {
         Self(relations)
     }
 
+    /// Returns iterator over document ids.
     pub fn iter(&self) -> Iter<DocumentId> {
         self.0.iter()
     }
 
+    /// Returns number of documents in this relation list.
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -176,10 +179,12 @@ impl PinnedRelationList {
         Self(relations)
     }
 
+    /// Returns iterator over document view ids.
     pub fn iter(&self) -> Iter<DocumentViewId> {
         self.0.iter()
     }
 
+    /// Returns number of pinned documents in this list.
     pub fn len(&self) -> usize {
         self.0.len()
     }
