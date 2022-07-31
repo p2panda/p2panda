@@ -8,15 +8,24 @@ use crate::next::operation::validate::validate_operation;
 use crate::next::operation::{OperationAction, OperationFields, OperationValue, OperationVersion};
 use crate::next::schema::{Schema, SchemaId};
 
-#[derive(Debug)]
+/// Create new operations.
+#[derive(Clone, Debug)]
 pub struct OperationBuilder {
+    /// Action of this operation.
     action: OperationAction,
+
+    /// Schema instance of this operation.
     schema: Schema,
+
+    /// Previous operations field.
     previous_operations: Option<DocumentViewId>,
+
+    /// Operation fields.
     fields: Option<OperationFields>,
 }
 
 impl OperationBuilder {
+    /// Returns a new instance of `OperationBuilder`.
     pub fn new(schema: &Schema) -> Self {
         Self {
             action: OperationAction::Create,
@@ -26,21 +35,25 @@ impl OperationBuilder {
         }
     }
 
-    pub fn action(mut self, action: &OperationAction) -> Self {
-        self.action = action.to_owned();
+    /// Set operation action.
+    pub fn action(mut self, action: OperationAction) -> Self {
+        self.action = action;
         self
     }
 
+    /// Set operation schema.
     pub fn schema(mut self, schema: &Schema) -> Self {
         self.schema = schema.to_owned();
         self
     }
 
+    /// Set previous operations.
     pub fn previous_operations(mut self, previous_operations: &DocumentViewId) -> Self {
         self.previous_operations = Some(previous_operations.to_owned());
         self
     }
 
+    /// Set operation fields.
     pub fn fields(mut self, fields: &[(&str, OperationValue)]) -> Self {
         let mut operation_fields = OperationFields::new();
 
@@ -55,6 +68,10 @@ impl OperationBuilder {
         self
     }
 
+    /// Builds and returns a new `Operation` instance.
+    ///
+    /// This method checks if the given previous operations and operation fields are matching the
+    /// regarding operation action.
     pub fn build(&self) -> Result<Operation, OperationBuilderError> {
         let operation = Operation {
             action: self.action,
@@ -156,175 +173,168 @@ impl Schematic for Operation {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use std::convert::TryFrom;
-
     use rstest::rstest;
-    use rstest_reuse::apply;
 
     use crate::next::document::{DocumentId, DocumentViewId};
     use crate::next::operation::traits::AsOperation;
-    use crate::next::operation::{EncodedOperation, OperationValue, Relation};
-    use crate::next::schema::SchemaId;
-    use crate::next::test_utils::fixtures::{
-        operation_fields, random_document_id, random_document_view_id, schema_id,
+    use crate::next::operation::{
+        OperationAction, OperationFields, OperationValue, OperationVersion,
     };
-    use crate::next::test_utils::templates::many_valid_operations;
-    use crate::Validate;
+    use crate::next::schema::{FieldType, Schema};
+    use crate::next::test_utils::constants::SCHEMA_ID;
+    use crate::next::test_utils::fixtures::{document_id, document_view_id, schema, schema_id};
 
-    use super::{Operation, OperationAction, OperationFields, OperationVersion};
+    use super::OperationBuilder;
 
-    #[test]
-    fn stringify_action() {
-        assert_eq!(OperationAction::Create.as_str(), "create");
-        assert_eq!(OperationAction::Update.as_str(), "update");
-        assert_eq!(OperationAction::Delete.as_str(), "delete");
+    #[rstest]
+    fn operation_builder(
+        #[with(vec![
+           ("firstname".into(), FieldType::String),
+           ("lastname".into(), FieldType::String),
+           ("year".into(), FieldType::Integer),
+        ])]
+        schema: Schema,
+        document_view_id: DocumentViewId,
+    ) {
+        let fields = vec![
+            ("firstname", "Peter".into()),
+            ("lastname", "Panda".into()),
+            ("year", 2020.into()),
+        ];
+
+        let operation = OperationBuilder::new(&schema)
+            .action(OperationAction::Update)
+            .previous_operations(&document_view_id)
+            .fields(&fields)
+            .build()
+            .unwrap();
+
+        assert_eq!(operation.action(), OperationAction::Update);
+        assert_eq!(operation.previous_operations(), Some(document_view_id));
+        assert_eq!(operation.fields(), Some(fields.into()));
+        assert_eq!(operation.version(), OperationVersion::V1);
+        assert_eq!(operation.schema_id(), *schema.id());
     }
 
-    // @TODO: Move this to `operation::validate`
-    /* #[rstest]
-    fn operation_validation(
-        operation_fields: OperationFields,
-        schema: SchemaId,
-        #[from(random_document_view_id)] prev_op_id: DocumentViewId,
+    #[rstest]
+    fn operation_builder_validation(
+        #[with(vec![("year".into(), FieldType::Integer)])] schema: Schema,
+        document_view_id: DocumentViewId,
     ) {
-        let invalid_create_operation_1 = Operation {
-            action: OperationAction::Create,
-            version: OperationVersion::Default,
-            schema: schema.clone(),
-            previous_operations: None,
-            // CREATE operations must contain fields
-            fields: None, // Error
-        };
+        // Correct CREATE operation
+        assert!(OperationBuilder::new(&schema)
+            .fields(&[("year", 2020.into())])
+            .build()
+            .is_ok());
 
-        assert!(invalid_create_operation_1.validate().is_err());
+        // CREATE operations should not contain previous_operations
+        assert!(OperationBuilder::new(&schema)
+            .action(OperationAction::Create)
+            .previous_operations(&document_view_id)
+            .fields(&[("year", 2020.into())])
+            .build()
+            .is_err());
 
-        let invalid_create_operation_2 = Operation {
-            action: OperationAction::Create,
-            version: OperationVersion::Default,
-            schema: schema.clone(),
-            // CREATE operations must not contain previous_operations
-            previous_operations: Some(prev_op_id.clone()), // Error
-            fields: Some(operation_fields.clone()),
-        };
+        // UPDATE operations should have fields
+        assert!(OperationBuilder::new(&schema)
+            .action(OperationAction::Update)
+            .previous_operations(&document_view_id)
+            .build()
+            .is_err());
 
-        assert!(invalid_create_operation_2.validate().is_err());
+        // DELETE operations should not have fields
+        assert!(OperationBuilder::new(&schema)
+            .action(OperationAction::Delete)
+            .previous_operations(&document_view_id)
+            .fields(&[("year", 2020.into())])
+            .build()
+            .is_err());
+    }
 
-        let invalid_update_operation_1 = Operation {
-            action: OperationAction::Update,
-            version: OperationVersion::Default,
-            schema: schema.clone(),
-            // UPDATE operations must contain previous_operations
-            previous_operations: None, // Error
-            fields: Some(operation_fields.clone()),
-        };
-
-        assert!(invalid_update_operation_1.validate().is_err());
-
-        let invalid_update_operation_2 = Operation {
-            action: OperationAction::Update,
-            version: OperationVersion::Default,
-            schema: schema.clone(),
-            previous_operations: Some(prev_op_id.clone()),
-            // UPDATE operations must contain fields
-            fields: None, // Error
-        };
-
-        assert!(invalid_update_operation_2.validate().is_err());
-
-        let invalid_delete_operation_1 = Operation {
-            action: OperationAction::Delete,
-            version: OperationVersion::Default,
-            schema: schema.clone(),
-            // DELETE operations must contain previous_operations
-            previous_operations: None, // Error
-            fields: None,
-        };
-
-        assert!(invalid_delete_operation_1.validate().is_err());
-
-        let invalid_delete_operation_2 = Operation {
-            action: OperationAction::Delete,
-            version: OperationVersion::Default,
-            schema,
-            previous_operations: Some(prev_op_id),
-            // DELETE operations must not contain fields
-            fields: Some(operation_fields), // Error
-        };
-
-        assert!(invalid_delete_operation_2.validate().is_err());
-    } */
-
-    // @TODO: Move this to `operation::encode` or `decode` or `tests`
-    /* #[rstest]
-    fn encode_and_decode(
-        schema: SchemaId,
-        #[from(random_document_view_id)] prev_op_id: DocumentViewId,
-        #[from(random_document_id)] document_id: DocumentId,
+    #[rstest]
+    fn operation_builder_schema_validation(
+        #[with(vec![
+            ("firstname".into(), FieldType::String),
+            ("year".into(), FieldType::Integer),
+            ("is_cute".into(), FieldType::Boolean),
+            ("address".into(), FieldType::Relation(schema_id(SCHEMA_ID))),
+        ])]
+        schema: Schema,
+        document_id: DocumentId,
+        document_view_id: DocumentViewId,
     ) {
-        // Create test operation
-        let mut fields = OperationFields::new();
+        // Operation matches schema
+        assert!(OperationBuilder::new(&schema)
+            .fields(&[
+                ("firstname", "Peter".into()),
+                ("year", 2020.into()),
+                ("is_cute", false.into()),
+                ("address", document_id.clone().into()),
+            ])
+            .build()
+            .is_ok());
 
-        // Add one field for every kind of OperationValue
-        fields
-            .add("username", OperationValue::String("bubu".to_owned()))
-            .unwrap();
+        // Field ordering does not matter in builder
+        assert!(OperationBuilder::new(&schema)
+            .fields(&[
+                ("address", document_id.clone().into()),
+                ("is_cute", false.into()),
+                ("year", 2020.into()),
+                ("firstname", "Peter".into()),
+            ])
+            .build()
+            .is_ok());
 
-        fields.add("height", OperationValue::Float(3.5)).unwrap();
+        // Field missing
+        assert!(OperationBuilder::new(&schema)
+            .fields(&[
+                ("firstname", "Peter".into()),
+                ("is_cute", false.into()),
+                ("address", document_id.clone().into()),
+            ])
+            .build()
+            .is_err());
 
-        fields.add("age", OperationValue::Integer(28)).unwrap();
+        // Invalid type
+        assert!(OperationBuilder::new(&schema)
+            .fields(&[
+                ("firstname", "Peter".into()),
+                ("year", "2020".into()),
+                ("is_cute", false.into()),
+                ("address", document_id.clone().into()),
+            ])
+            .build()
+            .is_err());
 
-        fields
-            .add("is_admin", OperationValue::Boolean(false))
-            .unwrap();
+        // Correct UPDATE operation matching schema
+        assert!(OperationBuilder::new(&schema)
+            .action(OperationAction::Update)
+            .previous_operations(&document_view_id)
+            .fields(&[("address", document_id.into())])
+            .build()
+            .is_ok());
+    }
 
-        fields
-            .add(
-                "profile_picture",
-                OperationValue::Relation(Relation::new(document_id)),
-            )
-            .unwrap();
-
-        let operation = Operation::new_update(schema, prev_op_id, fields).unwrap();
-
-        assert!(operation.is_update());
-
-        // Encode operation ...
-        let encoded = EncodedOperation::try_from(&operation).unwrap();
-
-        // ... and decode it again
-        let operation_restored = Operation::try_from(&encoded).unwrap();
-
-        assert_eq!(operation, operation_restored);
-    } */
-
-    // @TODO: This can stay here, just needs refactoring
-    /* #[rstest]
-    fn field_ordering(schema_id: SchemaId) {
+    #[rstest]
+    fn field_ordering(
+        #[with(vec![
+           ("a".into(), FieldType::String),
+           ("b".into(), FieldType::String),
+        ])]
+        schema: Schema,
+    ) {
         // Create first test operation
-        let mut fields = OperationFields::new();
-        fields
-            .add("a", OperationValue::String("sloth".to_owned()))
-            .unwrap();
-        fields
-            .add("b", OperationValue::String("penguin".to_owned()))
-            .unwrap();
-
-        let first_operation = Operation::new_create(schema.clone(), fields).unwrap();
+        let operation_1 = OperationBuilder::new(&schema)
+            .fields(&[("a", "sloth".into()), ("b", "penguin".into())])
+            .build();
 
         // Create second test operation with same values but different order of fields
-        let mut second_fields = OperationFields::new();
-        second_fields
-            .add("b", OperationValue::String("penguin".to_owned()))
-            .unwrap();
-        second_fields
-            .add("a", OperationValue::String("sloth".to_owned()))
-            .unwrap();
+        let operation_2 = OperationBuilder::new(&schema)
+            .fields(&[("b", "penguin".into()), ("a", "sloth".into())])
+            .build();
 
-        let second_operation = Operation::new_create(schema, second_fields).unwrap();
-
-        assert_eq!(first_operation.to_cbor(), second_operation.to_cbor());
-    } */
+        assert_eq!(operation_1.unwrap(), operation_2.unwrap());
+    }
 
     #[test]
     fn field_iteration() {
@@ -348,19 +358,4 @@ mod tests {
             &OperationValue::String("penguin".to_owned())
         );
     }
-
-    // @TODO: Move this to `operation::validate`
-    /* #[apply(many_valid_operations)]
-    fn many_valid_operations_should_encode(#[case] operation: Operation) {
-        assert!(EncodedOperation::try_from(&operation).is_ok())
-    } */
-
-    // @TODO: Do we still need this?
-    /* fn it_hashes(operation: Operation) {
-        let mut hash_map = HashMap::new();
-        let key_value = "Value identified by a hash".to_string();
-        hash_map.insert(&operation, key_value.clone());
-        let key_value_retrieved = hash_map.get(&operation).unwrap().to_owned();
-        assert_eq!(key_value, key_value_retrieved)
-    } */
 }

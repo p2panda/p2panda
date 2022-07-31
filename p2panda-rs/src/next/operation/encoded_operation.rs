@@ -67,100 +67,22 @@ impl EncodedOperation {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryFrom;
+    use std::collections::HashMap;
 
     use rstest::rstest;
-    use rstest_reuse::apply;
 
-    use crate::next::document::DocumentId;
-    use crate::next::operation::traits::AsOperation;
-    use crate::next::operation::{Operation, OperationValue, Relation, RelationList};
-    use crate::next::schema::SchemaId;
-    use crate::next::test_utils::fixtures::{
-        encoded_create_string, encoded_operation, operation, operation_fields, random_document_id,
-        random_document_view_id, schema, Fixture,
-    };
-    use crate::next::test_utils::templates::version_fixtures;
+    use crate::next::operation::EncodedOperation;
+    use crate::next::test_utils::fixtures::encoded_operation;
 
-    use super::EncodedOperation;
+    #[rstest]
+    fn it_hashes(encoded_operation: EncodedOperation) {
+        // Use operation as key in hash map
+        let mut hash_map = HashMap::new();
+        let key_value = "Value identified by a hash".to_string();
+        hash_map.insert(&encoded_operation, key_value.clone());
 
-    // @TODO: Something like this we should have in operation::validate
-    /* #[rstest]
-    fn decode_invalid_relation_fields(operation_encoded_invalid_relation_fields: EncodedOperation) {
-        let operation = Operation::try_from(&operation_encoded_invalid_relation_fields).unwrap();
-        assert!(operation.validate().is_err());
-    } */
-
-    // @TODO: Move to decode
-    /* #[apply(version_fixtures)]
-    fn decode(#[case] fixture: Fixture) {
-        let operation = Operation::try_from(&fixture.encoded_operation).unwrap();
-        assert!(operation.validate().is_ok());
-        assert!(operation.is_create());
-
-        let fields = operation.fields().unwrap();
-        assert_eq!(
-            fields.get("name").unwrap(),
-            &OperationValue::Text("chess".to_owned())
-        );
-        assert_eq!(
-            fields.get("description").unwrap(),
-            &OperationValue::Text("for playing chess".to_owned())
-        );
-    } */
-
-    // @TODO: Move to encode
-    /* #[rstest]
-    fn encode_decode_all_field_types(
-        schema: SchemaId,
-        #[from(random_document_id)] picture_document: DocumentId,
-        #[from(random_document_id)] friend_document_1: DocumentId,
-        #[from(random_document_id)] friend_document_2: DocumentId,
-        #[from(operation)]
-        #[with(
-            Some(operation_fields(vec![
-              ("username", OperationValue::Text("bubu".to_owned())),
-              ("age", OperationValue::Integer(28)),
-              ("height", OperationValue::Float(3.5)),
-              ("is_admin", OperationValue::Boolean(false)),
-              ("profile_picture", OperationValue::Relation(Relation::new(picture_document.clone()))),
-              ("my_friends", OperationValue::RelationList(RelationList::new(vec![
-                  friend_document_1.clone(),
-                  friend_document_2.clone(),
-              ]))),
-            ])),
-            Some(random_document_view_id()),
-        )]
-        update_operation: Operation,
-    ) {
-        let encoded_operation = EncodedOperation::try_from(&update_operation).unwrap();
-        let operation = Operation::try_from(&encoded_operation).unwrap();
-
-        assert!(operation.is_update());
-        assert_eq!(operation.schema(), schema);
-
-        let fields = operation.fields().unwrap();
-
-        assert_eq!(
-            fields.get("username").unwrap(),
-            &OperationValue::Text("bubu".to_owned())
-        );
-        assert_eq!(fields.get("age").unwrap(), &OperationValue::Integer(28));
-        assert_eq!(fields.get("height").unwrap(), &OperationValue::Float(3.5));
-        assert_eq!(
-            fields.get("is_admin").unwrap(),
-            &OperationValue::Boolean(false)
-        );
-        assert_eq!(
-            fields.get("profile_picture").unwrap(),
-            &OperationValue::Relation(Relation::new(picture_document))
-        );
-        assert_eq!(
-            fields.get("my_friends").unwrap(),
-            &OperationValue::RelationList(RelationList::new(vec![
-                friend_document_1,
-                friend_document_2,
-            ]))
-        );
-    } */
+        // Retreive value from hash map via key
+        let key_value_retrieved = hash_map.get(&encoded_operation).unwrap().to_owned();
+        assert_eq!(key_value, key_value_retrieved)
+    }
 }

@@ -65,3 +65,22 @@ impl<'de> Deserialize<'de> for OperationAction {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::OperationAction;
+
+    #[test]
+    fn as_str() {
+        assert_eq!(OperationAction::Create.as_str(), "create");
+        assert_eq!(OperationAction::Update.as_str(), "update");
+        assert_eq!(OperationAction::Delete.as_str(), "delete");
+    }
+
+    #[test]
+    fn as_u64() {
+        assert_eq!(OperationAction::Create.as_u64(), 0);
+        assert_eq!(OperationAction::Update.as_u64(), 1);
+        assert_eq!(OperationAction::Delete.as_u64(), 2);
+    }
+}

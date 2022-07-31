@@ -33,9 +33,18 @@ use crate::Human;
 ///
 /// This method applies the following validation steps:
 ///
-/// 1. @TODO
-/// 2. @TODO
-/// 3. @TODO
+/// 1. Correct hexadecimal entry encoding (when using human-readable encoding format) (#E1)
+/// 2. Correct Bamboo encoding as per specification (#E2)
+/// 3. Check if back- and skiplinks are correctly set for given sequence number (#E3)
+/// 4. Verify log-integrity (matching back- & skiplink entries, author, log id) (#E4)
+/// 5. Verify signature (#E5)
+/// 6. Check if payload matches claimed hash and size (#E6)
+/// 7. Correct hexadecimal operation encoding (when using human-readable encoding format) (#OP1)
+/// 8. Correct operation format as per specification, including canonic format checks against
+///    duplicate and unsorted operation fields (#OP2)
+/// 9. Correctly formatted and canonic operation field values, like document view ids (no
+///    duplicates, sorted, when no semantic value is given by that) as per specification (#OP3)
+/// 10. Operation fields match the claimed schema (#OP4)
 ///
 /// ```text
 ///                                                                  Look-Up
