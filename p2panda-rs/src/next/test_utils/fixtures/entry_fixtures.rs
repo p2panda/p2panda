@@ -8,7 +8,8 @@ use lipmaa_link::is_skip_link;
 use rstest::fixture;
 use varu64::encode as varu64_encode;
 
-use crate::next::entry::{Entry, EntryBuilder};
+use crate::next::entry::encode::sign_entry;
+use crate::next::entry::Entry;
 use crate::next::hash::{Blake3ArrayVec, Hash};
 use crate::next::identity::KeyPair;
 use crate::next::operation::encode::encode_operation;
@@ -32,20 +33,15 @@ pub fn entry(
 ) -> Entry {
     let encoded_operation = encode_operation(&operation).unwrap();
 
-    let mut builder = EntryBuilder::new()
-        .log_id(&log_id.into())
-        .seq_num(&seq_num.try_into().unwrap());
-
-    if let Some(link) = backlink {
-        builder = builder.backlink(&link);
-    }
-
-    if let Some(link) = skiplink {
-        builder = builder.skiplink(&link);
-    }
-
-    let entry = builder.sign(&encoded_operation, &key_pair).unwrap();
-    entry
+    sign_entry(
+        &log_id.into(),
+        &seq_num.try_into().unwrap(),
+        skiplink.as_ref(),
+        backlink.as_ref(),
+        &encoded_operation,
+        &key_pair,
+    )
+    .unwrap()
 }
 
 /// Fixture which injects an `Entry` with auto generated valid values for backlink, skiplink and
