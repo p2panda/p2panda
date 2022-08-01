@@ -103,25 +103,28 @@ impl FromStr for FieldType {
         // Matches a field type name, followed by an optional group in parentheses that contains
         // the referenced schema for relation field types
         lazy_static! {
-            static ref RE: Regex = Regex::new(r"(\w+)(\((.+)\))?").unwrap();
+            // Unwrap as we checked the regular expression for correctness
+            static ref RELATION_REGEX: Regex = Regex::new(r"(\w+)(\((.+)\))?").unwrap();
         }
-        let groups = RE.captures(s).unwrap();
-        let name = groups.get(1).map(|m| m.as_str());
-        let parameter = groups.get(3).map(|m| m.as_str());
 
-        match (name, parameter) {
+        // @TODO: This might panic if input is invalid?
+        let groups = RELATION_REGEX.captures(s).unwrap();
+        let relation_type = groups.get(1).map(|group_match| group_match.as_str());
+        let schema_id = groups.get(3).map(|group_match| group_match.as_str());
+
+        match (relation_type, schema_id) {
             (Some("relation"), Some(schema_id)) => {
-                Ok(FieldType::Relation(SchemaId::new(schema_id)?))
+                Ok(FieldType::Relation(SchemaId::from_str(schema_id)?))
             }
             (Some("relation_list"), Some(schema_id)) => {
-                Ok(FieldType::RelationList(SchemaId::new(schema_id)?))
+                Ok(FieldType::RelationList(SchemaId::from_str(schema_id)?))
             }
             (Some("pinned_relation"), Some(schema_id)) => {
-                Ok(FieldType::PinnedRelation(SchemaId::new(schema_id)?))
+                Ok(FieldType::PinnedRelation(SchemaId::from_str(schema_id)?))
             }
-            (Some("pinned_relation_list"), Some(schema_id)) => {
-                Ok(FieldType::PinnedRelationList(SchemaId::new(schema_id)?))
-            }
+            (Some("pinned_relation_list"), Some(schema_id)) => Ok(FieldType::PinnedRelationList(
+                SchemaId::from_str(schema_id)?,
+            )),
             _ => Err(FieldTypeError::InvalidFieldType(s.into())),
         }
     }

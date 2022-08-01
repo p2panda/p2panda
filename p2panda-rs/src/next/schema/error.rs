@@ -95,6 +95,7 @@ pub enum ValidationError {
 
 /// Custom error types for validating operations against `schema_field_definition_v1` schema.
 #[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
 pub enum SchemaFieldDefinitionError {
     /// Operation contains wrong number of fields for this schema.
     #[error("unexpected number of operation fields in schema field definition")]
@@ -127,6 +128,7 @@ pub enum SchemaFieldDefinitionError {
 
 /// Custom error types for validating operations against `schema_field_definition_v1` schema.
 #[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
 pub enum SchemaDefinitionError {
     /// Operation contains wrong number of fields for this schema.
     #[error("unexpected number of operation fields in schema definition")]
