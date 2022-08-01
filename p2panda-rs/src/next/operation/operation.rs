@@ -58,10 +58,13 @@ impl OperationBuilder {
         let mut operation_fields = OperationFields::new();
 
         for (field_name, field_value) in fields {
-            operation_fields
+            if operation_fields
                 .insert(field_name, field_value.to_owned())
-                // @TODO: Ignore error, we avoid duplicates with `insert`
-                .unwrap();
+                .is_err()
+            {
+                // Silently fail here as the underlying data type already takes care of duplicates
+                // for us ..
+            }
         }
 
         self.fields = Some(operation_fields);
