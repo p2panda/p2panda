@@ -64,7 +64,7 @@ pub fn validate_all_fields(
     }
 
     // When given, check against special validation rules for system schemas
-    validate_system_schema_fields(&fields, &schema)?;
+    validate_system_schema_fields(fields, schema)?;
 
     // Collect last fields (if there is any) we can consider unexpected
     let unexpected_fields: Vec<FieldName> =
@@ -124,7 +124,7 @@ pub fn validate_only_given_fields(
     }
 
     // When given, check against special validation rules for system schemas
-    validate_system_schema_fields(&fields, &schema)?;
+    validate_system_schema_fields(fields, schema)?;
 
     if unexpected_fields.is_empty() {
         Ok(validated_fields)
@@ -308,11 +308,11 @@ fn validate_system_schema_fields(
     match schema.id() {
         SchemaId::Application(_, _) => Ok(()),
         SchemaId::SchemaDefinition(_) => {
-            validate_schema_definition_v1_fields(&fields)?;
+            validate_schema_definition_v1_fields(fields)?;
             Ok(())
         }
         SchemaId::SchemaFieldDefinition(_) => {
-            validate_schema_field_definition_v1_fields(&fields)?;
+            validate_schema_field_definition_v1_fields(fields)?;
             Ok(())
         }
     }
