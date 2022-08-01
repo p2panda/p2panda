@@ -152,6 +152,17 @@ mod tests {
     }
 
     #[test]
+    fn to_bytes() {
+        let public_key_bytes: [u8; PUBLIC_KEY_LENGTH] = [
+            215, 90, 152, 1, 130, 177, 10, 183, 213, 75, 254, 211, 201, 100, 7, 58, 14, 225, 114,
+            243, 218, 166, 35, 37, 175, 2, 26, 104, 247, 7, 81, 26,
+        ];
+
+        let author = Author::new(&hex::encode(public_key_bytes)).unwrap();
+        assert_eq!(author.to_bytes(), public_key_bytes.to_vec());
+    }
+
+    #[test]
     fn from_public_key() {
         let public_key_bytes: [u8; PUBLIC_KEY_LENGTH] = [
             215, 90, 152, 1, 130, 177, 10, 183, 213, 75, 254, 211, 201, 100, 7, 58, 14, 225, 114,
