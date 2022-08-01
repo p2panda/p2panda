@@ -67,8 +67,8 @@ mod tests {
     use crate::next::operation::EncodedOperation;
     use crate::next::test_utils::constants::{HASH, PRIVATE_KEY};
     use crate::next::test_utils::fixtures::{
-        encoded_entry, encoded_operation, entry, entry_signed_encoded_unvalidated, key_pair,
-        operation_with_schema, random_hash, Fixture,
+        create_operation_with_schema, encoded_entry, encoded_operation, entry,
+        entry_signed_encoded_unvalidated, key_pair, random_hash, Fixture,
     };
     use crate::next::test_utils::templates::version_fixtures;
 
@@ -105,7 +105,7 @@ mod tests {
         1,
         None,
         None,
-        Some(operation_with_schema()),
+        Some(create_operation_with_schema()),
         key_pair(PRIVATE_KEY)
     ))]
     #[case::valid_entry_with_backlink(entry_signed_encoded_unvalidated(
@@ -113,7 +113,7 @@ mod tests {
         1,
         Some(random_hash()),
         None,
-        Some(operation_with_schema()),
+        Some(create_operation_with_schema()),
         key_pair(PRIVATE_KEY)
     ))]
     #[case::valid_entry_with_skiplink_and_backlink(entry_signed_encoded_unvalidated(
@@ -121,7 +121,7 @@ mod tests {
         1,
         Some(random_hash()),
         Some(random_hash()),
-        Some(operation_with_schema()),
+        Some(create_operation_with_schema()),
         key_pair(PRIVATE_KEY)
     ))]
     #[case::skiplink_ommitted_when_sam_as_backlink(entry_signed_encoded_unvalidated(
@@ -129,7 +129,7 @@ mod tests {
         1,
         Some(random_hash()),
         None,
-        Some(operation_with_schema()),
+        Some(create_operation_with_schema()),
         key_pair(PRIVATE_KEY)
     ))]
     fn decode_correct_entries(#[case] entry_encoded_unvalidated: EncodedEntry) {
@@ -144,7 +144,7 @@ mod tests {
             1,
             None,
             None,
-            Some(operation_with_schema()),
+            Some(create_operation_with_schema()),
             key_pair(PRIVATE_KEY)
         ),
         "Entry sequence must be larger than 0 but was 0"
@@ -155,7 +155,7 @@ mod tests {
             1,
             None,
             Some(random_hash()),
-            Some(operation_with_schema()),
+            Some(create_operation_with_schema()),
             key_pair(PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
@@ -166,7 +166,7 @@ mod tests {
             1,
             Some(random_hash()),
             None,
-            Some(operation_with_schema()),
+            Some(create_operation_with_schema()),
             key_pair(PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
@@ -177,7 +177,7 @@ mod tests {
             1,
             Some(HASH.parse().unwrap()),
             Some(HASH.parse().unwrap()),
-            Some(operation_with_schema()),
+            Some(create_operation_with_schema()),
             key_pair(PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
@@ -188,7 +188,7 @@ mod tests {
             1,
             None,
             None,
-            Some(operation_with_schema()),
+            Some(create_operation_with_schema()),
             key_pair(PRIVATE_KEY)
         ),
         "Could not decode backlink yamf hash: DecodeError"
@@ -199,7 +199,7 @@ mod tests {
             1,
             Some(random_hash()),
             None,
-            Some(operation_with_schema()),
+            Some(create_operation_with_schema()),
             key_pair(PRIVATE_KEY)
         ),
         "Could not decode backlink yamf hash: DecodeError"
@@ -210,7 +210,7 @@ mod tests {
             1,
             Some(HASH.parse().unwrap()),
             Some(HASH.parse().unwrap()),
-            Some(operation_with_schema()),
+            Some(create_operation_with_schema()),
             key_pair(PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
@@ -232,7 +232,7 @@ mod tests {
             1,
             Some(HASH.parse().unwrap()),
             Some(HASH.parse().unwrap()),
-            Some(operation_with_schema()),
+            Some(create_operation_with_schema()),
             key_pair(PRIVATE_KEY)
         ),
         "backlink and skiplink are identical"

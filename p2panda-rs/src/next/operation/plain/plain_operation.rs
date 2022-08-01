@@ -11,6 +11,10 @@ use crate::next::operation::traits::{Actionable, AsOperation, Schematic};
 use crate::next::operation::{Operation, OperationAction, OperationVersion};
 use crate::next::schema::SchemaId;
 
+/// Intermediate operation type which has been decoded, but not checked against a schema.
+///
+/// Use plain operations to already read important data from them, like the schema id or operation
+/// action.
 #[derive(Serialize, Debug, PartialEq)]
 pub struct PlainOperation(
     OperationVersion,

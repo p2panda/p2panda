@@ -114,9 +114,12 @@ pub fn operation(
     }
 }
 
-/// Returns an constant CREATE operation.
+/// Returns an CREATE operation with a constant testing schema.
 #[fixture]
-pub fn operation_with_schema() -> Operation {
+pub fn operation_with_schema(
+    #[from(some_fields)] fields: Option<OperationFields>,
+    #[default(None)] previous_operations: Option<DocumentViewId>,
+) -> Operation {
     let schema_id = schema_id(SCHEMA_ID);
 
     let schema = schema(
@@ -125,13 +128,21 @@ pub fn operation_with_schema() -> Operation {
         "Test schema",
     );
 
-    Operation {
-        version: OperationVersion::V1,
-        action: OperationAction::Create,
-        schema,
-        previous_operations: None,
-        fields: some_fields(test_fields()),
-    }
+    operation(fields, previous_operations, schema)
+}
+
+/// Returns an constant CREATE operation with a constant testing schema.
+#[fixture]
+pub fn create_operation_with_schema() -> Operation {
+    let schema_id = schema_id(SCHEMA_ID);
+
+    let schema = schema(
+        schema_fields(test_fields(), schema_id.clone()),
+        schema_id,
+        "Test schema",
+    );
+
+    operation(some_fields(test_fields()), None, schema)
 }
 
 /// Generates verified operation instance.
@@ -174,6 +185,24 @@ pub fn verified_operation(
         &schema,
     )
     .unwrap()
+}
+
+/// Generates verified operation instance with a constant schema.
+#[fixture]
+pub fn verified_operation_with_schema(
+    #[from(some_fields)] fields: Option<OperationFields>,
+    #[default(None)] previous_operations: Option<DocumentViewId>,
+    #[from(key_pair)] key_pair: KeyPair,
+) -> VerifiedOperation {
+    let schema_id = schema_id(SCHEMA_ID);
+
+    let schema = schema(
+        schema_fields(test_fields(), schema_id.clone()),
+        schema_id,
+        "Test schema",
+    );
+
+    verified_operation(fields, schema, previous_operations, key_pair)
 }
 
 /// Returns encoded operation as hexadecimal string.

@@ -49,6 +49,8 @@ impl AsVerifiedOperation for VerifiedOperation {
     }
 }
 
+impl Eq for VerifiedOperation {}
+
 impl PartialEq for VerifiedOperation {
     fn eq(&self, other: &Self) -> bool {
         self.operation_id() == other.operation_id()
@@ -73,64 +75,19 @@ impl VerifiedOperation {
     }
 }
 
-// @TODO: Requires refactoring of entry fixtures
-/* #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::convert::TryFrom;
 
     use rstest::rstest;
     use rstest_reuse::apply;
 
-    use crate::next::identity::{Author, KeyPair};
-    use crate::next::entry::EncodedEntry;
     use crate::next::operation::traits::{AsOperation, AsVerifiedOperation};
-    use crate::next::operation::{
-        Operation, OperationEncoded, OperationId, OperationValue, VerifiedOperation,
-    };
-    use crate::next::test_utils::constants::{test_fields, SCHEMA_ID};
-    use crate::next::test_utils::fixtures::{
-        entry_signed_encoded, key_pair, operation, operation_encoded, operation_fields,
-        operation_id,
-    };
-    use crate::test_utils::fixtures::key_pair;
-    use crate::test_utils::templates::{implements_as_operation, many_verified_operations};
-    use crate::Validate;
+    use crate::next::test_utils::constants::test_fields;
+    use crate::next::test_utils::fixtures::verified_operation;
+    use crate::next::test_utils::templates::{implements_as_operation, many_verified_operations};
 
-    #[rstest]
-    #[case(operation_encoded(Some(operation_fields(test_fields())), None, Some(SCHEMA_ID.parse().unwrap())))]
-    #[should_panic]
-    #[case(operation_encoded(Some(operation_fields(vec![("message", OperationValue::Text("Not the right message".to_string()))])), None, Some(SCHEMA_ID.parse().unwrap())))]
-    fn create_verified_operation(
-        entry_signed_encoded: EncodedEntry,
-        #[case] operation_encoded: OperationEncoded,
-    ) {
-        let verified_operation =
-            VerifiedOperation::new_from_entry(&entry_signed_encoded, &operation_encoded);
-        assert!(verified_operation.is_ok())
-    }
-
-    #[rstest]
-    fn new_operation_not_from_entry(
-        key_pair: KeyPair,
-        operation_id: OperationId,
-        #[from(operation)] operation: Operation,
-    ) {
-        let author = Author::try_from(*key_pair.public_key()).unwrap();
-        let verified_operation = VerifiedOperation::new(&author, &operation_id, &operation);
-        assert!(verified_operation.is_ok());
-        let verified_operation = verified_operation.unwrap();
-        assert_eq!(verified_operation.fields(), operation.fields());
-        assert_eq!(verified_operation.action(), operation.action());
-        assert_eq!(verified_operation.version(), operation.version());
-        assert_eq!(verified_operation.schema(), operation.schema());
-        assert_eq!(
-            verified_operation.previous_operations(),
-            operation.previous_operations()
-        );
-        assert_eq!(verified_operation.public_key(), &author);
-        assert_eq!(verified_operation.operation_id(), &operation_id);
-    }
+    use super::VerifiedOperation;
 
     #[apply(many_verified_operations)]
     fn only_some_operations_should_contain_fields(#[case] verified_operation: VerifiedOperation) {
@@ -148,18 +105,12 @@ mod tests {
     }
 
     #[apply(many_verified_operations)]
-    fn operations_should_validate(#[case] verified_operation: VerifiedOperation) {
-        assert!(verified_operation.operation().validate().is_ok());
-        assert!(verified_operation.validate().is_ok())
-    }
-
-    #[apply(many_verified_operations)]
     fn trait_methods_should_match(#[case] verified_operation: VerifiedOperation) {
         let operation = verified_operation.operation();
         assert_eq!(verified_operation.fields(), operation.fields());
         assert_eq!(verified_operation.action(), operation.action());
         assert_eq!(verified_operation.version(), operation.version());
-        assert_eq!(verified_operation.schema(), operation.schema());
+        assert_eq!(verified_operation.schema_id(), operation.schema_id());
         assert_eq!(
             verified_operation.previous_operations(),
             operation.previous_operations()
@@ -173,17 +124,21 @@ mod tests {
         operation.fields();
         operation.action();
         operation.version();
-        operation.schema();
+        operation.schema_id();
         operation.previous_operations();
         operation.has_fields();
         operation.has_previous_operations();
     }
 
+    #[rstest]
     fn it_hashes(verified_operation: VerifiedOperation) {
+        // Use verified operation as hash map key
         let mut hash_map = HashMap::new();
         let key_value = "Value identified by a hash".to_string();
         hash_map.insert(&verified_operation, key_value.clone());
+
+        // Obtain value from hash map
         let key_value_retrieved = hash_map.get(&verified_operation).unwrap().to_owned();
         assert_eq!(key_value, key_value_retrieved)
     }
-} */
+}

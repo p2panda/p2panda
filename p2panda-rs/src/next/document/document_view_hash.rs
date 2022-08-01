@@ -67,7 +67,6 @@ mod tests {
         #[from(random_operation_id)] operation_id_1: OperationId,
         #[from(random_operation_id)] operation_id_2: OperationId,
     ) {
-        // @TODO: This will fail as soon as we check against sorted operations
         let view_id_1 = DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]);
         let view_hash_1 = DocumentViewHash::from(&view_id_1);
         let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);

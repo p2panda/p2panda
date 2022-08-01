@@ -7,38 +7,35 @@ use rstest_reuse::template;
 #[export]
 #[rstest]
 #[allow(unused_qualifications)]
-#[case($crate::next::test_utils::fixtures::operation(
+#[case($crate::next::test_utils::fixtures::operation_with_schema(
     Some(
         $crate::next::test_utils::fixtures::operation_fields(
             $crate::next::test_utils::constants::test_fields()
         )
     ),
     None,
-    None,
 ))]
 #[allow(unused_qualifications)]
 #[case::update_operation(
-    $crate::next::test_utils::fixtures::operation(
+    $crate::next::test_utils::fixtures::operation_with_schema(
         Some(
             $crate::next::test_utils::fixtures::operation_fields(
                 $crate::next::test_utils::constants::test_fields()
             )
         ),
         Some($crate::next::test_utils::constants::HASH.parse().unwrap()),
-        None,
     )
 )]
 #[allow(unused_qualifications)]
 #[case::delete_operation(
-    $crate::next::test_utils::fixtures::operation(
+    $crate::next::test_utils::fixtures::operation_with_schema(
         None,
         Some($crate::next::test_utils::constants::HASH.parse().unwrap()),
-        None
     )
 )]
 #[allow(unused_qualifications)]
 #[case::update_operation_many_previous(
-    $crate::next::test_utils::fixtures::operation(
+    $crate::next::test_utils::fixtures::operation_with_schema(
         Some(
             $crate::next::test_utils::fixtures::operation_fields(
                 $crate::next::test_utils::constants::test_fields()
@@ -49,11 +46,10 @@ use rstest_reuse::template;
             $crate::next::test_utils::fixtures::random_operation_id(),
             $crate::next::test_utils::fixtures::random_operation_id()
         ])),
-        None
     )
 )]
 #[allow(unused_qualifications)]
-#[case::delete_operation_many_previous($crate::next::test_utils::fixtures::operation(
+#[case::delete_operation_many_previous($crate::next::test_utils::fixtures::operation_with_schema(
     None,
     Some(
         DocumentViewId::new(&[
@@ -62,37 +58,36 @@ use rstest_reuse::template;
             $crate::next::test_utils::fixtures::random_operation_id()
         ])
     ),
-    None
 ))]
 fn many_valid_operations(#[case] operation: Operation) {}
 
-/// This template contains various types of valid meta-operation.
+/// This template contains various types of valid verified operations with entries.
 #[template]
 #[export]
 #[rstest]
 #[allow(unused_qualifications)]
-#[case::create_meta_operation($crate::next::test_utils::fixtures::verified_operation(
+#[case::create_meta_operation($crate::next::test_utils::fixtures::verified_operation_with_schema(
     Some($crate::next::test_utils::fixtures::operation_fields(test_fields())),
     None,
-    None,
-    None,
-    None
+    $crate::next::test_utils::fixtures::key_pair(
+        $crate::next::test_utils::constants::PRIVATE_KEY
+    )
 ))]
 #[allow(unused_qualifications)]
-#[case::update_meta_operation($crate::next::test_utils::fixtures::verified_operation(
+#[case::update_meta_operation($crate::next::test_utils::fixtures::verified_operation_with_schema(
     Some($crate::next::test_utils::fixtures::operation_fields(test_fields())),
     Some($crate::next::test_utils::constants::HASH.parse().unwrap()),
-    None,
-    None,
-    None
+    $crate::next::test_utils::fixtures::key_pair(
+        $crate::next::test_utils::constants::PRIVATE_KEY
+    )
 ))]
 #[allow(unused_qualifications)]
-#[case::delete_meta_operation($crate::next::test_utils::fixtures::verified_operation(
+#[case::delete_meta_operation($crate::next::test_utils::fixtures::verified_operation_with_schema(
     None,
     Some($crate::next::test_utils::constants::HASH.parse().unwrap()),
-    None,
-    None,
-    None
+    $crate::next::test_utils::fixtures::key_pair(
+        $crate::next::test_utils::constants::PRIVATE_KEY
+    )
 ))]
 fn many_verified_operations(#[case] operation: VerifiedOperation) {}
 
@@ -101,45 +96,43 @@ fn many_verified_operations(#[case] operation: VerifiedOperation) {}
 #[export]
 #[rstest]
 #[allow(unused_qualifications)]
-#[case::create_operation($crate::next::test_utils::fixtures::operation(
+#[case::create_operation($crate::next::test_utils::fixtures::operation_with_schema(
     Some($crate::next::test_utils::fixtures::operation_fields(test_fields())),
     None,
-    None
 ))]
 #[allow(unused_qualifications)]
-#[case::update_operation($crate::next::test_utils::fixtures::operation(
-    Some($crate::next::test_utils::fixtures::operation_fields(test_fields())),
-    Some($crate::next::test_utils::constants::HASH.parse().unwrap()),
-    None
-))]
-#[allow(unused_qualifications)]
-#[case::delete_operation($crate::next::test_utils::fixtures::operation(None, Some(
-    $crate::next::test_utils::constants::HASH.parse().unwrap()),
-    None
-))]
-#[allow(unused_qualifications)]
-#[case::create_meta_operation($crate::next::test_utils::fixtures::verified_operation(
-    Some($crate::next::test_utils::fixtures::operation_fields(test_fields())),
-    None,
-    None,
-    None,
-    None
-))]
-#[allow(unused_qualifications)]
-#[case::update_meta_operation($crate::next::test_utils::fixtures::verified_operation(
+#[case::update_operation($crate::next::test_utils::fixtures::operation_with_schema(
     Some($crate::next::test_utils::fixtures::operation_fields(test_fields())),
     Some($crate::next::test_utils::constants::HASH.parse().unwrap()),
-    None,
-    None,
-    None
 ))]
 #[allow(unused_qualifications)]
-#[case::delete_meta_operation($crate::next::test_utils::fixtures::verified_operation(
+#[case::delete_operation($crate::next::test_utils::fixtures::operation_with_schema(
     None,
     Some($crate::next::test_utils::constants::HASH.parse().unwrap()),
+))]
+#[allow(unused_qualifications)]
+#[case::create_meta_operation($crate::next::test_utils::fixtures::verified_operation_with_schema(
+    Some($crate::next::test_utils::fixtures::operation_fields(test_fields())),
     None,
+    $crate::next::test_utils::fixtures::key_pair(
+        $crate::next::test_utils::constants::PRIVATE_KEY
+    )
+))]
+#[allow(unused_qualifications)]
+#[case::update_meta_operation($crate::next::test_utils::fixtures::verified_operation_with_schema(
+    Some($crate::next::test_utils::fixtures::operation_fields(test_fields())),
+    Some($crate::next::test_utils::constants::HASH.parse().unwrap()),
+    $crate::next::test_utils::fixtures::key_pair(
+        $crate::next::test_utils::constants::PRIVATE_KEY
+    )
+))]
+#[allow(unused_qualifications)]
+#[case::delete_meta_operation($crate::next::test_utils::fixtures::verified_operation_with_schema(
     None,
-    None
+    Some($crate::next::test_utils::constants::HASH.parse().unwrap()),
+    $crate::next::test_utils::fixtures::key_pair(
+        $crate::next::test_utils::constants::PRIVATE_KEY
+    )
 ))]
 fn implements_as_operation(#[case] operation: impl AsOperation) {}
 
