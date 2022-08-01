@@ -69,7 +69,7 @@ pub enum ValidateOperationError {
 
     /// Handle errors from `schema::validate` module.
     #[error(transparent)]
-    SchemaValidation(#[from] crate::next::schema::error::ValidationError),
+    SchemaValidation(#[from] crate::next::schema::validate::error::ValidationError),
 }
 
 /// Error types for methods of plain fields or operation fields.
