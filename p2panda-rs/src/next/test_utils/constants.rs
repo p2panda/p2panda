@@ -40,14 +40,16 @@ pub fn test_fields() -> Vec<(&'static str, OperationValue)> {
     ]);
 
     [
-        ("username", OperationValue::String("bubu".to_owned())),
         ("age", OperationValue::Integer(28)),
+        (
+            "comments",
+            OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
+                document_view_id_2,
+                document_view_id_3,
+            ])),
+        ),
         ("height", OperationValue::Float(3.5)),
         ("is_admin", OperationValue::Boolean(false)),
-        (
-            "profile_picture",
-            OperationValue::Relation(Relation::new(document_id_1)),
-        ),
         (
             "my_friends",
             OperationValue::RelationList(RelationList::new(vec![document_id_2])),
@@ -57,12 +59,10 @@ pub fn test_fields() -> Vec<(&'static str, OperationValue)> {
             OperationValue::PinnedRelation(PinnedRelation::new(document_view_id_1)),
         ),
         (
-            "comments",
-            OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
-                document_view_id_2,
-                document_view_id_3,
-            ])),
+            "profile_picture",
+            OperationValue::Relation(Relation::new(document_id_1)),
         ),
+        ("username", OperationValue::String("bubu".to_owned())),
     ]
     .to_vec()
 }

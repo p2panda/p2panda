@@ -3,79 +3,16 @@
 use std::fmt::Display;
 
 use crate::next::document::error::DocumentBuilderError;
-use crate::next::document::{
-    DocumentId, DocumentView, DocumentViewFields, DocumentViewId, DocumentViewValue,
-};
-use crate::next::graph::Graph;
+use crate::next::document::materialization::{build_graph, reduce};
+use crate::next::document::{DocumentId, DocumentView, DocumentViewId};
 use crate::next::identity::Author;
 use crate::next::operation::traits::{AsOperation, AsVerifiedOperation};
 use crate::next::operation::{OperationId, VerifiedOperation};
 use crate::next::schema::SchemaId;
 use crate::Human;
 
-/// Construct a graph from a list of operations.
-pub(super) fn build_graph(
-    operations: &[VerifiedOperation],
-) -> Result<Graph<OperationId, VerifiedOperation>, DocumentBuilderError> {
-    let mut graph = Graph::new();
-
-    // Add all operations to the graph.
-    for operation in operations {
-        graph.add_node(operation.operation_id(), operation.clone());
-    }
-
-    // Add links between operations in the graph.
-    for operation in operations {
-        if let Some(previous_operations) = operation.previous_operations() {
-            for previous in previous_operations.iter() {
-                let success = graph.add_link(previous, operation.operation_id());
-                if !success {
-                    return Err(DocumentBuilderError::InvalidOperationLink(
-                        operation.operation_id().to_owned(),
-                    ));
-                }
-            }
-        }
-    }
-
-    Ok(graph)
-}
-
-type IsEdited = bool;
-type IsDeleted = bool;
-
-/// Reduce a list of operations into a single view.
-///
-/// Returns the reduced fields of a document view along with the `edited` and `deleted` boolean
-/// flags. If the document contains a DELETE operation, then no view is returned and the `deleted`
-/// flag is set to true. If the document contains one or more UPDATE operations, then the reduced
-/// view is returned and the `edited` flag is set to true.
-pub(super) fn reduce(
-    ordered_operations: &[VerifiedOperation],
-) -> (Option<DocumentViewFields>, IsEdited, IsDeleted) {
-    let mut is_edited = false;
-
-    let mut document_view_fields = DocumentViewFields::new();
-
-    for operation in ordered_operations {
-        if operation.is_delete() {
-            return (None, true, true);
-        }
-
-        if operation.is_update() {
-            is_edited = true
-        }
-
-        if let Some(fields) = operation.fields() {
-            for (key, value) in fields.iter() {
-                let document_view_value = DocumentViewValue::new(operation.operation_id(), value);
-                document_view_fields.insert(key, document_view_value);
-            }
-        }
-    }
-
-    (Some(document_view_fields), is_edited, false)
-}
+pub type IsEdited = bool;
+pub type IsDeleted = bool;
 
 #[derive(Debug, Clone, Default)]
 pub struct DocumentMeta {
@@ -307,7 +244,6 @@ impl DocumentBuilder {
     }
 }
 
-// @TODO: A whole bunch of tests which need refactoring!
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
@@ -315,6 +251,7 @@ mod tests {
 
     use rstest::rstest;
 
+    use crate::next::document::materialization::reduce;
     use crate::next::document::{
         DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue,
     };
@@ -328,82 +265,34 @@ mod tests {
     use crate::next::test_utils::fixtures::{
         create_operation, delete_operation, operation, operation_fields, public_key,
         random_document_view_id, random_key_pair, random_operation_id, random_previous_operations,
-        schema, update_operation, verified_operation,
+        schema, update_operation, verified_operation, verified_operation_with_schema,
     };
     use crate::test_utils::mocks::{send_to_node, Client, Node};
     use crate::Human;
 
-    use super::{reduce, DocumentBuilder};
+    use super::DocumentBuilder;
 
-    /* #[rstest]
-    fn string_representation(
-        #[from(verified_operation)]
-        #[with(
-            Some(operation_fields(vec![("username", OperationValue::Text("Yahooo!".into()))])),
-            None,
-            Some(SCHEMA_ID.parse().unwrap()),
-            Some(public_key()),
-            Some("0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805".parse().unwrap())
-        )]
-        operation: VerifiedOperation,
-    ) {
+    #[rstest]
+    fn string_representation(#[from(verified_operation)] operation: VerifiedOperation) {
         let builder = DocumentBuilder::new(vec![operation]);
         let document = builder.build().unwrap();
 
         assert_eq!(
             document.to_string(),
-            "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805"
+            "00206a28f82fc8d27671b31948117af7501a5a0de709b0cf9bc3586b67abe67ac29a"
         );
 
         // Short string representation
-        assert_eq!(document.display(), "<Document 6ec805>");
+        assert_eq!(document.display(), "<Document 7ac29a>");
 
         // Make sure the id is matching
         assert_eq!(
             document.id().as_str(),
-            "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805"
+            "00206a28f82fc8d27671b31948117af7501a5a0de709b0cf9bc3586b67abe67ac29a"
         );
-    } */
+    }
 
-    /* #[rstest]
-    fn reduces_operations(
-        #[from(verified_operation)] create_operation: VerifiedOperation,
-        #[from(verified_operation)]
-        #[with(
-            Some(operation_fields(vec![("username", OperationValue::Text("Yahooo!".into()))])),
-            Some(random_previous_operations(1))
-        )]
-        update_operation: VerifiedOperation,
-        #[from(verified_operation)]
-        #[with(None, Some(random_previous_operations(1)))]
-        delete_operation: VerifiedOperation,
-    ) {
-        let (reduced_create, is_edited, is_deleted) = reduce(&[create_operation.clone()]);
-        assert_eq!(
-            *reduced_create.unwrap().get("username").unwrap().value(),
-            OperationValue::Text("bubu".to_string())
-        );
-        assert!(!is_edited);
-        assert!(!is_deleted);
-
-        let (reduced_update, is_edited, is_deleted) =
-            reduce(&[create_operation.clone(), update_operation.clone()]);
-        assert_eq!(
-            *reduced_update.unwrap().get("username").unwrap().value(),
-            OperationValue::Text("Yahooo!".to_string())
-        );
-        assert!(is_edited);
-        assert!(!is_deleted);
-
-        let (reduced_delete, is_edited, is_deleted) =
-            reduce(&[create_operation, update_operation, delete_operation]);
-
-        // The value remains the same, but the deleted flag is true now.
-        assert!(reduced_delete.is_none());
-        assert!(is_edited);
-        assert!(is_deleted);
-    } */
-
+    // @TODO: Refactor mock module first
     /* #[rstest]
     #[tokio::test]
     async fn resolve_documents(schema: SchemaId) {
@@ -615,6 +504,7 @@ mod tests {
         );
     } */
 
+    // @TODO: Refactor mock module first
     /* #[rstest]
     #[tokio::test]
     async fn must_have_create_operation(#[from(random_key_pair)] key_pair_1: KeyPair) {
@@ -663,6 +553,7 @@ mod tests {
         );
     } */
 
+    // @TODO: Refactor mock module first
     /* #[rstest]
     #[tokio::test]
     async fn incorrect_previous_operations(
@@ -720,6 +611,7 @@ mod tests {
         );
     } */
 
+    // @TODO: Refactor mock module first
     /* #[rstest]
     #[tokio::test]
     async fn operation_schemas_not_matching(
@@ -766,6 +658,7 @@ mod tests {
         );
     } */
 
+    // @TODO: Refactor mock module first
     /* #[rstest]
     #[tokio::test]
     async fn is_deleted(#[from(random_key_pair)] key_pair_1: KeyPair) {
@@ -800,6 +693,7 @@ mod tests {
         assert!(document.view().is_none());
     } */
 
+    // @TODO: Refactor mock module first
     /* #[rstest]
     #[tokio::test]
     async fn more_than_one_create(#[from(random_key_pair)] key_pair_1: KeyPair) {
@@ -835,6 +729,7 @@ mod tests {
         );
     } */
 
+    // @TODO: Refactor mock module first
     /* #[rstest]
     #[tokio::test]
     async fn builds_specific_document_view() {

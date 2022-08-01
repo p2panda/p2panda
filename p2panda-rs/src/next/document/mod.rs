@@ -9,7 +9,9 @@ mod document_view_fields;
 mod document_view_hash;
 mod document_view_id;
 pub mod error;
+pub mod materialization;
 
+pub use document::{Document, DocumentBuilder, IsDeleted, IsEdited};
 pub use document_id::DocumentId;
 pub use document_view::DocumentView;
 pub use document_view_fields::{DocumentViewFields, DocumentViewValue};

@@ -82,17 +82,18 @@ impl Human for DocumentView {
     }
 }
 
-// @TODO: Needs API updates
-/* #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use rstest::rstest;
 
-    use crate::next::document::{reduce, DocumentId, DocumentViewValue};
+    use crate::next::document::materialization::reduce;
+    use crate::next::document::{DocumentId, DocumentViewValue};
     use crate::next::operation::traits::AsVerifiedOperation;
     use crate::next::operation::{OperationId, OperationValue, Relation, VerifiedOperation};
     use crate::next::test_utils::constants::HASH;
     use crate::next::test_utils::fixtures::{
         document_id, document_view_id, operation_fields, verified_operation,
+        verified_operation_with_schema,
     };
     use crate::Human;
 
@@ -114,34 +115,29 @@ mod tests {
             document_view.keys(),
             vec![
                 "age",
+                "comments",
                 "height",
                 "is_admin",
                 "my_friends",
+                "past_event",
                 "profile_picture",
                 "username"
             ]
         );
         assert!(!document_view.is_empty());
-        assert_eq!(document_view.len(), 6);
+        assert_eq!(document_view.len(), 8);
         assert_eq!(
-            document_view.get("username").unwrap(),
+            document_view.get("age").unwrap(),
             &DocumentViewValue::new(
                 verified_operation.operation_id(),
-                &OperationValue::String("bubu".to_owned()),
-            )
+                &OperationValue::Integer(28)
+            ),
         );
         assert_eq!(
             document_view.get("height").unwrap(),
             &DocumentViewValue::new(
                 verified_operation.operation_id(),
                 &OperationValue::Float(3.5)
-            ),
-        );
-        assert_eq!(
-            document_view.get("age").unwrap(),
-            &DocumentViewValue::new(
-                verified_operation.operation_id(),
-                &OperationValue::Integer(28)
             ),
         );
         assert_eq!(
@@ -158,14 +154,21 @@ mod tests {
                 &OperationValue::Relation(expected_relation)
             ),
         );
+        assert_eq!(
+            document_view.get("username").unwrap(),
+            &DocumentViewValue::new(
+                verified_operation.operation_id(),
+                &OperationValue::String("bubu".to_owned()),
+            )
+        );
         assert!(!is_edited);
         assert!(!is_deleted);
     }
 
     #[rstest]
     fn with_update_op(
-        #[from(verified_operation)] create_operation: VerifiedOperation,
-        #[from(verified_operation)]
+        #[from(verified_operation_with_schema)] create_operation: VerifiedOperation,
+        #[from(verified_operation_with_schema)]
         #[with(Some(operation_fields(vec![
             ("username", OperationValue::String("yahoo".to_owned())),
             ("height", OperationValue::Float(100.23)),
@@ -229,7 +232,7 @@ mod tests {
             .parse::<OperationId>()
             .unwrap();
 
-        let document_view_id = DocumentViewId::new(&[operation_1, operation_2]).unwrap();
+        let document_view_id = DocumentViewId::new(&[operation_1, operation_2]);
         let (view, _, _) = reduce(&[verified_operation]);
         let document_view = DocumentView::new(&document_view_id, &view.unwrap());
 
@@ -239,4 +242,4 @@ mod tests {
         );
         assert_eq!(document_view.display(), "<DocumentView 496543_f16e79>");
     }
-} */
+}
