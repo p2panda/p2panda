@@ -42,59 +42,53 @@ fn validate_fields(value: &Vec<Vec<String>>) -> bool {
 ///
 /// These operations contain a "name", "description" and "fields" field with each have special
 /// limitations defined by the p2panda specification.
+///
+/// Please note that this does not check type field type or the operation fields in general, as
+/// this should be handled by other validation methods. This method is only checking the
+/// special requirements of this particular system schema.
 pub fn validate_schema_definition_v1_fields(
     fields: &PlainFields,
 ) -> Result<(), SchemaDefinitionError> {
-    // Check that there are only three fields given
-    if fields.len() != 3 {
-        return Err(SchemaDefinitionError::UnexpectedFields);
-    }
-
     // Check "name" field
-    let schema_name = fields
-        .get("name")
-        .ok_or(SchemaDefinitionError::NameMissing)?;
+    let schema_name = fields.get("name");
 
-    if let PlainValue::StringOrRelation(value) = schema_name {
-        if validate_name(value) {
-            Ok(())
-        } else {
-            Err(SchemaDefinitionError::NameInvalid)
+    match schema_name {
+        Some(PlainValue::StringOrRelation(value)) => {
+            if validate_name(value) {
+                Ok(())
+            } else {
+                Err(SchemaDefinitionError::NameInvalid)
+            }
         }
-    } else {
-        Err(SchemaDefinitionError::NameWrongType)
+        _ => Ok(()),
     }?;
 
     // Check "description" field
-    let schema_description = fields
-        .get("description")
-        .ok_or(SchemaDefinitionError::DescriptionMissing)?;
+    let schema_description = fields.get("description");
 
     match schema_description {
-        PlainValue::StringOrRelation(value) => {
+        Some(PlainValue::StringOrRelation(value)) => {
             if validate_description(value) {
                 Ok(())
             } else {
                 Err(SchemaDefinitionError::DescriptionInvalid)
             }
         }
-        _ => Err(SchemaDefinitionError::DescriptionWrongType),
+        _ => Ok(()),
     }?;
 
     // Check "fields" field
-    let schema_fields = fields
-        .get("fields")
-        .ok_or(SchemaDefinitionError::FieldsMissing)?;
+    let schema_fields = fields.get("fields");
 
     match schema_fields {
-        PlainValue::PinnedRelationList(value) => {
+        Some(PlainValue::PinnedRelationList(value)) => {
             if validate_fields(value) {
                 Ok(())
             } else {
                 Err(SchemaDefinitionError::FieldsInvalid)
             }
         }
-        _ => Err(SchemaDefinitionError::FieldsWrongType),
+        _ => Ok(()),
     }?;
 
     Ok(())
@@ -123,26 +117,12 @@ mod test {
        ("description", "This is a test description".into()),
        ("fields", PlainValue::PinnedRelationList(Vec::new())),
     ].into())]
-    #[should_panic]
-    #[case::missing_name(vec![
+    #[case::no_name(vec![
        ("description", "This is a test description".into()),
        ("fields", vec![random_document_view_id()].into()),
     ].into())]
-    #[should_panic]
-    #[case::missing_description(vec![
+    #[case::no_description(vec![
        ("name", "venues".into()),
-       ("fields", vec![random_document_view_id()].into()),
-    ].into())]
-    #[should_panic]
-    #[case::missing_fields(vec![
-       ("name", "venues".into()),
-       ("description", "This is a test description".into()),
-    ].into())]
-    #[should_panic]
-    #[case::unknown_field(vec![
-       ("name", "venues".into()),
-       ("peter", "panda".into()),
-       ("description", "This is a test description".into()),
        ("fields", vec![random_document_view_id()].into()),
     ].into())]
     fn check_fields(#[case] fields: PlainFields) {

@@ -11,7 +11,10 @@ use crate::next::operation::{
     OperationFields, OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
 use crate::next::schema::validate::error::ValidationError;
-use crate::next::schema::{FieldName, FieldType, Schema};
+use crate::next::schema::validate::{
+    validate_schema_definition_v1_fields, validate_schema_field_definition_v1_fields,
+};
+use crate::next::schema::{FieldName, FieldType, Schema, SchemaId};
 
 /// Checks if all fields of the schema match with the operation fields.
 ///
@@ -59,6 +62,9 @@ pub fn validate_all_fields(
             )),
         }?;
     }
+
+    // When given, check against special validation rules for system schemas
+    validate_system_schema_fields(&fields, &schema)?;
 
     // Collect last fields (if there is any) we can consider unexpected
     let unexpected_fields: Vec<FieldName> =
@@ -116,6 +122,9 @@ pub fn validate_only_given_fields(
             }
         };
     }
+
+    // When given, check against special validation rules for system schemas
+    validate_system_schema_fields(&fields, &schema)?;
 
     if unexpected_fields.is_empty() {
         Ok(validated_fields)
@@ -287,6 +296,24 @@ fn validate_field_value(
                     schema_field_type.to_string(),
                 ))
             }
+        }
+    }
+}
+
+/// Method to validate operation fields against special formatting rules of system schemas.
+fn validate_system_schema_fields(
+    fields: &PlainFields,
+    schema: &Schema,
+) -> Result<(), ValidationError> {
+    match schema.id() {
+        SchemaId::Application(_, _) => Ok(()),
+        SchemaId::SchemaDefinition(_) => {
+            validate_schema_definition_v1_fields(&fields)?;
+            Ok(())
+        }
+        SchemaId::SchemaFieldDefinition(_) => {
+            validate_schema_field_definition_v1_fields(&fields)?;
+            Ok(())
         }
     }
 }
@@ -708,5 +735,100 @@ mod tests {
             validate_only_given_fields(&plain_fields, &schema).unwrap(),
             fields
         );
+    }
+
+    #[rstest]
+    #[case::unknown_fields(
+        SchemaId::SchemaDefinition(1),
+        vec![
+            ("fans", PlainValue::PinnedRelationOrRelationList(vec![HASH.to_owned()])),
+        ],
+        "field 'fans' does not match schema: expected field name 'description'"
+    )]
+    #[case::invalid_type(
+        SchemaId::SchemaDefinition(1),
+        vec![
+            ("name", "venue".into()),
+            ("description", "A short description".into()),
+            ("fields", "This is not a pinned relation list".into()),
+        ],
+        "field 'fields' does not match schema: invalid field type 'str', expected 'pinned_relation_list(schema_field_definition_v1)'"
+    )]
+    #[case::invalid_name(
+        SchemaId::SchemaDefinition(1),
+        vec![
+            ("name", "__invalid_name__".into()),
+            ("description", "A short description".into()),
+            ("fields", PlainValue::PinnedRelationList(vec![vec![HASH.to_owned()]]))
+        ],
+        "invalid 'schema_definition_v1' operation: 'name' field in schema field definitions is wrongly formatted"
+    )]
+    #[case::invalid_field_type(
+        SchemaId::SchemaFieldDefinition(1),
+        vec![
+            ("name", "is_cute".into()),
+            ("type", "floatyboaty".into()),
+        ],
+        "invalid 'schema_field_definition_v1' operation: 'type' field in schema field definitions is wrongly formatted"
+    )]
+    fn wrong_system_schema_operations(
+        #[case] schema_id: SchemaId,
+        #[case] fields: Vec<(&str, PlainValue)>,
+        #[case] expected: &str,
+    ) {
+        // Get system schema struct
+        let schema = Schema::get_system(schema_id).unwrap();
+
+        // Construct plain fields
+        let mut plain_fields = PlainFields::new();
+        for (plain_field_name, plain_field_value) in fields {
+            plain_fields
+                .insert(plain_field_name, plain_field_value)
+                .unwrap();
+        }
+
+        // Check if fields match the schema
+        assert_eq!(
+            validate_all_fields(&plain_fields, &schema)
+                .err()
+                .expect("Expected error")
+                .to_string(),
+            expected
+        );
+    }
+
+    #[rstest]
+    #[case(
+        SchemaId::SchemaDefinition(1),
+        vec![
+            ("name", "venue".into()),
+            ("description", "A short description".into()),
+            ("fields", PlainValue::PinnedRelationList(vec![vec![HASH.to_owned()]]))
+        ],
+    )]
+    #[case(
+        SchemaId::SchemaFieldDefinition(1),
+        vec![
+            ("name", "is_cute".into()),
+            ("type", "bool".into()),
+        ],
+    )]
+    fn correct_system_schema_operations(
+        #[case] schema_id: SchemaId,
+        #[case] fields: Vec<(&str, PlainValue)>,
+    ) {
+        // Get system schema struct
+        let schema = Schema::get_system(schema_id).unwrap();
+
+        // Construct plain fields
+        let mut plain_fields = PlainFields::new();
+        for (plain_field_name, plain_field_value) in fields {
+            plain_fields
+                .insert(plain_field_name, plain_field_value)
+                .unwrap();
+        }
+
+        // Check if fields match the schema
+        assert!(validate_all_fields(&plain_fields, &schema).is_ok());
     }
 }

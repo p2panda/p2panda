@@ -98,44 +98,39 @@ fn validate_relation_type(value: &str) -> bool {
 ///
 /// These operations contain a "name" and "type" field with each have special limitations defined
 /// by the p2panda specification.
+///
+/// Please note that this does not check type field type or the operation fields in general, as
+/// this should be handled by other validation methods. This method is only checking the
+/// special requirements of this particular system schema.
 pub fn validate_schema_field_definition_v1_fields(
     fields: &PlainFields,
 ) -> Result<(), SchemaFieldDefinitionError> {
-    // Check that there are only two fields given
-    if fields.len() != 2 {
-        return Err(SchemaFieldDefinitionError::UnexpectedFields);
-    }
-
     // Check "name" field
-    let field_name = fields
-        .get("name")
-        .ok_or(SchemaFieldDefinitionError::NameMissing)?;
+    let field_name = fields.get("name");
 
     match field_name {
-        PlainValue::StringOrRelation(value) => {
+        Some(PlainValue::StringOrRelation(value)) => {
             if validate_name(value) {
                 Ok(())
             } else {
                 Err(SchemaFieldDefinitionError::NameInvalid)
             }
         }
-        _ => Err(SchemaFieldDefinitionError::NameWrongType),
+        _ => Ok(()),
     }?;
 
     // Check "type" field
-    let field_type = fields
-        .get("type")
-        .ok_or(SchemaFieldDefinitionError::TypeMissing)?;
+    let field_type = fields.get("type");
 
     match field_type {
-        PlainValue::StringOrRelation(value) => {
+        Some(PlainValue::StringOrRelation(value)) => {
             if validate_type(value) {
                 Ok(())
             } else {
                 Err(SchemaFieldDefinitionError::TypeInvalid)
             }
         }
-        _ => Err(SchemaFieldDefinitionError::TypeWrongType),
+        _ => Ok(()),
     }?;
 
     Ok(())
@@ -158,16 +153,8 @@ mod test {
        ("name", "a__is___".into()),
        ("type", "bool".into()),
     ].into())]
-    #[should_panic]
     #[case::missing_type(vec![("name", "venue".into())].into())]
-    #[should_panic]
     #[case::missing_name(vec![("type", "str".into())].into())]
-    #[should_panic]
-    #[case::unknown_field(vec![
-      ("name", "venue".into()),
-      ("type", "str".into()),
-      ("clean", "ing".into()),
-    ].into())]
     #[should_panic]
     #[case::invalid_type(vec![
       ("name", "venue".into()),
