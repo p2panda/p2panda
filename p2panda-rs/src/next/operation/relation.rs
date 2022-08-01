@@ -126,6 +126,11 @@ impl RelationList {
         Self(relations)
     }
 
+    /// Returns the list of document ids.
+    pub fn document_ids(&self) -> &[DocumentId] {
+        self.0.as_slice()
+    }
+
     /// Returns iterator over document ids.
     pub fn iter(&self) -> Iter<DocumentId> {
         self.0.iter()
@@ -177,6 +182,11 @@ impl PinnedRelationList {
     /// Returns a new list of pinned relations.
     pub fn new(relations: Vec<DocumentViewId>) -> Self {
         Self(relations)
+    }
+
+    /// Returns the list of document view ids.
+    pub fn document_view_ids(&self) -> &[DocumentViewId] {
+        self.0.as_slice()
     }
 
     /// Returns iterator over document view ids.

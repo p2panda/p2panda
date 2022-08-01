@@ -344,10 +344,10 @@ mod tests {
         // Create first test operation
         let mut fields = OperationFields::new();
         fields
-            .add("a", OperationValue::String("sloth".to_owned()))
+            .insert("a", OperationValue::String("sloth".to_owned()))
             .unwrap();
         fields
-            .add("b", OperationValue::String("penguin".to_owned()))
+            .insert("b", OperationValue::String("penguin".to_owned()))
             .unwrap();
 
         let mut field_iterator = fields.iter();

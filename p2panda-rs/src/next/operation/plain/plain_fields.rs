@@ -107,6 +107,21 @@ impl<'de> Deserialize<'de> for PlainFields {
     }
 }
 
+impl From<Vec<(&str, PlainValue)>> for PlainFields {
+    fn from(spec: Vec<(&str, PlainValue)>) -> Self {
+        let mut fields = PlainFields::new();
+
+        for field in spec {
+            if fields.insert(field.0, field.1).is_err() {
+                // Silently ignore duplicates errors .. the underlying data type takes care of that
+                // for us!
+            }
+        }
+
+        fields
+    }
+}
+
 impl From<&OperationFields> for PlainFields {
     fn from(fields: &OperationFields) -> Self {
         let mut raw = PlainFields::new();
@@ -117,33 +132,12 @@ impl From<&OperationFields> for PlainFields {
                 OperationValue::Integer(int) => PlainValue::Integer(*int),
                 OperationValue::Float(float) => PlainValue::Float(*float),
                 OperationValue::String(str) => PlainValue::StringOrRelation(str.to_owned()),
-                OperationValue::Relation(relation) => {
-                    PlainValue::StringOrRelation(relation.document_id().as_str().to_owned())
+                OperationValue::Relation(relation) => relation.document_id().to_owned().into(),
+                OperationValue::RelationList(list) => list.document_ids().to_vec().into(),
+                OperationValue::PinnedRelation(relation) => relation.view_id().to_owned().into(),
+                OperationValue::PinnedRelationList(list) => {
+                    list.document_view_ids().to_vec().into()
                 }
-                OperationValue::RelationList(list) => PlainValue::PinnedRelationOrRelationList(
-                    list.iter()
-                        .map(|document_id| document_id.to_string())
-                        .collect(),
-                ),
-                OperationValue::PinnedRelation(relation) => {
-                    PlainValue::PinnedRelationOrRelationList(
-                        relation
-                            .view_id()
-                            .iter()
-                            .map(|operation_id| operation_id.to_string())
-                            .collect(),
-                    )
-                }
-                OperationValue::PinnedRelationList(list) => PlainValue::PinnedRelationList(
-                    list.iter()
-                        .map(|document_view_id| {
-                            document_view_id
-                                .iter()
-                                .map(|operation_id| operation_id.to_string())
-                                .collect()
-                        })
-                        .collect(),
-                ),
             };
 
             // Unwrap here because we already know that there are no duplicates in

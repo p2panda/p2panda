@@ -60,7 +60,7 @@ pub fn operation_fields(
 ) -> OperationFields {
     let mut operation_fields = OperationFields::new();
     for (key, value) in fields_vec.iter() {
-        if let Err(_) = operation_fields.add(key, value.to_owned()) {
+        if let Err(_) = operation_fields.insert(key, value.to_owned()) {
             // Ignore duplicates error
         }
     }

@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::next::document::{DocumentId, DocumentViewId};
+
 /// Operation field values which have not been checked against a schema yet.
 ///
 /// This enum expresses some operation field types as groups, since "String" or "Relation" are
@@ -45,5 +47,79 @@ impl PlainValue {
             PlainValue::PinnedRelationOrRelationList(_) => "str[]",
             PlainValue::PinnedRelationList(_) => "str[][]",
         }
+    }
+}
+
+impl From<bool> for PlainValue {
+    fn from(value: bool) -> Self {
+        PlainValue::Boolean(value)
+    }
+}
+
+impl From<f64> for PlainValue {
+    fn from(value: f64) -> Self {
+        PlainValue::Float(value)
+    }
+}
+
+impl From<i64> for PlainValue {
+    fn from(value: i64) -> Self {
+        PlainValue::Integer(value)
+    }
+}
+
+impl From<String> for PlainValue {
+    fn from(value: String) -> Self {
+        PlainValue::StringOrRelation(value)
+    }
+}
+
+impl From<&str> for PlainValue {
+    fn from(value: &str) -> Self {
+        PlainValue::StringOrRelation(value.to_string())
+    }
+}
+
+impl From<DocumentId> for PlainValue {
+    fn from(value: DocumentId) -> Self {
+        PlainValue::StringOrRelation(value.to_string())
+    }
+}
+
+impl From<Vec<DocumentId>> for PlainValue {
+    fn from(value: Vec<DocumentId>) -> Self {
+        PlainValue::PinnedRelationOrRelationList(
+            value
+                .iter()
+                .map(|document_id| document_id.to_string())
+                .collect(),
+        )
+    }
+}
+
+impl From<DocumentViewId> for PlainValue {
+    fn from(value: DocumentViewId) -> Self {
+        PlainValue::PinnedRelationOrRelationList(
+            value
+                .iter()
+                .map(|operation_id| operation_id.to_string())
+                .collect(),
+        )
+    }
+}
+
+impl From<Vec<DocumentViewId>> for PlainValue {
+    fn from(value: Vec<DocumentViewId>) -> Self {
+        PlainValue::PinnedRelationList(
+            value
+                .iter()
+                .map(|document_view_id| {
+                    document_view_id
+                        .iter()
+                        .map(|operation_id| operation_id.to_string())
+                        .collect()
+                })
+                .collect(),
+        )
     }
 }

@@ -25,7 +25,7 @@ use crate::next::operation::OperationValue;
 /// # use p2panda_rs::next::operation::traits::{AsOperation};
 /// let mut fields = OperationFields::new();
 /// fields
-///     .add("title", OperationValue::String("Hello, Panda!".to_owned()))
+///     .insert("title", OperationValue::String("Hello, Panda!".to_owned()))
 ///     .unwrap();
 /// }
 /// ```
@@ -51,7 +51,7 @@ impl OperationFields {
     /// Adds a new field to this instance.
     ///
     /// A field is a simple key/value pair.
-    pub fn add(&mut self, name: &str, value: OperationValue) -> Result<(), FieldsError> {
+    pub fn insert(&mut self, name: &str, value: OperationValue) -> Result<(), FieldsError> {
         if self.0.contains_key(name) {
             return Err(FieldsError::FieldDuplicate(name.to_owned()));
         }
@@ -59,13 +59,6 @@ impl OperationFields {
         self.0.insert(name.to_owned(), value);
 
         Ok(())
-    }
-
-    /// Adds a new field to this instance.
-    ///
-    /// A field is a simple key/value pair.
-    pub fn insert(&mut self, name: &str, value: OperationValue) -> Result<(), FieldsError> {
-        self.add(name, value)
     }
 
     /// Overwrites an already existing field with a new value.
@@ -115,7 +108,7 @@ impl From<Vec<(&str, OperationValue)>> for OperationFields {
         let mut operation_fields = OperationFields::new();
 
         for field in spec {
-            if operation_fields.add(field.0, field.1).is_err() {
+            if operation_fields.insert(field.0, field.1).is_err() {
                 // Silently ignore duplicates errors .. the underlying data type takes care of that
                 // for us!
             }
@@ -141,7 +134,7 @@ mod tests {
 
         // Detect duplicate
         fields
-            .add(
+            .insert(
                 "message",
                 OperationValue::String("Hello, Panda!".to_owned()),
             )
@@ -149,7 +142,7 @@ mod tests {
 
         // Have to use `update` to change fields
         assert!(fields
-            .add("message", OperationValue::String("Huhu".to_owned()))
+            .insert("message", OperationValue::String("Huhu".to_owned()))
             .is_err());
 
         assert!(fields
@@ -190,6 +183,6 @@ mod tests {
 
         let value = OperationValue::PinnedRelationList(relations);
         let mut fields = OperationFields::new();
-        assert!(fields.add("locations", value).is_ok());
+        assert!(fields.insert("locations", value).is_ok());
     }
 }

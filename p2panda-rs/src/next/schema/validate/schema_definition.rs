@@ -16,8 +16,8 @@ fn validate_name(value: &str) -> bool {
     lazy_static! {
         // Unwrap as we checked the regular expression for correctness
         static ref NAME_REGEX: Regex = Regex::new(
-            "^[A-Za-z]{1}[A-Za-z0-9_]{0,62}[A-Za-z0-9]{1}$
-        ").unwrap();
+            "^[A-Za-z]{1}[A-Za-z0-9_]{0,62}[A-Za-z0-9]{1}$"
+        ).unwrap();
     }
 
     NAME_REGEX.is_match(value)
@@ -98,4 +98,117 @@ pub fn validate_schema_definition_v1_fields(
     }?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use rstest::rstest;
+
+    use crate::next::operation::plain::{PlainFields, PlainValue};
+    use crate::next::test_utils::constants::HASH;
+    use crate::next::test_utils::fixtures::random_document_view_id;
+
+    use super::{
+        validate_description, validate_fields, validate_name, validate_schema_definition_v1_fields,
+    };
+
+    #[rstest]
+    #[case(vec![
+       ("name", "venues".into()),
+       ("description", "This is a test description".into()),
+       ("fields", vec![random_document_view_id(), random_document_view_id()].into()),
+    ].into())]
+    #[case::no_fields(vec![
+       ("name", "venues".into()),
+       ("description", "This is a test description".into()),
+       ("fields", PlainValue::PinnedRelationList(Vec::new())),
+    ].into())]
+    #[should_panic]
+    #[case::missing_name(vec![
+       ("description", "This is a test description".into()),
+       ("fields", vec![random_document_view_id()].into()),
+    ].into())]
+    #[should_panic]
+    #[case::missing_description(vec![
+       ("name", "venues".into()),
+       ("fields", vec![random_document_view_id()].into()),
+    ].into())]
+    #[should_panic]
+    #[case::missing_fields(vec![
+       ("name", "venues".into()),
+       ("description", "This is a test description".into()),
+    ].into())]
+    #[should_panic]
+    #[case::unknown_field(vec![
+       ("name", "venues".into()),
+       ("peter", "panda".into()),
+       ("description", "This is a test description".into()),
+       ("fields", vec![random_document_view_id()].into()),
+    ].into())]
+    fn check_fields(#[case] fields: PlainFields) {
+        assert!(validate_schema_definition_v1_fields(&fields.into()).is_ok());
+    }
+
+    #[test]
+    fn check_schema_fields() {
+        let mut many_fields = Vec::new();
+
+        for _ in 0..1200 {
+            many_fields.push(vec![HASH.to_owned()]);
+        }
+
+        assert!(!validate_fields(&many_fields));
+        assert!(validate_fields(&vec![vec![HASH.to_owned()]]));
+    }
+
+    #[rstest]
+    #[case(
+        "The kangaroo is a marsupial from the family Macropodidae
+           (macropods, meaning large foot)"
+    )]
+    #[case("%*&______@@@@@[[}}}{}}}}}}}&}{&{&{&{&{&}}}}}]]")]
+    #[should_panic]
+    #[case(
+        "In common use the term is used to describe the largest species from this
+           family, the red kangaroo, as well as the antilopine kangaroo, eastern grey
+           kangaroo, and western grey kangaroo! Kangaroos have large, powerful hind legs,
+           large feet adapted for leaping, a long muscular tail for balance, and a small
+           head. Like most marsupials, female kangaroos have a pouch called a marsupium
+           in which joeys complete postnatal development."
+    )]
+    fn check_description(#[case] description_str: &str) {
+        assert!(validate_description(description_str));
+    }
+
+    #[rstest]
+    #[case("venues_with_garden")]
+    #[case("animals_in_zoo_with_many_friends")]
+    #[case("robot_3000_building_specification")]
+    #[case("mushrooms_in_2054")]
+    #[case("ILikeCamels")]
+    #[case("AndDromedars")]
+    #[case("And_Their_Special_Variants")]
+    #[should_panic]
+    #[case("where_did_we_end_up_again_")]
+    #[should_panic]
+    #[case("c0_1_2_1_a_b_4_____")]
+    #[should_panic]
+    #[case("")]
+    #[should_panic]
+    #[case("icecrüëmm")]
+    #[should_panic]
+    #[case("サービス！サービス！")]
+    #[should_panic]
+    #[case("schema_names_for_people_who_cant_decide_which_schema_name_to_pick")]
+    #[should_panic]
+    #[case("25_kangaroos")]
+    #[should_panic]
+    #[case("_and_how_did_it_all_began")]
+    #[should_panic]
+    #[case("???????")]
+    #[should_panic]
+    #[case("specification-says-no")]
+    fn check_name_field(#[case] name_str: &str) {
+        assert!(validate_name(name_str));
+    }
 }
