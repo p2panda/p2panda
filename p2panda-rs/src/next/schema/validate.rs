@@ -3,6 +3,9 @@
 //! Various methods to validate an operation against a schema.
 use std::convert::TryInto;
 
+use lazy_static::lazy_static;
+use regex::Regex;
+
 use crate::next::document::error::{DocumentIdError, DocumentViewIdError};
 use crate::next::document::{DocumentId, DocumentViewId};
 use crate::next::operation::error::RelationListError;
@@ -10,8 +13,66 @@ use crate::next::operation::plain::{PlainFields, PlainValue};
 use crate::next::operation::{
     OperationFields, OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
-use crate::next::schema::error::ValidationError;
+use crate::next::schema::error::{
+    SchemaDefinitionError, SchemaFieldDefinitionError, ValidationError,
+};
 use crate::next::schema::{FieldName, FieldType, Schema};
+
+fn check_schema_field_definition_name(value: &str) -> bool {
+    lazy_static! {
+        // Unwrap as we checked the regular expression for correctness
+        static ref NAME_REGEX: Regex = Regex::new("^[A-Za-z]{1}[A-Za-z0-9_]{0,63}$").unwrap();
+    }
+
+    NAME_REGEX.is_match(value)
+}
+
+fn check_schema_field_definition_type(value: &str) -> bool {
+    match value {
+        "bool" | "int" | "float" | "str" => true,
+        relation => check_schema_field_definition_relation(relation),
+    }
+}
+
+fn check_schema_field_definition_relation(value: &str) -> bool {
+    lazy_static! {
+        static ref RELATION_REGEX: Regex = {
+            let relations = "(relation|relation_list|pinned_relation|pinned_relation_list)";
+            let schema_id = "[A-Za-z]{1}[A-Za-z0-9_]{0,63}_([0-9A-Za-z]{68})(_[0-9A-Za-z]{68}*";
+
+            // Unwrap as we checked the regular expression for correctness
+            Regex::new(&format!("{}\\({}\\)", relations, schema_id)).unwrap()
+        };
+    }
+
+    RELATION_REGEX.is_match(value)
+}
+
+/// 1. The name of a schema MUST be at most 64 characters long
+/// 2. It begins with a letter
+/// 3. It uses only alphanumeric characters, digits and the underscore character ( _ )
+/// 4. It doesn't end with an underscore
+fn check_schema_definition_name(value: &str) -> bool {
+    lazy_static! {
+        // Unwrap as we checked the regular expression for correctness
+        static ref NAME_REGEX: Regex = Regex::new(
+            "^[A-Za-z]{1}[A-Za-z0-9_]{0,62}[A-Za-z0-9]{1}$
+        ").unwrap();
+    }
+
+    NAME_REGEX.is_match(value)
+}
+
+/// 1. The description of a schema MUST consist of unicode characters
+/// 2. ... and MUST be at most 256 characters long
+fn check_schema_definition_description(value: &str) -> bool {
+    return value.chars().count() <= 256;
+}
+
+/// A schema MUST have at most 1024 fields
+fn check_schema_definition_fields(value: &Vec<Vec<String>>) -> bool {
+    return value.len() <= 1024;
+}
 
 /// Checks if all fields of the schema match with the operation fields.
 ///
@@ -124,6 +185,107 @@ pub fn validate_only_given_fields(
             unexpected_fields.join(", "),
         ))
     }
+}
+
+pub fn validate_schema_definition_v1_fields(
+    fields: &PlainFields,
+) -> Result<(), SchemaDefinitionError> {
+    // Check that there are only three fields given
+    if fields.len() != 3 {
+        return Err(SchemaDefinitionError::UnexpectedFields);
+    }
+
+    // Check "name" field
+    let schema_name = fields
+        .get("name")
+        .ok_or(SchemaDefinitionError::NameMissing)?;
+
+    if let PlainValue::StringOrRelation(value) = schema_name {
+        if check_schema_definition_name(&value) {
+            Ok(())
+        } else {
+            Err(SchemaDefinitionError::NameInvalid)
+        }
+    } else {
+        Err(SchemaDefinitionError::NameWrongType)
+    }?;
+
+    // Check "description" field
+    let schema_description = fields
+        .get("description")
+        .ok_or(SchemaDefinitionError::DescriptionMissing)?;
+
+    match schema_description {
+        PlainValue::StringOrRelation(value) => {
+            if check_schema_definition_description(&value) {
+                Ok(())
+            } else {
+                Err(SchemaDefinitionError::DescriptionInvalid)
+            }
+        }
+        _ => Err(SchemaDefinitionError::DescriptionWrongType),
+    }?;
+
+    // Check "fields" field
+    let schema_fields = fields
+        .get("fields")
+        .ok_or(SchemaDefinitionError::FieldsMissing)?;
+
+    match schema_fields {
+        PlainValue::PinnedRelationList(value) => {
+            if check_schema_definition_fields(value) {
+                Ok(())
+            } else {
+                Err(SchemaDefinitionError::FieldsInvalid)
+            }
+        }
+        _ => Err(SchemaDefinitionError::FieldsWrongType),
+    }?;
+
+    Ok(())
+}
+
+pub fn validate_schema_field_definition_v1_fields(
+    fields: &PlainFields,
+) -> Result<(), SchemaFieldDefinitionError> {
+    // Check that there are only two fields given
+    if fields.len() != 2 {
+        return Err(SchemaFieldDefinitionError::UnexpectedFields);
+    }
+
+    // Check "name" field
+    let field_name = fields
+        .get("name")
+        .ok_or(SchemaFieldDefinitionError::NameMissing)?;
+
+    match field_name {
+        PlainValue::StringOrRelation(value) => {
+            if check_schema_field_definition_name(&value) {
+                Ok(())
+            } else {
+                Err(SchemaFieldDefinitionError::NameInvalid)
+            }
+        }
+        _ => Err(SchemaFieldDefinitionError::NameWrongType),
+    }?;
+
+    // Check "type" field
+    let field_type = fields
+        .get("type")
+        .ok_or(SchemaFieldDefinitionError::TypeMissing)?;
+
+    match field_type {
+        PlainValue::StringOrRelation(value) => {
+            if check_schema_field_definition_type(&value) {
+                Ok(())
+            } else {
+                Err(SchemaFieldDefinitionError::TypeInvalid)
+            }
+        }
+        _ => Err(SchemaFieldDefinitionError::TypeWrongType),
+    }?;
+
+    Ok(())
 }
 
 /// Validates name and type of an operation field by matching it against a schema field.
