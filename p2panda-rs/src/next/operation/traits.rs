@@ -9,14 +9,28 @@ use crate::next::operation::{
 };
 use crate::next::schema::SchemaId;
 
+/// Trait representing an "operation-like" struct.
+///
+/// Structs which "behave like" operations have a version and a distinct action. They can also
+/// relate to previous operations to form an operation graph.
 pub trait Actionable {
+    /// Returns the operation version.
     fn version(&self) -> OperationVersion;
+
+    /// Returns the operation action.
     fn action(&self) -> OperationAction;
+
+    /// Returns a list of previous operations.
     fn previous_operations(&self) -> Option<&DocumentViewId>;
 }
 
+/// Trait representing an "operation-like" struct which contains data fields that can be checked
+/// against a schema.
 pub trait Schematic {
+    /// Returns the schema id.
     fn schema_id(&self) -> &SchemaId;
+
+    /// Returns the fields holding the data.
     fn fields(&self) -> Option<PlainFields>;
 }
 

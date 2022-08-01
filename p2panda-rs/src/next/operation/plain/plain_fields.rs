@@ -13,11 +13,13 @@ use crate::next::operation::plain::PlainValue;
 use crate::next::operation::{OperationFields, OperationValue};
 use crate::next::schema::FieldName;
 
+/// Operation fields which have not been checked against a schema yet.
 #[derive(Clone, Serialize, Default, Debug, PartialEq)]
 pub struct PlainFields(BTreeMap<FieldName, PlainValue>);
 
 impl PlainFields {
-    pub fn new() -> Self {
+    /// Returns a new instance of plain fields.
+    pub(crate) fn new() -> Self {
         Self(BTreeMap::new())
     }
 
@@ -31,10 +33,14 @@ impl PlainFields {
         self.0.len()
     }
 
+    /// Gets a field from the list by name, returns `None` if it couldn't be found.
     pub fn get(&self, name: &str) -> Option<&PlainValue> {
         self.0.get(name)
     }
 
+    /// Inserts a new field into the list.
+    ///
+    /// Returns an error when a duplicate field name was detected.
     pub fn insert(&mut self, name: &str, value: PlainValue) -> Result<(), FieldsError> {
         if self.0.contains_key(name) {
             Err(FieldsError::FieldDuplicate(name.to_owned()))
@@ -44,6 +50,7 @@ impl PlainFields {
         }
     }
 
+    /// Iterates over the list of fields.
     pub fn iter(&self) -> Iter<FieldName, PlainValue> {
         self.0.iter()
     }

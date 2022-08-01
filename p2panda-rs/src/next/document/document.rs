@@ -11,13 +11,21 @@ use crate::next::operation::{OperationId, VerifiedOperation};
 use crate::next::schema::SchemaId;
 use crate::Human;
 
+/// Flag to indicate if document was edited by at least one author.
 pub type IsEdited = bool;
+
+/// Flag to indicate if document was deleted by at least one author.
 pub type IsDeleted = bool;
 
 #[derive(Debug, Clone, Default)]
 pub struct DocumentMeta {
+    /// Flag indicating if document was deleted.
     deleted: IsDeleted,
+
+    /// Flag indicating if document was edited.
     edited: IsEdited,
+
+    /// List of operations this document consists of.
     operations: Vec<VerifiedOperation>,
 }
 

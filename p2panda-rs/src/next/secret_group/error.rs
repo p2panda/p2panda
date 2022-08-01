@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Error types for creating and managing a secret group.
 use thiserror::Error;
 
 /// Custom error types for `SecretGroup`.

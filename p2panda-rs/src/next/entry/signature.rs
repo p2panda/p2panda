@@ -6,7 +6,7 @@ use bamboo_rs_core_ed25519_yasmf::Signature as BambooSignature;
 use ed25519_dalek::Signature as Ed25519Signature;
 
 /// Ed25519 signature.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug)]
 pub struct Signature(Ed25519Signature);
 
 impl Signature {
@@ -40,6 +40,14 @@ impl StdHash for Signature {
         self.into_bytes().hash(state)
     }
 }
+
+impl PartialEq for Signature {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for Signature {}
 
 #[cfg(test)]
 impl Signature {

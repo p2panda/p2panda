@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Helper method for `serde` to serialize bytes into a hex string when using a human readable
+/// encoding (JSON), otherwise it serializes the bytes directly.
 pub fn serialize_hex<S>(value: &[u8], serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
@@ -13,6 +15,8 @@ where
     }
 }
 
+/// Helper method for `serde` to deserialize from a hex string into bytes when using a human
+/// readable encoding (JSON), otherwise it deserializes the bytes directly.
 pub fn deserialize_hex<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
 where
     D: serde::Deserializer<'de>,

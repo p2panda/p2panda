@@ -4,8 +4,6 @@
 //! types like sequence numbers or log ids.
 use thiserror::Error;
 
-use crate::next::entry::LogId;
-
 /// Errors from `EntryBuilder` struct.
 #[derive(Error, Debug)]
 pub enum EntryBuilderError {

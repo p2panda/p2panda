@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Methods to reduce a list of operations into a single view.
 use crate::next::document::error::DocumentBuilderError;
 use crate::next::document::{DocumentViewFields, DocumentViewValue, IsDeleted, IsEdited};
 use crate::next::graph::Graph;

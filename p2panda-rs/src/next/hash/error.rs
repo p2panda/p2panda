@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Error types for validating or creating a hash.
 use thiserror::Error;
 
 /// Error types for `Hash` struct.

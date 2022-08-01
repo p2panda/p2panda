@@ -115,7 +115,7 @@ impl From<Vec<(&str, OperationValue)>> for OperationFields {
         let mut operation_fields = OperationFields::new();
 
         for field in spec {
-            if let Err(_) = operation_fields.add(field.0, field.1) {
+            if operation_fields.add(field.0, field.1).is_err() {
                 // Silently ignore duplicates errors .. the underlying data type takes care of that
                 // for us!
             }

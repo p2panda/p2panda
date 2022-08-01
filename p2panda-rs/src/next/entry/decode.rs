@@ -49,7 +49,7 @@ pub fn decode_entry(entry_encoded: &EncodedEntry) -> Result<Entry, DecodeEntryEr
     validate_links(&entry)?;
 
     // Check the signature (#E5)
-    validate_signature(entry.public_key(), entry.signature(), &entry_encoded)?;
+    validate_signature(entry.public_key(), entry.signature(), entry_encoded)?;
 
     Ok(entry)
 }

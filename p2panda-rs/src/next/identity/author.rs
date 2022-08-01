@@ -40,6 +40,7 @@ impl Author {
         Ok(author)
     }
 
+    /// Returns author represented as bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
         // Unwrap as we already checked the inner hex values
         hex::decode(&self.0).unwrap()

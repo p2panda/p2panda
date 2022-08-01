@@ -12,6 +12,7 @@ use serde::Deserialize;
 pub struct StringOrU64<T>(PhantomData<T>);
 
 impl<T> StringOrU64<T> {
+    /// Returns temporary type to deserialize a string or u64 into T.
     pub fn new() -> Self {
         Self(PhantomData::<T>)
     }

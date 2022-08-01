@@ -80,6 +80,7 @@ use crate::Human;
 ///                                         │VerifiedOperation│
 ///                                         └─────────────────┘
 /// ```
+#[allow(clippy::too_many_arguments)]
 pub fn validate_operation_with_entry(
     entry: &Entry,
     entry_encoded: &EncodedEntry,

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-&3.0-or-later
 
+//! Various methods to validate an operation against a schema.
 use std::convert::TryInto;
 
 use crate::next::document::error::{DocumentIdError, DocumentViewIdError};

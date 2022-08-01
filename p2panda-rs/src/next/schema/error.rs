@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Error types for creating schema instances or checking operations against them.
 use thiserror::Error;
 
 use crate::next::schema::SchemaId;

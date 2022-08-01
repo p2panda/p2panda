@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Error types for creating or materializing documents and document views and validating the
+//! format of document ids and document view ids.
 use thiserror::Error;
 
 use crate::next::operation::OperationId;
@@ -50,6 +52,7 @@ pub enum DocumentError {
 
 /// Custom error types for `DocumentView`.
 #[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
 pub enum DocumentViewError {
     /// TryFrom operation must be CREATE.
     #[error("operation must be instantiated from a CREATE operation")]
