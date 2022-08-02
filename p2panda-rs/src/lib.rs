@@ -80,10 +80,14 @@ pub mod secret_group;
 pub mod storage_provider;
 #[cfg(any(feature = "testing", test))]
 pub mod test_utils;
-#[cfg(target_arch = "wasm32")]
-pub mod wasm;
+// @TODO: Bring back after merging `next` module
+/* #[cfg(target_arch = "wasm32")]
+pub mod wasm; */
 
-/// Trait used by p2panda structs to validate arguments.
+/// Trait used by p2panda structs to validate data formats.
+///
+/// Use this trait to check against (canonic) formats of data (like document ids or yasmf hashes)
+/// coming in via deserialization, constructors or (string) conversion.
 pub trait Validate {
     /// Validation error type.
     type Error: std::fmt::Debug + std::error::Error + Send + Sync + 'static;
