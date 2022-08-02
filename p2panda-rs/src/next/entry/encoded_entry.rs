@@ -66,7 +66,7 @@ impl Display for EncodedEntry {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(feature = "testing", test))]
 impl EncodedEntry {
     pub fn new(bytes: &[u8]) -> EncodedEntry {
         Self(bytes.to_owned())
