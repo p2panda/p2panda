@@ -81,8 +81,8 @@ pub mod storage_provider;
 #[cfg(any(feature = "testing", test))]
 pub mod test_utils;
 // @TODO: Bring back after merging `next` module
-/* #[cfg(target_arch = "wasm32")]
-pub mod wasm; */
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
 
 /// Trait used by p2panda structs to validate data formats.
 ///
