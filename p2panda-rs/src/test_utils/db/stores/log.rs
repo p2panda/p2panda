@@ -3,9 +3,9 @@
 use async_trait::async_trait;
 use log::debug;
 
-use crate::document::DocumentId;
-use crate::entry::LogId;
-use crate::identity::Author;
+use crate::next::document::DocumentId;
+use crate::next::entry::LogId;
+use crate::next::identity::Author;
 use crate::storage_provider::errors::LogStorageError;
 use crate::storage_provider::traits::{AsStorageLog, LogStore};
 use crate::test_utils::db::{MemoryStore, StorageLog};

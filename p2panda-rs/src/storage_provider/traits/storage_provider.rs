@@ -3,10 +3,11 @@
 use async_trait::async_trait;
 use log::debug;
 
-use crate::document::DocumentId;
-use crate::entry::SeqNum;
-use crate::hash::Hash;
-use crate::operation::{AsOperation, AsVerifiedOperation, Operation};
+use crate::next::document::DocumentId;
+use crate::next::entry::SeqNum;
+use crate::next::hash::Hash;
+use crate::next::operation::traits::{AsOperation, AsVerifiedOperation};
+use crate::next::operation::Operation;
 use crate::storage_provider::errors::PublishEntryError;
 use crate::storage_provider::traits::{
     AsEntryArgsRequest, AsEntryArgsResponse, AsPublishEntryRequest, AsPublishEntryResponse,
@@ -277,12 +278,12 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::document::DocumentId;
-    use crate::entry::{sign_and_encode, Entry, LogId};
-    use crate::identity::KeyPair;
-    use crate::operation::{
-        AsOperation, OperationEncoded, OperationFields, OperationId, OperationValue,
-    };
+    use crate::next::document::DocumentId;
+    use crate::next::entry::encode::sign_and_encode_entry;
+    use crate::next::entry::{Entry, EntryBuilder, LogId};
+    use crate::next::identity::KeyPair;
+    use crate::next::operation::traits::AsOperation;
+    use crate::next::operation::{EncodedOperation, OperationFields, OperationId, OperationValue};
     use crate::storage_provider::traits::test_utils::{test_db, TestStore};
     use crate::storage_provider::traits::{
         AsEntryArgsResponse, AsPublishEntryResponse, AsStorageEntry,
@@ -387,16 +388,14 @@ mod tests {
             .unwrap();
 
         // Reconstruct it with an invalid backlink
-        let entry_with_invalid_backlink = Entry::new(
-            &entry_four.log_id(),
-            Some(&entry_four.operation()),
-            entry_four.skiplink_hash().as_ref(),
-            Some(&invalid_backlink.hash()),
-            &entry_four.seq_num(),
-        )
-        .unwrap();
+        let entry_with_invalid_backlink = EntryBuilder::new()
+            .log_id(&entry_four.log_id())
+            .seq_num(&entry_four.seq_num())
+            .backlink(&invalid_backlink.hash())
+            .sign(&entry_four.operation_encoded().unwrap(), &key_pair)
+            .unwrap();
 
-        let entry_signed = sign_and_encode(&entry_with_invalid_backlink, &key_pair).unwrap();
+        let entry_signed = sign_and_encode_entry(&entry_with_invalid_backlink, &key_pair).unwrap();
 
         let publish_entry_request = PublishEntryRequest {
             entry: entry_signed.clone(),
@@ -466,7 +465,7 @@ mod tests {
         )
         .unwrap();
 
-        let entry_signed = sign_and_encode(&entry_with_invalid_backlink, &key_pair).unwrap();
+        let entry_signed = sign_and_encode_entry(&entry_with_invalid_backlink, &key_pair).unwrap();
 
         let publish_entry_request = PublishEntryRequest {
             entry: entry_signed.clone(),
@@ -597,8 +596,8 @@ mod tests {
         .unwrap();
 
         let signed_entry_with_wrong_log_id =
-            sign_and_encode(&entry_with_wrong_log_id, &key_pair).unwrap();
-        let encoded_operation = OperationEncoded::try_from(&entry_two.operation()).unwrap();
+            sign_and_encode_entry(&entry_with_wrong_log_id, &key_pair).unwrap();
+        let encoded_operation = EncodedOperation::try_from(&entry_two.operation()).unwrap();
 
         // Create request and publish invalid entry
         let request_with_wrong_log_id = PublishEntryRequest {
@@ -704,9 +703,9 @@ mod tests {
             Some(update_operation_with_invalid_previous_operations.clone()),
         );
 
-        let encoded_entry = sign_and_encode(&update_entry, &key_pair).unwrap();
+        let encoded_entry = sign_and_encode_entry(&update_entry, &key_pair).unwrap();
         let encoded_operation =
-            OperationEncoded::try_from(&update_operation_with_invalid_previous_operations).unwrap();
+            EncodedOperation::try_from(&update_operation_with_invalid_previous_operations).unwrap();
 
         // Publish this entry (which contains an invalid previous_operation)
         let publish_entry_request = PublishEntryRequest {
@@ -765,7 +764,7 @@ mod tests {
             None,
         );
 
-        let encoded_operation = OperationEncoded::try_from(&mismatched_operation).unwrap();
+        let encoded_operation = EncodedOperation::try_from(&mismatched_operation).unwrap();
 
         // Publish this entry with an mismatching operation
         let publish_entry_request = PublishEntryRequest {

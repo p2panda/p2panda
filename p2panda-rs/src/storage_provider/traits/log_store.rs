@@ -2,9 +2,9 @@
 
 use async_trait::async_trait;
 
-use crate::document::DocumentId;
-use crate::entry::LogId;
-use crate::identity::Author;
+use crate::next::document::DocumentId;
+use crate::next::entry::LogId;
+use crate::next::identity::Author;
 use crate::storage_provider::errors::LogStorageError;
 use crate::storage_provider::traits::AsStorageLog;
 
@@ -61,8 +61,8 @@ pub trait LogStore<StorageLog: AsStorageLog> {
 mod tests {
     use rstest::rstest;
 
-    use crate::entry::LogId;
-    use crate::identity::Author;
+    use crate::next::entry::LogId;
+    use crate::next::identity::Author;
     use crate::storage_provider::traits::test_utils::{test_db, TestStore};
     use crate::storage_provider::traits::LogStore;
 

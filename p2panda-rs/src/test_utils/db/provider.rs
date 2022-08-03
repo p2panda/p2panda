@@ -5,10 +5,10 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 
-use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
-use crate::hash::Hash;
-use crate::operation::{OperationId, VerifiedOperation};
-use crate::schema::SchemaId;
+use crate::next::document::{Document, DocumentId, DocumentView, DocumentViewId};
+use crate::next::hash::Hash;
+use crate::next::operation::{OperationId, VerifiedOperation};
+use crate::next::schema::SchemaId;
 use crate::storage_provider::traits::StorageProvider;
 use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog};
 use crate::storage_provider::utils::Result;

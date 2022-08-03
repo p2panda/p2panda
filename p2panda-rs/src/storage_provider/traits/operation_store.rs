@@ -2,9 +2,9 @@
 
 use async_trait::async_trait;
 
-use crate::document::DocumentId;
-use crate::operation::AsVerifiedOperation;
-use crate::operation::OperationId;
+use crate::next::document::DocumentId;
+use crate::next::operation::traits::AsVerifiedOperation;
+use crate::next::operation::OperationId;
 use crate::storage_provider::errors::OperationStorageError;
 
 /// Trait which handles all storage actions relating to `Operation`s.

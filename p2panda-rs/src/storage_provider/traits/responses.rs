@@ -2,8 +2,8 @@
 
 use async_trait::async_trait;
 
-use crate::entry::{LogId, SeqNum};
-use crate::hash::Hash;
+use crate::next::entry::{LogId, SeqNum};
+use crate::next::hash::Hash;
 
 /// Response when requesting arguments to create a new entry.
 #[async_trait]

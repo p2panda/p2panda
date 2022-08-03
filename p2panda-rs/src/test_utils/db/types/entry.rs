@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::entry::{decode_entry, Entry, EntrySigned, LogId, SeqNum};
-use crate::hash::Hash;
-use crate::identity::Author;
-use crate::operation::{Operation, OperationEncoded, OperationId};
+use crate::next::entry::decode::decode_entry;
+use crate::next::entry::{EncodedEntry, Entry, LogId, SeqNum};
+use crate::next::hash::Hash;
+use crate::next::identity::Author;
+use crate::next::operation::decode::decode_operation;
+use crate::next::operation::{EncodedOperation, Operation, OperationId};
 use crate::storage_provider::errors::EntryStorageError;
 use crate::storage_provider::traits::AsStorageEntry;
 use crate::storage_provider::ValidationError;
@@ -16,7 +18,7 @@ pub struct StorageEntry {
     pub author: Author,
 
     /// Actual Bamboo entry data.
-    pub entry_bytes: EntrySigned,
+    pub entry_bytes: EncodedEntry,
 
     /// Hash of Bamboo entry data.
     pub entry_hash: Hash,
@@ -25,7 +27,7 @@ pub struct StorageEntry {
     pub log_id: LogId,
 
     /// Payload of entry, can be deleted.
-    pub payload_bytes: Option<OperationEncoded>,
+    pub payload_bytes: Option<EncodedOperation>,
 
     /// Hash of payload data.
     pub payload_hash: OperationId,
@@ -38,16 +40,16 @@ impl StorageEntry {
     /// Get the decoded entry.
     pub fn entry_decoded(&self) -> Entry {
         // Unwrapping as validation occurs in constructor.
-        decode_entry(&self.entry_signed(), self.operation_encoded().as_ref()).unwrap()
+        decode_entry(&self.entry_signed()).unwrap()
     }
 
     /// Get the encoded entry.
-    pub fn entry_signed(&self) -> EntrySigned {
+    pub fn entry_signed(&self) -> EncodedEntry {
         self.entry_bytes.clone()
     }
 
     /// Get the encoded operation.
-    pub fn operation_encoded(&self) -> Option<OperationEncoded> {
+    pub fn operation_encoded(&self) -> Option<EncodedOperation> {
         self.payload_bytes.clone()
     }
 }
@@ -57,18 +59,18 @@ impl AsStorageEntry for StorageEntry {
     type AsStorageEntryError = EntryStorageError;
 
     fn new(
-        entry: &EntrySigned,
-        operation: &OperationEncoded,
+        entry: &EncodedEntry,
+        operation: &EncodedOperation,
     ) -> Result<Self, Self::AsStorageEntryError> {
-        let entry_decoded = decode_entry(entry, None).unwrap();
+        let entry_decoded = decode_entry(entry).unwrap();
 
         let entry = StorageEntry {
-            author: entry.author(),
+            author: entry_decoded.public_key().to_owned(),
             entry_bytes: entry.clone(),
             entry_hash: entry.hash(),
             log_id: entry_decoded.log_id().to_owned(),
             payload_bytes: Some(operation.clone()),
-            payload_hash: entry.payload_hash().into(),
+            payload_hash: entry_decoded.payload_hash().to_owned().into(),
             seq_num: entry_decoded.seq_num().to_owned(),
         };
 
@@ -77,7 +79,7 @@ impl AsStorageEntry for StorageEntry {
     }
 
     fn author(&self) -> Author {
-        self.entry_signed().author()
+        self.entry_decoded().public_key().to_owned()
     }
 
     fn hash(&self) -> Hash {
@@ -85,15 +87,15 @@ impl AsStorageEntry for StorageEntry {
     }
 
     fn entry_bytes(&self) -> Vec<u8> {
-        self.entry_signed().to_bytes()
+        self.entry_signed().into_bytes()
     }
 
     fn backlink_hash(&self) -> Option<Hash> {
-        self.entry_decoded().backlink_hash().cloned()
+        self.entry_decoded().backlink().cloned()
     }
 
     fn skiplink_hash(&self) -> Option<Hash> {
-        self.entry_decoded().skiplink_hash().cloned()
+        self.entry_decoded().skiplink().cloned()
     }
 
     fn seq_num(&self) -> SeqNum {
@@ -105,8 +107,7 @@ impl AsStorageEntry for StorageEntry {
     }
 
     fn operation(&self) -> Operation {
-        let operation_encoded = self.operation_encoded().unwrap();
-        Operation::from(&operation_encoded)
+        decode_operation(&self.operation_encoded().unwrap()).unwrap()
     }
 }
 
@@ -118,7 +119,7 @@ impl Validate for StorageEntry {
         if let Some(operation) = self.operation_encoded() {
             operation.validate()?;
         }
-        decode_entry(&self.entry_signed(), self.operation_encoded().as_ref())?;
+        decode_entry(&self.entry_signed())?;
         Ok(())
     }
 }

@@ -3,11 +3,11 @@
 use async_trait::async_trait;
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 
-use crate::entry::LogId;
-use crate::entry::SeqNum;
-use crate::hash::Hash;
-use crate::identity::Author;
-use crate::schema::SchemaId;
+use crate::next::entry::LogId;
+use crate::next::entry::SeqNum;
+use crate::next::hash::Hash;
+use crate::next::identity::Author;
+use crate::next::schema::SchemaId;
 use crate::storage_provider::errors::EntryStorageError;
 use crate::storage_provider::traits::AsStorageEntry;
 
@@ -195,10 +195,10 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::entry::{sign_and_encode, Entry};
-    use crate::hash::Hash;
-    use crate::identity::KeyPair;
-    use crate::operation::{Operation, OperationEncoded};
+    use crate::next::entry::Entry;
+    use crate::next::hash::Hash;
+    use crate::next::identity::KeyPair;
+    use crate::next::operation::{EncodedOperation, Operation};
     use crate::storage_provider::traits::test_utils::{test_db, TestStore};
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
     use crate::test_utils::constants::SKIPLINK_SEQ_NUMS;
@@ -285,7 +285,7 @@ mod tests {
     #[tokio::test]
     async fn try_get_backlink_invalid_skiplink(
         key_pair: KeyPair,
-        operation_encoded: OperationEncoded,
+        operation_encoded: EncodedOperation,
         #[from(test_db)]
         #[with(4, 1, 1)]
         #[future]
@@ -430,7 +430,7 @@ mod tests {
     #[tokio::test]
     async fn try_get_skiplink_invalid_skiplink(
         key_pair: KeyPair,
-        operation_encoded: OperationEncoded,
+        operation_encoded: EncodedOperation,
         #[from(test_db)]
         #[with(4, 1, 1)]
         #[future]

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::document::DocumentId;
-use crate::entry::LogId;
-use crate::identity::Author;
-use crate::schema::SchemaId;
+use crate::next::document::DocumentId;
+use crate::next::entry::LogId;
+use crate::next::identity::Author;
+use crate::next::schema::SchemaId;
 use crate::storage_provider::traits::AsStorageLog;
 
 /// A log entry represented as a concatenated string of `"{author}-{schema}-{document_id}-{log_id}"`

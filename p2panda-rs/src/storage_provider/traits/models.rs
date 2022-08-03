@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::document::DocumentId;
-use crate::entry::{EntrySigned, LogId, SeqNum};
-use crate::hash::Hash;
-use crate::identity::Author;
-use crate::operation::{Operation, OperationEncoded};
-use crate::schema::SchemaId;
+use crate::next::document::DocumentId;
+use crate::next::entry::{EncodedEntry, LogId, SeqNum};
+use crate::next::hash::Hash;
+use crate::next::identity::Author;
+use crate::next::operation::{EncodedOperation, Operation};
+use crate::next::schema::SchemaId;
 use crate::Validate;
 
 /// Trait to be implemented on a struct representing a stored entry.
@@ -21,8 +21,8 @@ pub trait AsStorageEntry:
 
     /// Construct an instance of the struct implementing `AsStorageEntry`
     fn new(
-        entry: &EntrySigned,
-        operation: &OperationEncoded,
+        entry: &EncodedEntry,
+        operation: &EncodedOperation,
     ) -> Result<Self, Self::AsStorageEntryError>;
 
     /// Returns the author of this entry.

@@ -4,15 +4,17 @@ use std::convert::TryFrom;
 
 use rstest::fixture;
 
-use crate::document::{DocumentId, DocumentViewId};
-use crate::entry::{sign_and_encode, Entry, EntrySigned};
-use crate::hash::Hash;
-use crate::identity::{Author, KeyPair};
-use crate::operation::{
-    AsOperation, AsVerifiedOperation, Operation, OperationEncoded, OperationValue, PinnedRelation,
-    PinnedRelationList, Relation, RelationList, VerifiedOperation,
+use crate::next::document::{DocumentId, DocumentViewId};
+use crate::next::entry::encode::sign_and_encode_entry;
+use crate::next::entry::{Entry, SignedEntry};
+use crate::next::hash::Hash;
+use crate::next::identity::{Author, KeyPair};
+use crate::next::operation::{
+    EncodedOperation, Operation, OperationValue, PinnedRelation, PinnedRelationList, Relation,
+    RelationList, VerifiedOperation,
 };
-use crate::schema::SchemaId;
+use crate::next::schema::SchemaId;
+use crate::operation::traits::{AsOperation, AsVerifiedOperation};
 use crate::storage_provider::traits::{OperationStore, StorageProvider};
 use crate::storage_provider::utils::Result;
 use crate::test_utils::constants::{PRIVATE_KEY, SCHEMA_ID};
@@ -262,7 +264,7 @@ pub async fn send_to_store(
     store: &MemoryStore,
     operation: &Operation,
     key_pair: &KeyPair,
-) -> Result<(EntrySigned, PublishEntryResponse)> {
+) -> Result<(SignedEntry, PublishEntryResponse)> {
     // Get an Author from the key_pair.
     let author = Author::from(key_pair.public_key());
 
@@ -300,8 +302,8 @@ pub async fn send_to_store(
     )?;
 
     // Encode both the entry and operation.
-    let entry = sign_and_encode(&next_entry, key_pair)?;
-    let operation_encoded = OperationEncoded::try_from(operation)?;
+    let entry = sign_and_encode_entry(&next_entry, key_pair)?;
+    let operation_encoded = EncodedOperation::try_from(operation)?;
 
     // Publish the entry and get the next entry args.
     let publish_entry_request = PublishEntryRequest {

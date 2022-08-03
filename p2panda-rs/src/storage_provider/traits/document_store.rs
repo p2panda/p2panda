@@ -2,8 +2,8 @@
 
 use async_trait::async_trait;
 
-use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
-use crate::schema::SchemaId;
+use crate::next::document::{Document, DocumentId, DocumentView, DocumentViewId};
+use crate::next::schema::SchemaId;
 use crate::storage_provider::errors::DocumentStorageError;
 
 /// Storage traits for documents and document views.

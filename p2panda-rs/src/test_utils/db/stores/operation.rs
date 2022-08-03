@@ -3,8 +3,9 @@
 use async_trait::async_trait;
 use log::debug;
 
-use crate::document::DocumentId;
-use crate::operation::{AsOperation, AsVerifiedOperation, OperationId, VerifiedOperation};
+use crate::next::document::DocumentId;
+use crate::next::operation::traits::{AsOperation, AsVerifiedOperation};
+use crate::next::operation::{OperationId, VerifiedOperation};
 use crate::storage_provider::errors::OperationStorageError;
 use crate::storage_provider::traits::OperationStore;
 use crate::test_utils::db::MemoryStore;
