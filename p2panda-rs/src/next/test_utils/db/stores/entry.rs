@@ -143,11 +143,11 @@ impl EntryStore<StorageEntry> for MemoryStore {
         Ok(cert_pool)
     }
 }
-// 
+//
 // #[cfg(test)]
 // mod tests {
 //     use rstest::rstest;
-// 
+//
 //     use crate::next::entry::encode::encode_entry;
 //     use crate::next::entry::{EncodedEntry, Entry, LogId, SeqNum};
 //     use crate::next::identity::{Author, KeyPair};
@@ -156,18 +156,18 @@ impl EntryStore<StorageEntry> for MemoryStore {
 //     use crate::next::storage_provider::traits::{AsStorageEntry, EntryStore};
 //     use crate::next::test_utils::db::{MemoryStore, StorageEntry};
 //     use crate::next::test_utils::fixtures::{encoded_entry, entry, key_pair, schema_id};
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn insert_get_entry(encoded_entry: EncodedEntry) {
 //         // Instantiate a new store.
 //         let store = MemoryStore::default();
-// 
+//
 //         let storage_entry = StorageEntry::new(&encoded_entry).unwrap();
-// 
+//
 //         // Insert an entry into the store.
 //         assert!(store.insert_entry(storage_entry.clone()).await.is_ok());
-// 
+//
 //         // Get an entry at a specific seq number from an authors log.
 //         let entry_at_seq_num = store
 //             .get_entry_at_seq_num(
@@ -176,29 +176,29 @@ impl EntryStore<StorageEntry> for MemoryStore {
 //                 &storage_entry.seq_num(),
 //             )
 //             .await;
-// 
+//
 //         assert!(entry_at_seq_num.is_ok());
 //         assert_eq!(entry_at_seq_num.unwrap().unwrap(), storage_entry)
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn get_latest_entry(encoded_entry: EncodedEntry) {
 //         // Instantiate a new store.
 //         let store = MemoryStore::default();
-// 
+//
 //         let storage_entry = StorageEntry::new(&encoded_entry).unwrap();
-// 
+//
 //         // Before an entry is inserted the latest entry should be none.
 //         assert!(store
 //             .get_latest_entry(&storage_entry.author(), &LogId::default())
 //             .await
 //             .unwrap()
 //             .is_none());
-// 
+//
 //         // Insert an entry into the store.
 //         assert!(store.insert_entry(storage_entry.clone()).await.is_ok());
-// 
+//
 //         assert_eq!(
 //             store
 //                 .get_latest_entry(&storage_entry.author(), &LogId::default())
@@ -208,32 +208,32 @@ impl EntryStore<StorageEntry> for MemoryStore {
 //             storage_entry
 //         );
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn get_by_schema(entry: Entry, schema_id: SchemaId) {
 //         // Instantiate a new store.
 //         let store = MemoryStore::default();
-// 
+//
 //         let author_1_entry = encode_entry(&entry).unwrap();
 //         let author_1_entry = StorageEntry::new(&author_1_entry).unwrap();
-// 
+//
 //         // Before an entry with this schema is inserted this method should return an empty array.
 //         assert!(store
 //             .get_entries_by_schema(&schema_id)
 //             .await
 //             .unwrap()
 //             .is_empty());
-// 
+//
 //         // Insert an entry into the store.
 //         store.insert_entry(author_1_entry).await.unwrap();
-// 
+//
 //         assert_eq!(
 //             store.get_entries_by_schema(&schema_id).await.unwrap().len(),
 //             1
 //         );
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn get_entry_by_hash(
@@ -244,22 +244,22 @@ impl EntryStore<StorageEntry> for MemoryStore {
 //     ) {
 //         let db = db.await;
 //         let entries = db.store.entries.lock().unwrap().clone();
-// 
+//
 //         let entry_one = entries
 //             .values()
 //             .find(|entry| entry.seq_num().as_u64() == 1)
 //             .unwrap();
-// 
+//
 //         let entry_two = entries
 //             .values()
 //             .find(|entry| entry.seq_num().as_u64() == 2)
 //             .unwrap();
-// 
+//
 //         let entry_three = entries
 //             .values()
 //             .find(|entry| entry.seq_num().as_u64() == 2)
 //             .unwrap();
-// 
+//
 //         assert_eq!(
 //             *entry_one,
 //             db.store
@@ -285,7 +285,7 @@ impl EntryStore<StorageEntry> for MemoryStore {
 //                 .unwrap()
 //         );
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn get_n_entries(
@@ -296,24 +296,24 @@ impl EntryStore<StorageEntry> for MemoryStore {
 //         db: TestStore,
 //     ) {
 //         let db = db.await;
-// 
+//
 //         let author = Author::from(key_pair.public_key());
 //         let log_id = LogId::default();
-// 
+//
 //         let five_entries = db
 //             .store
 //             .get_paginated_log_entries(&author, &log_id, &SeqNum::new(1).unwrap(), 5)
 //             .await
 //             .unwrap();
 //         assert_eq!(five_entries.len(), 5);
-// 
+//
 //         let end_of_log_reached = db
 //             .store
 //             .get_paginated_log_entries(&author, &log_id, &SeqNum::new(1).unwrap(), 1000)
 //             .await
 //             .unwrap();
 //         assert_eq!(end_of_log_reached.len(), 16);
-// 
+//
 //         let first_entry_not_found = db
 //             .store
 //             .get_paginated_log_entries(&author, &log_id, &SeqNum::new(10000).unwrap(), 1)
@@ -321,7 +321,7 @@ impl EntryStore<StorageEntry> for MemoryStore {
 //             .unwrap();
 //         assert!(first_entry_not_found.is_empty());
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn get_cert_pool(
@@ -332,21 +332,21 @@ impl EntryStore<StorageEntry> for MemoryStore {
 //         db: TestStore,
 //     ) {
 //         let db = db.await;
-// 
+//
 //         let author = Author::from(key_pair.public_key());
 //         let log_id = LogId::default();
-// 
+//
 //         let cert_pool = db
 //             .store
 //             .get_certificate_pool(&author, &log_id, &SeqNum::new(16).unwrap())
 //             .await
 //             .unwrap();
-// 
+//
 //         let seq_nums: Vec<u64> = cert_pool
 //             .iter()
 //             .map(|entry| entry.seq_num().as_u64())
 //             .collect();
-// 
+//
 //         assert_eq!(seq_nums, vec![15, 14, 13, 4, 1]);
 //     }
 // }

@@ -111,13 +111,13 @@ impl DocumentStore for MemoryStore {
         Ok(documents)
     }
 }
-// 
+//
 // #[cfg(test)]
 // mod tests {
 //     use std::str::FromStr;
-// 
+//
 //     use rstest::rstest;
-// 
+//
 //     use crate::next::document::{
 //         DocumentBuilder, DocumentView, DocumentViewFields, DocumentViewId,
 //     };
@@ -132,14 +132,14 @@ impl DocumentStore for MemoryStore {
 //     };
 //     use crate::next::test_utils::constants::SCHEMA_ID;
 //     use crate::next::test_utils::fixtures::random_document_view_id;
-// 
+//
 //         fn entries_to_document_views(entries: &[StorageEntry]) -> Vec<DocumentView> {
 //             let mut document_views = Vec::new();
 //             let mut current_document_view_fields = DocumentViewFields::new();
-//     
+//
 //             for entry in entries {
 //                 let operation_id: OperationId = entry.hash().into();
-//     
+//
 //                 for (name, value) in entry.operation().fields().unwrap().iter() {
 //                     if entry.operation().action() == OperationAction::Delete {
 //                         continue;
@@ -148,21 +148,21 @@ impl DocumentStore for MemoryStore {
 //                             .insert(name, DocumentViewValue::new(&operation_id, value));
 //                     }
 //                 }
-//     
+//
 //                 let document_view_fields = DocumentViewFields::new_from_operation_fields(
 //                     &operation_id,
 //                     &entry.operation().fields().unwrap(),
 //                 );
-//     
+//
 //                 let document_view =
 //                     DocumentView::new(&operation_id.clone().into(), &document_view_fields);
-//     
+//
 //                 document_views.push(document_view)
 //             }
-//     
+//
 //             document_views
 //         }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn inserts_gets_one_document_view(
@@ -172,9 +172,9 @@ impl DocumentStore for MemoryStore {
 //         db: TestStore,
 //     ) {
 //         let db = db.await;
-// 
+//
 //         let author = Author::from(db.test_data.key_pairs[0].public_key());
-// 
+//
 //         // Get one entry from the pre-polulated db
 //         let entry = db
 //             .store
@@ -182,14 +182,14 @@ impl DocumentStore for MemoryStore {
 //             .await
 //             .unwrap()
 //             .unwrap();
-// 
+//
 //         let operation = db
 //             .store
 //             .get_operation_by_id(&entry.hash().into())
 //             .await
 //             .unwrap()
 //             .unwrap();
-// 
+//
 //         // Construct a `DocumentView`
 //         let operation_id: OperationId = entry.hash().into();
 //         let document_view_id: DocumentViewId = operation_id.clone().into();
@@ -200,22 +200,22 @@ impl DocumentStore for MemoryStore {
 //                 &operation.fields().unwrap(),
 //             ),
 //         );
-// 
+//
 //         // Insert into db
 //         let result = db
 //             .store
 //             .insert_document_view(&document_view, &SchemaId::from_str(SCHEMA_ID).unwrap())
 //             .await;
-// 
+//
 //         assert!(result.is_ok());
-// 
+//
 //         let retrieved_document_view = db
 //             .store
 //             .get_document_view_by_id(&document_view_id)
 //             .await
 //             .unwrap()
 //             .unwrap();
-// 
+//
 //         for key in [
 //             "username",
 //             "age",
@@ -231,7 +231,7 @@ impl DocumentStore for MemoryStore {
 //             assert_eq!(retrieved_document_view.get(key), document_view.get(key));
 //         }
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn document_view_does_not_exist(
@@ -247,10 +247,10 @@ impl DocumentStore for MemoryStore {
 //             .get_document_view_by_id(&random_document_view_id)
 //             .await
 //             .unwrap();
-// 
+//
 //         assert!(view_does_not_exist.is_none());
 //     }
-//     
+//
 //         #[rstest]
 //         #[tokio::test]
 //         async fn inserts_gets_many_document_views(
@@ -260,23 +260,23 @@ impl DocumentStore for MemoryStore {
 //             db: TestStore,
 //         ) {
 //             let db = db.await;
-//     
+//
 //             let author = Author::from(db.test_data.key_pairs[0].public_key());
 //             let schema_id = SchemaId::from_str(SCHEMA_ID).unwrap();
-//     
+//
 //             let log_id = LogId::default();
 //             let seq_num = SeqNum::default();
-//     
+//
 //             // Get 10 entries from the pre-populated test db
 //             let entries = db
 //                 .store
 //                 .get_paginated_log_entries(&author, &log_id, &seq_num, 10)
 //                 .await
 //                 .unwrap();
-//     
+//
 //             // Parse them into document views
 //             let document_views = entries_to_document_views(&entries);
-//     
+//
 //             // Insert each of these views into the db
 //             for document_view in document_views.clone() {
 //                 db.store
@@ -284,15 +284,15 @@ impl DocumentStore for MemoryStore {
 //                     .await
 //                     .unwrap();
 //             }
-//     
+//
 //             // Retrieve them again and assert they are the same as the inserted ones
 //             for (count, entry) in entries.iter().enumerate() {
 //                 let result = db.store.get_document_view_by_id(&entry.hash().into()).await;
-//     
+//
 //                 assert!(result.is_ok());
-//     
+//
 //                 let document_view = result.unwrap().unwrap();
-//     
+//
 //                 // The update operation should be included in the view correctly, we check that here.
 //                 let expected_username = if count == 0 {
 //                     DocumentViewValue::new(
@@ -308,7 +308,7 @@ impl DocumentStore for MemoryStore {
 //                 assert_eq!(document_view.get("username").unwrap(), &expected_username);
 //             }
 //         }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn inserts_gets_documents(
@@ -319,28 +319,28 @@ impl DocumentStore for MemoryStore {
 //     ) {
 //         let db = db.await;
 //         let document_id = db.test_data.documents[0].clone();
-// 
+//
 //         let document_operations = db
 //             .store
 //             .get_operations_by_document_id(&document_id)
 //             .await
 //             .unwrap();
-// 
+//
 //         let document = DocumentBuilder::new(document_operations).build().unwrap();
-// 
+//
 //         let result = db.store.insert_document(&document).await;
-// 
+//
 //         assert!(result.is_ok());
-// 
+//
 //         let document_view = db
 //             .store
 //             .get_document_view_by_id(document.view_id())
 //             .await
 //             .unwrap()
 //             .unwrap();
-// 
+//
 //         let expected_document_view = document.view().unwrap();
-// 
+//
 //         for key in [
 //             "username",
 //             "age",
@@ -356,7 +356,7 @@ impl DocumentStore for MemoryStore {
 //             assert_eq!(document_view.get(key), expected_document_view.get(key));
 //         }
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn gets_document_by_id(
@@ -367,28 +367,28 @@ impl DocumentStore for MemoryStore {
 //     ) {
 //         let db = db.await;
 //         let document_id = db.test_data.documents[0].clone();
-// 
+//
 //         let document_operations = db
 //             .store
 //             .get_operations_by_document_id(&document_id)
 //             .await
 //             .unwrap();
-// 
+//
 //         let document = DocumentBuilder::new(document_operations).build().unwrap();
-// 
+//
 //         let result = db.store.insert_document(&document).await;
-// 
+//
 //         assert!(result.is_ok());
-// 
+//
 //         let document_view = db
 //             .store
 //             .get_document_by_id(document.id())
 //             .await
 //             .unwrap()
 //             .unwrap();
-// 
+//
 //         let expected_document_view = document.view().unwrap();
-// 
+//
 //         for key in [
 //             "username",
 //             "age",
@@ -404,7 +404,7 @@ impl DocumentStore for MemoryStore {
 //             assert_eq!(document_view.get(key), expected_document_view.get(key));
 //         }
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn no_view_when_document_deleted(
@@ -415,24 +415,24 @@ impl DocumentStore for MemoryStore {
 //     ) {
 //         let db = db.await;
 //         let document_id = db.test_data.documents[0].clone();
-// 
+//
 //         let document_operations = db
 //             .store
 //             .get_operations_by_document_id(&document_id)
 //             .await
 //             .unwrap();
-// 
+//
 //         let document = DocumentBuilder::new(document_operations).build().unwrap();
-// 
+//
 //         let result = db.store.insert_document(&document).await;
-// 
+//
 //         assert!(result.is_ok());
-// 
+//
 //         let document_view = db.store.get_document_by_id(document.id()).await.unwrap();
-// 
+//
 //         assert!(document_view.is_none());
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn get_documents_by_schema_deleted_document(
@@ -443,28 +443,28 @@ impl DocumentStore for MemoryStore {
 //     ) {
 //         let db = db.await;
 //         let document_id = db.test_data.documents[0].clone();
-// 
+//
 //         let document_operations = db
 //             .store
 //             .get_operations_by_document_id(&document_id)
 //             .await
 //             .unwrap();
-// 
+//
 //         let document = DocumentBuilder::new(document_operations).build().unwrap();
-// 
+//
 //         let result = db.store.insert_document(&document).await;
-// 
+//
 //         assert!(result.is_ok());
-// 
+//
 //         let document_views = db
 //             .store
 //             .get_documents_by_schema(&SCHEMA_ID.parse().unwrap())
 //             .await
 //             .unwrap();
-// 
+//
 //         assert!(document_views.is_empty());
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn updates_a_document(
@@ -475,17 +475,17 @@ impl DocumentStore for MemoryStore {
 //     ) {
 //         let db = db.await;
 //         let document_id = db.test_data.documents[0].clone();
-// 
+//
 //         let document_operations = db
 //             .store
 //             .get_operations_by_document_id(&document_id)
 //             .await
 //             .unwrap();
-// 
+//
 //         let document = DocumentBuilder::new(document_operations).build().unwrap();
-// 
+//
 //         let mut current_operations = Vec::new();
-// 
+//
 //         for operation in document.operations() {
 //             // For each operation in the db we insert a document, cumulatively adding the next operation
 //             // each time. this should perform an "INSERT" first in the documents table, followed by 9 "UPDATES".
@@ -495,12 +495,12 @@ impl DocumentStore for MemoryStore {
 //                 .unwrap();
 //             let result = db.store.insert_document(&document).await;
 //             assert!(result.is_ok());
-// 
+//
 //             let document_view = db.store.get_document_by_id(document.id()).await.unwrap();
 //             assert!(document_view.is_some());
 //         }
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn gets_documents_by_schema(
@@ -511,21 +511,21 @@ impl DocumentStore for MemoryStore {
 //     ) {
 //         let db = db.await;
 //         let schema_id = SchemaId::from_str(SCHEMA_ID).unwrap();
-// 
+//
 //         for document_id in &db.test_data.documents {
 //             let document_operations = db
 //                 .store
 //                 .get_operations_by_document_id(document_id)
 //                 .await
 //                 .unwrap();
-// 
+//
 //             let document = DocumentBuilder::new(document_operations).build().unwrap();
-// 
+//
 //             db.store.insert_document(&document).await.unwrap();
 //         }
-// 
+//
 //         let schema_documents = db.store.get_documents_by_schema(&schema_id).await.unwrap();
-// 
+//
 //         assert_eq!(schema_documents.len(), 2);
 //     }
 // }

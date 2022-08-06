@@ -84,11 +84,11 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
             .collect())
     }
 }
-// 
+//
 // #[cfg(test)]
 // mod tests {
 //     use rstest::rstest;
-// 
+//
 //     use crate::next::document::DocumentId;
 //     use crate::next::entry::LogId;
 //     use crate::next::identity::{Author, KeyPair};
@@ -97,9 +97,9 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
 //     use crate::next::storage_provider::traits::test_utils::{test_db, TestStore};
 //     use crate::next::storage_provider::traits::{AsStorageEntry, EntryStore, StorageProvider};
 //     use crate::next::test_utils::fixtures::{document_id, key_pair, verified_operation};
-// 
+//
 //     use super::OperationStore;
-// 
+//
 //     #[rstest]
 //     #[case::create_operation(create_operation(&test_fields()))]
 //     #[case::update_operation(update_operation(&test_fields(), &HASH.parse().unwrap()))]
@@ -119,11 +119,11 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
 //         let db = db.await;
 //         // Construct the storage operation.
 //         let operation = VerifiedOperation::new(&author, &operation_id, &operation).unwrap();
-// 
+//
 //         // Insert the doggo operation into the db, returns Ok(true) when succesful.
 //         let result = db.store.insert_operation(&operation, &document_id).await;
 //         assert!(result.is_ok());
-// 
+//
 //         // Request the previously inserted operation by it's id.
 //         let returned_operation = db
 //             .store
@@ -131,12 +131,12 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
 //             .await
 //             .unwrap()
 //             .unwrap();
-// 
+//
 //         assert_eq!(returned_operation.public_key(), operation.public_key());
 //         assert_eq!(returned_operation.fields(), operation.fields());
 //         assert_eq!(returned_operation.operation_id(), operation.operation_id());
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn insert_operation_twice(
@@ -147,19 +147,19 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
 //         db: TestStore,
 //     ) {
 //         let db = db.await;
-// 
+//
 //         assert!(db
 //             .store
 //             .insert_operation(&verified_operation, &document_id)
 //             .await
 //             .is_ok());
-// 
+//
 //         assert_eq!(
 //             db.store.insert_operation(&verified_operation, &document_id).await.unwrap_err().to_string(),
 //             format!("Error occured when inserting an operation with id OperationId(Hash(\"{}\")) into storage", verified_operation.operation_id().as_str())
 //         )
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn gets_document_by_operation_id(
@@ -175,19 +175,19 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
 //         db: TestStore,
 //     ) {
 //         let db = db.await;
-// 
+//
 //         assert!(db
 //             .store
 //             .get_document_by_operation_id(create_operation.operation_id())
 //             .await
 //             .unwrap()
 //             .is_none());
-// 
+//
 //         db.store
 //             .insert_operation(&create_operation, &document_id)
 //             .await
 //             .unwrap();
-// 
+//
 //         assert_eq!(
 //             db.store
 //                 .get_document_by_operation_id(create_operation.operation_id())
@@ -196,12 +196,12 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
 //                 .unwrap(),
 //             document_id.clone()
 //         );
-// 
+//
 //         db.store
 //             .insert_operation(&update_operation, &document_id)
 //             .await
 //             .unwrap();
-// 
+//
 //         assert_eq!(
 //             db.store
 //                 .get_document_by_operation_id(create_operation.operation_id())
@@ -211,7 +211,7 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
 //             document_id.clone()
 //         );
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn get_operations_by_document_id(
@@ -222,29 +222,29 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
 //         db: TestStore,
 //     ) {
 //         let db = db.await;
-// 
+//
 //         let author = Author::from(key_pair.public_key());
-// 
+//
 //         let latest_entry = db
 //             .store
 //             .get_latest_entry(&author, &LogId::default())
 //             .await
 //             .unwrap()
 //             .unwrap();
-// 
+//
 //         let document_id = db
 //             .store
 //             .get_document_by_entry(&latest_entry.hash())
 //             .await
 //             .unwrap()
 //             .unwrap();
-// 
+//
 //         let operations_by_document_id = db
 //             .store
 //             .get_operations_by_document_id(&document_id)
 //             .await
 //             .unwrap();
-// 
+//
 //         assert_eq!(operations_by_document_id.len(), 5)
 //     }
 // }
