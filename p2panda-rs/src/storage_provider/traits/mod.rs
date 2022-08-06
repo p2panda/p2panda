@@ -6,8 +6,6 @@ mod entry_store;
 mod log_store;
 mod models;
 mod operation_store;
-mod requests;
-mod responses;
 mod storage_provider;
 #[cfg(any(feature = "testing", test))]
 pub mod test_utils;
@@ -17,6 +15,4 @@ pub use entry_store::EntryStore;
 pub use log_store::LogStore;
 pub use models::{AsStorageEntry, AsStorageLog};
 pub use operation_store::OperationStore;
-pub use requests::{AsEntryArgsRequest, AsPublishEntryRequest};
-pub use responses::{AsEntryArgsResponse, AsPublishEntryResponse};
 pub use storage_provider::StorageProvider;
