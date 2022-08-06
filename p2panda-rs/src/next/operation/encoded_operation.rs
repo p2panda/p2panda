@@ -53,7 +53,7 @@ impl Display for EncodedOperation {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(feature = "testing", test))]
 impl EncodedOperation {
     pub fn new(bytes: &[u8]) -> EncodedOperation {
         Self(bytes.to_owned())
