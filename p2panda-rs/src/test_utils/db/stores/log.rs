@@ -3,9 +3,9 @@
 use async_trait::async_trait;
 use log::debug;
 
-use crate::next::document::DocumentId;
-use crate::next::entry::LogId;
-use crate::next::identity::Author;
+use crate::document::DocumentId;
+use crate::entry::LogId;
+use crate::identity::Author;
 use crate::storage_provider::errors::LogStorageError;
 use crate::storage_provider::traits::{AsStorageLog, LogStore};
 use crate::test_utils::db::{MemoryStore, StorageLog};
@@ -69,22 +69,22 @@ impl LogStore<StorageLog> for MemoryStore {
 mod tests {
     use rstest::rstest;
 
-    use crate::next::document::DocumentId;
-    use crate::next::entry::LogId;
-    use crate::next::identity::{Author, KeyPair};
-    use crate::next::schema::SchemaId;
-    use crate::next::test_utils::fixtures::{document_id, key_pair, schema_id};
+    use crate::document::DocumentId;
+    use crate::entry::LogId;
+    use crate::identity::{Author, KeyPair};
+    use crate::schema::SchemaId;
     use crate::storage_provider::traits::{AsStorageLog, LogStore};
     use crate::test_utils::db::{MemoryStore, StorageLog};
+    use crate::test_utils::fixtures::{document_id, key_pair, schema};
 
     #[rstest]
     #[tokio::test]
-    async fn insert_get_log(key_pair: KeyPair, schema_id: SchemaId, document_id: DocumentId) {
+    async fn insert_get_log(key_pair: KeyPair, schema: SchemaId, document_id: DocumentId) {
         // Instantiate a new store.
         let store = MemoryStore::default();
 
         let author = Author::from(key_pair.public_key());
-        let log = StorageLog::new(&author, &schema_id, &document_id, &LogId::default());
+        let log = StorageLog::new(&author, &schema, &document_id, &LogId::default());
 
         // Insert a log into the store.
         assert!(store.insert_log(log).await.is_ok());
@@ -98,7 +98,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn get_next_log_id(key_pair: KeyPair, schema_id: SchemaId, document_id: DocumentId) {
+    async fn get_next_log_id(key_pair: KeyPair, schema: SchemaId, document_id: DocumentId) {
         // Instantiate a new store.
         let store = MemoryStore::default();
 
@@ -106,7 +106,7 @@ mod tests {
         let log_id = store.next_log_id(&author).await.unwrap();
         assert_eq!(log_id, LogId::default());
 
-        let log = StorageLog::new(&author, &schema_id, &document_id, &LogId::default());
+        let log = StorageLog::new(&author, &schema, &document_id, &LogId::default());
 
         assert!(store.insert_log(log).await.is_ok());
 
@@ -116,7 +116,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn get_latest_log_id(key_pair: KeyPair, schema_id: SchemaId, document_id: DocumentId) {
+    async fn get_latest_log_id(key_pair: KeyPair, schema: SchemaId, document_id: DocumentId) {
         // Instantiate a new store.
         let store = MemoryStore::default();
 
@@ -124,7 +124,7 @@ mod tests {
         let log_id = store.latest_log_id(&author).await.unwrap();
         assert_eq!(log_id, None);
 
-        let log = StorageLog::new(&author, &schema_id, &document_id, &LogId::default());
+        let log = StorageLog::new(&author, &schema, &document_id, &LogId::default());
 
         assert!(store.insert_log(log).await.is_ok());
 

@@ -4,14 +4,14 @@ use async_trait::async_trait;
 use lipmaa_link::get_lipmaa_links_back_to;
 use log::debug;
 
-use crate::next::entry::{LogId, SeqNum};
-use crate::next::hash::Hash;
-use crate::next::identity::Author;
-use crate::next::operation::traits::Schematic;
-use crate::next::schema::SchemaId;
+use crate::entry::{LogId, SeqNum};
+use crate::hash::Hash;
+use crate::identity::Author;
+use crate::operation::AsOperation;
+use crate::schema::SchemaId;
 use crate::storage_provider::errors::EntryStorageError;
-use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog, EntryStore};
-use crate::test_utils::db::{MemoryStore, StorageEntry, StorageLog};
+use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
+use crate::test_utils::db::{MemoryStore, StorageEntry};
 
 /// Implement `EntryStore` trait on `MemoryStore`
 #[async_trait]
@@ -97,22 +97,10 @@ impl EntryStore<StorageEntry> for MemoryStore {
         schema: &SchemaId,
     ) -> Result<Vec<StorageEntry>, EntryStorageError> {
         let entries = self.entries.lock().unwrap();
-        let logs = self.logs.lock().unwrap();
-
-        let schema_logs: Vec<&StorageLog> = logs
-            .iter()
-            .filter(|(_, log)| log.schema_id() == *schema)
-            .map(|(_, log)| log)
-            .collect();
 
         let entries: Vec<StorageEntry> = entries
             .iter()
-            .filter(|(_, entry)| {
-                schema_logs
-                    .iter()
-                    .find(|log| log.id() == entry.log_id())
-                    .is_some()
-            })
+            .filter(|(_, entry)| entry.operation().schema() == *schema)
             .map(|(_, entry)| entry.to_owned())
             .collect();
 
@@ -149,25 +137,27 @@ impl EntryStore<StorageEntry> for MemoryStore {
 mod tests {
     use rstest::rstest;
 
-    use crate::next::entry::encode::encode_entry;
-    use crate::next::entry::{EncodedEntry, Entry, LogId, SeqNum};
-    use crate::next::identity::{Author, KeyPair};
-    use crate::next::operation::{EncodedOperation, VerifiedOperation};
-    use crate::next::schema::SchemaId;
-    use crate::next::test_utils::fixtures::{
-        encoded_entry, encoded_operation, entry, key_pair, schema_id, verified_operation,
-    };
+    use crate::entry::{sign_and_encode, Entry, EntrySigned, LogId, SeqNum};
+    use crate::identity::{Author, KeyPair};
+    use crate::operation::OperationEncoded;
+    use crate::schema::SchemaId;
     use crate::storage_provider::traits::test_utils::{test_db, TestStore};
     use crate::storage_provider::traits::{AsStorageEntry, EntryStore};
     use crate::test_utils::db::{MemoryStore, StorageEntry};
+    use crate::test_utils::fixtures::{
+        entry, entry_signed_encoded, key_pair, operation_encoded, random_key_pair, schema,
+    };
 
     #[rstest]
     #[tokio::test]
-    async fn insert_get_entry(encoded_entry: EncodedEntry) {
+    async fn insert_get_entry(
+        entry_signed_encoded: EntrySigned,
+        operation_encoded: OperationEncoded,
+    ) {
         // Instantiate a new store.
         let store = MemoryStore::default();
 
-        let storage_entry = StorageEntry::new(&encoded_entry).unwrap();
+        let storage_entry = StorageEntry::new(&entry_signed_encoded, &operation_encoded).unwrap();
 
         // Insert an entry into the store.
         assert!(store.insert_entry(storage_entry.clone()).await.is_ok());
@@ -187,11 +177,14 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn get_latest_entry(encoded_entry: EncodedEntry) {
+    async fn get_latest_entry(
+        entry_signed_encoded: EntrySigned,
+        operation_encoded: OperationEncoded,
+    ) {
         // Instantiate a new store.
         let store = MemoryStore::default();
 
-        let storage_entry = StorageEntry::new(&encoded_entry).unwrap();
+        let storage_entry = StorageEntry::new(&entry_signed_encoded, &operation_encoded).unwrap();
 
         // Before an entry is inserted the latest entry should be none.
         assert!(store
@@ -215,27 +208,33 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn get_by_schema(entry: Entry, schema_id: SchemaId) {
+    async fn get_by_schema(
+        #[from(random_key_pair)] key_pair_1: KeyPair,
+        #[from(random_key_pair)] key_pair_2: KeyPair,
+        entry: Entry,
+        operation_encoded: OperationEncoded,
+        schema: SchemaId,
+    ) {
         // Instantiate a new store.
         let store = MemoryStore::default();
 
-        let author_1_entry = encode_entry(&entry).unwrap();
-        let author_1_entry = StorageEntry::new(&author_1_entry).unwrap();
+        let author_1_entry = sign_and_encode(&entry, &key_pair_1).unwrap();
+        let author_2_entry = sign_and_encode(&entry, &key_pair_2).unwrap();
+        let author_1_entry = StorageEntry::new(&author_1_entry, &operation_encoded).unwrap();
+        let author_2_entry = StorageEntry::new(&author_2_entry, &operation_encoded).unwrap();
 
         // Before an entry with this schema is inserted this method should return an empty array.
         assert!(store
-            .get_entries_by_schema(&schema_id)
+            .get_entries_by_schema(&schema)
             .await
             .unwrap()
             .is_empty());
 
-        // Insert an entry into the store.
+        // Insert two entries into the store.
         store.insert_entry(author_1_entry).await.unwrap();
+        store.insert_entry(author_2_entry).await.unwrap();
 
-        assert_eq!(
-            store.get_entries_by_schema(&schema_id).await.unwrap().len(),
-            1
-        );
+        assert_eq!(store.get_entries_by_schema(&schema).await.unwrap().len(), 2);
     }
 
     #[rstest]

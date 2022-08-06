@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::entry::Entry;
-use crate::next::document::DocumentId;
-use crate::next::entry::{EncodedEntry, LogId, SeqNum};
-use crate::next::hash::Hash;
-use crate::next::identity::Author;
-use crate::next::operation::{EncodedOperation, Operation, VerifiedOperation};
-use crate::next::schema::SchemaId;
+use crate::document::DocumentId;
+use crate::entry::{EntrySigned, LogId, SeqNum};
+use crate::hash::Hash;
+use crate::identity::Author;
+use crate::operation::{Operation, OperationEncoded};
+use crate::schema::SchemaId;
 use crate::Validate;
 
 /// Trait to be implemented on a struct representing a stored entry.
@@ -21,7 +20,10 @@ pub trait AsStorageEntry:
     type AsStorageEntryError: 'static + std::error::Error + Send + Sync;
 
     /// Construct an instance of the struct implementing `AsStorageEntry`
-    fn new(entry: &EncodedEntry) -> Result<Self, Self::AsStorageEntryError>;
+    fn new(
+        entry: &EntrySigned,
+        operation: &OperationEncoded,
+    ) -> Result<Self, Self::AsStorageEntryError>;
 
     /// Returns the author of this entry.
     fn author(&self) -> Author;
@@ -43,6 +45,9 @@ pub trait AsStorageEntry:
 
     /// Returns the log id of this entry.
     fn log_id(&self) -> LogId;
+
+    /// Returns the operation contained on this entry.
+    fn operation(&self) -> Operation;
 }
 
 /// Trait to be implemented on a struct representing a stored log.

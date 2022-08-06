@@ -5,13 +5,16 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 
-use crate::next::document::{Document, DocumentId, DocumentView, DocumentViewId};
-use crate::next::hash::Hash;
-use crate::next::operation::{OperationId, VerifiedOperation};
-use crate::next::schema::SchemaId;
+use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
+use crate::hash::Hash;
+use crate::operation::{OperationId, VerifiedOperation};
+use crate::schema::SchemaId;
 use crate::storage_provider::traits::StorageProvider;
 use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog};
 use crate::storage_provider::utils::Result;
+use crate::test_utils::db::{
+    EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse,
+};
 use crate::test_utils::db::{StorageEntry, StorageLog};
 
 type AuthorPlusLogId = String;
@@ -39,6 +42,14 @@ pub struct MemoryStore {
 
 #[async_trait]
 impl StorageProvider for MemoryStore {
+    type EntryArgsRequest = EntryArgsRequest;
+
+    type EntryArgsResponse = EntryArgsResponse;
+
+    type PublishEntryRequest = PublishEntryRequest;
+
+    type PublishEntryResponse = PublishEntryResponse;
+
     type StorageEntry = StorageEntry;
 
     type StorageLog = StorageLog;

@@ -8,4 +8,7 @@ mod stores;
 mod types;
 
 pub use provider::MemoryStore;
-pub use types::{EntryArgsResponse, PublishEntryResponse, StorageEntry, StorageLog};
+pub use types::{
+    EntryArgsRequest, EntryArgsResponse, PublishEntryRequest, PublishEntryResponse, StorageEntry,
+    StorageLog,
+};

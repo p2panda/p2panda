@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Errors for `Storage` provider and associated traits.
-use crate::next::document::{DocumentId, DocumentViewId};
-use crate::next::entry::error::{LogIdError, SeqNumError, ValidateEntryError};
-use crate::next::hash::error::HashError;
-use crate::next::hash::Hash;
-use crate::next::identity::error::AuthorError;
-use crate::next::operation::error::ValidateOperationError;
-use crate::next::operation::OperationId;
+use crate::document::{DocumentId, DocumentViewId};
+use crate::entry::{EntryError, EntrySignedError, LogIdError, SeqNumError};
+use crate::hash::{Hash, HashError};
+use crate::identity::AuthorError;
+use crate::operation::{OperationEncodedError, OperationError, OperationId};
 
 /// Data validation errors which can occur in the storage traits.
 #[derive(thiserror::Error, Debug)]
@@ -20,16 +18,22 @@ pub enum ValidationError {
     #[error(transparent)]
     HashValidation(#[from] HashError),
 
+    /// Error returned from validating p2panda-rs `Entry` data types.
     #[error(transparent)]
-    EntryValidation(#[from] ValidateEntryError),
+    EntryValidation(#[from] EntryError),
+
+    /// Error returned from validating p2panda-rs `EntrySigned` data types.
+    #[error(transparent)]
+    EntrySignedValidation(#[from] EntrySignedError),
 
     /// Error returned from validating p2panda-rs `Operation` data types.
     #[error(transparent)]
-    OperationValidation(#[from] ValidateOperationError),
+    OperationValidation(#[from] OperationError),
 
-    // /// Error returned from validating p2panda-rs `OperationEncoded` data types.
-    // #[error(transparent)]
-    // OperationEncodedValidation(#[from] OperationEncodedError),
+    /// Error returned from validating p2panda-rs `OperationEncoded` data types.
+    #[error(transparent)]
+    OperationEncodedValidation(#[from] OperationEncodedError),
+
     /// Error returned from validating p2panda-rs `LogId` data types.
     #[error(transparent)]
     LogIdValidation(#[from] LogIdError),
@@ -90,15 +94,6 @@ pub enum EntryStorageError {
     /// Error returned from validating p2panda-rs `EntrySigned` data types.
     #[error(transparent)]
     ValidationError(#[from] ValidationError),
-    //
-    //     #[error(transparent)]
-    //     DecodeEntryError(#[from] DecodeEntryError),
-    //
-    //     #[error(transparent)]
-    //     EncodeEntryError(#[from] EncodeEntryError),
-    //
-    //     #[error(transparent)]
-    //     EntryBuilderError(#[from] EntryBuilderError),
 }
 
 /// Errors which can occur when publishing a new entry.
