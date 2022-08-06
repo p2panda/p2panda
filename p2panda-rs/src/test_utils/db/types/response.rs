@@ -2,7 +2,6 @@
 
 use crate::entry::{LogId, SeqNum};
 use crate::hash::Hash;
-use crate::storage_provider::traits::{AsEntryArgsResponse, AsPublishEntryResponse};
 
 /// Response from calling `publish_entry`.
 ///
@@ -22,7 +21,7 @@ pub struct PublishEntryResponse {
     pub log_id: LogId,
 }
 
-impl AsPublishEntryResponse for PublishEntryResponse {
+impl PublishEntryResponse {
     /// Just the constructor method is defined here as all we need this trait for
     /// is constructing entry args to be returned from the default trait methods.
     fn new(backlink: Option<Hash>, skiplink: Option<Hash>, seq_num: SeqNum, log_id: LogId) -> Self {
@@ -51,7 +50,7 @@ pub struct EntryArgsResponse {
     pub log_id: LogId,
 }
 
-impl AsEntryArgsResponse for EntryArgsResponse {
+impl EntryArgsResponse {
     /// Just the constructor method is defined here as all we need this trait for
     /// is constructing entry args to be returned from the default trait methods.
     fn new(backlink: Option<Hash>, skiplink: Option<Hash>, seq_num: SeqNum, log_id: LogId) -> Self {
