@@ -5,7 +5,8 @@ use crate::next::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::next::hash::Hash;
 use crate::next::identity::Author;
 use crate::next::operation::decode::decode_operation;
-use crate::next::operation::{EncodedOperation, Operation, OperationId};
+use crate::next::operation::plain::PlainOperation;
+use crate::next::operation::{EncodedOperation, Operation, OperationId, VerifiedOperation};
 use crate::storage_provider::errors::EntryStorageError;
 use crate::storage_provider::traits::AsStorageEntry;
 use crate::storage_provider::ValidationError;
@@ -26,9 +27,6 @@ pub struct StorageEntry {
     /// Used log for this entry.
     pub log_id: LogId,
 
-    /// Payload of entry, can be deleted.
-    pub payload_bytes: Option<EncodedOperation>,
-
     /// Hash of payload data.
     pub payload_hash: OperationId,
 
@@ -47,21 +45,17 @@ impl StorageEntry {
     pub fn entry_signed(&self) -> EncodedEntry {
         self.entry_bytes.clone()
     }
-
-    /// Get the encoded operation.
-    pub fn operation_encoded(&self) -> Option<EncodedOperation> {
-        self.payload_bytes.clone()
-    }
+    //
+    //     /// Get the encoded operation.
+    //     pub fn operation_encoded(&self) -> Option<EncodedOperation> {
+    //         self.payload_bytes.clone()
+    //     }
 }
 
-/// Implement `AsStorageEntry` trait for `StorageEntry`
 impl AsStorageEntry for StorageEntry {
     type AsStorageEntryError = EntryStorageError;
 
-    fn new(
-        entry: &EncodedEntry,
-        operation: &EncodedOperation,
-    ) -> Result<Self, Self::AsStorageEntryError> {
+    fn new(entry: &EncodedEntry) -> Result<Self, Self::AsStorageEntryError> {
         let entry_decoded = decode_entry(entry).unwrap();
 
         let entry = StorageEntry {
@@ -69,7 +63,6 @@ impl AsStorageEntry for StorageEntry {
             entry_bytes: entry.clone(),
             entry_hash: entry.hash(),
             log_id: entry_decoded.log_id().to_owned(),
-            payload_bytes: Some(operation.clone()),
             payload_hash: entry_decoded.payload_hash().to_owned().into(),
             seq_num: entry_decoded.seq_num().to_owned(),
         };
@@ -105,21 +98,13 @@ impl AsStorageEntry for StorageEntry {
     fn log_id(&self) -> LogId {
         *self.entry_decoded().log_id()
     }
-
-    fn operation(&self) -> Operation {
-        decode_operation(&self.operation_encoded().unwrap()).unwrap()
-    }
 }
 
 impl Validate for StorageEntry {
     type Error = ValidationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        self.entry_signed().validate()?;
-        if let Some(operation) = self.operation_encoded() {
-            operation.validate()?;
-        }
-        decode_entry(&self.entry_signed())?;
+        // TODO: Maybe we are just gunna remove this, need to think about it still
         Ok(())
     }
 }
