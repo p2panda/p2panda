@@ -85,7 +85,7 @@ pub trait AsOperation {
 /// operation has no id is that the id is derived from the hash of the signed entry an operation is
 /// encoded on.
 ///
-/// [`StorageProvider`][crate::storage_provider::traits::StorageProvider] implementations should
+/// [`StorageProvider`][crate::next::storage_provider::traits::StorageProvider] implementations should
 /// implement this for a data structure that represents an operation as it is stored in the
 /// database.
 pub trait AsVerifiedOperation {
