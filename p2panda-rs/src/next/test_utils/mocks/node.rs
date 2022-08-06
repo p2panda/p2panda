@@ -5,81 +5,81 @@
 //! This node mocks functionality which would be implemented in a real world p2panda node. It does
 //! so in a simplistic manner and should only be used in a testing environment or demo environment.
 //!
-//! ## Example
-//!
-//! ```
-//! # extern crate p2panda_rs;
-//! # #[tokio::main]
-//! # async fn main() -> p2panda_rs::storage_provider::utils::Result<()> {
-//! use p2panda_rs::operation::OperationValue;
-//! use p2panda_rs::schema::SchemaId;
-//! use p2panda_rs::test_utils::constants::SCHEMA_ID;
-//! use p2panda_rs::test_utils::mocks::{send_to_node, Client, Node};
-//! use p2panda_rs::test_utils::fixtures::{
-//!     create_operation, delete_operation, schema, random_key_pair, operation_fields, update_operation,
-//! };
-//!
-//! // Instantiate a new mock node
-//! let mut node = Node::new();
-//!
-//! // Instantiate one client named "panda"
-//! let panda = Client::new("panda".to_string(), random_key_pair());
-//!
-//! // Panda creates a new chat document by publishing a CREATE operation
-//! let (document1_hash_id, _) = send_to_node(
-//!     &mut node,
-//!     &panda,
-//!     &create_operation(
-//!         &[(
-//!             "message",
-//!             OperationValue::Text("Ohh, my first message!".to_string()),
-//!         )],
-//!     )
-//! ).await?;
-//!
-//! // Panda updates the document by publishing an UPDATE operation
-//! let (entry2_hash, _) = send_to_node(
-//!     &mut node,
-//!     &panda,
-//!     &update_operation(
-//!         &[(
-//!             "message",
-//!             OperationValue::Text("Which I now update.".to_string()),
-//!         )],
-//!         &document1_hash_id.clone().into(),
-//!     )
-//! ).await?;
-//!
-//! // Panda deletes their document by publishing a DELETE operation
-//! send_to_node(
-//!     &mut node,
-//!     &panda,
-//!     &delete_operation(
-//!         &entry2_hash.into()
-//!     )
-//! ).await?;
-//!
-//! // Panda creates another chat document by publishing a new CREATE operation
-//! send_to_node(
-//!     &mut node,
-//!     &panda,
-//!     &create_operation(
-//!         &[(
-//!             "message",
-//!             OperationValue::Text("Let's try that again.".to_string()),
-//!         )],
-//!     )
-//! ).await?;
-//!
-//! // Get all entries published to this node
-//! let entries = node.entries();
-//!
-//! // There should be 4 entries
-//! entries.len(); // => 4
-//!
-//! # Ok(())
-//! # }
-//! ```
+/// ## Example
+///
+/// ```
+/// # extern crate p2panda_rs;
+/// # #[tokio::main]
+/// # async fn main() -> p2panda_rs::next::storage_provider::utils::Result<()> {
+/// use p2panda_rs::next::operation::OperationValue;
+/// use p2panda_rs::next::schema::SchemaId;
+/// use p2panda_rs::next::test_utils::constants::SCHEMA_ID;
+/// use p2panda_rs::next::test_utils::mocks::{send_to_node, Client, Node};
+/// use p2panda_rs::next::test_utils::fixtures::{
+///     create_operation, delete_operation, schema, random_key_pair, operation_fields, update_operation,
+/// };
+///
+/// // Instantiate a new mock node
+/// let mut node = Node::new();
+///
+/// // Instantiate one client named "panda"
+/// let panda = Client::new("panda".to_string(), random_key_pair());
+///
+/// // Panda creates a new chat document by publishing a CREATE operation
+/// let (document1_hash_id, _) = send_to_node(
+///     &mut node,
+///     &panda,
+///     &create_operation(
+///         &[(
+///             "message",
+///             OperationValue::Text("Ohh, my first message!".to_string()),
+///         )],
+///     )
+/// ).await?;
+///
+/// // Panda updates the document by publishing an UPDATE operation
+/// let (entry2_hash, _) = send_to_node(
+///     &mut node,
+///     &panda,
+///     &update_operation(
+///         &[(
+///             "message",
+///             OperationValue::Text("Which I now update.".to_string()),
+///         )],
+///         &document1_hash_id.clone().into(),
+///     )
+/// ).await?;
+///
+/// // Panda deletes their document by publishing a DELETE operation
+/// send_to_node(
+///     &mut node,
+///     &panda,
+///     &delete_operation(
+///         &entry2_hash.into()
+///     )
+/// ).await?;
+///
+/// // Panda creates another chat document by publishing a new CREATE operation
+/// send_to_node(
+///     &mut node,
+///     &panda,
+///     &create_operation(
+///         &[(
+///             "message",
+///             OperationValue::Text("Let's try that again.".to_string()),
+///         )],
+///     )
+/// ).await?;
+///
+/// // Get all entries published to this node
+/// let entries = node.entries();
+///
+/// // There should be 4 entries
+/// entries.len(); // => 4
+///
+/// # Ok(())
+/// # }
+/// ```
 use std::collections::{HashMap, HashSet};
 
 use crate::next::document::{Document, DocumentBuilder, DocumentId, DocumentView, DocumentViewId};
@@ -89,7 +89,7 @@ use crate::next::identity::Author;
 use crate::next::operation::{EncodedOperation, Operation, OperationId, VerifiedOperation};
 use crate::next::storage_provider::traits::test_utils::send_to_store;
 use crate::next::storage_provider::traits::{
-    AsStorageEntry, AsStorageLog, DocumentStore, OperationStore, StorageProvider,
+    AsStorageEntry, DocumentStore, OperationStore, StorageProvider,
 };
 use crate::next::storage_provider::utils::Result;
 use crate::next::test_utils::db::{EntryArgsResponse, PublishEntryResponse};
