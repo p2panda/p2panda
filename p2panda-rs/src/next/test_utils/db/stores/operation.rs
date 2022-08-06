@@ -6,9 +6,9 @@ use log::debug;
 use crate::next::document::DocumentId;
 use crate::next::operation::traits::{AsOperation, AsVerifiedOperation};
 use crate::next::operation::{OperationId, VerifiedOperation};
-use crate::storage_provider::errors::OperationStorageError;
-use crate::storage_provider::traits::OperationStore;
-use crate::test_utils::db::MemoryStore;
+use crate::next::storage_provider::errors::OperationStorageError;
+use crate::next::storage_provider::traits::OperationStore;
+use crate::next::test_utils::db::MemoryStore;
 
 #[async_trait]
 impl OperationStore<VerifiedOperation> for MemoryStore {

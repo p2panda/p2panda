@@ -63,7 +63,7 @@ impl AsStorageEntry for StorageEntry {
             seq_num: entry_decoded.seq_num().to_owned(),
         };
 
-        entry.validate()?;
+        // entry.validate()?;
         Ok(entry)
     }
 

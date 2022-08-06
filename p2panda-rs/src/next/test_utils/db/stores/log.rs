@@ -73,9 +73,9 @@ mod tests {
     use crate::next::entry::LogId;
     use crate::next::identity::{Author, KeyPair};
     use crate::next::schema::SchemaId;
+    use crate::next::storage_provider::traits::{AsStorageLog, LogStore};
+    use crate::next::test_utils::db::{MemoryStore, StorageLog};
     use crate::next::test_utils::fixtures::{document_id, key_pair, schema_id};
-    use crate::storage_provider::traits::{AsStorageLog, LogStore};
-    use crate::test_utils::db::{MemoryStore, StorageLog};
 
     #[rstest]
     #[tokio::test]

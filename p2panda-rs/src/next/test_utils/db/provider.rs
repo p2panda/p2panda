@@ -9,10 +9,10 @@ use crate::next::document::{Document, DocumentId, DocumentView, DocumentViewId};
 use crate::next::hash::Hash;
 use crate::next::operation::{OperationId, VerifiedOperation};
 use crate::next::schema::SchemaId;
-use crate::storage_provider::traits::StorageProvider;
-use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog};
-use crate::storage_provider::utils::Result;
-use crate::test_utils::db::{StorageEntry, StorageLog};
+use crate::next::storage_provider::traits::StorageProvider;
+use crate::next::storage_provider::traits::{AsStorageEntry, AsStorageLog};
+use crate::next::storage_provider::utils::Result;
+use crate::next::test_utils::db::{StorageEntry, StorageLog};
 
 type AuthorPlusLogId = String;
 
