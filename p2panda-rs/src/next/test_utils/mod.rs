@@ -2,5 +2,6 @@
 
 //! Temporary module which will guide us through this massive refactoring.
 pub mod constants;
+pub mod db;
 pub mod fixtures;
 pub mod templates;
