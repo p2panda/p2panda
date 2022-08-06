@@ -7,7 +7,6 @@
 //!
 /// ## Example
 ///
-/// ```
 /// # extern crate p2panda_rs;
 /// # #[tokio::main]
 /// # async fn main() -> p2panda_rs::next::storage_provider::utils::Result<()> {
@@ -54,7 +53,6 @@
 ///
 /// # Ok(())
 /// # }
-/// ```
 use crate::next::entry::encode::sign_and_encode_entry;
 use crate::next::entry::{EncodedEntry, LogId, SeqNum};
 use crate::next::hash::Hash;

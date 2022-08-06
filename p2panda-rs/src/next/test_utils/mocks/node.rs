@@ -7,7 +7,6 @@
 //!
 /// ## Example
 ///
-/// ```
 /// # extern crate p2panda_rs;
 /// # #[tokio::main]
 /// # async fn main() -> p2panda_rs::next::storage_provider::utils::Result<()> {
@@ -79,7 +78,6 @@
 ///
 /// # Ok(())
 /// # }
-/// ```
 use std::collections::{HashMap, HashSet};
 
 use crate::next::document::{Document, DocumentBuilder, DocumentId, DocumentView, DocumentViewId};
