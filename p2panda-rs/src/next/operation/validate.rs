@@ -7,7 +7,7 @@ use crate::next::entry::{EncodedEntry, Entry};
 use crate::next::hash::Hash;
 use crate::next::operation::error::{ValidateOperationError, VerifiedOperationError};
 use crate::next::operation::plain::{PlainFields, PlainOperation};
-use crate::next::operation::traits::AsOperation;
+use crate::next::operation::traits::{Actionable, Schematic};
 use crate::next::operation::{
     EncodedOperation, Operation, OperationAction, OperationVersion, VerifiedOperation,
 };
@@ -125,7 +125,7 @@ pub fn validate_operation_with_entry(
 /// 2. Correct canonic operation field values, like document view ids of pinned relations (no
 ///    duplicates, sorted) (#OP3)
 /// 3. Schema matches the given operation fields (#OP4)
-pub fn validate_operation<O: AsOperation>(
+pub fn validate_operation<O: Actionable + Schematic>(
     operation: &O,
     schema: &Schema,
 ) -> Result<Operation, ValidateOperationError> {

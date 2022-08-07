@@ -24,7 +24,7 @@ pub struct PlainOperation(
     #[serde(skip_serializing_if = "Option::is_none")] Option<PlainFields>,
 );
 
-impl AsOperation for PlainOperation {
+impl Actionable for PlainOperation {
     fn version(&self) -> OperationVersion {
         self.0
     }
@@ -36,7 +36,9 @@ impl AsOperation for PlainOperation {
     fn previous_operations(&self) -> Option<&DocumentViewId> {
         self.3.as_ref()
     }
-    
+}
+
+impl Schematic for PlainOperation {
     fn schema_id(&self) -> &SchemaId {
         &self.2
     }
