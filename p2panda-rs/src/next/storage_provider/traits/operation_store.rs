@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use crate::next::document::DocumentId;
 use crate::next::operation::traits::AsVerifiedOperation;
 use crate::next::operation::OperationId;
-use crate::next::storage_provider::errors::OperationStorageError;
+use crate::next::storage_provider::error::OperationStorageError;
 
 /// Trait which handles all storage actions relating to `Operation`s.
 ///

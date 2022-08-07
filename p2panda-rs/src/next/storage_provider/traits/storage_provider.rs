@@ -10,9 +10,10 @@ use crate::next::storage_provider::traits::{
 };
 use crate::next::storage_provider::utils::Result;
 
-// TODO: we no longer have any high level API methods living here, we can move `get_document_by_entry`
-// somewhere else then this trait becomes a very simple wrapper encapsulating the storage traits required
-// for the `domain` methods.
+/// Trait which handles all high level storage queries and insertions.
+// @TODO: we no longer have any high level API methods living here, we can move
+// `get_document_by_entry` somewhere else then this trait becomes a very simple wrapper
+// encapsulating the storage traits required for the `domain` methods.
 #[async_trait]
 pub trait StorageProvider:
     EntryStore<Self::StorageEntry> + LogStore<Self::StorageLog> + OperationStore<Self::StorageOperation>

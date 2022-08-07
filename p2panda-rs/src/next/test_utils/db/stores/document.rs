@@ -5,7 +5,7 @@ use log::debug;
 
 use crate::next::document::{Document, DocumentId, DocumentView, DocumentViewId};
 use crate::next::schema::SchemaId;
-use crate::next::storage_provider::errors::DocumentStorageError;
+use crate::next::storage_provider::error::DocumentStorageError;
 use crate::next::storage_provider::traits::DocumentStore;
 use crate::next::test_utils::db::MemoryStore;
 

@@ -5,7 +5,7 @@ use crate::next::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::next::hash::Hash;
 use crate::next::identity::Author;
 use crate::next::operation::OperationId;
-use crate::next::storage_provider::errors::EntryStorageError;
+use crate::next::storage_provider::error::EntryStorageError;
 use crate::next::storage_provider::traits::AsStorageEntry;
 
 /// A struct which represents an entry and operation pair in storage as a concatenated string.

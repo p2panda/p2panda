@@ -6,7 +6,7 @@ use log::debug;
 use crate::next::document::DocumentId;
 use crate::next::operation::traits::{AsOperation, AsVerifiedOperation};
 use crate::next::operation::{OperationId, VerifiedOperation};
-use crate::next::storage_provider::errors::OperationStorageError;
+use crate::next::storage_provider::error::OperationStorageError;
 use crate::next::storage_provider::traits::OperationStore;
 use crate::next::test_utils::db::MemoryStore;
 

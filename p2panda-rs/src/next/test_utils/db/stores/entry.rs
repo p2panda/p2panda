@@ -8,7 +8,7 @@ use crate::next::entry::{LogId, SeqNum};
 use crate::next::hash::Hash;
 use crate::next::identity::Author;
 use crate::next::schema::SchemaId;
-use crate::next::storage_provider::errors::EntryStorageError;
+use crate::next::storage_provider::error::EntryStorageError;
 use crate::next::storage_provider::traits::{AsStorageEntry, AsStorageLog, EntryStore};
 use crate::next::test_utils::db::{MemoryStore, StorageEntry, StorageLog};
 

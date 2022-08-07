@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Errors for `Storage` provider and associated traits.
+//! Errors from storage provider and associated traits.
 use crate::next::document::{DocumentId, DocumentViewId};
 use crate::next::entry::error::{LogIdError, SeqNumError, ValidateEntryError};
 use crate::next::hash::error::HashError;
@@ -20,6 +20,7 @@ pub enum ValidationError {
     #[error(transparent)]
     HashValidation(#[from] HashError),
 
+    /// Error returned from validating p2panda-rs `Entry` data types.
     #[error(transparent)]
     EntryValidation(#[from] ValidateEntryError),
 
@@ -109,7 +110,6 @@ pub enum OperationStorageError {
 #[derive(thiserror::Error, Debug)]
 pub enum DocumentStorageError {
     /// Catch all error which implementers can use for passing their own errors up the chain.
-    #[allow(dead_code)]
     #[error("Error occured in DocumentStore: {0}")]
     Custom(String),
 
