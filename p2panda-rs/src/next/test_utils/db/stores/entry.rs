@@ -143,7 +143,7 @@ impl EntryStore<StorageEntry> for MemoryStore {
         Ok(cert_pool)
     }
 }
-//
+// TODO: Needs reinstating when we have TestDatabase working again
 // #[cfg(test)]
 // mod tests {
 //     use rstest::rstest;

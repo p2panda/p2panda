@@ -41,11 +41,6 @@ impl StorageEntry {
     pub fn entry_signed(&self) -> EncodedEntry {
         self.entry_bytes.clone()
     }
-    //
-    //     /// Get the encoded operation.
-    //     pub fn operation_encoded(&self) -> Option<EncodedOperation> {
-    //         self.payload_bytes.clone()
-    //     }
 }
 
 impl AsStorageEntry for StorageEntry {

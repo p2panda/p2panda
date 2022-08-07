@@ -84,7 +84,7 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
             .collect())
     }
 }
-//
+// TODO: Needs reinstating when we have TestDatabase working again
 // #[cfg(test)]
 // mod tests {
 //     use rstest::rstest;

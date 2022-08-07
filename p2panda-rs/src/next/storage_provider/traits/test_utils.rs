@@ -200,6 +200,7 @@ pub struct TestData {
 /// valid CREATE operation following entries contain duplicate UPDATE operations. If the
 /// with_delete flag is set to true the last entry in all logs contain be a DELETE operation.
 pub async fn populate_test_db(db: &mut TestStore, config: &PopulateDatabaseConfig) {
+    // TODO: Needs reinstating when we deal with https://github.com/p2panda/p2panda/issues/418
     todo!()
 }
 
@@ -209,9 +210,11 @@ pub async fn send_to_store(
     operation: &Operation,
     key_pair: &KeyPair,
 ) -> Result<(EncodedEntry, PublishEntryResponse)> {
+    // TODO: Needs reinstating when we deal with https://github.com/p2panda/p2panda/issues/418
     todo!()
 }
 
+// TODO: Needs reinstating when we deal with https://github.com/p2panda/p2panda/issues/418
 // #[cfg(test)]
 // mod tests {
 //     use rstest::rstest;

@@ -32,6 +32,7 @@ pub trait LogStore<StorageLog: AsStorageLog> {
     /// Returns None when no log has been used yet.
     async fn latest_log_id(&self, author: &Author) -> Result<Option<LogId>, LogStorageError>;
 
+    // TODO: Deprecate this method when we deal with https://github.com/p2panda/p2panda/issues/418
     /// Returns registered or possible log id for a document.
     ///
     /// If no log has been previously registered for this document it

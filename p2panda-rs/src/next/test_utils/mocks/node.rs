@@ -5,6 +5,7 @@
 //! This node mocks functionality which would be implemented in a real world p2panda node. It does
 //! so in a simplistic manner and should only be used in a testing environment or demo environment.
 //!
+/// TODO: Needs reinstating when we deal with https://github.com/p2panda/p2panda/issues/418
 /// ## Example
 ///
 /// # extern crate p2panda_rs;
@@ -223,6 +224,7 @@ pub async fn process_new_operation(node: &mut Node, operation: &OperationId) -> 
     Ok(())
 }
 
+// TODO: Needs reinstating when we deal with https://github.com/p2panda/p2panda/issues/418
 // #[cfg(test)]
 // mod tests {
 //     use std::convert::TryFrom;

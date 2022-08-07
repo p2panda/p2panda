@@ -5,6 +5,7 @@
 //! This client mocks functionality which would be implemented in a real world p2panda client. It
 //! does so in a simplistic manner and should only be used in a testing or demo environment.
 //!
+/// TODO: Needs reinstating when we deal with https://github.com/p2panda/p2panda/issues/418
 /// ## Example
 ///
 /// # extern crate p2panda_rs;

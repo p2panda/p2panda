@@ -111,7 +111,7 @@ impl DocumentStore for MemoryStore {
         Ok(documents)
     }
 }
-//
+// TODO: Needs reinstating when we deal with https://github.com/p2panda/p2panda/issues/418
 // #[cfg(test)]
 // mod tests {
 //     use std::str::FromStr;
