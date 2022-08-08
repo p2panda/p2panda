@@ -12,13 +12,10 @@ use rstest_reuse::template;
     1,
     None,
     None,
-    Some($crate::test_utils::fixtures::operation(
-        Some($crate::test_utils::fixtures::operation_fields(
-            $crate::test_utils::constants::test_fields()
-        )),
-        None,
-        None
-    ))
+    $crate::test_utils::fixtures::create_operation_with_schema(),
+    $crate::test_utils::fixtures::key_pair(
+        $crate::test_utils::constants::PRIVATE_KEY
+    )
 ))]
 #[allow(unused_qualifications)]
 #[case::entry_with_backlink($crate::test_utils::fixtures::entry(
@@ -26,11 +23,10 @@ use rstest_reuse::template;
     1,
     Some($crate::test_utils::constants::HASH.parse().unwrap()),
     None,
-    Some($crate::test_utils::fixtures::operation(
-        Some($crate::test_utils::fixtures::operation_fields($crate::test_utils::constants::test_fields())),
-        None,
-        None
-    ))
+    $crate::test_utils::fixtures::create_operation_with_schema(),
+    $crate::test_utils::fixtures::key_pair(
+        $crate::test_utils::constants::PRIVATE_KEY
+    )
 ))]
 #[allow(unused_qualifications)]
 #[case::entry_with_backlink_and_skiplink($crate::test_utils::fixtures::entry(
@@ -38,11 +34,10 @@ use rstest_reuse::template;
     1,
     Some($crate::test_utils::constants::HASH.parse().unwrap()),
     Some($crate::test_utils::fixtures::random_hash()),
-    Some($crate::test_utils::fixtures::operation(
-        Some($crate::test_utils::fixtures::operation_fields($crate::test_utils::constants::test_fields())),
-        None,
-        None
-    ))
+    $crate::test_utils::fixtures::create_operation_with_schema(),
+    $crate::test_utils::fixtures::key_pair(
+        $crate::test_utils::constants::PRIVATE_KEY
+    )
 ))]
 #[allow(unused_qualifications)]
 #[case::skiplink_can_be_omitted_when_sam_as_backlink($crate::test_utils::fixtures::entry(
@@ -50,12 +45,11 @@ use rstest_reuse::template;
     1,
     Some($crate::test_utils::constants::HASH.parse().unwrap()),
     None,
-    Some($crate::test_utils::fixtures::operation(
-        Some($crate::test_utils::fixtures::operation_fields($crate::test_utils::constants::test_fields())),
-        None,
-        None
-    ))
+    $crate::test_utils::fixtures::create_operation_with_schema(),
+    $crate::test_utils::fixtures::key_pair(
+        $crate::test_utils::constants::PRIVATE_KEY
+    )
 ))]
-fn legacy_many_valid_entries(#[case] entry: Entry) {}
+fn many_valid_entries(#[case] entry: Entry) {}
 
-pub use legacy_many_valid_entries;
+pub use many_valid_entries;

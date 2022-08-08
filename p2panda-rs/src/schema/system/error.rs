@@ -17,5 +17,5 @@ pub enum SystemSchemaError {
 
     /// Invalid field type found.
     #[error("invalid field type")]
-    InvalidFieldType(#[from] crate::schema::FieldTypeError),
+    InvalidFieldType(#[from] crate::schema::error::FieldTypeError),
 }

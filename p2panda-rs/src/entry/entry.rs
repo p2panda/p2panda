@@ -1,157 +1,174 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
-use serde::{Deserialize, Serialize};
+use std::convert::TryInto;
+use std::hash::Hash as StdHash;
 
-use crate::entry::{EntryError, LogId, SeqNum};
+use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
+use bamboo_rs_core_ed25519_yasmf::Entry as BambooEntry;
+
+use crate::entry::encode::sign_entry;
+use crate::entry::error::EntryBuilderError;
+use crate::entry::{LogId, SeqNum, Signature};
 use crate::hash::Hash;
-use crate::operation::Operation;
-use crate::Validate;
+use crate::identity::{Author, KeyPair};
+use crate::operation::EncodedOperation;
+
+/// Create and sign new `Entry` instances.
+#[derive(Clone, Debug, Default)]
+pub struct EntryBuilder {
+    /// Used log for this entry.
+    log_id: LogId,
+
+    /// Sequence number of this entry.
+    seq_num: SeqNum,
+
+    /// Hash of skiplink Bamboo entry.
+    skiplink: Option<Hash>,
+
+    /// Hash of previous Bamboo entry.
+    backlink: Option<Hash>,
+}
+
+impl EntryBuilder {
+    /// Returns a new instance of `EntryBuilder`.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set log id of entry.
+    pub fn log_id(mut self, log_id: &LogId) -> Self {
+        self.log_id = log_id.to_owned();
+        self
+    }
+
+    /// Set sequence number of entry.
+    pub fn seq_num(mut self, seq_num: &SeqNum) -> Self {
+        self.seq_num = seq_num.to_owned();
+        self
+    }
+
+    /// Set skiplink hash of entry.
+    pub fn skiplink(mut self, hash: &Hash) -> Self {
+        self.skiplink = Some(hash.to_owned());
+        self
+    }
+
+    /// Set backlink hash of entry.
+    pub fn backlink(mut self, hash: &Hash) -> Self {
+        self.backlink = Some(hash.to_owned());
+        self
+    }
+
+    /// Signs entry and secures payload with the author's key pair, returns a new `Entry` instance.
+    ///
+    /// An `EncodedOperation` is required here for the entry payload. The entry is "pointing" at
+    /// the payload to secure and authenticate it. Later on, the payload can theoretically be
+    /// deleted when it is not needed anymore.
+    ///
+    /// Using this method we can assume that the entry will be correctly signed. This applies only
+    /// basic checks if the backlink and skiplink is correctly set for the given sequence number
+    /// (#E3). Please note though that this method can not check for correct log integrity!
+    pub fn sign(
+        &self,
+        encoded_operation: &EncodedOperation,
+        key_pair: &KeyPair,
+    ) -> Result<Entry, EntryBuilderError> {
+        let entry = sign_entry(
+            &self.log_id,
+            &self.seq_num,
+            self.skiplink.as_ref(),
+            self.backlink.as_ref(),
+            encoded_operation,
+            key_pair,
+        )?;
+
+        Ok(entry)
+    }
+}
 
 /// Entry of an append-only log based on [`Bamboo`] specification.
 ///
 /// Bamboo entries are the main data type of p2panda. They describe the actual data in the p2p
 /// network and are shared between nodes. Entries are organised in a distributed, single-writer
 /// append-only log structure, created and signed by holders of private keys and stored inside the
-/// node database.
+/// node's database.
 ///
 /// Entries are separated from the actual (off-chain) data to be able to delete application data
 /// without loosing the integrity of the log. Payload data is formatted as "operations" in p2panda.
 /// Each entry only holds a hash of the operation payload, this is why an [`Operation`] instance is
 /// required during entry signing.
 ///
+/// It is not possible to directly create an `Entry` instance without validation, use the
+/// `EntryBuilder` to programmatically create and sign one or decode it from bytes via the
+/// `EncodedEntry` struct.
+///
 /// [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
-///
-/// ## Example
-///
-/// ```
-/// # extern crate p2panda_rs;
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// use p2panda_rs::entry::{Entry, LogId, SeqNum};
-/// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
-/// use p2panda_rs::hash::Hash;
-/// use p2panda_rs::schema::SchemaId;
-/// # let schema_id = "chat_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
-///
-/// // == FIRST ENTRY IN NEW LOG ==
-///
-/// // Create schema id
-/// let schema_id = SchemaId::new(schema_id)?;
-///
-/// // Create a OperationFields instance and add a text field string with the key "title"
-/// let mut fields = OperationFields::new();
-/// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
-///
-/// // Create an operation containing the above fields
-/// let operation = Operation::new_create(schema_id, fields)?;
-///
-/// // Create the first Entry in a log
-/// let entry = Entry::new(
-///     &LogId::default(),
-///     Some(&operation),
-///     None,
-///     None,
-///     &SeqNum::new(1)?,
-/// )?;
-/// # Ok(())
-/// # }
-/// ```
-/// ## Example
-/// ```
-/// # extern crate p2panda_rs;
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// use p2panda_rs::entry::{Entry, LogId, SeqNum};
-/// use p2panda_rs::operation::{Operation, OperationFields, OperationValue};
-/// use p2panda_rs::hash::Hash;
-/// use p2panda_rs::schema::SchemaId;
-///
-/// // == ENTRY IN EXISTING LOG ==
-/// # let backlink_hash_string = "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543";
-/// # let schema_id = "chat_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
-///
-/// // Create schema
-/// let schema_id = SchemaId::new(schema_id)?;
-///
-/// // Create a OperationFields instance and add a text field string with the key "title"
-/// let mut fields = OperationFields::new();
-/// fields.add("title", OperationValue::Text("Hello, Panda!".to_owned()))?;
-///
-/// // Create an operation containing the above fields
-/// let operation = Operation::new_create(schema_id, fields)?;
-///
-/// // Create log ID from u64
-/// let log_id = LogId::new(1);
-///
-/// // Create sequence number from u64
-/// let seq_no = SeqNum::new(2)?;
-///
-/// // Create backlink hash from string
-/// let backlink_hash = Hash::new(&backlink_hash_string)?;
-///
-/// // Create entry
-/// let next_entry = Entry::new(
-///     &log_id,
-///     Some(&operation),
-///     None,
-///     Some(&backlink_hash),
-///     &seq_no,
-/// )?;
-/// # Ok(())
-/// # }
-/// ```
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Eq, PartialEq, StdHash)]
 pub struct Entry {
-    /// Hash of previous Bamboo entry.
-    entry_hash_backlink: Option<Hash>,
-
-    /// Hash of skiplink Bamboo entry.
-    entry_hash_skiplink: Option<Hash>,
+    /// Author of this entry.
+    pub(crate) author: Author,
 
     /// Used log for this entry.
-    log_id: LogId,
-
-    /// Operation payload of entry, can be deleted.
-    operation: Option<Operation>,
+    pub(crate) log_id: LogId,
 
     /// Sequence number of this entry.
-    seq_num: SeqNum,
+    pub(crate) seq_num: SeqNum,
+
+    /// Hash of skiplink Bamboo entry.
+    pub(crate) skiplink: Option<Hash>,
+
+    /// Hash of previous Bamboo entry.
+    pub(crate) backlink: Option<Hash>,
+
+    /// Byte size of payload.
+    pub(crate) payload_size: u64,
+
+    /// Hash of payload.
+    pub(crate) payload_hash: Hash,
+
+    /// Ed25519 signature of entry.
+    pub(crate) signature: Signature,
 }
 
 impl Entry {
-    /// Validates and returns a new instance of `Entry`.
-    pub fn new(
-        log_id: &LogId,
-        operation: Option<&Operation>,
-        entry_hash_skiplink: Option<&Hash>,
-        entry_hash_backlink: Option<&Hash>,
-        seq_num: &SeqNum,
-    ) -> Result<Self, EntryError> {
-        let entry = Self {
-            log_id: log_id.clone().to_owned(),
-            operation: operation.cloned(),
-            entry_hash_skiplink: entry_hash_skiplink.cloned(),
-            entry_hash_backlink: entry_hash_backlink.cloned(),
-            seq_num: *seq_num,
-        };
-        entry.validate()?;
-
-        Ok(entry)
+    /// Returns public key of entry.
+    pub fn public_key(&self) -> &Author {
+        &self.author
     }
 
-    /// Returns hash of backlink entry when given.
-    pub fn backlink_hash(&self) -> Option<&Hash> {
-        self.entry_hash_backlink.as_ref()
-    }
-
-    /// Returns hash of skiplink entry when given.
-    pub fn skiplink_hash(&self) -> Option<&Hash> {
-        self.entry_hash_skiplink.as_ref()
+    /// Returns log id of entry.
+    pub fn log_id(&self) -> &LogId {
+        &self.log_id
     }
 
     /// Returns sequence number of entry.
     pub fn seq_num(&self) -> &SeqNum {
         &self.seq_num
+    }
+
+    /// Returns hash of skiplink entry when given.
+    pub fn skiplink(&self) -> Option<&Hash> {
+        self.skiplink.as_ref()
+    }
+
+    /// Returns hash of backlink entry when given.
+    pub fn backlink(&self) -> Option<&Hash> {
+        self.backlink.as_ref()
+    }
+
+    /// Returns payload size of operation.
+    pub fn payload_size(&self) -> u64 {
+        self.payload_size
+    }
+
+    /// Returns payload hash of operation.
+    pub fn payload_hash(&self) -> &Hash {
+        &self.payload_hash
+    }
+
+    /// Returns signature of entry.
+    pub fn signature(&self) -> &Signature {
+        &self.signature
     }
 
     /// Calculates sequence number of backlink entry.
@@ -164,44 +181,35 @@ impl Entry {
         self.seq_num.skiplink_seq_num()
     }
 
-    /// Returns operation of entry.
-    pub fn operation(&self) -> Option<&Operation> {
-        self.operation.as_ref()
-    }
-
-    /// Returns log id of entry.
-    pub fn log_id(&self) -> &LogId {
-        &self.log_id
-    }
-
-    /// Returns true if entry contains operation.
-    pub fn has_operation(&self) -> bool {
-        self.operation.is_some()
-    }
-
     /// Returns true if skiplink has to be given.
     pub fn is_skiplink_required(&self) -> bool {
         is_lipmaa_required(self.seq_num.as_u64())
     }
 }
 
-impl Validate for Entry {
-    type Error = EntryError;
+impl From<BambooEntry<&[u8], &[u8]>> for Entry {
+    fn from(entry: BambooEntry<&[u8], &[u8]>) -> Self {
+        // Convert all hashes into our types
+        let backlink: Option<Hash> = entry.backlink.map(|link| (&link).into());
+        let skiplink: Option<Hash> = entry.lipmaa_link.map(|link| (&link).into());
+        let payload_hash: Hash = (&entry.payload_hash).into();
 
-    fn validate(&self) -> Result<(), Self::Error> {
-        // First entries do not contain any sequence number or links. Every other entry has to
-        // contain a backlink and skiplink unless they are equal, in which case the skiplink can be
-        // omitted.
-        match (
-            self.seq_num.is_first(),
-            self.entry_hash_backlink.is_some(),
-            self.entry_hash_skiplink.is_some(),
-            self.is_skiplink_required(),
-        ) {
-            (true, false, false, false) => Ok(()),
-            (false, true, false, false) => Ok(()),
-            (false, true, true, _) => Ok(()),
-            (_, _, _, _) => Err(EntryError::InvalidLinks),
+        // Unwrap as we assume that there IS a signature coming from bamboo struct at this point
+        let signature = entry.sig.expect("signature expected").into();
+
+        // Unwrap as the sequence number was already checked when decoding the bytes into the
+        // bamboo struct
+        let seq_num = entry.seq_num.try_into().expect("invalid sequence number");
+
+        Entry {
+            author: (&entry.author).into(),
+            log_id: entry.log_id.into(),
+            seq_num,
+            skiplink,
+            backlink,
+            payload_hash,
+            payload_size: entry.payload_size,
+            signature,
         }
     }
 }
@@ -212,76 +220,124 @@ mod tests {
 
     use crate::entry::{LogId, SeqNum};
     use crate::hash::Hash;
-    use crate::operation::{Operation, OperationFields, OperationValue};
-    use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::{entry, schema};
-    use crate::Validate;
+    use crate::identity::{Author, KeyPair};
+    use crate::operation::EncodedOperation;
+    use crate::test_utils::fixtures::{encoded_operation, key_pair, random_hash};
 
-    use super::Entry;
+    use super::EntryBuilder;
 
     #[rstest]
-    fn validation(schema: SchemaId) {
-        // Prepare sample values
-        let mut fields = OperationFields::new();
-        fields
-            .add("test", OperationValue::Text("Hello".to_owned()))
+    fn entry_builder(
+        #[from(random_hash)] entry_hash: Hash,
+        encoded_operation: EncodedOperation,
+        key_pair: KeyPair,
+    ) {
+        let log_id = LogId::new(92);
+        let seq_num = SeqNum::new(14002).unwrap();
+
+        let entry = EntryBuilder::new()
+            .log_id(&log_id)
+            .seq_num(&seq_num)
+            .backlink(&entry_hash)
+            .sign(&encoded_operation, &key_pair)
             .unwrap();
-        let operation = Operation::new_create(schema, fields).unwrap();
-        let backlink = Hash::new_from_bytes(&[7, 8, 9]);
 
-        // The first entry in a log doesn't need and cannot have references to previous entries
-        assert!(Entry::new(
-            &LogId::default(),
-            Some(&operation),
-            None,
-            None,
-            &SeqNum::new(1).unwrap()
-        )
-        .is_ok());
-
-        // Try to pass them over anyways, it will be invalidated
-        assert!(Entry::new(
-            &LogId::default(),
-            Some(&operation),
-            Some(&backlink),
-            Some(&backlink),
-            &SeqNum::new(1).unwrap()
-        )
-        .is_err());
-
-        // Any following entry requires backlinks
-        assert!(Entry::new(
-            &LogId::default(),
-            Some(&operation),
-            Some(&backlink),
-            Some(&backlink),
-            &SeqNum::new(2).unwrap()
-        )
-        .is_ok());
-
-        // We can omit the skiplink here as it is the same as the backlink
-        assert!(Entry::new(
-            &LogId::default(),
-            Some(&operation),
-            None,
-            Some(&backlink),
-            &SeqNum::new(2).unwrap()
-        )
-        .is_ok());
-
-        // We need a backlink here
-        assert!(Entry::new(
-            &LogId::default(),
-            Some(&operation),
-            None,
-            None,
-            &SeqNum::new(2).unwrap()
-        )
-        .is_err());
+        assert_eq!(entry.public_key(), &Author::from(key_pair.public_key()));
+        assert_eq!(entry.log_id(), &log_id);
+        assert_eq!(entry.seq_num(), &seq_num);
+        assert_eq!(entry.skiplink(), None);
+        assert_eq!(entry.backlink(), Some(&entry_hash));
+        assert_eq!(entry.payload_hash(), &encoded_operation.hash());
+        assert_eq!(entry.payload_size(), encoded_operation.size());
     }
 
     #[rstest]
-    pub fn validate_many(entry: Entry) {
-        assert!(entry.validate().is_ok())
+    fn entry_builder_validation(
+        #[from(random_hash)] entry_hash_1: Hash,
+        #[from(random_hash)] entry_hash_2: Hash,
+        encoded_operation: EncodedOperation,
+        key_pair: KeyPair,
+    ) {
+        // The first entry in a log doesn't need and cannot have references to previous entries
+        assert!(EntryBuilder::new()
+            .sign(&encoded_operation, &key_pair)
+            .is_ok());
+
+        // Can not have back- and skiplinks on first entry
+        assert!(EntryBuilder::new()
+            .skiplink(&entry_hash_1)
+            .backlink(&entry_hash_2)
+            .sign(&encoded_operation, &key_pair)
+            .is_err());
+
+        // Needs backlink on second entry
+        assert!(EntryBuilder::new()
+            .seq_num(&SeqNum::new(2).unwrap())
+            .backlink(&entry_hash_1)
+            .sign(&encoded_operation, &key_pair)
+            .is_ok());
+
+        assert!(EntryBuilder::new()
+            .seq_num(&SeqNum::new(2).unwrap())
+            .sign(&encoded_operation, &key_pair)
+            .is_err());
+
+        // Needs skiplink on forth entry
+        assert!(EntryBuilder::new()
+            .seq_num(&SeqNum::new(4).unwrap())
+            .backlink(&entry_hash_1)
+            .skiplink(&entry_hash_2)
+            .sign(&encoded_operation, &key_pair)
+            .is_ok());
+
+        assert!(EntryBuilder::new()
+            .seq_num(&SeqNum::new(4).unwrap())
+            .backlink(&entry_hash_1)
+            .sign(&encoded_operation, &key_pair)
+            .is_err());
+    }
+
+    #[rstest]
+    fn entry_links_methods(
+        #[from(random_hash)] entry_hash_1: Hash,
+        #[from(random_hash)] entry_hash_2: Hash,
+        encoded_operation: EncodedOperation,
+        key_pair: KeyPair,
+    ) {
+        // First entry does not return any backlink or skiplink sequence number
+        let entry = EntryBuilder::new()
+            .sign(&encoded_operation, &key_pair)
+            .unwrap();
+
+        assert_eq!(entry.seq_num_backlink(), None);
+        // @TODO: This fails ..
+        // https://github.com/p2panda/p2panda/issues/417
+        // assert_eq!(entry.seq_num_skiplink(), None);
+        assert_eq!(entry.is_skiplink_required(), false);
+
+        // Second entry returns sequence number for backlink
+        let entry = EntryBuilder::new()
+            .seq_num(&SeqNum::new(2).unwrap())
+            .backlink(&entry_hash_1)
+            .sign(&encoded_operation, &key_pair)
+            .unwrap();
+
+        assert_eq!(entry.seq_num_backlink(), Some(SeqNum::new(1).unwrap()));
+        // @TODO: This fails ..
+        // https://github.com/p2panda/p2panda/issues/417
+        // assert_eq!(entry.seq_num_skiplink(), None);
+        assert_eq!(entry.is_skiplink_required(), false);
+
+        // Fourth entry returns sequence number for backlink and skiplink
+        let entry = EntryBuilder::new()
+            .seq_num(&SeqNum::new(4).unwrap())
+            .backlink(&entry_hash_1)
+            .skiplink(&entry_hash_2)
+            .sign(&encoded_operation, &key_pair)
+            .unwrap();
+
+        assert_eq!(entry.seq_num_backlink(), Some(SeqNum::new(3).unwrap()));
+        assert_eq!(entry.seq_num_skiplink(), Some(SeqNum::new(1).unwrap()));
+        assert_eq!(entry.is_skiplink_required(), true);
     }
 }

@@ -5,9 +5,9 @@ use openmls_traits::OpenMlsCryptoProvider;
 use tls_codec::{TlsByteVecU8, TlsDeserialize, TlsSerialize, TlsSize};
 
 use crate::hash::Hash;
+use crate::secret_group::lts::error::LongTermSecretError;
 use crate::secret_group::lts::{
     aead, LongTermSecretCiphersuite, LongTermSecretCiphertext, LongTermSecretEpoch,
-    LongTermSecretError,
 };
 
 /// Long term secrets are objects which hold sensitive AEAD key secrets used to symmetrically
@@ -138,8 +138,9 @@ mod tests {
     use openmls_traits::OpenMlsCryptoProvider;
 
     use crate::hash::Hash;
+    use crate::secret_group::lts::error::LongTermSecretError;
     use crate::secret_group::lts::{
-        LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch, LongTermSecretError,
+        LongTermSecret, LongTermSecretCiphersuite, LongTermSecretEpoch,
     };
     use crate::secret_group::MlsProvider;
 

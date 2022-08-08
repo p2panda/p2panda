@@ -4,9 +4,8 @@ use std::convert::TryFrom;
 
 use crate::document::{DocumentView, DocumentViewId};
 use crate::operation::{OperationValue, PinnedRelationList};
+use crate::schema::system::SystemSchemaError;
 use crate::schema::FieldType;
-
-use super::SystemSchemaError;
 
 /// View onto materialised schema which has fields "name", "description" and "fields".
 ///
@@ -55,7 +54,7 @@ impl TryFrom<DocumentView> for SchemaView {
     fn try_from(document_view: DocumentView) -> Result<Self, Self::Error> {
         let name = match document_view.get("name") {
             Some(document_view_value) => {
-                if let OperationValue::Text(value) = document_view_value.value() {
+                if let OperationValue::String(value) = document_view_value.value() {
                     Ok(value)
                 } else {
                     Err(SystemSchemaError::InvalidField(
@@ -69,7 +68,7 @@ impl TryFrom<DocumentView> for SchemaView {
 
         let description = match document_view.get("description") {
             Some(document_view_value) => {
-                if let OperationValue::Text(value) = document_view_value.value() {
+                if let OperationValue::String(value) = document_view_value.value() {
                     Ok(value)
                 } else {
                     Err(SystemSchemaError::InvalidField(
@@ -143,7 +142,7 @@ impl TryFrom<DocumentView> for SchemaFieldView {
     fn try_from(document_view: DocumentView) -> Result<Self, Self::Error> {
         let name = match document_view.get("name") {
             Some(document_view_value) => {
-                if let OperationValue::Text(value) = document_view_value.value() {
+                if let OperationValue::String(value) = document_view_value.value() {
                     Ok(value)
                 } else {
                     Err(SystemSchemaError::InvalidField(
@@ -157,7 +156,7 @@ impl TryFrom<DocumentView> for SchemaFieldView {
 
         let field_type = match document_view.get("type") {
             Some(document_view_value) => {
-                if let OperationValue::Text(type_str) = document_view_value.value() {
+                if let OperationValue::String(type_str) = document_view_value.value() {
                     // Validate the type string parses into a FieldType
                     Ok(type_str.parse::<FieldType>()?)
                 } else {
@@ -188,7 +187,8 @@ mod tests {
     use crate::operation::{OperationId, OperationValue, PinnedRelationList};
     use crate::schema::system::SchemaFieldView;
     use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::{document_view_id, random_operation_id, schema};
+    use crate::test_utils::fixtures::schema_id;
+    use crate::test_utils::fixtures::{document_view_id, random_operation_id};
 
     use super::{FieldType, SchemaView};
 
@@ -203,14 +203,14 @@ mod tests {
             "name",
             DocumentViewValue::new(
                 &operation_id,
-                &OperationValue::Text("venue_name".to_string()),
+                &OperationValue::String("venue_name".to_string()),
             ),
         );
         venue_schema.insert(
             "description",
             DocumentViewValue::new(
                 &operation_id,
-                &OperationValue::Text("Describes a venue".to_string()),
+                &OperationValue::String("Describes a venue".to_string()),
             ),
         );
         venue_schema.insert(
@@ -218,7 +218,7 @@ mod tests {
             DocumentViewValue::new(
                 &operation_id,
                 &OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
-                    DocumentViewId::new(&[relation]).unwrap(),
+                    DocumentViewId::new(&[relation]),
                 ])),
             ),
         );
@@ -232,7 +232,7 @@ mod tests {
     fn field_type_from_document_view(
         #[from(random_operation_id)] operation_id: OperationId,
         document_view_id: DocumentViewId,
-        #[from(schema)] address_schema: SchemaId,
+        #[from(schema_id)] address_schema: SchemaId,
     ) {
         // Create first schema field "is_accessible"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -242,12 +242,12 @@ mod tests {
             "name",
             DocumentViewValue::new(
                 &operation_id,
-                &OperationValue::Text("is_accessible".to_string()),
+                &OperationValue::String("is_accessible".to_string()),
             ),
         );
         bool_field.insert(
             "type",
-            DocumentViewValue::new(&operation_id, &FieldType::Bool.into()),
+            DocumentViewValue::new(&operation_id, &FieldType::Boolean.into()),
         );
 
         let document_view = DocumentView::new(&document_view_id, &bool_field);
@@ -255,7 +255,7 @@ mod tests {
         assert!(field_view.is_ok());
 
         let field_view = field_view.unwrap();
-        assert_eq!(field_view.field_type(), &FieldType::Bool);
+        assert_eq!(field_view.field_type(), &FieldType::Boolean);
         assert_eq!(field_view.name(), "is_accessible");
 
         // Create second schema field "capacity"
@@ -264,17 +264,20 @@ mod tests {
         let mut capacity_field = DocumentViewFields::new();
         capacity_field.insert(
             "name",
-            DocumentViewValue::new(&operation_id, &OperationValue::Text("capacity".to_string())),
+            DocumentViewValue::new(
+                &operation_id,
+                &OperationValue::String("capacity".to_string()),
+            ),
         );
         capacity_field.insert(
             "type",
-            DocumentViewValue::new(&operation_id, &FieldType::Int.into()),
+            DocumentViewValue::new(&operation_id, &FieldType::Integer.into()),
         );
 
         let document_view = DocumentView::new(&document_view_id, &capacity_field);
         let field_view = SchemaFieldView::try_from(document_view);
         assert!(field_view.is_ok());
-        assert_eq!(field_view.unwrap().field_type(), &FieldType::Int);
+        assert_eq!(field_view.unwrap().field_type(), &FieldType::Integer);
 
         // Create third schema field "ticket_price"
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -284,7 +287,7 @@ mod tests {
             "name",
             DocumentViewValue::new(
                 &operation_id,
-                &OperationValue::Text("ticket_price".to_string()),
+                &OperationValue::String("ticket_price".to_string()),
             ),
         );
         float_field.insert(
@@ -305,7 +308,7 @@ mod tests {
             "name",
             DocumentViewValue::new(
                 &operation_id,
-                &OperationValue::Text("venue_name".to_string()),
+                &OperationValue::String("venue_name".to_string()),
             ),
         );
         str_field.insert(
@@ -324,7 +327,10 @@ mod tests {
         let mut relation_field = DocumentViewFields::new();
         relation_field.insert(
             "name",
-            DocumentViewValue::new(&operation_id, &OperationValue::Text("address".to_string())),
+            DocumentViewValue::new(
+                &operation_id,
+                &OperationValue::String("address".to_string()),
+            ),
         );
         relation_field.insert(
             "type",
@@ -351,11 +357,14 @@ mod tests {
         let mut invalid_field = DocumentViewFields::new();
         invalid_field.insert(
             "name",
-            DocumentViewValue::new(&operation_id, &OperationValue::Text("address".to_string())),
+            DocumentViewValue::new(
+                &operation_id,
+                &OperationValue::String("address".to_string()),
+            ),
         );
         invalid_field.insert(
             "type",
-            DocumentViewValue::new(&operation_id, &OperationValue::Text("hash".to_string())),
+            DocumentViewValue::new(&operation_id, &OperationValue::String("hash".to_string())),
         );
 
         let document_view = DocumentView::new(&document_view_id, &invalid_field);

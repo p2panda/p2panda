@@ -16,7 +16,7 @@ pub enum LongTermSecretError {
 
     /// Internal hashing error.
     #[error(transparent)]
-    HashError(#[from] crate::hash::HashError),
+    HashError(#[from] crate::hash::error::HashError),
 
     /// Internal AEAD En- & Decryption error.
     #[error(transparent)]

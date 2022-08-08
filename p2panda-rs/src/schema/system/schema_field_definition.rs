@@ -4,7 +4,8 @@ use std::collections::BTreeMap;
 
 use lazy_static::lazy_static;
 
-use crate::schema::{FieldType, Schema, SchemaId, SchemaIdError};
+use crate::schema::error::SchemaIdError;
+use crate::schema::{FieldType, Schema, SchemaId};
 
 const DESCRIPTION: &str = "Define fields for application data schemas.";
 

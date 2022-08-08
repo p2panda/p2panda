@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 use std::fmt::Display;
 
 use crate::document::{DocumentViewHash, DocumentViewId};
-use crate::operation::{Operation, OperationError, OperationFields};
+use crate::operation::{Operation, OperationBuilder};
+use crate::schema::error::{SchemaError, SchemaIdError};
 use crate::schema::system::{
     get_schema_definition, get_schema_field_definition, SchemaFieldView, SchemaView,
 };
-use crate::schema::{FieldType, SchemaError, SchemaId, SchemaIdError, SchemaVersion};
+use crate::schema::{FieldType, SchemaId, SchemaVersion};
 use crate::Human;
 
 /// The key of a schema field
-type FieldKey = String;
+pub type FieldName = String;
 
 /// A struct representing a p2panda schema.
 ///
@@ -35,7 +35,7 @@ type FieldKey = String;
 /// [`Schema::new`] is only available for testing. This method of constructing a schema doesn't
 /// validate that the given schema id matches the provided schema's published description and field
 /// definitions.
-///
+//
 // @NOTE: Fields on this struct are `pub(super)` to enable making static instances of system
 // schemas from their respective files in the `./system` subdirectory. Making system schema
 // instances is not supported by `Schema::new()` to prevent their dynamic redefinition.
@@ -48,62 +48,42 @@ pub struct Schema {
     pub(super) description: String,
 
     /// Maps all of the schema's field names to their respective types.
-    pub(super) fields: BTreeMap<FieldKey, FieldType>,
+    pub(super) fields: BTreeMap<FieldName, FieldType>,
 }
 
 impl Schema {
-    /// Create an application schema instance with the given id, description and fields.
-    ///
-    /// Use [`Schema::get_system`] to access static system schema instances.
-    ///
-    /// ## Example
-    ///
-    /// ```
-    /// # #[cfg(test)]
-    /// # mod doc_test {
-    /// # extern crate p2panda_rs;
-    /// # use p2panda_rs::document::DocumentViewId;
-    /// # use p2panda_rs::test_utils::fixtures::{document_view_id};
-    /// #
-    /// # #[rstest]
-    /// # fn main(#[from(document_view_id)] schema_document_view_id: DocumentViewId) {
-    /// let schema = Schema::new(
-    ///     SchemaId::Application("cucumber", schema_document_view_id),
-    ///     "A variety in the cucumber society's database.",
-    ///     vec![
-    ///         ("name", FieldType::String),
-    ///         ("grow_cycle_days", FieldType::Int),
-    ///         ("flavor_rating", FieldType::Int),
-    ///     ]
-    /// );
-    /// assert!(schema.is_ok());
-    /// # }
-    /// # }
-    /// ```
-    #[cfg(any(feature = "testing", test))]
-    pub fn new(
-        id: &SchemaId,
-        description: &str,
-        fields: Vec<(&str, FieldType)>,
-    ) -> Result<Self, SchemaError> {
-        let mut field_map: BTreeMap<String, FieldType> = BTreeMap::new();
-        for (field_name, field_type) in fields {
-            field_map.insert(field_name.to_owned(), field_type.to_owned());
+    /// Instantiate a new `Schema` from a `SchemaView` and it's `SchemaFieldView`s.
+    pub fn from_views(
+        schema: SchemaView,
+        fields: Vec<SchemaFieldView>,
+    ) -> Result<Schema, SchemaError> {
+        // Validate that the passed `SchemaFields` are the correct ones for this `Schema`.
+        for schema_field in schema.fields().iter() {
+            match fields
+                .iter()
+                .find(|schema_field_view| schema_field_view.id() == schema_field)
+            {
+                Some(_) => Ok(()),
+                None => Err(SchemaError::InvalidFields),
+            }?;
         }
 
-        if let SchemaId::Application(_, _) = id {
-            let schema = Self {
-                id: id.to_owned(),
-                description: description.to_owned(),
-                fields: field_map,
-            };
-
-            // @TODO: Implement `Validate` for `Schema` and call it here
-
-            Ok(schema)
-        } else {
-            Err(SchemaError::DynamicSystemSchema(id.clone()))
+        // And that no extra fields were passed
+        if fields.iter().len() > schema.fields().len() {
+            return Err(SchemaError::InvalidFields);
         }
+
+        // Construct a key-value map of fields
+        let mut fields_map = BTreeMap::new();
+        for field in fields {
+            fields_map.insert(field.name().to_string(), field.field_type().to_owned());
+        }
+
+        Ok(Schema {
+            id: SchemaId::new_application(schema.name(), schema.view_id()),
+            description: schema.description().to_owned(),
+            fields: fields_map,
+        })
     }
 
     /// Returns a create operation that can be sent to a node to create a schema.
@@ -128,22 +108,23 @@ impl Schema {
     ///     "chess_move",
     ///     "a move in my chess game",
     ///     vec![from_field_view_id, to_field_view_id].into()
-    /// ).unwrap();
-    /// assert!(create_operation.validate().is_ok());
+    /// );
     /// # }
     /// # }
     /// ```
-    pub fn create(
-        name: &str,
-        description: &str,
-        field_view_ids: Vec<DocumentViewId>,
-    ) -> Result<Operation, OperationError> {
-        let fields = OperationFields::try_from(vec![
-            ("name", name.into()),
-            ("description", description.into()),
-            ("fields", field_view_ids.into()),
-        ])?;
-        Operation::new_create(SchemaId::SchemaDefinition(1), fields)
+    pub fn create(name: &str, description: &str, field_view_ids: Vec<DocumentViewId>) -> Operation {
+        // Unwrap here as we know that this schema exists
+        let schema = Self::get_system(SchemaId::SchemaDefinition(1)).unwrap();
+
+        OperationBuilder::new(schema)
+            .fields(&[
+                ("name", name.into()),
+                ("description", description.into()),
+                ("fields", field_view_ids.into()),
+            ])
+            .build()
+            // Unwrap here as we know that the operation matches the schema
+            .unwrap()
     }
 
     /// Returns a create operation that can be sent to a node to create a schema.
@@ -164,49 +145,19 @@ impl Schema {
     /// let create_operation: Operation = Schema::create_field(
     ///     "field_name",
     ///     FieldType::String,
-    /// ).unwrap();
-    /// assert!(create_operation.validate().is_ok());
+    /// );
     /// # }
     /// # }
     /// ```
-    pub fn create_field(name: &str, field_type: FieldType) -> Result<Operation, OperationError> {
-        let fields =
-            OperationFields::try_from(vec![("name", name.into()), ("type", field_type.into())])?;
-        Operation::new_create(SchemaId::SchemaFieldDefinition(1), fields)
-    }
+    pub fn create_field(name: &str, field_type: FieldType) -> Operation {
+        // Unwrap here as we know that this schema exists
+        let schema = Self::get_system(SchemaId::SchemaFieldDefinition(1)).unwrap();
 
-    /// Instantiate a new `Schema` from a `SchemaView` and it's `SchemaFieldView`s.
-    pub fn from_views(
-        schema: SchemaView,
-        fields: Vec<SchemaFieldView>,
-    ) -> Result<Schema, SchemaError> {
-        // Validate that the passed `SchemaFields` are the correct ones for this `Schema`.
-        for schema_field in schema.fields().iter() {
-            match fields
-                .iter()
-                .find(|schema_field_view| schema_field_view.id() == &schema_field)
-            {
-                Some(_) => Ok(()),
-                None => Err(SchemaError::InvalidFields),
-            }?;
-        }
-
-        // And that no extra fields were passed
-        if fields.iter().len() > schema.fields().iter().len() {
-            return Err(SchemaError::InvalidFields);
-        }
-
-        // Construct a key-value map of fields
-        let mut fields_map = BTreeMap::new();
-        for field in fields {
-            fields_map.insert(field.name().to_string(), field.field_type().to_owned());
-        }
-
-        Ok(Schema {
-            id: SchemaId::new_application(schema.name(), schema.view_id()),
-            description: schema.description().to_owned(),
-            fields: fields_map,
-        })
+        OperationBuilder::new(schema)
+            .fields(&[("name", name.into()), ("type", field_type.into())])
+            .build()
+            // Unwrap here as we know that the operation matches the schema
+            .unwrap()
     }
 
     /// Return a static `Schema` instance for a system schema.
@@ -245,40 +196,92 @@ impl Schema {
     /// It has the format "<schema name>__<hashed schema document view>" for application schemas
     /// and "<schema_name>__<version>" for system schemas (note that this has two underscores,
     /// while schema id has only one).
-    #[allow(unused)]
     pub fn hash_id(&self) -> String {
         match self.id.version() {
             SchemaVersion::Application(view_id) => {
                 format!("{}__{}", self.name(), DocumentViewHash::from(&view_id))
             }
             SchemaVersion::System(version) => {
-                format!("{}__{}", self.name(), &version.to_string())
+                format!("{}__{}", self.name(), version)
             }
         }
     }
 
     /// Access the schema version.
-    #[allow(unused)]
     pub fn version(&self) -> SchemaVersion {
         self.id.version()
     }
 
     /// Access the schema name.
-    #[allow(unused)]
     pub fn name(&self) -> &str {
         self.id.name()
     }
 
     /// Access the schema description.
-    #[allow(unused)]
     pub fn description(&self) -> &str {
         &self.description
     }
 
     /// Access the schema fields.
-    #[allow(unused)]
-    pub fn fields(&self) -> &BTreeMap<FieldKey, FieldType> {
+    pub fn fields(&self) -> &BTreeMap<FieldName, FieldType> {
         &self.fields
+    }
+}
+
+#[cfg(any(feature = "testing", test))]
+impl Schema {
+    /// Create an application schema instance with the given id, description and fields.
+    ///
+    /// Use [`Schema::get_system`] to access static system schema instances.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # #[cfg(test)]
+    /// # mod doc_test {
+    /// # extern crate p2panda_rs;
+    /// # use p2panda_rs::document::DocumentViewId;
+    /// # use p2panda_rs::test_utils::fixtures::{document_view_id};
+    /// #
+    /// # #[rstest]
+    /// # fn main(#[from(document_view_id)] schema_document_view_id: DocumentViewId) {
+    /// let schema = Schema::new(
+    ///     SchemaId::Application("cucumber", schema_document_view_id),
+    ///     "A variety in the cucumber society's database.",
+    ///     vec![
+    ///         ("name", FieldType::String),
+    ///         ("grow_cycle_days", FieldType::Int),
+    ///         ("flavor_rating", FieldType::Int),
+    ///     ]
+    /// );
+    /// assert!(schema.is_ok());
+    /// # }
+    /// # }
+    /// ```
+    pub fn new(
+        id: &SchemaId,
+        description: &str,
+        fields: Vec<(impl ToString, FieldType)>,
+    ) -> Result<Self, SchemaError> {
+        let mut field_map: BTreeMap<String, FieldType> = BTreeMap::new();
+
+        for (field_name, field_type) in fields {
+            field_map.insert(field_name.to_string(), field_type.to_owned());
+        }
+
+        if let SchemaId::Application(_, _) = id {
+            let schema = Self {
+                id: id.to_owned(),
+                description: description.to_owned(),
+                fields: field_map,
+            };
+
+            // @TODO: Implement `Validate` for `Schema` and call it here
+
+            Ok(schema)
+        } else {
+            Err(SchemaError::DynamicSystemSchema(id.clone()))
+        }
     }
 }
 
@@ -290,7 +293,7 @@ impl Display for Schema {
 
 impl Human for Schema {
     fn display(&self) -> String {
-        self.id.display()
+        format!("<Schema {}>", self.id.display())
     }
 }
 
@@ -301,7 +304,8 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::document::{DocumentView, DocumentViewFields, DocumentViewId, DocumentViewValue};
+    use crate::document::DocumentViewId;
+    use crate::document::{DocumentView, DocumentViewFields, DocumentViewValue};
     use crate::operation::{OperationId, OperationValue, PinnedRelationList};
     use crate::schema::system::{SchemaFieldView, SchemaView};
     use crate::schema::{FieldType, Schema, SchemaId, SchemaVersion};
@@ -319,14 +323,14 @@ mod tests {
             "name",
             DocumentViewValue::new(
                 operation_id,
-                &OperationValue::Text("venue_name".to_string()),
+                &OperationValue::String("venue_name".to_string()),
             ),
         );
         schema.insert(
             "description",
             DocumentViewValue::new(
                 operation_id,
-                &OperationValue::Text("Describes a venue".to_string()),
+                &OperationValue::String("Describes a venue".to_string()),
             ),
         );
         schema.insert(
@@ -350,11 +354,14 @@ mod tests {
         let mut capacity_field = DocumentViewFields::new();
         capacity_field.insert(
             "name",
-            DocumentViewValue::new(operation_id, &OperationValue::Text(name.to_string())),
+            DocumentViewValue::new(operation_id, &OperationValue::String(name.to_string())),
         );
         capacity_field.insert(
             "type",
-            DocumentViewValue::new(operation_id, &OperationValue::Text(field_type.to_string())),
+            DocumentViewValue::new(
+                operation_id,
+                &OperationValue::String(field_type.to_string()),
+            ),
         );
 
         let capacity_field_view: SchemaFieldView = DocumentView::new(view_id, &capacity_field)
@@ -368,7 +375,7 @@ mod tests {
         let schema = Schema::new(
             &SchemaId::Application("venue".into(), schema_view_id),
             "Some description",
-            vec![("number", FieldType::Int)],
+            vec![("number", FieldType::Integer)],
         )
         .unwrap();
 
@@ -389,10 +396,10 @@ mod tests {
         let schema = Schema::new(
             &SchemaId::Application("venue".into(), schema_view_id),
             "Some description",
-            vec![("number", FieldType::Int)],
+            vec![("number", FieldType::Integer)],
         )
         .unwrap();
-        assert_eq!(schema.display(), "<Schema venue_496543>");
+        assert_eq!(schema.display(), "<Schema venue 496543>");
 
         let schema_definition = Schema::get_system(SchemaId::SchemaDefinition(1)).unwrap();
         assert_eq!(schema_definition.display(), "<Schema schema_definition_v1>");
@@ -426,7 +433,7 @@ mod tests {
         let result = Schema::new(
             &SchemaId::SchemaDefinition(1),
             "description",
-            vec![("wrong", FieldType::Int)],
+            vec![("wrong", FieldType::Integer)],
         );
         assert_eq!(
             format!("{}", result.unwrap_err()),
@@ -470,12 +477,11 @@ mod tests {
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
         let fields = PinnedRelationList::new(vec![
-            DocumentViewId::new(&[relation_operation_id_1.clone()]).unwrap(),
+            DocumentViewId::new(&[relation_operation_id_1.clone()]),
             DocumentViewId::new(&[
                 relation_operation_id_2.clone(),
                 relation_operation_id_3.clone(),
-            ])
-            .unwrap(),
+            ]),
         ]);
 
         let schema_view = create_schema_view(&fields, &schema_view_id, &field_operation_id);
@@ -496,7 +502,7 @@ mod tests {
         let capacity_field_view = create_field(
             "capacity",
             "int",
-            &DocumentViewId::new(&[relation_operation_id_2, relation_operation_id_3]).unwrap(),
+            &DocumentViewId::new(&[relation_operation_id_2, relation_operation_id_3]),
             &field_operation_id,
         );
 
@@ -532,7 +538,7 @@ mod tests {
     fn hash_id(#[from(document_view_id)] application_schema_view_id: DocumentViewId) {
         // Validate application schema format
         let mut schema_fields = BTreeMap::new();
-        schema_fields.insert("is_real".to_string(), FieldType::Bool);
+        schema_fields.insert("is_real".to_string(), FieldType::Boolean);
         let application_schema = Schema {
             id: SchemaId::Application("event".to_string(), application_schema_view_id),
             description: "test".to_string(),
@@ -628,48 +634,5 @@ mod tests {
             ]
         )
         .is_err());
-    }
-}
-// Exclude wasm which doesn't support `Node`
-#[cfg(not(target_arch = "wasm32"))]
-#[cfg(test)]
-mod tests_wasm_not_invited {
-    use rstest::rstest;
-
-    use crate::operation::OperationValue;
-    use crate::schema::{FieldType, Schema};
-    use crate::test_utils::fixtures::random_key_pair;
-    use crate::test_utils::mocks::{send_to_node, Client, Node};
-
-    #[rstest]
-    #[tokio::test]
-    // Override because Clippy does not recognise that `matches` consumes its parameters
-    #[allow(unused_variables)]
-    async fn schema_create() {
-        let key_pair = random_key_pair();
-        let client = Client::new("🐧".to_string(), key_pair);
-        let mut node = Node::new();
-
-        // Create schema field definition
-        let operation = Schema::create_field("title", FieldType::Bool).unwrap();
-        let (field_entry, _) = send_to_node(&mut node, &client, &operation).await.unwrap();
-
-        // Create schema definition
-        let operation = Schema::create(
-            "books",
-            "books in my library",
-            vec![field_entry.as_str().parse().unwrap()].into(),
-        )
-        .unwrap();
-        let (schema_view_id, _) = send_to_node(&mut node, &client, &operation).await.unwrap();
-
-        // Retrieve materialised value
-        let docs = node.documents();
-        let doc = docs.get(&schema_view_id.as_str().parse().unwrap()).unwrap();
-        let test_value = doc.view().unwrap().get("fields").unwrap().value();
-
-        // Assert
-        let expected = OperationValue::Text("title".to_string());
-        assert!(matches!(test_value, expected));
     }
 }

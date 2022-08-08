@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Error types for creating and managing a secret group.
 use thiserror::Error;
 
 /// Custom error types for `SecretGroup`.
@@ -40,9 +41,9 @@ pub enum SecretGroupError {
 
     /// Error coming from `mls` sub-module.
     #[error(transparent)]
-    MlsError(#[from] crate::secret_group::mls::MlsError),
+    MlsError(#[from] crate::secret_group::mls::error::MlsError),
 
     /// Error coming from `lts` sub-module.
     #[error(transparent)]
-    LTSError(#[from] crate::secret_group::lts::LongTermSecretError),
+    LTSError(#[from] crate::secret_group::lts::error::LongTermSecretError),
 }

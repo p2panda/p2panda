@@ -5,13 +5,13 @@ use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
 use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::identity::AuthorError;
+use crate::identity::error::AuthorError;
 use crate::{Human, Validate};
 
 /// Authors are hex encoded Ed25519 public key strings.
-#[derive(Clone, Debug, Serialize, Eq, StdHash, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Eq, StdHash, PartialEq)]
 pub struct Author(String);
 
 impl Author {
@@ -40,7 +40,7 @@ impl Author {
         Ok(author)
     }
 
-    /// Return bytes of author.
+    /// Returns author represented as bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
         // Unwrap as we already checked the inner hex values
         hex::decode(&self.0).unwrap()
@@ -73,6 +73,20 @@ impl Human for Author {
     fn display(&self) -> String {
         let offset = PUBLIC_KEY_LENGTH * 2 - 6;
         format!("<Author {}>", &self.0[offset..])
+    }
+}
+
+impl<'de> Deserialize<'de> for Author {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Deserialize into public key string
+        let public_key: String = Deserialize::deserialize(deserializer)?;
+
+        // Check format
+        Author::new(&public_key)
+            .map_err(|err| serde::de::Error::custom(format!("invalid public key {}", err)))
     }
 }
 
@@ -126,7 +140,7 @@ impl Validate for Author {
 mod tests {
     use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
 
-    use crate::identity::AuthorError;
+    use crate::identity::error::AuthorError;
     use crate::Human;
 
     use super::Author;

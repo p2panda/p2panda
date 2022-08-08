@@ -7,7 +7,8 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use crate::operation::OperationValue;
-use crate::schema::{FieldTypeError, SchemaId};
+use crate::schema::error::FieldTypeError;
+use crate::schema::SchemaId;
 
 /// Valid field types for publishing an application schema.
 ///
@@ -17,16 +18,16 @@ use crate::schema::{FieldTypeError, SchemaId};
 /// # use p2panda_rs::operation::{OperationFields, OperationValue};
 /// # use p2panda_rs::schema::FieldType;
 /// let mut field_definition = OperationFields::new();
-/// field_definition.add("name", OperationValue::Text("document_title".to_string()));
-/// field_definition.add("type", FieldType::String.into());
+/// field_definition.insert("name", "document_title".into());
+/// field_definition.insert("type", FieldType::String.into());
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 pub enum FieldType {
     /// Defines a boolean field.
-    Bool,
+    Boolean,
 
     /// Defines an integer number field.
-    Int,
+    Integer,
 
     /// Defines a floating point number field.
     Float,
@@ -56,8 +57,8 @@ impl Display for FieldType {
     // Note: This automatically implements the `to_string` function as well.
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let field_type_str = match self {
-            FieldType::Bool => "bool".to_string(),
-            FieldType::Int => "int".to_string(),
+            FieldType::Boolean => "bool".to_string(),
+            FieldType::Integer => "int".to_string(),
             FieldType::Float => "float".to_string(),
             FieldType::String => "str".to_string(),
             FieldType::Relation(schema_id) => format!("relation({})", schema_id),
@@ -78,7 +79,7 @@ impl Display for FieldType {
 
 impl From<FieldType> for OperationValue {
     fn from(field_type: FieldType) -> OperationValue {
-        OperationValue::Text(field_type.to_string())
+        OperationValue::String(field_type.to_string())
     }
 }
 
@@ -88,8 +89,8 @@ impl FromStr for FieldType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // Match non-parametric field types on their plain text name
         let text_match = match s {
-            "bool" => Ok(FieldType::Bool),
-            "int" => Ok(FieldType::Int),
+            "bool" => Ok(FieldType::Boolean),
+            "int" => Ok(FieldType::Integer),
             "float" => Ok(FieldType::Float),
             "str" => Ok(FieldType::String),
             _ => Err(FieldTypeError::InvalidFieldType(s.into())),
@@ -102,25 +103,28 @@ impl FromStr for FieldType {
         // Matches a field type name, followed by an optional group in parentheses that contains
         // the referenced schema for relation field types
         lazy_static! {
-            static ref RE: Regex = Regex::new(r"(\w+)(\((.+)\))?").unwrap();
+            // Unwrap as we checked the regular expression for correctness
+            static ref RELATION_REGEX: Regex = Regex::new(r"(\w+)(\((.+)\))?").unwrap();
         }
-        let groups = RE.captures(s).unwrap();
-        let name = groups.get(1).map(|m| m.as_str());
-        let parameter = groups.get(3).map(|m| m.as_str());
 
-        match (name, parameter) {
+        // @TODO: This might panic if input is invalid?
+        let groups = RELATION_REGEX.captures(s).unwrap();
+        let relation_type = groups.get(1).map(|group_match| group_match.as_str());
+        let schema_id = groups.get(3).map(|group_match| group_match.as_str());
+
+        match (relation_type, schema_id) {
             (Some("relation"), Some(schema_id)) => {
-                Ok(FieldType::Relation(SchemaId::new(schema_id)?))
+                Ok(FieldType::Relation(SchemaId::from_str(schema_id)?))
             }
             (Some("relation_list"), Some(schema_id)) => {
-                Ok(FieldType::RelationList(SchemaId::new(schema_id)?))
+                Ok(FieldType::RelationList(SchemaId::from_str(schema_id)?))
             }
             (Some("pinned_relation"), Some(schema_id)) => {
-                Ok(FieldType::PinnedRelation(SchemaId::new(schema_id)?))
+                Ok(FieldType::PinnedRelation(SchemaId::from_str(schema_id)?))
             }
-            (Some("pinned_relation_list"), Some(schema_id)) => {
-                Ok(FieldType::PinnedRelationList(SchemaId::new(schema_id)?))
-            }
+            (Some("pinned_relation_list"), Some(schema_id)) => Ok(FieldType::PinnedRelationList(
+                SchemaId::from_str(schema_id)?,
+            )),
             _ => Err(FieldTypeError::InvalidFieldType(s.into())),
         }
     }
@@ -128,12 +132,14 @@ impl FromStr for FieldType {
 
 #[cfg(test)]
 mod tests {
-    use crate::schema::{FieldType, SchemaId};
+    use crate::schema::SchemaId;
+
+    use super::FieldType;
 
     #[test]
     fn to_string() {
-        assert_eq!(FieldType::Bool.to_string(), "bool");
-        assert_eq!(FieldType::Int.to_string(), "int");
+        assert_eq!(FieldType::Boolean.to_string(), "bool");
+        assert_eq!(FieldType::Integer.to_string(), "int");
         assert_eq!(FieldType::Float.to_string(), "float");
         assert_eq!(FieldType::String.to_string(), "str");
         assert_eq!(
@@ -156,8 +162,8 @@ mod tests {
 
     #[test]
     fn from_str() {
-        assert_eq!(FieldType::Bool, "bool".parse().unwrap());
-        assert_eq!(FieldType::Int, "int".parse().unwrap());
+        assert_eq!(FieldType::Boolean, "bool".parse().unwrap());
+        assert_eq!(FieldType::Integer, "int".parse().unwrap());
         assert_eq!(FieldType::Float, "float".parse().unwrap());
         assert_eq!(FieldType::String, "str".parse().unwrap());
         assert_eq!(

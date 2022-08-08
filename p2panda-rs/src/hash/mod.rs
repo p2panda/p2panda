@@ -8,9 +8,10 @@
 //!
 //! [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
 //! [`YAMF`]: https://github.com/bamboo-rs/yamf-hash
-mod error;
+pub mod error;
 #[allow(clippy::module_inception)]
 mod hash;
 
-pub use error::HashError;
-pub use hash::{Blake3ArrayVec, Hash, HASH_SIZE};
+#[cfg(any(feature = "testing", test))]
+pub use hash::Blake3ArrayVec;
+pub use hash::{Hash, HASH_SIZE};

@@ -4,8 +4,7 @@
 use std::collections::btree_map::Iter as BTreeMapIter;
 use std::fmt::Display;
 
-use crate::document::DocumentViewId;
-use crate::document::{DocumentViewFields, DocumentViewValue};
+use crate::document::{DocumentViewFields, DocumentViewId, DocumentViewValue};
 use crate::Human;
 
 type FieldKey = String;
@@ -79,7 +78,7 @@ impl Display for DocumentView {
 
 impl Human for DocumentView {
     fn display(&self) -> String {
-        self.id.display()
+        format!("<DocumentView {}>", self.id.display())
     }
 }
 
@@ -87,14 +86,14 @@ impl Human for DocumentView {
 mod tests {
     use rstest::rstest;
 
-    use crate::document::document_view_fields::DocumentViewValue;
-    use crate::document::{reduce, DocumentId};
-    use crate::operation::{
-        AsVerifiedOperation, OperationId, OperationValue, Relation, VerifiedOperation,
-    };
+    use crate::document::materialization::reduce;
+    use crate::document::{DocumentId, DocumentViewValue};
+    use crate::operation::traits::AsVerifiedOperation;
+    use crate::operation::{OperationId, OperationValue, Relation, VerifiedOperation};
     use crate::test_utils::constants::HASH;
     use crate::test_utils::fixtures::{
         document_id, document_view_id, operation_fields, verified_operation,
+        verified_operation_with_schema,
     };
     use crate::Human;
 
@@ -116,34 +115,29 @@ mod tests {
             document_view.keys(),
             vec![
                 "age",
+                "comments",
                 "height",
                 "is_admin",
                 "my_friends",
+                "past_event",
                 "profile_picture",
                 "username"
             ]
         );
         assert!(!document_view.is_empty());
-        assert_eq!(document_view.len(), 6);
+        assert_eq!(document_view.len(), 8);
         assert_eq!(
-            document_view.get("username").unwrap(),
+            document_view.get("age").unwrap(),
             &DocumentViewValue::new(
                 verified_operation.operation_id(),
-                &OperationValue::Text("bubu".to_owned()),
-            )
+                &OperationValue::Integer(28)
+            ),
         );
         assert_eq!(
             document_view.get("height").unwrap(),
             &DocumentViewValue::new(
                 verified_operation.operation_id(),
                 &OperationValue::Float(3.5)
-            ),
-        );
-        assert_eq!(
-            document_view.get("age").unwrap(),
-            &DocumentViewValue::new(
-                verified_operation.operation_id(),
-                &OperationValue::Integer(28)
             ),
         );
         assert_eq!(
@@ -160,16 +154,23 @@ mod tests {
                 &OperationValue::Relation(expected_relation)
             ),
         );
+        assert_eq!(
+            document_view.get("username").unwrap(),
+            &DocumentViewValue::new(
+                verified_operation.operation_id(),
+                &OperationValue::String("bubu".to_owned()),
+            )
+        );
         assert!(!is_edited);
         assert!(!is_deleted);
     }
 
     #[rstest]
     fn with_update_op(
-        #[from(verified_operation)] create_operation: VerifiedOperation,
-        #[from(verified_operation)]
+        #[from(verified_operation_with_schema)] create_operation: VerifiedOperation,
+        #[from(verified_operation_with_schema)]
         #[with(Some(operation_fields(vec![
-            ("username", OperationValue::Text("yahoo".to_owned())),
+            ("username", OperationValue::String("yahoo".to_owned())),
             ("height", OperationValue::Float(100.23)),
             ("age", OperationValue::Integer(12)),
             ("is_admin", OperationValue::Boolean(true)),
@@ -187,7 +188,7 @@ mod tests {
             document_view.get("username").unwrap(),
             &DocumentViewValue::new(
                 update_operation.operation_id(),
-                &OperationValue::Text("yahoo".to_owned()),
+                &OperationValue::String("yahoo".to_owned()),
             )
         );
         assert_eq!(
@@ -231,7 +232,7 @@ mod tests {
             .parse::<OperationId>()
             .unwrap();
 
-        let document_view_id = DocumentViewId::new(&[operation_1, operation_2]).unwrap();
+        let document_view_id = DocumentViewId::new(&[operation_1, operation_2]);
         let (view, _, _) = reduce(&[verified_operation]);
         let document_view = DocumentView::new(&document_view_id, &view.unwrap());
 

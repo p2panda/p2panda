@@ -9,9 +9,10 @@ use openmls::messages::Welcome;
 use openmls::prelude::SenderRatchetConfiguration;
 use openmls_traits::OpenMlsCryptoProvider;
 
+use crate::secret_group::mls::error::MlsError;
 use crate::secret_group::mls::{
-    MlsError, MLS_MAX_FORWARD_DISTANCE, MLS_MAX_PAST_EPOCHS, MLS_OUT_OF_ORDER_TOLERANCE,
-    MLS_PADDING_SIZE, MLS_WIRE_FORMAT_POLICY,
+    MLS_MAX_FORWARD_DISTANCE, MLS_MAX_PAST_EPOCHS, MLS_OUT_OF_ORDER_TOLERANCE, MLS_PADDING_SIZE,
+    MLS_WIRE_FORMAT_POLICY,
 };
 
 /// Wrapper around the Managed MLS Group of `openmls`.

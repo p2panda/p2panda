@@ -43,8 +43,7 @@ impl From<Hash> for DocumentViewHash {
 impl From<&DocumentViewId> for DocumentViewHash {
     fn from(document_view_id: &DocumentViewId) -> Self {
         let graph_tip_bytes: Vec<u8> = document_view_id
-            .sorted()
-            .into_iter()
+            .iter()
             .flat_map(|graph_tip| graph_tip.as_hash().to_bytes())
             .collect();
 
@@ -68,10 +67,9 @@ mod tests {
         #[from(random_operation_id)] operation_id_1: OperationId,
         #[from(random_operation_id)] operation_id_2: OperationId,
     ) {
-        let view_id_1 =
-            DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]).unwrap();
+        let view_id_1 = DocumentViewId::new(&[operation_id_1.clone(), operation_id_2.clone()]);
         let view_hash_1 = DocumentViewHash::from(&view_id_1);
-        let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]).unwrap();
+        let view_id_2 = DocumentViewId::new(&[operation_id_2, operation_id_1]);
         let view_hash_2 = DocumentViewHash::from(&view_id_2);
         assert_eq!(view_hash_1, view_hash_2);
     }

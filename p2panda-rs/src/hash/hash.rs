@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
@@ -10,7 +10,7 @@ use bamboo_rs_core_ed25519_yasmf::yasmf_hash::new_blake3;
 use serde::{Deserialize, Serialize};
 use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
-use crate::hash::HashError;
+use crate::hash::error::HashError;
 use crate::{Human, Validate};
 
 /// Size of p2panda entries' hashes.
@@ -25,7 +25,7 @@ pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
 /// to the Bamboo specification.
 ///
 /// [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
-#[derive(Clone, Debug, Ord, PartialOrd, Serialize, Deserialize, PartialEq, Eq, StdHash)]
+#[derive(Clone, Debug, Ord, PartialOrd, Serialize, PartialEq, Eq, StdHash)]
 pub struct Hash(String);
 
 impl Hash {
@@ -66,6 +66,29 @@ impl Hash {
     }
 }
 
+impl Validate for Hash {
+    type Error = HashError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        // Check if hash is a hex string
+        match hex::decode(&self.0) {
+            Ok(bytes) => {
+                // Check if length is correct
+                if bytes.len() != HASH_SIZE + 2 {
+                    return Err(HashError::InvalidLength(bytes.len(), HASH_SIZE + 2));
+                }
+
+                // Check if YASMF BLAKE3 hash is valid
+                match YasmfHash::<&[u8]>::decode(&bytes) {
+                    Ok((YasmfHash::Blake3(_), _)) => Ok(()),
+                    _ => Err(HashError::DecodingFailed),
+                }
+            }
+            Err(_) => Err(HashError::InvalidHexEncoding),
+        }
+    }
+}
+
 impl fmt::Display for Hash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_str())
@@ -87,6 +110,20 @@ impl Human for Hash {
     fn display(&self) -> String {
         let offset = MAX_YAMF_HASH_SIZE * 2 - 6;
         format!("<Hash {}>", &self.as_str()[offset..])
+    }
+}
+
+impl<'de> Deserialize<'de> for Hash {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Deserialize hash string
+        let hash: String = Deserialize::deserialize(deserializer)?;
+
+        // Convert and validate format
+        hash.try_into()
+            .map_err(|err: HashError| serde::de::Error::custom(err.to_string()))
     }
 }
 
@@ -136,31 +173,6 @@ impl TryFrom<String> for Hash {
 
     fn try_from(str: String) -> Result<Self, Self::Error> {
         Self::new(&str)
-    }
-}
-
-impl Validate for Hash {
-    type Error = HashError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        // Check if hash is a hex string
-        match hex::decode(&self.0) {
-            Ok(bytes) => {
-                // Check if length is correct
-                if bytes.len() != HASH_SIZE + 2 {
-                    return Err(HashError::InvalidLength(bytes.len(), HASH_SIZE + 2));
-                }
-
-                // Check if YASMF BLAKE3 hash is valid
-                match YasmfHash::<&[u8]>::decode(&bytes) {
-                    Ok((YasmfHash::Blake3(_), _)) => {}
-                    _ => return Err(HashError::DecodingFailed),
-                }
-            }
-            Err(_) => return Err(HashError::InvalidHexEncoding),
-        }
-
-        Ok(())
     }
 }
 

@@ -2,12 +2,9 @@
 
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 
-use serde::{Deserialize, Serialize};
-
-use crate::operation::{OperationError, OperationFieldsError, OperationValue};
-use crate::Validate;
+use crate::operation::error::FieldsError;
+use crate::operation::OperationValue;
 
 /// Operation fields are used to store application data. They are implemented as a simple key/value
 /// store with support for a limited number of data types (see [`OperationValue`] for further
@@ -24,14 +21,15 @@ use crate::Validate;
 /// ```
 /// # extern crate p2panda_rs;
 /// # fn main() -> () {
-/// # use p2panda_rs::operation::{OperationFields, OperationValue, AsOperation};
+/// # use p2panda_rs::operation::{OperationFields, OperationValue};
+/// # use p2panda_rs::operation::traits::{AsOperation};
 /// let mut fields = OperationFields::new();
 /// fields
-///     .add("title", OperationValue::Text("Hello, Panda!".to_owned()))
+///     .insert("title", OperationValue::String("Hello, Panda!".to_owned()))
 ///     .unwrap();
 /// }
 /// ```
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct OperationFields(BTreeMap<String, OperationValue>);
 
 impl OperationFields {
@@ -53,9 +51,9 @@ impl OperationFields {
     /// Adds a new field to this instance.
     ///
     /// A field is a simple key/value pair.
-    pub fn add(&mut self, name: &str, value: OperationValue) -> Result<(), OperationFieldsError> {
+    pub fn insert(&mut self, name: &str, value: OperationValue) -> Result<(), FieldsError> {
         if self.0.contains_key(name) {
-            return Err(OperationFieldsError::FieldDuplicate);
+            return Err(FieldsError::FieldDuplicate(name.to_owned()));
         }
 
         self.0.insert(name.to_owned(), value);
@@ -64,13 +62,9 @@ impl OperationFields {
     }
 
     /// Overwrites an already existing field with a new value.
-    pub fn update(
-        &mut self,
-        name: &str,
-        value: OperationValue,
-    ) -> Result<(), OperationFieldsError> {
+    pub fn update(&mut self, name: &str, value: OperationValue) -> Result<(), FieldsError> {
         if !self.0.contains_key(name) {
-            return Err(OperationFieldsError::UnknownField);
+            return Err(FieldsError::UnknownField);
         }
 
         self.0.insert(name.to_owned(), value);
@@ -79,9 +73,9 @@ impl OperationFields {
     }
 
     /// Removes an existing field from this instance.
-    pub fn remove(&mut self, name: &str) -> Result<(), OperationFieldsError> {
+    pub fn remove(&mut self, name: &str) -> Result<(), FieldsError> {
         if !self.0.contains_key(name) {
-            return Err(OperationFieldsError::UnknownField);
+            return Err(FieldsError::UnknownField);
         }
 
         self.0.remove(name);
@@ -109,34 +103,23 @@ impl OperationFields {
     }
 }
 
-impl Validate for OperationFields {
-    type Error = OperationError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        for (_, value) in self.iter() {
-            value.validate()?;
-        }
-
-        Ok(())
-    }
-}
-
-impl TryFrom<Vec<(&str, OperationValue)>> for OperationFields {
-    type Error = OperationFieldsError;
-
-    fn try_from(spec: Vec<(&str, OperationValue)>) -> Result<Self, Self::Error> {
+impl From<Vec<(&str, OperationValue)>> for OperationFields {
+    fn from(spec: Vec<(&str, OperationValue)>) -> Self {
         let mut operation_fields = OperationFields::new();
+
         for field in spec {
-            operation_fields.add(field.0, field.1)?;
+            if operation_fields.insert(field.0, field.1).is_err() {
+                // Silently ignore duplicates errors .. the underlying data type takes care of that
+                // for us!
+            }
         }
-        Ok(operation_fields)
+
+        operation_fields
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryFrom;
-
     use rstest::rstest;
 
     use crate::document::DocumentViewId;
@@ -151,21 +134,24 @@ mod tests {
 
         // Detect duplicate
         fields
-            .add("message", OperationValue::Text("Hello, Panda!".to_owned()))
+            .insert(
+                "message",
+                OperationValue::String("Hello, Panda!".to_owned()),
+            )
             .unwrap();
 
         // Have to use `update` to change fields
         assert!(fields
-            .add("message", OperationValue::Text("Huhu".to_owned()))
+            .insert("message", OperationValue::String("Huhu".to_owned()))
             .is_err());
 
         assert!(fields
-            .update("message", OperationValue::Text("Huhu".to_owned()))
+            .update("message", OperationValue::String("Huhu".to_owned()))
             .is_ok());
 
         // Bail when key does not exist
         assert!(fields
-            .update("imagine", OperationValue::Text("Pandaparty".to_owned()))
+            .update("imagine", OperationValue::String("Pandaparty".to_owned()))
             .is_err());
 
         assert_eq!(fields.keys(), vec!["message"]);
@@ -184,10 +170,10 @@ mod tests {
         #[from(random_operation_id)] operation_id_5: OperationId,
         #[from(random_operation_id)] operation_id_6: OperationId,
     ) {
-        let document_view_id_1 = DocumentViewId::new(&[operation_id_1, operation_id_2]).unwrap();
-        let document_view_id_2 = DocumentViewId::new(&[operation_id_3]).unwrap();
+        let document_view_id_1 = DocumentViewId::new(&[operation_id_1, operation_id_2]);
+        let document_view_id_2 = DocumentViewId::new(&[operation_id_3]);
         let document_view_id_3 =
-            DocumentViewId::new(&[operation_id_4, operation_id_5, operation_id_6]).unwrap();
+            DocumentViewId::new(&[operation_id_4, operation_id_5, operation_id_6]);
 
         let relations = PinnedRelationList::new(vec![
             document_view_id_1,
@@ -197,16 +183,6 @@ mod tests {
 
         let value = OperationValue::PinnedRelationList(relations);
         let mut fields = OperationFields::new();
-        assert!(fields.add("locations", value).is_ok());
-    }
-
-    #[test]
-    fn easy_operation_fields() {
-        assert!(OperationFields::try_from(vec![("name", "boppety".into())]).is_ok());
-
-        assert!(
-            OperationFields::try_from(vec![("name", "boppety".into()), ("name", true.into())])
-                .is_err()
-        );
+        assert!(fields.insert("locations", value).is_ok());
     }
 }

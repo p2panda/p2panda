@@ -3,10 +3,8 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
-use crate::operation::{
-    AsOperation, AsVerifiedOperation, OperationFields, OperationId, OperationValue,
-    VerifiedOperation,
-};
+use crate::operation::traits::{AsOperation, AsVerifiedOperation};
+use crate::operation::{OperationFields, OperationId, OperationValue, VerifiedOperation};
 
 /// The current value of a document fiew field as well as the id of the operation it came from.
 #[derive(Clone, Debug, PartialEq)]
@@ -119,21 +117,21 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::{DocumentViewFields, DocumentViewValue};
-    use crate::operation::{
-        AsOperation, AsVerifiedOperation, OperationId, OperationValue, VerifiedOperation,
-    };
+    use crate::operation::traits::{AsOperation, AsVerifiedOperation};
+    use crate::operation::{OperationId, OperationValue, VerifiedOperation};
     use crate::test_utils::fixtures::{random_operation_id, verified_operation};
 
     #[rstest]
     fn construct_fields(#[from(random_operation_id)] value_id: OperationId) {
         let mut fields = DocumentViewFields::new();
+
         fields.insert(
             "name",
-            DocumentViewValue::new(&value_id, &OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into())),
+            DocumentViewValue::new(&value_id, &OperationValue::String("ʕ •ᴥ•ʔ Cafe!".into())),
         );
         fields.insert(
             "owner",
-            DocumentViewValue::new(&value_id, &OperationValue::Text("しろくま".into())),
+            DocumentViewValue::new(&value_id, &OperationValue::String("しろくま".into())),
         );
         fields.insert(
             "house-number",
@@ -144,11 +142,11 @@ mod tests {
         assert!(!fields.is_empty());
         assert_eq!(
             fields.get("name").unwrap(),
-            &DocumentViewValue::new(&value_id, &OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into()))
+            &DocumentViewValue::new(&value_id, &OperationValue::String("ʕ •ᴥ•ʔ Cafe!".into()))
         );
         assert_eq!(
             fields.get("owner").unwrap(),
-            &DocumentViewValue::new(&value_id, &OperationValue::Text("しろくま".into()))
+            &DocumentViewValue::new(&value_id, &OperationValue::String("しろくま".into()))
         );
         assert_eq!(
             fields.get("house-number").unwrap(),

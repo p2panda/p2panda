@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use super::GraphError;
+use crate::graph::error::GraphError;
 
 /// This struct contains all functionality implemented in this module. It is can be used for
 /// building and sorting a graph of causally connected nodes.
@@ -455,9 +455,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::graph::graph::GraphData;
-
-    use super::Graph;
+    use super::{Graph, GraphData};
 
     #[test]
     fn basics() {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::fmt;
-use std::fmt::{Display, Write};
+use std::fmt::Display;
 use std::str::FromStr;
 
 use serde::de::Visitor;
@@ -70,6 +70,7 @@ impl SchemaId {
                 )
             })?
             .1;
+
         let is_system_schema =
             rightmost_section.starts_with('v') && rightmost_section.len() < MAX_YAMF_HASH_SIZE * 2;
 
@@ -82,52 +83,6 @@ impl SchemaId {
     /// Returns a `SchemaId` given an application schema's name and view id.
     pub fn new_application(name: &str, view_id: &DocumentViewId) -> Self {
         Self::Application(name.to_string(), view_id.clone())
-    }
-
-    fn parse_system_schema_str(id_str: &str) -> Result<Self, SchemaIdError> {
-        let (name, version_str) = id_str.rsplit_once('_').unwrap();
-        let version = version_str[1..].parse::<u8>().map_err(|_| {
-            SchemaIdError::MalformedSchemaId(
-                id_str.to_string(),
-                "couldn't parse system schema version".to_string(),
-            )
-        })?;
-        match name {
-            SCHEMA_DEFINITION_NAME => Ok(Self::SchemaDefinition(version)),
-            SCHEMA_FIELD_DEFINITION_NAME => Ok(Self::SchemaFieldDefinition(version)),
-            _ => Err(SchemaIdError::UnknownSystemSchema(name.to_string())),
-        }
-    }
-
-    /// Read an application schema id from a string.
-    ///
-    /// Parses the schema id by iteratively splitting sections from the right at `_` until the
-    /// remainder is shorter than an operation id. Each section is parsed as an operation id
-    /// and the last (leftmost) section is parsed as the schema's name.
-    fn parse_application_schema_str(id_str: &str) -> Result<Self, SchemaIdError> {
-        let mut operation_ids = vec![];
-        let mut remainder = id_str;
-        while let Some((left, right)) = remainder.rsplit_once('_') {
-            operation_ids.push(right.parse::<OperationId>()?);
-
-            // If the remainder is no longer than an entry hash we assume that it's the schema name.
-            // By breaking here we allow the schema name to contain underscores as well.
-            remainder = left;
-            if remainder.len() < MAX_YAMF_HASH_SIZE * 2 {
-                break;
-            }
-        }
-
-        if remainder.is_empty() {
-            return Err(SchemaIdError::MissingApplicationSchemaName(
-                id_str.to_string(),
-            ));
-        }
-
-        Ok(SchemaId::Application(
-            remainder.to_string(),
-            DocumentViewId::new(&operation_ids).unwrap(),
-        ))
     }
 
     /// Access the schema name.
@@ -149,15 +104,72 @@ impl SchemaId {
     }
 }
 
+impl SchemaId {
+    /// Read a system schema id from a string.
+    fn parse_system_schema_str(id_str: &str) -> Result<Self, SchemaIdError> {
+        let (name, version_str) = id_str.rsplit_once('_').unwrap();
+
+        let version = version_str[1..].parse::<u8>().map_err(|_| {
+            SchemaIdError::MalformedSchemaId(
+                id_str.to_string(),
+                "couldn't parse system schema version".to_string(),
+            )
+        })?;
+
+        match name {
+            SCHEMA_DEFINITION_NAME => Ok(Self::SchemaDefinition(version)),
+            SCHEMA_FIELD_DEFINITION_NAME => Ok(Self::SchemaFieldDefinition(version)),
+            _ => Err(SchemaIdError::UnknownSystemSchema(name.to_string())),
+        }
+    }
+
+    /// Read an application schema id from a string.
+    ///
+    /// Parses the schema id by iteratively splitting sections from the right at `_` until the
+    /// remainder is shorter than an operation id. Each section is parsed as an operation id
+    /// and the last (leftmost) section is parsed as the schema's name.
+    fn parse_application_schema_str(id_str: &str) -> Result<Self, SchemaIdError> {
+        let mut operation_ids = vec![];
+        let mut remainder = id_str;
+
+        while let Some((left, right)) = remainder.rsplit_once('_') {
+            let operation_id: OperationId = right.parse()?;
+            operation_ids.push(operation_id);
+
+            // If the remainder is no longer than an entry hash we assume that it's the schema
+            // name. By breaking here we allow the schema name to contain underscores as well.
+            remainder = left;
+            if remainder.len() < MAX_YAMF_HASH_SIZE * 2 {
+                break;
+            }
+        }
+
+        // Since we've built the array from the back, we have to reverse it again to get the
+        // original order
+        operation_ids.reverse();
+
+        if remainder.is_empty() {
+            return Err(SchemaIdError::MissingApplicationSchemaName(
+                id_str.to_string(),
+            ));
+        }
+
+        Ok(SchemaId::Application(
+            remainder.to_string(),
+            DocumentViewId::from_untrusted(operation_ids)?,
+        ))
+    }
+}
+
 impl Display for SchemaId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SchemaId::Application(name, view_id) => {
                 write!(f, "{}", name)?;
 
-                for op_id in view_id.sorted().into_iter() {
-                    write!(f, "_{}", op_id.as_str())?;
-                }
+                view_id
+                    .iter()
+                    .try_for_each(|op_id| write!(f, "_{}", op_id.as_str()))?;
 
                 Ok(())
             }
@@ -173,16 +185,10 @@ impl Display for SchemaId {
 
 impl Human for SchemaId {
     fn display(&self) -> String {
-        let mut rv = String::new();
-        write!(rv, "<Schema ").unwrap();
         match self {
-            SchemaId::Application(name, view_id) => {
-                write!(rv, "{}_{}", name, view_id.to_short_string()).unwrap()
-            }
-            system_schema => write!(rv, "{}", system_schema).unwrap(),
+            SchemaId::Application(name, view_id) => format!("{} {}", name, view_id.display()),
+            system_schema => format!("{}", system_schema),
         }
-        write!(rv, ">").unwrap();
-        rv
     }
 }
 
@@ -191,24 +197,6 @@ impl FromStr for SchemaId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::new(s)
-    }
-}
-
-/// Serde `Visitor` implementation used to deserialize `SchemaId`.
-struct SchemaIdVisitor;
-
-impl<'de> Visitor<'de> for SchemaIdVisitor {
-    type Value = SchemaId;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("schema id as string")
-    }
-
-    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        SchemaId::new(value).map_err(|err| serde::de::Error::custom(err.to_string()))
     }
 }
 
@@ -226,6 +214,23 @@ impl<'de> Deserialize<'de> for SchemaId {
     where
         D: Deserializer<'de>,
     {
+        struct SchemaIdVisitor;
+
+        impl<'de> Visitor<'de> for SchemaIdVisitor {
+            type Value = SchemaId;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("schema id as string")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                SchemaId::new(value).map_err(|err| serde::de::Error::custom(err.to_string()))
+            }
+        }
+
         deserializer.deserialize_any(SchemaIdVisitor)
     }
 }
@@ -235,7 +240,7 @@ mod test {
     use rstest::rstest;
 
     use crate::test_utils::constants::SCHEMA_ID;
-    use crate::test_utils::fixtures::schema;
+    use crate::test_utils::fixtures::schema_id;
     use crate::Human;
 
     use super::SchemaId;
@@ -331,11 +336,18 @@ mod test {
             .unwrap()
         );
 
+        assert_eq!(
+            format!("{}", appl_schema),
+            "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
+        );
+
         let schema = SchemaId::new("schema_definition_v50").unwrap();
         assert_eq!(schema, SchemaId::SchemaDefinition(50));
+        assert_eq!(format!("{}", schema), "schema_definition_v50");
 
         let schema_field = SchemaId::new("schema_field_definition_v1").unwrap();
         assert_eq!(schema_field, SchemaId::SchemaFieldDefinition(1));
+        assert_eq!(format!("{}", schema_field), "schema_field_definition_v1");
     }
 
     #[test]
@@ -345,13 +357,13 @@ mod test {
     }
 
     #[rstest]
-    fn string_representation(schema: SchemaId) {
+    fn string_representation(schema_id: SchemaId) {
         assert_eq!(
-            schema.to_string(),
+            schema_id.to_string(),
             "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
         );
         assert_eq!(
-            format!("{}", schema),
+            format!("{}", schema_id),
             "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
         );
         assert_eq!(
@@ -365,11 +377,11 @@ mod test {
     }
 
     #[rstest]
-    fn short_representation(schema: SchemaId) {
-        assert_eq!(schema.display(), "<Schema venue_8fc78b>");
+    fn short_representation(schema_id: SchemaId) {
+        assert_eq!(schema_id.display(), "venue 8fc78b");
         assert_eq!(
             SchemaId::SchemaDefinition(1).display(),
-            "<Schema schema_definition_v1>"
+            "schema_definition_v1"
         );
     }
 }

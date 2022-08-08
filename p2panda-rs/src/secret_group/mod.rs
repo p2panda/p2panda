@@ -53,7 +53,7 @@
 //! See: <https://openmls.tech> for more information.
 mod codec;
 mod commit;
-mod error;
+pub mod error;
 mod group;
 mod lts;
 mod member;

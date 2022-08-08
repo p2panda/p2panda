@@ -1,20 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Error types for creating schema instances and schema ids.
 use thiserror::Error;
 
 use crate::schema::SchemaId;
 
 /// Custom errors related to `SchemaId`.
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum SchemaIdError {
-    /// Handle errors from validating operation id hashes.
-    #[error(transparent)]
-    DocumentViewIdError(#[from] crate::document::DocumentViewIdError),
-
-    /// Invalid hash in schema id.
-    #[error("encountered invalid hash while parsing application schema id: {0}")]
-    HashError(#[from] crate::hash::HashError),
-
     /// Encountered a malformed schema id.
     #[error("malformed schema id `{0}`: {1}")]
     MalformedSchemaId(String, String),
@@ -26,10 +19,22 @@ pub enum SchemaIdError {
     /// Invalid system schema id.
     #[error("unsupported system schema: {0}")]
     UnknownSystemSchema(String),
+
+    /// Invalid hash in schema id.
+    #[error("encountered invalid hash while parsing application schema id: {0}")]
+    HashError(#[from] crate::hash::error::HashError),
+
+    /// Handle errors from validating document view ids.
+    #[error("encountered invalid document view id while parsing application schema id: {0}")]
+    DocumentViewIdError(#[from] crate::document::error::DocumentViewIdError),
+
+    /// Handle errors from validating operation ids.
+    #[error("encountered invalid hash while parsing application schema id: {0}")]
+    OperationIdError(#[from] crate::operation::error::OperationIdError),
 }
 
 /// Custom errors related to `Schema`.
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum SchemaError {
     /// Invalid fields in schema.
     #[error("invalid fields found for this schema")]

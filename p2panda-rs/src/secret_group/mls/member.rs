@@ -9,7 +9,8 @@ use openmls_traits::OpenMlsCryptoProvider;
 use tls_codec::Serialize;
 
 use crate::identity::KeyPair;
-use crate::secret_group::mls::{MlsError, MLS_CIPHERSUITE_NAME, MLS_LIFETIME_EXTENSION_DAYS};
+use crate::secret_group::mls::error::MlsError;
+use crate::secret_group::mls::{MLS_CIPHERSUITE_NAME, MLS_LIFETIME_EXTENSION_DAYS};
 
 /// Wrapper around the MLS [CredentialBundle] of `openmls`.
 #[derive(Debug, Clone)]
