@@ -103,7 +103,7 @@ pub fn sign_encode_entry(
         skiplink_hash.as_ref(),
         backlink_hash.as_ref(),
         &operation_encoded,
-        &key_pair.as_inner(),
+        key_pair.as_inner(),
     ));
 
     // Serialise result to JavaScript object

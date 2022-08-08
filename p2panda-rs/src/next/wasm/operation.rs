@@ -143,17 +143,14 @@ impl OperationFields {
                 );
 
                 // Convert to document view ids to validate it
-                let document_view_ids: Result<(), DocumentViewIdError> = relations_str
-                    .iter()
-                    .map(|operation_ids_str| {
+                let document_view_ids: Result<(), DocumentViewIdError> =
+                    relations_str.iter().try_for_each(|operation_ids_str| {
                         // Convert list of strings to list of operation ids aka a document view
                         // id, this checks if list of operation ids is sorted and without any
                         // duplicates
                         let _: DocumentViewId = operation_ids_str.as_slice().try_into()?;
-
                         Ok(())
-                    })
-                    .collect();
+                    });
 
                 jserr!(
                     document_view_ids,
