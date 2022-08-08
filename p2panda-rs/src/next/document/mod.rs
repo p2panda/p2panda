@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Temporary module which will guide us through this massive refactoring.
+//! Document is a replicatable data type designed to handle concurrent updates in a way where all
+//! replicas eventually resolve to the same deterministic value.
+//!
+//! A Document is made up of a linked graph of operations. During a process of ordering and
+//! reduction the graph is resolved to a single data item matching the documents schema definition.
+//! Any two documents (replicas) which contain the same collection of operations will resolve to
+//! the same value.
+//!
+//! In the p2panda network, Documents are materialised on nodes and the resulting document views
+//! are stored in the database.
+// @TODO: Bring back doc-string example here
 #[allow(clippy::module_inception)]
 mod document;
 mod document_id;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Generic structs which can be used for building a graph structure and sorting it's nodes in
-//! a topological depth-first manner.
+//! Generic structs which can be used for building a graph structure and sorting it's nodes in a
+//! topological depth-first manner.
 //!
 //! Graph building API based on [tangle-graph](https://gitlab.com/tangle-js/tangle-graph) and graph
 //! sorting inspired by [incremental-topo](https://github.com/declanvk/incremental-topo).

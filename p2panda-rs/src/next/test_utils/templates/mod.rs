@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Temporary module which will guide us through this massive refactoring.
+//! Fixture templates which can be used to run a single test agains collections a cases.
 mod entry_templates;
 mod operation_templates;
 mod version_fixture_templates;
