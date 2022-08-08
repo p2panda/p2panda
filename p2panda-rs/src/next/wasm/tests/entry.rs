@@ -4,7 +4,7 @@ use wasm_bindgen_test::*;
 
 use crate::next::hash::Hash;
 use crate::next::operation::encode::encode_operation;
-use crate::next::operation::{OperationFields, OperationValue};
+use crate::next::operation::OperationFields;
 use crate::next::test_utils::fixtures::{operation_with_schema, random_document_view_id};
 use crate::next::wasm::{decode_entry, sign_encode_entry, KeyPair, SignEncodeEntryResult};
 

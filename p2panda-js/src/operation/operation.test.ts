@@ -16,8 +16,8 @@ describe('operation', () => {
       const operationFields = await getOperationFields(fields);
 
       const outputRepresentation =
-        'OperationFields(OperationFields({"channel": Integer(5), "message": ' +
-        'Text("chin chin"), "serious": Boolean(false), "temperature": Float(12.921)}))';
+        'OperationFields(PlainFields({"channel": Integer(5), "message": ' +
+        'StringOrRelation("chin chin"), "serious": Boolean(false), "temperature": Float(12.921)}))';
       expect(operationFields.toString()).toEqual(outputRepresentation);
     });
   });

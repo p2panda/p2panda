@@ -1,22 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use serde::{Deserialize, Serialize};
+#[cfg(test)]
+use serde::Deserialize;
+use serde::Serialize;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
+use crate::next::document::DocumentViewId;
 use crate::next::entry::decode::decode_entry as decode;
 use crate::next::entry::encode::sign_and_encode_entry;
 use crate::next::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::next::hash::Hash;
 use crate::next::operation::decode::decode_operation;
-use crate::next::operation::plain::PlainOperation;
+use crate::next::operation::plain::PlainFields;
+use crate::next::operation::traits::{Actionable, Schematic};
 use crate::next::operation::EncodedOperation;
 use crate::next::wasm::error::jserr;
 use crate::next::wasm::serde::serialize_to_js;
 use crate::next::wasm::KeyPair;
 
 /// Return value of [`sign_encode_entry`] that holds the encoded entry and its hash.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Debug)]
+#[cfg_attr(test, derive(Deserialize))]
 #[serde(rename_all = "camelCase")]
 pub struct SignEncodeEntryResult {
     /// Encoded p2panda entry.
@@ -30,7 +35,8 @@ pub struct SignEncodeEntryResult {
 }
 
 /// Return value of [`decode_entry`] that holds the decoded entry and plain operation.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Debug)]
+#[cfg_attr(test, derive(Deserialize))]
 #[serde(rename_all = "camelCase")]
 pub struct DecodeEntryResult {
     /// Author of this entry.
@@ -57,8 +63,32 @@ pub struct DecodeEntryResult {
     /// Hash of payload.
     pub payload_hash: String,
 
-    /// Plain operation object, payload of this entry.
-    pub operation: Option<PlainOperation>,
+    /// Payload of this entry.
+    pub operation: Option<DecodeOperationResult>,
+}
+
+/// Return value of [`decode_entry`] that holds the decoded plain operation.
+///
+/// Even though operations are actually encoded as an array this object returns it as a map for
+/// better readability.
+#[derive(Serialize, Debug)]
+#[cfg_attr(test, derive(Deserialize))]
+#[serde(rename_all = "camelCase")]
+pub struct DecodeOperationResult {
+    /// Operation action.
+    pub action: String,
+
+    /// Operation version.
+    pub version: u64,
+
+    /// Schema id.
+    pub schema_id: String,
+
+    /// Previous operations.
+    pub previous_operations: Option<DocumentViewId>,
+
+    /// Operation fields.
+    pub fields: Option<PlainFields>,
 }
 
 /// Returns a signed and encoded entry that can be published to a p2panda node.
@@ -120,7 +150,7 @@ pub fn sign_encode_entry(
 #[wasm_bindgen(js_name = decodeEntry)]
 pub fn decode_entry(entry_str: String, operation_str: Option<String>) -> Result<JsValue, JsValue> {
     // Convert encoded operation
-    let operation_plain = match operation_str {
+    let operation = match operation_str {
         Some(hex_str) => {
             let operation_bytes = jserr!(
                 hex::decode(hex_str),
@@ -132,7 +162,14 @@ pub fn decode_entry(entry_str: String, operation_str: Option<String>) -> Result<
             // @TODO: We want actual operations here, but for this we need schemas
             let operation_plain = jserr!(decode_operation(&operation_encoded));
 
-            Some(operation_plain)
+            // Convert to external wasm type
+            Some(DecodeOperationResult {
+                action: operation_plain.action().to_string(),
+                version: operation_plain.version().as_u64(),
+                schema_id: operation_plain.schema_id().to_string(),
+                previous_operations: operation_plain.previous_operations().cloned(),
+                fields: operation_plain.fields(),
+            })
         }
         None => None,
     };
@@ -157,8 +194,7 @@ pub fn decode_entry(entry_str: String, operation_str: Option<String>) -> Result<
         payload_size: entry.payload_size(),
         payload_hash: entry.payload_hash().to_string(),
         signature: entry.signature().to_string(),
-        // @TODO: Return full operation here, not only schema-less plain operation
-        operation: operation_plain,
+        operation,
     };
     let result = jserr!(serialize_to_js(&entry_operation_bundle));
     Ok(result)

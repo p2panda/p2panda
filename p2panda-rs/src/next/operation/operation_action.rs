@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::fmt;
+use std::fmt::Display;
+
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Operations are categorised by their action type.
@@ -63,6 +66,12 @@ impl<'de> Deserialize<'de> for OperationAction {
                 action
             ))),
         }
+    }
+}
+
+impl Display for OperationAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 

@@ -4,7 +4,7 @@ import wasm from '~/wasm';
 
 const TEST_HASH =
   '0020ddc99aca776df0ca9d1b5871ba39d4edacc752a0a3426b12c3958971b6c847ac';
-const TEST_SCHEMA = `test_${TEST_HASH}`;
+const TEST_SCHEMA_ID = `test_${TEST_HASH}`;
 
 describe('WebAssembly interface', () => {
   describe('KeyPair', () => {
@@ -40,18 +40,20 @@ describe('WebAssembly interface', () => {
       const fields = new OperationFields();
 
       // Set fields of all possible types
-      fields.add('description', 'str', 'Hello, Panda');
-      fields.add('temperature', 'int', '32');
-      fields.add('isCute', 'bool', true);
-      fields.add('degree', 'float', 12.322);
-      fields.add('username', 'relation', TEST_HASH);
-      fields.add('locations', 'relation_list', [TEST_HASH]);
-      fields.add('that_one_funny_comment_i_made', 'pinned_relation', [
+      fields.insert('description', 'str', 'Hello, Panda');
+      fields.insert('temperature', 'int', '32');
+      fields.insert('isCute', 'bool', true);
+      fields.insert('degree', 'float', 12.322);
+      fields.insert('username', 'relation', TEST_HASH);
+      fields.insert('locations', 'relation_list', [TEST_HASH]);
+      fields.insert('that_one_funny_comment_i_made', 'pinned_relation', [
         TEST_HASH,
       ]);
-      fields.add('those_many_funny_comments_i_made', 'pinned_relation_list', [
-        [TEST_HASH],
-      ]);
+      fields.insert(
+        'those_many_funny_comments_i_made',
+        'pinned_relation_list',
+        [[TEST_HASH]],
+      );
 
       // Returns the correct fields
       expect(fields.get('description')).toBe('Hello, Panda');
@@ -73,19 +75,17 @@ describe('WebAssembly interface', () => {
       const { OperationFields } = await wasm;
       const fields = new OperationFields();
       expect(fields.length()).toBe(0);
-      fields.add('message', 'str', 'Good morning');
+      fields.insert('message', 'str', 'Good morning');
       expect(fields.length()).toBe(1);
-      fields.remove('message');
-      expect(fields.length()).toBe(0);
     });
 
     it('throws when trying to set a field twice', async () => {
       const { OperationFields } = await wasm;
       const fields = new OperationFields();
-      fields.add('description', 'str', 'Good morning, Panda');
+      fields.insert('description', 'str', 'Good morning, Panda');
       expect(() =>
-        fields.add('description', 'str', 'Good night, Panda'),
-      ).toThrow('field already exists');
+        fields.insert('description', 'str', 'Good night, Panda'),
+      ).toThrow("field 'description' already exists");
     });
 
     it('throws when using invalid types or values', async () => {
@@ -93,45 +93,43 @@ describe('WebAssembly interface', () => {
       const fields = new OperationFields();
 
       // Throw when type is invalid
-      expect(() => fields.add('test', 'lulu', true)).toThrow(
+      expect(() => fields.insert('test', 'lulu', true)).toThrow(
         'Unknown value type',
       );
-      expect(() => fields.add('test', 'int', 'notanumber')).toThrow(
+      expect(() => fields.insert('test', 'int', 'notanumber')).toThrow(
         'Invalid integer value',
       );
 
-      expect(() => fields.add('contact', 'relation', [TEST_HASH])).toThrow(
-        'Expected an operation id value for field of type relation',
-      );
-
-      expect(() => fields.add('contact', 'relation_list', TEST_HASH)).toThrow(
-        'Expected an array of operation ids for field of type relation list',
-      );
-
-      expect(() => fields.add('contact', 'pinned_relation', TEST_HASH)).toThrow(
-        'Expected an array of operation ids for field of type pinned relation list',
+      expect(() => fields.insert('contact', 'relation', [TEST_HASH])).toThrow(
+        'Expected a document id string for field of type relation',
       );
 
       expect(() =>
-        fields.add('contact', 'pinned_relation_list', [TEST_HASH]),
+        fields.insert('contact', 'relation_list', TEST_HASH),
+      ).toThrow(
+        'Expected an array of operation ids for field of type relation list',
+      );
+
+      expect(() =>
+        fields.insert('contact', 'pinned_relation', TEST_HASH),
+      ).toThrow(
+        'Expected an array of operation ids for field of type pinned relation',
+      );
+
+      expect(() =>
+        fields.insert('contact', 'pinned_relation_list', [TEST_HASH]),
       ).toThrow(
         'Expected a nested array of operation ids for field of type pinned relation list',
       );
 
       // Throw when relation is an invalid hash
       expect(() =>
-        fields.add('contact', 'relation', 'this is not a hash'),
-      ).toThrow('invalid hex encoding in hash string');
+        fields.insert('contact', 'relation', 'this is not a hash'),
+      ).toThrow('Invalid document id found for relation');
 
       expect(() =>
-        fields.add('contact', 'relation_list', ['this is not a hash']),
-      ).toThrow('invalid hex encoding in hash string');
-    });
-
-    it('throws when removing an inexistent field', async () => {
-      const { OperationFields } = await wasm;
-      const fields = new OperationFields();
-      expect(() => fields.remove('test')).toThrow();
+        fields.insert('contact', 'relation_list', ['this is not a hash']),
+      ).toThrow('Invalid document id found in relation list');
     });
   });
 
@@ -153,10 +151,10 @@ describe('WebAssembly interface', () => {
 
       // Create operation with fields
       const fields = new OperationFields();
-      fields.add('description', 'str', 'Hello, Panda');
+      fields.insert('description', 'str', 'Hello, Panda');
       expect(fields.get('description')).toBe('Hello, Panda');
 
-      const operationEncoded = encodeCreateOperation(TEST_SCHEMA, fields);
+      const operationEncoded = encodeCreateOperation(TEST_SCHEMA_ID, fields);
 
       // Sign and encode entry
       const { entryEncoded, entryHash } = signEncodeEntry(
@@ -176,12 +174,11 @@ describe('WebAssembly interface', () => {
       expect(decodedEntry.backlink).toBeUndefined();
       expect(decodedEntry.skiplink).toBeUndefined();
       expect(decodedEntry.operation.action).toBe('create');
-      expect(decodedEntry.operation.schema).toEqual(TEST_SCHEMA);
+      expect(decodedEntry.operation.schemaId).toEqual(TEST_SCHEMA_ID);
 
       // Test operation fields map
       const { fields: operationFields } = decodedEntry.operation;
-      expect(operationFields.get('description').value).toBe('Hello, Panda');
-      expect(operationFields.get('description').type).toBe('str');
+      expect(operationFields.get('description')).toBe('Hello, Panda');
 
       // Test decoding entry without operation
       expect(() => decodeEntry(entryEncoded)).not.toThrow();
@@ -211,12 +208,12 @@ describe('WebAssembly interface', () => {
 
       // Use large numbers as operation field values
       const fields = new OperationFields();
-      fields.add('large_i64', 'int', LARGE_I64);
-      fields.add('large_i64_negative', 'int', LARGE_I64_NEGATIVE);
-      fields.add('large_f64', 'float', LARGE_F64);
-      fields.add('large_f64_negative', 'float', LARGE_F64_NEGATIVE);
+      fields.insert('large_i64', 'int', LARGE_I64);
+      fields.insert('large_i64_negative', 'int', LARGE_I64_NEGATIVE);
+      fields.insert('large_f64', 'float', LARGE_F64);
+      fields.insert('large_f64_negative', 'float', LARGE_F64_NEGATIVE);
 
-      const operationEncoded = encodeCreateOperation(TEST_SCHEMA, fields);
+      const operationEncoded = encodeCreateOperation(TEST_SCHEMA_ID, fields);
 
       // Sign and encode entry with a very high `log_id` value
       const { entryEncoded } = signEncodeEntry(
@@ -233,12 +230,12 @@ describe('WebAssembly interface', () => {
       expect(decodedEntry.logId).toEqual(BigInt(LARGE_LOG_ID));
 
       const { fields: operationFields } = decodedEntry.operation;
-      expect(operationFields.get('large_i64').value).toEqual(BigInt(LARGE_I64));
-      expect(operationFields.get('large_i64_negative').value).toEqual(
+      expect(operationFields.get('large_i64')).toEqual(BigInt(LARGE_I64));
+      expect(operationFields.get('large_i64_negative')).toEqual(
         BigInt(LARGE_I64_NEGATIVE),
       );
-      expect(operationFields.get('large_f64').value).toEqual(LARGE_F64);
-      expect(operationFields.get('large_f64_negative').value).toEqual(
+      expect(operationFields.get('large_f64')).toEqual(LARGE_F64);
+      expect(operationFields.get('large_f64_negative')).toEqual(
         LARGE_F64_NEGATIVE,
       );
     });
