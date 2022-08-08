@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
-
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
 use crate::next::entry::decode::decode_entry as decode;
-use crate::next::entry::encode::sign_entry;
+use crate::next::entry::encode::sign_and_encode_entry;
 use crate::next::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::next::hash::Hash;
-use crate::next::operation::{Operation, OperationEncoded};
+use crate::next::operation::decode::decode_operation;
+use crate::next::operation::plain::PlainOperation;
+use crate::next::operation::EncodedOperation;
 use crate::next::wasm::error::jserr;
 use crate::next::wasm::serde::serialize_to_js;
 use crate::next::wasm::KeyPair;
@@ -29,6 +29,18 @@ pub struct SignEncodeEntryResult {
     pub operation_hash: String,
 }
 
+/// Return value of [`decode_entry`] that holds the decoded entry and plain operation.
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DecodeEntryResult {
+    pub seq_num: u64,
+    pub log_id: u64,
+    pub backlink: Option<String>,
+    pub skiplink: Option<String>,
+    pub signature: String,
+    pub operation: Option<PlainOperation>,
+}
+
 /// Returns a signed and encoded entry that can be published to a p2panda node.
 ///
 /// `entry_backlink_hash`, `entry_skiplink_hash`, `seq_num` and `log_id` are obtained by querying
@@ -42,42 +54,43 @@ pub fn sign_encode_entry(
     seq_num: u64,
     log_id: u64,
 ) -> Result<JsValue, JsValue> {
-    // If skiplink_hash exists construct Hash
+    // If skiplink_hash exists construct `Hash`
     let skiplink_hash = match entry_skiplink_hash {
         Some(hash) => Some(jserr!(Hash::new(&hash))),
         None => None,
     };
 
-    // If backlink_hash exists construct Hash
+    // If backlink_hash exists construct `Hash`
     let backlink_hash = match entry_backlink_hash {
         Some(hash) => Some(jserr!(Hash::new(&hash))),
         None => None,
     };
 
-    // Create SeqNum instance
+    // Create `SeqNum` instance
     let seq_num = jserr!(SeqNum::new(seq_num));
 
-    // Convert to Operation
-    let operation_encoded = jserr!(OperationEncoded::new(&encoded_operation));
-    let operation = jserr!(Operation::try_from(&operation_encoded));
+    // Convert to `EncodedOperation`
+    let operation_bytes = jserr!(
+        hex::decode(encoded_operation),
+        "Invalid hex-encoding of encoded operation"
+    );
+    let operation_encoded = EncodedOperation::from_bytes(&operation_bytes);
 
-    // Create Entry instance
-    let entry = jserr!(Entry::new(
+    // Sign and encode entry
+    let entry_encoded = jserr!(sign_and_encode_entry(
         &LogId::new(log_id),
-        Some(&operation),
+        &seq_num,
         skiplink_hash.as_ref(),
         backlink_hash.as_ref(),
-        &seq_num,
+        &operation_encoded,
+        &key_pair.as_inner(),
     ));
-
-    // Finally sign and encode entry
-    let entry_signed = jserr!(sign_and_encode(&entry, key_pair.as_inner()));
 
     // Serialise result to JavaScript object
     let entry_operation_bundle = SignEncodeEntryResult {
-        entry_encoded: entry_signed.as_str().into(),
-        entry_hash: entry_signed.hash().as_str().into(),
-        operation_hash: operation_encoded.hash().as_str().into(),
+        entry_encoded: entry_encoded.to_string(),
+        entry_hash: entry_encoded.hash().to_string(),
+        operation_hash: operation_encoded.hash().to_string(),
     };
     let result = jserr!(serialize_to_js(&entry_operation_bundle));
     Ok(result)
@@ -85,24 +98,45 @@ pub fn sign_encode_entry(
 
 /// Decodes an entry and optional operation given their encoded form.
 #[wasm_bindgen(js_name = decodeEntry)]
-pub fn decode_entry(
-    entry_encoded: String,
-    operation_encoded: Option<String>,
-) -> Result<JsValue, JsValue> {
+pub fn decode_entry(entry_str: String, operation_str: Option<String>) -> Result<JsValue, JsValue> {
     // Convert encoded operation
-    let operation_encoded = match operation_encoded {
-        Some(msg) => {
-            let inner = jserr!(OperationEncoded::new(&msg));
-            Some(inner)
+    let operation_plain = match operation_str {
+        Some(hex_str) => {
+            let operation_bytes = jserr!(
+                hex::decode(hex_str),
+                "Invalid hex-encoding of encoded operation"
+            );
+            let operation_encoded = EncodedOperation::from_bytes(&operation_bytes);
+
+            // Decode to plain operation
+            // @TODO: We want actual operations here, but for this we need schemas
+            let operation_plain = jserr!(decode_operation(&operation_encoded));
+
+            Some(operation_plain)
         }
         None => None,
     };
 
     // Convert encoded entry
-    let entry_signed = jserr!(EntrySigned::new(&entry_encoded));
-    let entry: Entry = jserr!(decode(&entry_signed, operation_encoded.as_ref()));
+    let entry_bytes = jserr!(
+        hex::decode(entry_str),
+        "Invalid hex-encoding of encoded entry"
+    );
+    let entry_encoded = EncodedEntry::from_bytes(&entry_bytes);
 
-    // Serialize struct to JavaScript object.
-    let result = jserr!(serialize_to_js(&entry));
+    // Decode entry
+    let entry: Entry = jserr!(decode(&entry_encoded));
+
+    // Serialise result to JavaScript object
+    let entry_operation_bundle = DecodeEntryResult {
+        seq_num: entry.seq_num().as_u64(),
+        log_id: entry.log_id().as_u64(),
+        skiplink: entry.skiplink().map(|hash| hash.to_string()),
+        backlink: entry.backlink().map(|hash| hash.to_string()),
+        signature: entry.signature().to_string(),
+        // @TODO: Return full operation here, not only schema-less plain operation
+        operation: operation_plain,
+    };
+    let result = jserr!(serialize_to_js(&entry_operation_bundle));
     Ok(result)
 }

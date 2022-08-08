@@ -149,6 +149,9 @@ impl From<&Operation> for PlainOperation {
 // @TODO: Remove this as soon as wasm binding support schemas and operations.
 #[cfg(target_arch = "wasm32")]
 impl PlainOperation {
+    /// Temporary constructor method to create new `PlainOperation` instances.
+    ///
+    /// This will be removed as soon as we bring schemas and operations into `p2panda-js`.
     pub fn new(
         version: OperationVersion,
         action: OperationAction,

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Helpers for better debugging and handling of errors of the WebAssembly & JavaScript world.
 use std::panic;
 
 use console_error_panic_hook::hook as panic_hook;
@@ -28,3 +29,5 @@ macro_rules! jserr {
 pub fn set_wasm_panic_hook() {
     panic::set_hook(Box::new(panic_hook));
 }
+
+pub(crate) use jserr;

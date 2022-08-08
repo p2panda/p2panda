@@ -8,7 +8,8 @@ use wasm_bindgen::prelude::wasm_bindgen;
 // Converts any Rust Error type into js_sys:Error while keeping its error message. This helps
 // propagating errors similar like we do in Rust but in WebAssembly contexts. It is possible to
 // optionally use a custom error message when required.
-macro_rules! jserr {
+// @TODO: This needs to get uncommented as macros are registered globally
+/* macro_rules! jserr {
     // Convert error to js_sys::Error with original error message
     ($l:expr) => {
         $l.map_err::<JsValue, _>(|err| js_sys::Error::new(&format!("{}", err)).into())?
@@ -18,7 +19,7 @@ macro_rules! jserr {
     ($l:expr, $err:expr) => {
         $l.map_err::<JsValue, _>(|_| js_sys::Error::new(&format!("{:?}", $err)).into())?
     };
-}
+} */
 
 /// Sets a [`panic hook`] for better error messages in NodeJS or web browser.
 ///
@@ -28,4 +29,4 @@ pub fn set_wasm_panic_hook() {
     panic::set_hook(Box::new(panic_hook));
 }
 
-pub(crate) use jserr;
+// pub(crate) use jserr;

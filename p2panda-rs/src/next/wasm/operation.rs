@@ -10,10 +10,7 @@ use crate::next::document::error::DocumentViewIdError;
 use crate::next::document::{DocumentId, DocumentViewId};
 use crate::next::operation::encode::encode_plain_operation;
 use crate::next::operation::plain::{PlainFields, PlainOperation, PlainValue};
-use crate::next::operation::{
-    OperationAction, OperationId, OperationValue, OperationVersion, PinnedRelation,
-    PinnedRelationList, Relation, RelationList,
-};
+use crate::next::operation::{OperationAction, OperationId, OperationVersion, RelationList};
 use crate::next::schema::SchemaId;
 use crate::next::wasm::error::jserr;
 use crate::next::wasm::serde::{deserialize_from_js, serialize_to_js};
@@ -152,8 +149,7 @@ impl OperationFields {
                         // Convert list of strings to list of operation ids aka a document view
                         // id, this checks if list of operation ids is sorted and without any
                         // duplicates
-                        let document_view_id: DocumentViewId =
-                            operation_ids_str.as_slice().try_into()?;
+                        let _: DocumentViewId = operation_ids_str.as_slice().try_into()?;
 
                         Ok(())
                     })
@@ -183,10 +179,6 @@ impl OperationFields {
             Some(PlainValue::Float(value)) => Ok(JsValue::from_f64(value.to_owned())),
             Some(PlainValue::Integer(value)) => Ok(JsValue::from(value.to_owned())),
             Some(PlainValue::StringOrRelation(value)) => Ok(JsValue::from_str(value)),
-            Some(PlainValue::StringOrRelation(value)) => Ok(jserr!(serialize_to_js(value))),
-            Some(PlainValue::PinnedRelationOrRelationList(value)) => {
-                Ok(jserr!(serialize_to_js(value)))
-            }
             Some(PlainValue::PinnedRelationOrRelationList(value)) => {
                 Ok(jserr!(serialize_to_js(value)))
             }

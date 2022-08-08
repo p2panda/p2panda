@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::fmt;
 use std::hash::Hash as StdHash;
 
 use bamboo_rs_core_ed25519_yasmf::Signature as BambooSignature;
@@ -48,6 +49,12 @@ impl PartialEq for Signature {
 }
 
 impl Eq for Signature {}
+
+impl fmt::Display for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", hex::encode(self.into_bytes()))
+    }
+}
 
 #[cfg(test)]
 impl Signature {
