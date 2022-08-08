@@ -145,3 +145,17 @@ impl From<&Operation> for PlainOperation {
         )
     }
 }
+
+// @TODO: Remove this as soon as wasm binding support schemas and operations.
+#[cfg(target_arch = "wasm32")]
+impl PlainOperation {
+    pub fn new(
+        version: OperationVersion,
+        action: OperationAction,
+        schema_id: SchemaId,
+        previous_operations: Option<DocumentViewId>,
+        fields: Option<PlainFields>,
+    ) -> Self {
+        PlainOperation(version, action, schema_id, previous_operations, fields)
+    }
+}

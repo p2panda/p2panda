@@ -13,3 +13,5 @@ pub mod serde;
 pub mod storage_provider;
 #[cfg(any(feature = "testing", test))]
 pub mod test_utils;
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
