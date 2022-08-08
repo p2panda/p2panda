@@ -33,11 +33,31 @@ pub struct SignEncodeEntryResult {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DecodeEntryResult {
-    pub seq_num: u64,
+    /// Author of this entry.
+    pub public_key: String,
+
+    /// Used log for this entry.
     pub log_id: u64,
-    pub backlink: Option<String>,
+
+    /// Sequence number of this entry.
+    pub seq_num: u64,
+
+    /// Hash of skiplink Bamboo entry.
     pub skiplink: Option<String>,
+
+    /// Hash of previous Bamboo entry.
+    pub backlink: Option<String>,
+
+    /// Ed25519 signature of entry.
     pub signature: String,
+
+    /// Payload size of entry.
+    pub payload_size: u64,
+
+    /// Hash of payload.
+    pub payload_hash: String,
+
+    /// Plain operation object, payload of this entry.
     pub operation: Option<PlainOperation>,
 }
 
@@ -129,10 +149,13 @@ pub fn decode_entry(entry_str: String, operation_str: Option<String>) -> Result<
 
     // Serialise result to JavaScript object
     let entry_operation_bundle = DecodeEntryResult {
+        public_key: entry.public_key().to_string(),
         seq_num: entry.seq_num().as_u64(),
         log_id: entry.log_id().as_u64(),
         skiplink: entry.skiplink().map(|hash| hash.to_string()),
         backlink: entry.backlink().map(|hash| hash.to_string()),
+        payload_size: entry.payload_size(),
+        payload_hash: entry.payload_hash().to_string(),
         signature: entry.signature().to_string(),
         // @TODO: Return full operation here, not only schema-less plain operation
         operation: operation_plain,

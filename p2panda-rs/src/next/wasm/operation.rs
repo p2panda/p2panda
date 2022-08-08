@@ -49,7 +49,7 @@ impl OperationFields {
     /// This method will throw an error when the field was already set, an invalid type value got
     /// passed or when the value does not reflect the given type.
     #[wasm_bindgen]
-    pub fn add(&mut self, name: &str, value_type: &str, value: JsValue) -> Result<(), JsValue> {
+    pub fn insert(&mut self, name: &str, value_type: &str, value: JsValue) -> Result<(), JsValue> {
         match value_type {
             "str" => {
                 let value_str = jserr!(value.as_string().ok_or("Invalid string value"));
