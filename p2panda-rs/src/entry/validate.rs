@@ -13,7 +13,7 @@ use crate::operation::EncodedOperation;
 /// Checks if backlink- and skiplink are correctly set for the given sequence number (#E3).
 ///
 /// First entries do not contain any links. Every other entry has to contain a back- and skiplink
-/// unless they are equal, in which case the skiplink can be omitted.
+/// unless they are equal, in which case the skiplink must be omitted.
 pub fn validate_links(entry: &Entry) -> Result<(), ValidateEntryError> {
     match (
         entry.seq_num().is_first(),
