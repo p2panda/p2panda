@@ -4,7 +4,6 @@ use crate::entry::decode::decode_entry;
 use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
-use crate::operation::OperationId;
 use crate::storage_provider::error::EntryStorageError;
 use crate::storage_provider::traits::AsStorageEntry;
 
@@ -24,7 +23,7 @@ pub struct StorageEntry {
     pub log_id: LogId,
 
     /// Hash of payload data.
-    pub payload_hash: OperationId,
+    pub payload_hash: Hash,
 
     /// Sequence number of this entry.
     pub seq_num: SeqNum,
@@ -54,11 +53,10 @@ impl AsStorageEntry for StorageEntry {
             entry_bytes: entry.clone(),
             entry_hash: entry.hash(),
             log_id: entry_decoded.log_id().to_owned(),
-            payload_hash: entry_decoded.payload_hash().to_owned().into(),
+            payload_hash: entry_decoded.payload_hash().to_owned(),
             seq_num: entry_decoded.seq_num().to_owned(),
         };
 
-        // entry.validate()?;
         Ok(entry)
     }
 
