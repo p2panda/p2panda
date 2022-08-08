@@ -22,10 +22,10 @@ export type EncodedEntry = {
   author: string;
   entryBytes: string;
   entryHash: string;
-  logId: BigInt;
+  logId: bigint;
   payloadBytes: string;
   payloadHash: string;
-  seqNum: BigInt;
+  seqNum: bigint;
 };
 
 /**
@@ -41,9 +41,9 @@ export type EntryRecord = Entry & {
 export type Entry = {
   backlink: string | undefined;
   skiplink: string | undefined;
-  logId: BigInt;
+  logId: bigint;
   operation: Operation | undefined;
-  seqNum: BigInt;
+  seqNum: bigint;
 };
 
 /**
@@ -65,7 +65,7 @@ export type Fields = {
     | boolean
     | number
     | string
-    | BigInt
+    | bigint
     | Relation
     | Relation[]
     | PinnedRelation
@@ -88,9 +88,9 @@ export type PinnedRelation = string[];
 export type EntryTagged = {
   backlink: string | undefined;
   skiplink: string | undefined;
-  logId: BigInt;
+  logId: bigint;
   operation: OperationTagged | undefined;
-  seqNum: BigInt;
+  seqNum: bigint;
 };
 
 /**

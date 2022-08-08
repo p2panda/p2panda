@@ -26,7 +26,12 @@ const decodedOperations = TEST_DATA.panda.logs[0].decodedOperations.map(
       const fields: FieldsTagged = new Map();
 
       Object.entries(operation.fields).forEach(([key, value]) => {
-        fields.set(key, value as OperationValue);
+        // @TODO: This only works with strings currently, it needs refactoring
+        // as soon as we have schemas
+        fields.set(key, {
+          value,
+          type: 'str',
+        } as OperationValue);
       });
 
       // assert the type of the JSON-imported `fields` as `unknown` so that
