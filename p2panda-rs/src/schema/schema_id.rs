@@ -144,6 +144,9 @@ impl SchemaId {
             }
         }
 
+        // @TODO: We should check here if the name in the schema id follows the specification
+        // Related issue: https://github.com/p2panda/p2panda/issues/425
+
         // Since we've built the array from the back, we have to reverse it again to get the
         // original order
         operation_ids.reverse();

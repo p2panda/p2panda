@@ -35,20 +35,20 @@ pub type FieldName = String;
 /// [`Schema::new`] is only available for testing. This method of constructing a schema doesn't
 /// validate that the given schema id matches the provided schema's published description and field
 /// definitions.
-//
-// @NOTE: Fields on this struct are `pub(super)` to enable making static instances of system
-// schemas from their respective files in the `./system` subdirectory. Making system schema
-// instances is not supported by `Schema::new()` to prevent their dynamic redefinition.
+// @TODO: For all methods creating a `Schema` instance or related to that we need to check that the
+// names, field names and descriptions match the specification. Currently we only do this when
+// looking at operations (see `schema::validate` methods).
+// Related issue: https://github.com/p2panda/p2panda/issues/426
 #[derive(Clone, Debug, PartialEq)]
 pub struct Schema {
     /// The application schema id for this schema.
-    pub(super) id: SchemaId,
+    pub(crate) id: SchemaId,
 
     /// Describes the schema's intended use.
-    pub(super) description: String,
+    pub(crate) description: String,
 
     /// Maps all of the schema's field names to their respective types.
-    pub(super) fields: BTreeMap<FieldName, FieldType>,
+    pub(crate) fields: BTreeMap<FieldName, FieldType>,
 }
 
 impl Schema {
