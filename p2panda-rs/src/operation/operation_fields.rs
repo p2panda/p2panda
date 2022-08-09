@@ -21,11 +21,10 @@ use crate::operation::OperationValue;
 /// ```
 /// # extern crate p2panda_rs;
 /// # fn main() -> () {
-/// # use p2panda_rs::operation::{OperationFields, OperationValue};
-/// # use p2panda_rs::operation::traits::{AsOperation};
+/// # use p2panda_rs::operation::OperationFields;
 /// let mut fields = OperationFields::new();
 /// fields
-///     .insert("title", OperationValue::String("Hello, Panda!".to_owned()))
+///     .insert("title", "Hello, Panda!".into())
 ///     .unwrap();
 /// }
 /// ```
@@ -184,5 +183,23 @@ mod tests {
         let value = OperationValue::PinnedRelationList(relations);
         let mut fields = OperationFields::new();
         assert!(fields.insert("locations", value).is_ok());
+    }
+
+    #[test]
+    fn from_vec() {
+        let fields = OperationFields::from(vec![
+            ("message", "Hello, Panda!".into()),
+            ("message", "Duplicates are ignored".into()),
+            ("is_cute", true.into()),
+        ]);
+
+        assert_eq!(
+            fields.get("message").unwrap(),
+            &OperationValue::String("Hello, Panda!".into())
+        );
+        assert_eq!(
+            fields.get("is_cute").unwrap(),
+            &OperationValue::Boolean(true)
+        );
     }
 }
