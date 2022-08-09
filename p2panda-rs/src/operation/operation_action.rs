@@ -80,10 +80,14 @@ mod tests {
     use super::OperationAction;
 
     #[test]
-    fn as_str() {
+    fn string_representation() {
         assert_eq!(OperationAction::Create.as_str(), "create");
         assert_eq!(OperationAction::Update.as_str(), "update");
         assert_eq!(OperationAction::Delete.as_str(), "delete");
+
+        assert_eq!(format!("{}", OperationAction::Create), "create");
+        assert_eq!(format!("{}", OperationAction::Update), "update");
+        assert_eq!(format!("{}", OperationAction::Delete), "delete");
     }
 
     #[test]
