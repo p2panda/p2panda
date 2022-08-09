@@ -77,6 +77,10 @@ impl Display for OperationAction {
 
 #[cfg(test)]
 mod tests {
+    use ciborium::cbor;
+
+    use crate::serde::{deserialize_into, serialize_from, serialize_value};
+
     use super::OperationAction;
 
     #[test]
@@ -95,5 +99,28 @@ mod tests {
         assert_eq!(OperationAction::Create.as_u64(), 0);
         assert_eq!(OperationAction::Update.as_u64(), 1);
         assert_eq!(OperationAction::Delete.as_u64(), 2);
+    }
+
+    #[test]
+    fn serialize() {
+        let bytes = serialize_from(OperationAction::Create);
+        assert_eq!(bytes, vec![0]);
+
+        let bytes = serialize_from(OperationAction::Delete);
+        assert_eq!(bytes, vec![2]);
+    }
+
+    #[test]
+    fn deserialize() {
+        let action: OperationAction = deserialize_into(&serialize_value(cbor!(1))).unwrap();
+        assert_eq!(action, OperationAction::Update);
+
+        // Unsupported action
+        let invalid_action = deserialize_into::<OperationAction>(&serialize_value(cbor!(12)));
+        assert!(invalid_action.is_err());
+
+        // Can not be a string
+        let invalid_type = deserialize_into::<OperationAction>(&serialize_value(cbor!("0")));
+        assert!(invalid_type.is_err());
     }
 }

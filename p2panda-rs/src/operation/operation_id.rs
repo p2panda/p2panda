@@ -87,9 +87,13 @@ impl<'de> Deserialize<'de> for OperationId {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
+    use ciborium::cbor;
     use rstest::rstest;
 
     use crate::hash::Hash;
+    use crate::serde::{deserialize_into, serialize_from, serialize_value};
     use crate::test_utils::fixtures::random_hash;
     use crate::Human;
 
@@ -132,5 +136,40 @@ mod tests {
         let operation_id = OperationId::new(&Hash::new(hash_str).unwrap());
 
         assert_eq!(operation_id.display(), "<Operation 6ec805>");
+    }
+
+    #[test]
+    fn serialize() {
+        let bytes = serialize_from(
+            OperationId::from_str(
+                "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805",
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            bytes,
+            vec![
+                120, 68, 48, 48, 50, 48, 99, 102, 98, 48, 102, 97, 51, 55, 102, 51, 54, 100, 48,
+                56, 50, 102, 97, 97, 100, 51, 56, 56, 54, 97, 57, 102, 102, 98, 99, 99, 50, 56, 49,
+                51, 98, 55, 97, 102, 101, 57, 48, 102, 48, 54, 48, 57, 97, 53, 53, 54, 100, 52, 50,
+                53, 102, 49, 97, 55, 54, 101, 99, 56, 48, 53
+            ]
+        );
+    }
+
+    #[test]
+    fn deserialize() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let operation_id: OperationId = deserialize_into(&serialize_value(cbor!(
+            "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805"
+        )))
+        .unwrap();
+        assert_eq!(OperationId::from_str(hash_str).unwrap(), operation_id);
+
+        // Invalid hashes
+        let invalid_hash = deserialize_into::<OperationId>(&serialize_value(cbor!("1234")));
+        assert!(invalid_hash.is_err());
+        let empty_hash = deserialize_into::<OperationId>(&serialize_value(cbor!("")));
+        assert!(empty_hash.is_err());
     }
 }
