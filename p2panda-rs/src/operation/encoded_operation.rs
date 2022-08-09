@@ -69,10 +69,39 @@ impl EncodedOperation {
 mod tests {
     use std::collections::HashMap;
 
+    use ciborium::cbor;
     use rstest::rstest;
 
     use crate::operation::EncodedOperation;
+    use crate::serde::encode_value;
     use crate::test_utils::fixtures::encoded_operation;
+
+    #[test]
+    fn byte_and_str_representation() {
+        let bytes = encode_value(cbor!([
+            1,
+            2,
+            "schema_field_definition_v1",
+            ["00200f64117685c68c82154fb87260e670884a410a4add69c33bf4f606297b83b6ca"]
+        ]));
+
+        let encoded_operation = EncodedOperation::from_bytes(&bytes);
+
+        // Return bytes and size
+        assert_eq!(encoded_operation.into_bytes(), bytes);
+        assert_eq!(encoded_operation.size() as usize, bytes.len());
+
+        // Represent bytes as hexadecimal string
+        assert_eq!(
+            concat!(
+                "840102781a736368656d615f6669656c645f646566696e69746",
+                "96f6e5f76318178443030323030663634313137363835633638",
+                "633832313534666238373236306536373038383461343130613",
+                "461646436396333336266346636303632393762383362366361"
+            ),
+            format!("{}", encoded_operation)
+        );
+    }
 
     #[rstest]
     fn it_hashes(encoded_operation: EncodedOperation) {
