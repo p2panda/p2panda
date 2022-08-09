@@ -235,5 +235,22 @@ mod tests {
         assert!(deserialize_into::<PlainOperation>(&serialize_value(cbor!([1]))).is_err());
         assert!(deserialize_into::<PlainOperation>(&serialize_value(cbor!([1, 1]))).is_err());
         assert!(deserialize_into::<PlainOperation>(&serialize_value(cbor!("Test"))).is_err());
+        assert!(deserialize_into::<PlainOperation>(&serialize_value(cbor!([
+            1,
+            0,
+            "schema_field_definition_v1"
+        ])))
+        .is_err());
+        assert!(deserialize_into::<PlainOperation>(&serialize_value(cbor!([
+            1,
+            1,
+            "schema_field_definition_v1",
+            ["0020"]
+        ])))
+        .is_err());
+        assert!(deserialize_into::<PlainOperation>(&serialize_value(
+            cbor!([1, 1, "schema_field_definition_v1", { "type" => "int" }])
+        ))
+        .is_err());
     }
 }
