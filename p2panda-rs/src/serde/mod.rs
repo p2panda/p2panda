@@ -7,6 +7,6 @@ mod hex_str;
 mod u64_str;
 
 #[cfg(any(feature = "testing", test))]
-pub use cbor::encode_value;
+pub use cbor::{deserialize_into, serialize_from, serialize_value};
 pub use hex_str::{deserialize_hex, serialize_hex};
 pub use u64_str::StringOrU64;

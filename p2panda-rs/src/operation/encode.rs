@@ -47,7 +47,7 @@ mod tests {
 
     use crate::operation::plain::PlainOperation;
     use crate::operation::Operation;
-    use crate::serde::encode_value;
+    use crate::serde::serialize_value;
     use crate::test_utils::fixtures::operation_with_schema;
 
     use super::{encode_operation, encode_plain_operation};
@@ -62,7 +62,7 @@ mod tests {
 
         assert_eq!(from_operation.to_string(), from_plain_operation.to_string());
         assert_eq!(
-            encode_value(cbor!(
+            serialize_value(cbor!(
                 [
                     1,
                     0,

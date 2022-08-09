@@ -51,7 +51,7 @@ mod tests {
     use rstest_reuse::apply;
 
     use crate::operation::EncodedOperation;
-    use crate::serde::encode_value;
+    use crate::serde::serialize_value;
     use crate::test_utils::constants::{HASH, SCHEMA_ID};
     use crate::test_utils::fixtures::Fixture;
     use crate::test_utils::templates::version_fixtures;
@@ -59,7 +59,7 @@ mod tests {
     use super::decode_operation;
 
     fn encode_cbor(value: Value) -> EncodedOperation {
-        EncodedOperation::new(&encode_value(Ok(value)))
+        EncodedOperation::new(&serialize_value(Ok(value)))
     }
 
     #[rstest]

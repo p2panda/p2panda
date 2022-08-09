@@ -47,3 +47,37 @@ impl<'de> Deserialize<'de> for OperationVersion {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ciborium::cbor;
+
+    use crate::serde::{deserialize_into, serialize_from, serialize_value};
+
+    use super::OperationVersion;
+
+    #[test]
+    fn u64_representation() {
+        assert_eq!(OperationVersion::V1.as_u64(), 1);
+    }
+
+    #[test]
+    fn serialize() {
+        let bytes = serialize_from(OperationVersion::V1);
+        assert_eq!(bytes, vec![1]);
+    }
+
+    #[test]
+    fn deserialize() {
+        let version: OperationVersion = deserialize_into(&serialize_value(cbor!(1))).unwrap();
+        assert_eq!(version, OperationVersion::V1);
+
+        // Unsupported version number
+        let invalid_version = deserialize_into::<OperationVersion>(&serialize_value(cbor!(0)));
+        assert!(invalid_version.is_err());
+
+        // Can not be a string
+        let invalid_type = deserialize_into::<OperationVersion>(&serialize_value(cbor!("0")));
+        assert!(invalid_type.is_err());
+    }
+}

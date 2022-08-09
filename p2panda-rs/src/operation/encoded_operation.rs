@@ -73,12 +73,12 @@ mod tests {
     use rstest::rstest;
 
     use crate::operation::EncodedOperation;
-    use crate::serde::encode_value;
+    use crate::serde::serialize_value;
     use crate::test_utils::fixtures::encoded_operation;
 
     #[test]
     fn byte_and_str_representation() {
-        let bytes = encode_value(cbor!([
+        let bytes = serialize_value(cbor!([
             1,
             2,
             "schema_field_definition_v1",
