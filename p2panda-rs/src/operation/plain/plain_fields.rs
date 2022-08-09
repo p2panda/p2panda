@@ -156,7 +156,6 @@ mod tests {
 
     use crate::operation::plain::PlainValue;
     use crate::operation::OperationFields;
-
     use crate::serde::{deserialize_into, serialize_from, serialize_value};
     use crate::test_utils::fixtures::operation_fields;
 

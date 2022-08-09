@@ -123,3 +123,125 @@ impl From<Vec<DocumentViewId>> for PlainValue {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ciborium::cbor;
+    use rstest::rstest;
+
+    use crate::document::{DocumentId, DocumentViewId};
+    use crate::serde::{deserialize_into, serialize_from, serialize_value};
+    use crate::test_utils::fixtures::{document_id, document_view_id};
+
+    use super::PlainValue;
+
+    #[test]
+    fn field_type_representation() {
+        assert_eq!("int", PlainValue::Integer(5).field_type());
+        assert_eq!("bool", PlainValue::Boolean(false).field_type());
+        assert_eq!(
+            "str",
+            PlainValue::StringOrRelation("test".into()).field_type()
+        );
+        assert_eq!(
+            "str[]",
+            PlainValue::PinnedRelationOrRelationList(vec!["test".into()]).field_type()
+        );
+    }
+
+    #[rstest]
+    fn from_primitives(document_id: DocumentId, document_view_id: DocumentViewId) {
+        // Scalar types
+        assert_eq!(PlainValue::Boolean(true), true.into());
+        assert_eq!(PlainValue::Float(1.5), 1.5.into());
+        assert_eq!(PlainValue::Integer(3), 3.into());
+        assert_eq!(
+            PlainValue::StringOrRelation("hellö".to_string()),
+            "hellö".into()
+        );
+
+        // Relation types
+        assert_eq!(
+            PlainValue::StringOrRelation(document_id.to_string()),
+            document_id.clone().into()
+        );
+        assert_eq!(
+            PlainValue::PinnedRelationOrRelationList(vec![document_id.to_string()]),
+            vec![document_id].into()
+        );
+        assert_eq!(
+            PlainValue::PinnedRelationOrRelationList(vec![document_view_id.to_string()]),
+            document_view_id.clone().into()
+        );
+        assert_eq!(
+            PlainValue::PinnedRelationList(vec![vec![document_view_id.to_string()]]),
+            vec![document_view_id.clone()].into()
+        );
+    }
+
+    #[test]
+    fn serialize() {
+        assert_eq!(
+            serialize_from(PlainValue::Integer(5)),
+            serialize_value(cbor!(5))
+        );
+
+        assert_eq!(
+            serialize_from(PlainValue::StringOrRelation("Piep".into())),
+            serialize_value(cbor!("Piep"))
+        );
+
+        assert_eq!(
+            serialize_from(PlainValue::PinnedRelationOrRelationList(vec![
+                "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4".into()
+            ])),
+            serialize_value(cbor!([
+                "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4"
+            ]))
+        );
+
+        assert_eq!(
+            serialize_from(PlainValue::PinnedRelationList(vec![vec![
+                "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4".into()
+            ]])),
+            serialize_value(cbor!([[
+                "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4"
+            ]]))
+        );
+    }
+
+    #[test]
+    fn deserialize() {
+        assert_eq!(
+            deserialize_into::<PlainValue>(&serialize_value(cbor!(12))).unwrap(),
+            PlainValue::Integer(12)
+        );
+        assert_eq!(
+            deserialize_into::<PlainValue>(&serialize_value(cbor!(12.0))).unwrap(),
+            PlainValue::Float(12.0)
+        );
+        assert_eq!(
+            deserialize_into::<PlainValue>(&serialize_value(cbor!("Piep"))).unwrap(),
+            PlainValue::StringOrRelation("Piep".into())
+        );
+    }
+
+    #[test]
+    fn large_numbers() {
+        assert_eq!(
+            deserialize_into::<PlainValue>(&serialize_value(cbor!(i64::MAX))).unwrap(),
+            PlainValue::Integer(i64::MAX)
+        );
+        assert_eq!(
+            deserialize_into::<PlainValue>(&serialize_value(cbor!(f64::MAX))).unwrap(),
+            PlainValue::Float(f64::MAX)
+        );
+
+        // It deserializes a too large integer into a float and passes which is not the expected
+        // behaviour, latest when checking against a schema it should fail though!
+        let bytes = serialize_value(cbor!(u64::MAX));
+        let value = deserialize_into::<PlainValue>(&bytes);
+        assert!(value.is_ok());
+        assert_eq!(value.unwrap().field_type(), "float");
+    }
+}

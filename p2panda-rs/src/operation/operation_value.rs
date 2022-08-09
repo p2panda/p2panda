@@ -153,10 +153,6 @@ mod tests {
         assert_eq!(OperationValue::Float(1.5), 1.5.into());
         assert_eq!(OperationValue::Integer(3), 3.into());
         assert_eq!(OperationValue::String("hellö".to_string()), "hellö".into());
-        assert_eq!(
-            OperationValue::String("hellö".to_string()),
-            "hellö".to_string().into()
-        );
 
         // Relation types
         assert_eq!(
