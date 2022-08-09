@@ -146,7 +146,7 @@ impl From<&Operation> for PlainOperation {
     }
 }
 
-// @TODO: Remove this as soon as wasm binding support schemas and operations.
+// @TODO: Remove this as soon as wasm binding supports schemas and operations.
 #[cfg(target_arch = "wasm32")]
 impl PlainOperation {
     /// Temporary constructor method to create new `PlainOperation` instances.
@@ -160,5 +160,80 @@ impl PlainOperation {
         fields: Option<PlainFields>,
     ) -> Self {
         PlainOperation(version, action, schema_id, previous_operations, fields)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ciborium::cbor;
+    use rstest::rstest;
+
+    use crate::document::DocumentViewId;
+    use crate::operation::traits::{Actionable, Schematic};
+    use crate::operation::{Operation, OperationAction, OperationId, OperationVersion};
+    use crate::schema::SchemaId;
+    use crate::serde::{deserialize_into, serialize_from, serialize_value};
+    use crate::test_utils::fixtures::{
+        document_view_id, operation_with_schema, random_operation_id,
+    };
+
+    use super::PlainOperation;
+
+    #[rstest]
+    fn from_operation(#[from(operation_with_schema)] operation: Operation) {
+        let plain_operation = PlainOperation::from(&operation);
+        assert_eq!(plain_operation.action(), operation.action());
+        assert_eq!(plain_operation.version(), operation.version());
+        assert_eq!(plain_operation.schema_id(), operation.schema_id());
+        assert_eq!(plain_operation.fields(), operation.fields());
+        assert_eq!(
+            plain_operation.previous_operations(),
+            operation.previous_operations()
+        );
+    }
+
+    #[rstest]
+    fn serialize(document_view_id: DocumentViewId) {
+        assert_eq!(
+            serialize_from(PlainOperation(
+                OperationVersion::V1,
+                OperationAction::Create,
+                SchemaId::Application("mushrooms".into(), document_view_id.clone()),
+                None,
+                Some(vec![("name", "Hericium coralloides".into())].into())
+            )),
+            serialize_value(cbor!(
+                [1, 0, format!("mushrooms_{}", document_view_id), {
+                    "name" => "Hericium coralloides"
+                }]
+            ))
+        );
+    }
+
+    #[rstest]
+    fn deserialize(document_view_id: DocumentViewId, random_operation_id: OperationId) {
+        assert_eq!(
+            deserialize_into::<PlainOperation>(&serialize_value(cbor!(
+                [1, 1, format!("mushrooms_{}", document_view_id), [random_operation_id.to_string()], {
+                    "name" => "Lycoperdon echinatum"
+                }]
+            )))
+            .unwrap(),
+            PlainOperation(
+                OperationVersion::V1,
+                OperationAction::Update,
+                SchemaId::Application("mushrooms".into(), document_view_id),
+                Some(DocumentViewId::from(random_operation_id)),
+                Some(vec![("name", "Lycoperdon echinatum".into())].into())
+            )
+        );
+    }
+
+    #[test]
+    fn deserialize_invalid_operations() {
+        assert!(deserialize_into::<PlainOperation>(&serialize_value(cbor!([]))).is_err());
+        assert!(deserialize_into::<PlainOperation>(&serialize_value(cbor!([1]))).is_err());
+        assert!(deserialize_into::<PlainOperation>(&serialize_value(cbor!([1, 1]))).is_err());
+        assert!(deserialize_into::<PlainOperation>(&serialize_value(cbor!("Test"))).is_err());
     }
 }
