@@ -2,7 +2,6 @@
 
 use std::hash::Hash as StdHash;
 
-use crate::entry::Entry;
 use crate::identity::Author;
 use crate::operation::traits::AsVerifiedOperation;
 use crate::operation::{Operation, OperationId};
