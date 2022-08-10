@@ -125,26 +125,26 @@ pub fn validate_operation_with_entry(
 pub fn validate_operation_format<O: Actionable + Schematic>(
     operation: &O,
 ) -> Result<(), ValidateOperationError> {
-    let action = operation.action();
-    let fields = operation.fields();
-    let previous_operations = operation.previous_operations();
-
-    match (action, fields, previous_operations) {
-        (OperationAction::Create, None, _) => Err(ValidateOperationError::ExpectedFields),
-        (OperationAction::Create, Some(_), Some(_)) => {
-            Err(ValidateOperationError::UnexpectedPreviousOperations)
+    match operation.action() {
+        OperationAction::Create => {
+            // We don't want to return the fields here so we ignore them.
+            let _ = validate_create_operation_format(
+                operation.previous_operations(),
+                operation.fields(),
+            )?;
+            Ok(())
         }
-        (OperationAction::Create, Some(_), None) => Ok(()),
-        (OperationAction::Update, None, _) => Err(ValidateOperationError::ExpectedFields),
-        (OperationAction::Update, Some(_), None) => {
-            Err(ValidateOperationError::ExpectedPreviousOperations)
+        OperationAction::Update => {
+            // We don't want to return the fields here so we ignore them.
+            let _ = validate_update_operation_format(
+                operation.previous_operations(),
+                operation.fields(),
+            )?;
+            Ok(())
         }
-        (OperationAction::Update, Some(_), Some(_)) => Ok(()),
-        (OperationAction::Delete, Some(_), _) => Err(ValidateOperationError::UnexpectedFields),
-        (OperationAction::Delete, None, None) => {
-            Err(ValidateOperationError::ExpectedPreviousOperations)
+        OperationAction::Delete => {
+            validate_delete_operation_format(operation.previous_operations(), operation.fields())
         }
-        (OperationAction::Delete, None, Some(_)) => Ok(()),
     }
 }
 
@@ -178,20 +178,56 @@ pub fn validate_operation<O: Actionable + Schematic>(
     }
 }
 
+/// Validate the header fields of a CREATE operation.
+///
+/// Returns the unwrapped fields which we may wish to validate agains a schema in a
+/// following step.
+fn validate_create_operation_format(
+    plain_previous_operations: Option<&DocumentViewId>,
+    plain_fields: Option<PlainFields>,
+) -> Result<PlainFields, ValidateOperationError> {
+    match (plain_fields, plain_previous_operations) {
+        (None, _) => Err(ValidateOperationError::ExpectedFields),
+        (Some(_), Some(_)) => Err(ValidateOperationError::UnexpectedPreviousOperations),
+        (Some(fields), None) => Ok(fields),
+    }
+}
+
+/// Validate the header fields of a UPDATE operation.
+///
+/// Returns the unwrapped fields which we may wish to validate agains a schema in a
+/// following step.
+fn validate_update_operation_format(
+    plain_previous_operations: Option<&DocumentViewId>,
+    plain_fields: Option<PlainFields>,
+) -> Result<PlainFields, ValidateOperationError> {
+    match (plain_fields, plain_previous_operations) {
+        (None, _) => Err(ValidateOperationError::ExpectedFields),
+        (Some(_), None) => Err(ValidateOperationError::ExpectedPreviousOperations),
+        (Some(fields), Some(_)) => Ok(fields),
+    }
+}
+
+/// Validate the header fields of a DELETE operation.
+fn validate_delete_operation_format(
+    plain_previous_operations: Option<&DocumentViewId>,
+    plain_fields: Option<PlainFields>,
+) -> Result<(), ValidateOperationError> {
+    match (plain_fields, plain_previous_operations) {
+        (Some(_), _) => Err(ValidateOperationError::UnexpectedFields),
+        (None, None) => Err(ValidateOperationError::ExpectedPreviousOperations),
+        (None, Some(_)) => Ok(()),
+    }
+}
+
 /// Validates a CREATE operation.
 fn validate_create_operation(
     plain_previous_operations: Option<&DocumentViewId>,
     plain_fields: Option<PlainFields>,
     schema: &Schema,
 ) -> Result<Operation, ValidateOperationError> {
-    if plain_previous_operations.is_some() {
-        return Err(ValidateOperationError::UnexpectedPreviousOperations);
-    }
-
-    let validated_fields = match plain_fields {
-        Some(fields) => validate_all_fields(&fields, schema)?,
-        None => return Err(ValidateOperationError::ExpectedFields),
-    };
+    let fields = validate_create_operation_format(plain_previous_operations, plain_fields)?;
+    let validated_fields = validate_all_fields(&fields, schema)?;
 
     Ok(Operation {
         version: OperationVersion::V1,
@@ -208,21 +244,16 @@ fn validate_update_operation(
     plain_fields: Option<PlainFields>,
     schema: &Schema,
 ) -> Result<Operation, ValidateOperationError> {
-    let validated_fields = match plain_fields {
-        Some(fields) => validate_only_given_fields(&fields, schema)?,
-        None => return Err(ValidateOperationError::ExpectedFields),
-    };
+    let fields = validate_update_operation_format(plain_previous_operations, plain_fields)?;
+    let validated_fields = validate_only_given_fields(&fields, schema)?;
 
-    match plain_previous_operations {
-        Some(previous_operations) => Ok(Operation {
-            version: OperationVersion::V1,
-            action: OperationAction::Update,
-            schema_id: schema.id().to_owned(),
-            previous_operations: Some(previous_operations.to_owned()),
-            fields: Some(validated_fields),
-        }),
-        None => Err(ValidateOperationError::ExpectedPreviousOperations),
-    }
+    Ok(Operation {
+        version: OperationVersion::V1,
+        action: OperationAction::Update,
+        schema_id: schema.id().to_owned(),
+        previous_operations: plain_previous_operations.cloned(),
+        fields: Some(validated_fields),
+    })
 }
 
 /// Validates a DELETE operation.
@@ -231,20 +262,15 @@ fn validate_delete_operation(
     plain_fields: Option<PlainFields>,
     schema: &Schema,
 ) -> Result<Operation, ValidateOperationError> {
-    if plain_fields.is_some() {
-        return Err(ValidateOperationError::UnexpectedFields);
-    }
+    validate_delete_operation_format(plain_previous_operations, plain_fields)?;
 
-    match plain_previous_operations {
-        Some(previous_operations) => Ok(Operation {
-            version: OperationVersion::V1,
-            action: OperationAction::Delete,
-            schema_id: schema.id().to_owned(),
-            previous_operations: Some(previous_operations.to_owned()),
-            fields: None,
-        }),
-        None => Err(ValidateOperationError::ExpectedPreviousOperations),
-    }
+    Ok(Operation {
+        version: OperationVersion::V1,
+        action: OperationAction::Delete,
+        schema_id: schema.id().to_owned(),
+        previous_operations: plain_previous_operations.cloned(),
+        fields: None,
+    })
 }
 
 #[cfg(test)]
@@ -254,12 +280,13 @@ mod tests {
     use rstest::rstest;
     use rstest_reuse::apply;
 
+    use crate::document::{DocumentId, DocumentViewId};
     use crate::operation::decode::decode_operation;
     use crate::operation::plain::PlainOperation;
-    use crate::operation::EncodedOperation;
+    use crate::operation::{EncodedOperation, OperationAction, OperationBuilder};
     use crate::schema::{FieldType, Schema, SchemaId};
     use crate::test_utils::constants::{HASH, SCHEMA_ID};
-    use crate::test_utils::fixtures::{schema_id, Fixture};
+    use crate::test_utils::fixtures::{document_id, document_view_id, schema, schema_id, Fixture};
     use crate::test_utils::templates::version_fixtures;
 
     use super::validate_operation;
@@ -365,5 +392,79 @@ mod tests {
         // Validating operation fixture against schema should succeed
         let plain_operation = decode_operation(&fixture.operation_encoded).unwrap();
         assert!(validate_operation(&plain_operation, &fixture.schema).is_ok());
+    }
+
+    #[rstest]
+    fn operation_schema_validation(
+        #[with(vec![
+                ("firstname".into(), FieldType::String),
+                ("year".into(), FieldType::Integer),
+                ("is_cute".into(), FieldType::Boolean),
+                ("address".into(), FieldType::Relation(schema_id(SCHEMA_ID))),
+            ])]
+        schema: Schema,
+        document_id: DocumentId,
+        document_view_id: DocumentViewId,
+    ) {
+        // Operation matches schema
+        let operation = OperationBuilder::new(schema.id())
+            .fields(&[
+                ("firstname", "Peter".into()),
+                ("year", 2020.into()),
+                ("is_cute", false.into()),
+                ("address", document_id.clone().into()),
+            ])
+            .build()
+            .unwrap();
+
+        assert!(validate_operation(&operation, &schema).is_ok());
+
+        // Field ordering does not matter in builder
+        let operation = OperationBuilder::new(schema.id())
+            .fields(&[
+                ("address", document_id.clone().into()),
+                ("is_cute", false.into()),
+                ("year", 2020.into()),
+                ("firstname", "Peter".into()),
+            ])
+            .build()
+            .unwrap();
+
+        assert!(validate_operation(&operation, &schema).is_ok());
+
+        // Field missing
+        let operation = OperationBuilder::new(schema.id())
+            .fields(&[
+                ("firstname", "Peter".into()),
+                ("is_cute", false.into()),
+                ("address", document_id.clone().into()),
+            ])
+            .build()
+            .unwrap();
+
+        assert!(validate_operation(&operation, &schema).is_err());
+
+        // Invalid type
+        let operation = OperationBuilder::new(schema.id())
+            .fields(&[
+                ("firstname", "Peter".into()),
+                ("year", "2020".into()),
+                ("is_cute", false.into()),
+                ("address", document_id.clone().into()),
+            ])
+            .build()
+            .unwrap();
+
+        assert!(validate_operation(&operation, &schema).is_err());
+
+        // Correct UPDATE operation matching schema
+        let operation = OperationBuilder::new(schema.id())
+            .action(OperationAction::Update)
+            .previous_operations(&document_view_id)
+            .fields(&[("address", document_id.into())])
+            .build()
+            .unwrap();
+
+        assert!(validate_operation(&operation, &schema).is_ok());
     }
 }
