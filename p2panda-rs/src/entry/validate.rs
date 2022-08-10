@@ -46,22 +46,11 @@ pub fn validate_links(entry: &Entry) -> Result<(), ValidateEntryError> {
 /// provider implementation.
 pub fn validate_log_integrity(
     entry: &Entry,
-    skiplink_entry: Option<&Entry>,
-    skiplink_entry_hash: Option<&Hash>,
-    backlink_entry: Option<&Entry>,
-    backlink_entry_hash: Option<&Hash>,
+    skiplink: Option<(&Entry, &Hash)>,
+    backlink: Option<(&Entry, &Hash)>,
 ) -> Result<(), ValidateEntryError> {
-    // First make sure we didn't pass wrong arguments
-    if backlink_entry.is_some() != backlink_entry_hash.is_some() {
-        panic!("Both encoded and decoded backlink entry must be the same")
-    }
-
-    if skiplink_entry.is_some() != skiplink_entry_hash.is_some() {
-        panic!("Both encoded and decoded skiplink entry must be the same")
-    }
-
-    match skiplink_entry {
-        Some(link) => {
+    match skiplink {
+        Some((link, link_hash)) => {
             // Is the claimed link entry part of the same log?
             if entry.log_id() != link.log_id() {
                 return Err(ValidateEntryError::WrongSkiplinkLogId(
@@ -74,7 +63,7 @@ pub fn validate_log_integrity(
                 Some(entry_link) => {
                     // Is the claimed hash matching with what is in the log?
                     // Unwrap here as we know this skiplink exists
-                    if entry_link != skiplink_entry_hash.unwrap() {
+                    if entry_link != link_hash {
                         return Err(ValidateEntryError::WrongSkiplinkHash);
                     }
                 }
@@ -89,8 +78,8 @@ pub fn validate_log_integrity(
         None => (),
     };
 
-    match backlink_entry {
-        Some(link) => {
+    match backlink {
+        Some((link, link_hash)) => {
             // Is the claimed link entry part of the same log?
             if entry.log_id() != link.log_id() {
                 return Err(ValidateEntryError::WrongBacklinkLogId(
@@ -103,7 +92,7 @@ pub fn validate_log_integrity(
                 Some(entry_link) => {
                     // Is the claimed hash matching with what is in the log?
                     // Unwrap here as we know this backlink exists
-                    if entry_link != backlink_entry_hash.unwrap() {
+                    if entry_link != link_hash {
                         return Err(ValidateEntryError::WrongBacklinkHash);
                     }
                 }
@@ -254,47 +243,31 @@ mod tests {
             .unwrap();
 
         // Validate correct log integrity
-        assert!(validate_log_integrity(&entry_1, None, None, None, None).is_ok());
-        assert!(validate_log_integrity(
-            &entry_2,
-            None,
-            None,
-            Some(&entry_1),
-            Some(&encoded_entry_1.hash())
-        )
-        .is_ok());
-        assert!(validate_log_integrity(
-            &entry_3,
-            None,
-            None,
-            Some(&entry_2),
-            Some(&encoded_entry_2.hash())
-        )
-        .is_ok());
+        assert!(validate_log_integrity(&entry_1, None, None).is_ok());
+        assert!(
+            validate_log_integrity(&entry_2, None, Some((&entry_1, &encoded_entry_1.hash())),)
+                .is_ok()
+        );
+        assert!(
+            validate_log_integrity(&entry_3, None, Some((&entry_2, &encoded_entry_2.hash())),)
+                .is_ok()
+        );
         assert!(validate_log_integrity(
             &entry_4,
-            Some(&entry_1),
-            Some(&encoded_entry_1.hash()),
-            Some(&entry_3),
-            Some(&encoded_entry_3.hash())
+            Some((&entry_1, &encoded_entry_1.hash())),
+            Some((&entry_3, &encoded_entry_3.hash())),
         )
         .is_ok());
 
         // Validate invalid log integrity
-        assert!(validate_log_integrity(
-            &entry_2,
-            None,
-            None,
-            Some(&entry_3),
-            Some(&encoded_entry_3.hash())
-        )
-        .is_err());
+        assert!(
+            validate_log_integrity(&entry_2, None, Some((&entry_3, &encoded_entry_3.hash())),)
+                .is_err()
+        );
         assert!(validate_log_integrity(
             &entry_4,
-            Some(&entry_3),
-            Some(&encoded_entry_3.hash()),
-            Some(&entry_1),
-            Some(&encoded_entry_1.hash())
+            Some((&entry_3, &encoded_entry_3.hash())),
+            Some((&entry_1, &encoded_entry_1.hash())),
         )
         .is_err());
     }

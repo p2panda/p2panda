@@ -84,10 +84,8 @@ use crate::Human;
 pub fn validate_operation_with_entry(
     entry: &Entry,
     entry_encoded: &EncodedEntry,
-    skiplink_entry: Option<&Entry>,
-    skiplink_entry_hash: Option<&Hash>,
-    backlink_entry: Option<&Entry>,
-    backlink_entry_hash: Option<&Hash>,
+    skiplink: Option<(&Entry, &Hash)>,
+    backlink: Option<(&Entry, &Hash)>,
     plain_operation: &PlainOperation,
     operation_encoded: &EncodedOperation,
     schema: &Schema,
@@ -96,13 +94,7 @@ pub fn validate_operation_with_entry(
     validate_payload(entry, operation_encoded)?;
 
     // Verify that the entries links are correct
-    validate_log_integrity(
-        entry,
-        skiplink_entry,
-        skiplink_entry_hash,
-        backlink_entry,
-        backlink_entry_hash,
-    )?;
+    validate_log_integrity(entry, skiplink, backlink)?;
 
     // The operation id is the result of a hashing function over the entry bytes.
     let operation_id = entry_encoded.hash().into();
