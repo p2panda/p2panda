@@ -21,15 +21,8 @@ pub struct VerifiedOperation {
     /// Operation, which is the payload of the entry.
     pub(crate) operation: Operation,
 
-    /// Entry which was used to publish this operation.
-    pub(crate) entry: Entry,
-}
-
-impl VerifiedOperation {
-    /// Returns the entry related to this operation.
-    pub fn entry(&self) -> &Entry {
-        &self.entry
-    }
+    /// The public key of the key pair used to publish this operation.
+    pub(crate) public_key: Author,
 }
 
 impl AsVerifiedOperation for VerifiedOperation {
@@ -45,7 +38,7 @@ impl AsVerifiedOperation for VerifiedOperation {
 
     /// Returns the public key of the author of this operation.
     fn public_key(&self) -> &Author {
-        self.entry.public_key()
+        &self.public_key
     }
 }
 
@@ -66,11 +59,11 @@ impl StdHash for VerifiedOperation {
 #[cfg(test)]
 impl VerifiedOperation {
     /// Create a verified operation from it's unverified parts for testing.
-    pub fn new(entry: &Entry, operation: &Operation, operation_id: &OperationId) -> Self {
+    pub fn new(public_key: &Author, operation: &Operation, operation_id: &OperationId) -> Self {
         Self {
             operation_id: operation_id.to_owned(),
             operation: operation.to_owned(),
-            entry: entry.to_owned(),
+            public_key: public_key.to_owned(),
         }
     }
 }

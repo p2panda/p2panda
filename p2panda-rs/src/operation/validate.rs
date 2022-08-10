@@ -103,7 +103,7 @@ pub fn validate_operation_with_entry(
     let operation = validate_operation(plain_operation, schema)?;
 
     Ok(VerifiedOperation {
-        entry: entry.to_owned(),
+        public_key: entry.public_key().to_owned(),
         operation,
         operation_id,
     })
