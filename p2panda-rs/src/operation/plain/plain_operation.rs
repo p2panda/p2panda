@@ -39,8 +39,8 @@ impl Actionable for PlainOperation {
 }
 
 impl Schematic for PlainOperation {
-    fn schema_id(&self) -> SchemaId {
-        self.2.clone()
+    fn schema_id(&self) -> &SchemaId {
+        &self.2
     }
 
     fn fields(&self) -> Option<PlainFields> {

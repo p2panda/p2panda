@@ -28,7 +28,7 @@ pub trait Actionable {
 /// against a schema.
 pub trait Schematic {
     /// Returns the schema id.
-    fn schema_id(&self) -> SchemaId;
+    fn schema_id(&self) -> &SchemaId;
 
     /// Returns the fields holding the data.
     fn fields(&self) -> Option<PlainFields>;

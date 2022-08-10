@@ -164,7 +164,7 @@ pub fn validate_operation<O: Actionable + Schematic>(
     let fields = operation.fields();
 
     // Make sure the schema id and given schema matches
-    if operation.schema_id() != *schema.id() {
+    if operation.schema_id() != schema.id() {
         return Err(ValidateOperationError::SchemaNotMatching(
             operation.schema_id().display(),
             schema.id().display(),

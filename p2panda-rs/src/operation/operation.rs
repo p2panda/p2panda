@@ -165,8 +165,8 @@ impl Actionable for Operation {
 }
 
 impl Schematic for Operation {
-    fn schema_id(&self) -> SchemaId {
-        self.schema_id.clone()
+    fn schema_id(&self) -> &SchemaId {
+        &self.schema_id
     }
 
     fn fields(&self) -> Option<PlainFields> {
