@@ -117,7 +117,38 @@ pub fn validate_operation_with_entry(
     })
 }
 
-/// Checks the fields of an operation-like data type against a schema.
+/// Check the format of an operation-like data type.
+///
+/// This method checks against:
+///
+/// 1. Correct operation format (#OP2)
+pub fn validate_operation_format<O: Actionable + Schematic>(
+    operation: &O,
+) -> Result<(), ValidateOperationError> {
+    let action = operation.action();
+    let fields = operation.fields();
+    let previous_operations = operation.previous_operations();
+
+    match (action, fields, previous_operations) {
+        (OperationAction::Create, None, _) => Err(ValidateOperationError::ExpectedFields),
+        (OperationAction::Create, Some(_), Some(_)) => {
+            Err(ValidateOperationError::UnexpectedPreviousOperations)
+        }
+        (OperationAction::Create, Some(_), None) => Ok(()),
+        (OperationAction::Update, None, _) => Err(ValidateOperationError::ExpectedFields),
+        (OperationAction::Update, Some(_), None) => {
+            Err(ValidateOperationError::ExpectedPreviousOperations)
+        }
+        (OperationAction::Update, Some(_), Some(_)) => Ok(()),
+        (OperationAction::Delete, Some(_), _) => Err(ValidateOperationError::UnexpectedFields),
+        (OperationAction::Delete, None, None) => {
+            Err(ValidateOperationError::ExpectedPreviousOperations)
+        }
+        (OperationAction::Delete, None, Some(_)) => Ok(()),
+    }
+}
+
+/// Checks the fields and format of an operation-like data type against a schema.
 ///
 /// This method checks against:
 ///
@@ -133,7 +164,7 @@ pub fn validate_operation<O: Actionable + Schematic>(
     let fields = operation.fields();
 
     // Make sure the schema id and given schema matches
-    if operation.schema_id() != schema.id() {
+    if operation.schema_id() != *schema.id() {
         return Err(ValidateOperationError::SchemaNotMatching(
             operation.schema_id().display(),
             schema.id().display(),
@@ -165,7 +196,7 @@ fn validate_create_operation(
     Ok(Operation {
         version: OperationVersion::V1,
         action: OperationAction::Create,
-        schema: schema.to_owned(),
+        schema_id: schema.id().to_owned(),
         previous_operations: None,
         fields: Some(validated_fields),
     })
@@ -186,7 +217,7 @@ fn validate_update_operation(
         Some(previous_operations) => Ok(Operation {
             version: OperationVersion::V1,
             action: OperationAction::Update,
-            schema: schema.to_owned(),
+            schema_id: schema.id().to_owned(),
             previous_operations: Some(previous_operations.to_owned()),
             fields: Some(validated_fields),
         }),
@@ -208,7 +239,7 @@ fn validate_delete_operation(
         Some(previous_operations) => Ok(Operation {
             version: OperationVersion::V1,
             action: OperationAction::Delete,
-            schema: schema.to_owned(),
+            schema_id: schema.id().to_owned(),
             previous_operations: Some(previous_operations.to_owned()),
             fields: None,
         }),

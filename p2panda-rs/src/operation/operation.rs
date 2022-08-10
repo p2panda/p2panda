@@ -4,9 +4,9 @@ use crate::document::DocumentViewId;
 use crate::operation::error::OperationBuilderError;
 use crate::operation::plain::PlainFields;
 use crate::operation::traits::{Actionable, AsOperation, Schematic};
-use crate::operation::validate::validate_operation;
+use crate::operation::validate::validate_operation_format;
 use crate::operation::{OperationAction, OperationFields, OperationValue, OperationVersion};
-use crate::schema::{Schema, SchemaId};
+use crate::schema::SchemaId;
 
 /// Create new operations.
 #[derive(Clone, Debug)]
@@ -15,7 +15,7 @@ pub struct OperationBuilder {
     action: OperationAction,
 
     /// Schema instance of this operation.
-    schema: Schema,
+    schema_id: SchemaId,
 
     /// Previous operations field.
     previous_operations: Option<DocumentViewId>,
@@ -26,10 +26,10 @@ pub struct OperationBuilder {
 
 impl OperationBuilder {
     /// Returns a new instance of `OperationBuilder`.
-    pub fn new(schema: &Schema) -> Self {
+    pub fn new(schema_id: &SchemaId) -> Self {
         Self {
             action: OperationAction::Create,
-            schema: schema.to_owned(),
+            schema_id: schema_id.to_owned(),
             previous_operations: None,
             fields: None,
         }
@@ -42,8 +42,8 @@ impl OperationBuilder {
     }
 
     /// Set operation schema.
-    pub fn schema(mut self, schema: &Schema) -> Self {
-        self.schema = schema.to_owned();
+    pub fn schema_id(mut self, schema_id: SchemaId) -> Self {
+        self.schema_id = schema_id;
         self
     }
 
@@ -79,12 +79,12 @@ impl OperationBuilder {
         let operation = Operation {
             action: self.action,
             version: OperationVersion::V1,
-            schema: self.schema.to_owned(),
+            schema_id: self.schema_id.to_owned(),
             previous_operations: self.previous_operations.to_owned(),
             fields: self.fields.to_owned(),
         };
 
-        validate_operation(&operation, &self.schema)?;
+        validate_operation_format(&operation)?;
 
         Ok(operation)
     }
@@ -112,8 +112,8 @@ pub struct Operation {
     /// Describes if this operation creates, updates or deletes data.
     pub(crate) action: OperationAction,
 
-    /// Schema matching this operation.
-    pub(crate) schema: Schema,
+    /// The id of the schema for this operation.
+    pub(crate) schema_id: SchemaId,
 
     /// Optional document view id containing the operation ids directly preceding this one in the
     /// document.
@@ -136,7 +136,7 @@ impl AsOperation for Operation {
 
     /// Returns schema id of operation.
     fn schema_id(&self) -> SchemaId {
-        self.schema.id().to_owned()
+        self.schema_id.to_owned()
     }
 
     /// Returns known previous operations vector of this operation.
@@ -165,8 +165,8 @@ impl Actionable for Operation {
 }
 
 impl Schematic for Operation {
-    fn schema_id(&self) -> &SchemaId {
-        self.schema.id()
+    fn schema_id(&self) -> SchemaId {
+        self.schema_id.clone()
     }
 
     fn fields(&self) -> Option<PlainFields> {
@@ -178,32 +178,23 @@ impl Schematic for Operation {
 mod tests {
     use rstest::rstest;
 
-    use crate::document::{DocumentId, DocumentViewId};
+    use crate::document::DocumentViewId;
     use crate::operation::traits::AsOperation;
     use crate::operation::{OperationAction, OperationFields, OperationValue, OperationVersion};
-    use crate::schema::{FieldType, Schema};
-    use crate::test_utils::constants::SCHEMA_ID;
-    use crate::test_utils::fixtures::{document_id, document_view_id, schema, schema_id};
+    use crate::schema::SchemaId;
+    use crate::test_utils::fixtures::{document_view_id, schema_id};
 
     use super::OperationBuilder;
 
     #[rstest]
-    fn operation_builder(
-        #[with(vec![
-           ("firstname".into(), FieldType::String),
-           ("lastname".into(), FieldType::String),
-           ("year".into(), FieldType::Integer),
-        ])]
-        schema: Schema,
-        document_view_id: DocumentViewId,
-    ) {
+    fn operation_builder(schema_id: SchemaId, document_view_id: DocumentViewId) {
         let fields = vec![
             ("firstname", "Peter".into()),
             ("lastname", "Panda".into()),
             ("year", 2020.into()),
         ];
 
-        let operation = OperationBuilder::new(&schema)
+        let operation = OperationBuilder::new(&schema_id)
             .action(OperationAction::Update)
             .previous_operations(&document_view_id)
             .fields(&fields)
@@ -214,123 +205,149 @@ mod tests {
         assert_eq!(operation.previous_operations(), Some(document_view_id));
         assert_eq!(operation.fields(), Some(fields.into()));
         assert_eq!(operation.version(), OperationVersion::V1);
-        assert_eq!(operation.schema_id(), *schema.id());
+        assert_eq!(operation.schema_id(), schema_id);
     }
 
     #[rstest]
-    fn operation_builder_validation(
-        #[with(vec![("year".into(), FieldType::Integer)])] schema: Schema,
-        document_view_id: DocumentViewId,
-    ) {
+    fn operation_builder_validation(schema_id: SchemaId, document_view_id: DocumentViewId) {
         // Correct CREATE operation
-        assert!(OperationBuilder::new(&schema)
+        assert!(OperationBuilder::new(&schema_id)
             .fields(&[("year", 2020.into())])
             .build()
             .is_ok());
 
-        // CREATE operations should not contain previous_operations
-        assert!(OperationBuilder::new(&schema)
+        // CREATE operations must not contain previous_operations
+        assert!(OperationBuilder::new(&schema_id)
             .action(OperationAction::Create)
-            .previous_operations(&document_view_id)
             .fields(&[("year", 2020.into())])
+            .previous_operations(&document_view_id)
             .build()
             .is_err());
 
-        // UPDATE operations should have fields
-        assert!(OperationBuilder::new(&schema)
+        // CREATE operations must contain fields
+        assert!(OperationBuilder::new(&schema_id)
+            .action(OperationAction::Create)
+            .build()
+            .is_err());
+
+        // correct UPDATE operation
+        assert!(OperationBuilder::new(&schema_id)
+            .action(OperationAction::Update)
+            .fields(&[("year", 2020.into())])
+            .previous_operations(&document_view_id)
+            .build()
+            .is_ok());
+
+        // UPDATE operations must have fields
+        assert!(OperationBuilder::new(&schema_id)
             .action(OperationAction::Update)
             .previous_operations(&document_view_id)
             .build()
             .is_err());
 
-        // DELETE operations should not have fields
-        assert!(OperationBuilder::new(&schema)
+        // UPDATE operations must have previous_operations
+        assert!(OperationBuilder::new(&schema_id)
+            .action(OperationAction::Update)
+            .fields(&[("year", 2020.into())])
+            .build()
+            .is_err());
+
+        // correct DELETE operation
+        assert!(OperationBuilder::new(&schema_id)
+            .action(OperationAction::Delete)
+            .previous_operations(&document_view_id)
+            .build()
+            .is_ok());
+
+        // DELETE operations must not have fields
+        assert!(OperationBuilder::new(&schema_id)
             .action(OperationAction::Delete)
             .previous_operations(&document_view_id)
             .fields(&[("year", 2020.into())])
             .build()
             .is_err());
-    }
 
-    #[rstest]
-    fn operation_builder_schema_validation(
-        #[with(vec![
-            ("firstname".into(), FieldType::String),
-            ("year".into(), FieldType::Integer),
-            ("is_cute".into(), FieldType::Boolean),
-            ("address".into(), FieldType::Relation(schema_id(SCHEMA_ID))),
-        ])]
-        schema: Schema,
-        document_id: DocumentId,
-        document_view_id: DocumentViewId,
-    ) {
-        // Operation matches schema
-        assert!(OperationBuilder::new(&schema)
-            .fields(&[
-                ("firstname", "Peter".into()),
-                ("year", 2020.into()),
-                ("is_cute", false.into()),
-                ("address", document_id.clone().into()),
-            ])
-            .build()
-            .is_ok());
-
-        // Field ordering does not matter in builder
-        assert!(OperationBuilder::new(&schema)
-            .fields(&[
-                ("address", document_id.clone().into()),
-                ("is_cute", false.into()),
-                ("year", 2020.into()),
-                ("firstname", "Peter".into()),
-            ])
-            .build()
-            .is_ok());
-
-        // Field missing
-        assert!(OperationBuilder::new(&schema)
-            .fields(&[
-                ("firstname", "Peter".into()),
-                ("is_cute", false.into()),
-                ("address", document_id.clone().into()),
-            ])
-            .build()
-            .is_err());
-
-        // Invalid type
-        assert!(OperationBuilder::new(&schema)
-            .fields(&[
-                ("firstname", "Peter".into()),
-                ("year", "2020".into()),
-                ("is_cute", false.into()),
-                ("address", document_id.clone().into()),
-            ])
-            .build()
-            .is_err());
-
-        // Correct UPDATE operation matching schema
-        assert!(OperationBuilder::new(&schema)
+        // DELETE operations must have previous_operations
+        assert!(OperationBuilder::new(&schema_id)
             .action(OperationAction::Update)
-            .previous_operations(&document_view_id)
-            .fields(&[("address", document_id.into())])
             .build()
-            .is_ok());
+            .is_err());
     }
 
+    // TODO: Should this test be moved somewhere else?
+    //     #[rstest]
+    //     fn operation_builder_schema_validation(
+    //         #[with(vec![
+    //             ("firstname".into(), FieldType::String),
+    //             ("year".into(), FieldType::Integer),
+    //             ("is_cute".into(), FieldType::Boolean),
+    //             ("address".into(), FieldType::Relation(schema_id(SCHEMA_ID))),
+    //         ])]
+    //         schema: Schema,
+    //         document_id: DocumentId,
+    //         document_view_id: DocumentViewId,
+    //     ) {
+    //         // Operation matches schema
+    //         assert!(OperationBuilder::new(&schema)
+    //             .fields(&[
+    //                 ("firstname", "Peter".into()),
+    //                 ("year", 2020.into()),
+    //                 ("is_cute", false.into()),
+    //                 ("address", document_id.clone().into()),
+    //             ])
+    //             .build()
+    //             .is_ok());
+    //
+    //         // Field ordering does not matter in builder
+    //         assert!(OperationBuilder::new(&schema)
+    //             .fields(&[
+    //                 ("address", document_id.clone().into()),
+    //                 ("is_cute", false.into()),
+    //                 ("year", 2020.into()),
+    //                 ("firstname", "Peter".into()),
+    //             ])
+    //             .build()
+    //             .is_ok());
+    //
+    //         // Field missing
+    //         assert!(OperationBuilder::new(&schema)
+    //             .fields(&[
+    //                 ("firstname", "Peter".into()),
+    //                 ("is_cute", false.into()),
+    //                 ("address", document_id.clone().into()),
+    //             ])
+    //             .build()
+    //             .is_err());
+    //
+    //         // Invalid type
+    //         assert!(OperationBuilder::new(&schema)
+    //             .fields(&[
+    //                 ("firstname", "Peter".into()),
+    //                 ("year", "2020".into()),
+    //                 ("is_cute", false.into()),
+    //                 ("address", document_id.clone().into()),
+    //             ])
+    //             .build()
+    //             .is_err());
+    //
+    //         // Correct UPDATE operation matching schema
+    //         assert!(OperationBuilder::new(&schema)
+    //             .action(OperationAction::Update)
+    //             .previous_operations(&document_view_id)
+    //             .fields(&[("address", document_id.into())])
+    //             .build()
+    //             .is_ok());
+    //     }
+
     #[rstest]
-    fn field_ordering(
-        #[with(vec![
-           ("a".into(), FieldType::String),
-           ("b".into(), FieldType::String),
-        ])]
-        schema: Schema,
-    ) {
+    fn field_ordering(schema_id: SchemaId) {
         // Create first test operation
-        let operation_1 = OperationBuilder::new(&schema)
+        let operation_1 = OperationBuilder::new(&schema_id)
             .fields(&[("a", "sloth".into()), ("b", "penguin".into())])
             .build();
 
         // Create second test operation with same values but different order of fields
-        let operation_2 = OperationBuilder::new(&schema)
+        let operation_2 = OperationBuilder::new(&schema_id)
             .fields(&[("b", "penguin".into()), ("a", "sloth".into())])
             .build();
 
