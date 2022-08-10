@@ -35,23 +35,75 @@ pub type FieldName = String;
 /// [`Schema::new`] is only available for testing. This method of constructing a schema doesn't
 /// validate that the given schema id matches the provided schema's published description and field
 /// definitions.
-//
-// @NOTE: Fields on this struct are `pub(super)` to enable making static instances of system
-// schemas from their respective files in the `./system` subdirectory. Making system schema
-// instances is not supported by `Schema::new()` to prevent their dynamic redefinition.
+// @TODO: For all methods creating a `Schema` instance or related to that we need to check that the
+// names, field names and descriptions match the specification. Currently we only do this when
+// looking at operations (see `schema::validate` methods).
+// Related issue: https://github.com/p2panda/p2panda/issues/426
 #[derive(Clone, Debug, PartialEq)]
 pub struct Schema {
     /// The application schema id for this schema.
-    pub(super) id: SchemaId,
+    pub(crate) id: SchemaId,
 
     /// Describes the schema's intended use.
-    pub(super) description: String,
+    pub(crate) description: String,
 
     /// Maps all of the schema's field names to their respective types.
-    pub(super) fields: BTreeMap<FieldName, FieldType>,
+    pub(crate) fields: BTreeMap<FieldName, FieldType>,
 }
 
 impl Schema {
+    /// Create an application schema instance with the given id, description and fields.
+    ///
+    /// Use [`Schema::get_system`] to access static system schema instances.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// # #[cfg(test)]
+    /// # mod doc_test {
+    /// # extern crate p2panda_rs;
+    /// # use p2panda_rs::document::DocumentViewId;
+    /// # use p2panda_rs::test_utils::fixtures::document_view_id;
+    /// #
+    /// # #[rstest]
+    /// # fn main(#[from(document_view_id)] schema_document_view_id: DocumentViewId) {
+    /// let schema = Schema::new(
+    ///     SchemaId::Application("cucumber", schema_document_view_id),
+    ///     "A variety in the cucumber society's database.",
+    ///     vec![
+    ///         ("name", FieldType::String),
+    ///         ("grow_cycle_days", FieldType::Int),
+    ///         ("flavor_rating", FieldType::Int),
+    ///     ]
+    /// );
+    /// assert!(schema.is_ok());
+    /// # }
+    /// # }
+    /// ```
+    pub fn new(
+        id: &SchemaId,
+        description: &str,
+        fields: Vec<(impl ToString, FieldType)>,
+    ) -> Result<Self, SchemaError> {
+        let mut field_map: BTreeMap<String, FieldType> = BTreeMap::new();
+
+        for (field_name, field_type) in fields {
+            field_map.insert(field_name.to_string(), field_type.to_owned());
+        }
+
+        if let SchemaId::Application(_, _) = id {
+            let schema = Self {
+                id: id.to_owned(),
+                description: description.to_owned(),
+                fields: field_map,
+            };
+
+            Ok(schema)
+        } else {
+            Err(SchemaError::DynamicSystemSchema(id.clone()))
+        }
+    }
+
     /// Instantiate a new `Schema` from a `SchemaView` and it's `SchemaFieldView`s.
     pub fn from_views(
         schema: SchemaView,
@@ -225,63 +277,6 @@ impl Schema {
     /// Access the schema fields.
     pub fn fields(&self) -> &BTreeMap<FieldName, FieldType> {
         &self.fields
-    }
-}
-
-#[cfg(any(feature = "testing", test))]
-impl Schema {
-    /// Create an application schema instance with the given id, description and fields.
-    ///
-    /// Use [`Schema::get_system`] to access static system schema instances.
-    ///
-    /// ## Example
-    ///
-    /// ```
-    /// # #[cfg(test)]
-    /// # mod doc_test {
-    /// # extern crate p2panda_rs;
-    /// # use p2panda_rs::document::DocumentViewId;
-    /// # use p2panda_rs::test_utils::fixtures::{document_view_id};
-    /// #
-    /// # #[rstest]
-    /// # fn main(#[from(document_view_id)] schema_document_view_id: DocumentViewId) {
-    /// let schema = Schema::new(
-    ///     SchemaId::Application("cucumber", schema_document_view_id),
-    ///     "A variety in the cucumber society's database.",
-    ///     vec![
-    ///         ("name", FieldType::String),
-    ///         ("grow_cycle_days", FieldType::Int),
-    ///         ("flavor_rating", FieldType::Int),
-    ///     ]
-    /// );
-    /// assert!(schema.is_ok());
-    /// # }
-    /// # }
-    /// ```
-    pub fn new(
-        id: &SchemaId,
-        description: &str,
-        fields: Vec<(impl ToString, FieldType)>,
-    ) -> Result<Self, SchemaError> {
-        let mut field_map: BTreeMap<String, FieldType> = BTreeMap::new();
-
-        for (field_name, field_type) in fields {
-            field_map.insert(field_name.to_string(), field_type.to_owned());
-        }
-
-        if let SchemaId::Application(_, _) = id {
-            let schema = Self {
-                id: id.to_owned(),
-                description: description.to_owned(),
-                fields: field_map,
-            };
-
-            // @TODO: Implement `Validate` for `Schema` and call it here
-
-            Ok(schema)
-        } else {
-            Err(SchemaError::DynamicSystemSchema(id.clone()))
-        }
     }
 }
 
