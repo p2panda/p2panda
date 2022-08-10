@@ -13,7 +13,7 @@ use crate::operation::{
     EncodedOperation, Operation, OperationAction, OperationFields, OperationId, OperationValue,
     OperationVersion, VerifiedOperation,
 };
-use crate::schema::Schema;
+use crate::schema::{Schema, SchemaId};
 use crate::test_utils::constants::{test_fields, HASH, SCHEMA_ID};
 use crate::test_utils::fixtures::{
     document_view_id, key_pair, random_hash, schema, schema_fields, schema_id,
@@ -84,14 +84,14 @@ pub fn some_fields(
 pub fn operation(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] previous_operations: Option<DocumentViewId>,
-    #[from(schema)] schema: Schema,
+    #[from(schema_id)] schema_id: SchemaId,
 ) -> Operation {
     match fields {
         // It's a CREATE operation
         Some(fields) if previous_operations.is_none() => Operation {
             version: OperationVersion::V1,
             action: OperationAction::Create,
-            schema,
+            schema_id,
             previous_operations: None,
             fields: Some(fields),
         },
@@ -99,7 +99,7 @@ pub fn operation(
         Some(fields) => Operation {
             version: OperationVersion::V1,
             action: OperationAction::Update,
-            schema,
+            schema_id,
             previous_operations,
             fields: Some(fields),
         },
@@ -107,14 +107,14 @@ pub fn operation(
         None => Operation {
             version: OperationVersion::V1,
             action: OperationAction::Delete,
-            schema,
+            schema_id,
             previous_operations,
             fields: None,
         },
     }
 }
 
-/// Returns an CREATE operation with a constant testing schema.
+/// Returns an CREATE operation with a constant testing schema id.
 #[fixture]
 pub fn operation_with_schema(
     #[from(some_fields)] fields: Option<OperationFields>,
@@ -122,27 +122,15 @@ pub fn operation_with_schema(
 ) -> Operation {
     let schema_id = schema_id(SCHEMA_ID);
 
-    let schema = schema(
-        schema_fields(test_fields(), schema_id.clone()),
-        schema_id,
-        "Test schema",
-    );
-
-    operation(fields, previous_operations, schema)
+    operation(fields, previous_operations, schema_id)
 }
 
-/// Returns an constant CREATE operation with a constant testing schema.
+/// Returns an constant CREATE operation with a constant testing schema id.
 #[fixture]
 pub fn create_operation_with_schema() -> Operation {
     let schema_id = schema_id(SCHEMA_ID);
 
-    let schema = schema(
-        schema_fields(test_fields(), schema_id.clone()),
-        schema_id,
-        "Test schema",
-    );
-
-    operation(some_fields(test_fields()), None, schema)
+    operation(some_fields(test_fields()), None, schema_id)
 }
 
 /// Generates verified operation instance.
@@ -157,7 +145,7 @@ pub fn verified_operation(
     #[default(None)] previous_operations: Option<DocumentViewId>,
     #[from(key_pair)] key_pair: KeyPair,
 ) -> VerifiedOperation {
-    let operation = operation(fields, previous_operations, schema.clone());
+    let operation = operation(fields, previous_operations, schema.id().clone());
     let operation_plain: PlainOperation = (&operation).into();
     let operation_encoded = encode_plain_operation(&operation_plain).unwrap();
 
@@ -215,9 +203,9 @@ pub fn encoded_create_string(operation: Operation) -> String {
 pub fn encoded_operation(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] previous_operations: Option<DocumentViewId>,
-    #[from(schema)] schema: Schema,
+    #[from(schema_id)] schema_id: SchemaId,
 ) -> EncodedOperation {
-    let operation = operation(fields, previous_operations, schema);
+    let operation = operation(fields, previous_operations, schema_id);
     encode_operation(&operation).unwrap()
 }
 
@@ -225,9 +213,9 @@ pub fn encoded_operation(
 #[fixture]
 pub fn create_operation(
     #[default(test_fields())] fields: Vec<(&str, OperationValue)>,
-    #[from(schema)] schema: Schema,
+    #[from(schema_id)] schema_id: SchemaId,
 ) -> Operation {
-    operation(Some(operation_fields(fields.to_vec())), None, schema)
+    operation(Some(operation_fields(fields.to_vec())), None, schema_id)
 }
 
 /// Helper method for easily constructing an UPDATE operation.
@@ -235,12 +223,12 @@ pub fn create_operation(
 pub fn update_operation(
     #[default(test_fields())] fields: Vec<(&str, OperationValue)>,
     #[from(document_view_id)] previous_operations: DocumentViewId,
-    #[from(schema)] schema: Schema,
+    #[from(schema_id)] schema_id: SchemaId,
 ) -> Operation {
     operation(
         Some(operation_fields(fields.to_vec())),
         Some(previous_operations.clone()),
-        schema,
+        schema_id,
     )
 }
 
@@ -248,7 +236,7 @@ pub fn update_operation(
 #[fixture]
 pub fn delete_operation(
     #[from(document_view_id)] previous_operations: DocumentViewId,
-    #[from(schema)] schema: Schema,
+    #[from(schema_id)] schema_id: SchemaId,
 ) -> Operation {
-    operation(None, Some(previous_operations.to_owned()), schema)
+    operation(None, Some(previous_operations.to_owned()), schema_id)
 }

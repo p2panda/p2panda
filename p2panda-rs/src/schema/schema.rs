@@ -168,7 +168,7 @@ impl Schema {
         // Unwrap here as we know that this schema exists
         let schema = Self::get_system(SchemaId::SchemaDefinition(1)).unwrap();
 
-        OperationBuilder::new(schema)
+        OperationBuilder::new(schema.id())
             .fields(&[
                 ("name", name.into()),
                 ("description", description.into()),
@@ -205,7 +205,7 @@ impl Schema {
         // Unwrap here as we know that this schema exists
         let schema = Self::get_system(SchemaId::SchemaFieldDefinition(1)).unwrap();
 
-        OperationBuilder::new(schema)
+        OperationBuilder::new(schema.id())
             .fields(&[("name", name.into()), ("type", field_type.into())])
             .build()
             // Unwrap here as we know that the operation matches the schema
