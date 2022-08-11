@@ -82,6 +82,7 @@ pub mod error;
 mod log_id;
 mod seq_num;
 mod signature;
+pub mod traits;
 pub mod validate;
 
 pub use encoded_entry::{EncodedEntry, SIGNATURE_SIZE};

@@ -16,6 +16,7 @@ use bamboo_rs_core_ed25519_yasmf::entry::{is_lipmaa_required, MAX_ENTRY_SIZE};
 use bamboo_rs_core_ed25519_yasmf::{Entry as BambooEntry, Signature as BambooSignature};
 
 use crate::entry::error::EncodeEntryError;
+use crate::entry::traits::AsEntry;
 use crate::entry::validate::validate_links;
 use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::hash::Hash;

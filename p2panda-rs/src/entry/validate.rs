@@ -5,6 +5,7 @@
 //! You will not find methods here to check the encoding of Bamboo entries, as this is handled
 //! inside the external bamboo-rs crate.
 use crate::entry::error::ValidateEntryError;
+use crate::entry::traits::AsEntry;
 use crate::entry::{EncodedEntry, Entry, Signature};
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
@@ -146,6 +147,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::entry::encode::encode_entry;
+    use crate::entry::traits::AsEntry;
     use crate::entry::{EncodedEntry, Entry, EntryBuilder, SeqNum, Signature};
     use crate::identity::KeyPair;
     use crate::operation::EncodedOperation;
