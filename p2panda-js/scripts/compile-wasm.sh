@@ -64,20 +64,20 @@ then
     cargo --quiet build \
         --target=wasm32-unknown-unknown \
         --manifest-path $RUST_DIR/Cargo.toml
+    RELEASE_WASM=$(find_wasm_file "$RUST_DIR/target/wasm32-unknown-unknown/debug")
 elif [[ $MODE == "production" ]]
 then
     cargo --quiet build \
         --target=wasm32-unknown-unknown \
         --release \
         --manifest-path $RUST_DIR/Cargo.toml
+    RELEASE_WASM=$(find_wasm_file "$RUST_DIR/target/wasm32-unknown-unknown/release")
 else
     echo "△ Mode needs to be 'production' or 'development'"
     exit 1
 fi
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-RELEASE_WASM=$(find_wasm_file "$RUST_DIR/target/wasm32-unknown-unknown/release")
 
 echo "◇ Adjust WebAssembly for 'node' target"
 wasm-bindgen \
