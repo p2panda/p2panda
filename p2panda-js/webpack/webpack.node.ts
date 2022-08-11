@@ -4,7 +4,7 @@ import webpack, { DefinePlugin } from 'webpack';
 import CopyPlugin from 'copy-webpack-plugin';
 import ESLintPlugin from 'eslint-webpack-plugin';
 
-import config, { DIR_WASM, DIR_DIST, tsRule, getPath } from './webpack.common';
+import config, { DIR_WASM, tsRule, getPath } from './webpack.common';
 
 /*
  * Extended configuration to build library targeting node applications:
@@ -55,8 +55,8 @@ const configNode: webpack.Configuration = {
     new CopyPlugin({
       patterns: [
         {
-          from: `${getPath(DIR_WASM)}/node/*.{js,wasm}`,
-          to: getPath(DIR_DIST),
+          from: `${getPath(DIR_WASM)}/node/*.wasm`,
+          to: '[name][ext]',
         },
       ],
     }),
