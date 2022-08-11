@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Exit when any command fails
+# Exit with error when any command fails
 set -e
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -52,63 +52,63 @@ find_wasm_file () {
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-echo "◆ Compiling WebAssembly"
+echo "◆ Compile WebAssembly"
 
 if [[ $MODE == "development" ]]
 then
   cargo --quiet build \
-    --target=wasm32-unknown-unknown \
-    --manifest-path $RUST_DIR/Cargo.toml
+      --target=wasm32-unknown-unknown \
+      --manifest-path $RUST_DIR/Cargo.toml
 else
   cargo --quiet build \
-    --target=wasm32-unknown-unknown \
-    --release \
-    --manifest-path $RUST_DIR/Cargo.toml
+      --target=wasm32-unknown-unknown \
+      --release \
+      --manifest-path $RUST_DIR/Cargo.toml
 fi
-
-RELEASE_WASM=$(find_wasm_file "$RUST_DIR/target/wasm32-unknown-unknown/release")
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-echo "◇ Adjusting WebAssembly for 'node' target"
-wasm-bindgen \
-  --out-dir=$RUST_DIR/$NODE_PROJECT \
-  --out-name=index \
-  --target=nodejs \
-  $RELEASE_WASM
+RELEASE_WASM=$(find_wasm_file "$RUST_DIR/target/wasm32-unknown-unknown/release")
 
-echo "◇ Adjusting WebAssembly for 'web' target"
+echo "◇ Adjust WebAssembly for 'node' target"
 wasm-bindgen \
-  --out-dir=$RUST_DIR/$WEB_PROJECT \
-  --out-name=index \
-  --target=web \
-  --omit-default-module-path \
-  $RELEASE_WASM
+    --out-dir=$RUST_DIR/$NODE_PROJECT \
+    --out-name=index \
+    --target=nodejs \
+    $RELEASE_WASM
+
+echo "◇ Adjust WebAssembly for 'web' target"
+wasm-bindgen \
+    --out-dir=$RUST_DIR/$WEB_PROJECT \
+    --out-name=index \
+    --target=web \
+    --omit-default-module-path \
+    $RELEASE_WASM
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 if [[ $MODE == "production" ]]
 then
-  ensure_installed wasm-opt
+    ensure_installed wasm-opt
 
-  echo "◌ Optimize 'node' target output for speed"
+    echo "◌ Optimize 'node' target for speed"
 
-  INPUT_WASM=$(find_wasm_file "$RUST_DIR/$NODE_PROJECT/$RUST_PROJECT")
-  OUTPUT_WASM=$TMP_DIR/optimized-node.wasm
-  wasm-opt -O -o $OUTPUT_WASM $INPUT_WASM
-  mv $OUTPUT_WASM $INPUT_WASM
+    INPUT_WASM=$(find_wasm_file "$RUST_DIR/$NODE_PROJECT/$RUST_PROJECT")
+    OUTPUT_WASM=$TMP_DIR/optimized-node.wasm
+    wasm-opt -O -o $OUTPUT_WASM $INPUT_WASM
+    mv $OUTPUT_WASM $INPUT_WASM
 
-  echo "◌ Optimize 'web' target for size"
+    echo "◌ Optimize 'web' target for size"
 
-  INPUT_WASM=$(find_wasm_file "$RUST_DIR/$WEB_PROJECT/$RUST_PROJECT")
-  OUTPUT_WASM=$TMP_DIR/optimized-web.wasm
-  input_filesize=$(wc -c < $INPUT_WASM)
-  wasm-opt -Os -o $OUTPUT_WASM $INPUT_WASM
-  output_filesize=$(wc -c < $OUTPUT_WASM)
-  mv $OUTPUT_WASM $INPUT_WASM
-  echo "▷ file size before: $input_filesize / after: $output_filesize bytes"
+    INPUT_WASM=$(find_wasm_file "$RUST_DIR/$WEB_PROJECT/$RUST_PROJECT")
+    OUTPUT_WASM=$TMP_DIR/optimized-web.wasm
+    input_filesize=$(wc -c < $INPUT_WASM)
+    wasm-opt -Os -o $OUTPUT_WASM $INPUT_WASM
+    output_filesize=$(wc -c < $OUTPUT_WASM)
+    mv $OUTPUT_WASM $INPUT_WASM
+    echo "▷ file size before: $input_filesize / after: $output_filesize bytes"
 else
-  echo "◌ Skip optimizations in 'development' mode"
+    echo "◌ Skip optimizations in 'development' mode"
 fi
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
