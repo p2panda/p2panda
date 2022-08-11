@@ -7,8 +7,10 @@ set -e
 # User Arguments
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# Run in development or production mode
-MODE="${1:-development}"
+# Run in 'development' or 'production' mode, check for NODE_ENV environment
+# variable to set mode
+node_env="${NODE_ENV:-development}"
+MODE="${1:-$node_env}"
 
 # Path to Rust project with Cargo.toml file
 RUST_DIR="${2:-../p2panda-rs}"
@@ -56,14 +58,18 @@ echo "◆ Compile WebAssembly"
 
 if [[ $MODE == "development" ]]
 then
-  cargo --quiet build \
-      --target=wasm32-unknown-unknown \
-      --manifest-path $RUST_DIR/Cargo.toml
+    cargo --quiet build \
+        --target=wasm32-unknown-unknown \
+        --manifest-path $RUST_DIR/Cargo.toml
+elif [[ $MODE == "production" ]]
+then
+    cargo --quiet build \
+        --target=wasm32-unknown-unknown \
+        --release \
+        --manifest-path $RUST_DIR/Cargo.toml
 else
-  cargo --quiet build \
-      --target=wasm32-unknown-unknown \
-      --release \
-      --manifest-path $RUST_DIR/Cargo.toml
+    echo "△ Mode needs to be 'production' or 'development'"
+    exit 1
 fi
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
