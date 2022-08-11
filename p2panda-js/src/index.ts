@@ -11,6 +11,7 @@ if (!globalThis.fetch) {
 
 export { createKeyPair, recoverKeyPair } from '~/identity';
 export { Session } from '~/session';
-export { default as wasm } from '~/wasm';
+export { default as initWasm } from '~/wasm';
+export * as wasm from '~/wasm';
 
 export * from '~/types';

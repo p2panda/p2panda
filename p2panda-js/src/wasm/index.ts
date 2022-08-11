@@ -7,17 +7,18 @@ const wasmAdapter = BUILD_TARGET_WEB
   ? require('~/wasm/web')
   : require('~/wasm/node');
 
-const { default: init, setWasmPanicHook, ...rest } = wasmAdapter;
 const {
   KeyPair,
   OperationFields,
   decodeEntry,
+  default: init,
   encodeCreateOperation,
   encodeDeleteOperation,
   encodeUpdateOperation,
+  setWasmPanicHook,
   signEncodeEntry,
   verifySignature,
-} = rest;
+} = wasmAdapter;
 
 export default async () => {
   await init();
@@ -25,8 +26,6 @@ export default async () => {
   // Set panic hooks for better logging of wasm errors. See:
   // https://github.com/rustwasm/console_error_panic_hook
   setWasmPanicHook();
-
-  return rest;
 };
 
 export {
