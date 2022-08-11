@@ -36,8 +36,8 @@ jobs:
           # Rust and npm artifacts.
           key: ${{ runner.os }}-test-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}
 
-      - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Install wasm-bindgen
+        uses: jetli/wasm-bindgen-action@v0.1.0
 
       - name: Install dependencies
         run: npm ci
@@ -69,8 +69,17 @@ jobs:
           path: ${{ env.cache_path }}
           key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}
 
-      - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Install wasm-bindgen
+        uses: jetli/wasm-bindgen-action@v0.1.0
+
+      - name: Install wasm-opt
+        uses: giantswarm/install-binary-action@v1
+        with:
+          binary: "wasm-opt"
+          version: "109"
+          download_url: "https://github.com/WebAssembly/binaryen/releases/download/version_${version}/binaryen-version_${version}-x86_64-linux.tar.gz"
+          tarball_binary_path: "*/bin/${binary}"
+          smoke_test: "${binary} --version"
 
       - name: Install dependencies
         run: npm ci
