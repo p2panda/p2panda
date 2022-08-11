@@ -49,7 +49,7 @@ ensure_installed wasm-bindgen
 
 # Finds and returns a .wasm file in a folder
 find_wasm_file () {
-  ls $1/*.wasm
+    ls $1/*.wasm
 }
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
