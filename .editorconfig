@@ -6,7 +6,7 @@ indent_style = space
 trim_trailing_whitespace = true
 insert_final_newline = true
 
-[*.rs]
+[*.{rs,sh}]
 indent_size = 4
 
 [*.{js,ts}]
