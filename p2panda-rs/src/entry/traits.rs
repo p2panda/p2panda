@@ -46,3 +46,14 @@ pub trait AsEntry {
         is_lipmaa_required(self.seq_num().as_u64())
     }
 }
+
+pub trait AsEncodedEntry {
+    /// Generates and returns hash of encoded entry.
+    fn hash(&self) -> Hash;
+
+    /// Returns entry as bytes.
+    fn into_bytes(&self) -> Vec<u8>;
+
+    /// Returns payload size (number of bytes) of total encoded entry.
+    fn size(&self) -> u64;
+}

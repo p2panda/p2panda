@@ -2,7 +2,7 @@
 
 //! Collection of low-level validation methods for operations.
 use crate::document::DocumentViewId;
-use crate::entry::traits::AsEntry;
+use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::validate::{validate_log_integrity, validate_payload};
 use crate::entry::{EncodedEntry, Entry};
 use crate::hash::Hash;

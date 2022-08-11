@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use crate::hash::Hash;
 use crate::serde::{deserialize_hex, serialize_hex};
 
+use super::traits::AsEncodedEntry;
+
 /// Size of p2panda entries' signatures.
 pub const SIGNATURE_SIZE: usize = ED25519_SIGNATURE_SIZE;
 
@@ -34,21 +36,6 @@ impl EncodedEntry {
         Self(bytes.to_owned())
     }
 
-    /// Generates and returns hash of encoded entry.
-    pub fn hash(&self) -> Hash {
-        Hash::new_from_bytes(&self.0)
-    }
-
-    /// Returns entry as bytes.
-    pub fn into_bytes(&self) -> Vec<u8> {
-        self.0.clone()
-    }
-
-    /// Returns payload size (number of bytes) of total encoded entry.
-    pub fn size(&self) -> u64 {
-        self.0.len() as u64
-    }
-
     /// Returns only those bytes of a signed entry that don't contain the signature.
     ///
     /// Encoded entries contains both a signature as well as the bytes that were signed. In order
@@ -57,6 +44,23 @@ impl EncodedEntry {
         let bytes = self.into_bytes();
         let signature_offset = bytes.len() - SIGNATURE_SIZE;
         bytes[..signature_offset].into()
+    }
+}
+
+impl AsEncodedEntry for EncodedEntry {
+    /// Generates and returns hash of encoded entry.
+    fn hash(&self) -> Hash {
+        Hash::new_from_bytes(&self.0)
+    }
+
+    /// Returns entry as bytes.
+    fn into_bytes(&self) -> Vec<u8> {
+        self.0.clone()
+    }
+
+    /// Returns payload size (number of bytes) of total encoded entry.
+    fn size(&self) -> u64 {
+        self.0.len() as u64
     }
 }
 

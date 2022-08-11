@@ -18,6 +18,8 @@ use crate::entry::traits::AsEntry;
 use crate::entry::validate::{validate_links, validate_signature};
 use crate::entry::{EncodedEntry, Entry};
 
+use super::traits::AsEncodedEntry;
+
 /// Method to decode an entry.
 ///
 /// In this process the following validation steps are applied:
@@ -63,7 +65,7 @@ mod tests {
     use rstest_reuse::apply;
 
     use crate::entry::encode::encode_entry;
-    use crate::entry::traits::AsEntry;
+    use crate::entry::traits::{AsEncodedEntry, AsEntry};
     use crate::entry::{EncodedEntry, Entry};
     use crate::identity::KeyPair;
     use crate::operation::EncodedOperation;

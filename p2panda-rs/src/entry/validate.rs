@@ -147,7 +147,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::entry::encode::encode_entry;
-    use crate::entry::traits::AsEntry;
+    use crate::entry::traits::{AsEncodedEntry, AsEntry};
     use crate::entry::{EncodedEntry, Entry, EntryBuilder, SeqNum, Signature};
     use crate::identity::KeyPair;
     use crate::operation::EncodedOperation;

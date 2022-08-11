@@ -160,6 +160,7 @@ mod tests {
     use rstest::rstest;
     use rstest_reuse::apply;
 
+    use crate::entry::traits::AsEncodedEntry;
     use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
     use crate::hash::Hash;
     use crate::identity::KeyPair;
