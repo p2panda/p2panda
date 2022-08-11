@@ -6,11 +6,12 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 
 use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
+use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::hash::Hash;
 use crate::operation::{OperationId, VerifiedOperation};
 use crate::schema::SchemaId;
+use crate::storage_provider::traits::AsStorageLog;
 use crate::storage_provider::traits::StorageProvider;
-use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog};
 use crate::storage_provider::utils::Result;
 use crate::test_utils::db::{StorageEntry, StorageLog};
 
@@ -39,7 +40,7 @@ pub struct MemoryStore {
 
 #[async_trait]
 impl StorageProvider for MemoryStore {
-    type StorageEntry = StorageEntry;
+    type Entry = StorageEntry;
 
     type StorageLog = StorageLog;
 
@@ -61,7 +62,7 @@ impl StorageProvider for MemoryStore {
 
         let log = logs
             .iter()
-            .find(|(_, log)| log.id() == entry.log_id() && log.author() == entry.author());
+            .find(|(_, log)| &log.id() == entry.log_id() && &log.author() == entry.public_key());
 
         Ok(log.map(|(_, log)| log.document_id()))
     }

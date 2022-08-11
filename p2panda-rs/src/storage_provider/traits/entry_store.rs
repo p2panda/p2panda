@@ -2,24 +2,24 @@
 
 use async_trait::async_trait;
 
+use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::LogId;
 use crate::entry::SeqNum;
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::EntryStorageError;
-use crate::storage_provider::traits::AsStorageEntry;
 
-/// Trait which handles all storage actions relating to `Entry`.
+/// Trait which handles all storage actions relating to entries.
 ///
 /// This trait should be implemented on the root storage provider struct. It's definitions make up
 /// the required methods for inserting and querying entries from storage.
 #[async_trait]
-pub trait EntryStore<StorageEntry: AsStorageEntry> {
+pub trait EntryStore<Entry: AsEntry + AsEncodedEntry> {
     /// Insert an entry into storage.
     ///
     /// Returns an error if a fatal storage error occured.
-    async fn insert_entry(&self, value: StorageEntry) -> Result<(), EntryStorageError>;
+    async fn insert_entry(&self, value: Entry) -> Result<(), EntryStorageError>;
 
     /// Get an entry at sequence position within an author's log.
     ///
@@ -31,13 +31,10 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         author: &Author,
         log_id: &LogId,
         seq_num: &SeqNum,
-    ) -> Result<Option<StorageEntry>, EntryStorageError>;
+    ) -> Result<Option<Entry>, EntryStorageError>;
 
     /// Get an entry by it's hash.
-    async fn get_entry_by_hash(
-        &self,
-        hash: &Hash,
-    ) -> Result<Option<StorageEntry>, EntryStorageError>;
+    async fn get_entry_by_hash(&self, hash: &Hash) -> Result<Option<Entry>, EntryStorageError>;
 
     /// Get the latest Bamboo entry of an author's log.
     ///
@@ -48,7 +45,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         &self,
         author: &Author,
         log_id: &LogId,
-    ) -> Result<Option<StorageEntry>, EntryStorageError>;
+    ) -> Result<Option<Entry>, EntryStorageError>;
 
     /// Get a vector of all entries of a given schema.
     ///
@@ -58,7 +55,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
     async fn get_entries_by_schema(
         &self,
         schema: &SchemaId,
-    ) -> Result<Vec<StorageEntry>, EntryStorageError>;
+    ) -> Result<Vec<Entry>, EntryStorageError>;
 
     /// Get all entries of a log from a specified sequence number up to passed max number of entries.
     ///
@@ -70,7 +67,7 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         log_id: &LogId,
         seq_num: &SeqNum,
         max_number_of_entries: usize,
-    ) -> Result<Vec<StorageEntry>, EntryStorageError>;
+    ) -> Result<Vec<Entry>, EntryStorageError>;
 
     /// Get all entries which make up the certificate pool for the given entry.
     ///
@@ -82,5 +79,5 @@ pub trait EntryStore<StorageEntry: AsStorageEntry> {
         author_id: &Author,
         log_id: &LogId,
         seq_num: &SeqNum,
-    ) -> Result<Vec<StorageEntry>, EntryStorageError>;
+    ) -> Result<Vec<Entry>, EntryStorageError>;
 }

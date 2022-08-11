@@ -82,14 +82,13 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::document::{Document, DocumentBuilder, DocumentId, DocumentView, DocumentViewId};
+use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::EncodedEntry;
 use crate::hash::Hash;
 use crate::identity::Author;
 use crate::operation::{EncodedOperation, Operation, OperationId, VerifiedOperation};
 use crate::storage_provider::traits::test_utils::send_to_store;
-use crate::storage_provider::traits::{
-    AsStorageEntry, DocumentStore, OperationStore, StorageProvider,
-};
+use crate::storage_provider::traits::{DocumentStore, OperationStore, StorageProvider};
 use crate::storage_provider::utils::Result;
 use crate::test_utils::db::{EntryArgsResponse, PublishEntryResponse};
 use crate::test_utils::db::{MemoryStore, StorageEntry};
@@ -178,7 +177,7 @@ impl Node {
         let mut authors = HashSet::new();
         let entries = self.store().entries.lock().unwrap();
         for (_, entry) in entries.iter() {
-            authors.insert(entry.author());
+            authors.insert(entry.public_key().to_owned());
         }
         authors
     }

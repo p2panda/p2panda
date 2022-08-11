@@ -13,6 +13,6 @@ pub mod test_utils;
 pub use document_store::DocumentStore;
 pub use entry_store::EntryStore;
 pub use log_store::LogStore;
-pub use models::{AsStorageEntry, AsStorageLog};
+pub use models::AsStorageLog;
 pub use operation_store::OperationStore;
 pub use storage_provider::StorageProvider;
