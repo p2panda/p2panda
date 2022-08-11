@@ -6,10 +6,9 @@ use std::hash::Hash as StdHash;
 use bamboo_rs_core_ed25519_yasmf::ED25519_SIGNATURE_SIZE;
 use serde::{Deserialize, Serialize};
 
+use crate::entry::traits::AsEncodedEntry;
 use crate::hash::Hash;
 use crate::serde::{deserialize_hex, serialize_hex};
-
-use super::traits::AsEncodedEntry;
 
 /// Size of p2panda entries' signatures.
 pub const SIGNATURE_SIZE: usize = ED25519_SIGNATURE_SIZE;

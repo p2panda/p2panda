@@ -14,11 +14,9 @@
 use bamboo_rs_core_ed25519_yasmf::decode;
 
 use crate::entry::error::DecodeEntryError;
-use crate::entry::traits::AsEntry;
+use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::validate::{validate_links, validate_signature};
 use crate::entry::{EncodedEntry, Entry};
-
-use super::traits::AsEncodedEntry;
 
 /// Method to decode an entry.
 ///
