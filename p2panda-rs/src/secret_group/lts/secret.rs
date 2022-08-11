@@ -15,7 +15,7 @@ use crate::secret_group::lts::{
 ///
 /// Additionally to the secret value every long-term secret also holds meta data, like the MLS
 /// group id and epoch which this secret belongs to.
-#[derive(Debug, Clone, PartialEq, TlsDeserialize, TlsSerialize, TlsSize)]
+#[derive(Debug, Clone, Eq, PartialEq, TlsDeserialize, TlsSerialize, TlsSize)]
 pub struct LongTermSecret {
     /// Identifier of the related MLS group.
     group_id: GroupId,

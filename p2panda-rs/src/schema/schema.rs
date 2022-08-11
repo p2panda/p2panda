@@ -39,7 +39,7 @@ pub type FieldName = String;
 // names, field names and descriptions match the specification. Currently we only do this when
 // looking at operations (see `schema::validate` methods).
 // Related issue: https://github.com/p2panda/p2panda/issues/426
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Schema {
     /// The application schema id for this schema.
     pub(crate) id: SchemaId,
