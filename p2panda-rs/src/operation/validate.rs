@@ -71,7 +71,7 @@ use crate::Human;
 ///                     │               │      │   │    │          │          │
 ///                     │               │      │   │    │          │          │
 ///                     │               ▼      ▼   ▼    ▼          ▼          │
-///                     └───────────►  validate_operation_and_entry() ◄───────┘
+///                     └───────────►  validate_operation_with_entry() ◄──────┘
 ///                                                 │
 ///                                                 │
 ///                                                 │
