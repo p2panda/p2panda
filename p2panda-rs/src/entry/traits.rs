@@ -56,4 +56,9 @@ pub trait AsEncodedEntry {
 
     /// Returns payload size (number of bytes) of total encoded entry.
     fn size(&self) -> u64;
+
+    /// Returns the entry bytes encoded as a hex string.
+    fn into_hex(&self) -> String {
+        hex::encode(self.into_bytes())
+    }
 }
