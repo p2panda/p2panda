@@ -2,7 +2,11 @@
 
 import debug from 'debug';
 
-import wasm from '~/wasm';
+import {
+  encodeDeleteOperation,
+  encodeCreateOperation,
+  encodeUpdateOperation,
+} from '~/wasm';
 import { getOperationFields } from '~/operation';
 import { marshallRequestFields } from '~/utils';
 import { signPublishEntry } from '~/entry';
@@ -22,15 +26,13 @@ export const createDocument = async (
   fields: Fields,
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
-  const { encodeCreateOperation } = await wasm;
-
   log(`Creating document`, fields);
 
   const fieldsTagged = marshallRequestFields(fields);
-  const operationFields = await getOperationFields(fieldsTagged);
+  const operationFields = getOperationFields(fieldsTagged);
   const encodedOperation = encodeCreateOperation(schema, operationFields);
 
-  const entryEncoded = await signPublishEntry(encodedOperation, {
+  const entryEncoded = signPublishEntry(encodedOperation, {
     keyPair,
     schema,
     session,
@@ -51,8 +53,6 @@ export const updateDocument = async (
   fields: Fields,
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
-  const { encodeUpdateOperation } = await wasm;
-
   log(`Updating document`, {
     document: documentId,
     previousOperations,
@@ -60,7 +60,7 @@ export const updateDocument = async (
   });
 
   const fieldsTagged = marshallRequestFields(fields);
-  const operationFields = await getOperationFields(fieldsTagged);
+  const operationFields = getOperationFields(fieldsTagged);
 
   const encodedOperation = encodeUpdateOperation(
     schema,
@@ -91,8 +91,6 @@ export const deleteDocument = async (
   previousOperations: string[],
   { keyPair, schema, session }: Context,
 ): Promise<string> => {
-  const { encodeDeleteOperation } = await wasm;
-
   log('Deleting document', { document: documentId, previousOperations });
 
   const encodedOperation = encodeDeleteOperation(schema, previousOperations);

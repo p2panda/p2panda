@@ -4,10 +4,10 @@
 .nvmrc
 .prettierignore
 .prettierrc.json
+/coverage
 /wasm
 docs
 jest.config.ts
-openrpc.json
 src
 test
 tsconfig.json

@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import wasm from '~/wasm';
+import { KeyPair } from '~/wasm';
 
 /**
- * Returns a new p2panda key pair.
+ * Generates a new key pair.
+ *
+ * @returns KeyPair instance
  */
-// Remove this eslint rule once we have proper TypeScript types
-// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-export const createKeyPair = async () => {
-  const { KeyPair } = await wasm;
+export function createKeyPair() {
   const keyPair = new KeyPair();
   return keyPair;
-};
+}
 
 /**
  * Load a p2panda key pair from its private key.
@@ -19,10 +18,7 @@ export const createKeyPair = async () => {
  * @param privateKey string representation of a private key
  * @returns KeyPair instance
  */
-// Remove this eslint rule once we have proper TypeScript types
-// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-export const recoverKeyPair = async (privateKey: string) => {
-  const { KeyPair } = await wasm;
+export function recoverKeyPair(privateKey: string) {
   const keyPair = KeyPair.fromPrivateKey(privateKey);
   return keyPair;
-};
+}

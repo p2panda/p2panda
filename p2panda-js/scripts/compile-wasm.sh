@@ -16,7 +16,7 @@ MODE="${1:-$node_env}"
 RUST_DIR="${2:-../p2panda-rs}"
 
 # Path to temporary folder where compiled files are stored
-TMP_DIR="${3:-./wasm}"
+TARGET_DIR="${3:-./wasm}"
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -51,6 +51,9 @@ ensure_installed wasm-bindgen
 find_wasm_file () {
     ls $1/*.wasm
 }
+
+# Prepare target folder
+mkdir -p $TARGET_DIR
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -99,15 +102,15 @@ then
 
     echo "◌ Optimize 'node' target for speed"
 
-    INPUT_WASM=$(find_wasm_file "$RUST_DIR/$NODE_PROJECT/$RUST_PROJECT")
-    OUTPUT_WASM=$TMP_DIR/optimized-node.wasm
+    INPUT_WASM=$(find_wasm_file "$RUST_DIR/$NODE_PROJECT")
+    OUTPUT_WASM=$TARGET_DIR/optimized-node.wasm
     wasm-opt -O -o $OUTPUT_WASM $INPUT_WASM
     mv $OUTPUT_WASM $INPUT_WASM
 
     echo "◌ Optimize 'web' target for size"
 
-    INPUT_WASM=$(find_wasm_file "$RUST_DIR/$WEB_PROJECT/$RUST_PROJECT")
-    OUTPUT_WASM=$TMP_DIR/optimized-web.wasm
+    INPUT_WASM=$(find_wasm_file "$RUST_DIR/$WEB_PROJECT")
+    OUTPUT_WASM=$TARGET_DIR/optimized-web.wasm
     input_filesize=$(wc -c < $INPUT_WASM)
     wasm-opt -Os -o $OUTPUT_WASM $INPUT_WASM
     output_filesize=$(wc -c < $OUTPUT_WASM)
@@ -120,7 +123,5 @@ fi
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Move compiled files over
-rm -rf $TMP_DIR
-mkdir -p $TMP_DIR
-mv $RUST_DIR/$NODE_PROJECT $TMP_DIR
-mv $RUST_DIR/$WEB_PROJECT $TMP_DIR
+mv $RUST_DIR/$NODE_PROJECT $TARGET_DIR
+mv $RUST_DIR/$WEB_PROJECT $TARGET_DIR

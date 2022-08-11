@@ -4,7 +4,7 @@
 
 import { createMockClient } from 'mock-apollo-client';
 
-import { KeyPair } from 'wasm';
+import { KeyPair } from '~/wasm';
 import { recoverKeyPair } from '~/identity';
 import { Session } from '~/session';
 
@@ -64,9 +64,10 @@ const createMockSession = (): Session => {
  * with `npm run test:mock-node`.
  */
 describe('Session', () => {
-  let keyPair: KeyPair;
-  beforeAll(async () => {
-    keyPair = await recoverKeyPair(authorFixture().privateKey);
+  let keyPair: typeof KeyPair;
+
+  beforeAll(() => {
+    keyPair = recoverKeyPair(authorFixture().privateKey);
   });
 
   it('requires an endpoint parameter', () => {

@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import * as webpack from 'webpack';
+import webpack, { DefinePlugin } from 'webpack';
 import ESLintPlugin from 'eslint-webpack-plugin';
 
-import config, { getWasmPlugin } from './webpack.common';
+import config, { tsRule } from './webpack.common';
 
 /*
  * Extended configuration to build library targeting modern browsers:
  *
  * - Output is minified for smaller library size
- * - Wasm-pack generates WebAssembly with default `bundler` target
+ * - Uses WebAssembly built with `web` target
+ * - WebAssembly converted to base64 string and embedded inline
  * - Webpack bundles with `web` target
  */
 const configWeb: webpack.Configuration = {
@@ -19,7 +20,21 @@ const configWeb: webpack.Configuration = {
     ...config.output,
     filename: '[name].min.js',
   },
-  plugins: [getWasmPlugin('bundler'), new ESLintPlugin()],
+  module: {
+    rules: [
+      tsRule,
+      {
+        test: /\.wasm$/,
+        type: 'asset/inline',
+      },
+    ],
+  },
+  plugins: [
+    new DefinePlugin({
+      BUILD_TARGET_WEB: JSON.stringify(true),
+    }),
+    new ESLintPlugin(),
+  ],
   target: 'web',
 };
 

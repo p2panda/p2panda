@@ -3,18 +3,20 @@
 import { createKeyPair, recoverKeyPair } from '~/identity';
 
 describe('Key pair utils', () => {
-  it('createKeyPair creates a key pair', async () => {
-    const keyPair = await createKeyPair();
+  it('createKeyPair creates a key pair', () => {
+    const keyPair = createKeyPair();
     expect(keyPair.privateKey()).toHaveLength(64);
   });
 
-  it('recoverKeyPair recovers a key pair', async () => {
-    const keyPair = await createKeyPair();
-    const keyPair2 = await recoverKeyPair(keyPair.privateKey());
+  it('recoverKeyPair recovers a key pair', () => {
+    const keyPair = createKeyPair();
+    const keyPair2 = recoverKeyPair(keyPair.privateKey());
     expect(keyPair.publicKey()).toBe(keyPair2.publicKey());
   });
 
-  it('recoverKeyPair throws when recovering an invalid key pair', async () => {
-    await expect(recoverKeyPair('invalid')).rejects.toThrow();
+  it('recoverKeyPair throws when recovering an invalid key pair', () => {
+    expect(() => {
+      recoverKeyPair('invalid');
+    }).toThrow();
   });
 });
