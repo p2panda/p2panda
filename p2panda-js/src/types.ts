@@ -8,7 +8,7 @@ export type SchemaId =
 /**
  * Arguments for publishing the next entry.
  */
-export type EntryArgs = {
+export type NextArgs = {
   skiplink: string | undefined;
   backlink: string | undefined;
   seqNum: string;

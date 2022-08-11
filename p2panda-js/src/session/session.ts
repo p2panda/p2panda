@@ -15,7 +15,7 @@ import fetch from 'node-fetch';
 
 import { createDocument, deleteDocument, updateDocument } from '~/document';
 
-import type { EntryArgs, Fields, SchemaId } from '~/types';
+import type { NextArgs, Fields, SchemaId } from '~/types';
 import type { KeyPair } from 'wasm';
 
 const log = debug('p2panda-js:session');
@@ -26,10 +26,16 @@ export type Context = {
   session: Session;
 };
 
+type NextArgsVariables = {
+  publicKey: string;
+  viewId?: string;
+};
+
 // GraphQL query to retrieve next entry args from node.
-export const GQL_NEXT_ENTRY_ARGS = gql`
-  {
-    nextEntryArgs(publicKey: $publicKey, documentId: $documentId) {
+// @TODO: Query `nextEntryArgs` is deprecated and will be replaced by `nextArgs` soon
+export const GQL_NEXT_ARGS = gql`
+  query NextArgs($publicKey: String!, $viewId: String) {
+    nextEntryArgs(publicKey: $publicKey, documentId: $viewId) {
       logId
       seqNum
       backlink
@@ -38,11 +44,17 @@ export const GQL_NEXT_ENTRY_ARGS = gql`
   }
 `;
 
+type PublishVariables = {
+  entry: string;
+  operation: string;
+};
+
 // GraphQL mutation to publish an entry and retrieve arguments for encoding the
 // next operation on the same document (those are currently not used to update
 // the next entry arguments cache).
-export const GQL_PUBLISH_ENTRY = gql`
-  {
+// @TODO: Query `publishEntry` is deprecated and will be replaced by `publish` soon
+export const GQL_PUBLISH = gql`
+  mutation Publish($entry: String!, $operation: String!) {
     publishEntry(entry: $entry, operation: $operation) {
       logId
       seqNum
@@ -77,7 +89,7 @@ export class Session {
   client: ApolloClient<NormalizedCacheObject>;
 
   // Cached arguments for the next entry
-  private nextEntryArgs: { [cacheKey: string]: EntryArgs } = {};
+  private nextArgs: { [cacheKey: string]: NextArgs } = {};
 
   constructor(
     endpoint: Session['endpoint'],
@@ -158,42 +170,46 @@ export class Session {
    * This uses the cache set through `Session._setNextEntryArgs`.
    *
    * @param publicKey public key of the author
-   * @param document optional document id
+   * @param viewId optional document view id
    * @returns an `EntryArgs` object
    */
-  async getNextEntryArgs(
-    publicKey: string,
-    documentId?: string,
-  ): Promise<EntryArgs> {
+  async getNextArgs(publicKey: string, viewId?: string): Promise<NextArgs> {
     if (!publicKey) {
       throw new Error("Author's public key must be provided");
     }
 
-    // Use cache only when documentId is set
-    if (documentId) {
-      const cacheKey = `${publicKey}/${documentId}`;
-      const cachedValue = this.nextEntryArgs[cacheKey];
+    const variables: NextArgsVariables = {
+      publicKey,
+    };
+
+    // Use cache only when viewId is set
+    if (viewId) {
+      const cacheKey = `${publicKey}/${viewId}`;
+      const cachedValue = this.nextArgs[cacheKey];
 
       if (cachedValue) {
-        delete this.nextEntryArgs[cacheKey];
-        log('request nextEntryArgs [cached]', cachedValue);
+        delete this.nextArgs[cacheKey];
+        log('request nextArgs [cached]', cachedValue);
         return cachedValue;
       }
+
+      variables.viewId = viewId;
     }
 
     try {
-      const { data } = await this.client.query<{ nextEntryArgs: EntryArgs }>({
-        query: GQL_NEXT_ENTRY_ARGS,
-        variables: {
-          publicKey,
-          documentId,
-        },
+      // @TODO: Query `nextEntryArgs` is deprecated and will be replaced by `nextArgs` soon
+      const { data } = await this.client.query<
+        { nextEntryArgs: NextArgs },
+        NextArgsVariables
+      >({
+        query: GQL_NEXT_ARGS,
+        variables,
       });
-      const nextEntryArgs = data.nextEntryArgs;
-      log('request nextEntryArgs', nextEntryArgs);
-      return nextEntryArgs;
+      const nextArgs = data.nextEntryArgs;
+      log('request nextArgs', nextArgs);
+      return nextArgs;
     } catch (err) {
-      log('Error fetching next entry args');
+      log('Error fetching nextArgs');
       throw err;
     }
   }
@@ -201,17 +217,13 @@ export class Session {
   /**
    * Cache next entry args for a given author and document id.
    *
-   * @param author public key of the author
-   * @param document document id
-   * @param entryArgs an object with entry arguments
+   * @param publicKey public key of the author
+   * @param viewId document id
+   * @param nextArgs an object with entry arguments
    */
-  setNextEntryArgs(
-    author: string,
-    documentId: string,
-    entryArgs: EntryArgs,
-  ): void {
-    const cacheKey = `${author}/${documentId}`;
-    this.nextEntryArgs[cacheKey] = entryArgs;
+  setNextArgs(publicKey: string, viewId: string, nextArgs: NextArgs): void {
+    const cacheKey = `${publicKey}/${viewId}`;
+    this.nextArgs[cacheKey] = nextArgs;
   }
 
   /**
@@ -221,18 +233,24 @@ export class Session {
    * @param operation
    * @returns next entry arguments
    */
-  async publishEntry(entry: string, operation: string): Promise<EntryArgs> {
+  async publish(entry: string, operation: string): Promise<NextArgs> {
     if (!entry || !operation) {
       throw new Error('Encoded entry and operation must be provided');
     }
 
+    const variables: PublishVariables = {
+      entry,
+      operation,
+    };
+
     try {
-      const { data } = await this.client.mutate<{ publishEntry: EntryArgs }>({
-        mutation: GQL_PUBLISH_ENTRY,
-        variables: {
-          entry,
-          operation,
-        },
+      // @TODO: Query `publishEntry` is deprecated and will be replaced by `publish` soon
+      const { data } = await this.client.mutate<
+        { publishEntry: NextArgs },
+        PublishVariables
+      >({
+        mutation: GQL_PUBLISH,
+        variables,
       });
       log('request publishEntry', data);
       if (data?.publishEntry == null)

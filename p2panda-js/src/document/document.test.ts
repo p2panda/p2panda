@@ -30,9 +30,7 @@ describe('document', () => {
       const asyncFunctionMock = jest
         .fn()
         .mockResolvedValue(entryArgsFixture(1));
-      jest
-        .spyOn(session, 'getNextEntryArgs')
-        .mockImplementation(asyncFunctionMock);
+      jest.spyOn(session, 'getNextArgs').mockImplementation(asyncFunctionMock);
 
       const fields = entryFixture(1).operation?.fields as Fields;
 
@@ -55,9 +53,7 @@ describe('document', () => {
       const asyncFunctionMock = jest
         .fn()
         .mockResolvedValue(entryArgsFixture(2));
-      jest
-        .spyOn(session, 'getNextEntryArgs')
-        .mockImplementation(asyncFunctionMock);
+      jest.spyOn(session, 'getNextArgs').mockImplementation(asyncFunctionMock);
 
       // These are the fields for an update operation
       const fields = entryFixture(2).operation?.fields as Fields;
@@ -92,9 +88,7 @@ describe('document', () => {
       const asyncFunctionMock = jest
         .fn()
         .mockResolvedValue(entryArgsFixture(4));
-      jest
-        .spyOn(session, 'getNextEntryArgs')
-        .mockImplementation(asyncFunctionMock);
+      jest.spyOn(session, 'getNextArgs').mockImplementation(asyncFunctionMock);
 
       // This is the document id
       const id = documentIdFixture();
