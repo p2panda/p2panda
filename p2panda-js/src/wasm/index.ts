@@ -1,23 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+type Wasm = typeof import('wasm/node');
+
+type WasmAdapter = {
+  default: () => Promise<void>,
+} & Wasm;
+
 // Defined by webpack.DefinePlugin
 declare const BUILD_TARGET_WEB: boolean;
 
-const wasmAdapter = BUILD_TARGET_WEB
+const wasmAdapter: WasmAdapter = BUILD_TARGET_WEB
   ? require('~/wasm/web')
   : require('~/wasm/node');
 
 const {
-  KeyPair,
-  OperationFields,
-  decodeEntry,
   default: init,
-  encodeCreateOperation,
-  encodeDeleteOperation,
-  encodeUpdateOperation,
   setWasmPanicHook,
-  signEncodeEntry,
-  verifySignature,
+  ...rest
 } = wasmAdapter;
 
 export default async () => {
@@ -28,13 +27,4 @@ export default async () => {
   setWasmPanicHook();
 };
 
-export {
-  KeyPair,
-  OperationFields,
-  decodeEntry,
-  encodeCreateOperation,
-  encodeDeleteOperation,
-  encodeUpdateOperation,
-  signEncodeEntry,
-  verifySignature,
-};
+module.exports = rest;
