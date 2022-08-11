@@ -65,7 +65,7 @@ rand = "^0.7.3"
 console_error_panic_hook = "^0.1.7"
 js-sys = "^0.3.58"
 rand = { version = "^0.7.3", features = ["wasm-bindgen"] }
-wasm-bindgen = "^0.2.81"
+wasm-bindgen = "^0.2.82"
 
 [dev-dependencies]
 criterion = "^0.3.5"
