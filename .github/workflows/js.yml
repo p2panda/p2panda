@@ -36,6 +36,14 @@ jobs:
           # Rust and npm artifacts.
           key: ${{ runner.os }}-test-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}
 
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
+
       - name: Install wasm-bindgen
         uses: jetli/wasm-bindgen-action@v0.1.0
 
@@ -68,6 +76,14 @@ jobs:
         with:
           path: ${{ env.cache_path }}
           key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
 
       - name: Install wasm-bindgen
         uses: jetli/wasm-bindgen-action@v0.1.0
