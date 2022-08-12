@@ -104,3 +104,48 @@ jobs:
       - name: Run build
         run: npm run build
         working-directory: ${{ env.working_directory }}
+
+  js-types:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup node
+        # This action also handles dependency caching for us
+        uses: actions/setup-node@v2
+        with:
+          node-version-file: ${{ env.working_directory}}/.nvmrc
+
+      - name: Restore from cargo and npm cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.cache_path }}
+          # Note that this caching action does NOT cache node dependencies.
+          # This is done by "actions/setup-node" instead. Here we're caching
+          # Rust and npm artifacts.
+          key: ${{ runner.os }}-test-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
+
+      - name: Install wasm-bindgen
+        uses: jetli/wasm-bindgen-action@v0.1.0
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ${{ env.working_directory }}
+
+      - name: Compile wasm to regenerate type declarations
+        run: npm run wasm
+        working-directory: ${{ env.working_directory }}
+
+      - name: Check types
+        run: npm run typecheck
+        working-directory: ${{ env.working_directory }}

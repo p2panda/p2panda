@@ -9,6 +9,7 @@
     "clear": "rimraf ./lib ./wasm",
     "docs": "typedoc src/index.ts",
     "lint": "eslint --ext .ts .",
+    "typecheck": "tsc --noEmit",
     "test": "cross-env NODE_ENV=development run-s clear wasm test:jest",
     "test:jest": "jest --coverage=$npm_config_coverage",
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm test' --ext js,ts,json",
