@@ -2,7 +2,7 @@
   "extends": "@tsconfig/node12/tsconfig.json",
   "compilerOptions": {
     "baseUrl": ".",
-    "rootDir": ".",
+    "rootDir": "./src",
     "outDir": "./lib",
     "paths": {
       "~/*": ["./src/*"],
@@ -13,8 +13,8 @@
     "downlevelIteration": true,
     "esModuleInterop": true,
     "sourceMap": true,
-    "target": "es5",
     "types": ["jest", "node"],
-    "strict": true
+    "strict": true,
+    "declaration": true
   }
 }

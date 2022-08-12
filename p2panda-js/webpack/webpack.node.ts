@@ -52,6 +52,10 @@ const configNode: webpack.Configuration = {
           from: `${getPath(DIR_WASM)}/node/*.{js,wasm}`,
           to: getPath(DIR_DIST),
         },
+        {
+          from: `${getPath(DIR_WASM)}/node/*.d.ts`,
+          to: `${getPath(DIR_DIST)}/wasm/[name][ext]`,
+        },
       ],
     }),
     new ESLintPlugin(),
