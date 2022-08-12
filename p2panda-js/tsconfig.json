@@ -15,6 +15,7 @@
     "sourceMap": true,
     "types": ["jest", "node"],
     "strict": true,
-    "declaration": true
+    "declaration": true,
+    "declarationDir": "./lib/types"
   }
 }

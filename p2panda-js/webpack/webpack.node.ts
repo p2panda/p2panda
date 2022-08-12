@@ -54,7 +54,7 @@ const configNode: webpack.Configuration = {
         },
         {
           from: `${getPath(DIR_WASM)}/node/*.d.ts`,
-          to: `${getPath(DIR_DIST)}/wasm/[name][ext]`,
+          to: `${getPath(DIR_DIST)}/types/wasm/[name][ext]`,
         },
       ],
     }),
