@@ -12,6 +12,7 @@ use crate::entry::{LogId, SeqNum, Signature};
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::EncodedOperation;
+use crate::storage_provider::traits::EntryWithOperation;
 
 /// Create and sign new `Entry` instances.
 #[derive(Clone, Debug, Default)]
@@ -195,6 +196,21 @@ impl From<BambooEntry<&[u8], &[u8]>> for Entry {
             payload_hash,
             payload_size: entry.payload_size,
             signature,
+        }
+    }
+}
+
+impl<T: EntryWithOperation> From<T> for Entry {
+    fn from(entry: T) -> Self {
+        Entry {
+            author: entry.public_key().to_owned(),
+            log_id: entry.log_id().to_owned(),
+            seq_num: entry.seq_num().to_owned(),
+            skiplink: entry.skiplink().cloned(),
+            backlink: entry.backlink().cloned(),
+            payload_size: entry.payload_size(),
+            payload_hash: entry.payload_hash().to_owned(),
+            signature: entry.signature().to_owned(),
         }
     }
 }

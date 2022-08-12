@@ -9,6 +9,8 @@ use crate::operation::traits::AsVerifiedOperation;
 use crate::storage_provider::traits::{AsStorageLog, EntryStore, LogStore, OperationStore};
 use crate::storage_provider::utils::Result;
 
+use super::EntryWithOperation;
+
 /// Trait which handles all high level storage queries and insertions.
 // @TODO: we no longer have any high level API methods living here, we can move
 // `get_document_by_entry` somewhere else then this trait becomes a very simple wrapper
@@ -21,7 +23,7 @@ pub trait StorageProvider:
     // higher level methods (publish_entry and next_entry_args) on StorageProvider.
 
     /// An associated type representing an entry as it passes in and out of storage.
-    type Entry: AsEntry + AsEncodedEntry;
+    type Entry: EntryWithOperation;
 
     /// An associated type representing a log as it passes in and out of storage.
     type StorageLog: AsStorageLog;

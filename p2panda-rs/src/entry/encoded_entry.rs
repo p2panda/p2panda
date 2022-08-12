@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::entry::traits::AsEncodedEntry;
 use crate::hash::Hash;
 use crate::serde::{deserialize_hex, serialize_hex};
+use crate::storage_provider::traits::EntryWithOperation;
 
 /// Size of p2panda entries' signatures.
 pub const SIGNATURE_SIZE: usize = ED25519_SIGNATURE_SIZE;
@@ -66,6 +67,12 @@ impl AsEncodedEntry for EncodedEntry {
 impl Display for EncodedEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", hex::encode(&self.0))
+    }
+}
+
+impl<T: EntryWithOperation> From<T> for EncodedEntry {
+    fn from(entry: T) -> Self {
+        EncodedEntry(entry.into_bytes())
     }
 }
 
