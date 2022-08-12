@@ -105,7 +105,7 @@ jobs:
         run: npm run build
         working-directory: ${{ env.working_directory }}
 
-  js-types:
+  typecheck:
     runs-on: ubuntu-latest
 
     steps:
