@@ -17,7 +17,7 @@ use super::EntryWithOperation;
 // encapsulating the storage traits required for the `domain` methods.
 #[async_trait]
 pub trait StorageProvider:
-    EntryStore<Self::Entry> + LogStore<Self::StorageLog> + OperationStore<Self::StorageOperation>
+    EntryStore<Self::Entry> + LogStore<Self::StorageLog> + OperationStore<Self::Operation>
 {
     // TODO: We can move these types into their own stores once we deprecate the
     // higher level methods (publish_entry and next_entry_args) on StorageProvider.
@@ -29,7 +29,7 @@ pub trait StorageProvider:
     type StorageLog: AsStorageLog;
 
     /// An associated type representing an operation as it passes in and out of storage.
-    type StorageOperation: AsVerifiedOperation;
+    type Operation: AsVerifiedOperation;
 
     /// Returns the related document for any entry.
     ///

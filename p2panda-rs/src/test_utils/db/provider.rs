@@ -44,7 +44,7 @@ impl StorageProvider for MemoryStore {
 
     type StorageLog = StorageLog;
 
-    type StorageOperation = VerifiedOperation;
+    type Operation = VerifiedOperation;
 
     async fn get_document_by_entry(&self, entry_hash: &Hash) -> Result<Option<DocumentId>> {
         let entries = self.entries.lock().unwrap();
