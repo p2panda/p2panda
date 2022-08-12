@@ -133,7 +133,20 @@ pub struct DocumentBuilder {
 
 impl DocumentBuilder {
     /// Instantiate a new `DocumentBuilder` from a collection of operations.
-    pub fn new(operations: Vec<VerifiedOperation>) -> DocumentBuilder {
+    pub fn new<O: AsVerifiedOperation>(operations: Vec<O>) -> DocumentBuilder {
+        let operations = operations
+            .iter()
+            .map(|operation| VerifiedOperation {
+                id: operation.id().to_owned(),
+                version: operation.version(),
+                action: operation.action(),
+                schema_id: operation.schema_id(),
+                previous_operations: operation.previous_operations(),
+                fields: operation.fields(),
+                public_key: operation.public_key().to_owned(),
+            })
+            .collect();
+
         Self { operations }
     }
 
