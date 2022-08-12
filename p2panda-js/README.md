@@ -43,7 +43,7 @@ This library provides all tools required to write a client for the [`p2panda`] n
 
 [`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
-[`p2panda`]: https://github.com/p2panda/design-document
+[`p2panda`]: https://github.com/p2panda/handbook
 
 ## Installation
 
@@ -108,15 +108,16 @@ const Chat = ({}) => {
 };
 ```
 
-## Development Setup
+## Development
 
 ### Dependencies
 
 - [`NodeJS`](https://nodejs.org/en/)
 - [`Rust`](https://www.rust-lang.org/learn/get-started)
-- [`wasm-pack`](https://rustwasm.github.io/wasm-pack/installer/)
+- [`wasm-bindgen`](https://rustwasm.github.io/wasm-bindgen/reference/cli.html)
+- [`wasm-opt`](https://github.com/WebAssembly/binaryen/discussions/3797)
 
-In order to develop with the current code base `p2panda-js` needs to be compiled from the [`p2panda-rs`](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) code using `wasm-pack`. This requires a working `Rust` environment to be setup and `wasm-pack` to be installed. You can then run the following commands, the compilation occurs during the testing and build phases.
+In order to develop with the current code base `p2panda-js` needs to be compiled from the [`p2panda-rs`](https://github.com/p2panda/p2panda/tree/main/p2panda-rs) code using `wasm-pack`. This requires a working `Rust` environment to be setup and `wasm-bindgen` to be installed. `wasm-opt` is only required to optimize the WebAssembly builds for production via `npm run build`. You can then run the following commands, the compilation occurs during the testing and build phases:
 
 ```bash
 # Install dependencies
@@ -125,10 +126,10 @@ npm install
 # Check code formatting
 npm run lint
 
-# Run tests
+# Run tests, requires `wasm-bindgen`
 npm test
 
-# Compile wasm and bundle js package
+# Compile wasm and bundle js package, requires `wasm-bindgen` and `wasm-opt`
 npm run build
 ```
 
@@ -165,4 +166,6 @@ GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)
 <img src="https://p2panda.org/images/ngi-logo.png" width="auto" height="80px"><br />
 <img src="https://p2panda.org/images/eu-flag-logo.png" width="auto" height="80px">
 
-_This project has received funding from the European Union’s Horizon 2020 research and innovation programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528_
+*This project has received funding from the European Union’s Horizon 2020
+research and innovation programme within the framework of the NGI-POINTER
+Project funded under grant agreement No 871528*
