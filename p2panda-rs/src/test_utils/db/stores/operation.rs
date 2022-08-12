@@ -20,7 +20,7 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
         debug!(
             "Inserting {} operation: {} into store",
             operation.action().as_str(),
-            operation.operation_id(),
+            operation.id(),
         );
 
         let mut operations = self.operations.lock().unwrap();
@@ -29,11 +29,11 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
             .any(|(_document_id, verified_operation)| verified_operation == operation)
         {
             return Err(OperationStorageError::InsertionError(
-                operation.operation_id().clone(),
+                operation.id().clone(),
             ));
         } else {
             operations.insert(
-                operation.operation_id().to_owned(),
+                operation.id().to_owned(),
                 (document_id.clone(), operation.clone()),
             )
         };
@@ -63,7 +63,7 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
         let operations = self.operations.lock().unwrap();
         Ok(operations
             .values()
-            .find(|(_document_id, verified_operation)| verified_operation.operation_id() == id)
+            .find(|(_document_id, verified_operation)| verified_operation.id() == id)
             .map(|(document_id, _operation)| document_id.clone()))
     }
 
@@ -127,14 +127,14 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
 //         // Request the previously inserted operation by it's id.
 //         let returned_operation = db
 //             .store
-//             .get_operation_by_id(operation.operation_id())
+//             .get_operation_by_id(operation.id())
 //             .await
 //             .unwrap()
 //             .unwrap();
 //
 //         assert_eq!(returned_operation.public_key(), operation.public_key());
 //         assert_eq!(returned_operation.fields(), operation.fields());
-//         assert_eq!(returned_operation.operation_id(), operation.operation_id());
+//         assert_eq!(returned_operation.id(), operation.id());
 //     }
 //
 //     #[rstest]
@@ -156,7 +156,7 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
 //
 //         assert_eq!(
 //             db.store.insert_operation(&verified_operation, &document_id).await.unwrap_err().to_string(),
-//             format!("Error occured when inserting an operation with id OperationId(Hash(\"{}\")) into storage", verified_operation.operation_id().as_str())
+//             format!("Error occured when inserting an operation with id OperationId(Hash(\"{}\")) into storage", verified_operation.id().as_str())
 //         )
 //     }
 //
@@ -178,7 +178,7 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
 //
 //         assert!(db
 //             .store
-//             .get_document_by_operation_id(create_operation.operation_id())
+//             .get_document_by_operation_id(create_operation.id())
 //             .await
 //             .unwrap()
 //             .is_none());
@@ -190,7 +190,7 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
 //
 //         assert_eq!(
 //             db.store
-//                 .get_document_by_operation_id(create_operation.operation_id())
+//                 .get_document_by_operation_id(create_operation.id())
 //                 .await
 //                 .unwrap()
 //                 .unwrap(),
@@ -204,7 +204,7 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
 //
 //         assert_eq!(
 //             db.store
-//                 .get_document_by_operation_id(create_operation.operation_id())
+//                 .get_document_by_operation_id(create_operation.id())
 //                 .await
 //                 .unwrap()
 //                 .unwrap(),

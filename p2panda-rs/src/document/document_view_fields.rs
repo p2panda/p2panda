@@ -101,10 +101,7 @@ impl From<VerifiedOperation> for DocumentViewFields {
 
         if let Some(fields) = operation.fields() {
             for (name, value) in fields.iter() {
-                document_view_fields.insert(
-                    name,
-                    DocumentViewValue::new(operation.operation_id(), value),
-                );
+                document_view_fields.insert(name, DocumentViewValue::new(operation.id(), value));
             }
         }
 
@@ -157,17 +154,17 @@ mod tests {
     #[rstest]
     fn from_meta_operation(verified_operation: VerifiedOperation) {
         let document_view_fields = DocumentViewFields::from(verified_operation.clone());
-        let operation_fields = verified_operation.operation().fields().unwrap();
+        let operation_fields = verified_operation.fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
 
     #[rstest]
     fn new_from_operation_fields(verified_operation: VerifiedOperation) {
         let document_view_fields = DocumentViewFields::new_from_operation_fields(
-            verified_operation.operation_id(),
-            &verified_operation.operation().fields().unwrap(),
+            verified_operation.id(),
+            &verified_operation.fields().unwrap(),
         );
-        let operation_fields = verified_operation.operation().fields().unwrap();
+        let operation_fields = verified_operation.fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
 }

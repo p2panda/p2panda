@@ -128,36 +128,27 @@ mod tests {
         assert_eq!(document_view.len(), 8);
         assert_eq!(
             document_view.get("age").unwrap(),
-            &DocumentViewValue::new(
-                verified_operation.operation_id(),
-                &OperationValue::Integer(28)
-            ),
+            &DocumentViewValue::new(verified_operation.id(), &OperationValue::Integer(28)),
         );
         assert_eq!(
             document_view.get("height").unwrap(),
-            &DocumentViewValue::new(
-                verified_operation.operation_id(),
-                &OperationValue::Float(3.5)
-            ),
+            &DocumentViewValue::new(verified_operation.id(), &OperationValue::Float(3.5)),
         );
         assert_eq!(
             document_view.get("is_admin").unwrap(),
-            &DocumentViewValue::new(
-                verified_operation.operation_id(),
-                &OperationValue::Boolean(false)
-            ),
+            &DocumentViewValue::new(verified_operation.id(), &OperationValue::Boolean(false)),
         );
         assert_eq!(
             document_view.get("profile_picture").unwrap(),
             &DocumentViewValue::new(
-                verified_operation.operation_id(),
+                verified_operation.id(),
                 &OperationValue::Relation(expected_relation)
             ),
         );
         assert_eq!(
             document_view.get("username").unwrap(),
             &DocumentViewValue::new(
-                verified_operation.operation_id(),
+                verified_operation.id(),
                 &OperationValue::String("bubu".to_owned()),
             )
         );
@@ -187,35 +178,26 @@ mod tests {
         assert_eq!(
             document_view.get("username").unwrap(),
             &DocumentViewValue::new(
-                update_operation.operation_id(),
+                update_operation.id(),
                 &OperationValue::String("yahoo".to_owned()),
             )
         );
         assert_eq!(
             document_view.get("height").unwrap(),
-            &DocumentViewValue::new(
-                update_operation.operation_id(),
-                &OperationValue::Float(100.23)
-            ),
+            &DocumentViewValue::new(update_operation.id(), &OperationValue::Float(100.23)),
         );
         assert_eq!(
             document_view.get("age").unwrap(),
-            &DocumentViewValue::new(
-                update_operation.operation_id(),
-                &OperationValue::Integer(12)
-            ),
+            &DocumentViewValue::new(update_operation.id(), &OperationValue::Integer(12)),
         );
         assert_eq!(
             document_view.get("is_admin").unwrap(),
-            &DocumentViewValue::new(
-                update_operation.operation_id(),
-                &OperationValue::Boolean(true)
-            )
+            &DocumentViewValue::new(update_operation.id(), &OperationValue::Boolean(true))
         );
         assert_eq!(
             document_view.get("profile_picture").unwrap(),
             &DocumentViewValue::new(
-                create_operation.operation_id(),
+                create_operation.id(),
                 &OperationValue::Relation(Relation::new(relation_id))
             )
         );

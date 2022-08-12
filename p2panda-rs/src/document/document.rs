@@ -184,7 +184,7 @@ impl DocumentBuilder {
         }?;
 
         // Get the document schema
-        let schema = create_operation.operation().schema_id();
+        let schema = create_operation.schema_id();
 
         // Get the document author (or rather, the public key of the author who created this
         // document)
@@ -200,7 +200,7 @@ impl DocumentBuilder {
             return Err(DocumentBuilderError::OperationSchemaNotMatching);
         }
 
-        let document_id = DocumentId::new(&create_operation.operation_id().clone());
+        let document_id = DocumentId::new(&create_operation.id().clone());
 
         // Build the graph.
         let mut graph = build_graph(&self.operations)?;
@@ -217,7 +217,7 @@ impl DocumentBuilder {
         let graph_tips: Vec<OperationId> = sorted_graph_data
             .current_graph_tips()
             .iter()
-            .map(|operation| operation.operation_id().to_owned())
+            .map(|operation| operation.id().to_owned())
             .collect();
 
         // Reduce the sorted operations into a single key value map
@@ -430,13 +430,13 @@ mod tests {
         exp_result.insert(
             "name",
             DocumentViewValue::new(
-                operations[4].operation_id(),
+                operations[4].id(),
                 &OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
             ),
         );
 
         let expected_graph_tips: Vec<OperationId> =
-            vec![operations[4].clone().operation_id().clone()];
+            vec![operations[4].clone().id().clone()];
         let expected_op_order = vec![
             operations[0].clone(),
             operations[2].clone(),
@@ -457,7 +457,7 @@ mod tests {
         assert_eq!(document.view_id().graph_tips(), expected_graph_tips);
         assert_eq!(
             document.id(),
-            &DocumentId::new(operations[0].operation_id().to_owned())
+            &DocumentId::new(operations[0].id().to_owned())
         );
 
         // Multiple replicas receiving operations in different orders should resolve to same value.
@@ -494,7 +494,7 @@ mod tests {
         assert_eq!(replica_1.view_id().graph_tips(), expected_graph_tips);
         assert_eq!(
             replica_1.id(),
-            &DocumentId::new(operations[0].operation_id().to_owned())
+            &DocumentId::new(operations[0].id().to_owned())
         );
 
         assert_eq!(
@@ -610,7 +610,7 @@ mod tests {
                 .to_string(),
             format!(
                 "Operation {} cannot be connected to the document graph",
-                operation_two.operation_id()
+                operation_two.id()
             )
         );
     } */

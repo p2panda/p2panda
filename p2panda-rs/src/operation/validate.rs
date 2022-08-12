@@ -8,7 +8,7 @@ use crate::entry::{EncodedEntry, Entry};
 use crate::hash::Hash;
 use crate::operation::error::{ValidateOperationError, VerifiedOperationError};
 use crate::operation::plain::{PlainFields, PlainOperation};
-use crate::operation::traits::{Actionable, Schematic};
+use crate::operation::traits::{Actionable, AsOperation, Schematic};
 use crate::operation::{
     EncodedOperation, Operation, OperationAction, OperationVersion, VerifiedOperation,
 };
@@ -104,9 +104,13 @@ pub fn validate_operation_with_entry(
     let operation = validate_operation(plain_operation, schema)?;
 
     Ok(VerifiedOperation {
+        id: operation_id,
         public_key: entry.public_key().to_owned(),
-        operation,
-        operation_id,
+        version: AsOperation::version(&operation),
+        action: AsOperation::action(&operation),
+        schema_id: AsOperation::schema_id(&operation),
+        previous_operations: AsOperation::previous_operations(&operation),
+        fields: AsOperation::fields(&operation),
     })
 }
 
