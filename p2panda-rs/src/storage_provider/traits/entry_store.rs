@@ -3,10 +3,11 @@
 use async_trait::async_trait;
 
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
-use crate::entry::LogId;
 use crate::entry::SeqNum;
+use crate::entry::{EncodedEntry, Entry as P2pandaEntry, LogId};
 use crate::hash::Hash;
 use crate::identity::Author;
+use crate::operation::EncodedOperation;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::EntryStorageError;
 
@@ -19,7 +20,12 @@ pub trait EntryStore<Entry: AsEntry + AsEncodedEntry> {
     /// Insert an entry into storage.
     ///
     /// Returns an error if a fatal storage error occured.
-    async fn insert_entry(&self, value: Entry) -> Result<(), EntryStorageError>;
+    async fn insert_entry(
+        &self,
+        entry: &P2pandaEntry,
+        encoded_entry: &EncodedEntry,
+        encoded_operation: Option<&EncodedOperation>,
+    ) -> Result<(), EntryStorageError>;
 
     /// Get an entry at sequence position within an author's log.
     ///

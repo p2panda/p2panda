@@ -5,9 +5,10 @@ use lipmaa_link::get_lipmaa_links_back_to;
 use log::debug;
 
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
-use crate::entry::{LogId, SeqNum};
+use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
+use crate::operation::EncodedOperation;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::EntryStorageError;
 use crate::storage_provider::traits::{AsStorageLog, EntryStore};
@@ -17,11 +18,22 @@ use crate::test_utils::db::{MemoryStore, StorageEntry, StorageLog};
 #[async_trait]
 impl EntryStore<StorageEntry> for MemoryStore {
     /// Insert an entry into storage.
-    async fn insert_entry(&self, entry: StorageEntry) -> Result<(), EntryStorageError> {
-        debug!("Inserting entry: {} into store", entry.hash());
+    async fn insert_entry(
+        &self,
+        entry: &Entry,
+        encoded_entry: &EncodedEntry,
+        operation: Option<&EncodedOperation>,
+    ) -> Result<(), EntryStorageError> {
+        debug!("Inserting entry: {} into store", encoded_entry.hash());
+
+        let storage_entry = StorageEntry {
+            entry: entry.to_owned(),
+            encoded_entry: encoded_entry.to_owned(),
+            payload: operation.cloned(),
+        };
 
         let mut entries = self.entries.lock().unwrap();
-        entries.insert(entry.hash(), entry);
+        entries.insert(encoded_entry.hash(), storage_entry);
         Ok(())
     }
 
