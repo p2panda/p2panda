@@ -4,6 +4,7 @@
   "description": "All the things a panda needs",
   "main": "lib/index.js",
   "browser": "lib/index.min.js",
+  "types": "lib/index.d.ts",
   "scripts": {
     "build": "cross-env NODE_ENV=production run-s clear wasm webpack",
     "clear": "rimraf ./lib ./wasm",
