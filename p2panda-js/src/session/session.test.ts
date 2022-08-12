@@ -64,7 +64,7 @@ const createMockSession = (): Session => {
  * with `npm run test:mock-node`.
  */
 describe('Session', () => {
-  let keyPair: typeof KeyPair;
+  let keyPair: KeyPair;
 
   beforeAll(() => {
     keyPair = recoverKeyPair(authorFixture().privateKey);

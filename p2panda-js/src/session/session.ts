@@ -16,7 +16,7 @@ import fetch from 'node-fetch';
 import { createDocument, deleteDocument, updateDocument } from '~/document';
 
 import type { NextArgs, Fields, SchemaId } from '~/types';
-import type { KeyPair } from 'wasm/node';
+import type { KeyPair } from '~/wasm';
 
 const log = debug('p2panda-js:session');
 

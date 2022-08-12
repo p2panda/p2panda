@@ -11,9 +11,7 @@ const log = debug('p2panda-js:operation');
 /**
  * Returns an operation fields instance for the given field contents and schema.
  */
-export const getOperationFields = (
-  fields: FieldsTagged,
-): typeof OperationFields => {
+export const getOperationFields = (fields: FieldsTagged): OperationFields => {
   const operationFields = new OperationFields();
 
   for (const [key, fieldValue] of fields.entries()) {
