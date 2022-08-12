@@ -1,9 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::document::DocumentId;
-use crate::entry::LogId;
+use crate::entry::traits::{AsEncodedEntry, AsEntry};
+use crate::entry::{EncodedEntry, LogId, SeqNum};
+use crate::hash::Hash;
 use crate::identity::Author;
+use crate::operation::traits::AsVerifiedOperation;
+use crate::operation::EncodedOperation;
 use crate::schema::SchemaId;
+
+/// Trait to be implemented on a struct representing a stored entry optionally with it's payload.
+///
+/// Storage implementations should implement this for a data structure that represents an
+/// entry as it is stored in the database. This trait defines methods for reading values from the
+/// entry and it's operation.
+pub trait EntryWithOperation: AsEntry + AsEncodedEntry {
+    fn payload(&self) -> Option<&EncodedOperation>;
+}
 
 /// Trait to be implemented on a struct representing a stored log.
 ///

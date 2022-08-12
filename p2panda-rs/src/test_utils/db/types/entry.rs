@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::entry::decode::decode_entry;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
+use crate::operation::EncodedOperation;
+use crate::storage_provider::traits::EntryWithOperation;
 
 /// A struct which represents an entry and operation pair in storage as a concatenated string.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -13,6 +16,26 @@ pub struct StorageEntry {
 
     /// Actual Bamboo entry data.
     pub encoded_entry: EncodedEntry,
+
+    /// The entry payload.
+    pub payload: Option<EncodedOperation>,
+}
+
+impl StorageEntry {
+    pub fn new(encoded_entry: &EncodedEntry, operation: Option<&EncodedOperation>) -> Self {
+        let entry = decode_entry(encoded_entry).expect("Invalid encoded entry given");
+        Self {
+            entry,
+            encoded_entry: encoded_entry.to_owned(),
+            payload: operation.cloned(),
+        }
+    }
+}
+
+impl EntryWithOperation for StorageEntry {
+    fn payload(&self) -> Option<&EncodedOperation> {
+        self.payload.as_ref()
+    }
 }
 
 impl AsEntry for StorageEntry {
