@@ -4,6 +4,8 @@ use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
+use serde::{Deserialize, Serialize};
+
 use crate::document::error::DocumentIdError;
 use crate::hash::Hash;
 use crate::operation::OperationId;
@@ -23,7 +25,7 @@ use crate::{Human, Validate};
 ///                         \
 ///                          \__ [UPDATE] (Hash: "eff..")
 /// ```
-#[derive(Clone, Debug, StdHash, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug, StdHash, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DocumentId(OperationId);
 
 impl DocumentId {
