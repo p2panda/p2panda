@@ -17,7 +17,7 @@ use crate::operation::{EncodedOperation, OperationAction};
 use crate::schema::Schema;
 use crate::storage_provider::traits::{AsStorageLog, StorageProvider};
 use crate::storage_provider::utils::Result;
-use crate::storage_provider::validation::{
+use crate::test_utils::memory_store::validation::{
     ensure_document_not_deleted, get_expected_skiplink, increment_seq_num, is_next_seq_num,
     next_log_id, verify_log_id,
 };

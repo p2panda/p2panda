@@ -7,8 +7,6 @@ mod log_store;
 mod models;
 mod operation_store;
 mod storage_provider;
-#[cfg(any(feature = "testing", test))]
-pub mod test_utils;
 
 pub use document_store::DocumentStore;
 pub use entry_store::EntryStore;
