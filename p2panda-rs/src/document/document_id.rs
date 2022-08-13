@@ -25,7 +25,7 @@ use crate::{Human, Validate};
 ///                         \
 ///                          \__ [UPDATE] (Hash: "eff..")
 /// ```
-#[derive(Clone, Debug, StdHash, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, StdHash, Ord, PartialOrd, Eq, PartialEq)]
 pub struct DocumentId(OperationId);
 
 impl DocumentId {
