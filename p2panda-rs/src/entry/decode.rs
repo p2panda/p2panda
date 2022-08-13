@@ -14,6 +14,7 @@
 use bamboo_rs_core_ed25519_yasmf::decode;
 
 use crate::entry::error::DecodeEntryError;
+use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::validate::{validate_links, validate_signature};
 use crate::entry::{EncodedEntry, Entry};
 
@@ -62,6 +63,7 @@ mod tests {
     use rstest_reuse::apply;
 
     use crate::entry::encode::encode_entry;
+    use crate::entry::traits::{AsEncodedEntry, AsEntry};
     use crate::entry::{EncodedEntry, Entry};
     use crate::identity::KeyPair;
     use crate::operation::EncodedOperation;

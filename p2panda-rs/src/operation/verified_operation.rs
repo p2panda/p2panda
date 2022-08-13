@@ -2,9 +2,13 @@
 
 use std::hash::Hash as StdHash;
 
+use crate::document::DocumentViewId;
 use crate::identity::Author;
-use crate::operation::traits::AsVerifiedOperation;
-use crate::operation::{Operation, OperationId};
+use crate::operation::traits::{AsOperation, AsVerifiedOperation};
+#[cfg(test)]
+use crate::operation::Operation;
+use crate::operation::{OperationAction, OperationFields, OperationId, OperationVersion};
+use crate::schema::SchemaId;
 
 /// An operation which has been encoded and published on a signed entry.
 ///
@@ -15,10 +19,22 @@ use crate::operation::{Operation, OperationId};
 #[derive(Debug, Clone)]
 pub struct VerifiedOperation {
     /// Identifier of the operation.
-    pub(crate) operation_id: OperationId,
+    pub(crate) id: OperationId,
 
-    /// Operation, which is the payload of the entry.
-    pub(crate) operation: Operation,
+    /// Version of this operation.
+    pub(crate) version: OperationVersion,
+
+    /// Action of this operation.
+    pub(crate) action: OperationAction,
+
+    /// Schema instance of this operation.
+    pub(crate) schema_id: SchemaId,
+
+    /// Previous operations field.
+    pub(crate) previous_operations: Option<DocumentViewId>,
+
+    /// Operation fields.
+    pub(crate) fields: Option<OperationFields>,
 
     /// The public key of the key pair used to publish this operation.
     pub(crate) public_key: Author,
@@ -26,13 +42,8 @@ pub struct VerifiedOperation {
 
 impl AsVerifiedOperation for VerifiedOperation {
     /// Returns the identifier for this operation.
-    fn operation_id(&self) -> &OperationId {
-        &self.operation_id
-    }
-
-    /// Returns the wrapped operation.
-    fn operation(&self) -> &Operation {
-        &self.operation
+    fn id(&self) -> &OperationId {
+        &self.id
     }
 
     /// Returns the public key of the author of this operation.
@@ -41,17 +52,44 @@ impl AsVerifiedOperation for VerifiedOperation {
     }
 }
 
+impl AsOperation for VerifiedOperation {
+    /// Returns action type of operation.
+    fn action(&self) -> OperationAction {
+        self.action.to_owned()
+    }
+
+    /// Returns schema if of operation.
+    fn schema_id(&self) -> SchemaId {
+        self.schema_id.to_owned()
+    }
+
+    /// Returns version of operation.
+    fn version(&self) -> OperationVersion {
+        self.version.to_owned()
+    }
+
+    /// Returns application data fields of operation.
+    fn fields(&self) -> Option<OperationFields> {
+        self.fields.clone()
+    }
+
+    /// Returns vector of this operation's previous operation ids
+    fn previous_operations(&self) -> Option<DocumentViewId> {
+        self.previous_operations.clone()
+    }
+}
+
 impl Eq for VerifiedOperation {}
 
 impl PartialEq for VerifiedOperation {
     fn eq(&self, other: &Self) -> bool {
-        self.operation_id() == other.operation_id()
+        self.id() == other.id()
     }
 }
 
 impl StdHash for VerifiedOperation {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.operation_id().hash(state)
+        self.id().hash(state)
     }
 }
 
@@ -60,9 +98,13 @@ impl VerifiedOperation {
     /// Create a verified operation from it's unverified parts for testing.
     pub fn new(public_key: &Author, operation: &Operation, operation_id: &OperationId) -> Self {
         Self {
-            operation_id: operation_id.to_owned(),
-            operation: operation.to_owned(),
+            id: operation_id.to_owned(),
             public_key: public_key.to_owned(),
+            version: OperationVersion::V1,
+            action: operation.action(),
+            schema_id: operation.schema_id(),
+            previous_operations: operation.previous_operations(),
+            fields: operation.fields(),
         }
     }
 }
@@ -74,7 +116,7 @@ mod tests {
     use rstest::rstest;
     use rstest_reuse::apply;
 
-    use crate::operation::traits::{AsOperation, AsVerifiedOperation};
+    use crate::operation::traits::AsOperation;
     use crate::test_utils::constants::test_fields;
     use crate::test_utils::fixtures::verified_operation;
     use crate::test_utils::templates::{implements_as_operation, many_verified_operations};
@@ -84,29 +126,16 @@ mod tests {
     #[apply(many_verified_operations)]
     fn only_some_operations_should_contain_fields(#[case] verified_operation: VerifiedOperation) {
         if verified_operation.is_create() {
-            assert!(verified_operation.operation().fields().is_some());
+            assert!(verified_operation.fields().is_some());
         }
 
         if verified_operation.is_update() {
-            assert!(verified_operation.operation().fields().is_some());
+            assert!(verified_operation.fields().is_some());
         }
 
         if verified_operation.is_delete() {
-            assert!(verified_operation.operation().fields().is_none());
+            assert!(verified_operation.fields().is_none());
         }
-    }
-
-    #[apply(many_verified_operations)]
-    fn trait_methods_should_match(#[case] verified_operation: VerifiedOperation) {
-        let operation = verified_operation.operation();
-        assert_eq!(verified_operation.fields(), operation.fields());
-        assert_eq!(verified_operation.action(), operation.action());
-        assert_eq!(verified_operation.version(), operation.version());
-        assert_eq!(verified_operation.schema_id(), operation.schema_id());
-        assert_eq!(
-            verified_operation.previous_operations(),
-            operation.previous_operations()
-        );
     }
 
     #[apply(implements_as_operation)]

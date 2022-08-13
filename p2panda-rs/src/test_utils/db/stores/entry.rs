@@ -4,23 +4,36 @@ use async_trait::async_trait;
 use lipmaa_link::get_lipmaa_links_back_to;
 use log::debug;
 
-use crate::entry::{LogId, SeqNum};
+use crate::entry::traits::{AsEncodedEntry, AsEntry};
+use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::Author;
+use crate::operation::EncodedOperation;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::EntryStorageError;
-use crate::storage_provider::traits::{AsStorageEntry, AsStorageLog, EntryStore};
+use crate::storage_provider::traits::{AsStorageLog, EntryStore};
 use crate::test_utils::db::{MemoryStore, StorageEntry, StorageLog};
 
 /// Implement `EntryStore` trait on `MemoryStore`
 #[async_trait]
 impl EntryStore<StorageEntry> for MemoryStore {
     /// Insert an entry into storage.
-    async fn insert_entry(&self, entry: StorageEntry) -> Result<(), EntryStorageError> {
-        debug!("Inserting entry: {} into store", entry.hash());
+    async fn insert_entry(
+        &self,
+        entry: &Entry,
+        encoded_entry: &EncodedEntry,
+        operation: Option<&EncodedOperation>,
+    ) -> Result<(), EntryStorageError> {
+        debug!("Inserting entry: {} into store", encoded_entry.hash());
+
+        let storage_entry = StorageEntry {
+            entry: entry.to_owned(),
+            encoded_entry: encoded_entry.to_owned(),
+            payload: operation.cloned(),
+        };
 
         let mut entries = self.entries.lock().unwrap();
-        entries.insert(entry.hash(), entry);
+        entries.insert(encoded_entry.hash(), storage_entry);
         Ok(())
     }
 
@@ -44,7 +57,7 @@ impl EntryStore<StorageEntry> for MemoryStore {
         let entries = self.entries.lock().unwrap();
 
         let entry = entries.values().find(|entry| {
-            entry.seq_num() == *seq_num && entry.author() == *author && entry.log_id() == *log_id
+            entry.seq_num() == seq_num && entry.public_key() == author && entry.log_id() == log_id
         });
 
         Ok(entry.cloned())
@@ -60,7 +73,7 @@ impl EntryStore<StorageEntry> for MemoryStore {
 
         let latest_entry = entries
             .iter()
-            .filter(|(_, entry)| entry.author() == *author && entry.log_id() == *log_id)
+            .filter(|(_, entry)| entry.public_key() == author && entry.log_id() == log_id)
             .max_by_key(|(_, entry)| entry.seq_num().as_u64());
 
         Ok(latest_entry.map(|(_, entry)| entry).cloned())
@@ -106,12 +119,7 @@ impl EntryStore<StorageEntry> for MemoryStore {
 
         let entries: Vec<StorageEntry> = entries
             .iter()
-            .filter(|(_, entry)| {
-                schema_logs
-                    .iter()
-                    .find(|log| log.id() == entry.log_id())
-                    .is_some()
-            })
+            .filter(|(_, entry)| schema_logs.iter().any(|log| &log.id() == entry.log_id()))
             .map(|(_, entry)| entry.to_owned())
             .collect();
 
@@ -171,7 +179,7 @@ impl EntryStore<StorageEntry> for MemoryStore {
 //         // Get an entry at a specific seq number from an authors log.
 //         let entry_at_seq_num = store
 //             .get_entry_at_seq_num(
-//                 &storage_entry.author(),
+//                 &storage_entry.public_key(),
 //                 &storage_entry.log_id(),
 //                 &storage_entry.seq_num(),
 //             )
@@ -191,7 +199,7 @@ impl EntryStore<StorageEntry> for MemoryStore {
 //
 //         // Before an entry is inserted the latest entry should be none.
 //         assert!(store
-//             .get_latest_entry(&storage_entry.author(), &LogId::default())
+//             .get_latest_entry(&storage_entry.public_key(), &LogId::default())
 //             .await
 //             .unwrap()
 //             .is_none());
@@ -201,7 +209,7 @@ impl EntryStore<StorageEntry> for MemoryStore {
 //
 //         assert_eq!(
 //             store
-//                 .get_latest_entry(&storage_entry.author(), &LogId::default())
+//                 .get_latest_entry(&storage_entry.public_key(), &LogId::default())
 //                 .await
 //                 .unwrap()
 //                 .unwrap(),

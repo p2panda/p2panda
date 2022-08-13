@@ -4,9 +4,7 @@
 use crate::document::DocumentViewId;
 use crate::identity::Author;
 use crate::operation::plain::PlainFields;
-use crate::operation::{
-    Operation, OperationAction, OperationFields, OperationId, OperationVersion,
-};
+use crate::operation::{OperationAction, OperationFields, OperationId, OperationVersion};
 use crate::schema::SchemaId;
 
 /// Trait representing an "operation-like" struct.
@@ -88,60 +86,10 @@ pub trait AsOperation {
 /// [`StorageProvider`][crate::storage_provider::traits::StorageProvider] implementations should
 /// implement this for a data structure that represents an operation as it is stored in the
 /// database.
-pub trait AsVerifiedOperation {
+pub trait AsVerifiedOperation: AsOperation {
     /// Returns the identifier for this operation.
-    fn operation_id(&self) -> &OperationId;
+    fn id(&self) -> &OperationId;
 
     /// Returns the public key of the author of this operation.
     fn public_key(&self) -> &Author;
-
-    /// Returns the wrapped operation.
-    fn operation(&self) -> &Operation;
-}
-
-impl<T: AsVerifiedOperation> AsOperation for T {
-    /// Returns action type of operation.
-    fn action(&self) -> OperationAction {
-        AsOperation::action(AsVerifiedOperation::operation(self))
-    }
-
-    /// Returns schema if of operation.
-    fn schema_id(&self) -> SchemaId {
-        AsOperation::schema_id(AsVerifiedOperation::operation(self))
-    }
-
-    /// Returns version of operation.
-    fn version(&self) -> OperationVersion {
-        AsOperation::version(AsVerifiedOperation::operation(self))
-    }
-
-    /// Returns application data fields of operation.
-    fn fields(&self) -> Option<OperationFields> {
-        AsOperation::fields(AsVerifiedOperation::operation(self))
-    }
-
-    /// Returns vector of this operation's previous operation ids
-    fn previous_operations(&self) -> Option<DocumentViewId> {
-        AsOperation::previous_operations(AsVerifiedOperation::operation(self))
-    }
-
-    fn has_fields(&self) -> bool {
-        self.fields().is_some()
-    }
-
-    fn has_previous_operations(&self) -> bool {
-        self.previous_operations().is_some()
-    }
-
-    fn is_create(&self) -> bool {
-        self.action() == OperationAction::Create
-    }
-
-    fn is_update(&self) -> bool {
-        self.action() == OperationAction::Update
-    }
-
-    fn is_delete(&self) -> bool {
-        self.action() == OperationAction::Delete
-    }
 }

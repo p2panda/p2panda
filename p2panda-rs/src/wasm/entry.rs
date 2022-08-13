@@ -9,6 +9,7 @@ use wasm_bindgen::JsValue;
 use crate::document::DocumentViewId;
 use crate::entry::decode::decode_entry as decode;
 use crate::entry::encode::sign_and_encode_entry;
+use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::operation::decode::decode_operation;

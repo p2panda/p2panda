@@ -6,8 +6,10 @@ use std::hash::Hash as StdHash;
 use bamboo_rs_core_ed25519_yasmf::ED25519_SIGNATURE_SIZE;
 use serde::{Deserialize, Serialize};
 
+use crate::entry::traits::AsEncodedEntry;
 use crate::hash::Hash;
 use crate::serde::{deserialize_hex, serialize_hex};
+use crate::storage_provider::traits::EntryWithOperation;
 
 /// Size of p2panda entries' signatures.
 pub const SIGNATURE_SIZE: usize = ED25519_SIGNATURE_SIZE;
@@ -34,21 +36,6 @@ impl EncodedEntry {
         Self(bytes.to_owned())
     }
 
-    /// Generates and returns hash of encoded entry.
-    pub fn hash(&self) -> Hash {
-        Hash::new_from_bytes(&self.0)
-    }
-
-    /// Returns entry as bytes.
-    pub fn into_bytes(&self) -> Vec<u8> {
-        self.0.clone()
-    }
-
-    /// Returns payload size (number of bytes) of total encoded entry.
-    pub fn size(&self) -> u64 {
-        self.0.len() as u64
-    }
-
     /// Returns only those bytes of a signed entry that don't contain the signature.
     ///
     /// Encoded entries contains both a signature as well as the bytes that were signed. In order
@@ -60,9 +47,32 @@ impl EncodedEntry {
     }
 }
 
+impl AsEncodedEntry for EncodedEntry {
+    /// Generates and returns hash of encoded entry.
+    fn hash(&self) -> Hash {
+        Hash::new_from_bytes(&self.0)
+    }
+
+    /// Returns entry as bytes.
+    fn into_bytes(&self) -> Vec<u8> {
+        self.0.clone()
+    }
+
+    /// Returns payload size (number of bytes) of total encoded entry.
+    fn size(&self) -> u64 {
+        self.0.len() as u64
+    }
+}
+
 impl Display for EncodedEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", hex::encode(&self.0))
+    }
+}
+
+impl<T: EntryWithOperation> From<T> for EncodedEntry {
+    fn from(entry: T) -> Self {
+        EncodedEntry(entry.into_bytes())
     }
 }
 

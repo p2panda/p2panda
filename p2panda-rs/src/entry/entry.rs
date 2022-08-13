@@ -3,15 +3,16 @@
 use std::convert::TryInto;
 use std::hash::Hash as StdHash;
 
-use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use bamboo_rs_core_ed25519_yasmf::Entry as BambooEntry;
 
 use crate::entry::encode::sign_entry;
 use crate::entry::error::EntryBuilderError;
+use crate::entry::traits::AsEntry;
 use crate::entry::{LogId, SeqNum, Signature};
 use crate::hash::Hash;
 use crate::identity::{Author, KeyPair};
 use crate::operation::EncodedOperation;
+use crate::storage_provider::traits::EntryWithOperation;
 
 /// Create and sign new `Entry` instances.
 #[derive(Clone, Debug, Default)]
@@ -130,60 +131,45 @@ pub struct Entry {
     pub(crate) signature: Signature,
 }
 
-impl Entry {
+impl AsEntry for Entry {
     /// Returns public key of entry.
-    pub fn public_key(&self) -> &Author {
+    fn public_key(&self) -> &Author {
         &self.author
     }
 
     /// Returns log id of entry.
-    pub fn log_id(&self) -> &LogId {
+    fn log_id(&self) -> &LogId {
         &self.log_id
     }
 
     /// Returns sequence number of entry.
-    pub fn seq_num(&self) -> &SeqNum {
+    fn seq_num(&self) -> &SeqNum {
         &self.seq_num
     }
 
     /// Returns hash of skiplink entry when given.
-    pub fn skiplink(&self) -> Option<&Hash> {
+    fn skiplink(&self) -> Option<&Hash> {
         self.skiplink.as_ref()
     }
 
     /// Returns hash of backlink entry when given.
-    pub fn backlink(&self) -> Option<&Hash> {
+    fn backlink(&self) -> Option<&Hash> {
         self.backlink.as_ref()
     }
 
     /// Returns payload size of operation.
-    pub fn payload_size(&self) -> u64 {
+    fn payload_size(&self) -> u64 {
         self.payload_size
     }
 
     /// Returns payload hash of operation.
-    pub fn payload_hash(&self) -> &Hash {
+    fn payload_hash(&self) -> &Hash {
         &self.payload_hash
     }
 
     /// Returns signature of entry.
-    pub fn signature(&self) -> &Signature {
+    fn signature(&self) -> &Signature {
         &self.signature
-    }
-
-    /// Calculates sequence number of backlink entry.
-    pub fn seq_num_backlink(&self) -> Option<SeqNum> {
-        self.seq_num.backlink_seq_num()
-    }
-
-    /// Calculates sequence number of skiplink entry.
-    pub fn seq_num_skiplink(&self) -> Option<SeqNum> {
-        self.seq_num.skiplink_seq_num()
-    }
-
-    /// Returns true if skiplink has to be given.
-    pub fn is_skiplink_required(&self) -> bool {
-        is_lipmaa_required(self.seq_num.as_u64())
     }
 }
 
@@ -214,10 +200,26 @@ impl From<BambooEntry<&[u8], &[u8]>> for Entry {
     }
 }
 
+impl<T: EntryWithOperation> From<T> for Entry {
+    fn from(entry: T) -> Self {
+        Entry {
+            author: entry.public_key().to_owned(),
+            log_id: entry.log_id().to_owned(),
+            seq_num: entry.seq_num().to_owned(),
+            skiplink: entry.skiplink().cloned(),
+            backlink: entry.backlink().cloned(),
+            payload_size: entry.payload_size(),
+            payload_hash: entry.payload_hash().to_owned(),
+            signature: entry.signature().to_owned(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
 
+    use crate::entry::traits::AsEntry;
     use crate::entry::{LogId, SeqNum};
     use crate::hash::Hash;
     use crate::identity::{Author, KeyPair};
