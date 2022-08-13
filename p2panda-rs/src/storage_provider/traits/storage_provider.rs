@@ -3,13 +3,12 @@
 use async_trait::async_trait;
 
 use crate::document::DocumentId;
-use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::hash::Hash;
 use crate::operation::traits::AsVerifiedOperation;
-use crate::storage_provider::traits::{AsStorageLog, EntryStore, LogStore, OperationStore};
+use crate::storage_provider::traits::{
+    AsStorageLog, EntryStore, EntryWithOperation, LogStore, OperationStore,
+};
 use crate::storage_provider::utils::Result;
-
-use super::EntryWithOperation;
 
 /// Trait which handles all high level storage queries and insertions.
 // @TODO: we no longer have any high level API methods living here, we can move

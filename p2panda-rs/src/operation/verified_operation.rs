@@ -4,12 +4,11 @@ use std::hash::Hash as StdHash;
 
 use crate::document::DocumentViewId;
 use crate::identity::Author;
-use crate::operation::traits::AsVerifiedOperation;
-use crate::operation::{Operation, OperationId};
+use crate::operation::traits::{AsOperation, AsVerifiedOperation};
+use crate::operation::{
+    Operation, OperationAction, OperationFields, OperationId, OperationVersion,
+};
 use crate::schema::SchemaId;
-
-use super::traits::AsOperation;
-use super::{OperationAction, OperationFields, OperationVersion};
 
 /// An operation which has been encoded and published on a signed entry.
 ///
