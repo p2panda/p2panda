@@ -21,7 +21,7 @@ use crate::schema::SchemaId;
 /// field_definition.insert("name", "document_title".into());
 /// field_definition.insert("type", FieldType::String.into());
 /// ```
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FieldType {
     /// Defines a boolean field.
     Boolean,

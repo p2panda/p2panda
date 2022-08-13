@@ -58,14 +58,14 @@ use crate::graph::error::GraphError;
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Graph<K, V>(HashMap<K, Node<K, V>>)
 where
     K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
     V: PartialEq + Clone + Debug;
 
 /// An internal struct which represents a node in the graph and contains generic data.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Node<K, V>
 where
     K: Hash + Ord + PartialOrd + Eq + PartialEq + Clone + Debug,
@@ -77,7 +77,7 @@ where
     next: Vec<K>,
 }
 
-#[derive(Debug, PartialEq, Clone, Default)]
+#[derive(Debug, Eq, PartialEq, Clone, Default)]
 pub struct GraphData<V: PartialEq + Clone + Debug> {
     sorted: Vec<V>,
     graph_tips: Vec<V>,

@@ -10,7 +10,7 @@ use crate::schema::FieldType;
 /// View onto materialised schema which has fields "name", "description" and "fields".
 ///
 /// The fields are validated when converting a DocumentView struct into this type.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SchemaView {
     /// ID of this schema view.
     id: DocumentViewId,
@@ -106,7 +106,7 @@ impl TryFrom<DocumentView> for SchemaView {
 /// View onto materialised schema field which has fields "name" and "type".
 ///
 /// The fields are validated when converting a DocumentView struct into this type.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SchemaFieldView {
     // Identifier of this schema field view.
     id: DocumentViewId,
