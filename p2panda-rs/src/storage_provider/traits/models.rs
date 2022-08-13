@@ -2,10 +2,8 @@
 
 use crate::document::DocumentId;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
-use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
-use crate::hash::Hash;
+use crate::entry::LogId;
 use crate::identity::Author;
-use crate::operation::traits::AsVerifiedOperation;
 use crate::operation::EncodedOperation;
 use crate::schema::SchemaId;
 

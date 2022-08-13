@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Interfaces for interactions for entry-like structs.
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 
 use crate::entry::{LogId, SeqNum, Signature};
@@ -54,12 +55,16 @@ pub trait AsEncodedEntry {
     fn hash(&self) -> Hash;
 
     /// Returns entry as bytes.
+    ///
+    /// TODO: Do we want to change this method naming?
+    #[allow(clippy::wrong_self_convention)]
     fn into_bytes(&self) -> Vec<u8>;
 
     /// Returns payload size (number of bytes) of total encoded entry.
     fn size(&self) -> u64;
 
     /// Returns the entry bytes encoded as a hex string.
+    #[allow(clippy::wrong_self_convention)]
     fn into_hex(&self) -> String {
         hex::encode(self.into_bytes())
     }

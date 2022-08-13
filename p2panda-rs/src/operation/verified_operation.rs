@@ -5,9 +5,9 @@ use std::hash::Hash as StdHash;
 use crate::document::DocumentViewId;
 use crate::identity::Author;
 use crate::operation::traits::{AsOperation, AsVerifiedOperation};
-use crate::operation::{
-    Operation, OperationAction, OperationFields, OperationId, OperationVersion,
-};
+#[cfg(test)]
+use crate::operation::Operation;
+use crate::operation::{OperationAction, OperationFields, OperationId, OperationVersion};
 use crate::schema::SchemaId;
 
 /// An operation which has been encoded and published on a signed entry.
@@ -116,7 +116,7 @@ mod tests {
     use rstest::rstest;
     use rstest_reuse::apply;
 
-    use crate::operation::traits::{AsOperation, AsVerifiedOperation};
+    use crate::operation::traits::AsOperation;
     use crate::test_utils::constants::test_fields;
     use crate::test_utils::fixtures::verified_operation;
     use crate::test_utils::templates::{implements_as_operation, many_verified_operations};

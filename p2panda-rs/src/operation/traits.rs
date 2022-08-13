@@ -4,9 +4,7 @@
 use crate::document::DocumentViewId;
 use crate::identity::Author;
 use crate::operation::plain::PlainFields;
-use crate::operation::{
-    Operation, OperationAction, OperationFields, OperationId, OperationVersion,
-};
+use crate::operation::{OperationAction, OperationFields, OperationId, OperationVersion};
 use crate::schema::SchemaId;
 
 /// Trait representing an "operation-like" struct.
