@@ -7,5 +7,4 @@
 pub mod constants;
 pub mod fixtures;
 pub mod memory_store;
-pub mod mocks;
 pub mod templates;
