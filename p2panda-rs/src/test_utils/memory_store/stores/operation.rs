@@ -8,7 +8,7 @@ use crate::operation::traits::{AsOperation, AsVerifiedOperation};
 use crate::operation::{OperationId, VerifiedOperation};
 use crate::storage_provider::error::OperationStorageError;
 use crate::storage_provider::traits::OperationStore;
-use crate::test_utils::db::MemoryStore;
+use crate::test_utils::memory_store::MemoryStore;
 
 #[async_trait]
 impl OperationStore<VerifiedOperation> for MemoryStore {

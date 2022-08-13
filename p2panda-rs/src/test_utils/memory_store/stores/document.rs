@@ -7,7 +7,7 @@ use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
 use crate::schema::SchemaId;
 use crate::storage_provider::error::DocumentStorageError;
 use crate::storage_provider::traits::DocumentStore;
-use crate::test_utils::db::MemoryStore;
+use crate::test_utils::memory_store::MemoryStore;
 
 #[async_trait]
 impl DocumentStore for MemoryStore {

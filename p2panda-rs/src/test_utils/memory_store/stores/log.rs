@@ -8,7 +8,7 @@ use crate::entry::LogId;
 use crate::identity::Author;
 use crate::storage_provider::error::LogStorageError;
 use crate::storage_provider::traits::{AsStorageLog, LogStore};
-use crate::test_utils::db::{MemoryStore, StorageLog};
+use crate::test_utils::memory_store::{MemoryStore, StorageLog};
 
 /// Implement the `LogStore` trait on MemoryStore
 #[async_trait]
@@ -74,7 +74,7 @@ mod tests {
     use crate::identity::{Author, KeyPair};
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{AsStorageLog, LogStore};
-    use crate::test_utils::db::{MemoryStore, StorageLog};
+    use crate::test_utils::memory_store::{MemoryStore, StorageLog};
     use crate::test_utils::fixtures::{document_id, key_pair, schema_id};
 
     #[rstest]
