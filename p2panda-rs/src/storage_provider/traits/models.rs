@@ -12,9 +12,10 @@ use crate::schema::SchemaId;
 /// Trait to be implemented on a struct representing a stored entry optionally with it's payload.
 ///
 /// Storage implementations should implement this for a data structure that represents an
-/// entry as it is stored in the database. This trait defines methods for reading values from the
-/// entry and it's operation.
+/// entry as it is stored in the database. This trait requires implementations of both `AsEntry`
+/// and `AsEncodedEntry` and additionally adds a method for accessing the entries'  payload.
 pub trait EntryWithOperation: AsEntry + AsEncodedEntry {
+    /// The payload of this operation.
     fn payload(&self) -> Option<&EncodedOperation>;
 }
 

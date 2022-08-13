@@ -6,6 +6,7 @@ use crate::entry::{LogId, SeqNum, Signature};
 use crate::hash::Hash;
 use crate::identity::Author;
 
+/// Trait representing an "entry-like" struct.
 pub trait AsEntry {
     /// Returns public key of entry.
     fn public_key(&self) -> &Author;
@@ -47,6 +48,7 @@ pub trait AsEntry {
     }
 }
 
+/// Trait representing an "encoded entry-like" struct.
 pub trait AsEncodedEntry {
     /// Generates and returns hash of encoded entry.
     fn hash(&self) -> Hash;

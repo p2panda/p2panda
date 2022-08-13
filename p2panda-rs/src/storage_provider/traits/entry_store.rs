@@ -19,6 +19,9 @@ use crate::storage_provider::error::EntryStorageError;
 pub trait EntryStore<Entry: AsEntry + AsEncodedEntry> {
     /// Insert an entry into storage.
     ///
+    /// No validation of the passed values occurs, this is assumed to have already happened
+    /// elsewhere.
+    ///
     /// Returns an error if a fatal storage error occured.
     async fn insert_entry(
         &self,
