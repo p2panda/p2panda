@@ -12,7 +12,7 @@ use crate::operation::{
 use crate::schema::SchemaId;
 use crate::storage_provider::utils::Result;
 use crate::test_utils::constants::{PRIVATE_KEY, SCHEMA_ID};
-use crate::test_utils::db::{MemoryStore, PublishEntryResponse};
+use crate::test_utils::memory_store::{MemoryStore, PublishEntryResponse};
 
 /// The fields used as defaults in the tests.
 pub fn complex_test_fields() -> Vec<(&'static str, OperationValue)> {

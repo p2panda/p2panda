@@ -90,8 +90,8 @@ use crate::operation::{EncodedOperation, Operation, OperationId, VerifiedOperati
 use crate::storage_provider::traits::test_utils::send_to_store;
 use crate::storage_provider::traits::{DocumentStore, OperationStore, StorageProvider};
 use crate::storage_provider::utils::Result;
-use crate::test_utils::db::{EntryArgsResponse, PublishEntryResponse};
-use crate::test_utils::db::{MemoryStore, StorageEntry};
+use crate::test_utils::memory_store::{EntryArgsResponse, PublishEntryResponse};
+use crate::test_utils::memory_store::{MemoryStore, StorageEntry};
 use crate::test_utils::mocks::Client;
 
 /// Mock node which simulates the functionality of a real node in the p2panda.
