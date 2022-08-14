@@ -45,7 +45,7 @@ const config: webpack.Configuration = {
     extensions: ['.ts', '.js'],
   },
   devtool: 'source-map',
-  // stats: 'minimal',
+  stats: 'minimal',
   experiments: {
     asyncWebAssembly: true,
   },
