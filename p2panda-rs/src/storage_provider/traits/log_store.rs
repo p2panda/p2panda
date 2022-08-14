@@ -57,35 +57,35 @@ pub trait LogStore<StorageLog: AsStorageLog> {
         Ok(log_id)
     }
 }
-//
-// #[cfg(test)]
-// mod tests {
-//     use rstest::rstest;
-//
-//     use crate::entry::LogId;
-//     use crate::identity::Author;
-//     use crate::storage_provider::traits::test_utils::{test_db, TestStore};
-//     use crate::storage_provider::traits::LogStore;
-//
-//     #[rstest]
-//     #[tokio::test]
-//     async fn find_document_log_id(
-//         #[from(test_db)]
-//         #[with(3, 1, 1)]
-//         #[future]
-//         db: TestStore,
-//     ) {
-//         let db = db.await;
-//
-//         let document_id = db.test_data.documents.get(0).unwrap();
-//         let key_pair = db.test_data.key_pairs.get(0).unwrap();
-//         let author = Author::from(key_pair.public_key());
-//
-//         let log_id = db
-//             .store
-//             .find_document_log_id(&author, Some(document_id))
-//             .await
-//             .unwrap();
-//         assert_eq!(log_id, LogId::new(0));
-//     }
-// }
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use crate::entry::LogId;
+    use crate::identity::Author;
+    use crate::storage_provider::traits::LogStore;
+    use crate::test_utils::memory_store::helpers::{test_db, TestStore};
+
+    #[rstest]
+    #[tokio::test]
+    async fn find_document_log_id(
+        #[from(test_db)]
+        #[with(3, 1, 1)]
+        #[future]
+        db: TestStore,
+    ) {
+        let db = db.await;
+
+        let document_id = db.test_data.documents.get(0).unwrap();
+        let key_pair = db.test_data.key_pairs.get(0).unwrap();
+        let author = Author::from(key_pair.public_key());
+
+        let log_id = db
+            .store
+            .find_document_log_id(&author, Some(document_id))
+            .await
+            .unwrap();
+        assert_eq!(log_id, LogId::new(0));
+    }
+}
