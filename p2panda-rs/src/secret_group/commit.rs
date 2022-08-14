@@ -4,7 +4,8 @@ use openmls::framing::{MlsMessageIn, MlsMessageOut};
 use openmls::messages::Welcome;
 use tls_codec::{TlsDeserialize, TlsSerialize, TlsSize};
 
-use crate::secret_group::{SecretGroupError, SecretGroupMessage};
+use crate::secret_group::error::SecretGroupError;
+use crate::secret_group::SecretGroupMessage;
 
 /// Plaintext commit message which is published on the network to announce group changes.
 ///

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Error types for creating and traversing an operation graph.
 use thiserror::Error;
 
-/// Error types for methods of `materialiser` module.
+/// Error types for methods of `graph` module.
 #[derive(Error, Debug, Clone)]
 #[allow(missing_copy_implementations)]
 pub enum GraphError {

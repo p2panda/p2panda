@@ -3,7 +3,8 @@
 use openmls_traits::crypto::OpenMlsCrypto;
 use openmls_traits::OpenMlsCryptoProvider;
 
-use crate::secret_group::lts::{LongTermSecretCiphersuite, LongTermSecretError};
+use crate::secret_group::lts::error::LongTermSecretError;
+use crate::secret_group::lts::LongTermSecretCiphersuite;
 
 /// Encrypt data using the AEAD algorithm given by ciphersuite. Returns ciphertext with
 /// authenticated plaintext HMAC (tag).

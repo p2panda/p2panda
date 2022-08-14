@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Errors for `Storage` provider and associated traits.
+//! Errors from storage provider and associated traits.
 use crate::document::{DocumentId, DocumentViewId};
-use crate::entry::{EntryError, EntrySignedError, LogIdError, SeqNumError};
-use crate::hash::{Hash, HashError};
-use crate::identity::AuthorError;
-use crate::operation::{OperationEncodedError, OperationError, OperationId};
+use crate::entry::error::{LogIdError, SeqNumError, ValidateEntryError};
+use crate::hash::error::HashError;
+use crate::hash::Hash;
+use crate::identity::error::AuthorError;
+use crate::operation::error::ValidateOperationError;
+use crate::operation::OperationId;
 
 /// Data validation errors which can occur in the storage traits.
 #[derive(thiserror::Error, Debug)]
@@ -20,19 +22,11 @@ pub enum ValidationError {
 
     /// Error returned from validating p2panda-rs `Entry` data types.
     #[error(transparent)]
-    EntryValidation(#[from] EntryError),
-
-    /// Error returned from validating p2panda-rs `EntrySigned` data types.
-    #[error(transparent)]
-    EntrySignedValidation(#[from] EntrySignedError),
+    EntryValidation(#[from] ValidateEntryError),
 
     /// Error returned from validating p2panda-rs `Operation` data types.
     #[error(transparent)]
-    OperationValidation(#[from] OperationError),
-
-    /// Error returned from validating p2panda-rs `OperationEncoded` data types.
-    #[error(transparent)]
-    OperationEncodedValidation(#[from] OperationEncodedError),
+    OperationValidation(#[from] ValidateOperationError),
 
     /// Error returned from validating p2panda-rs `LogId` data types.
     #[error(transparent)]
@@ -96,26 +90,6 @@ pub enum EntryStorageError {
     ValidationError(#[from] ValidationError),
 }
 
-/// Errors which can occur when publishing a new entry.
-#[derive(thiserror::Error, Debug)]
-pub enum PublishEntryError {
-    /// Error returned when an entry is recieved and it's document can't be found.
-    #[error("Could not find document for entry in database with id: {0}")]
-    DocumentMissing(Hash),
-
-    /// Error returned when an entry is received and it's operation is missing previous_operations.
-    #[error("UPDATE or DELETE operation with id: with id: {0} came without previous_operations")]
-    OperationWithoutPreviousOperations(OperationId),
-
-    /// Error returned when an entry is received which contains an invalid LogId.
-    #[error("Requested log id {0} does not match expected log id {1}")]
-    InvalidLogId(u64, u64),
-
-    /// Error returned when an entry is received which contains a mismatching operation.
-    #[error("Invalid Entry and Operation pair with id {0}")]
-    InvalidEntryWithOperation(Hash),
-}
-
 /// `OperationStore` errors.
 #[derive(thiserror::Error, Debug)]
 pub enum OperationStorageError {
@@ -136,7 +110,6 @@ pub enum OperationStorageError {
 #[derive(thiserror::Error, Debug)]
 pub enum DocumentStorageError {
     /// Catch all error which implementers can use for passing their own errors up the chain.
-    #[allow(dead_code)]
     #[error("Error occured in DocumentStore: {0}")]
     Custom(String),
 

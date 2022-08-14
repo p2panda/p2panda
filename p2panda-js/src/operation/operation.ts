@@ -20,7 +20,7 @@ export const getOperationFields = async (
   const operationFields = new OperationFields();
   for (const [key, fieldValue] of fields.entries()) {
     const { type, value } = fieldValue;
-    operationFields.add(key, type, value);
+    operationFields.insert(key, type, value);
   }
 
   log('getOperationFields', operationFields.toString());

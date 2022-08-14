@@ -10,6 +10,11 @@ pub enum MlsError {
     #[error("Unexpected message")]
     UnexpectedMessage,
 
+    /// Internal `openmls_memory_keystore` serialisation error.
+    // @TODO: This will be changed as soon as we have our own key store implementation.
+    #[error("KeyStore failed during serialisation")]
+    KeyStoreSerialization,
+
     /// Validating or creating `Credential` instances failed.
     #[error(transparent)]
     Credential(#[from] openmls::credentials::errors::CredentialError),
@@ -57,9 +62,4 @@ pub enum MlsError {
     /// Critical internal `openmls` library error.
     #[error(transparent)]
     Library(#[from] openmls::error::LibraryError),
-
-    /// Internal `openmls_memory_keystore` serialisation error.
-    // @TODO: This will be changed as soon as we have our own key store implementation.
-    #[error("KeyStore failed during serialisation")]
-    KeyStoreSerialization,
 }

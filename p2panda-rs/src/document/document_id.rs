@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::fmt::Display;
+use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
-
-use crate::hash::{Hash, HashError};
+use crate::document::error::DocumentIdError;
+use crate::hash::Hash;
 use crate::operation::OperationId;
 use crate::{Human, Validate};
 
@@ -23,13 +23,13 @@ use crate::{Human, Validate};
 ///                         \
 ///                          \__ [UPDATE] (Hash: "eff..")
 /// ```
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, StdHash, Ord, PartialOrd, Eq, PartialEq)]
 pub struct DocumentId(OperationId);
 
 impl DocumentId {
     /// Creates a new instance of `DocumentId`.
-    pub fn new(id: OperationId) -> Self {
-        Self(id)
+    pub fn new(id: &OperationId) -> Self {
+        Self(id.to_owned())
     }
 
     /// Returns the string representation of the document id.
@@ -52,24 +52,25 @@ impl Human for DocumentId {
 }
 
 impl Validate for DocumentId {
-    type Error = HashError;
+    type Error = DocumentIdError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        self.0.validate()
+        self.0.validate()?;
+        Ok(())
     }
 }
 
 impl From<Hash> for DocumentId {
     fn from(hash: Hash) -> Self {
-        Self::new(hash.into())
+        Self(hash.into())
     }
 }
 
 impl FromStr for DocumentId {
-    type Err = HashError;
+    type Err = DocumentIdError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::new(s.parse::<OperationId>()?))
+        Ok(Self(s.parse::<OperationId>()?))
     }
 }
 
@@ -91,12 +92,12 @@ mod tests {
         let document_id: DocumentId = hash_str.parse().unwrap();
         assert_eq!(
             document_id,
-            DocumentId::new(hash_str.parse::<OperationId>().unwrap())
+            DocumentId::new(&hash_str.parse::<OperationId>().unwrap())
         );
 
         // Converts any `Hash` to `DocumentId`
         let document_id = DocumentId::from(hash.clone());
-        assert_eq!(document_id, DocumentId::new(hash.into()));
+        assert_eq!(document_id, DocumentId::new(&hash.into()));
 
         // Fails when string is not a hash
         assert!("This is not a hash".parse::<DocumentId>().is_err());

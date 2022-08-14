@@ -117,7 +117,7 @@ mod tests {
 
         // Create long-term secret
         let secret = LongTermSecret::new(
-            Hash::new_from_bytes(vec![1, 2, 3]).unwrap(),
+            Hash::new_from_bytes(&[1, 2, 3]),
             LongTermSecretCiphersuite::PANDA10_AES256GCM,
             LongTermSecretEpoch::default(),
             random_key.into(),
@@ -177,7 +177,7 @@ mod tests {
         let ada_member = SecretGroupMember::new(&provider, &ada_key_pair).unwrap();
         let ada_key_package = ada_member.key_package(&provider).unwrap();
 
-        let secret_group_id = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let secret_group_id = Hash::new_from_bytes(&[1, 2, 3]);
         let mut group = SecretGroup::new(&provider, &secret_group_id, &billie_member).unwrap();
         let commit = group.add_members(&provider, &[ada_key_package]).unwrap();
 

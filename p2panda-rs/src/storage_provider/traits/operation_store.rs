@@ -3,9 +3,9 @@
 use async_trait::async_trait;
 
 use crate::document::DocumentId;
-use crate::operation::AsVerifiedOperation;
-use crate::operation::OperationId;
-use crate::storage_provider::errors::OperationStorageError;
+use crate::operation::traits::AsVerifiedOperation;
+use crate::operation::{OperationId, VerifiedOperation};
+use crate::storage_provider::error::OperationStorageError;
 
 /// Trait which handles all storage actions relating to `Operation`s.
 ///
@@ -19,7 +19,7 @@ pub trait OperationStore<StorageOperation: AsVerifiedOperation> {
     /// a fatal DB error occurs.
     async fn insert_operation(
         &self,
-        operation: &StorageOperation,
+        operation: &VerifiedOperation,
         document_id: &DocumentId,
     ) -> Result<(), OperationStorageError>;
 

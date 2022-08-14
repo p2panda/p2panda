@@ -4,11 +4,12 @@ use openmls::group::GroupId;
 use tls_codec::{TlsByteVecU8, TlsDeserialize, TlsSerialize, TlsSize};
 
 use crate::hash::Hash;
-use crate::secret_group::lts::{LongTermSecretEpoch, LongTermSecretError};
+use crate::secret_group::lts::error::LongTermSecretError;
+use crate::secret_group::lts::LongTermSecretEpoch;
 
 /// Data type holding encrypted application data from a sender with needed meta information for a
 /// receiver to decrypt it again.
-#[derive(Debug, Clone, PartialEq, TlsDeserialize, TlsSerialize, TlsSize)]
+#[derive(Debug, Clone, Eq, PartialEq, TlsDeserialize, TlsSerialize, TlsSize)]
 pub struct LongTermSecretCiphertext {
     /// Identifier of the related MLS group.
     group_id: GroupId,

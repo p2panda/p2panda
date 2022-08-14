@@ -4,7 +4,8 @@ use std::collections::BTreeMap;
 
 use lazy_static::lazy_static;
 
-use crate::schema::{FieldType, Schema, SchemaId, SchemaIdError};
+use crate::schema::error::SchemaIdError;
+use crate::schema::{FieldType, Schema, SchemaId};
 
 const DESCRIPTION: &str = "Publish data schemas for your application.";
 
@@ -14,6 +15,7 @@ lazy_static! {
 
         fields.insert("name".to_string(), FieldType::String);
         fields.insert("description".to_string(), FieldType::String);
+
         fields.insert(
             "fields".to_string(),
             FieldType::PinnedRelationList(SchemaId::SchemaFieldDefinition(1)),

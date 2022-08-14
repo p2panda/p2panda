@@ -24,7 +24,7 @@
 //! # use p2panda_rs::hash::Hash;
 //! # use p2panda_rs::identity::KeyPair;
 //! # use p2panda_rs::secret_group::{SecretGroup, SecretGroupMember, MlsProvider};
-//! # let group_instance_id = Hash::new_from_bytes(vec![1, 2, 3])?;
+//! # let group_instance_id = Hash::new_from_bytes(&[1, 2, 3]);
 //! // Define provider for cryptographic methods and key storage
 //! let provider = MlsProvider::new();
 //!
@@ -53,7 +53,7 @@
 //! See: <https://openmls.tech> for more information.
 mod codec;
 mod commit;
-mod error;
+pub mod error;
 mod group;
 mod lts;
 mod member;

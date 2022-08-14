@@ -7,7 +7,7 @@
 //!
 //! [p2panda-js]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 mod entry;
-mod error;
+pub mod error;
 mod key_pair;
 mod operation;
 mod serde;

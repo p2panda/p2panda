@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Error types for creating key pairs and validating public key representations.
 use thiserror::Error;
 
 /// Custom error types for key pairs.

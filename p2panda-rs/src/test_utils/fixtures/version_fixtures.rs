@@ -1,53 +1,86 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-/// Hard-coded fixtures with valid and invalid byte encodings for testing.
+//! Hard-coded fixtures with valid and invalid byte encodings for testing.
 use rstest::fixture;
 
-use crate::entry::{decode_entry, Entry, EntrySigned};
+use crate::entry::decode::decode_entry;
+use crate::entry::{EncodedEntry, Entry};
 use crate::identity::KeyPair;
-use crate::operation::OperationEncoded;
-use crate::test_utils::fixtures::key_pair;
+use crate::operation::EncodedOperation;
+use crate::schema::{FieldType, Schema};
+use crate::test_utils::constants::SCHEMA_ID;
+use crate::test_utils::fixtures::{key_pair, schema_id};
 
 /// Fixture struct which contains versioned p2panda data for testing.
 #[derive(Debug)]
 pub struct Fixture {
     pub entry: Entry,
-    pub entry_signed_encoded: EntrySigned,
+    pub entry_encoded: EncodedEntry,
     pub key_pair: KeyPair,
-    pub operation_encoded: OperationEncoded,
+    pub operation_encoded: EncodedOperation,
+    pub schema: Schema,
 }
 
-/// Fixture which injects p2panda testing data from p2panda version `0.3.0`.
+/// Fixture which injects p2panda testing data from the latest p2panda version.
 #[fixture]
-pub fn v0_3_0_fixture() -> Fixture {
+pub fn latest_fixture() -> Fixture {
     let key_pair = key_pair("4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176");
-    let entry_signed_encoded = EntrySigned::new("009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10101bc00207597aa680a7f619d72ec4410bb3a0af4bcb66509e43c1ddec70beefd4b158f5c1a0836975a8a23d92e7ff3d23742dfb4a5c447b2ef7b86fd1063743ba6bb50e0ddceff7d3814825aaf35cf1d2288061fcfff00375b91dcfc38f945a798d1810a").unwrap();
-    let operation_encoded = OperationEncoded::new("a466616374696f6e6663726561746566736368656d61784a76656e75655f30303230633635353637616533376566656132393365333461396337643133663866326266323364626463336235633762396162343632393331313163343866633738626776657273696f6e01666669656c6473a26b6465736372697074696f6ea26474797065637374726576616c756571666f7220706c6179696e67206368657373646e616d65a26474797065637374726576616c7565656368657373").unwrap();
-    let entry = decode_entry(&entry_signed_encoded, Some(&operation_encoded)).unwrap();
 
-    // Comment out to regenerate fixture:
-    /* use std::convert::TryFrom;
-    let operation_fields = operation_fields(vec![
-        ("name", OperationValue::Text("chess".to_string())),
-        (
-            "description",
-            OperationValue::Text("for playing chess".to_string()),
-        ),
-    ]);
-    let operation = create_operation(SchemaId::new(SCHEMA_ID).unwrap(), operation_fields);
-    let key_pair = key_pair("4c21b14046f284f87f1ea4be4b973664221ad483079a68ed35a6812553b41176");
-    let operation = create_operation(SchemaId::new(SCHEMA_ID).unwrap(), operation_fields);
-    let entry_signed_encoded = crate::entry::sign_and_encode(
-        &entry(operation.clone(), seq_num(1), None, None, log_id(1)),
+    // Hard-coded bytes for entry and operation
+    let entry_encoded = EncodedEntry::from_str("009cdb3a8c0c4b308173d4c3c43a67a6d013444af99acb8be6c52423746d9aa2c10001790020d00b4a66f86b0868b948204bff9e17e1688040e895c2c1f0b3114f45d412978d44804f48e535f87936bf8574c287e470ee1bf453920cddabc244a1168ade39ad14c430d377977695839cbb31d30d8b6577caaf9ad759c3060bfbac0593b50502");
+
+    let operation_encoded = EncodedOperation::from_str("840100784a76656e75655f3030323063363535363761653337656665613239336533346139633764313366386632626632336462646333623563376239616234363239333131316334386663373862a26b6465736372697074696f6e71666f7220706c6179696e67206368657373646e616d65656368657373");
+
+    // Decode entry
+    let entry = decode_entry(&entry_encoded).unwrap();
+
+    // Initialise schema for this operation
+    let schema_id = schema_id(SCHEMA_ID);
+    let schema_description: &str = "Chess is fun!";
+
+    let schema = Schema::new(
+        &schema_id,
+        &schema_description,
+        vec![
+            ("name", FieldType::String),
+            ("description", FieldType::String),
+        ],
+    )
+    .unwrap();
+
+    // Comment out to regenerate fixture
+    /* use crate::entry::{LogId, SeqNum};
+    use crate::operation::encode::encode_operation;
+    use crate::operation::OperationValue;
+    use crate::test_utils::fixtures::create_operation;
+    let operation = create_operation(
+        vec![
+            ("name", OperationValue::String("chess".to_string())),
+            (
+                "description",
+                OperationValue::String("for playing chess".to_string()),
+            ),
+        ],
+        schema.clone(),
+    );
+    let encoded_operation = encode_operation(&operation).unwrap();
+    let encoded_entry = crate::entry::encode::sign_and_encode_entry(
+        &LogId::default(),
+        &SeqNum::default(),
+        None,
+        None,
+        &encoded_operation,
         &key_pair,
-    ).unwrap();
-    println!("{:?}", entry_signed_encoded.as_str());
-    println!("{:?}", OperationEncoded::try_from(&operation).unwrap()); */
+    )
+    .unwrap();
+    println!("{}", encoded_entry);
+    println!("{}", encoded_operation); */
 
     Fixture {
-        entry_signed_encoded,
-        operation_encoded,
-        key_pair,
         entry,
+        entry_encoded,
+        key_pair,
+        operation_encoded,
+        schema,
     }
 }

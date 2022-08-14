@@ -3,10 +3,8 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
-use crate::operation::{
-    AsOperation, AsVerifiedOperation, OperationFields, OperationId, OperationValue,
-    VerifiedOperation,
-};
+use crate::operation::traits::{AsOperation, AsVerifiedOperation};
+use crate::operation::{OperationFields, OperationId, OperationValue, VerifiedOperation};
 
 /// The current value of a document fiew field as well as the id of the operation it came from.
 #[derive(Clone, Debug, PartialEq)]
@@ -103,10 +101,7 @@ impl From<VerifiedOperation> for DocumentViewFields {
 
         if let Some(fields) = operation.fields() {
             for (name, value) in fields.iter() {
-                document_view_fields.insert(
-                    name,
-                    DocumentViewValue::new(operation.operation_id(), value),
-                );
+                document_view_fields.insert(name, DocumentViewValue::new(operation.id(), value));
             }
         }
 
@@ -119,21 +114,21 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::{DocumentViewFields, DocumentViewValue};
-    use crate::operation::{
-        AsOperation, AsVerifiedOperation, OperationId, OperationValue, VerifiedOperation,
-    };
+    use crate::operation::traits::{AsOperation, AsVerifiedOperation};
+    use crate::operation::{OperationId, OperationValue, VerifiedOperation};
     use crate::test_utils::fixtures::{random_operation_id, verified_operation};
 
     #[rstest]
     fn construct_fields(#[from(random_operation_id)] value_id: OperationId) {
         let mut fields = DocumentViewFields::new();
+
         fields.insert(
             "name",
-            DocumentViewValue::new(&value_id, &OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into())),
+            DocumentViewValue::new(&value_id, &OperationValue::String("ʕ •ᴥ•ʔ Cafe!".into())),
         );
         fields.insert(
             "owner",
-            DocumentViewValue::new(&value_id, &OperationValue::Text("しろくま".into())),
+            DocumentViewValue::new(&value_id, &OperationValue::String("しろくま".into())),
         );
         fields.insert(
             "house-number",
@@ -144,11 +139,11 @@ mod tests {
         assert!(!fields.is_empty());
         assert_eq!(
             fields.get("name").unwrap(),
-            &DocumentViewValue::new(&value_id, &OperationValue::Text("ʕ •ᴥ•ʔ Cafe!".into()))
+            &DocumentViewValue::new(&value_id, &OperationValue::String("ʕ •ᴥ•ʔ Cafe!".into()))
         );
         assert_eq!(
             fields.get("owner").unwrap(),
-            &DocumentViewValue::new(&value_id, &OperationValue::Text("しろくま".into()))
+            &DocumentViewValue::new(&value_id, &OperationValue::String("しろくま".into()))
         );
         assert_eq!(
             fields.get("house-number").unwrap(),
@@ -159,17 +154,17 @@ mod tests {
     #[rstest]
     fn from_meta_operation(verified_operation: VerifiedOperation) {
         let document_view_fields = DocumentViewFields::from(verified_operation.clone());
-        let operation_fields = verified_operation.operation().fields().unwrap();
+        let operation_fields = verified_operation.fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
 
     #[rstest]
     fn new_from_operation_fields(verified_operation: VerifiedOperation) {
         let document_view_fields = DocumentViewFields::new_from_operation_fields(
-            verified_operation.operation_id(),
-            &verified_operation.operation().fields().unwrap(),
+            verified_operation.id(),
+            &verified_operation.fields().unwrap(),
         );
-        let operation_fields = verified_operation.operation().fields().unwrap();
+        let operation_fields = verified_operation.fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
 }

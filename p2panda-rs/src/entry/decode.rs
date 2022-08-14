@@ -1,143 +1,265 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::{TryFrom, TryInto};
-use std::marker::PhantomData;
-use std::str::FromStr;
+//! Methods to decode an entry.
+//!
+//! To derive an `Entry` from bytes or a hexadecimal string, use the `EncodedEntry` struct and
+//! apply the `decode_entry` method, which allows you to decode the encoded entry into the final
+//! `Entry` instance.
+//!
+//! ```text
+//!             ┌────────────┐                         ┌─────┐
+//!  bytes ───► │EncodedEntry│ ────decode_entry()────► │Entry│
+//!             └────────────┘                         └─────┘
+//! ```
+use bamboo_rs_core_ed25519_yasmf::decode;
 
-use arrayvec::ArrayVec;
-use bamboo_rs_core_ed25519_yasmf::Entry as BambooEntry;
-use serde::de::Visitor;
-use serde::Deserialize;
+use crate::entry::error::DecodeEntryError;
+use crate::entry::traits::{AsEncodedEntry, AsEntry};
+use crate::entry::validate::{validate_links, validate_signature};
+use crate::entry::{EncodedEntry, Entry};
 
-use crate::entry::{Entry, EntrySigned, EntrySignedError, LogId, SeqNum, SIGNATURE_SIZE};
-use crate::hash::{Hash, HASH_SIZE};
-use crate::operation::{Operation, OperationEncoded};
-
-/// Method to decode an entry and optionally its payload.
+/// Method to decode an entry.
 ///
-/// Takes [`EntrySigned`] and optionally [`OperationEncoded`] as arguments, returns a decoded and
-/// unsigned [`Entry`].
+/// In this process the following validation steps are applied:
 ///
-/// Entries are separated from the operations they refer to and serve as "off-chain data". Since
-/// operations can independently be deleted they have to be passed on as an optional argument.
+/// 1. Check correct Bamboo encoding as per specification (#E2)
+/// 2. Check if back- and skiplinks are correctly set for given sequence number (#E3)
+/// 3. Verify signature (#E5)
 ///
-/// When a [`OperationEncoded`] is passed it will automatically check its integrity with this
-/// [`Entry`] by comparing their hashes. Valid operations will be included in the returned
-/// [`Entry`], if an invalid operation is passed an error will be returned.
-pub fn decode_entry(
-    entry_encoded: &EntrySigned,
-    operation_encoded: Option<&OperationEncoded>,
-) -> Result<Entry, EntrySignedError> {
-    let entry: BambooEntry<ArrayVec<[u8; HASH_SIZE]>, ArrayVec<[u8; SIGNATURE_SIZE]>> =
-        entry_encoded.into();
+/// Please note: This method does almost all validation checks required as per specification to
+/// make sure the entry is well-formed and correctly signed, with two exceptions:
+///
+/// 1. This is NOT checking for the log integrity as this requires knowledge about other entries /
+///    some sort of persistence layer. Use the `validate_log_integrity` method manually to check
+///    this as well. (#E4)
+/// 2. This is NOT checking the payload integrity and authenticity. (#E6)
+///
+/// Check out the `decode_operation_with_entry` method in the `operation` module if you're
+/// interested in full verification of both entries and operations.
+pub fn decode_entry(entry_encoded: &EncodedEntry) -> Result<Entry, DecodeEntryError> {
+    let bytes = entry_encoded.into_bytes();
 
-    let operation = match operation_encoded {
-        Some(payload) => {
-            entry_encoded.validate_operation(payload)?;
-            Some(Operation::from(payload))
-        }
-        None => None,
-    };
+    // Decode the bamboo entry as per specification (#E2)
+    let bamboo_entry = decode(&bytes)?;
 
-    let entry_hash_backlink: Option<Hash> = match entry.backlink {
-        Some(link) => Some(link.try_into()?),
-        None => None,
-    };
+    // Convert from external crate type to our `Entry` struct
+    let entry: Entry = bamboo_entry.into();
 
-    let entry_hash_skiplink: Option<Hash> = match entry.lipmaa_link {
-        Some(link) => Some(link.try_into()?),
-        None => None,
-    };
+    // Validate links (#E3). The bamboo-rs crate does check for valid links but not if back- &
+    // skiplinks are identical (this is optional but we enforce it)
+    validate_links(&entry)?;
 
-    Ok(Entry::new(
-        &LogId::new(entry.log_id),
-        operation.as_ref(),
-        entry_hash_skiplink.as_ref(),
-        entry_hash_backlink.as_ref(),
-        &SeqNum::new(entry.seq_num).unwrap(),
-    )
-    .unwrap())
-}
+    // Check the signature (#E5)
+    validate_signature(entry.public_key(), entry.signature(), entry_encoded)?;
 
-/// Visitor which can be used to deserialize a `String` or `u64` integer to a type T.
-pub struct StringOrU64<T>(PhantomData<T>);
-
-impl<T> StringOrU64<T> {
-    pub fn new() -> Self {
-        Self(PhantomData::<T>)
-    }
-}
-
-impl<'de, T> Visitor<'de> for StringOrU64<T>
-where
-    T: Deserialize<'de> + FromStr + TryFrom<u64>,
-{
-    type Value = T;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("string or u64 integer")
-    }
-
-    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        let result = FromStr::from_str(value)
-            .map_err(|_| serde::de::Error::custom("Invalid string value"))?;
-
-        Ok(result)
-    }
-
-    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        let result = TryInto::<Self::Value>::try_into(value)
-            .map_err(|_| serde::de::Error::custom("Invalid u64 value"))?;
-
-        Ok(result)
-    }
+    Ok(entry)
 }
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
+    use std::convert::TryInto;
 
-    use serde::Deserialize;
+    use rstest::rstest;
+    use rstest_reuse::apply;
 
-    use super::StringOrU64;
+    use crate::entry::encode::encode_entry;
+    use crate::entry::traits::{AsEncodedEntry, AsEntry};
+    use crate::entry::{EncodedEntry, Entry};
+    use crate::identity::KeyPair;
+    use crate::operation::EncodedOperation;
+    use crate::test_utils::constants::{HASH, PRIVATE_KEY};
+    use crate::test_utils::fixtures::{
+        create_operation_with_schema, encoded_entry, encoded_operation, entry,
+        entry_signed_encoded_unvalidated, key_pair, random_hash, Fixture,
+    };
+    use crate::test_utils::templates::version_fixtures;
 
-    #[test]
-    fn deserialize_str_and_u64() {
-        #[derive(PartialEq, Eq, Debug)]
-        struct Test(u64);
+    use super::decode_entry;
 
-        impl From<u64> for Test {
-            fn from(value: u64) -> Self {
-                Self(value)
-            }
-        }
+    #[rstest]
+    fn test_entry_signed(entry: Entry) {
+        let encoded_entry = encode_entry(&entry).unwrap();
 
-        impl FromStr for Test {
-            type Err = Box<dyn std::error::Error>;
+        let verification = KeyPair::verify(
+            &entry.public_key().into(),
+            &encoded_entry.unsigned_bytes(),
+            &entry.signature().into(),
+        );
 
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
-                Ok(Test(u64::from_str(s)?))
-            }
-        }
+        assert!(verification.is_ok(), "{:?}", verification.unwrap_err())
+    }
 
-        impl<'de> Deserialize<'de> for Test {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                deserializer.deserialize_any(StringOrU64::<Test>::new())
-            }
-        }
+    #[rstest]
+    fn test_size(encoded_entry: EncodedEntry) {
+        let size: usize = encoded_entry.size().try_into().unwrap();
+        assert_eq!(size, encoded_entry.into_bytes().len())
+    }
 
-        let mut cbor_bytes = Vec::new();
-        ciborium::ser::into_writer("12", &mut cbor_bytes).unwrap();
-        let result: Test = ciborium::de::from_reader(&cbor_bytes[..]).unwrap();
-        assert_eq!(result, Test(12));
+    #[rstest]
+    fn test_payload_hash(entry: Entry, encoded_operation: EncodedOperation) {
+        let expected_payload_hash = encoded_operation.hash();
+        assert_eq!(entry.payload_hash(), &expected_payload_hash)
+    }
+
+    #[rstest]
+    #[case::valid_first_entry(entry_signed_encoded_unvalidated(
+        1,
+        1,
+        None,
+        None,
+        Some(create_operation_with_schema()),
+        key_pair(PRIVATE_KEY)
+    ))]
+    #[case::valid_entry_with_backlink(entry_signed_encoded_unvalidated(
+        2,
+        1,
+        Some(random_hash()),
+        None,
+        Some(create_operation_with_schema()),
+        key_pair(PRIVATE_KEY)
+    ))]
+    #[case::valid_entry_with_skiplink_and_backlink(entry_signed_encoded_unvalidated(
+        13,
+        1,
+        Some(random_hash()),
+        Some(random_hash()),
+        Some(create_operation_with_schema()),
+        key_pair(PRIVATE_KEY)
+    ))]
+    #[case::skiplink_ommitted_when_sam_as_backlink(entry_signed_encoded_unvalidated(
+        14,
+        1,
+        Some(random_hash()),
+        None,
+        Some(create_operation_with_schema()),
+        key_pair(PRIVATE_KEY)
+    ))]
+    fn decode_correct_entries(#[case] entry_encoded_unvalidated: EncodedEntry) {
+        assert!(decode_entry(&entry_encoded_unvalidated).is_ok());
+    }
+
+    #[rstest]
+    #[case::empty_string(EncodedEntry::from_str(""), "Bytes to decode had length of 0")]
+    #[case::seq_number_zero(
+        entry_signed_encoded_unvalidated(
+            0,
+            1,
+            None,
+            None,
+            Some(create_operation_with_schema()),
+            key_pair(PRIVATE_KEY)
+        ),
+        "Entry sequence must be larger than 0 but was 0"
+    )]
+    #[case::should_not_have_skiplink(
+        entry_signed_encoded_unvalidated(
+            1,
+            1,
+            None,
+            Some(random_hash()),
+            Some(create_operation_with_schema()),
+            key_pair(PRIVATE_KEY)
+        ),
+        "Could not decode payload hash DecodeError"
+    )]
+    #[case::should_not_have_backlink(
+        entry_signed_encoded_unvalidated(
+            1,
+            1,
+            Some(random_hash()),
+            None,
+            Some(create_operation_with_schema()),
+            key_pair(PRIVATE_KEY)
+        ),
+        "Could not decode payload hash DecodeError"
+    )]
+    #[case::should_not_have_backlink_or_skiplink(
+        entry_signed_encoded_unvalidated(
+            1,
+            1,
+            Some(HASH.parse().unwrap()),
+            Some(HASH.parse().unwrap()),
+            Some(create_operation_with_schema()),
+            key_pair(PRIVATE_KEY)
+        ),
+        "Could not decode payload hash DecodeError"
+    )]
+    #[case::missing_backlink(
+        entry_signed_encoded_unvalidated(
+            2,
+            1,
+            None,
+            None,
+            Some(create_operation_with_schema()),
+            key_pair(PRIVATE_KEY)
+        ),
+        "Could not decode backlink yamf hash: DecodeError"
+    )]
+    #[case::missing_skiplink(
+        entry_signed_encoded_unvalidated(
+            8,
+            1,
+            Some(random_hash()),
+            None,
+            Some(create_operation_with_schema()),
+            key_pair(PRIVATE_KEY)
+        ),
+        "Could not decode backlink yamf hash: DecodeError"
+    )]
+    #[case::should_not_include_skiplink(
+        entry_signed_encoded_unvalidated(
+            14,
+            1,
+            Some(HASH.parse().unwrap()),
+            Some(HASH.parse().unwrap()),
+            Some(create_operation_with_schema()),
+            key_pair(PRIVATE_KEY)
+        ),
+        "Could not decode payload hash DecodeError"
+    )]
+    #[case::payload_hash_and_size_missing(
+        entry_signed_encoded_unvalidated(
+            14,
+            1,
+            Some(random_hash()),
+            Some(HASH.parse().unwrap()),
+            None,
+            key_pair(PRIVATE_KEY)
+        ),
+        "Could not decode payload hash DecodeError"
+    )]
+    #[case::skiplink_and_backlink_should_be_unique(
+        entry_signed_encoded_unvalidated(
+            13,
+            1,
+            Some(HASH.parse().unwrap()),
+            Some(HASH.parse().unwrap()),
+            Some(create_operation_with_schema()),
+            key_pair(PRIVATE_KEY)
+        ),
+        "backlink and skiplink are identical"
+    )]
+    fn correct_errors_on_invalid_entries(
+        #[case] unverified_encoded_entry: EncodedEntry,
+        #[case] expected_error_message: &str,
+    ) {
+        assert_eq!(
+            decode_entry(&unverified_encoded_entry)
+                .unwrap_err()
+                .to_string(),
+            expected_error_message
+        );
+    }
+
+    #[apply(version_fixtures)]
+    fn decode_fixture_entry(#[case] fixture: Fixture) {
+        // Decode `EncodedEntry` fixture
+        let entry = decode_entry(&fixture.entry_encoded).unwrap();
+
+        // Decoded `Entry` values should match fixture `Entry` values
+        assert_eq!(entry.log_id(), fixture.entry.log_id());
+        assert_eq!(entry.seq_num(), fixture.entry.seq_num());
+        assert_eq!(entry.skiplink(), fixture.entry.skiplink());
+        assert_eq!(entry.backlink(), fixture.entry.backlink());
     }
 }

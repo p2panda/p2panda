@@ -6,8 +6,8 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use crate::entry::decode::StringOrU64;
 use crate::entry::error::LogIdError;
+use crate::serde::StringOrU64;
 
 /// Authors can write entries to multiple logs identified by log ids.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, StdHash)]

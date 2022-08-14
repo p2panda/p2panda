@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
 use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::identity::AuthorError;
+use crate::identity::error::AuthorError;
 use crate::{Human, Validate};
 
 /// Authors are hex encoded Ed25519 public key strings.
-#[derive(Clone, Debug, Serialize, Eq, StdHash, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Eq, StdHash, PartialEq)]
 pub struct Author(String);
 
 impl Author {
@@ -23,16 +22,14 @@ impl Author {
     /// ```
     /// # extern crate p2panda_rs;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// use std::convert::TryFrom;
-    ///
     /// use p2panda_rs::identity::{Author, KeyPair};
     ///
     /// // Generate new Ed25519 key pair
     /// let key_pair = KeyPair::new();
-    /// let public_key = key_pair.public_key().to_owned();
+    /// let public_key = key_pair.public_key();
     ///
     /// // Create an `Author` instance from a public key
-    /// let author = Author::try_from(public_key).unwrap();
+    /// let author = Author::from(public_key);
     ///
     /// # Ok(())
     /// # }
@@ -41,6 +38,12 @@ impl Author {
         let author = Self(String::from(value));
         author.validate()?;
         Ok(author)
+    }
+
+    /// Returns author represented as bytes.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        // Unwrap as we already checked the inner hex values
+        hex::decode(&self.0).unwrap()
     }
 
     /// Returns hexadecimal representation of public key bytes as `&str`.
@@ -73,12 +76,32 @@ impl Human for Author {
     }
 }
 
-/// Convert ed25519_dalek `PublicKey` to `Author` instance.
-impl TryFrom<PublicKey> for Author {
-    type Error = AuthorError;
+impl<'de> Deserialize<'de> for Author {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Deserialize into public key string
+        let public_key: String = Deserialize::deserialize(deserializer)?;
 
-    fn try_from(public_key: PublicKey) -> Result<Self, Self::Error> {
-        Self::new(&hex::encode(public_key.to_bytes()))
+        // Check format
+        Author::new(&public_key)
+            .map_err(|err| serde::de::Error::custom(format!("invalid public key {}", err)))
+    }
+}
+
+/// Convert ed25519_dalek `PublicKey` to `Author` instance.
+impl From<&PublicKey> for Author {
+    fn from(public_key: &PublicKey) -> Self {
+        // Unwrap as we already trust that `PublicKey` is correct
+        Self::new(&hex::encode(public_key.to_bytes())).unwrap()
+    }
+}
+
+impl From<&Author> for PublicKey {
+    fn from(author: &Author) -> Self {
+        // Unwrap as we already trust that `Author` is correct
+        PublicKey::from_bytes(&author.to_bytes()).unwrap()
     }
 }
 
@@ -115,11 +138,9 @@ impl Validate for Author {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryInto;
-
     use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
 
-    use crate::identity::AuthorError;
+    use crate::identity::error::AuthorError;
     use crate::Human;
 
     use super::Author;
@@ -145,6 +166,17 @@ mod tests {
     }
 
     #[test]
+    fn to_bytes() {
+        let public_key_bytes: [u8; PUBLIC_KEY_LENGTH] = [
+            215, 90, 152, 1, 130, 177, 10, 183, 213, 75, 254, 211, 201, 100, 7, 58, 14, 225, 114,
+            243, 218, 166, 35, 37, 175, 2, 26, 104, 247, 7, 81, 26,
+        ];
+
+        let author = Author::new(&hex::encode(public_key_bytes)).unwrap();
+        assert_eq!(author.to_bytes(), public_key_bytes.to_vec());
+    }
+
+    #[test]
     fn from_public_key() {
         let public_key_bytes: [u8; PUBLIC_KEY_LENGTH] = [
             215, 90, 152, 1, 130, 177, 10, 183, 213, 75, 254, 211, 201, 100, 7, 58, 14, 225, 114,
@@ -153,7 +185,7 @@ mod tests {
         let public_key = PublicKey::from_bytes(&public_key_bytes).unwrap();
 
         // Convert `ed25519_dalek` `PublicKey` into `Author` instance
-        let author: Author = public_key.try_into().unwrap();
+        let author: Author = (&public_key).into();
         assert_eq!(author.to_string(), hex::encode(public_key_bytes));
     }
 

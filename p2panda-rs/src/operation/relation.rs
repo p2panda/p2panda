@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
+use std::slice::Iter;
 
-use crate::document::{DocumentId, DocumentViewId, DocumentViewIdError};
-use crate::hash::HashError;
+use crate::document::error::DocumentIdError;
+use crate::document::{DocumentId, DocumentViewId};
+use crate::operation::error::{
+    PinnedRelationError, PinnedRelationListError, RelationError, RelationListError,
+};
+use crate::operation::OperationId;
 use crate::Validate;
-
-use super::OperationId;
 
 /// Field type representing references to other documents.
 ///
@@ -25,7 +28,7 @@ use super::OperationId;
 ///     |
 /// Document: [Comment "This was great!"]
 /// ```
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Relation(DocumentId);
 
 impl Relation {
@@ -41,10 +44,11 @@ impl Relation {
 }
 
 impl Validate for Relation {
-    type Error = HashError;
+    type Error = RelationError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        self.0.validate()
+        self.0.validate()?;
+        Ok(())
     }
 }
 
@@ -79,7 +83,7 @@ impl Validate for Relation {
 /// Pinned relations give us immutability and the option to restore a historical state across
 /// documents. However, most cases will probably only need unpinned relations: For example when
 /// referring to a user-profile you probably want to always get the _latest_ version.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PinnedRelation(DocumentViewId);
 
 impl PinnedRelation {
@@ -92,28 +96,28 @@ impl PinnedRelation {
     pub fn view_id(&self) -> &DocumentViewId {
         &self.0
     }
-}
 
-impl Validate for PinnedRelation {
-    type Error = DocumentViewIdError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        self.0.validate()
+    /// Returns iterator over operation ids.
+    pub fn iter(&self) -> Iter<OperationId> {
+        self.0.iter()
     }
 }
 
-impl IntoIterator for PinnedRelation {
-    type Item = OperationId;
+impl Validate for PinnedRelation {
+    type Error = PinnedRelationError;
 
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+    fn validate(&self) -> Result<(), Self::Error> {
+        self.0.validate()?;
+        Ok(())
     }
 }
 
 /// A `RelationList` can be used to reference multiple foreign documents from a document field.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+///
+/// The item order and occurrences inside a relation list are defined by the developers and users
+/// and have semantic meaning, for this reason we do not check against duplicates or ordering here.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::len_without_is_empty)]
 pub struct RelationList(Vec<DocumentId>);
 
 impl RelationList {
@@ -122,16 +126,28 @@ impl RelationList {
         Self(relations)
     }
 
-    /// Returns an iterator over the `DocumentId`s in this `RelationList`
-    pub fn iter(&self) -> std::vec::IntoIter<DocumentId> {
-        self.0.clone().into_iter()
+    /// Returns the list of document ids.
+    pub fn document_ids(&self) -> &[DocumentId] {
+        self.0.as_slice()
+    }
+
+    /// Returns iterator over document ids.
+    pub fn iter(&self) -> Iter<DocumentId> {
+        self.0.iter()
+    }
+
+    /// Returns number of documents in this relation list.
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
 impl Validate for RelationList {
-    type Error = HashError;
+    type Error = RelationListError;
 
     fn validate(&self) -> Result<(), Self::Error> {
+        // Note that we do NOT check for duplicates and ordering here as this information is
+        // semantic!
         for document_id in &self.0 {
             document_id.validate()?;
         }
@@ -140,18 +156,26 @@ impl Validate for RelationList {
     }
 }
 
-impl IntoIterator for RelationList {
-    type Item = DocumentId;
+impl TryFrom<&[String]> for RelationList {
+    type Error = RelationListError;
 
-    type IntoIter = std::vec::IntoIter<Self::Item>;
+    fn try_from(str_list: &[String]) -> Result<Self, Self::Error> {
+        let document_ids: Result<Vec<DocumentId>, DocumentIdError> = str_list
+            .iter()
+            .map(|document_id_str| document_id_str.parse::<DocumentId>())
+            .collect();
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        Ok(Self(document_ids?))
     }
 }
 
 /// A `PinnedRelationList` can be used to reference multiple documents views.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+///
+/// The item order and occurrences inside a pinned relation list are defined by the developers and
+/// users and have semantic meaning, for this reason we do not check against duplicates or ordering
+/// here.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::len_without_is_empty)]
 pub struct PinnedRelationList(Vec<DocumentViewId>);
 
 impl PinnedRelationList {
@@ -160,31 +184,33 @@ impl PinnedRelationList {
         Self(relations)
     }
 
-    /// Returns an iterator over the `DocumentViewId`s in this `PinnedRelationList`
-    pub fn iter(&self) -> std::vec::IntoIter<DocumentViewId> {
-        self.0.clone().into_iter()
+    /// Returns the list of document view ids.
+    pub fn document_view_ids(&self) -> &[DocumentViewId] {
+        self.0.as_slice()
+    }
+
+    /// Returns iterator over document view ids.
+    pub fn iter(&self) -> Iter<DocumentViewId> {
+        self.0.iter()
+    }
+
+    /// Returns number of pinned documents in this list.
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
 impl Validate for PinnedRelationList {
-    type Error = DocumentViewIdError;
+    type Error = PinnedRelationListError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        for document_view in &self.0 {
-            document_view.validate()?;
+        // Note that we do NOT check for duplicates and ordering here as this information is
+        // semantic!
+        for document_view_id in &self.0 {
+            document_view_id.validate()?;
         }
 
         Ok(())
-    }
-}
-
-impl IntoIterator for PinnedRelationList {
-    type Item = DocumentViewId;
-
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
     }
 }
 
@@ -194,7 +220,8 @@ mod tests {
 
     use crate::document::{DocumentId, DocumentViewId};
     use crate::hash::Hash;
-    use crate::test_utils::fixtures::{random_document_id, random_hash};
+    use crate::test_utils::fixtures::random_document_id;
+    use crate::test_utils::fixtures::random_hash;
     use crate::Validate;
 
     use super::{PinnedRelation, PinnedRelationList, Relation, RelationList};
@@ -222,20 +249,21 @@ mod tests {
 
     #[rstest]
     fn iterates(#[from(random_hash)] hash_1: Hash, #[from(random_hash)] hash_2: Hash) {
-        let pinned_relation = PinnedRelation::new(
-            DocumentViewId::new(&[hash_1.clone().into(), hash_2.clone().into()]).unwrap(),
-        );
+        let pinned_relation = PinnedRelation::new(DocumentViewId::new(&[
+            hash_1.clone().into(),
+            hash_2.clone().into(),
+        ]));
 
-        for hash in pinned_relation {
+        for hash in pinned_relation.iter() {
             assert!(hash.validate().is_ok());
         }
 
         let relation_list = RelationList::new(vec![
-            DocumentId::new(hash_1.clone().into()),
-            DocumentId::new(hash_2.clone().into()),
+            DocumentId::new(&hash_1.clone().into()),
+            DocumentId::new(&hash_2.clone().into()),
         ]);
 
-        for document_id in relation_list {
+        for document_id in relation_list.iter() {
             assert!(document_id.validate().is_ok());
         }
 
@@ -244,8 +272,8 @@ mod tests {
             DocumentViewId::from(hash_2),
         ]);
 
-        for pinned_relation in pinned_relation_list {
-            for hash in pinned_relation {
+        for pinned_relation in pinned_relation_list.iter() {
+            for hash in pinned_relation.graph_tips() {
                 assert!(hash.validate().is_ok());
             }
         }

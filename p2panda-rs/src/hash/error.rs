@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Error types for validating or creating a hash.
 use thiserror::Error;
 
-/// Custom error types for `Hash`.
-#[derive(Error, Debug, Clone)]
-#[allow(missing_copy_implementations)]
+/// Error types for `Hash` struct.
+#[derive(Error, Debug)]
 pub enum HashError {
     /// Hash string has an invalid length.
     #[error("invalid hash length {0} bytes, expected {1} bytes")]
@@ -18,7 +18,7 @@ pub enum HashError {
     #[error("can not decode YASMF BLAKE3 hash")]
     DecodingFailed,
 
-    /// Internal `yasmf_hash` crate error.
+    /// Internal error from `yasmf_hash` crate.
     #[error(transparent)]
     YasmfHashError(#[from] yasmf_hash::error::Error),
 }

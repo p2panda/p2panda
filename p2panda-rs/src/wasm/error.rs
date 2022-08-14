@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Helpers for better debugging and handling of errors of the WebAssembly & JavaScript world.
 use std::panic;
 
 use console_error_panic_hook::hook as panic_hook;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-// Converts any Rust Error type into js_sys:Error while keeping its error message. This helps
-// propagating errors similar like we do in Rust but in WebAssembly contexts. It is possible to
-// optionally use a custom error message when required.
+// Converts any Rust error type into `js_sys::Error` while preserving its error message.
+//
+// This helps propagating errors similar like we do in Rust but in WebAssembly contexts. It is
+// possible to optionally use a custom error message when required.
 macro_rules! jserr {
     // Convert error to js_sys::Error with original error message
     ($l:expr) => {

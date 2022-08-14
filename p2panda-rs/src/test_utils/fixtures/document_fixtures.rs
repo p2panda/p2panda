@@ -7,33 +7,30 @@ use crate::operation::OperationId;
 use crate::test_utils::constants::HASH;
 use crate::test_utils::fixtures::random_hash;
 
-/// Fixture which injects the default `DocumentId` into a test method.
-///
-/// Default value can be overridden at testing time by passing in a custom hash string.
+/// Returns constant document id.
 #[fixture]
 pub fn document_id(#[default(HASH)] hash_str: &str) -> DocumentId {
     hash_str.parse().unwrap()
 }
 
-/// Fixture which injects the default `DocumentViewId` into a test method.
-///
-/// Default value can be overridden at testing time by passing in a custom vector of hash strings.
+/// Returns constant document view id.
 #[fixture]
-pub fn document_view_id(#[default(vec![HASH])] hash_str_vec: Vec<&str>) -> DocumentViewId {
-    let hashes: Vec<OperationId> = hash_str_vec
+pub fn document_view_id(#[default(vec![HASH])] operation_id_str_vec: Vec<&str>) -> DocumentViewId {
+    let operation_ids: Vec<OperationId> = operation_id_str_vec
         .into_iter()
         .map(|hash| hash.parse::<OperationId>().unwrap())
         .collect();
-    DocumentViewId::new(&hashes).unwrap()
+
+    DocumentViewId::new(&operation_ids)
 }
 
-/// Fixture which injects a random `DocumentId` into a test method.
+/// Generates random document id.
 #[fixture]
 pub fn random_document_id() -> DocumentId {
     random_hash().into()
 }
 
-/// Fixture which injects a random `DocumentViewId` into a test method.
+/// Generates random document view id.
 #[fixture]
 pub fn random_document_view_id() -> DocumentViewId {
     random_hash().into()

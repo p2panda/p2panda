@@ -1,78 +1,137 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Error types for encoding, decoding and validating operations with schemas and regarding data
+//! types like operation fields, relations or plain operations.
 use thiserror::Error;
 
-/// Error types for methods of `Operation` struct.
-#[allow(missing_copy_implementations)]
+/// Errors from `OperationBuilder` struct.
 #[derive(Error, Debug)]
-pub enum OperationError {
-    /// Invalid attempt to create an operation without any fields data.
-    #[error("operation fields can not be empty")]
-    EmptyFields,
-
-    /// Invalid attempt to create a delete operation with fields.
-    #[error("DELETE operation must not have fields")]
-    DeleteWithFields,
-
-    /// Invalid attempt to create an operation without any previous operations data.
-    #[error("previous_operations field can not be empty")]
-    EmptyPreviousOperations,
-
-    /// Invalid attempt to create an operation with previous operations data.
-    #[error("previous_operations field should be empty")]
-    ExistingPreviousOperations,
-
-    /// Invalid hash found.
+pub enum OperationBuilderError {
+    /// Handle errors from `operation::validate` module.
     #[error(transparent)]
-    HashError(#[from] crate::hash::HashError),
-
-    /// Error from operation fields.
-    #[error(transparent)]
-    OperationFieldsError(#[from] OperationFieldsError),
+    ValidateOperationError(#[from] ValidateOperationError),
 }
 
-/// Error types for methods of `OperationFields` struct.
+/// Errors from `operation::encode` module.
 #[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
-pub enum OperationFieldsError {
+pub enum EncodeOperationError {
+    /// CBOR encoder failed critically due to an IO issue.
+    #[error("cbor encoder failed {0}")]
+    EncoderIOFailed(String),
+
+    /// CBOR encoder could not serialize this value.
+    #[error("cbor encoder failed serializing value {0}")]
+    EncoderFailed(String),
+}
+
+/// Errors from `operation::decode` module.
+#[derive(Error, Debug)]
+pub enum DecodeOperationError {
+    /// CBOR decoder failed critically due to an IO issue.
+    #[error("cbor decoder failed {0}")]
+    DecoderIOFailed(String),
+
+    /// Invalid CBOR encoding detected.
+    #[error("invalid cbor encoding at byte {0}")]
+    InvalidCBOREncoding(usize),
+
+    /// Invalid p2panda operation encoding detected.
+    #[error("{0}")]
+    InvalidEncoding(String),
+
+    /// CBOR decoder exceeded maximum recursion limit.
+    #[error("cbor decoder exceeded recursion limit")]
+    RecursionLimitExceeded,
+}
+
+/// Errors from `operation::validate` module.
+#[derive(Error, Debug)]
+pub enum ValidateOperationError {
+    /// Claimed schema id did not match given schema.
+    #[error("operation schema id not matching with given schema: {0}, expected: {1}")]
+    SchemaNotMatching(String, String),
+
+    /// Expected `fields` in CREATE or UPDATE operation.
+    #[error("expected 'fields' in CREATE or UPDATE operation")]
+    ExpectedFields,
+
+    /// Unexpected `fields` in DELETE operation.
+    #[error("unexpected 'fields' in DELETE operation")]
+    UnexpectedFields,
+
+    /// Expected `previous_operations` in UPDATE or DELETE operation.
+    #[error("expected 'previous_operations' in UPDATE or DELETE operation")]
+    ExpectedPreviousOperations,
+
+    /// Unexpected `previous_operations` in CREATE operation.
+    #[error("unexpected 'previous_operations' in CREATE operation")]
+    UnexpectedPreviousOperations,
+
+    /// Handle errors from `schema::validate` module.
+    #[error(transparent)]
+    SchemaValidation(#[from] crate::schema::validate::error::ValidationError),
+}
+
+/// Error types for methods of plain fields or operation fields.
+#[derive(Error, Debug)]
+pub enum FieldsError {
     /// Detected duplicate field when adding a new one.
-    #[error("field already exists")]
-    FieldDuplicate,
+    #[error("field '{0}' already exists")]
+    FieldDuplicate(String),
 
     /// Tried to interact with an unknown field.
     #[error("field does not exist")]
     UnknownField,
 }
 
-/// Custom error types for `OperationEncoded`.
-#[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
-pub enum OperationEncodedError {
-    /// Encoded operation string contains invalid hex characters.
-    #[error("invalid hex encoding in operation")]
-    InvalidHexEncoding,
-}
-
-/// Error types for methods of `VerifiedOperation` struct.
+/// Errors from converting to a `VerifiedOperation` in `operation:validate` module.
 #[derive(Error, Debug)]
 pub enum VerifiedOperationError {
-    /// Invalid encoded entry found.
+    /// Handle errors from `operation::validate` module.
     #[error(transparent)]
-    EntrySignedError(#[from] crate::entry::EntrySignedError),
+    ValidateOperationError(#[from] ValidateOperationError),
 
-    /// Encoded operation data is invalid.
+    /// Handle errors from `entry::validate` module.
     #[error(transparent)]
-    OperationEncodedError(#[from] OperationEncodedError),
+    ValidateEntryError(#[from] crate::entry::error::ValidateEntryError),
+}
 
-    /// Invalid operation found.
+/// Errors from `OperationId` struct.
+#[derive(Error, Debug)]
+pub enum OperationIdError {
+    /// Handle errors from `Hash` struct.
     #[error(transparent)]
-    OperationError(#[from] OperationError),
+    HashError(#[from] crate::hash::error::HashError),
+}
 
-    /// Invalid author found.
+/// Errors from `Relation` struct.
+#[derive(Error, Debug)]
+pub enum RelationError {
+    /// Handle errors from `DocumentId` struct.
     #[error(transparent)]
-    AuthorError(#[from] crate::identity::AuthorError),
+    DocumentIdError(#[from] crate::document::error::DocumentIdError),
+}
 
-    /// Invalid operation id hash found.
+/// Errors from `PinnedRelation` struct.
+#[derive(Error, Debug)]
+pub enum PinnedRelationError {
+    /// Handle errors from `DocumentViewId` struct.
     #[error(transparent)]
-    HashError(#[from] crate::hash::HashError),
+    DocumentViewIdError(#[from] crate::document::error::DocumentViewIdError),
+}
+
+/// Errors from `RelationList` struct.
+#[derive(Error, Debug)]
+pub enum RelationListError {
+    /// Handle errors from `DocumentId` struct.
+    #[error(transparent)]
+    DocumentIdError(#[from] crate::document::error::DocumentIdError),
+}
+
+/// Errors from `PinnedRelationList` struct.
+#[derive(Error, Debug)]
+pub enum PinnedRelationListError {
+    /// Handle errors from `DocumentViewId` struct.
+    #[error(transparent)]
+    DocumentViewIdError(#[from] crate::document::error::DocumentViewIdError),
 }

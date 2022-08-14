@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
@@ -10,7 +10,7 @@ use bamboo_rs_core_ed25519_yasmf::yasmf_hash::new_blake3;
 use serde::{Deserialize, Serialize};
 use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
-use crate::hash::HashError;
+use crate::hash::error::HashError;
 use crate::{Human, Validate};
 
 /// Size of p2panda entries' hashes.
@@ -25,7 +25,7 @@ pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
 /// to the Bamboo specification.
 ///
 /// [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
-#[derive(Clone, Debug, Ord, PartialOrd, Serialize, Deserialize, PartialEq, Eq, StdHash)]
+#[derive(Clone, Debug, Ord, PartialOrd, Serialize, PartialEq, Eq, StdHash)]
 pub struct Hash(String);
 
 impl Hash {
@@ -37,18 +37,21 @@ impl Hash {
     }
 
     /// Hashes byte data and returns it as `Hash` instance.
-    pub fn new_from_bytes(value: Vec<u8>) -> Result<Self, HashError> {
+    pub fn new_from_bytes(value: &[u8]) -> Self {
         // Generate Blake3 hash
-        let blake3_hash = new_blake3(&value);
+        let blake3_hash = new_blake3(value);
 
         // Wrap hash in YASMF container format
         let mut bytes = Vec::new();
-        blake3_hash.encode_write(&mut bytes)?;
+        blake3_hash
+            .encode_write(&mut bytes)
+            // Unwrap here as this will only fail on critical system failures
+            .unwrap();
 
         // Encode bytes as hex string
         let hex_str = hex::encode(&bytes);
 
-        Ok(Self(hex_str))
+        Self(hex_str)
     }
 
     /// Returns hash as bytes.
@@ -60,6 +63,29 @@ impl Hash {
     /// Returns hash as `&str`.
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+impl Validate for Hash {
+    type Error = HashError;
+
+    fn validate(&self) -> Result<(), Self::Error> {
+        // Check if hash is a hex string
+        match hex::decode(&self.0) {
+            Ok(bytes) => {
+                // Check if length is correct
+                if bytes.len() != HASH_SIZE + 2 {
+                    return Err(HashError::InvalidLength(bytes.len(), HASH_SIZE + 2));
+                }
+
+                // Check if YASMF BLAKE3 hash is valid
+                match YasmfHash::<&[u8]>::decode(&bytes) {
+                    Ok((YasmfHash::Blake3(_), _)) => Ok(()),
+                    _ => Err(HashError::DecodingFailed),
+                }
+            }
+            Err(_) => Err(HashError::InvalidHexEncoding),
+        }
     }
 }
 
@@ -87,22 +113,36 @@ impl Human for Hash {
     }
 }
 
-/// Converts YASMF hash from `yasmf-hash` crate to p2panda `Hash` instance.
-impl<T: core::borrow::Borrow<[u8]> + Clone> TryFrom<YasmfHash<T>> for Hash {
-    type Error = HashError;
+impl<'de> Deserialize<'de> for Hash {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Deserialize hash string
+        let hash: String = Deserialize::deserialize(deserializer)?;
 
-    fn try_from(yasmf_hash: YasmfHash<T>) -> Result<Self, Self::Error> {
+        // Convert and validate format
+        hash.try_into()
+            .map_err(|err: HashError| serde::de::Error::custom(err.to_string()))
+    }
+}
+
+/// Converts YASMF hash from `yasmf-hash` crate to p2panda `Hash` instance.
+impl<T: core::borrow::Borrow<[u8]> + Clone> From<&YasmfHash<T>> for Hash {
+    fn from(yasmf_hash: &YasmfHash<T>) -> Self {
         let mut out = [0u8; MAX_YAMF_HASH_SIZE];
-        let _ = yasmf_hash.encode(&mut out)?;
-        Self::new(&hex::encode(out))
+        // Unwrap here as this will only fail on a critical system error
+        let _ = yasmf_hash.encode(&mut out).unwrap();
+        // Unwrap because we know it is a valid hex string
+        Self::new(&hex::encode(out)).unwrap()
     }
 }
 
 /// Returns Yet-Another-Smol-Multiformat Hash struct from the `yasmf-hash` crate.
 ///
 /// This comes in handy when interacting with the `bamboo-rs` crate.
-impl From<Hash> for YasmfHash<Blake3ArrayVec> {
-    fn from(hash: Hash) -> YasmfHash<Blake3ArrayVec> {
+impl From<&Hash> for YasmfHash<Blake3ArrayVec> {
+    fn from(hash: &Hash) -> YasmfHash<Blake3ArrayVec> {
         let bytes = hash.to_bytes();
         let yasmf_hash = YasmfHash::<Blake3ArrayVec>::decode_owned(&bytes).unwrap();
         yasmf_hash.0
@@ -136,31 +176,6 @@ impl TryFrom<String> for Hash {
     }
 }
 
-impl Validate for Hash {
-    type Error = HashError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        // Check if hash is a hex string
-        match hex::decode(&self.0) {
-            Ok(bytes) => {
-                // Check if length is correct
-                if bytes.len() != HASH_SIZE + 2 {
-                    return Err(HashError::InvalidLength(bytes.len(), HASH_SIZE + 2));
-                }
-
-                // Check if YASMF BLAKE3 hash is valid
-                match YasmfHash::<&[u8]>::decode(&bytes) {
-                    Ok((YasmfHash::Blake3(_), _)) => {}
-                    _ => return Err(HashError::DecodingFailed),
-                }
-            }
-            Err(_) => return Err(HashError::InvalidHexEncoding),
-        }
-
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -188,7 +203,7 @@ mod tests {
     #[test]
     fn new_from_bytes() {
         assert_eq!(
-            Hash::new_from_bytes(vec![1, 2, 3]).unwrap(),
+            Hash::new_from_bytes(&[1, 2, 3]),
             Hash::new("0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543")
                 .unwrap()
         );
@@ -196,15 +211,15 @@ mod tests {
 
     #[test]
     fn convert_yasmf() {
-        let hash = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
-        let yasmf_hash = Into::<YasmfHash<Blake3ArrayVec>>::into(hash.to_owned());
-        let hash_restored = TryInto::<Hash>::try_into(yasmf_hash).unwrap();
+        let hash = Hash::new_from_bytes(&[1, 2, 3]);
+        let yasmf_hash = Into::<YasmfHash<Blake3ArrayVec>>::into(&hash);
+        let hash_restored = Into::<Hash>::into(&yasmf_hash);
         assert_eq!(hash, hash_restored);
     }
 
     #[test]
     fn it_hashes() {
-        let hash = Hash::new_from_bytes(vec![1, 2, 3]).unwrap();
+        let hash = Hash::new_from_bytes(&[1, 2, 3]);
         let mut hash_map = HashMap::new();
         let key_value = "Value identified by a hash".to_string();
         hash_map.insert(&hash, key_value.clone());
