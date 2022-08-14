@@ -3,9 +3,6 @@
 import init, { setWasmPanicHook } from '../wasm/web';
 import wasmData from '../wasm/web/index_bg.wasm';
 
-export { createKeyPair, recoverKeyPair } from './identity';
-export { Session } from './session';
-
 export async function initWebAssembly() {
   await init(wasmData);
 
@@ -13,3 +10,5 @@ export async function initWebAssembly() {
   // https://github.com/rustwasm/console_error_panic_hook
   setWasmPanicHook();
 }
+
+export * from './p2panda';
