@@ -4,11 +4,12 @@
 
 import { createMockClient } from 'mock-apollo-client';
 
-import { KeyPair } from '~/wasm';
-import { recoverKeyPair } from '~/identity';
-import { Session } from '~/session';
+import { GQL_NEXT_ARGS, GQL_PUBLISH } from './session';
+import { KeyPair } from '../wasm';
+import { Session } from './';
+import { recoverKeyPair } from '../identity';
 
-import type { Fields } from '~/types';
+import type { Fields } from '../types';
 
 import {
   authorFixture,
@@ -18,7 +19,6 @@ import {
   entryFixture,
   schemaFixture,
 } from '../../test/fixtures';
-import { GQL_NEXT_ARGS, GQL_PUBLISH } from './session';
 
 /**
  * Simple mock p2panda session.

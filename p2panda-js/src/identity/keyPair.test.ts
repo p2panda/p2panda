@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { createKeyPair, recoverKeyPair } from '~/identity';
+import { createKeyPair, recoverKeyPair } from './';
 
 describe('Key pair utils', () => {
   it('createKeyPair creates a key pair', () => {

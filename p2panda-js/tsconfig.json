@@ -2,12 +2,7 @@
   "extends": "@tsconfig/node12/tsconfig.json",
   "compilerOptions": {
     "baseUrl": ".",
-    "rootDir": "./src",
     "outDir": "./lib",
-    "paths": {
-      "~/*": ["./src/*"],
-      "wasm/*": ["./wasm/*"]
-    },
     "lib": ["dom"],
     "resolveJsonModule": true,
     "downlevelIteration": true,

@@ -6,13 +6,13 @@ import {
   encodeDeleteOperation,
   encodeCreateOperation,
   encodeUpdateOperation,
-} from '~/wasm';
-import { getOperationFields } from '~/operation';
-import { marshallRequestFields } from '~/utils';
-import { signPublishEntry } from '~/entry';
+} from '../wasm';
+import { getOperationFields } from '../operation';
+import { marshallRequestFields } from '../utils';
+import { signPublishEntry } from '../entry';
 
-import type { Context } from '~/session';
-import type { Fields } from '~/types';
+import type { Context } from '../session';
+import type { Fields } from '../types';
 
 const log = debug('p2panda-js:document');
 

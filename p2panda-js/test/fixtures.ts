@@ -1,4 +1,4 @@
-import { marshallResponseFields } from '~/utils';
+import { marshallResponseFields } from '../src/utils';
 
 import type {
   EncodedEntry,
@@ -9,7 +9,7 @@ import type {
   OperationTagged,
   OperationValue,
   SchemaId,
-} from '~/types';
+} from '../src/types';
 
 import TEST_DATA from './test-data.json';
 

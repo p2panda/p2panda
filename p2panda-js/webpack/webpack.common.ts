@@ -45,13 +45,9 @@ const config: webpack.Configuration = {
   },
   resolve: {
     extensions: ['.ts', '.js'],
-    alias: {
-      '~': getPath(DIR_SRC),
-      wasm: getPath(DIR_WASM),
-    },
   },
   devtool: 'source-map',
-  // stats: 'minimal',
+  stats: 'minimal',
   experiments: {
     asyncWebAssembly: true,
   },

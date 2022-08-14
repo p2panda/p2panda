@@ -36,16 +36,13 @@ const configNode: webpack.Configuration = {
     //
     // Through this workaround, there are a couple of things to take care of:
     //
-    // 1. The path aliases in the regarding webpack and ts configs point from
-    // `wasm` to the `<root>/wasm` folder.
+    // 1. We treat `../../wasm/node/index.js` as an external dependency here,
+    // but routing it to `<root>/<dist>/wasm/index.js` (note the <dist>!)
     //
-    // 2. We treat `wasm/node/index.js` as an external dependency here, but
-    // routing it to `<root>/<dist>/wasm/index.js` (note the <dist>!)
-    //
-    // 3. Since this folder doesn't exist in the final build we copy it from
+    // 2. Since this folder doesn't exist in the final build we copy it from
     // `<root>/wasm/node` to `<root>/<dist>/wasm` via the CopyPlugin, see
     // further below.
-    'wasm/node/index.js': `./${DIR_WASM}/index.js`,
+    '../../wasm/node/index.js': `./${DIR_WASM}/index.js`,
     // `node-fetch` has a weird export that needs to be treated differently.
     'node-fetch': 'commonjs2 node-fetch',
   },

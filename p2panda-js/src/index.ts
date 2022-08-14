@@ -9,9 +9,9 @@ if (!globalThis.fetch) {
   globalThis.Headers = Headers;
 }
 
-export { createKeyPair, recoverKeyPair } from '~/identity';
-export { Session } from '~/session';
-export { default as initWasm } from '~/wasm';
-export * as wasm from '~/wasm';
+export { createKeyPair, recoverKeyPair } from './identity';
+export { Session } from './session';
+export { default as initWasm } from './wasm';
+export * as wasm from './wasm';
 
-export * from '~/types';
+export * from './types';

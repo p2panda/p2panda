@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { KeyPair } from '~/wasm';
+import { KeyPair } from '../wasm';
 
 /**
  * Generates a new key pair.

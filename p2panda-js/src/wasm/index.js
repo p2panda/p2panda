@@ -2,8 +2,8 @@
 // Defined by webpack.DefinePlugin
 
 const wasmAdapter = BUILD_TARGET_WEB
-  ? require('~/wasm/web')
-  : require('~/wasm/node');
+  ? require('./web')
+  : require('./node');
 
 const { default: init, setWasmPanicHook, ...rest } = wasmAdapter;
 

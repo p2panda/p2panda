@@ -2,8 +2,8 @@
 
 import debug from 'debug';
 
-import { signEncodeEntry } from '~/wasm';
-import { Context } from '~/session';
+import { signEncodeEntry } from '../wasm';
+import { Context } from '../session';
 
 const log = debug('p2panda-js:entry');
 
