@@ -6,7 +6,7 @@
   "browser": "lib/index.min.js",
   "types": "lib/types/index.d.ts",
   "scripts": {
-    "build": "cross-env NODE_ENV=production run-s clear wasm webpack",
+    "build": "cross-env NODE_ENV=production run-s clear wasm wasm:types webpack",
     "clear": "rimraf ./lib ./wasm",
     "docs": "typedoc src/index.ts",
     "lint": "eslint --ext .ts .",
@@ -15,6 +15,7 @@
     "test:jest": "jest --coverage=$npm_config_coverage",
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm test' --ext js,ts,json",
     "wasm": "./scripts/compile-wasm.sh",
+    "wasm:types": "cp ./wasm/node/index.d.ts ./src/wasm",
     "webpack": "run-p webpack:web webpack:node --aggregate-output",
     "webpack:node": "webpack --config-name node --color",
     "webpack:web": "webpack --config-name web --color"

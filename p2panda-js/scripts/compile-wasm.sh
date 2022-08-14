@@ -125,7 +125,3 @@ fi
 # Move compiled files over
 mv $RUST_DIR/$NODE_PROJECT $TARGET_DIR
 mv $RUST_DIR/$WEB_PROJECT $TARGET_DIR
-
-# Copy Typescript declaration to p2panda-js. The declarations are the same for
-# both targets so it does not matter from which we take a copy.
-cp $TARGET_DIR/$NODE_PROJECT/index.d.ts src/wasm/

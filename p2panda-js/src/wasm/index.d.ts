@@ -1,20 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
-* Sets a [`panic hook`] for better error messages in NodeJS or web browser.
-*
-* [`panic hook`]: https://crates.io/crates/console_error_panic_hook
-*/
-export function setWasmPanicHook(): void;
-/**
-* Verify the integrity of a signed operation.
-* @param {string} public_key
-* @param {string} byte_string
-* @param {string} signature
-* @returns {any}
-*/
-export function verifySignature(public_key: string, byte_string: string, signature: string): any;
-/**
 * Returns an encoded CREATE operation that creates a document of the provided schema.
 * @param {any} schema_id
 * @param {OperationFields} fields
@@ -37,6 +23,12 @@ export function encodeUpdateOperation(schema_id: any, previous_operations: any, 
 */
 export function encodeDeleteOperation(schema_id: any, previous_operations: any): string;
 /**
+* Sets a [`panic hook`] for better error messages in NodeJS or web browser.
+*
+* [`panic hook`]: https://crates.io/crates/console_error_panic_hook
+*/
+export function setWasmPanicHook(): void;
+/**
 * Returns a signed and encoded entry that can be published to a p2panda node.
 *
 * `entry_backlink_hash`, `entry_skiplink_hash`, `seq_num` and `log_id` are obtained by querying
@@ -57,6 +49,14 @@ export function signEncodeEntry(key_pair: KeyPair, encoded_operation: string, en
 * @returns {any}
 */
 export function decodeEntry(entry_str: string, operation_str?: string): any;
+/**
+* Verify the integrity of a signed operation.
+* @param {string} public_key
+* @param {string} byte_string
+* @param {string} signature
+* @returns {any}
+*/
+export function verifySignature(public_key: string, byte_string: string, signature: string): any;
 /**
 * Ed25519 key pair for authors to sign Bamboo entries with.
 */
