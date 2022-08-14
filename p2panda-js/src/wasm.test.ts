@@ -7,7 +7,7 @@ import {
   decodeEntry,
   signEncodeEntry,
   OperationFields,
-} from './';
+} from './wasm';
 
 const TEST_HASH =
   '0020ddc99aca776df0ca9d1b5871ba39d4edacc752a0a3426b12c3958971b6c847ac';
