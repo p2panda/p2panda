@@ -303,8 +303,8 @@ pub async fn publish<S: StorageProvider>(
     // STORE LOG //
     ///////////////
 
-    // If this is a CREATE operation it goes into a new log which we insert here.
-    if operation.is_create() {
+    // If this is the first entry in a new log we insert it here.
+    if entry.seq_num().is_first() {
         let log = S::StorageLog::new(author, &operation.schema_id(), &document_id, log_id);
 
         store.insert_log(log).await?;
@@ -1096,8 +1096,8 @@ mod tests {
 
             let encoded_operation = encode_operation(&operation).unwrap();
             let encoded_entry = sign_and_encode_entry(
-                &next_entry_args.log_id.into(),
-                &next_entry_args.seq_num.into(),
+                &next_entry_args.log_id,
+                &next_entry_args.seq_num,
                 next_entry_args.skiplink.map(Hash::from).as_ref(),
                 next_entry_args.backlink.map(Hash::from).as_ref(),
                 &encoded_operation,
@@ -1119,6 +1119,13 @@ mod tests {
             .await;
 
             assert!(result.is_ok());
+
+            let next_args = result.unwrap();
+
+            assert_eq!(
+                next_args.seq_num,
+                next_entry_args.seq_num.clone().next().unwrap()
+            );
         }
     }
 
