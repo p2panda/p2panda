@@ -7,7 +7,7 @@ use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
 use crate::schema::SchemaId;
 use crate::storage_provider::error::DocumentStorageError;
 use crate::storage_provider::traits::DocumentStore;
-use crate::test_utils::memory_store::MemoryStore;
+use crate::test_utils::db::MemoryStore;
 
 #[async_trait]
 impl DocumentStore for MemoryStore {
@@ -129,7 +129,7 @@ mod tests {
     };
     use crate::test_utils::constants::{self, test_fields};
     use crate::test_utils::fixtures::random_document_view_id;
-    use crate::test_utils::memory_store::test_db::{test_db, TestDatabase};
+    use crate::test_utils::db::test_db::{test_db, TestDatabase};
 
     #[rstest]
     #[tokio::test]

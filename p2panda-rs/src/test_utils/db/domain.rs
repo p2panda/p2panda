@@ -15,11 +15,11 @@ use crate::operation::{EncodedOperation, OperationAction};
 use crate::schema::Schema;
 use crate::storage_provider::traits::{AsStorageLog, StorageProvider};
 use crate::storage_provider::utils::Result;
-use crate::test_utils::memory_store::validation::{
+use crate::test_utils::db::validation::{
     ensure_document_not_deleted, get_expected_skiplink, increment_seq_num, is_next_seq_num,
     next_log_id, verify_log_id,
 };
-use crate::test_utils::memory_store::EntryArgsResponse;
+use crate::test_utils::db::EntryArgsResponse;
 use crate::Human;
 
 use super::validation::get_checked_document_id_for_view_id;
@@ -376,12 +376,12 @@ mod tests {
         create_operation, delete_operation, key_pair, operation, public_key,
         random_document_view_id, random_hash, schema, update_operation,
     };
-    use crate::test_utils::memory_store::domain::EntryArgsResponse;
-    use crate::test_utils::memory_store::test_db::{
+    use crate::test_utils::db::domain::EntryArgsResponse;
+    use crate::test_utils::db::test_db::{
         populate_test_db, send_to_store, test_db_config, PopulateDatabaseConfig, TestDatabase,
     };
-    use crate::test_utils::memory_store::validation::get_checked_document_id_for_view_id;
-    use crate::test_utils::memory_store::{MemoryStore, StorageEntry};
+    use crate::test_utils::db::validation::get_checked_document_id_for_view_id;
+    use crate::test_utils::db::{MemoryStore, StorageEntry};
 
     use super::{next_args, publish};
 

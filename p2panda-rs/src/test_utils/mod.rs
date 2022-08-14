@@ -6,5 +6,5 @@
 //! implementations.
 pub mod constants;
 pub mod fixtures;
-pub mod memory_store;
+pub mod db;
 pub mod templates;

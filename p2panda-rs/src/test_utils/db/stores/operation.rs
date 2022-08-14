@@ -8,7 +8,7 @@ use crate::operation::traits::{AsOperation, AsVerifiedOperation};
 use crate::operation::{OperationId, VerifiedOperation};
 use crate::storage_provider::error::OperationStorageError;
 use crate::storage_provider::traits::OperationStore;
-use crate::test_utils::memory_store::MemoryStore;
+use crate::test_utils::db::MemoryStore;
 
 #[async_trait]
 impl OperationStore<VerifiedOperation> for MemoryStore {
@@ -101,7 +101,7 @@ mod tests {
         create_operation, delete_operation, document_id, key_pair, operation, operation_fields,
         operation_id, public_key, random_previous_operations, update_operation, verified_operation,
     };
-    use crate::test_utils::memory_store::test_db::{test_db, TestDatabase};
+    use crate::test_utils::db::test_db::{test_db, TestDatabase};
 
     use super::OperationStore;
 

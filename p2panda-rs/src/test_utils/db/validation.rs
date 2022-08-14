@@ -239,10 +239,10 @@ mod tests {
     use crate::identity::{Author, KeyPair};
     use crate::test_utils::constants::PRIVATE_KEY;
     use crate::test_utils::fixtures::{key_pair, random_document_id};
-    use crate::test_utils::memory_store::test_db::{
+    use crate::test_utils::db::test_db::{
         populate_test_db, test_db_config, PopulateDatabaseConfig, TestDatabase,
     };
-    use crate::test_utils::memory_store::MemoryStore;
+    use crate::test_utils::db::MemoryStore;
 
     use super::{
         ensure_document_not_deleted, get_expected_skiplink, increment_log_id, increment_seq_num,

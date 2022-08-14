@@ -12,7 +12,7 @@ use crate::operation::EncodedOperation;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::EntryStorageError;
 use crate::storage_provider::traits::{AsStorageLog, EntryStore};
-use crate::test_utils::memory_store::{MemoryStore, StorageEntry, StorageLog};
+use crate::test_utils::db::{MemoryStore, StorageEntry, StorageLog};
 
 /// Implement `EntryStore` trait on `MemoryStore`
 #[async_trait]
@@ -163,8 +163,8 @@ mod tests {
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{AsStorageLog, EntryStore, LogStore};
     use crate::test_utils::fixtures::{encoded_entry, key_pair, schema_id};
-    use crate::test_utils::memory_store::test_db::{test_db, TestDatabase};
-    use crate::test_utils::memory_store::{MemoryStore, StorageLog};
+    use crate::test_utils::db::test_db::{test_db, TestDatabase};
+    use crate::test_utils::db::{MemoryStore, StorageLog};
 
     #[rstest]
     #[tokio::test]
