@@ -2,8 +2,8 @@
   "name": "p2panda-js",
   "version": "0.4.0",
   "description": "All the things a panda needs",
-  "main": "lib/index.js",
-  "browser": "lib/index.min.js",
+  "main": "lib/node/index.js",
+  "browser": "lib/inline/index.min.js",
   "types": "lib/types/index.d.ts",
   "scripts": {
     "build": "cross-env NODE_ENV=production run-s clear wasm wasm:types webpack",
@@ -15,8 +15,9 @@
     "test:jest": "jest --coverage=$npm_config_coverage",
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm test' --ext js,ts,json",
     "wasm": "./scripts/compile-wasm.sh",
-    "wasm:types": "cp ./wasm/node/index.d.ts ./src/wasm",
-    "webpack": "run-p webpack:web webpack:node --aggregate-output",
+    "wasm:types": "cp ./wasm/node/index.d.ts ./src/wasm.d.ts",
+    "webpack": "run-p webpack:web webpack:inline webpack:node --aggregate-output",
+    "webpack:inline": "webpack --config-name inline --color",
     "webpack:node": "webpack --config-name node --color",
     "webpack:web": "webpack --config-name web --color"
   },

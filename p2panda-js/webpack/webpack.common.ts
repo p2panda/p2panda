@@ -33,9 +33,7 @@ export const tsRule: webpack.RuleSetRule = {
 
 // Base Webpack configuration
 const config: webpack.Configuration = {
-  entry: {
-    index: getPath(DIR_SRC, 'index.ts'),
-  },
+  entry: getPath(DIR_SRC, 'index.ts'),
   output: {
     path: getPath(DIR_DIST),
     library: {
@@ -47,9 +45,13 @@ const config: webpack.Configuration = {
     extensions: ['.ts', '.js'],
   },
   devtool: 'source-map',
-  stats: 'minimal',
+  // stats: 'minimal',
   experiments: {
     asyncWebAssembly: true,
+  },
+  performance: {
+    // We know that .wasm files are large and we can't do much about it ..
+    hints: false,
   },
 };
 

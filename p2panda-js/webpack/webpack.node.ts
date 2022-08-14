@@ -20,7 +20,7 @@ const configNode: webpack.Configuration = {
   name: 'node',
   output: {
     ...config.output,
-    filename: '[name].js',
+    filename: 'node/index.js',
   },
   target: 'node',
   externals: {
@@ -42,7 +42,7 @@ const configNode: webpack.Configuration = {
     // 2. Since this folder doesn't exist in the final build we copy it from
     // `<root>/wasm/node` to `<root>/<dist>/wasm` via the CopyPlugin, see
     // further below.
-    '../../wasm/node/index.js': `./${DIR_WASM}/index.js`,
+    '../wasm/node': `./wasm/index.js`,
     // `node-fetch` has a weird export that needs to be treated differently.
     'node-fetch': 'commonjs2 node-fetch',
   },
@@ -59,7 +59,7 @@ const configNode: webpack.Configuration = {
       patterns: [
         {
           from: `${getPath(DIR_WASM)}/node/*.{js,wasm}`,
-          to: `${getPath(DIR_DIST)}/wasm/[name][ext]`,
+          to: `${getPath(DIR_DIST)}/node/wasm/[name][ext]`,
         },
         {
           from: `${getPath(DIR_WASM)}/node/*.d.ts`,
