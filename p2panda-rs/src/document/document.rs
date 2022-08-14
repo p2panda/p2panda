@@ -283,13 +283,13 @@ mod tests {
     };
     use crate::schema::{FieldType, Schema, SchemaId};
     use crate::test_utils::constants::{self, HASH, PRIVATE_KEY, SCHEMA_ID};
+    use crate::test_utils::db::test_db::send_to_store;
+    use crate::test_utils::db::MemoryStore;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, operation, operation_fields, public_key,
         random_document_view_id, random_key_pair, random_operation_id, random_previous_operations,
         schema, update_operation, verified_operation, verified_operation_with_schema,
     };
-    use crate::test_utils::db::test_db::send_to_store;
-    use crate::test_utils::db::MemoryStore;
     use crate::Human;
 
     use super::DocumentBuilder;

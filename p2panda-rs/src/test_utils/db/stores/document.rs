@@ -128,8 +128,8 @@ mod tests {
         DocumentStore, EntryStore, EntryWithOperation, OperationStore,
     };
     use crate::test_utils::constants::{self, test_fields};
-    use crate::test_utils::fixtures::random_document_view_id;
     use crate::test_utils::db::test_db::{test_db, TestDatabase};
+    use crate::test_utils::fixtures::random_document_view_id;
 
     #[rstest]
     #[tokio::test]

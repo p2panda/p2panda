@@ -14,8 +14,8 @@ use crate::schema::Schema;
 use crate::storage_provider::traits::StorageProvider;
 use crate::storage_provider::utils::Result;
 use crate::test_utils::constants;
-use crate::test_utils::fixtures::schema;
 use crate::test_utils::db::{EntryArgsResponse, MemoryStore};
+use crate::test_utils::fixtures::schema;
 
 use super::domain::{next_args, publish};
 
