@@ -239,8 +239,8 @@ mod tests {
     use crate::identity::{Author, KeyPair};
     use crate::test_utils::constants::PRIVATE_KEY;
     use crate::test_utils::fixtures::{key_pair, random_document_id};
-    use crate::test_utils::memory_store::helpers::{
-        populate_test_db, test_db_config, PopulateDatabaseConfig, TestStore,
+    use crate::test_utils::memory_store::test_db::{
+        populate_test_db, test_db_config, PopulateDatabaseConfig, TestDatabase,
     };
     use crate::test_utils::memory_store::MemoryStore;
 
@@ -323,7 +323,7 @@ mod tests {
         config: PopulateDatabaseConfig,
     ) {
         let store = MemoryStore::default();
-        let mut db = TestStore::new(&store);
+        let mut db = TestDatabase::new(&store);
         populate_test_db(&mut db, &config).await;
 
         // Unwrap the passed document id or select the first valid one from the database.
@@ -359,7 +359,7 @@ mod tests {
         config: PopulateDatabaseConfig,
     ) {
         let store = MemoryStore::default();
-        let mut db = TestStore::new(&store);
+        let mut db = TestDatabase::new(&store);
         populate_test_db(&mut db, &config).await;
 
         let author = Author::from(key_pair.public_key());
@@ -391,7 +391,7 @@ mod tests {
         config: PopulateDatabaseConfig,
     ) {
         let store = MemoryStore::default();
-        let mut db = TestStore::new(&store);
+        let mut db = TestDatabase::new(&store);
         populate_test_db(&mut db, &config).await;
 
         let author = Author::from(key_pair.public_key());
@@ -412,7 +412,7 @@ mod tests {
         config: PopulateDatabaseConfig,
     ) {
         let store = MemoryStore::default();
-        let mut db = TestStore::new(&store);
+        let mut db = TestDatabase::new(&store);
         populate_test_db(&mut db, &config).await;
 
         let document_id = db.test_data.documents.first().unwrap();
@@ -429,7 +429,7 @@ mod tests {
         config: PopulateDatabaseConfig,
     ) {
         let store = MemoryStore::default();
-        let mut db = TestStore::new(&store);
+        let mut db = TestDatabase::new(&store);
         populate_test_db(&mut db, &config).await;
 
         let document_id = db.test_data.documents.first().unwrap();

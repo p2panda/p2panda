@@ -4,9 +4,9 @@
 //!
 //! Used in the mock node and for testing.
 pub mod domain;
-pub mod helpers;
 mod provider;
 mod stores;
+pub mod test_db;
 mod types;
 pub mod validation;
 

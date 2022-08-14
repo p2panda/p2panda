@@ -163,7 +163,7 @@ mod tests {
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{AsStorageLog, EntryStore, LogStore};
     use crate::test_utils::fixtures::{encoded_entry, key_pair, schema_id};
-    use crate::test_utils::memory_store::helpers::{test_db, TestStore};
+    use crate::test_utils::memory_store::test_db::{test_db, TestDatabase};
     use crate::test_utils::memory_store::{MemoryStore, StorageLog};
 
     #[rstest]
@@ -269,7 +269,7 @@ mod tests {
         #[from(test_db)]
         #[with(3, 1, 1)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
         let entries = db.store.entries.lock().unwrap().clone();
@@ -322,7 +322,7 @@ mod tests {
         #[from(test_db)]
         #[with(16, 1, 1)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
 
@@ -358,7 +358,7 @@ mod tests {
         #[from(test_db)]
         #[with(17, 1, 1)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
 

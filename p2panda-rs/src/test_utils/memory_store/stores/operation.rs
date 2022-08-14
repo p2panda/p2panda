@@ -101,7 +101,7 @@ mod tests {
         create_operation, delete_operation, document_id, key_pair, operation, operation_fields,
         operation_id, public_key, random_previous_operations, update_operation, verified_operation,
     };
-    use crate::test_utils::memory_store::helpers::{test_db, TestStore};
+    use crate::test_utils::memory_store::test_db::{test_db, TestDatabase};
 
     use super::OperationStore;
 
@@ -119,7 +119,7 @@ mod tests {
         document_id: DocumentId,
         #[from(test_db)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
         // Construct the storage operation.
@@ -149,7 +149,7 @@ mod tests {
         document_id: DocumentId,
         #[from(test_db)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
 
@@ -179,7 +179,7 @@ mod tests {
         document_id: DocumentId,
         #[from(test_db)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
 
@@ -226,7 +226,7 @@ mod tests {
         #[from(test_db)]
         #[with(5, 1, 1)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
 

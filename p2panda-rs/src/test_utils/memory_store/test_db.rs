@@ -120,7 +120,7 @@ pub async fn test_db(
         &'static str,
         OperationValue,
     )>,
-) -> TestStore {
+) -> TestDatabase {
     let config = PopulateDatabaseConfig {
         no_of_entries,
         no_of_logs,
@@ -131,7 +131,7 @@ pub async fn test_db(
         update_operation_fields,
     };
 
-    let mut db = TestStore::default();
+    let mut db = TestDatabase::default();
     populate_test_db(&mut db, &config).await;
     db
 }
@@ -158,7 +158,7 @@ pub fn test_key_pairs(no_of_authors: usize) -> Vec<KeyPair> {
 /// Container for `MemoryStore` with access to the document ids and key_pairs present in the
 /// pre-populated database.
 #[derive(Default, Debug)]
-pub struct TestStore {
+pub struct TestDatabase {
     /// The store.
     pub store: MemoryStore,
 
@@ -166,7 +166,7 @@ pub struct TestStore {
     pub test_data: TestData,
 }
 
-impl TestStore {
+impl TestDatabase {
     /// Instantiate a new test store.
     pub fn new(store: &MemoryStore) -> Self {
         Self {
@@ -196,7 +196,7 @@ pub struct TestData {
 /// Passed parameters define what the db should contain. The first entry in each log contains a
 /// valid CREATE operation following entries contain duplicate UPDATE operations. If the
 /// with_delete flag is set to true the last entry in all logs contain be a DELETE operation.
-pub async fn populate_test_db(db: &mut TestStore, config: &PopulateDatabaseConfig) {
+pub async fn populate_test_db(db: &mut TestDatabase, config: &PopulateDatabaseConfig) {
     let key_pairs = test_key_pairs(config.no_of_authors);
 
     for key_pair in &key_pairs {
@@ -305,7 +305,7 @@ mod tests {
     use crate::entry::{LogId, SeqNum};
     use crate::test_utils::constants::SKIPLINK_SEQ_NUMS;
 
-    use super::{test_db, TestStore};
+    use super::{test_db, TestDatabase};
 
     #[rstest]
     #[tokio::test]
@@ -313,7 +313,7 @@ mod tests {
         #[from(test_db)]
         #[with(17, 1, 1)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
         let entries = db.store.entries.lock().unwrap().clone();

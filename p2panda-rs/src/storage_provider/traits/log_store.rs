@@ -65,7 +65,7 @@ mod tests {
     use crate::entry::LogId;
     use crate::identity::Author;
     use crate::storage_provider::traits::LogStore;
-    use crate::test_utils::memory_store::helpers::{test_db, TestStore};
+    use crate::test_utils::memory_store::test_db::{test_db, TestDatabase};
 
     #[rstest]
     #[tokio::test]
@@ -73,7 +73,7 @@ mod tests {
         #[from(test_db)]
         #[with(3, 1, 1)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
 

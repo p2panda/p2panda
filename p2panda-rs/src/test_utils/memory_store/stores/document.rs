@@ -129,7 +129,7 @@ mod tests {
     };
     use crate::test_utils::constants::{self, test_fields};
     use crate::test_utils::fixtures::random_document_view_id;
-    use crate::test_utils::memory_store::helpers::{test_db, TestStore};
+    use crate::test_utils::memory_store::test_db::{test_db, TestDatabase};
 
     #[rstest]
     #[tokio::test]
@@ -137,7 +137,7 @@ mod tests {
         #[from(test_db)]
         #[with(1, 1, 1)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
         let author = Author::from(db.test_data.key_pairs[0].public_key());
@@ -199,7 +199,7 @@ mod tests {
         #[from(test_db)]
         #[with(1, 1, 1)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
         let view_does_not_exist = db
@@ -217,7 +217,7 @@ mod tests {
         #[from(test_db)]
         #[with(1, 1, 1)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
         let document_id = db.test_data.documents[0].clone();
@@ -255,7 +255,7 @@ mod tests {
         #[from(test_db)]
         #[with(1, 1, 1)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
         let document_id = db.test_data.documents[0].clone();
@@ -293,7 +293,7 @@ mod tests {
         #[from(test_db)]
         #[with(10, 1, 1, true)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
         let document_id = db.test_data.documents[0].clone();
@@ -321,7 +321,7 @@ mod tests {
         #[from(test_db)]
         #[with(10, 1, 1, true)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
         let document_id = db.test_data.documents[0].clone();
@@ -353,7 +353,7 @@ mod tests {
         #[from(test_db)]
         #[with(10, 1, 1)]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
         let document_id = db.test_data.documents[0].clone();
@@ -389,7 +389,7 @@ mod tests {
         #[from(test_db)]
         #[with(10, 2, 1, false, constants::schema())]
         #[future]
-        db: TestStore,
+        db: TestDatabase,
     ) {
         let db = db.await;
         let schema_id = SchemaId::from_str(constants::SCHEMA_ID).unwrap();
