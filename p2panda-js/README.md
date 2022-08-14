@@ -55,6 +55,62 @@ npm i p2panda-js
 
 ## Usage
 
+`p2panda-js` uses WebAssembly internally and runs both in NodeJS and web browsers.
+
+### NodeJS
+
+```js
+import { createKeyPair } from 'p2panda-js';
+const keyPair = createKeyPair();
+console.log(keyPair.publicKey());
+```
+
+### Browser
+
+To quickly get started you can run `p2panda-js` in any modern browser like that:
+
+```html
+<script src="p2panda-js/lib/inline/index.min.js"></script>
+<script>
+  const { initWebAssembly, createKeyPair } = p2panda;
+
+  async function run() {
+    // When running p2panda in the Browser, this method needs to be run once
+    // before using all other `p2panda-js` methods
+    await initWebAssembly();
+
+    const keyPair = createKeyPair();
+    document.getElementById('publicKey').innerText = keyPair.publicKey();
+  }
+
+  run();
+</script>
+<div id="publicKey"></div>
+```
+
+The above method includes the WebAssembly inside the JavaScript file (encoded as a base64 string). To load less data you can also manually load the WebAssembly:
+
+```html
+<script src="p2panda-js/lib/web/index.min.js"></script>
+<script>
+  const { initWebAssembly, createKeyPair } = p2panda;
+
+  async function run() {
+    // When running p2panda in the Browser, this method needs to be run once
+    // before using all other `p2panda-js` methods
+    await initWebAssembly('p2panda-js/lib/web/p2panda-js-v0.4.0.wasm');
+
+    const keyPair = createKeyPair();
+    document.getElementById('publicKey').innerText = keyPair.publicKey();
+  }
+
+  run();
+</script>
+<div id="publicKey"></div>
+```
+
+## React Example
+
 ```js
 import { createKeyPair, Session } from 'p2panda-js';
 
@@ -67,7 +123,7 @@ const CHAT_SCHEMA =
 // Create a key pair for every usage context of p2panda, i.e. every device and
 // every piece of software that is used. Key pairs should never have to be
 // transferred between different devices of a user
-const keyPair = await createKeyPair();
+const keyPair = createKeyPair();
 
 // Open a long running connection to a p2panda node and configure it so all
 // calls in this session are executed using that key pair
@@ -92,7 +148,7 @@ const GET_CHAT_MESSAGES = gql`
   }
 `;
 
-const Chat = ({}) => {
+const Chat = () => {
   const { loading, error, data } = useQuery(GET_CHAT_MESSAGES);
 
   if (loading) return 'Loading...';
