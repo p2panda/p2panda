@@ -31,7 +31,7 @@
       Releases
     </a>
     <span> | </span>
-    <a href="https://github.com/p2panda/design-document#how-to-contribute">
+    <a href="https://github.com/p2panda/handbook#how-to-contribute">
       Contributing
     </a>
   </h3>
@@ -88,7 +88,7 @@ To quickly get started you can run `p2panda-js` in any modern browser like that:
 <div id="publicKey"></div>
 ```
 
-The above method includes the WebAssembly inside the JavaScript file (encoded as a base64 string). To load less data you can also manually load the WebAssembly:
+The above method includes the WebAssembly inside the JavaScript file (encoded as a base64 string). To load less data you can also manually initialize the library:
 
 ```html
 <script src="p2panda-js/lib/web/index.min.js"></script>
@@ -97,7 +97,7 @@ The above method includes the WebAssembly inside the JavaScript file (encoded as
 
   async function run() {
     // When running p2panda in the Browser, this method needs to be run once
-    // before using all other `p2panda-js` methods
+    // before using all other `p2panda-js` methods.
     await initWebAssembly('p2panda-js/lib/web/p2panda-js-v0.4.0.wasm');
 
     const keyPair = createKeyPair();
@@ -109,10 +109,14 @@ The above method includes the WebAssembly inside the JavaScript file (encoded as
 <div id="publicKey"></div>
 ```
 
-## React Example
+### React
 
 ```js
-import { createKeyPair, Session } from 'p2panda-js';
+import { createKeyPair, Session, initWebAssembly } from 'p2panda-js';
+
+// When running p2panda in the Browser, this method needs to be run once
+// before using all other `p2panda-js` methods
+await initWebAssembly();
 
 // This example uses the "chat" schema at which this hash is pointing. We are
 // still working on a good way for you to create and access data schemas. For
