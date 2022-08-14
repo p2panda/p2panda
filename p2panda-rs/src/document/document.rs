@@ -264,588 +264,513 @@ impl DocumentBuilder {
         })
     }
 }
-//
-// #[cfg(not(target_arch = "wasm32"))]
-// #[cfg(test)]
-// mod tests {
-//     use std::convert::TryFrom;
-//
-//     use rstest::rstest;
-//
-//     use crate::document::materialization::reduce;
-//     use crate::document::{DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue};
-//     use crate::identity::KeyPair;
-//     use crate::operation::traits::{AsOperation, AsVerifiedOperation};
-//     use crate::operation::{EncodedOperation, OperationId, OperationValue, VerifiedOperation};
-//     use crate::schema::SchemaId;
-//     use crate::test_utils::constants::SCHEMA_ID;
-//     use crate::test_utils::fixtures::{
-//         create_operation, delete_operation, operation, operation_fields, public_key,
-//         random_document_view_id, random_key_pair, random_operation_id, random_previous_operations,
-//         schema, update_operation, verified_operation, verified_operation_with_schema,
-//     };
-//     use crate::test_utils::mocks::{send_to_node, Client, Node};
-//     use crate::Human;
-//
-//     use super::DocumentBuilder;
-//
-//     #[rstest]
-//     fn string_representation(#[from(verified_operation)] operation: VerifiedOperation) {
-//         let builder = DocumentBuilder::new(vec![operation]);
-//         let document = builder.build().unwrap();
-//
-//         assert_eq!(
-//             document.to_string(),
-//             "00206a28f82fc8d27671b31948117af7501a5a0de709b0cf9bc3586b67abe67ac29a"
-//         );
-//
-//         // Short string representation
-//         assert_eq!(document.display(), "<Document 7ac29a>");
-//
-//         // Make sure the id is matching
-//         assert_eq!(
-//             document.id().as_str(),
-//             "00206a28f82fc8d27671b31948117af7501a5a0de709b0cf9bc3586b67abe67ac29a"
-//         );
-//     }
 
-// @TODO: Refactor mock module first
-/* #[rstest]
-#[tokio::test]
-async fn resolve_documents(schema: SchemaId) {
-    let panda = Client::new(
-        "panda".to_string(),
-        KeyPair::from_private_key_str(
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(test)]
+mod tests {
+    use std::convert::TryFrom;
+
+    use rstest::rstest;
+
+    use crate::document::materialization::reduce;
+    use crate::document::{DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue};
+    use crate::entry::traits::AsEncodedEntry;
+    use crate::identity::{Author, KeyPair};
+    use crate::operation::traits::{AsOperation, AsVerifiedOperation};
+    use crate::operation::{
+        EncodedOperation, OperationAction, OperationBuilder, OperationId, OperationValue,
+        VerifiedOperation,
+    };
+    use crate::schema::{FieldType, Schema, SchemaId};
+    use crate::test_utils::constants::{self, HASH, PRIVATE_KEY, SCHEMA_ID};
+    use crate::test_utils::fixtures::{
+        create_operation, delete_operation, operation, operation_fields, public_key,
+        random_document_view_id, random_key_pair, random_operation_id, random_previous_operations,
+        schema, update_operation, verified_operation, verified_operation_with_schema,
+    };
+    use crate::test_utils::memory_store::helpers::send_to_store;
+    use crate::test_utils::memory_store::MemoryStore;
+    use crate::Human;
+
+    use super::DocumentBuilder;
+
+    #[rstest]
+    fn string_representation(#[from(verified_operation)] operation: VerifiedOperation) {
+        let builder = DocumentBuilder::new(vec![operation]);
+        let document = builder.build().unwrap();
+
+        assert_eq!(
+            document.to_string(),
+            "00206a28f82fc8d27671b31948117af7501a5a0de709b0cf9bc3586b67abe67ac29a"
+        );
+
+        // Short string representation
+        assert_eq!(document.display(), "<Document 7ac29a>");
+
+        // Make sure the id is matching
+        assert_eq!(
+            document.id().as_str(),
+            "00206a28f82fc8d27671b31948117af7501a5a0de709b0cf9bc3586b67abe67ac29a"
+        );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn resolve_documents(
+        #[with(vec![("name".to_string(), FieldType::String)])] schema: Schema,
+    ) {
+        let panda = KeyPair::from_private_key_str(
             "ddcafe34db2625af34c8ba3cf35d46e23283d908c9848c8b43d1f5d0fde779ea",
         )
-        .unwrap(),
-    );
-    let penguin = Client::new(
-        "penguin".to_string(),
-        KeyPair::from_private_key_str(
+        .unwrap();
+
+        let penguin = KeyPair::from_private_key_str(
             "1c86b2524b48f0ba86103cddc6bdfd87774ab77ab4c0ea989ed0eeab3d28827a",
         )
-        .unwrap(),
-    );
-    let mut node = Node::new();
+        .unwrap();
 
-    // Panda publishes a create operation.
-    // This instantiates a new document.
-    //
-    // DOCUMENT: [panda_1]
-    //
-    let (panda_entry_1_hash, _) = send_to_node(
-        &mut node,
-        &panda,
-        &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
-    )
-    .await
-    .unwrap();
+        let mut store = MemoryStore::default();
 
-    // Panda publishes an update operation.
-    // It contains the id of the previous operation in it's `previous_operations` array
-    //
-    // DOCUMENT: [panda_1]<--[panda_2]
-    //
-    let (panda_entry_2_hash, _) = send_to_node(
-        &mut node,
-        &panda,
-        &update_operation(
-            &[("name", OperationValue::Text("Panda Cafe!".to_string()))],
-            &panda_entry_1_hash.clone().into(),
-        ),
-    )
-    .await
-    .unwrap();
+        // Panda publishes a CREATE operation.
+        // This instantiates a new document.
+        //
+        // DOCUMENT: [panda_1]
 
-    // Penguin publishes an update operation which creates a new branch in the graph.
-    // This is because they didn't know about Panda's second operation.
-    //
-    // DOCUMENT: [panda_1]<--[penguin_1]
-    //                    \----[panda_2]
-    let (penguin_entry_1_hash, _) = send_to_node(
-        &mut node,
-        &penguin,
-        &update_operation(
-            &[("name", OperationValue::Text("Penguin Cafe!!!".to_string()))],
-            &panda_entry_1_hash.clone().into(),
-        ),
-    )
-    .await
-    .unwrap();
-
-    // Penguin publishes a new operation while now being aware of the previous branching situation.
-    // Their `previous_operations` field now contains 2 operation id's.
-    //
-    // DOCUMENT: [panda_1]<--[penguin_1]<---[penguin_2]
-    //                    \----[panda_2]<--/
-    let (penguin_entry_2_hash, _) = send_to_node(
-        &mut node,
-        &penguin,
-        &update_operation(
-            &[("name", OperationValue::Text("Polar Bear Cafe".to_string()))],
-            &DocumentViewId::new(&[
-                penguin_entry_1_hash.clone().into(),
-                panda_entry_2_hash.clone().into(),
-            ])
-            .unwrap(),
-        ),
-    )
-    .await
-    .unwrap();
-
-    // Penguin publishes a new update operation which points at the current graph tip.
-    //
-    // DOCUMENT: [panda_1]<--[penguin_1]<---[penguin_2]<--[penguin_3]
-    //                    \----[panda_2]<--/
-    let (penguin_entry_3_hash, _) = send_to_node(
-        &mut node,
-        &penguin,
-        &update_operation(
-            &[(
-                "name",
-                OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
-            )],
-            &penguin_entry_2_hash.clone().into(),
-        ),
-    )
-    .await
-    .unwrap();
-
-    let operations: Vec<VerifiedOperation> = vec![
-        node.operations()
-            .get(&panda_entry_1_hash.into())
-            .unwrap()
-            .clone(),
-        node.operations()
-            .get(&panda_entry_2_hash.into())
-            .unwrap()
-            .clone(),
-        node.operations()
-            .get(&penguin_entry_1_hash.into())
-            .unwrap()
-            .clone(),
-        node.operations()
-            .get(&penguin_entry_2_hash.into())
-            .unwrap()
-            .clone(),
-        node.operations()
-            .get(&penguin_entry_3_hash.into())
-            .unwrap()
-            .clone(),
-    ];
-
-    let document = DocumentBuilder::new(operations.clone()).build();
-
-    assert!(document.is_ok());
-
-    let mut exp_result = DocumentViewFields::new();
-    exp_result.insert(
-        "name",
-        DocumentViewValue::new(
-            operations[4].id(),
-            &OperationValue::Text("Polar Bear Cafe!!!!!!!!!!".to_string()),
-        ),
-    );
-
-    let expected_graph_tips: Vec<OperationId> =
-        vec![operations[4].clone().id().clone()];
-    let expected_op_order = vec![
-        operations[0].clone(),
-        operations[2].clone(),
-        operations[1].clone(),
-        operations[3].clone(),
-        operations[4].clone(),
-    ];
-
-    // Document should resolve to expected value
-
-    let document = document.unwrap();
-    assert_eq!(document.view().unwrap().get("name"), exp_result.get("name"));
-    assert!(document.is_edited());
-    assert!(!document.is_deleted());
-    assert_eq!(document.author(), &panda.author());
-    assert_eq!(document.schema(), &schema);
-    assert_eq!(document.operations(), &expected_op_order);
-    assert_eq!(document.view_id().graph_tips(), expected_graph_tips);
-    assert_eq!(
-        document.id(),
-        &DocumentId::new(operations[0].id().to_owned())
-    );
-
-    // Multiple replicas receiving operations in different orders should resolve to same value.
-
-    let replica_1 = DocumentBuilder::new(vec![
-        operations[4].clone(),
-        operations[3].clone(),
-        operations[2].clone(),
-        operations[1].clone(),
-        operations[0].clone(),
-    ])
-    .build()
-    .unwrap();
-
-    let replica_2 = DocumentBuilder::new(vec![
-        operations[2].clone(),
-        operations[1].clone(),
-        operations[0].clone(),
-        operations[4].clone(),
-        operations[3].clone(),
-    ])
-    .build()
-    .unwrap();
-
-    assert_eq!(
-        replica_1.view().unwrap().get("name"),
-        exp_result.get("name")
-    );
-    assert!(replica_1.is_edited());
-    assert!(!replica_1.is_deleted());
-    assert_eq!(replica_1.author(), &panda.author());
-    assert_eq!(replica_1.schema(), &schema);
-    assert_eq!(replica_1.operations(), &expected_op_order);
-    assert_eq!(replica_1.view_id().graph_tips(), expected_graph_tips);
-    assert_eq!(
-        replica_1.id(),
-        &DocumentId::new(operations[0].id().to_owned())
-    );
-
-    assert_eq!(
-        replica_1.view().unwrap().get("name"),
-        replica_2.view().unwrap().get("name")
-    );
-    assert_eq!(replica_1.id(), replica_2.id());
-    assert_eq!(
-        replica_1.view_id().graph_tips(),
-        replica_2.view_id().graph_tips(),
-    );
-} */
-
-// @TODO: Refactor mock module first
-/* #[rstest]
-#[tokio::test]
-async fn must_have_create_operation(#[from(random_key_pair)] key_pair_1: KeyPair) {
-    let panda = Client::new("panda".to_string(), key_pair_1);
-    let mut node = Node::new();
-
-    // Panda publishes a create operation.
-    // This instantiates a new document.
-    let (panda_entry_1_hash, _) = send_to_node(
-        &mut node,
-        &panda,
-        &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
-    )
-    .await
-    .unwrap();
-
-    // Panda publishes an update operation.
-    // It contains the id of the previous operation in it's `previous_operations` array
-    let (update_entry_hash, _) = send_to_node(
-        &mut node,
-        &panda,
-        &update_operation(
-            &[("name", OperationValue::Text("Panda Cafe!".to_string()))],
-            &panda_entry_1_hash.into(),
-        ),
-    )
-    .await
-    .unwrap();
-
-    // Only retrieve the update operation.
-    let entries = node.entries();
-    let only_the_update_operation = entries.get(&update_entry_hash).unwrap();
-
-    let operations = vec![VerifiedOperation::new_from_entry(
-        &only_the_update_operation.entry_signed(),
-        &only_the_update_operation.operation_encoded().unwrap(),
-    )
-    .unwrap()];
-
-    assert_eq!(
-        DocumentBuilder::new(operations)
+        let panda_operation_1 = OperationBuilder::new(schema.id())
+            .action(OperationAction::Create)
+            .fields(&[("name", OperationValue::String("Panda Cafe".to_string()))])
             .build()
-            .unwrap_err()
-            .to_string(),
-        "Every document must contain one create operation".to_string()
-    );
-} */
+            .unwrap();
 
-// @TODO: Refactor mock module first
-/* #[rstest]
-#[tokio::test]
-async fn incorrect_previous_operations(
-    #[from(random_key_pair)] key_pair_1: KeyPair,
-    #[from(random_document_view_id)] incorrect_previous_operation: DocumentViewId,
-) {
-    let panda = Client::new("panda".to_string(), key_pair_1);
-    let mut node = Node::new();
+        let (panda_entry_1, _) = send_to_store(&mut store, &panda_operation_1, &schema, &panda)
+            .await
+            .unwrap();
 
-    // Panda publishes a create operation.
-    // This instantiates a new document.
-    let (panda_entry_1_hash, next_entry_args) = send_to_node(
-        &mut node,
-        &panda,
-        &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
-    )
-    .await
-    .unwrap();
+        // Panda publishes an UPDATE operation.
+        // It contains the id of the previous operation in it's `previous_operations` array
+        //
+        // DOCUMENT: [panda_1]<--[panda_2]
+        //
 
-    // Construct an update operation with non-existant previous operations
-    let operation_with_wrong_prev_ops = update_operation(
-        &[("name", OperationValue::Text("Panda Cafe!".to_string()))],
-        &incorrect_previous_operation,
-    );
-
-    let operation_one = node
-        .operations()
-        .get(&panda_entry_1_hash.into())
-        .unwrap()
-        .clone();
-
-    let entry_two = panda.signed_encoded_entry(
-        operation_with_wrong_prev_ops.clone(),
-        &next_entry_args.log_id,
-        next_entry_args.skiplink.as_ref(),
-        next_entry_args.backlink.as_ref(),
-        &next_entry_args.seq_num,
-    );
-
-    let operation_two = VerifiedOperation::new_from_entry(
-        &entry_two,
-        &OperationEncoded::try_from(&operation_with_wrong_prev_ops).unwrap(),
-    )
-    .unwrap();
-
-    assert_eq!(
-        DocumentBuilder::new(vec![operation_one, operation_two.clone()])
+        let panda_operation_2 = OperationBuilder::new(schema.id())
+            .action(OperationAction::Update)
+            .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
+            .previous_operations(&panda_entry_1.hash().into())
             .build()
-            .unwrap_err()
-            .to_string(),
-        format!(
-            "Operation {} cannot be connected to the document graph",
-            operation_two.id()
-        )
-    );
-} */
+            .unwrap();
 
-// @TODO: Refactor mock module first
-/* #[rstest]
-#[tokio::test]
-async fn operation_schemas_not_matching(
-    #[from(random_key_pair)] key_pair_1: KeyPair,
-    #[from(random_operation_id)] create_operation_id: OperationId,
-    #[from(random_operation_id)] update_operation_id: OperationId,
-) {
-    let panda = Client::new("panda".to_string(), key_pair_1);
+        let (panda_entry_2, _) = send_to_store(&mut store, &panda_operation_2, &schema, &panda)
+            .await
+            .unwrap();
 
-    let create_operation = VerifiedOperation::new(
-        &panda.author(),
-        &create_operation_id,
-        &operation(
-            Some(operation_fields(vec![(
+        // Penguin publishes an update operation which creates a new branch in the graph.
+        // This is because they didn't know about Panda's second operation.
+        //
+        // DOCUMENT: [panda_1]<--[penguin_1]
+        //                    \----[panda_2]
+
+        let penguin_operation_1 = OperationBuilder::new(schema.id())
+            .action(OperationAction::Update)
+            .fields(&[(
                 "name",
-                OperationValue::Text("Panda Cafe".to_string()),
-            )])),
-            None,
-            Some(SchemaId::new("schema_field_definition_v1").unwrap()),
-        ),
-    )
-    .unwrap();
-
-    let update_operation = VerifiedOperation::new(
-        &panda.author(),
-        &update_operation_id,
-        &operation(
-            Some(operation_fields(vec![(
-                "name",
-                OperationValue::Text("Panda Cafe!".to_string()),
-            )])),
-            Some(create_operation_id.into()),
-            Some(SchemaId::new("schema_definition_v1").unwrap()),
-        ),
-    )
-    .unwrap();
-
-    assert_eq!(
-        DocumentBuilder::new(vec![create_operation, update_operation])
+                OperationValue::String("Penguin Cafe!!!".to_string()),
+            )])
+            .previous_operations(&panda_entry_1.hash().into())
             .build()
-            .unwrap_err()
-            .to_string(),
-        "All operations in a document must follow the same schema".to_string()
-    );
-} */
+            .unwrap();
 
-// @TODO: Refactor mock module first
-/* #[rstest]
-#[tokio::test]
-async fn is_deleted(#[from(random_key_pair)] key_pair_1: KeyPair) {
-    let panda = Client::new("panda".to_string(), key_pair_1);
-    let mut node = Node::new();
+        let (penguin_entry_1, _) =
+            send_to_store(&mut store, &penguin_operation_1, &schema, &penguin)
+                .await
+                .unwrap();
 
-    // Panda publishes a create operation.
-    // This instantiates a new document.
-    let (panda_entry_1_hash, _) = send_to_node(
-        &mut node,
-        &panda,
-        &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
-    )
-    .await
-    .unwrap();
+        // Penguin publishes a new operation while now being aware of the previous branching situation.
+        // Their `previous_operations` field now contains 2 operation id's.
+        //
+        // DOCUMENT: [panda_1]<--[penguin_1]<---[penguin_2]
+        //                    \----[panda_2]<--/
 
-    // Panda publishes an delete operation.
-    // It contains the id of the previous operation in it's `previous_operations` array.
-    send_to_node(
-        &mut node,
-        &panda,
-        &delete_operation(&panda_entry_1_hash.into()),
-    )
-    .await
-    .unwrap();
+        let penguin_operation_2 = OperationBuilder::new(schema.id())
+            .action(OperationAction::Update)
+            .fields(&[(
+                "name",
+                OperationValue::String("Polar Bear Cafe".to_string()),
+            )])
+            .previous_operations(&DocumentViewId::new(&[
+                penguin_entry_1.hash().into(),
+                panda_entry_2.hash().into(),
+            ]))
+            .build()
+            .unwrap();
 
-    let operations: Vec<VerifiedOperation> = node.operations().values().cloned().collect();
-    let document = DocumentBuilder::new(operations).build().unwrap();
+        let (penguin_entry_2, _) =
+            send_to_store(&mut store, &penguin_operation_2, &schema, &penguin)
+                .await
+                .unwrap();
 
-    assert!(document.is_deleted());
+        // Penguin publishes a new update operation which points at the current graph tip.
+        //
+        // DOCUMENT: [panda_1]<--[penguin_1]<---[penguin_2]<--[penguin_3]
+        //                    \----[panda_2]<--/
 
-    assert!(document.view().is_none());
-} */
+        let penguin_operation_3 = OperationBuilder::new(schema.id())
+            .action(OperationAction::Update)
+            .fields(&[(
+                "name",
+                OperationValue::String("Polar Bear Cafe!!!!!!!!!!".to_string()),
+            )])
+            .previous_operations(&penguin_entry_2.hash().into())
+            .build()
+            .unwrap();
 
-// @TODO: Refactor mock module first
-/* #[rstest]
-#[tokio::test]
-async fn more_than_one_create(#[from(random_key_pair)] key_pair_1: KeyPair) {
-    let panda = Client::new("panda".to_string(), key_pair_1);
-    let mut node = Node::new();
+        let (penguin_entry_3, _) =
+            send_to_store(&mut store, &penguin_operation_3, &schema, &penguin)
+                .await
+                .unwrap();
 
-    // Panda publishes a create operation.
-    // This instantiates a new document.
-    let (_panda_entry_1_hash, _) = send_to_node(
-        &mut node,
-        &panda,
-        &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
-    )
-    .await
-    .unwrap();
+        let operations: Vec<VerifiedOperation> = store
+            .operations
+            .lock()
+            .unwrap()
+            .values()
+            .map(|(_, operation)| operation.to_owned())
+            .collect();
 
-    let create_verified_operation = node
-        .operations()
-        .values()
-        .find(|operation| operation.is_create())
-        .unwrap()
-        .to_owned();
+        let document = DocumentBuilder::new(operations.clone()).build();
 
-    assert_eq!(
-        DocumentBuilder::new(vec![
-            create_verified_operation.clone(),
-            create_verified_operation
+        assert!(document.is_ok());
+
+        // Document should resolve to expected value
+        let document = document.unwrap();
+
+        let operation_order: Vec<OperationId> = document
+            .operations()
+            .iter()
+            .map(|op| op.id().to_owned())
+            .collect();
+
+        let mut exp_result = DocumentViewFields::new();
+        exp_result.insert(
+            "name",
+            DocumentViewValue::new(
+                &penguin_entry_3.hash().into(),
+                &OperationValue::String("Polar Bear Cafe!!!!!!!!!!".to_string()),
+            ),
+        );
+
+        let document_id = DocumentId::new(&panda_entry_1.hash().into());
+        let expected_graph_tips: Vec<OperationId> = vec![penguin_entry_3.hash().into()];
+        let expected_op_order: Vec<OperationId> = vec![
+            panda_entry_1.clone(),
+            panda_entry_2,
+            penguin_entry_1,
+            penguin_entry_2,
+            penguin_entry_3.clone(),
+        ]
+        .iter()
+        .map(|entry| entry.hash().into())
+        .collect();
+
+        assert_eq!(document.view().unwrap().get("name"), exp_result.get("name"));
+        assert!(document.is_edited());
+        assert!(!document.is_deleted());
+        assert_eq!(document.author(), &Author::from(panda.public_key()));
+        assert_eq!(document.schema(), schema.id());
+        assert_eq!(operation_order, expected_op_order);
+        assert_eq!(document.view_id().graph_tips(), expected_graph_tips);
+        assert_eq!(document.id(), &document_id);
+
+        // Multiple replicas receiving operations in different orders should resolve to same value.
+
+        let replica_1 = DocumentBuilder::new(vec![
+            operations[4].clone(),
+            operations[3].clone(),
+            operations[2].clone(),
+            operations[1].clone(),
+            operations[0].clone(),
         ])
         .build()
-        .unwrap_err()
-        .to_string(),
-        "Multiple create operations found".to_string()
-    );
-} */
+        .unwrap();
 
-// @TODO: Refactor mock module first
-/* #[rstest]
-#[tokio::test]
-async fn builds_specific_document_view() {
-    let panda = Client::new(
-        "panda".to_string(),
-        KeyPair::from_private_key_str(
-            "ddcafe34db2625af34c8ba3cf35d46e23283d908c9848c8b43d1f5d0fde779ea",
-        )
-        .unwrap(),
-    );
+        let replica_2 = DocumentBuilder::new(vec![
+            operations[2].clone(),
+            operations[1].clone(),
+            operations[0].clone(),
+            operations[4].clone(),
+            operations[3].clone(),
+        ])
+        .build()
+        .unwrap();
 
-    let mut node = Node::new();
+        assert_eq!(
+            replica_1.view().unwrap().get("name"),
+            exp_result.get("name")
+        );
+        assert!(replica_1.is_edited());
+        assert!(!replica_1.is_deleted());
+        assert_eq!(replica_1.author(), &Author::from(panda.public_key()));
+        assert_eq!(replica_1.schema(), schema.id());
+        assert_eq!(operation_order, expected_op_order);
+        assert_eq!(replica_1.view_id().graph_tips(), expected_graph_tips);
+        assert_eq!(replica_1.id(), &document_id);
 
-    let (panda_entry_1_hash, _) = send_to_node(
-        &mut node,
-        &panda,
-        &create_operation(&[("name", OperationValue::Text("Panda Cafe".to_string()))]),
-    )
-    .await
-    .unwrap();
+        assert_eq!(
+            replica_1.view().unwrap().get("name"),
+            replica_2.view().unwrap().get("name")
+        );
+        assert_eq!(replica_1.id(), replica_2.id());
+        assert_eq!(
+            replica_1.view_id().graph_tips(),
+            replica_2.view_id().graph_tips(),
+        );
+    }
 
-    let (panda_entry_2_hash, _) = send_to_node(
-        &mut node,
-        &panda,
-        &update_operation(
-            &[("name", OperationValue::Text("Panda Cafe!".to_string()))],
-            &panda_entry_1_hash.clone().into(),
-        ),
-    )
-    .await
-    .unwrap();
+    #[rstest]
+    fn must_have_create_operation(
+        #[from(verified_operation)]
+        #[with(
+            Some(operation_fields(constants::test_fields())),
+            constants::schema(),
+            Some(random_document_view_id())
+        )]
+        update_operation: VerifiedOperation,
+    ) {
+        assert_eq!(
+            DocumentBuilder::new(vec![update_operation])
+                .build()
+                .unwrap_err()
+                .to_string(),
+            "every document must contain one create operation".to_string()
+        );
+    }
 
-    let (panda_entry_3_hash, _) = send_to_node(
-        &mut node,
-        &panda,
-        &update_operation(
-            &[("name", OperationValue::Text("Panda Cafe!!!!!!".to_string()))],
-            &panda_entry_1_hash.clone().into(),
-        ),
-    )
-    .await
-    .unwrap();
+    #[rstest]
+    #[tokio::test]
+    async fn incorrect_previous_operations(
+        #[from(verified_operation)]
+        #[with(Some(operation_fields(constants::test_fields())), constants::schema())]
+        create_operation: VerifiedOperation,
+        #[from(verified_operation)]
+        #[with(
+            Some(operation_fields(constants::test_fields())),
+            constants::schema(),
+            Some(random_document_view_id())
+        )]
+        update_operation: VerifiedOperation,
+    ) {
+        assert_eq!(
+            DocumentBuilder::new(vec![create_operation, update_operation.clone()])
+                .build()
+                .unwrap_err()
+                .to_string(),
+            format!(
+                "operation {} cannot be connected to the document graph",
+                update_operation.id()
+            )
+        );
+    }
 
-    // DOCUMENT: [panda_1]<--[penguin_1]
-    //                    \----[panda_2]
+    #[rstest]
+    #[tokio::test]
+    async fn operation_schemas_not_matching() {
+        let create_operation = verified_operation(
+            Some(operation_fields(constants::test_fields())),
+            constants::schema(),
+            None,
+            KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
+        );
 
-    let operations: Vec<VerifiedOperation> = node.operations().values().cloned().collect();
+        let update_operation = verified_operation(
+            Some(operation_fields(vec![
+                ("name", "is_cute".into()),
+                ("type", "bool".into()),
+            ])),
+            Schema::get_system(SchemaId::SchemaFieldDefinition(1))
+                .unwrap()
+                .to_owned(),
+            Some(create_operation.id().to_owned().into()),
+            KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
+        );
 
-    let document_builder = DocumentBuilder::new(operations);
+        assert_eq!(
+            DocumentBuilder::new(vec![create_operation, update_operation])
+                .build()
+                .unwrap_err()
+                .to_string(),
+            "all operations in a document must follow the same schema".to_string()
+        );
+    }
 
-    assert_eq!(
-        document_builder
-            .build_to_view_id(Some(panda_entry_1_hash.into()))
-            .unwrap()
-            .view()
-            .unwrap()
-            .get("name")
-            .unwrap()
-            .value(),
-        &OperationValue::Text("Panda Cafe".to_string())
-    );
+    #[rstest]
+    #[tokio::test]
+    async fn is_deleted(
+        #[from(verified_operation)]
+        #[with(Some(operation_fields(constants::test_fields())), constants::schema())]
+        create_operation: VerifiedOperation,
+    ) {
+        let delete_operation = verified_operation(
+            None,
+            constants::schema(),
+            Some(DocumentViewId::new(&[create_operation.id().to_owned()])),
+            KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
+        );
 
-    assert_eq!(
-        document_builder
-            .build_to_view_id(Some(panda_entry_2_hash.clone().into()))
-            .unwrap()
-            .view()
-            .unwrap()
-            .get("name")
-            .unwrap()
-            .value(),
-        &OperationValue::Text("Panda Cafe!".to_string())
-    );
+        let document = DocumentBuilder::new(vec![create_operation, delete_operation])
+            .build()
+            .unwrap();
 
-    assert_eq!(
-        document_builder
-            .build_to_view_id(Some(panda_entry_3_hash.clone().into()))
-            .unwrap()
-            .view()
-            .unwrap()
-            .get("name")
-            .unwrap()
-            .value(),
-        &OperationValue::Text("Panda Cafe!!!!!!".to_string())
-    );
+        assert!(document.is_deleted());
+        assert!(document.view().is_none());
+    }
 
-    assert_eq!(
-        document_builder
-            .build_to_view_id(Some(
-                DocumentViewId::new(&[panda_entry_2_hash.into(), panda_entry_3_hash.into()])
-                    .unwrap()
-            ))
-            .unwrap()
-            .view()
-            .unwrap()
-            .get("name")
-            .unwrap()
-            .value(),
-        &OperationValue::Text("Panda Cafe!".to_string())
-    );
-} */
-// }
+    #[rstest]
+    #[tokio::test]
+    async fn more_than_one_create(#[from(verified_operation)] create_operation: VerifiedOperation) {
+        assert_eq!(
+            DocumentBuilder::new(vec![create_operation.clone(), create_operation])
+                .build()
+                .unwrap_err()
+                .to_string(),
+            "multiple CREATE operations found".to_string()
+        );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn builds_specific_document_view(
+        #[with(vec![("name".to_string(), FieldType::String)])] schema: Schema,
+    ) {
+        let panda = Author::from(KeyPair::new().public_key());
+        let penguin = Author::from(KeyPair::new().public_key());
+
+        let store = MemoryStore::default();
+
+        // Panda publishes a CREATE operation.
+        // This instantiates a new document.
+        //
+        // DOCUMENT: [panda_1]
+
+        let panda_operation_1 = OperationBuilder::new(schema.id())
+            .action(OperationAction::Create)
+            .fields(&[("name", OperationValue::String("Panda Cafe".to_string()))])
+            .build()
+            .unwrap();
+
+        let panda_operation_1 = VerifiedOperation::new(
+            &panda,
+            &panda_operation_1,
+            &"0020aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .parse()
+                .unwrap(),
+        );
+
+        // Panda publishes an UPDATE operation.
+        // It contains the id of the previous operation in it's `previous_operations` array
+        //
+        // DOCUMENT: [panda_1]<--[panda_2]
+        //
+
+        let panda_operation_2 = OperationBuilder::new(schema.id())
+            .action(OperationAction::Update)
+            .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
+            .previous_operations(&DocumentViewId::new(&[panda_operation_1.id().to_owned()]))
+            .build()
+            .unwrap();
+
+        let panda_operation_2 = VerifiedOperation::new(
+            &panda,
+            &panda_operation_2,
+            &"0020bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                .parse()
+                .unwrap(),
+        );
+
+        // Penguin publishes an update operation which creates a new branch in the graph.
+        // This is because they didn't know about Panda's second operation.
+        //
+        // DOCUMENT: [panda_1]<--[penguin_1]
+        //                    \----[panda_2]
+
+        let penguin_operation_1 = OperationBuilder::new(schema.id())
+            .action(OperationAction::Update)
+            .fields(&[(
+                "name",
+                OperationValue::String("Penguin Cafe!!!".to_string()),
+            )])
+            .previous_operations(&DocumentViewId::new(&[panda_operation_2.id().to_owned()]))
+            .build()
+            .unwrap();
+
+        let penguin_operation_1 = VerifiedOperation::new(
+            &penguin,
+            &penguin_operation_1,
+            &"0020cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                .parse()
+                .unwrap(),
+        );
+
+        let operations = vec![
+            panda_operation_1.clone(),
+            panda_operation_2.clone(),
+            penguin_operation_1.clone(),
+        ];
+        let document_builder = DocumentBuilder::new(operations);
+
+        assert_eq!(
+            document_builder
+                .build_to_view_id(Some(DocumentViewId::new(&[panda_operation_1
+                    .id()
+                    .to_owned()])))
+                .unwrap()
+                .view()
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .value(),
+            &OperationValue::String("Panda Cafe".to_string())
+        );
+
+        assert_eq!(
+            document_builder
+                .build_to_view_id(Some(DocumentViewId::new(&[panda_operation_2
+                    .id()
+                    .to_owned()])))
+                .unwrap()
+                .view()
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .value(),
+            &OperationValue::String("Panda Cafe!".to_string())
+        );
+
+        assert_eq!(
+            document_builder
+                .build_to_view_id(Some(DocumentViewId::new(&[penguin_operation_1
+                    .id()
+                    .to_owned()])))
+                .unwrap()
+                .view()
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .value(),
+            &OperationValue::String("Penguin Cafe!!!".to_string())
+        );
+
+        assert_eq!(
+            document_builder
+                .build_to_view_id(Some(DocumentViewId::new(&[
+                    panda_operation_2.id().to_owned(),
+                    penguin_operation_1.id().to_owned()
+                ])))
+                .unwrap()
+                .view()
+                .unwrap()
+                .get("name")
+                .unwrap()
+                .value(),
+            &OperationValue::String("Penguin Cafe!!!".to_string())
+        );
+    }
+}
