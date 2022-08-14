@@ -56,8 +56,8 @@ const configNode: webpack.Configuration = {
     new DefinePlugin({
       BUILD_TARGET_WEB: JSON.stringify(false),
     }),
-    // Since we treat the `wasm` module as "external", we have to import it
-    // after the `wasm-pack` step into the `lib` folder.
+    // Since we treat the `wasm` module as "external" as an workaround (read
+    // more above), we have to copy it manually into the build.
     new CopyPlugin({
       patterns: [
         {
