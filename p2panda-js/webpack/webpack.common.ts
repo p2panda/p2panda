@@ -2,7 +2,6 @@
 
 import * as path from 'path';
 
-import transformPaths from 'ts-transform-paths';
 import webpack from 'webpack';
 
 export const DIR_DIST = 'lib';
@@ -27,8 +26,6 @@ export const tsRule: webpack.RuleSetRule = {
       options: {
         configFile: 'tsconfig.json',
         onlyCompileBundledFiles: true,
-        // Replace path aliases in declaration files with relative paths
-        getCustomTransformers: () => transformPaths(),
       },
     },
   ],
@@ -54,7 +51,7 @@ const config: webpack.Configuration = {
     },
   },
   devtool: 'source-map',
-  stats: 'minimal',
+  // stats: 'minimal',
   experiments: {
     asyncWebAssembly: true,
   },
