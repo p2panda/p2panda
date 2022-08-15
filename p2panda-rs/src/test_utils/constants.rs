@@ -5,9 +5,7 @@ use crate::operation::{
     OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
 use crate::schema::Schema;
-use crate::test_utils::fixtures::{document_id, document_view_id};
-
-use super::fixtures::{schema_fields, schema_id};
+use crate::test_utils::fixtures::{document_id, document_view_id, schema_fields, schema_id};
 
 /// Hash value, used when a hash is needed for testing. It's the default hash in fixtures
 /// when a custom value isn't specified.

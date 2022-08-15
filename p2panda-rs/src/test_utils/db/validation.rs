@@ -67,7 +67,7 @@ pub fn is_next_seq_num(
 /// - Retrieve the stored log id for the document id
 ///   - If found, ensure it matches the claimed log id
 ///   - If not found retrieve the next available log id for this author and ensure that matches
-pub async fn verify_log_id<S: StorageProvider>(
+pub async fn verify_document_log_id<S: StorageProvider>(
     store: &S,
     author: &Author,
     claimed_log_id: &LogId,
@@ -244,7 +244,7 @@ mod tests {
 
     use super::{
         ensure_document_not_deleted, get_expected_skiplink, increment_log_id, increment_seq_num,
-        is_next_seq_num, verify_log_id,
+        is_next_seq_num, verify_document_log_id,
     };
 
     #[rstest]
@@ -328,7 +328,7 @@ mod tests {
 
         let author = Author::from(key_pair.public_key());
 
-        verify_log_id(&store, &author, &claimed_log_id, &document_id)
+        verify_document_log_id(&store, &author, &claimed_log_id, &document_id)
             .await
             .unwrap();
     }

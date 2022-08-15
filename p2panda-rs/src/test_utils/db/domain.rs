@@ -17,7 +17,7 @@ use crate::storage_provider::traits::{AsStorageLog, StorageProvider};
 use crate::storage_provider::utils::Result;
 use crate::test_utils::db::validation::{
     ensure_document_not_deleted, get_expected_skiplink, increment_seq_num, is_next_seq_num,
-    next_log_id, verify_log_id,
+    next_log_id, verify_document_log_id,
 };
 use crate::test_utils::db::EntryArgsResponse;
 use crate::Human;
@@ -297,7 +297,7 @@ pub async fn publish<S: StorageProvider>(
     };
 
     // Verify the claimed log id against the expected one for this document id and author.
-    verify_log_id(store, author, log_id, &document_id).await?;
+    verify_document_log_id(store, author, log_id, &document_id).await?;
 
     ///////////////
     // STORE LOG //
