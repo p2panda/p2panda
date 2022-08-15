@@ -2,9 +2,23 @@
   "name": "p2panda-js",
   "version": "0.4.0",
   "description": "All the things a panda needs",
-  "main": "lib/node/index.js",
-  "browser": "lib/inline/index.min.js",
-  "types": "lib/types/index.d.ts",
+  "main": "./lib/node/index.js",
+  "browser": "./lib/browser/index.min.js",
+  "types": "./lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "node": "./lib/node/index.js",
+      "browser": "./lib/browser/index.min.js"
+    },
+    "./slim": {
+      "types": "./lib/types/index.slim.d.ts",
+      "import": "./lib/slim/index.js",
+      "browser": "./lib/slim/index.min.js"
+    },
+    "./p2panda.wasm": "./dist/slim/p2panda.wasm",
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "build": "cross-env NODE_ENV=production run-s clear wasm wasm:types webpack",
     "clear": "rimraf ./lib ./wasm",
@@ -16,12 +30,12 @@
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm test' --ext js,ts,json",
     "wasm": "./scripts/compile-wasm.sh",
     "wasm:types": "cp ./wasm/node/index.d.ts ./src/wasm.d.ts",
-    "webpack": "run-p webpack:web webpack:web-minimize webpack:inline webpack:inline-minimize webpack:node --aggregate-output",
-    "webpack:inline": "webpack --config-name inline --color",
-    "webpack:inline-minimize": "webpack --config-name inline-minimize --color",
+    "webpack": "run-p webpack:slim webpack:slim-minimize webpack:browser webpack:browser-minimize webpack:node --aggregate-output",
+    "webpack:browser": "webpack --config-name browser --color",
+    "webpack:browser-minimize": "webpack --config-name browser-minimize --color",
     "webpack:node": "webpack --config-name node --color",
-    "webpack:web": "webpack --config-name web --color",
-    "webpack:web-minimize": "webpack --config-name web-minimize --color"
+    "webpack:slim": "webpack --config-name slim --color",
+    "webpack:slim-minimize": "webpack --config-name slim-minimize --color"
   },
   "engines": {
     "node": ">= v12.0.0"

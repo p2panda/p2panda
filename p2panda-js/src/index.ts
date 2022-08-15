@@ -5,6 +5,8 @@ import Headers from 'fetch-headers';
 
 import { setWasmPanicHook } from '../wasm/node';
 
+// @TODO: Remove `fetch` together with `apollo/client`
+// https://github.com/p2panda/p2panda/issues/433
 if (!globalThis.fetch) {
   // @ts-expect-error we trust that `node-fetch` is a suitable replacement
   globalThis.fetch = fetch;

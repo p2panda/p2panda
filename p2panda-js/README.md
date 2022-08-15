@@ -55,7 +55,7 @@ npm i p2panda-js
 
 ## Usage
 
-`p2panda-js` uses WebAssembly internally and runs both in NodeJS and web browsers.
+`p2panda-js` runs both in NodeJS and web browsers.
 
 ### NodeJS
 
@@ -70,35 +70,19 @@ console.log(keyPair.publicKey());
 To quickly get started you can run `p2panda-js` in any modern browser like that:
 
 ```html
-<script src="p2panda-js/lib/inline/index.min.js"></script>
+<script src="p2panda-js/lib/browser/index.min.js"></script>
 <script>
   const { initWebAssembly, createKeyPair } = p2panda;
 
   async function run() {
-    // When running p2panda in the Browser, this method needs to be run once
-    // before using all other `p2panda-js` methods
-    await initWebAssembly();
-
-    const keyPair = createKeyPair();
-    document.getElementById('publicKey').innerText = keyPair.publicKey();
-  }
-
-  run();
-</script>
-<div id="publicKey"></div>
-```
-
-The above method includes the WebAssembly inside the JavaScript file (encoded as a base64 string). To load less data you can also manually initialize the library:
-
-```html
-<script src="p2panda-js/lib/web/index.min.js"></script>
-<script>
-  const { initWebAssembly, createKeyPair } = p2panda;
-
-  async function run() {
-    // When running p2panda in the Browser, this method needs to be run once
+    // When using p2panda in the Browser, this method needs to be run once
     // before using all other `p2panda-js` methods.
-    await initWebAssembly('p2panda-js/lib/web/p2panda-js-v0.4.0.wasm');
+    //
+    // This is an initialization function which will "boot" the module and
+    // make it ready to use. Currently browsers don't support natively
+    // imported WebAssembly as an ES module, but eventually the manual
+    // initialization won't be required!
+    await initWebAssembly();
 
     const keyPair = createKeyPair();
     document.getElementById('publicKey').innerText = keyPair.publicKey();
@@ -167,6 +151,10 @@ const Chat = () => {
   );
 };
 ```
+
+### Slim
+
+The above method includes the WebAssembly inside the JavaScript file, encoded as a base64 string. While this allows developers to quickly get started, it also doubles the size of the imported file. To avoid larger payloads and decoding times you can also load the `.wasm` file manually by replacing the file path to `p2panda-js/lib/slim/index.min.js` and initialize the module via `await initWebAssembly('p2panda-js/lib/slim/p2panda.wasm')`, make sure the `.wasm` file is hosted somewhere as well.
 
 ## Development
 

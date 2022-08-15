@@ -1,32 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { Configuration, DefinePlugin } from 'webpack';
-import CopyPlugin from 'copy-webpack-plugin';
 import ESLintPlugin from 'eslint-webpack-plugin';
 
-import config, {
-  DIR_DIST,
-  DIR_SRC,
-  DIR_WASM,
-  getPath,
-  tsRule,
-} from './webpack.common';
+import config, { getPath, tsRule, DIR_SRC } from './webpack.common';
 
-const BUNDLE_NAME = 'web';
+const BUNDLE_NAME = 'browser';
 
 /*
  * Extended configuration to build library targeting modern browsers:
  *
  * - Output can be minified for smaller library size
  * - Uses WebAssembly built with `web` target
- * - WebAssembly needs to be initialized with using external '.wasm' file to
- *   save bandwith
+ * - WebAssembly converted to base64 string and embedded inline
  * - Webpack bundles with `web` target
  */
-const configWeb = ({ minimize = true }): Configuration => {
+const configBrowser = ({ minimize = true }): Configuration => {
   return {
     ...config,
-    entry: getPath(DIR_SRC, 'index.web.ts'),
+    entry: getPath(DIR_SRC, `index.${BUNDLE_NAME}.ts`),
     name: minimize ? `${BUNDLE_NAME}-minimize` : BUNDLE_NAME,
     output: {
       ...config.output,
@@ -36,22 +28,17 @@ const configWeb = ({ minimize = true }): Configuration => {
     },
     target: 'web',
     module: {
-      rules: [tsRule],
+      rules: [
+        tsRule,
+        {
+          test: /\.wasm$/,
+          type: 'asset/inline',
+        },
+      ],
     },
     plugins: [
       new DefinePlugin({
         BUILD_TARGET_WEB: JSON.stringify(true),
-      }),
-      // Make sure the `.wasm` file is also copied into the folder so developers
-      // can load it from there to pass it over to the `initializeWebAssembly`
-      // method
-      new CopyPlugin({
-        patterns: [
-          {
-            from: `${getPath(DIR_WASM)}/web/*.wasm`,
-            to: `${getPath(DIR_DIST)}/${BUNDLE_NAME}/p2panda.wasm`,
-          },
-        ],
       }),
       new ESLintPlugin(),
     ],
@@ -61,4 +48,4 @@ const configWeb = ({ minimize = true }): Configuration => {
   };
 };
 
-export default configWeb;
+export default configBrowser;
