@@ -23,6 +23,8 @@ Highlights are marked with a pancake 🥞
 - Remove generic parameters from `StorageProvider` [#408](https://github.com/p2panda/p2panda/pull/408) `rs`
 - Consistent `as_str` and `to_string` functions, introduce `Human` trait with `display` method for short strings [#389](https://github.com/p2panda/p2panda/pull/389) `rs`
 - Update `Human` impl for `SchemaId` and `DocumentViewId` [#414](https://github.com/p2panda/p2panda/pull/414) `rs`
+- Deprecate mock `Node` and `Client` structs [#437](https://github.com/p2panda/p2panda/pull/437)
+- Introduce `validation` and `domain` modules to `test_utils/db` [#437](https://github.com/p2panda/p2panda/pull/437)
 
 ### Fixed
 
