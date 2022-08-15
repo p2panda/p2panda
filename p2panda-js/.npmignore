@@ -8,6 +8,7 @@
 /wasm
 docs
 jest.config.ts
+scripts
 src
 test
 tsconfig.json
