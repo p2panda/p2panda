@@ -55,13 +55,13 @@ npm i p2panda-js
 
 ## Usage
 
-`p2panda-js` runs both in NodeJS and web browsers.
+`p2panda-js` runs both in NodeJS and web browsers and can be integrated in a bundle for example via Webpack or Rollup.
 
 ### NodeJS
 
 ```js
-import { createKeyPair } from 'p2panda-js';
-const keyPair = createKeyPair();
+import p2panda from 'p2panda-js';
+const keyPair = p2panda.createKeyPair();
 console.log(keyPair.publicKey());
 ```
 
@@ -152,9 +152,21 @@ const Chat = () => {
 };
 ```
 
-### Slim
+### Manually load `.wasm`
 
-The above method includes the WebAssembly inside the JavaScript file, encoded as a base64 string. While this allows developers to quickly get started, it also doubles the size of the imported file. To avoid larger payloads and decoding times you can also load the `.wasm` file manually by replacing the file path to `p2panda-js/lib/slim/index.min.js` and initialize the module via `await initWebAssembly('p2panda-js/lib/slim/p2panda.wasm')`, make sure the `.wasm` file is hosted somewhere as well.
+Using `p2panda-js` in the browser automatically uses the version which inlines the WebAssembly inside the JavaScript file, encoded as a base64 string. While this works for most developers, it also doubles the size of the imported file. To avoid larger payloads and decoding times you can also load the `.wasm` file manually by replacing the file path to `p2panda-js/lib/slim/index.min.js` and initialize the module via `await initWebAssembly('p2panda-js/lib/slim/p2panda.wasm')`, make sure the `.wasm` file is hosted somewhere as well or your bundler knows about it.
+
+```javascript
+import { initWebAssembly, createKeyPair } from 'p2panda-js/slim';
+import wasm from 'p2panda-js/p2panda.wasm';
+
+// When running p2panda in the Browser, this method needs to be run once
+// before using all other `p2panda-js` methods
+await initWebAssembly(wasm);
+
+const keyPair = createKeyPair();
+console.log(keyPair.publicKey());
+```
 
 ## Development
 

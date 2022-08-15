@@ -20,7 +20,7 @@ const BUNDLE_NAME = 'node';
 const configNode = (): Configuration => {
   return {
     ...config,
-    name: 'node',
+    name: BUNDLE_NAME,
     output: {
       ...config.output,
       filename: `${BUNDLE_NAME}/index.js`,
@@ -39,11 +39,11 @@ const configNode = (): Configuration => {
       //
       // Through this workaround, there are a couple of things to take care of:
       //
-      // 1. We treat `../../wasm/node/index.js` as an external dependency here,
-      // but routing it to `<root>/<dist>/wasm/index.js` (note the <dist>!)
+      // 1. We treat `../wasm/node` as an external dependency here,
+      // but routing it to `<root>/<dist>/node/wasm/index.js` (note the <dist>!)
       //
       // 2. Since this folder doesn't exist in the final build we copy it from
-      // `<root>/wasm/node` to `<root>/<dist>/wasm` via the CopyPlugin, see
+      // `<root>/wasm/node` to `<root>/<dist>/node/wasm` via the CopyPlugin, see
       // further below.
       '../wasm/node': `./wasm/index.js`,
       // `node-fetch` has a weird export that needs to be treated differently.

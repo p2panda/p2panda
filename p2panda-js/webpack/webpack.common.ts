@@ -36,10 +36,8 @@ const config: webpack.Configuration = {
   entry: getPath(DIR_SRC, 'index.ts'),
   output: {
     path: getPath(DIR_DIST),
-    library: {
-      name: 'p2panda',
-      type: 'umd',
-    },
+    library: 'p2panda',
+    libraryTarget: 'umd',
   },
   resolve: {
     extensions: ['.ts', '.js'],

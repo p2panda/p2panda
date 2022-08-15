@@ -9,6 +9,7 @@
     ".": {
       "types": "./lib/types/index.d.ts",
       "node": "./lib/node/index.js",
+      "import": "./lib/browser/index.js",
       "browser": "./lib/browser/index.min.js"
     },
     "./slim": {
@@ -16,7 +17,7 @@
       "import": "./lib/slim/index.js",
       "browser": "./lib/slim/index.min.js"
     },
-    "./p2panda.wasm": "./dist/slim/p2panda.wasm",
+    "./p2panda.wasm": "./lib/slim/p2panda.wasm",
     "./package.json": "./package.json"
   },
   "scripts": {
