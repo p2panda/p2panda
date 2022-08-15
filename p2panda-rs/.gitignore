@@ -1,7 +1,8 @@
 # https://doc.rust-lang.org/stable/cargo/faq.html#why-do-binaries-have-cargolock-in-version-control-but-not-libraries
 Cargo.lock
-pkg
+node
 target
+web
 
 # Used to configure system-specific paths to browser binaries for headless testing with wasm-pack
 /webdriver.json

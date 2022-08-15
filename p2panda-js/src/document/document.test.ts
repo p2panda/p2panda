@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { recoverKeyPair } from '~/identity';
-import { Session } from '~/session';
-
-import type { Fields } from '~/types';
-
+import { recoverKeyPair } from '../identity';
+import { Session } from '../session';
 import { createDocument, deleteDocument, updateDocument } from '.';
+
+import type { Fields } from '../types';
 
 import {
   authorFixture,
@@ -16,7 +15,7 @@ import {
   schemaFixture,
 } from '../../test/fixtures';
 
-jest.mock('~/session');
+jest.mock('../session');
 
 const MOCK_SERVER_URL = 'http://localhost:2020';
 
@@ -30,9 +29,7 @@ describe('document', () => {
       const asyncFunctionMock = jest
         .fn()
         .mockResolvedValue(entryArgsFixture(1));
-      jest
-        .spyOn(session, 'getNextEntryArgs')
-        .mockImplementation(asyncFunctionMock);
+      jest.spyOn(session, 'getNextArgs').mockImplementation(asyncFunctionMock);
 
       const fields = entryFixture(1).operation?.fields as Fields;
 
@@ -55,9 +52,7 @@ describe('document', () => {
       const asyncFunctionMock = jest
         .fn()
         .mockResolvedValue(entryArgsFixture(2));
-      jest
-        .spyOn(session, 'getNextEntryArgs')
-        .mockImplementation(asyncFunctionMock);
+      jest.spyOn(session, 'getNextArgs').mockImplementation(asyncFunctionMock);
 
       // These are the fields for an update operation
       const fields = entryFixture(2).operation?.fields as Fields;
@@ -92,9 +87,7 @@ describe('document', () => {
       const asyncFunctionMock = jest
         .fn()
         .mockResolvedValue(entryArgsFixture(4));
-      jest
-        .spyOn(session, 'getNextEntryArgs')
-        .mockImplementation(asyncFunctionMock);
+      jest.spyOn(session, 'getNextArgs').mockImplementation(asyncFunctionMock);
 
       // This is the document id
       const id = documentIdFixture();

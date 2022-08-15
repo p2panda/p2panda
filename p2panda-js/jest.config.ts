@@ -3,13 +3,7 @@ import type { Config } from '@jest/types';
 export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  moduleNameMapper: {
-    // Use the same path alias for our codebase as we do in Webpack
-    '^~(.*)$': '<rootDir>/src$1',
-    // Map `wasm` imports to the build of `wasm-pack`
-    wasm: '<rootDir>/wasm',
-  },
-  modulePathIgnorePatterns: ['<rootDir>/wasm-web'],
+  modulePathIgnorePatterns: ['<rootDir>/wasm/web'],
   // Skip reporting coverage for auto-generated wasm module that should be
   // tested from p2panda-rs.
   coveragePathIgnorePatterns: ['<rootDir>/wasm'],

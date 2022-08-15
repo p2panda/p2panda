@@ -25,12 +25,15 @@ Highlights are marked with a pancake 🥞
 - Update `Human` impl for `SchemaId` and `DocumentViewId` [#414](https://github.com/p2panda/p2panda/pull/414) `rs`
 - Deprecate mock `Node` and `Client` structs [#437](https://github.com/p2panda/p2panda/pull/437)
 - Introduce `validation` and `domain` modules to `test_utils/db` [#437](https://github.com/p2panda/p2panda/pull/437)
+- Introduce new node and browser builds for JavaScript, export TypeScript definitions [#429](https://github.com/p2panda/p2panda/pull/429) `js`
+- Refactored benchmarks to include schema validation [#430](https://github.com/p2panda/p2panda/pull/414) `rs`
 
 ### Fixed
 
 - Set log id default to `0` [#398](https://github.com/p2panda/p2panda/pull/398) `rs`
 - Fix iterator implementations for `SeqNum` and `LogId` [#404](https://github.com/p2panda/p2panda/pull/404) `rs`
 - Fix system schema CDDL definitions [#393](https://github.com/p2panda/p2panda/pull/393) `rs`
+- Fix GraphQL queries via Apollo [#428](https://github.com/p2panda/p2panda/pull/428) `js`
 
 ## [0.4.0]
 

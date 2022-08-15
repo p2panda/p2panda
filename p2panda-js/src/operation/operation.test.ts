@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { getOperationFields } from '~/operation';
-import { marshallRequestFields } from '~/utils';
+import { getOperationFields } from './';
+import { marshallRequestFields } from '../utils';
 
 describe('operation', () => {
   describe('getOperationFields', () => {
