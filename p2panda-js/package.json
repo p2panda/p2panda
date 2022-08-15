@@ -16,10 +16,12 @@
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm test' --ext js,ts,json",
     "wasm": "./scripts/compile-wasm.sh",
     "wasm:types": "cp ./wasm/node/index.d.ts ./src/wasm.d.ts",
-    "webpack": "run-p webpack:web webpack:inline webpack:node --aggregate-output",
+    "webpack": "run-p webpack:web webpack:web-minimize webpack:inline webpack:inline-minimize webpack:node --aggregate-output",
     "webpack:inline": "webpack --config-name inline --color",
+    "webpack:inline-minimize": "webpack --config-name inline-minimize --color",
     "webpack:node": "webpack --config-name node --color",
-    "webpack:web": "webpack --config-name web --color"
+    "webpack:web": "webpack --config-name web --color",
+    "webpack:web-minimize": "webpack --config-name web-minimize --color"
   },
   "engines": {
     "node": ">= v12.0.0"
