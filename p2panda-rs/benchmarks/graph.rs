@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Benchmarking tests adapted from [https://github.com/declanvk/incremental-topo/tree/main/benches](https://github.com/declanvk/incremental-topo/tree/main/benches).
-
+// Benchmarking tests adapted from
+// [https://github.com/declanvk/incremental-topo/tree/main/benches](https://github.com/declanvk/incremental-topo/tree/main/benches).
 #[macro_use]
 extern crate criterion;
 extern crate rand;
 
 use criterion::{BenchmarkId, Criterion};
-
 use p2panda_rs::graph::Graph;
 
 const DEFAULT_DENSITY: f32 = 0.1;

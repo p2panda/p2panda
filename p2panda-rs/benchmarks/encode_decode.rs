@@ -1,16 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Benchmark the performance of encoding and decoding entries and operations while also
-//! performing a full validation against a schema.
+//! Benchmark the performance of encoding and decoding entries and operations while also performing
+//! a full validation against a schema.
 //!
 //! An [`Entry`] and accompanying [`Operation`] are encoded and decoded for varying payload sizes
 //! and throughput is measured.
-
 use std::convert::TryInto;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
-
 use p2panda_rs::document::DocumentViewId;
 use p2panda_rs::entry::decode::decode_entry;
 use p2panda_rs::entry::encode::encode_entry;
@@ -21,8 +18,9 @@ use p2panda_rs::operation::encode::encode_operation;
 use p2panda_rs::operation::validate::validate_operation_with_entry;
 use p2panda_rs::operation::{EncodedOperation, OperationBuilder};
 use p2panda_rs::schema::{FieldType, Schema, SchemaId};
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
-/// Encode an [`Entry`] and [`Operation`] given some string payload
+/// Encode an [`Entry`] and [`Operation`] given some string payload.
 fn run_encode(
     payload: &str,
     key_pair: &KeyPair,
