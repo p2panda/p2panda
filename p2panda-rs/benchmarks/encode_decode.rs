@@ -18,7 +18,8 @@ use p2panda_rs::operation::encode::encode_operation;
 use p2panda_rs::operation::validate::validate_operation_with_entry;
 use p2panda_rs::operation::{EncodedOperation, OperationBuilder};
 use p2panda_rs::schema::{FieldType, Schema, SchemaId};
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 
 /// Encode an [`Entry`] and [`Operation`] given some string payload.
 fn run_encode(
