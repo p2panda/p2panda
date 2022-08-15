@@ -90,6 +90,7 @@
   },
   "dependencies": {
     "debug": "^4.3.4",
+    "graphql": "^16.5.0",
     "graphql-request": "^4.3.0"
   }
 }
