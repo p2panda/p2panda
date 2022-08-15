@@ -93,6 +93,42 @@ pub fn test_db_config(
     }
 }
 
+/// Container for `MemoryStore` with access to the document ids and key_pairs present in the
+/// pre-populated database.
+#[derive(Default, Debug)]
+pub struct TestDatabase {
+    /// The store.
+    pub store: MemoryStore,
+
+    /// Test data collected during store population.
+    pub test_data: TestData,
+}
+
+impl TestDatabase {
+    /// Instantiate a new test store.
+    pub fn new(store: &MemoryStore, test_data: TestData) -> Self {
+        Self {
+            store: store.clone(),
+            test_data,
+        }
+    }
+}
+
+/// Data collected when populating a `TestData` base in order to easily check values which
+/// would be otherwise hard or impossible to get through the store methods.
+///
+/// Note: if new entries are published to this node, keypairs and any newly created
+/// documents will not be added to these lists.
+#[derive(Default, Debug)]
+pub struct TestData {
+    /// KeyPairs which were used to pre-populate this store.
+    pub key_pairs: Vec<KeyPair>,
+
+    /// The id of all documents which were inserted into the store when it was
+    /// pre-populated with values.
+    pub documents: Vec<DocumentId>,
+}
+
 /// Fixture for constructing a storage provider instance backed by a pre-populated database.
 ///
 /// Passed parameters define what the database should contain. The first entry in each log contains
@@ -131,9 +167,15 @@ pub async fn test_db(
         update_operation_fields,
     };
 
-    let mut db = TestDatabase::default();
-    populate_test_db(&mut db, &config).await;
-    db
+    let store = MemoryStore::default();
+    let (key_pairs, documents) = populate_store(&store, &config).await;
+    TestDatabase::new(
+        &store,
+        TestData {
+            key_pairs,
+            documents,
+        },
+    )
 }
 
 /// Helper for creating many key_pairs.
@@ -155,55 +197,18 @@ pub fn test_key_pairs(no_of_authors: usize) -> Vec<KeyPair> {
     key_pairs
 }
 
-/// Container for `MemoryStore` with access to the document ids and key_pairs present in the
-/// pre-populated database.
-#[derive(Default, Debug)]
-pub struct TestDatabase {
-    /// The store.
-    pub store: MemoryStore,
-
-    /// Test data collected during store population.
-    pub test_data: TestData,
-}
-
-impl TestDatabase {
-    /// Instantiate a new test store.
-    pub fn new(store: &MemoryStore) -> Self {
-        Self {
-            store: store.clone(),
-            test_data: TestData::default(),
-        }
-    }
-}
-
-/// Data collected when populating a `TestData` base in order to easily check values which
-/// would be otherwise hard or impossible to get through the store methods.
-///
-/// Note: if new entries are published to this node, keypairs and any newly created
-/// documents will not be added to these lists.
-#[derive(Default, Debug)]
-pub struct TestData {
-    /// KeyPairs which were used to pre-populate this store.
-    pub key_pairs: Vec<KeyPair>,
-
-    /// The id of all documents which were inserted into the store when it was
-    /// pre-populated with values.
-    pub documents: Vec<DocumentId>,
-}
-
 /// Helper method for populating a `TestDatabase` with configurable data.
 ///
 /// Passed parameters define what the db should contain. The first entry in each log contains a
 /// valid CREATE operation following entries contain duplicate UPDATE operations. If the
 /// with_delete flag is set to true the last entry in all logs contain be a DELETE operation.
-pub async fn populate_test_db(db: &mut TestDatabase, config: &PopulateDatabaseConfig) {
+pub async fn populate_store<S: StorageProvider>(
+    store: &S,
+    config: &PopulateDatabaseConfig,
+) -> (Vec<KeyPair>, Vec<DocumentId>) {
     let key_pairs = test_key_pairs(config.no_of_authors);
-
+    let mut documents: Vec<DocumentId> = Vec::new();
     for key_pair in &key_pairs {
-        db.test_data
-            .key_pairs
-            .push(KeyPair::from_private_key(key_pair.private_key()).unwrap());
-
         for _log_id in 0..config.no_of_logs {
             let mut previous_operation: Option<DocumentViewId> = None;
 
@@ -239,7 +244,7 @@ pub async fn populate_test_db(db: &mut TestDatabase, config: &PopulateDatabaseCo
 
                 // Publish the operation encoded on an entry to storage.
                 let (entry_encoded, publish_entry_response) =
-                    send_to_store(&db.store, &operation, &config.schema, key_pair)
+                    send_to_store(store, &operation, &config.schema, key_pair)
                         .await
                         .expect("Send to store");
 
@@ -248,11 +253,12 @@ pub async fn populate_test_db(db: &mut TestDatabase, config: &PopulateDatabaseCo
 
                 // Push this document id to the test data.
                 if index == 0 {
-                    db.test_data.documents.push(entry_encoded.hash().into());
+                    documents.push(entry_encoded.hash().into());
                 }
             }
         }
     }
+    (key_pairs, documents)
 }
 
 /// Helper method for publishing an operation encoded on an entry to a store.
