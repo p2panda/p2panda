@@ -23,6 +23,7 @@ Highlights are marked with a pancake 🥞
 - Remove generic parameters from `StorageProvider` [#408](https://github.com/p2panda/p2panda/pull/408) `rs`
 - Consistent `as_str` and `to_string` functions, introduce `Human` trait with `display` method for short strings [#389](https://github.com/p2panda/p2panda/pull/389) `rs`
 - Update `Human` impl for `SchemaId` and `DocumentViewId` [#414](https://github.com/p2panda/p2panda/pull/414) `rs`
+- Introduce new node and browser builds for JavaScript, export TypeScript definitions [#429](https://github.com/p2panda/p2panda/pull/429) `js`
 - Refactored benchmarks to include schema validation [#430](https://github.com/p2panda/p2panda/pull/414) `rs`
 
 ### Fixed

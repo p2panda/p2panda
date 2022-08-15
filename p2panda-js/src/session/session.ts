@@ -13,10 +13,10 @@ import {
 } from '@apollo/client/core';
 import fetch from 'node-fetch';
 
-import { createDocument, deleteDocument, updateDocument } from '~/document';
+import { createDocument, deleteDocument, updateDocument } from '../document';
 
-import type { NextArgs, Fields, SchemaId } from '~/types';
-import type { KeyPair } from 'wasm';
+import type { NextArgs, Fields, SchemaId } from '../types';
+import type { KeyPair } from '../wasm';
 
 const log = debug('p2panda-js:session');
 

@@ -2,8 +2,8 @@
 
 import debug from 'debug';
 
-import wasm from '~/wasm';
-import { Context } from '~/session';
+import { signEncodeEntry } from '../wasm';
+import { Context } from '../session';
 
 const log = debug('p2panda-js:entry');
 
@@ -20,7 +20,6 @@ export const signPublishEntry = async (
   { keyPair, session }: Context,
   documentId?: string,
 ): Promise<string> => {
-  const { signEncodeEntry } = await wasm;
   const publicKey = keyPair.publicKey();
 
   log('Signing and publishing entry');

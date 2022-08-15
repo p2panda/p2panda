@@ -2,8 +2,7 @@
 
 import * as path from 'path';
 
-import * as webpack from 'webpack';
-import WasmPackPlugin from '@wasm-tool/wasm-pack-plugin';
+import webpack from 'webpack';
 
 export const DIR_DIST = 'lib';
 export const DIR_SRC = 'src';
@@ -15,61 +14,42 @@ export function getPath(...args: Array<string>): string {
   return path.resolve(__dirname, '..', ...args);
 }
 
-// Helper method to create a `wasm-pack` plugin instance
-export function getWasmPlugin(
-  target: 'nodejs' | 'web' | 'bundler',
-): WasmPackPlugin {
-  return new WasmPackPlugin({
-    crateDirectory: getPath('..', DIR_WASM_SRC),
-    outDir: getPath(DIR_WASM),
-    extraArgs: `--target ${target}`,
-    pluginLogLevel: 'error',
-  });
-}
+export const tsRule: webpack.RuleSetRule = {
+  test: /\.ts$/,
+  exclude: /node_modules/,
+  use: [
+    {
+      loader: 'babel-loader',
+    },
+    {
+      loader: 'ts-loader',
+      options: {
+        configFile: 'tsconfig.json',
+        onlyCompileBundledFiles: true,
+      },
+    },
+  ],
+};
 
 // Base Webpack configuration
 const config: webpack.Configuration = {
-  entry: {
-    index: getPath(DIR_SRC, 'index.ts'),
-  },
+  entry: getPath(DIR_SRC, 'index.ts'),
   output: {
     path: getPath(DIR_DIST),
-    library: {
-      name: 'p2panda',
-      type: 'umd',
-    },
+    library: 'p2panda',
+    libraryTarget: 'umd',
   },
   resolve: {
     extensions: ['.ts', '.js'],
-    alias: {
-      '~': getPath(DIR_SRC),
-      wasm: getPath(DIR_WASM),
-    },
-  },
-  module: {
-    rules: [
-      {
-        test: /\.ts$/,
-        exclude: /node_modules/,
-        use: [
-          {
-            loader: 'babel-loader',
-          },
-          {
-            loader: 'ts-loader',
-            options: {
-              configFile: 'tsconfig.json',
-              onlyCompileBundledFiles: true,
-            },
-          },
-        ],
-      },
-    ],
   },
   devtool: 'source-map',
   stats: 'minimal',
   experiments: {
     asyncWebAssembly: true,
+  },
+  performance: {
+    // We know that .wasm files are large and we can't do much about it ..
+    hints: false,
   },
 };
 

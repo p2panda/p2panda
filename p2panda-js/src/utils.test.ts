@@ -2,8 +2,8 @@
 
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 
-import { marshallRequestFields, marshallResponseFields } from '~/utils';
-import { Fields, FieldsTagged } from '~/types';
+import { marshallRequestFields, marshallResponseFields } from '../src/utils';
+import { Fields, FieldsTagged } from '../src/types';
 
 const REQUEST: Fields = {
   channel: 5,

@@ -2,22 +2,18 @@
 
 import debug from 'debug';
 
-import wasm from '~/wasm';
+import { OperationFields } from '../wasm';
 
-import type { FieldsTagged } from '~/types';
-import type { OperationFields } from 'wasm';
+import type { FieldsTagged } from '../types';
 
 const log = debug('p2panda-js:operation');
 
 /**
  * Returns an operation fields instance for the given field contents and schema.
  */
-export const getOperationFields = async (
-  fields: FieldsTagged,
-): Promise<OperationFields> => {
-  const { OperationFields } = await wasm;
-
+export const getOperationFields = (fields: FieldsTagged): OperationFields => {
   const operationFields = new OperationFields();
+
   for (const [key, fieldValue] of fields.entries()) {
     const { type, value } = fieldValue;
     operationFields.insert(key, type, value);

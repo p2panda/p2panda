@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import wasm from '~/wasm';
+import {
+  KeyPair,
+  encodeCreateOperation,
+  verifySignature,
+  decodeEntry,
+  signEncodeEntry,
+  OperationFields,
+} from './wasm';
 
 const TEST_HASH =
   '0020ddc99aca776df0ca9d1b5871ba39d4edacc752a0a3426b12c3958971b6c847ac';
@@ -8,21 +15,18 @@ const TEST_SCHEMA_ID = `test_${TEST_HASH}`;
 
 describe('WebAssembly interface', () => {
   describe('KeyPair', () => {
-    it('creates a key pair', async () => {
-      const { KeyPair } = await wasm;
+    it('creates a key pair', () => {
       const keyPair = new KeyPair();
       expect(keyPair.privateKey().length).toBe(64);
     });
 
-    it('restores a key pair', async () => {
-      const { KeyPair } = await wasm;
+    it('restores a key pair', () => {
       const keyPair = new KeyPair();
       const keyPairSecond = KeyPair.fromPrivateKey(keyPair.privateKey());
       expect(keyPair.publicKey()).toBe(keyPairSecond.publicKey());
     });
 
-    it('signs and validates', async () => {
-      const { KeyPair, verifySignature } = await wasm;
+    it('signs and validates', () => {
       const keyPair = new KeyPair();
       const publicKey = keyPair.publicKey();
       const message = 'Hello, Signature!';
@@ -35,8 +39,7 @@ describe('WebAssembly interface', () => {
   });
 
   describe('OperationFields', () => {
-    it('stores and returns the right fields', async () => {
-      const { OperationFields } = await wasm;
+    it('stores and returns the right fields', () => {
       const fields = new OperationFields();
 
       // Set fields of all possible types
@@ -71,16 +74,14 @@ describe('WebAssembly interface', () => {
       expect(fields.get('message')).toBe(null);
     });
 
-    it('returns the correct length', async () => {
-      const { OperationFields } = await wasm;
+    it('returns the correct length', () => {
       const fields = new OperationFields();
       expect(fields.length()).toBe(0);
       fields.insert('message', 'str', 'Good morning');
       expect(fields.length()).toBe(1);
     });
 
-    it('throws when trying to set a field twice', async () => {
-      const { OperationFields } = await wasm;
+    it('throws when trying to set a field twice', () => {
       const fields = new OperationFields();
       fields.insert('description', 'str', 'Good morning, Panda');
       expect(() =>
@@ -88,8 +89,7 @@ describe('WebAssembly interface', () => {
       ).toThrow("field 'description' already exists");
     });
 
-    it('throws when using invalid types or values', async () => {
-      const { OperationFields } = await wasm;
+    it('throws when using invalid types or values', () => {
       const fields = new OperationFields();
 
       // Throw when type is invalid
@@ -134,17 +134,9 @@ describe('WebAssembly interface', () => {
   });
 
   describe('Entries', () => {
-    it('creates, signs and decodes an entry', async () => {
+    it('creates, signs and decodes an entry', () => {
       const LOG_ID = 5;
       const SEQ_NUM = 1;
-
-      const {
-        KeyPair,
-        OperationFields,
-        decodeEntry,
-        encodeCreateOperation,
-        signEncodeEntry,
-      } = await wasm;
 
       // Generate new key pair
       const keyPair = new KeyPair();
@@ -184,7 +176,7 @@ describe('WebAssembly interface', () => {
       expect(() => decodeEntry(entryEncoded)).not.toThrow();
     });
 
-    it('encodes and decodes large integers correctly', async () => {
+    it('encodes and decodes large integers correctly', () => {
       // A couple of large operation field values representing large 64 bit
       // signed integer and float numbers
       const LARGE_I64 = '8932198321983219';
@@ -195,14 +187,6 @@ describe('WebAssembly interface', () => {
       // Maximum unsigned u64 integer is 18446744073709551615
       const LARGE_LOG_ID = '12345678912345678912';
       const SEQ_NUM = 1;
-
-      const {
-        KeyPair,
-        OperationFields,
-        decodeEntry,
-        encodeCreateOperation,
-        signEncodeEntry,
-      } = await wasm;
 
       const keyPair = new KeyPair();
 
