@@ -13,7 +13,7 @@ use crate::entry::{EncodedEntry, Entry};
 use crate::hash::{Blake3ArrayVec, Hash};
 use crate::identity::KeyPair;
 use crate::operation::encode::encode_operation;
-use crate::operation::Operation;
+use crate::operation::{EncodedOperation, Operation};
 use crate::test_utils::fixtures::{key_pair, operation, random_hash};
 
 /// Creates an `Entry`.
@@ -102,7 +102,7 @@ pub fn entry_signed_encoded_unvalidated(
     #[default(0)] log_id: u64,
     #[default(None)] backlink: Option<Hash>,
     #[default(None)] skiplink: Option<Hash>,
-    #[default(None)] operation: Option<Operation>,
+    #[default(None)] operation: Option<EncodedOperation>,
     #[from(key_pair)] key_pair: KeyPair,
 ) -> EncodedEntry {
     let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
@@ -149,14 +149,12 @@ pub fn entry_signed_encoded_unvalidated(
     // Encode the operation if it exists
     match operation {
         Some(operation) => {
-            let operation_encoded = encode_operation(&operation).unwrap();
-
             // Encode the payload size
-            let operation_size = operation_encoded.size();
+            let operation_size = operation.size();
             next_byte_num += varu64_encode(operation_size, &mut entry_bytes[next_byte_num..]);
 
             // Encode the payload hash
-            let operation_hash = operation_encoded.hash();
+            let operation_hash = operation.hash();
             next_byte_num += Into::<YasmfHash<Blake3ArrayVec>>::into(&operation_hash)
                 .encode(&mut entry_bytes[next_byte_num..])
                 .unwrap();
