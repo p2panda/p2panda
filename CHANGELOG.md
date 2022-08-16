@@ -27,6 +27,7 @@ Highlights are marked with a pancake 🥞
 - Introduce `validation` and `domain` modules to `test_utils/db` [#437](https://github.com/p2panda/p2panda/pull/437)
 - Introduce new node and browser builds for JavaScript, export TypeScript definitions [#429](https://github.com/p2panda/p2panda/pull/429) `js`
 - Refactored benchmarks to include schema validation [#430](https://github.com/p2panda/p2panda/pull/414) `rs`
+- Replace `@apollo/client` with `graphql-request` [#441](https://github.com/p2panda/p2panda/pull/441) `js`
 
 ### Fixed
 

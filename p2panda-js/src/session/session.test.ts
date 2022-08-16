@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /* eslint-disable @typescript-eslint/ban-ts-comment */
-
-import { createMockClient } from 'mock-apollo-client';
-
 import { GQL_NEXT_ARGS, GQL_PUBLISH } from './session';
 import { KeyPair } from '../wasm';
 import { Session } from './';
 import { recoverKeyPair } from '../identity';
 
 import type { Fields } from '../types';
+import type { FetchMockStatic } from 'fetch-mock';
 
 import {
   authorFixture,
@@ -20,42 +18,43 @@ import {
   schemaFixture,
 } from '../../test/fixtures';
 
-/**
- * Simple mock p2panda session.
- *
- * Will respond to:
+/* Set up GraphQL server mock. It will respond to:
  * - query `nextEntryArgs`: always returns entry args for sequence number 6
- * - mutation `publishEntry` always returns a response as if sequence number 5
- *  had been published.
- *
- * @returns Session
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const createMockSession = (): Session => {
-  const session = new Session('http://localhost:2020');
-  const mockClient = createMockClient();
+ * - mutation `publishEntry` always returns a response as if sequence
+ *   number 5 had been published. */
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+jest.mock('node-fetch', () => require('fetch-mock-jest').sandbox());
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const fetchMock: FetchMockStatic = require('node-fetch');
 
-  // Register nextEntryArgs handler
-  mockClient.setRequestHandler(GQL_NEXT_ARGS, () =>
-    Promise.resolve({
+// @ts-ignore
+fetchMock.config.matchPartialBody = true;
+
+fetchMock
+  .mock(
+    {
+      name: 'nextArgs',
+      url: 'http://localhost:2020',
+      body: { query: GQL_NEXT_ARGS },
+    },
+    {
       data: {
         nextEntryArgs: entryArgsFixture(5),
       },
-    }),
-  );
-
-  // Register publishEntry handler
-  mockClient.setRequestHandler(GQL_PUBLISH, () =>
-    Promise.resolve({
+    },
+  )
+  .mock(
+    {
+      name: 'publish',
+      url: 'http://localhost:2020',
+      body: { query: GQL_PUBLISH },
+    },
+    {
       data: {
         publishEntry: entryArgsFixture(5),
       },
-    }),
+    },
   );
-
-  session.client = mockClient;
-  return session;
-};
 
 /**
  * Test the `Session` class.
@@ -75,13 +74,14 @@ describe('Session', () => {
       // @ts-ignore: We deliberately use the API wrong here
       new Session();
     }).toThrow('Missing `endpoint` parameter for creating a session');
+
     expect(() => {
       new Session('');
     }).toThrow('Missing `endpoint` parameter for creating a session');
   });
 
   it('has a string representation', async () => {
-    const session = createMockSession();
+    const session = new Session('http://localhost:2020');
     expect(`${session}`).toEqual('<Session http://localhost:2020>');
 
     session.setKeyPair(keyPair);
@@ -97,7 +97,7 @@ describe('Session', () => {
 
   describe('publish', () => {
     it('can publish entries', async () => {
-      const session = createMockSession();
+      const session = new Session('http://localhost:2020');
 
       try {
         const nextArgs = await session.publish(
@@ -112,7 +112,7 @@ describe('Session', () => {
     });
 
     it('throws when publishing without all required parameters', async () => {
-      const session = createMockSession();
+      const session = new Session('http://localhost:2020');
       await expect(
         // @ts-ignore: We deliberately use the API wrong here
         session.publish(null, encodedEntryFixture(1).payloadBytes),
@@ -126,7 +126,7 @@ describe('Session', () => {
 
   describe('get/setNextEntryArgs', () => {
     it('returns next entry args from node', async () => {
-      const session = createMockSession();
+      const session = new Session('http://localhost:2020');
 
       const nextArgs = await session.getNextArgs(
         authorFixture().publicKey,
@@ -139,7 +139,8 @@ describe('Session', () => {
     });
 
     it('returns next entry args from cache', async () => {
-      const session = createMockSession();
+      const session = new Session('http://localhost:2020');
+
       // Add a spy to check whether the value is really retrieved from the
       // cache and not requested
       const mockedFn = jest.fn(async () => true);
@@ -175,7 +176,7 @@ describe('Session', () => {
     const fields = entryFixture(1).operation?.fields as Fields;
 
     beforeEach(async () => {
-      session = createMockSession();
+      session = new Session('http://localhost:2020');
       session.setKeyPair(keyPair);
     });
 
@@ -212,7 +213,7 @@ describe('Session', () => {
       ?.previous_operations as string[];
 
     beforeEach(async () => {
-      session = createMockSession();
+      session = new Session('http://localhost:2020');
       session.setKeyPair(keyPair);
       jest.spyOn(session, 'getNextArgs').mockResolvedValue(entryArgsFixture(2));
     });
@@ -258,7 +259,7 @@ describe('Session', () => {
       ?.previous_operations as string[];
 
     beforeEach(async () => {
-      session = createMockSession();
+      session = new Session('http://localhost:2020');
       session.setKeyPair(keyPair);
       jest.spyOn(session, 'getNextArgs').mockResolvedValue(entryArgsFixture(3));
     });

@@ -28,7 +28,7 @@ const configNode = (): Configuration => {
     target: 'node',
     externals: {
       // Treating the WebAssembly module as external prevents a bug with Webpack
-      // reformating the generated code by `wasm-pack` and breaking it badly.
+      // reformating the generated code by `wasm-bindgen` and breaking it badly.
       //
       // This Webpack issue mostly hits the WebAssembly code of the `getrandom`
       // crate using dynamic `require` statements based on the environment
@@ -46,9 +46,6 @@ const configNode = (): Configuration => {
       // `<root>/wasm/node` to `<root>/<dist>/node/wasm` via the CopyPlugin, see
       // further below.
       '../wasm/node': `./wasm/index.js`,
-      // `node-fetch` has a weird export that needs to be treated differently.
-      // @TODO: Remove fetch, https://github.com/p2panda/p2panda/issues/433
-      'node-fetch': 'commonjs2 node-fetch',
     },
     module: {
       rules: [tsRule],

@@ -1,17 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import debug from 'debug';
-import {
-  ApolloClient,
-  ApolloClientOptions,
-  gql,
-  HttpLink,
-  InMemoryCache,
-  NormalizedCacheObject,
-  // Import from `client/core` to not require `react` as a dependency as long
-  // as that is possible.
-} from '@apollo/client/core';
-import fetch from 'node-fetch';
+import { gql, GraphQLClient } from 'graphql-request';
 
 import { createDocument, deleteDocument, updateDocument } from '../document';
 
@@ -86,26 +76,17 @@ export class Session {
   endpoint: string;
 
   // A GraphQL client connected to the configured endpoint
-  client: ApolloClient<NormalizedCacheObject>;
+  client: GraphQLClient;
 
   // Cached arguments for the next entry
   private nextArgs: { [cacheKey: string]: NextArgs } = {};
 
-  constructor(
-    endpoint: Session['endpoint'],
-    apolloOptions?: ApolloClientOptions<NormalizedCacheObject>,
-  ) {
+  constructor(endpoint: Session['endpoint']) {
     if (endpoint == null || endpoint === '') {
       throw new Error('Missing `endpoint` parameter for creating a session');
     }
     this.endpoint = endpoint;
-    this.client = new ApolloClient({
-      // @ts-expect-error using a fetch implementation that ts doesn't consider
-      // valid
-      link: new HttpLink({ uri: endpoint, fetch }),
-      cache: new InMemoryCache(),
-      ...apolloOptions,
-    });
+    this.client = new GraphQLClient(endpoint);
   }
 
   private _schema: SchemaId | null = null;
@@ -197,14 +178,8 @@ export class Session {
     }
 
     try {
+      const data = await this.client.request(GQL_NEXT_ARGS, variables);
       // @TODO: Query `nextEntryArgs` is deprecated and will be replaced by `nextArgs` soon
-      const { data } = await this.client.query<
-        { nextEntryArgs: NextArgs },
-        NextArgsVariables
-      >({
-        query: GQL_NEXT_ARGS,
-        variables,
-      });
       const nextArgs = data.nextEntryArgs;
       log('request nextArgs', nextArgs);
       return nextArgs;
@@ -244,17 +219,12 @@ export class Session {
     };
 
     try {
-      // @TODO: Query `publishEntry` is deprecated and will be replaced by `publish` soon
-      const { data } = await this.client.mutate<
-        { publishEntry: NextArgs },
-        PublishVariables
-      >({
-        mutation: GQL_PUBLISH,
-        variables,
-      });
+      const data = await this.client.request(GQL_PUBLISH, variables);
       log('request publishEntry', data);
-      if (data?.publishEntry == null)
+      // @TODO: Query `publishEntry` is deprecated and will be replaced by `publish` soon
+      if (data?.publishEntry == null) {
         throw new Error("Response doesn't contain field `publishEntry`");
+      }
       return data.publishEntry;
     } catch (err) {
       log('Error publishing entry');
