@@ -1,15 +1,15 @@
-import { marshallResponseFields } from '~/utils';
+import { marshallResponseFields } from '../src/utils';
 
 import type {
   EncodedEntry,
   Entry,
-  EntryArgs,
+  NextArgs,
   FieldsTagged,
   Operation,
   OperationTagged,
   OperationValue,
   SchemaId,
-} from '~/types';
+} from '../src/types';
 
 import TEST_DATA from './test-data.json';
 
@@ -124,10 +124,10 @@ export const encodedEntryFixture = (seqNum: number): EncodedEntry => {
  * Takes a `seqNum` parameter, which is the sequence number of
  * the entry preceding the one we want arguments for.
  */
-export const entryArgsFixture = (seqNum: number): EntryArgs => {
+export const entryArgsFixture = (seqNum: number): NextArgs => {
   const index = seqNum - 1;
 
-  const entryArgs: EntryArgs = {
+  const entryArgs: NextArgs = {
     backlink: (nextEntryArgs[index].backlink || null) as string | undefined,
     skiplink: (nextEntryArgs[index].skiplink || null) as string | undefined,
     seqNum: nextEntryArgs[index].seqNum,

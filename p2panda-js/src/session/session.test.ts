@@ -2,14 +2,14 @@
 
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 
-import { DocumentNode } from 'graphql';
 import { createMockClient } from 'mock-apollo-client';
 
-import { KeyPair } from 'wasm';
-import { recoverKeyPair } from '~/identity';
-import { Session } from '~/session';
+import { GQL_NEXT_ARGS, GQL_PUBLISH } from './session';
+import { KeyPair } from '../wasm';
+import { Session } from './';
+import { recoverKeyPair } from '../identity';
 
-import type { Fields } from '~/types';
+import type { Fields } from '../types';
 
 import {
   authorFixture,
@@ -19,7 +19,6 @@ import {
   entryFixture,
   schemaFixture,
 } from '../../test/fixtures';
-import { GQL_NEXT_ENTRY_ARGS, GQL_PUBLISH_ENTRY } from './session';
 
 /**
  * Simple mock p2panda session.
@@ -37,7 +36,7 @@ const createMockSession = (): Session => {
   const mockClient = createMockClient();
 
   // Register nextEntryArgs handler
-  mockClient.setRequestHandler(GQL_NEXT_ENTRY_ARGS, () =>
+  mockClient.setRequestHandler(GQL_NEXT_ARGS, () =>
     Promise.resolve({
       data: {
         nextEntryArgs: entryArgsFixture(5),
@@ -46,7 +45,7 @@ const createMockSession = (): Session => {
   );
 
   // Register publishEntry handler
-  mockClient.setRequestHandler(GQL_PUBLISH_ENTRY, () =>
+  mockClient.setRequestHandler(GQL_PUBLISH, () =>
     Promise.resolve({
       data: {
         publishEntry: entryArgsFixture(5),
@@ -66,8 +65,9 @@ const createMockSession = (): Session => {
  */
 describe('Session', () => {
   let keyPair: KeyPair;
-  beforeAll(async () => {
-    keyPair = await recoverKeyPair(authorFixture().privateKey);
+
+  beforeAll(() => {
+    keyPair = recoverKeyPair(authorFixture().privateKey);
   });
 
   it('requires an endpoint parameter', () => {
@@ -95,16 +95,16 @@ describe('Session', () => {
     );
   });
 
-  describe('publishEntry', () => {
+  describe('publish', () => {
     it('can publish entries', async () => {
       const session = createMockSession();
 
       try {
-        const nextEntryArgs = await session.publishEntry(
+        const nextArgs = await session.publish(
           encodedEntryFixture(4).entryBytes,
           encodedEntryFixture(4).payloadBytes,
         );
-        expect(nextEntryArgs.backlink).toEqual(entryArgsFixture(5).backlink);
+        expect(nextArgs.backlink).toEqual(entryArgsFixture(5).backlink);
       } catch (err) {
         console.error(err);
         throw err;
@@ -115,11 +115,11 @@ describe('Session', () => {
       const session = createMockSession();
       await expect(
         // @ts-ignore: We deliberately use the API wrong here
-        session.publishEntry(null, encodedEntryFixture(1).payloadBytes),
+        session.publish(null, encodedEntryFixture(1).payloadBytes),
       ).rejects.toThrow();
       await expect(
         // @ts-ignore: We deliberately use the API wrong here
-        session.publishEntry(encodedEntryFixture(1).entryBytes, null),
+        session.publish(encodedEntryFixture(1).entryBytes, null),
       ).rejects.toThrow();
     });
   });
@@ -128,14 +128,14 @@ describe('Session', () => {
     it('returns next entry args from node', async () => {
       const session = createMockSession();
 
-      const nextEntryArgs = await session.getNextEntryArgs(
+      const nextArgs = await session.getNextArgs(
         authorFixture().publicKey,
         documentIdFixture(),
       );
-      expect(nextEntryArgs.skiplink).toEqual(entryArgsFixture(5).skiplink);
-      expect(nextEntryArgs.backlink).toEqual(entryArgsFixture(5).backlink);
-      expect(nextEntryArgs.seqNum).toEqual(entryArgsFixture(5).seqNum);
-      expect(nextEntryArgs.logId).toEqual(entryArgsFixture(5).logId);
+      expect(nextArgs.skiplink).toEqual(entryArgsFixture(5).skiplink);
+      expect(nextArgs.backlink).toEqual(entryArgsFixture(5).backlink);
+      expect(nextArgs.seqNum).toEqual(entryArgsFixture(5).seqNum);
+      expect(nextArgs.logId).toEqual(entryArgsFixture(5).logId);
     });
 
     it('returns next entry args from cache', async () => {
@@ -146,24 +146,24 @@ describe('Session', () => {
       // @ts-ignore Yes, Typescript, a mock is not the same as the original.
       session.client.query = mockedFn;
 
-      const nextEntryArgs = {
+      const nextArgs = {
         // Treat json `null` as undefined
         backlink: entryArgsFixture(5).backlink as string | undefined,
         skiplink: entryArgsFixture(5).skiplink as string | undefined,
         logId: entryArgsFixture(5).logId,
         seqNum: entryArgsFixture(5).seqNum,
       };
-      session.setNextEntryArgs(
+      session.setNextArgs(
         authorFixture().publicKey,
         documentIdFixture(),
-        nextEntryArgs,
+        nextArgs,
       );
 
-      const cacheResponse = await session.getNextEntryArgs(
+      const cacheResponse = await session.getNextArgs(
         authorFixture().publicKey,
         documentIdFixture(),
       );
-      expect(cacheResponse.logId).toEqual(nextEntryArgs.logId);
+      expect(cacheResponse.logId).toEqual(nextArgs.logId);
       expect(mockedFn.mock.calls.length).toBe(0);
     });
   });
@@ -180,9 +180,7 @@ describe('Session', () => {
     });
 
     it('handles valid arguments', async () => {
-      jest
-        .spyOn(session, 'getNextEntryArgs')
-        .mockResolvedValue(entryArgsFixture(1));
+      jest.spyOn(session, 'getNextArgs').mockResolvedValue(entryArgsFixture(1));
 
       expect(
         await session.create(fields, {
@@ -216,9 +214,7 @@ describe('Session', () => {
     beforeEach(async () => {
       session = createMockSession();
       session.setKeyPair(keyPair);
-      jest
-        .spyOn(session, 'getNextEntryArgs')
-        .mockResolvedValue(entryArgsFixture(2));
+      jest.spyOn(session, 'getNextArgs').mockResolvedValue(entryArgsFixture(2));
     });
 
     it('handles valid arguments', async () => {
@@ -264,9 +260,7 @@ describe('Session', () => {
     beforeEach(async () => {
       session = createMockSession();
       session.setKeyPair(keyPair);
-      jest
-        .spyOn(session, 'getNextEntryArgs')
-        .mockResolvedValue(entryArgsFixture(3));
+      jest.spyOn(session, 'getNextArgs').mockResolvedValue(entryArgsFixture(3));
     });
 
     it('handles valid arguments', async () => {

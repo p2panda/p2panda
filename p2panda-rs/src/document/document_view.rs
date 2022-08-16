@@ -87,13 +87,12 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::materialization::reduce;
-    use crate::document::{DocumentId, DocumentViewValue};
+    use crate::document::DocumentViewValue;
     use crate::operation::traits::AsVerifiedOperation;
-    use crate::operation::{OperationId, OperationValue, Relation, VerifiedOperation};
+    use crate::operation::{OperationFields, OperationId, OperationValue, VerifiedOperation};
     use crate::test_utils::constants::HASH;
     use crate::test_utils::fixtures::{
-        document_id, document_view_id, operation_fields, verified_operation,
-        verified_operation_with_schema,
+        document_view_id, operation_fields, verified_operation, verified_operation_with_schema,
     };
     use crate::Human;
 
@@ -103,57 +102,27 @@ mod tests {
     fn from_single_create_op(
         verified_operation: VerifiedOperation,
         document_view_id: DocumentViewId,
+        operation_fields: OperationFields,
     ) {
-        let expected_relation = Relation::new(HASH.parse().unwrap());
-
         // Reduce a single CREATE `Operation`
         let (view, is_edited, is_deleted) = reduce(&[verified_operation.clone()]);
 
         let document_view = DocumentView::new(&document_view_id, &view.unwrap());
 
-        assert_eq!(
-            document_view.keys(),
-            vec![
-                "age",
-                "comments",
-                "height",
-                "is_admin",
-                "my_friends",
-                "past_event",
-                "profile_picture",
-                "username"
-            ]
-        );
         assert!(!document_view.is_empty());
-        assert_eq!(document_view.len(), 8);
-        assert_eq!(
-            document_view.get("age").unwrap(),
-            &DocumentViewValue::new(verified_operation.id(), &OperationValue::Integer(28)),
-        );
-        assert_eq!(
-            document_view.get("height").unwrap(),
-            &DocumentViewValue::new(verified_operation.id(), &OperationValue::Float(3.5)),
-        );
-        assert_eq!(
-            document_view.get("is_admin").unwrap(),
-            &DocumentViewValue::new(verified_operation.id(), &OperationValue::Boolean(false)),
-        );
-        assert_eq!(
-            document_view.get("profile_picture").unwrap(),
-            &DocumentViewValue::new(
-                verified_operation.id(),
-                &OperationValue::Relation(expected_relation)
-            ),
-        );
-        assert_eq!(
-            document_view.get("username").unwrap(),
-            &DocumentViewValue::new(
-                verified_operation.id(),
-                &OperationValue::String("bubu".to_owned()),
-            )
-        );
         assert!(!is_edited);
         assert!(!is_deleted);
+        assert_eq!(document_view.len(), 8);
+        assert_eq!(document_view.keys(), operation_fields.keys());
+        for key in operation_fields.keys() {
+            assert_eq!(
+                document_view.get(&key).unwrap(),
+                &DocumentViewValue::new(
+                    verified_operation.id(),
+                    operation_fields.get(&key).unwrap(),
+                ),
+            );
+        }
     }
 
     #[rstest]
@@ -168,10 +137,8 @@ mod tests {
         ])), Some(HASH.parse().unwrap()))]
         update_operation: VerifiedOperation,
         document_view_id: DocumentViewId,
-        #[from(document_id)] relation_id: DocumentId,
     ) {
-        let (view, is_edited, is_deleted) =
-            reduce(&[create_operation.clone(), update_operation.clone()]);
+        let (view, is_edited, is_deleted) = reduce(&[create_operation, update_operation.clone()]);
 
         let document_view = DocumentView::new(&document_view_id, &view.unwrap());
 
@@ -193,13 +160,6 @@ mod tests {
         assert_eq!(
             document_view.get("is_admin").unwrap(),
             &DocumentViewValue::new(update_operation.id(), &OperationValue::Boolean(true))
-        );
-        assert_eq!(
-            document_view.get("profile_picture").unwrap(),
-            &DocumentViewValue::new(
-                create_operation.id(),
-                &OperationValue::Relation(Relation::new(relation_id))
-            )
         );
         assert!(is_edited);
         assert!(!is_deleted);

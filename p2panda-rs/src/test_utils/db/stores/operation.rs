@@ -84,167 +84,174 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
             .collect())
     }
 }
-// TODO: Needs reinstating when we have TestDatabase working again
-// #[cfg(test)]
-// mod tests {
-//     use rstest::rstest;
-//
-//     use crate::document::DocumentId;
-//     use crate::entry::LogId;
-//     use crate::identity::{Author, KeyPair};
-//     use crate::operation::traits::AsVerifiedOperation;
-//     use crate::operation::VerifiedOperation;
-//     use crate::storage_provider::traits::test_utils::{test_db, TestStore};
-//     use crate::storage_provider::traits::{AsStorageEntry, EntryStore, StorageProvider};
-//     use crate::test_utils::fixtures::{document_id, key_pair, verified_operation};
-//
-//     use super::OperationStore;
-//
-//     #[rstest]
-//     #[case::create_operation(create_operation(&test_fields()))]
-//     #[case::update_operation(update_operation(&test_fields(), &HASH.parse().unwrap()))]
-//     #[case::update_operation_many_prev_ops(update_operation(&test_fields(), &random_previous_operations(12)))]
-//     #[case::delete_operation(delete_operation(&HASH.parse().unwrap()))]
-//     #[case::delete_operation_many_prev_ops(delete_operation(&random_previous_operations(12)))]
-//     #[tokio::test]
-//     async fn insert_get_operations(
-//         #[case] operation: Operation,
-//         #[from(public_key)] author: Author,
-//         operation_id: OperationId,
-//         document_id: DocumentId,
-//         #[from(test_db)]
-//         #[future]
-//         db: TestStore,
-//     ) {
-//         let db = db.await;
-//         // Construct the storage operation.
-//         let operation = VerifiedOperation::new(&author, &operation_id, &operation).unwrap();
-//
-//         // Insert the doggo operation into the db, returns Ok(true) when succesful.
-//         let result = db.store.insert_operation(&operation, &document_id).await;
-//         assert!(result.is_ok());
-//
-//         // Request the previously inserted operation by it's id.
-//         let returned_operation = db
-//             .store
-//             .get_operation_by_id(operation.id())
-//             .await
-//             .unwrap()
-//             .unwrap();
-//
-//         assert_eq!(returned_operation.public_key(), operation.public_key());
-//         assert_eq!(returned_operation.fields(), operation.fields());
-//         assert_eq!(returned_operation.id(), operation.id());
-//     }
-//
-//     #[rstest]
-//     #[tokio::test]
-//     async fn insert_operation_twice(
-//         #[from(verified_operation)] verified_operation: VerifiedOperation,
-//         document_id: DocumentId,
-//         #[from(test_db)]
-//         #[future]
-//         db: TestStore,
-//     ) {
-//         let db = db.await;
-//
-//         assert!(db
-//             .store
-//             .insert_operation(&verified_operation, &document_id)
-//             .await
-//             .is_ok());
-//
-//         assert_eq!(
-//             db.store.insert_operation(&verified_operation, &document_id).await.unwrap_err().to_string(),
-//             format!("Error occured when inserting an operation with id OperationId(Hash(\"{}\")) into storage", verified_operation.id().as_str())
-//         )
-//     }
-//
-//     #[rstest]
-//     #[tokio::test]
-//     async fn gets_document_by_operation_id(
-//         #[from(verified_operation)]
-//         #[with(Some(operation_fields(test_fields())), None, None, None, Some(HASH.parse().unwrap()))]
-//         create_operation: VerifiedOperation,
-//         #[from(verified_operation)]
-//         #[with(Some(operation_fields(test_fields())), Some(HASH.parse().unwrap()))]
-//         update_operation: VerifiedOperation,
-//         document_id: DocumentId,
-//         #[from(test_db)]
-//         #[future]
-//         db: TestStore,
-//     ) {
-//         let db = db.await;
-//
-//         assert!(db
-//             .store
-//             .get_document_by_operation_id(create_operation.id())
-//             .await
-//             .unwrap()
-//             .is_none());
-//
-//         db.store
-//             .insert_operation(&create_operation, &document_id)
-//             .await
-//             .unwrap();
-//
-//         assert_eq!(
-//             db.store
-//                 .get_document_by_operation_id(create_operation.id())
-//                 .await
-//                 .unwrap()
-//                 .unwrap(),
-//             document_id.clone()
-//         );
-//
-//         db.store
-//             .insert_operation(&update_operation, &document_id)
-//             .await
-//             .unwrap();
-//
-//         assert_eq!(
-//             db.store
-//                 .get_document_by_operation_id(create_operation.id())
-//                 .await
-//                 .unwrap()
-//                 .unwrap(),
-//             document_id.clone()
-//         );
-//     }
-//
-//     #[rstest]
-//     #[tokio::test]
-//     async fn get_operations_by_document_id(
-//         key_pair: KeyPair,
-//         #[from(test_db)]
-//         #[with(5, 1, 1)]
-//         #[future]
-//         db: TestStore,
-//     ) {
-//         let db = db.await;
-//
-//         let author = Author::from(key_pair.public_key());
-//
-//         let latest_entry = db
-//             .store
-//             .get_latest_entry(&author, &LogId::default())
-//             .await
-//             .unwrap()
-//             .unwrap();
-//
-//         let document_id = db
-//             .store
-//             .get_document_by_entry(&latest_entry.hash())
-//             .await
-//             .unwrap()
-//             .unwrap();
-//
-//         let operations_by_document_id = db
-//             .store
-//             .get_operations_by_document_id(&document_id)
-//             .await
-//             .unwrap();
-//
-//         assert_eq!(operations_by_document_id.len(), 5)
-//     }
-// }
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use crate::document::DocumentId;
+    use crate::entry::traits::AsEncodedEntry;
+    use crate::entry::LogId;
+    use crate::identity::{Author, KeyPair};
+    use crate::operation::traits::{AsOperation, AsVerifiedOperation};
+    use crate::operation::{Operation, OperationId, VerifiedOperation};
+    use crate::storage_provider::traits::{EntryStore, EntryWithOperation, StorageProvider};
+    use crate::test_utils::constants;
+    use crate::test_utils::db::test_db::{test_db, TestDatabase};
+    use crate::test_utils::fixtures::{
+        create_operation, delete_operation, document_id, key_pair, operation, operation_fields,
+        operation_id, public_key, random_previous_operations, update_operation, verified_operation,
+    };
+
+    use super::OperationStore;
+
+    #[rstest]
+    #[case::create_operation(create_operation(constants::test_fields(), constants::schema().id().to_owned()))]
+    #[case::update_operation(update_operation(constants::test_fields(), constants::HASH.parse().unwrap(), constants::schema().id().to_owned()))]
+    #[case::update_operation_many_prev_ops(update_operation(constants::test_fields(), random_previous_operations(12), constants::schema().id().to_owned()))]
+    #[case::delete_operation(delete_operation(constants::HASH.parse().unwrap(), constants::schema().id().to_owned()))]
+    #[case::delete_operation_many_prev_ops(delete_operation(random_previous_operations(12), constants::schema().id().to_owned()))]
+    #[tokio::test]
+    async fn insert_get_operations(
+        #[case] operation: Operation,
+        #[from(public_key)] author: Author,
+        operation_id: OperationId,
+        document_id: DocumentId,
+        #[from(test_db)]
+        #[future]
+        db: TestDatabase,
+    ) {
+        let db = db.await;
+        // Construct the storage operation.
+        let operation = VerifiedOperation::new(&author, &operation, &operation_id);
+
+        // Insert the doggo operation into the db, returns Ok(true) when succesful.
+        let result = db.store.insert_operation(&operation, &document_id).await;
+        assert!(result.is_ok());
+
+        // Request the previously inserted operation by it's id.
+        let returned_operation = db
+            .store
+            .get_operation_by_id(operation.id())
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(returned_operation.public_key(), operation.public_key());
+        assert_eq!(returned_operation.fields(), operation.fields());
+        assert_eq!(returned_operation.id(), operation.id());
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn insert_operation_twice(
+        #[from(verified_operation)] verified_operation: VerifiedOperation,
+        document_id: DocumentId,
+        #[from(test_db)]
+        #[future]
+        db: TestDatabase,
+    ) {
+        let db = db.await;
+
+        assert!(db
+            .store
+            .insert_operation(&verified_operation, &document_id)
+            .await
+            .is_ok());
+
+        assert_eq!(
+            db.store.insert_operation(&verified_operation, &document_id).await.unwrap_err().to_string(),
+            format!("Error occured when inserting an operation with id OperationId(Hash(\"{}\")) into storage", verified_operation.id().as_str())
+        )
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn gets_document_by_operation_id(
+        #[from(verified_operation)] create_operation: VerifiedOperation,
+        #[from(verified_operation)]
+        #[with(
+            Some(operation_fields(constants::test_fields())),
+            constants::schema(),
+            Some(random_previous_operations(2))
+        )]
+        update_operation: VerifiedOperation,
+        document_id: DocumentId,
+        #[from(test_db)]
+        #[future]
+        db: TestDatabase,
+    ) {
+        let db = db.await;
+
+        assert!(db
+            .store
+            .get_document_by_operation_id(create_operation.id())
+            .await
+            .unwrap()
+            .is_none());
+
+        db.store
+            .insert_operation(&create_operation, &document_id)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            db.store
+                .get_document_by_operation_id(create_operation.id())
+                .await
+                .unwrap()
+                .unwrap(),
+            document_id.clone()
+        );
+
+        db.store
+            .insert_operation(&update_operation, &document_id)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            db.store
+                .get_document_by_operation_id(update_operation.id())
+                .await
+                .unwrap()
+                .unwrap(),
+            document_id.clone()
+        );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn get_operations_by_document_id(
+        key_pair: KeyPair,
+        #[from(test_db)]
+        #[with(5, 1, 1)]
+        #[future]
+        db: TestDatabase,
+    ) {
+        let db = db.await;
+
+        let author = Author::from(key_pair.public_key());
+
+        let latest_entry = db
+            .store
+            .get_latest_entry(&author, &LogId::default())
+            .await
+            .unwrap()
+            .unwrap();
+
+        let document_id = db
+            .store
+            .get_document_by_entry(&latest_entry.hash())
+            .await
+            .unwrap()
+            .unwrap();
+
+        let operations_by_document_id = db
+            .store
+            .get_operations_by_document_id(&document_id)
+            .await
+            .unwrap();
+
+        assert_eq!(operations_by_document_id.len(), 5)
+    }
+}

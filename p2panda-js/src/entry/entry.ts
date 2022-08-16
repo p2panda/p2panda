@@ -2,8 +2,8 @@
 
 import debug from 'debug';
 
-import wasm from '~/wasm';
-import { Context } from '~/session';
+import { signEncodeEntry } from '../wasm';
+import { Context } from '../session';
 
 const log = debug('p2panda-js:entry');
 
@@ -20,45 +20,34 @@ export const signPublishEntry = async (
   { keyPair, session }: Context,
   documentId?: string,
 ): Promise<string> => {
-  const { signEncodeEntry } = await wasm;
+  const publicKey = keyPair.publicKey();
 
   log('Signing and publishing entry');
+  const nextArgs = await session.getNextArgs(publicKey, documentId);
 
-  const entryArgs = await session.getNextEntryArgs(
-    keyPair.publicKey(),
+  log('Retrieved next args for', {
+    publicKey,
     documentId,
-  );
-
-  log('Retrieved next entry args for', {
-    keyPair: keyPair.publicKey(),
-    documentId,
-    entryArgs,
+    nextArgs,
   });
 
   const { entryEncoded, entryHash } = signEncodeEntry(
     keyPair,
     operationEncoded,
-    entryArgs.skiplink,
-    entryArgs.backlink,
-    BigInt(entryArgs.seqNum),
-    BigInt(entryArgs.logId),
+    nextArgs.skiplink,
+    nextArgs.backlink,
+    BigInt(nextArgs.seqNum),
+    BigInt(nextArgs.logId),
   );
   log('Signed and encoded entry');
 
-  const nextEntryArgs = await session.publishEntry(
-    entryEncoded,
-    operationEncoded,
-  );
+  const publishNextArgs = await session.publish(entryEncoded, operationEncoded);
   log('Published entry');
 
   // Cache next entry args for next publish. Use the entry hash as the document
   // id for CREATE operations.
-  session.setNextEntryArgs(
-    keyPair.publicKey(),
-    documentId || entryHash,
-    nextEntryArgs,
-  );
-  log('Cached next entry args');
+  session.setNextArgs(publicKey, documentId || entryHash, publishNextArgs);
+  log('Cached next arguments');
 
   return entryEncoded;
 };

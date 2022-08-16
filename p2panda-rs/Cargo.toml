@@ -65,7 +65,7 @@ rand = "^0.7.3"
 console_error_panic_hook = "^0.1.7"
 js-sys = "^0.3.58"
 rand = { version = "^0.7.3", features = ["wasm-bindgen"] }
-wasm-bindgen = "^0.2.81"
+wasm-bindgen = "^0.2.82"
 
 [dev-dependencies]
 criterion = "^0.3.5"
@@ -79,3 +79,13 @@ rstest_reuse = "^0.3.0"
 tokio = { version = "1.19.2", features = ["rt", "macros", "rt-multi-thread"] }
 varu64 = { version = "^0.7.0", default-features = false }
 wasm-bindgen-test = "^0.3.31"
+
+[[bench]]
+name = "graph"
+harness = false
+path = "benchmarks/graph.rs"
+
+[[bench]]
+name = "encode_decode"
+harness = false
+path = "benchmarks/encode_decode.rs"
