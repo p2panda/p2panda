@@ -315,7 +315,7 @@ mod tests {
         // @TODO: This fails ..
         // https://github.com/p2panda/p2panda/issues/417
         // assert_eq!(entry.seq_num_skiplink(), None);
-        assert_eq!(entry.is_skiplink_required(), false);
+        assert!(!entry.is_skiplink_required());
 
         // Second entry returns sequence number for backlink
         let entry = EntryBuilder::new()
@@ -328,7 +328,7 @@ mod tests {
         // @TODO: This fails ..
         // https://github.com/p2panda/p2panda/issues/417
         // assert_eq!(entry.seq_num_skiplink(), None);
-        assert_eq!(entry.is_skiplink_required(), false);
+        assert!(!entry.is_skiplink_required());
 
         // Fourth entry returns sequence number for backlink and skiplink
         let entry = EntryBuilder::new()
@@ -340,6 +340,6 @@ mod tests {
 
         assert_eq!(entry.seq_num_backlink(), Some(SeqNum::new(3).unwrap()));
         assert_eq!(entry.seq_num_skiplink(), Some(SeqNum::new(1).unwrap()));
-        assert_eq!(entry.is_skiplink_required(), true);
+        assert!(entry.is_skiplink_required());
     }
 }

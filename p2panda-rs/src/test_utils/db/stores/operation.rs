@@ -95,12 +95,12 @@ mod tests {
     use crate::identity::{Author, KeyPair};
     use crate::operation::traits::{AsOperation, AsVerifiedOperation};
     use crate::operation::{Operation, OperationId, VerifiedOperation};
-    use crate::storage_provider::traits::{EntryStore, EntryWithOperation, StorageProvider};
+    use crate::storage_provider::traits::{EntryStore, StorageProvider};
     use crate::test_utils::constants;
     use crate::test_utils::db::test_db::{test_db, TestDatabase};
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, document_id, key_pair, operation, operation_fields,
-        operation_id, public_key, random_previous_operations, update_operation, verified_operation,
+        create_operation, delete_operation, document_id, key_pair, operation_fields, operation_id,
+        public_key, random_previous_operations, update_operation, verified_operation,
     };
 
     use super::OperationStore;

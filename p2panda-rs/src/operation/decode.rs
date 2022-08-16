@@ -87,8 +87,7 @@ mod tests {
         let bytes = encode_cbor(raw_operation.expect("Invalid CBOR value"));
         assert_eq!(
             decode_operation(&bytes)
-                .err()
-                .expect("Expect error")
+                .expect_err("Expect error")
                 .to_string(),
             expected
         );
@@ -256,8 +255,7 @@ mod tests {
         let bytes = encode_cbor(raw_operation.expect("Invalid CBOR value"));
         assert_eq!(
             decode_operation(&bytes)
-                .err()
-                .expect("Expect error")
+                .expect_err("Expect error")
                 .to_string(),
             expected
         );

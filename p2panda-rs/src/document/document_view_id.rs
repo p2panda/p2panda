@@ -277,11 +277,11 @@ mod tests {
 
         assert!(DocumentViewId::from_untrusted(vec![
             operation_id_3.clone(),
-            operation_id_3.clone(),
-            operation_id_2.clone(),
+            operation_id_3,
+            operation_id_2,
             operation_id_4.clone(),
-            operation_id_1.clone(),
-            operation_id_4.clone(),
+            operation_id_1,
+            operation_id_4,
         ])
         .is_err());
     }
@@ -301,7 +301,7 @@ mod tests {
         assert_eq!(document_id, DocumentViewId::new(&[hash.clone().into()]));
 
         // Converts an `OperationId` to `DocumentViewId`
-        let document_id: DocumentViewId = OperationId::new(&hash.clone()).into();
+        let document_id: DocumentViewId = OperationId::new(&hash).into();
         assert_eq!(document_id, DocumentViewId::new(&[hash.into()]));
 
         // Fails when string is not a hash

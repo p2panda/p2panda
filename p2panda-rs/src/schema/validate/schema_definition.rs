@@ -126,7 +126,7 @@ mod test {
        ("fields", vec![random_document_view_id()].into()),
     ].into())]
     fn check_fields(#[case] fields: PlainFields) {
-        assert!(validate_schema_definition_v1_fields(&fields.into()).is_ok());
+        assert!(validate_schema_definition_v1_fields(&fields).is_ok());
     }
 
     #[test]

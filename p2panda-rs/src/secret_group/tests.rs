@@ -110,7 +110,7 @@ fn long_term_secret_evolution() {
         .rotate_long_term_secret(&billie_provider)
         .unwrap();
     let group_commit = billie_group
-        .remove_members(&billie_provider, &[calvin_key_package.clone()])
+        .remove_members(&billie_provider, &[calvin_key_package])
         .unwrap();
     assert!(group_commit.welcome().is_none());
 
@@ -244,7 +244,7 @@ fn sender_ratchet_evolution() {
 
     // Billie invites Calvin into the group
     let group_commit = billie_group
-        .add_members(&billie_provider, &[calvin_key_package.clone()])
+        .add_members(&billie_provider, &[calvin_key_package])
         .unwrap();
 
     // Calvin joins the group

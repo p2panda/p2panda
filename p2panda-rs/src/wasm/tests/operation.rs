@@ -174,7 +174,7 @@ fn encodes_operations() {
     // ~~~~~~
 
     // Get hash from CREATE operation
-    let document_id = EncodedOperation::from_str(&create_operation.unwrap()).hash();
+    let document_id = EncodedOperation::new_from_str(&create_operation.unwrap()).hash();
 
     // Encode another UPDATE operation and refer to previous CREATE operation
     let previous_operations = Array::new();
@@ -190,7 +190,7 @@ fn encodes_operations() {
     // ~~~~~~
 
     // Get hash from UPDATE operation
-    let update_op_hash = EncodedOperation::from_str(&update_operation.unwrap()).hash();
+    let update_op_hash = EncodedOperation::new_from_str(&update_operation.unwrap()).hash();
 
     // Encode another DELETE operation and refer to previous UPDATE operation
     let previous_operations = Array::new();

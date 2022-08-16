@@ -82,7 +82,7 @@ impl EncodedEntry {
         Self(bytes.to_owned())
     }
 
-    pub fn from_str(value: &str) -> EncodedEntry {
+    pub fn new_from_str(value: &str) -> EncodedEntry {
         let bytes = hex::decode(value).expect("invalid hexadecimal value");
         Self(bytes)
     }

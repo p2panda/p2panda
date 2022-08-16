@@ -12,9 +12,8 @@ use crate::entry::encode::{encode_entry, sign_entry};
 use crate::entry::{EncodedEntry, Entry};
 use crate::hash::{Blake3ArrayVec, Hash};
 use crate::identity::KeyPair;
-use crate::operation::encode::encode_operation;
-use crate::operation::{EncodedOperation, Operation};
-use crate::test_utils::fixtures::{encoded_operation, key_pair, operation, random_hash};
+use crate::operation::EncodedOperation;
+use crate::test_utils::fixtures::{encoded_operation, key_pair, random_hash};
 
 /// Creates an `Entry`.
 ///

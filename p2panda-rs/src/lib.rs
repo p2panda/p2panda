@@ -25,9 +25,6 @@
 #![allow(clippy::single_component_path_imports)]
 #[cfg(any(feature = "testing", test))]
 use rstest_reuse;
-#[cfg(test)]
-#[macro_use]
-extern crate proptest;
 
 pub mod document;
 pub mod entry;

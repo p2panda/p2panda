@@ -550,7 +550,7 @@ mod tests {
         let provider = MlsProvider::new();
         let owner = SecretGroupMember::new(&provider, &key_pair).unwrap();
         let mut group = SecretGroup::new(&provider, &group_instance_id, &owner).unwrap();
-        let member_key_package_1 = group.members().first().unwrap().clone().to_owned();
+        let member_key_package_1 = group.members().first().cloned().unwrap().to_owned();
 
         // Add a new member
         let provider_2 = MlsProvider::new();

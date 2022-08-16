@@ -60,7 +60,7 @@ pub fn operation_fields(
 ) -> OperationFields {
     let mut operation_fields = OperationFields::new();
     for (key, value) in fields_vec.iter() {
-        if let Err(_) = operation_fields.insert(key, value.to_owned()) {
+        if operation_fields.insert(key, value.to_owned()).is_err() {
             // Ignore duplicates error
         }
     }
@@ -235,7 +235,7 @@ pub fn update_operation(
 ) -> Operation {
     operation(
         Some(operation_fields(fields.to_vec())),
-        Some(previous_operations.clone()),
+        Some(previous_operations),
         schema_id,
     )
 }
@@ -246,5 +246,5 @@ pub fn delete_operation(
     #[from(document_view_id)] previous_operations: DocumentViewId,
     #[from(schema_id)] schema_id: SchemaId,
 ) -> Operation {
-    operation(None, Some(previous_operations.to_owned()), schema_id)
+    operation(None, Some(previous_operations), schema_id)
 }

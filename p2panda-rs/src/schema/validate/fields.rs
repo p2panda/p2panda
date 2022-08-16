@@ -435,8 +435,7 @@ mod tests {
     ) {
         assert_eq!(
             validate_field_value(&plain_value, &schema_field_type)
-                .err()
-                .expect("Expected error")
+                .expect_err("Expected error")
                 .to_string(),
             expected.to_string()
         );
@@ -564,8 +563,7 @@ mod tests {
         // Check if fields match the schema
         assert_eq!(
             validate_all_fields(&plain_fields, &schema)
-                .err()
-                .expect("Expected error")
+                .expect_err("Expected error")
                 .to_string(),
             expected
         );
@@ -684,15 +682,14 @@ mod tests {
         let mut plain_fields = PlainFields::new();
         for (plain_field_name, plain_field_value) in fields {
             plain_fields
-                .insert(&plain_field_name, plain_field_value)
+                .insert(plain_field_name, plain_field_value)
                 .unwrap();
         }
 
         // Check if fields match the schema
         assert_eq!(
             validate_only_given_fields(&plain_fields, &schema)
-                .err()
-                .expect("Expect error")
+                .expect_err("Expect error")
                 .to_string(),
             expected
         );
@@ -789,9 +786,8 @@ mod tests {
 
         // Check if fields match the schema
         assert_eq!(
-            validate_all_fields(&plain_fields, &schema)
-                .err()
-                .expect("Expected error")
+            validate_all_fields(&plain_fields, schema)
+                .expect_err("Expected error")
                 .to_string(),
             expected
         );
@@ -829,6 +825,6 @@ mod tests {
         }
 
         // Check if fields match the schema
-        assert!(validate_all_fields(&plain_fields, &schema).is_ok());
+        assert!(validate_all_fields(&plain_fields, schema).is_ok());
     }
 }

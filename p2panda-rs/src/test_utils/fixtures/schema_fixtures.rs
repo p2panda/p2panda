@@ -41,7 +41,7 @@ pub fn schema_field(
     #[from(schema_field_name)] name: FieldName,
     #[from(schema_field_type)] value: FieldType,
 ) -> (FieldName, FieldType) {
-    (name.to_owned(), value)
+    (name, value)
 }
 
 /// Generates schema fields from an operation. Sets schema ids of all relations to constant document

@@ -265,30 +265,23 @@ impl DocumentBuilder {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 #[cfg(test)]
 mod tests {
-    use std::convert::TryFrom;
-
     use rstest::rstest;
 
-    use crate::document::materialization::reduce;
     use crate::document::{DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue};
     use crate::entry::traits::AsEncodedEntry;
     use crate::identity::{Author, KeyPair};
-    use crate::operation::traits::{AsOperation, AsVerifiedOperation};
+    use crate::operation::traits::AsVerifiedOperation;
     use crate::operation::{
-        EncodedOperation, OperationAction, OperationBuilder, OperationId, OperationValue,
-        VerifiedOperation,
+        OperationAction, OperationBuilder, OperationId, OperationValue, VerifiedOperation,
     };
     use crate::schema::{FieldType, Schema, SchemaId};
-    use crate::test_utils::constants::{self, HASH, PRIVATE_KEY, SCHEMA_ID};
+    use crate::test_utils::constants::{self, PRIVATE_KEY};
     use crate::test_utils::db::test_db::send_to_store;
     use crate::test_utils::db::MemoryStore;
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, operation, operation_fields, public_key,
-        random_document_view_id, random_key_pair, random_operation_id, random_previous_operations,
-        schema, update_operation, verified_operation, verified_operation_with_schema,
+        operation_fields, random_document_view_id, schema, verified_operation,
     };
     use crate::Human;
 
@@ -329,7 +322,7 @@ mod tests {
         )
         .unwrap();
 
-        let mut store = MemoryStore::default();
+        let store = MemoryStore::default();
 
         // Panda publishes a CREATE operation.
         // This instantiates a new document.
@@ -342,7 +335,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let (panda_entry_1, _) = send_to_store(&mut store, &panda_operation_1, &schema, &panda)
+        let (panda_entry_1, _) = send_to_store(&store, &panda_operation_1, &schema, &panda)
             .await
             .unwrap();
 
@@ -359,7 +352,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let (panda_entry_2, _) = send_to_store(&mut store, &panda_operation_2, &schema, &panda)
+        let (panda_entry_2, _) = send_to_store(&store, &panda_operation_2, &schema, &panda)
             .await
             .unwrap();
 
@@ -379,10 +372,9 @@ mod tests {
             .build()
             .unwrap();
 
-        let (penguin_entry_1, _) =
-            send_to_store(&mut store, &penguin_operation_1, &schema, &penguin)
-                .await
-                .unwrap();
+        let (penguin_entry_1, _) = send_to_store(&store, &penguin_operation_1, &schema, &penguin)
+            .await
+            .unwrap();
 
         // Penguin publishes a new operation while now being aware of the previous branching situation.
         // Their `previous_operations` field now contains 2 operation id's.
@@ -403,10 +395,9 @@ mod tests {
             .build()
             .unwrap();
 
-        let (penguin_entry_2, _) =
-            send_to_store(&mut store, &penguin_operation_2, &schema, &penguin)
-                .await
-                .unwrap();
+        let (penguin_entry_2, _) = send_to_store(&store, &penguin_operation_2, &schema, &penguin)
+            .await
+            .unwrap();
 
         // Penguin publishes a new update operation which points at the current graph tip.
         //
@@ -423,10 +414,9 @@ mod tests {
             .build()
             .unwrap();
 
-        let (penguin_entry_3, _) =
-            send_to_store(&mut store, &penguin_operation_3, &schema, &penguin)
-                .await
-                .unwrap();
+        let (penguin_entry_3, _) = send_to_store(&store, &penguin_operation_3, &schema, &penguin)
+            .await
+            .unwrap();
 
         let operations: Vec<VerifiedOperation> = store
             .operations
@@ -465,7 +455,7 @@ mod tests {
             panda_entry_2,
             penguin_entry_1,
             penguin_entry_2,
-            penguin_entry_3.clone(),
+            penguin_entry_3,
         ]
         .iter()
         .map(|entry| entry.hash().into())
@@ -642,8 +632,6 @@ mod tests {
     ) {
         let panda = Author::from(KeyPair::new().public_key());
         let penguin = Author::from(KeyPair::new().public_key());
-
-        let store = MemoryStore::default();
 
         // Panda publishes a CREATE operation.
         // This instantiates a new document.

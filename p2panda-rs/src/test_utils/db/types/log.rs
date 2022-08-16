@@ -7,7 +7,7 @@ use crate::schema::SchemaId;
 use crate::storage_provider::traits::AsStorageLog;
 
 /// A log entry represented as a concatenated string of `"{author}-{schema}-{document_id}-{log_id}"`
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StorageLog {
     /// Public key of the author.
     pub author: Author,

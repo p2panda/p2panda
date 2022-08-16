@@ -171,7 +171,7 @@ mod tests {
             OperationValue::PinnedRelationList(PinnedRelationList::new(vec![
                 document_view_id.clone()
             ])),
-            vec![document_view_id.clone()].into()
+            vec![document_view_id].into()
         );
     }
 }

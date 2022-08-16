@@ -175,7 +175,7 @@ mod tests {
         );
         assert_eq!(
             PlainValue::PinnedRelationList(vec![vec![document_view_id.to_string()]]),
-            vec![document_view_id.clone()].into()
+            vec![document_view_id].into()
         );
     }
 

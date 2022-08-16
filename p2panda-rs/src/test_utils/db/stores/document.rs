@@ -121,12 +121,10 @@ mod tests {
     use crate::entry::traits::AsEncodedEntry;
     use crate::entry::{LogId, SeqNum};
     use crate::identity::Author;
-    use crate::operation::traits::{AsOperation, Schematic};
-    use crate::operation::{OperationAction, OperationId, OperationValue};
+    use crate::operation::traits::AsOperation;
+    use crate::operation::OperationId;
     use crate::schema::SchemaId;
-    use crate::storage_provider::traits::{
-        DocumentStore, EntryStore, EntryWithOperation, OperationStore,
-    };
+    use crate::storage_provider::traits::{DocumentStore, EntryStore, OperationStore};
     use crate::test_utils::constants::{self, test_fields};
     use crate::test_utils::db::test_db::{test_db, TestDatabase};
     use crate::test_utils::fixtures::random_document_view_id;

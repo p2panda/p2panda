@@ -73,7 +73,6 @@ ctor = "^0.1.22"
 incremental-topo = "^0.1.2"
 openmls = { version = "^0.4.1", features = ["crypto-subtle", "test-utils"] }
 pretty_env_logger = "^0.4.0"
-proptest = { version = "^1.0.0", default-features = false, features = ["std"] }
 rstest = "^0.15.0"
 rstest_reuse = "^0.3.0"
 tokio = { version = "1.19.2", features = ["rt", "macros", "rt-multi-thread"] }

@@ -377,8 +377,7 @@ mod tests {
         let plain_operation = cbor_to_plain(raw_operation.expect("Invalid CBOR value"));
         assert_eq!(
             validate_operation(&plain_operation, &schema)
-                .err()
-                .expect("Expect error")
+                .expect_err("Expect error")
                 .to_string(),
             expected
         );

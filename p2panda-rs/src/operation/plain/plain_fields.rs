@@ -164,11 +164,11 @@ mod tests {
     #[test]
     fn insert_and_get_fields() {
         let mut fields = PlainFields::new();
-        assert_eq!(fields.is_empty(), true);
+        assert!(fields.is_empty());
         assert_eq!(fields.len(), 0);
 
         fields.insert("test", PlainValue::Boolean(true)).unwrap();
-        assert_eq!(fields.is_empty(), false);
+        assert!(!fields.is_empty());
         assert_eq!(fields.len(), 1);
         assert_eq!(fields.get("test"), Some(&PlainValue::Boolean(true)));
     }

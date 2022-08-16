@@ -59,7 +59,7 @@ impl EncodedOperation {
         Self(bytes.to_owned())
     }
 
-    pub fn from_str(value: &str) -> EncodedOperation {
+    pub fn new_from_str(value: &str) -> EncodedOperation {
         let bytes = hex::decode(value).expect("invalid hexadecimal value");
         Self(bytes)
     }

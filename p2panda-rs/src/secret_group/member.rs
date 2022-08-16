@@ -109,7 +109,7 @@ mod tests {
         // Credential bundle and key package got saved in key store
         let key_package_bundle: Option<KeyPackageBundle> = provider
             .key_store()
-            .read(&key_package.hash_ref(provider.crypto()).unwrap().as_slice());
+            .read(key_package.hash_ref(provider.crypto()).unwrap().as_slice());
         let credential_bundle: Option<CredentialBundle> = provider.key_store().read(
             &member
                 .credential()

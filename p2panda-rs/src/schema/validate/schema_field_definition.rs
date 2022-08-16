@@ -166,7 +166,7 @@ mod test {
       ("type", "str".into()),
     ].into())]
     fn check_fields(#[case] fields: PlainFields) {
-        assert!(validate_schema_field_definition_v1_fields(&fields.into()).is_ok());
+        assert!(validate_schema_field_definition_v1_fields(&fields).is_ok());
     }
 
     #[rstest]
