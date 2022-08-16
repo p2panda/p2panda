@@ -133,6 +133,14 @@ pub fn create_operation_with_schema() -> Operation {
     operation(some_fields(test_fields()), None, schema_id)
 }
 
+/// Returns an constant encoded CREATE operation with a constant testing schema id.
+#[fixture]
+pub fn encoded_create_operation_with_schema() -> EncodedOperation {
+    let schema_id = schema_id(SCHEMA_ID);
+
+    encode_operation(&operation(some_fields(test_fields()), None, schema_id)).unwrap()
+}
+
 /// Generates verified operation instance.
 ///
 /// If a value for `fields` is provided, this is a CREATE operation. If values for both `fields`

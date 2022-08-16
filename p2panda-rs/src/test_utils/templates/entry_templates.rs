@@ -12,7 +12,7 @@ use rstest_reuse::template;
     1,
     None,
     None,
-    $crate::test_utils::fixtures::create_operation_with_schema(),
+    $crate::test_utils::fixtures::encoded_create_operation_with_schema(),
     $crate::test_utils::fixtures::key_pair(
         $crate::test_utils::constants::PRIVATE_KEY
     )
@@ -23,7 +23,7 @@ use rstest_reuse::template;
     1,
     Some($crate::test_utils::constants::HASH.parse().unwrap()),
     None,
-    $crate::test_utils::fixtures::create_operation_with_schema(),
+    $crate::test_utils::fixtures::encoded_create_operation_with_schema(),
     $crate::test_utils::fixtures::key_pair(
         $crate::test_utils::constants::PRIVATE_KEY
     )
@@ -34,7 +34,7 @@ use rstest_reuse::template;
     1,
     Some($crate::test_utils::constants::HASH.parse().unwrap()),
     Some($crate::test_utils::fixtures::random_hash()),
-    $crate::test_utils::fixtures::create_operation_with_schema(),
+    $crate::test_utils::fixtures::encoded_create_operation_with_schema(),
     $crate::test_utils::fixtures::key_pair(
         $crate::test_utils::constants::PRIVATE_KEY
     )
@@ -45,7 +45,7 @@ use rstest_reuse::template;
     1,
     Some($crate::test_utils::constants::HASH.parse().unwrap()),
     None,
-    $crate::test_utils::fixtures::create_operation_with_schema(),
+    $crate::test_utils::fixtures::encoded_create_operation_with_schema(),
     $crate::test_utils::fixtures::key_pair(
         $crate::test_utils::constants::PRIVATE_KEY
     )

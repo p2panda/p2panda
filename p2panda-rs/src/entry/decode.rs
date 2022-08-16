@@ -66,6 +66,7 @@ mod tests {
     use crate::entry::traits::{AsEncodedEntry, AsEntry};
     use crate::entry::{EncodedEntry, Entry};
     use crate::identity::KeyPair;
+    use crate::operation::encode::encode_operation;
     use crate::operation::EncodedOperation;
     use crate::test_utils::constants::{HASH, PRIVATE_KEY};
     use crate::test_utils::fixtures::{
@@ -107,7 +108,7 @@ mod tests {
         1,
         None,
         None,
-        Some(create_operation_with_schema()),
+        Some(encode_operation(&create_operation_with_schema()).unwrap()),
         key_pair(PRIVATE_KEY)
     ))]
     #[case::valid_entry_with_backlink(entry_signed_encoded_unvalidated(
@@ -115,7 +116,7 @@ mod tests {
         1,
         Some(random_hash()),
         None,
-        Some(create_operation_with_schema()),
+        Some(encode_operation(&create_operation_with_schema()).unwrap()),
         key_pair(PRIVATE_KEY)
     ))]
     #[case::valid_entry_with_skiplink_and_backlink(entry_signed_encoded_unvalidated(
@@ -123,7 +124,7 @@ mod tests {
         1,
         Some(random_hash()),
         Some(random_hash()),
-        Some(create_operation_with_schema()),
+        Some(encode_operation(&create_operation_with_schema()).unwrap()),
         key_pair(PRIVATE_KEY)
     ))]
     #[case::skiplink_ommitted_when_sam_as_backlink(entry_signed_encoded_unvalidated(
@@ -131,7 +132,7 @@ mod tests {
         1,
         Some(random_hash()),
         None,
-        Some(create_operation_with_schema()),
+        Some(encode_operation(&create_operation_with_schema()).unwrap()),
         key_pair(PRIVATE_KEY)
     ))]
     fn decode_correct_entries(#[case] entry_encoded_unvalidated: EncodedEntry) {
@@ -146,7 +147,7 @@ mod tests {
             1,
             None,
             None,
-            Some(create_operation_with_schema()),
+            Some(encode_operation(&create_operation_with_schema()).unwrap()),
             key_pair(PRIVATE_KEY)
         ),
         "Entry sequence must be larger than 0 but was 0"
@@ -157,7 +158,7 @@ mod tests {
             1,
             None,
             Some(random_hash()),
-            Some(create_operation_with_schema()),
+            Some(encode_operation(&create_operation_with_schema()).unwrap()),
             key_pair(PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
@@ -168,7 +169,7 @@ mod tests {
             1,
             Some(random_hash()),
             None,
-            Some(create_operation_with_schema()),
+            Some(encode_operation(&create_operation_with_schema()).unwrap()),
             key_pair(PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
@@ -179,7 +180,7 @@ mod tests {
             1,
             Some(HASH.parse().unwrap()),
             Some(HASH.parse().unwrap()),
-            Some(create_operation_with_schema()),
+            Some(encode_operation(&create_operation_with_schema()).unwrap()),
             key_pair(PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
@@ -190,7 +191,7 @@ mod tests {
             1,
             None,
             None,
-            Some(create_operation_with_schema()),
+            Some(encode_operation(&create_operation_with_schema()).unwrap()),
             key_pair(PRIVATE_KEY)
         ),
         "Could not decode backlink yamf hash: DecodeError"
@@ -201,7 +202,7 @@ mod tests {
             1,
             Some(random_hash()),
             None,
-            Some(create_operation_with_schema()),
+            Some(encode_operation(&create_operation_with_schema()).unwrap()),
             key_pair(PRIVATE_KEY)
         ),
         "Could not decode backlink yamf hash: DecodeError"
@@ -212,7 +213,7 @@ mod tests {
             1,
             Some(HASH.parse().unwrap()),
             Some(HASH.parse().unwrap()),
-            Some(create_operation_with_schema()),
+            Some(encode_operation(&create_operation_with_schema()).unwrap()),
             key_pair(PRIVATE_KEY)
         ),
         "Could not decode payload hash DecodeError"
@@ -234,7 +235,7 @@ mod tests {
             1,
             Some(HASH.parse().unwrap()),
             Some(HASH.parse().unwrap()),
-            Some(create_operation_with_schema()),
+            Some(encode_operation(&create_operation_with_schema()).unwrap()),
             key_pair(PRIVATE_KEY)
         ),
         "backlink and skiplink are identical"

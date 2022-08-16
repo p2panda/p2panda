@@ -14,7 +14,7 @@ use crate::hash::{Blake3ArrayVec, Hash};
 use crate::identity::KeyPair;
 use crate::operation::encode::encode_operation;
 use crate::operation::{EncodedOperation, Operation};
-use crate::test_utils::fixtures::{key_pair, operation, random_hash};
+use crate::test_utils::fixtures::{encoded_operation, key_pair, operation, random_hash};
 
 /// Creates an `Entry`.
 ///
@@ -28,11 +28,9 @@ pub fn entry(
     #[default(0)] log_id: u64,
     #[default(None)] backlink: Option<Hash>,
     #[default(None)] skiplink: Option<Hash>,
-    #[from(operation)] operation: Operation,
+    #[from(encoded_operation)] encoded_operation: EncodedOperation,
     #[from(key_pair)] key_pair: KeyPair,
 ) -> Entry {
-    let encoded_operation = encode_operation(&operation).unwrap();
-
     sign_entry(
         &log_id.into(),
         &seq_num.try_into().unwrap(),
@@ -52,7 +50,7 @@ pub fn entry(
 pub fn entry_auto_gen_links(
     #[default(1)] seq_num: u64,
     #[default(0)] log_id: u64,
-    #[from(operation)] operation: Operation,
+    #[from(encoded_operation)] encoded_operation: EncodedOperation,
     #[from(key_pair)] key_pair: KeyPair,
 ) -> Entry {
     let backlink = match seq_num {
@@ -65,7 +63,14 @@ pub fn entry_auto_gen_links(
         true => Some(random_hash()),
     };
 
-    entry(seq_num, log_id, backlink, skiplink, operation, key_pair)
+    entry(
+        seq_num,
+        log_id,
+        backlink,
+        skiplink,
+        encoded_operation,
+        key_pair,
+    )
 }
 
 /// Returns default encoded entry.
@@ -75,11 +80,9 @@ pub fn encoded_entry(
     #[default(0)] log_id: u64,
     #[default(None)] backlink: Option<Hash>,
     #[default(None)] skiplink: Option<Hash>,
-    #[from(operation)] operation: Operation,
+    #[from(encoded_operation)] encoded_operation: EncodedOperation,
     #[from(key_pair)] key_pair: KeyPair,
 ) -> EncodedEntry {
-    let encoded_operation = encode_operation(&operation).unwrap();
-
     let entry = sign_entry(
         &log_id.into(),
         &seq_num.try_into().unwrap(),
