@@ -42,10 +42,10 @@ impl KeyPair {
         hex::encode(self.0.private_key().to_bytes())
     }
 
-    /// Sign an operation using this key pair, returns signature encoded as a hex string.
+    /// Sign any data using this key pair, returns signature encoded as a hex string.
     #[wasm_bindgen]
-    pub fn sign(&self, operation: String) -> String {
-        let signature = self.0.sign(operation.as_bytes());
+    pub fn sign(&self, value: String) -> String {
+        let signature = self.0.sign(value.as_bytes());
         hex::encode(signature.to_bytes())
     }
 

@@ -172,7 +172,7 @@ impl OperationFields {
             "relation" => {
                 let relation: Relation = jserr!(
                     deserialize_from_js(value),
-                    "Expected an operation id value for field of type relation"
+                    "Expected a document id string for field of type relation"
                 );
                 jserr!(relation.validate());
                 jserr!(self.0.insert(name, OperationValue::Relation(relation)));
