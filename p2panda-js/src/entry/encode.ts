@@ -27,10 +27,8 @@ type EntryArgs = {
 
 /**
  * Signs and encodes an Bamboo entry for the given payload and key pair.
- *
- * @param {Entry} entry - Arguments to create the entry
+ * @param {EntryArgs} entry - Arguments to create the entry
  * @param {KeyPair} keyPair - Key pair to sign the entry with
- *
  * @returns Hexadecimal encoded entry
  */
 export function signAndEncodeEntry(entry: EntryArgs, keyPair: KeyPair): string {

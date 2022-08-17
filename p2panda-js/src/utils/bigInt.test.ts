@@ -11,7 +11,6 @@ describe('toBigInt', () => {
 
   it('sets a default value', () => {
     expect(toBigInt(undefined, BigInt(5))).toEqual(BigInt(5));
-    expect(toBigInt(null, BigInt(5))).toEqual(BigInt(5));
     expect(toBigInt(0, BigInt(5))).toEqual(BigInt(0));
   });
 });

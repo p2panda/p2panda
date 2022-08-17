@@ -187,6 +187,7 @@ impl OperationFields {
                 Ok(())
             }
             "pinned_relation" => {
+                // @TODO: Should order and de-duplicate value before
                 let relation: PinnedRelation = jserr!(
                     deserialize_from_js(value),
                     "Expected an array of operation ids for field of type pinned relation list"
@@ -198,6 +199,7 @@ impl OperationFields {
                 Ok(())
             }
             "pinned_relation_list" => {
+                // @TODO: Should order and de-duplicate values before
                 let relations: PinnedRelationList = jserr!(
                     deserialize_from_js(value),
                     "Expected a nested array of operation ids for field of type pinned relation list"

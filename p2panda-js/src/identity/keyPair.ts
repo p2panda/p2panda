@@ -26,7 +26,6 @@ export class KeyPair {
    * bytes which do not represent a valid point, or which do not represent
    * corresponding parts of the key, then your KeyPair will be broken and it
    * will be your fault.
-   *
    * @returns KeyPair instance
    */
   constructor(privateKey?: string) {
@@ -65,7 +64,6 @@ export class KeyPair {
 
   /**
    * Returns public key as a hexadecimal string.
-   *
    * @returns {string} Hexadecimal encoded public key
    */
   publicKey(): string {
@@ -74,7 +72,6 @@ export class KeyPair {
 
   /**
    * Returns private key as a hexadecimal string.
-   *
    * @returns {string} Hexadecimal encoded private key.
    */
   privateKey(): string {
@@ -83,9 +80,7 @@ export class KeyPair {
 
   /**
    * Signs any data using this key pair and returns signature.
-   *
    * @param {string?} bytes - Any byte sequence encoded as a hexadecimal string
-   *
    * @returns {string} Hexadecimal encoded signature
    */
   sign(bytes: string): string {
@@ -106,11 +101,9 @@ export class KeyPair {
 
 /**
  * Returns true if signed data could be verified against a public key.
- *
  * @param {string} publicKey - Ed25519 public key string
  * @param {string} bytes - Any byte sequence encoded as a hexadecimal string
  * @param {string} signature - Ed25519 signature string
- *
  * @returns {boolean} True if claimed signature is correct
  */
 export function verifySignature(

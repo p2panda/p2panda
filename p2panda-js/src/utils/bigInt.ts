@@ -2,11 +2,11 @@
 
 // Helper method to convert different inputs to BigInt
 export function toBigInt(
-  value: string | number | bigint | undefined | null,
-  defaultValue: bigint,
+  value?: string | number | bigint,
+  defaultValue?: bigint,
 ): bigint {
   if (typeof value === 'undefined' || value === null) {
-    return BigInt(defaultValue);
+    return BigInt(defaultValue || 0);
   } else {
     return BigInt(value);
   }
