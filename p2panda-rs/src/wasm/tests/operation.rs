@@ -6,9 +6,9 @@ use wasm_bindgen_test::*;
 
 use crate::hash::Hash;
 use crate::operation::EncodedOperation;
-use crate::wasm::{
-    encode_create_operation, encode_delete_operation, encode_update_operation, OperationFields,
-};
+use crate::test_utils::fixtures::{operation_with_schema, random_document_view_id};
+use crate::wasm::serde::deserialize_from_js;
+use crate::wasm::{decode_operation, encode_operation, OperationFields, PlainOperation};
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -162,11 +162,15 @@ fn encodes_operations() {
     // ~~~~~~
 
     let hash = Hash::new_from_bytes(&[1, 2, 3]);
-    let schema = JsValue::from_str(&format!("test_{}", hash.as_str()));
+    let schema_id = format!("test_{}", hash.as_str());
 
     // Encode as CREATE operation
-    let create_operation = encode_create_operation(schema.clone(), fields.clone());
-
+    let create_operation = encode_operation(
+        0,
+        schema_id.clone(),
+        JsValue::UNDEFINED,
+        Some(fields.clone()),
+    );
     assert!(create_operation.is_ok());
 
     // ~~~~~~
@@ -174,15 +178,18 @@ fn encodes_operations() {
     // ~~~~~~
 
     // Get hash from CREATE operation
-    let document_id = EncodedOperation::new_from_str(&create_operation.unwrap()).hash();
+    let document_id = EncodedOperation::from_hex(&create_operation.unwrap()).hash();
 
     // Encode another UPDATE operation and refer to previous CREATE operation
     let previous_operations = Array::new();
     previous_operations.push(&JsValue::from_str(document_id.as_str()));
 
-    let update_operation =
-        encode_update_operation(schema.clone(), previous_operations.into(), fields);
-
+    let update_operation = encode_operation(
+        1,
+        schema_id.clone(),
+        previous_operations.into(),
+        Some(fields),
+    );
     assert!(update_operation.is_ok());
 
     // ~~~~~~
@@ -190,13 +197,34 @@ fn encodes_operations() {
     // ~~~~~~
 
     // Get hash from UPDATE operation
-    let update_op_hash = EncodedOperation::new_from_str(&update_operation.unwrap()).hash();
+    let update_op_hash = EncodedOperation::from_hex(&update_operation.unwrap()).hash();
 
     // Encode another DELETE operation and refer to previous UPDATE operation
     let previous_operations = Array::new();
     previous_operations.push(&JsValue::from_str(update_op_hash.as_str()));
 
-    let delete_operation = encode_delete_operation(schema, previous_operations.into());
-
+    let delete_operation = encode_operation(2, schema_id, previous_operations.into(), None);
     assert!(delete_operation.is_ok());
+}
+
+#[wasm_bindgen_test]
+fn decode_operations() {
+    // Prepare operation
+    let mut fields = crate::operation::OperationFields::new();
+    fields.insert("username", "dolphin".into()).unwrap();
+    let operation = operation_with_schema(Some(fields), Some(random_document_view_id()));
+    let operation_encoded = crate::operation::encode::encode_operation(&operation).unwrap();
+
+    // Decode operation
+    let result = decode_operation(operation_encoded.to_string()).unwrap();
+    let plain_operation: PlainOperation = deserialize_from_js(result).unwrap();
+    assert_eq!(plain_operation.version, 1);
+    assert_eq!(plain_operation.action, 1);
+
+    let plain_fields = plain_operation.fields.unwrap();
+    assert_eq!(plain_fields.len(), 1);
+    assert_eq!(
+        plain_fields.get("username").unwrap(),
+        JsValue::from_str("dolphin")
+    );
 }

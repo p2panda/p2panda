@@ -1,48 +1,51 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
-* Returns an encoded CREATE operation that creates a document of the provided schema.
-* @param {any} schema_id
-* @param {OperationFields} fields
-* @returns {string}
-*/
-export function encodeCreateOperation(schema_id: any, fields: OperationFields): string;
-/**
-* Returns an encoded UPDATE operation that updates fields of a given document.
-* @param {any} schema_id
-* @param {any} previous_operations
-* @param {OperationFields} fields
-* @returns {string}
-*/
-export function encodeUpdateOperation(schema_id: any, previous_operations: any, fields: OperationFields): string;
-/**
-* Returns an encoded DELETE operation that deletes a given document.
-* @param {any} schema_id
-* @param {any} previous_operations
-* @returns {string}
-*/
-export function encodeDeleteOperation(schema_id: any, previous_operations: any): string;
-/**
-* Returns a signed and encoded entry that can be published to a p2panda node.
-*
-* `entry_backlink_hash`, `entry_skiplink_hash`, `seq_num` and `log_id` are obtained by querying
-* the `getEntryArguments` method of a p2panda node.
-* @param {KeyPair} key_pair
-* @param {string} encoded_operation
-* @param {string | undefined} entry_skiplink_hash
-* @param {string | undefined} entry_backlink_hash
-* @param {bigint} seq_num
+* Returns a signed Bamboo entry.
 * @param {bigint} log_id
-* @returns {any}
+* @param {bigint} seq_num
+* @param {string | undefined} skiplink_hash
+* @param {string | undefined} backlink_hash
+* @param {string} payload
+* @param {KeyPair} key_pair
+* @returns {string}
 */
-export function signEncodeEntry(key_pair: KeyPair, encoded_operation: string, entry_skiplink_hash: string | undefined, entry_backlink_hash: string | undefined, seq_num: bigint, log_id: bigint): any;
+export function signAndEncodeEntry(log_id: bigint, seq_num: bigint, skiplink_hash: string | undefined, backlink_hash: string | undefined, payload: string, key_pair: KeyPair): string;
 /**
-* Decodes an entry and optional operation given their encoded form.
-* @param {string} entry_str
-* @param {string | undefined} operation_str
+* Decodes an hexadecimal string into an `Entry`.
+* @param {string} encoded_entry
 * @returns {any}
 */
-export function decodeEntry(entry_str: string, operation_str?: string): any;
+export function decodeEntry(encoded_entry: string): any;
+/**
+* Sets a [`panic hook`] for better error messages in NodeJS or web browser.
+*
+* [`panic hook`]: https://crates.io/crates/console_error_panic_hook
+*/
+export function setWasmPanicHook(): void;
+/**
+* Returns hash of an hexadecimal encoded value.
+* @param {string} value
+* @returns {string}
+*/
+export function generateHash(value: string): string;
+/**
+* Creates, validates and encodes an operation as hexadecimal string.
+* @param {bigint} action
+* @param {string} schema_id
+* @param {any} previous_operations
+* @param {OperationFields | undefined} fields
+* @returns {string}
+*/
+export function encodeOperation(action: bigint, schema_id: string, previous_operations: any, fields?: OperationFields): string;
+/**
+* Decodes an operation into its plain form.
+*
+* A plain operation has not been checked against a schema yet.
+* @param {string} encoded_operation
+* @returns {any}
+*/
+export function decodeOperation(encoded_operation: string): any;
 /**
 * Verify the integrity of a signed operation.
 * @param {string} public_key
@@ -51,12 +54,6 @@ export function decodeEntry(entry_str: string, operation_str?: string): any;
 * @returns {any}
 */
 export function verifySignature(public_key: string, byte_string: string, signature: string): any;
-/**
-* Sets a [`panic hook`] for better error messages in NodeJS or web browser.
-*
-* [`panic hook`]: https://crates.io/crates/console_error_panic_hook
-*/
-export function setWasmPanicHook(): void;
 /**
 * Ed25519 key pair for authors to sign Bamboo entries with.
 */
@@ -91,7 +88,7 @@ export class KeyPair {
   sign(operation: string): string;
 }
 /**
-* Use `OperationFields` to attach application data to an [`Operation`].
+* Interface to create, update and retreive values from operation fields.
 */
 export class OperationFields {
   free(): void;
@@ -124,6 +121,33 @@ export class OperationFields {
   insert(name: string, value_type: string, value: any): void;
 /**
 * Returns field of this `OperationFields` instance when existing.
+* @param {string} name
+* @returns {any}
+*/
+  get(name: string): any;
+/**
+* Returns the number of fields in this instance.
+* @returns {number}
+*/
+  length(): number;
+/**
+* Returns true when no field exists.
+* @returns {boolean}
+*/
+  isEmpty(): boolean;
+/**
+* Returns this instance formatted for debugging.
+* @returns {string}
+*/
+  toString(): string;
+}
+/**
+* Interface to create, update and retreive values from operation fields.
+*/
+export class PlainFields {
+  free(): void;
+/**
+* Returns field value when existing.
 * @param {string} name
 * @returns {any}
 */

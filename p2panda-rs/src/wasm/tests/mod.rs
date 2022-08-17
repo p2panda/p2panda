@@ -2,5 +2,6 @@
 
 //! Tests for `wasm` module in `p2panda_rs`.
 mod entry;
+mod hash;
 mod key_pair;
 mod operation;

@@ -135,3 +135,12 @@ pub enum PinnedRelationListError {
     #[error(transparent)]
     DocumentViewIdError(#[from] crate::document::error::DocumentViewIdError),
 }
+
+/// Errors from `OperationAction` enum.
+#[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
+pub enum OperationActionError {
+    /// Passed unknown operation action value.
+    #[error("unknown operation action {0}")]
+    UnknownAction(u64),
+}

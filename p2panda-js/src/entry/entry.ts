@@ -2,7 +2,7 @@
 
 import debug from 'debug';
 
-import { signEncodeEntry } from '../wasm';
+import { signAndEncodeEntry, generateHash } from '../wasm';
 import { Context } from '../session';
 
 const log = debug('p2panda-js:entry');
@@ -31,14 +31,15 @@ export const signPublishEntry = async (
     nextArgs,
   });
 
-  const { entryEncoded, entryHash } = signEncodeEntry(
-    keyPair,
-    operationEncoded,
+  const entryEncoded = signAndEncodeEntry(
+    BigInt(nextArgs.logId),
+    BigInt(nextArgs.seqNum),
     nextArgs.skiplink,
     nextArgs.backlink,
-    BigInt(nextArgs.seqNum),
-    BigInt(nextArgs.logId),
+    operationEncoded,
+    keyPair,
   );
+  const entryHash = generateHash(entryEncoded);
   log('Signed and encoded entry');
 
   const publishNextArgs = await session.publish(entryEncoded, operationEncoded);
