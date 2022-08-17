@@ -65,7 +65,7 @@ export class KeyPair {
   /**
    * Returns public key as a hexadecimal string.
    *
-   * @returns {string} Hexadecimal encoded public key.
+   * @returns {string} Hexadecimal encoded public key
    */
   publicKey(): string {
     return this.__internal.publicKey();
@@ -83,7 +83,8 @@ export class KeyPair {
   /**
    * Signs any data using this key pair and returns signature.
    *
-   * @returns {string} Hexadecimal encoded signature.
+   * @param {string?} bytes - Any byte sequence encoded as a hexadecimal string
+   * @returns {string} Hexadecimal encoded signature
    */
   sign(bytes: string): string {
     validate(
