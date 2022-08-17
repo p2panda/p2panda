@@ -6,6 +6,7 @@ import { validate } from '../validate';
  * Converts byte sequence to hexadecimal string.
  *
  * @param {Uint8Array} bytes - Any byte sequence
+ *
  * @returns {string} Hexadecimal encoded string
  */
 export function bytesToHex(bytes: Uint8Array): string {
@@ -24,6 +25,7 @@ export function bytesToHex(bytes: Uint8Array): string {
  * Converts any hexadecimal string to byte sequence.
  *
  * @param {string} hex - Hexadecimal encoded string.
+ *
  * @returns {Uint8Array} Byte sequence
  */
 export function hexToBytes(hex: string): Uint8Array {

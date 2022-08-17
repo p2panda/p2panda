@@ -141,4 +141,34 @@ describe('validate', () => {
       );
     }).toThrow('"value" is not a valid hexadecimal string');
   });
+
+  it('checks minimum numbers', () => {
+    expect(() => {
+      validate(
+        {
+          value: BigInt(12),
+        },
+        {
+          value: {
+            min: 12,
+            type: 'bigint',
+          },
+        },
+      );
+    }).not.toThrow();
+
+    expect(() => {
+      validate(
+        {
+          value: BigInt(11),
+        },
+        {
+          value: {
+            min: 12,
+            type: 'bigint',
+          },
+        },
+      );
+    }).toThrow('"value" is smaller than the minimum value 12');
+  });
 });

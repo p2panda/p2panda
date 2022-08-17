@@ -81,11 +81,11 @@ export class KeyPair {
 */
   privateKey(): string;
 /**
-* Sign an operation using this key pair, returns signature encoded as a hex string.
-* @param {string} operation
+* Sign any data using this key pair, returns signature encoded as a hex string.
+* @param {string} value
 * @returns {string}
 */
-  sign(operation: string): string;
+  sign(value: string): string;
 }
 /**
 * Interface to create, update and retreive values from operation fields.
