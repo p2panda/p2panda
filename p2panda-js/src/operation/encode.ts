@@ -10,10 +10,10 @@ import type { EasyValues, OperationAction, OperationMeta } from './';
  * Arguments to create an operation.
  */
 export type OperationArgs = OperationMeta & {
-  // Operation action, default is CREATE
+  /** Operation action, default is CREATE */
   action?: OperationAction;
 
-  // Fields with user data, needs to be set for CREATE and UPDATE operations
+  /** Fields with user data, needs to be set for CREATE and UPDATE operations */
   fields?: OperationFields | EasyValues;
 };
 

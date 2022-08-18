@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Helper method to convert different inputs to BigInt
+/** Helper method to convert different inputs to BigInt */
 export function toBigInt(
   value?: string | number | bigint,
   defaultValue?: bigint,

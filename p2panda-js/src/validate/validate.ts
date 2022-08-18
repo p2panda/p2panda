@@ -2,19 +2,19 @@
 
 type Validation = {
   [key: string]: {
-    // Value needs to be of this type, default is 'string'
+    /** Value needs to be of this type, default is 'string' */
     type?: 'object' | 'bigint' | 'string' | 'boolean' | 'number';
 
-    // Value needs to have exact given length
+    /** Value needs to have exact given length */
     length?: number;
 
-    // Number needs to have at least this value.
+    /** Number needs to have at least this value. */
     min?: number;
 
-    // Value need to be a valid hexadecimal string
+    /** Value need to be a valid hexadecimal string */
     validHex?: boolean;
 
-    // Value can be optional
+    /** Value can be optional */
     optional?: boolean;
   };
 };
@@ -23,7 +23,7 @@ type ValidationValues = {
   [key: string]: object | bigint | string | boolean | number | undefined;
 };
 
-// Helper method to validate if hex string is correct
+/** Helper method to validate if hex string is correct */
 function isValidHexString(value: string): boolean {
   // Needs to be even number of characters
   if (value.length % 2 !== 0) {
@@ -35,7 +35,7 @@ function isValidHexString(value: string): boolean {
   return hexRegEx.test(value);
 }
 
-// Helper method to validate user input
+/** Helper method to validate user input */
 export function validate(values: ValidationValues, fields: Validation) {
   Object.keys(fields).forEach((key) => {
     const value = values[key];
