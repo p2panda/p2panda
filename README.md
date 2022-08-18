@@ -67,6 +67,7 @@ This library provides all tools required to write a client, node or even your ow
 
 ```javascript
 import { KeyPair } from "p2panda-js";
+
 const keyPair = new KeyPair();
 console.log(keyPair.publicKey());
 ```
