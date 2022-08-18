@@ -32,6 +32,7 @@ Highlights are marked with a pancake 🥞
 - Replace `@apollo/client` with `graphql-request` [#441](https://github.com/p2panda/p2panda/pull/441) `js`
 - Expose `from_bytes` for `EncodedOperation` and `EncodedEntry` [#445](https://github.com/p2panda/p2panda/pull/445) `rs`
 - Introduce new feature flags, rename `testing` to `test-utils` [#448](https://github.com/p2panda/p2panda/pull/448) `rs`
+- Replace `lazy_static` with `once_cell` [#449](https://github.com/p2panda/p2panda/pull/449) `rs`
 
 ### Fixed
 
