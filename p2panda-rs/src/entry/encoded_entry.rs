@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::entry::traits::AsEncodedEntry;
 use crate::hash::Hash;
 use crate::serde::{deserialize_hex, serialize_hex};
+#[cfg(any(feature = "storage-provider", test))]
 use crate::storage_provider::traits::EntryWithOperation;
 
 /// Size of p2panda entries' signatures.
@@ -70,6 +71,7 @@ impl Display for EncodedEntry {
     }
 }
 
+#[cfg(any(feature = "storage-provider", test))]
 impl<T: EntryWithOperation> From<T> for EncodedEntry {
     fn from(entry: T) -> Self {
         EncodedEntry(entry.into_bytes())

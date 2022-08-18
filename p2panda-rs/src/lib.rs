@@ -36,6 +36,7 @@ pub mod schema;
 #[cfg(feature = "secret-group")]
 pub mod secret_group;
 pub mod serde;
+#[cfg(any(feature = "storage-provider", test))]
 pub mod storage_provider;
 #[cfg(any(feature = "test-utils", test))]
 pub mod test_utils;
