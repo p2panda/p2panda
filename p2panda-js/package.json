@@ -9,15 +9,15 @@
   "exports": {
     ".": {
       "types": "./lib/cjs/index.d.ts",
-      "node": "./lib/node/index.js",
+      "node": "./lib/node/index.cjs",
       "import": "./lib/esm/index.js",
-      "default": "./lib/cjs/index.js"
+      "default": "./lib/cjs/index.cjs"
     },
     "./slim": {
       "types": "./lib/cjs-slim/index.d.ts",
-      "node": "./lib/node/index.js",
+      "node": "./lib/node/index.cjs",
       "import": "./lib/esm-slim/index.js",
-      "default": "./lib/cjs-slim/index.js"
+      "default": "./lib/cjs-slim/index.cjs"
     },
     "./p2panda.wasm": "./lib/p2panda.wasm",
     "./package.json": "./package.json"

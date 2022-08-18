@@ -11,8 +11,7 @@ import pluginTypeScript from '@rollup/plugin-typescript';
 import { wasm as pluginWasm } from '@rollup/plugin-wasm';
 import { terser as pluginTerser } from 'rollup-plugin-terser';
 
-import pkg from './package.json';
-
+const PROJECT_NAME = 'p2panda';
 const SRC_DIR = 'src';
 const DIST_DIR = 'lib';
 
@@ -27,7 +26,7 @@ function pluginCopy({ name }) {
         recursive: true,
       });
 
-      ['index.js', 'index.d.ts', 'index_bg.wasm', 'index_bg.wasm.d.ts'].forEach(
+      ['index.d.ts', 'index_bg.wasm', 'index_bg.wasm.d.ts'].forEach(
         (fileName) => {
           fs.copyFileSync(
             path.resolve(`./wasm/node/${fileName}`),
@@ -36,11 +35,16 @@ function pluginCopy({ name }) {
         },
       );
 
+      fs.copyFileSync(
+        path.resolve('./wasm/node/index.js'),
+        path.resolve(`./${DIST_DIR}/${name}/wasm/index.cjs`),
+      );
+
       // Copy .wasm file into root of destination, "slim" versions can import
       // it from there
       fs.copyFileSync(
         path.resolve('./wasm/web/index_bg.wasm'),
-        path.resolve(`./${DIST_DIR}/p2panda.wasm`),
+        path.resolve(`./${DIST_DIR}/${PROJECT_NAME}.wasm`),
       );
     },
   };
@@ -53,20 +57,22 @@ function config({
   isSlim = false,
   name = 'esm',
 }) {
+  const ext = format === 'cjs' ? 'cjs' : 'js';
+
   return [
     // Build package
     {
       input,
       output: [
         {
-          name: pkg.name,
-          file: `${DIST_DIR}/${name}/index.js`,
+          name: PROJECT_NAME,
+          file: `${DIST_DIR}/${name}/index.${ext}`,
           format,
           sourcemap: true,
         },
         // Provide a minified version for non-NodeJS builds
         !isNode && {
-          name: pkg.name,
+          name: PROJECT_NAME,
           file: `${DIST_DIR}/${name}/index.min.js`,
           format,
           sourcemap: true,
@@ -86,7 +92,9 @@ function config({
         // Treat wasm module as external for NodeJS builds
         isNode &&
           pluginAlias({
-            entries: [{ find: '../wasm/node', replacement: './wasm/index.js' }],
+            entries: [
+              { find: '../wasm/node', replacement: './wasm/index.cjs' },
+            ],
           }),
         // Inline WebAssembly as base64 strings for some builds
         !isNode &&
@@ -100,7 +108,7 @@ function config({
         }),
       ],
       // Treat wasm module as external for NodeJS builds
-      external: isNode ? ['./wasm/index.js'] : [],
+      external: isNode ? ['./wasm/index.cjs'] : [],
     },
     // Build TypeScript definitions
     {
@@ -119,12 +127,14 @@ export default [
     input: `./${SRC_DIR}/index.inline.ts`,
     format: 'umd',
     isNode: false,
+    isSlim: false,
     name: 'umd',
   }),
   ...config({
     input: `./${SRC_DIR}/index.inline.ts`,
     format: 'cjs',
     isNode: false,
+    isSlim: false,
     name: 'cjs',
   }),
   ...config({
@@ -138,6 +148,7 @@ export default [
     input: `./${SRC_DIR}/index.inline.ts`,
     format: 'esm',
     isNode: false,
+    isSlim: false,
     name: 'esm',
   }),
   ...config({
@@ -151,6 +162,7 @@ export default [
     input: `./${SRC_DIR}/index.ts`,
     format: 'cjs',
     isNode: true,
+    isSlim: false,
     name: 'node',
   }),
 ];

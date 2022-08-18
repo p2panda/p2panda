@@ -10,7 +10,10 @@ import init, { setWasmPanicHook } from '../wasm/web';
 import wasmData from '../wasm/web/index_bg.wasm';
 
 export async function initWebAssembly() {
-  await init(wasmData);
+  // rollup-wasm plugin changes the method signature during build
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  await init(wasmData());
 
   // Set panic hooks for better logging of wasm errors. See:
   // https://github.com/rustwasm/console_error_panic_hook
