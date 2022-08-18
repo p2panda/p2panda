@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-&3.0-or-later
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::operation::plain::{PlainFields, PlainValue};
@@ -13,12 +13,10 @@ use crate::schema::validate::error::SchemaDefinitionError;
 /// 3. It uses only alphanumeric characters, digits and the underscore character
 /// 4. It doesn't end with an underscore
 fn validate_name(value: &str) -> bool {
-    lazy_static! {
+    static NAME_REGEX: Lazy<Regex> = Lazy::new(|| {
         // Unwrap as we checked the regular expression for correctness
-        static ref NAME_REGEX: Regex = Regex::new(
-            "^[A-Za-z]{1}[A-Za-z0-9_]{0,62}[A-Za-z0-9]{1}$"
-        ).unwrap();
-    }
+        Regex::new("^[A-Za-z]{1}[A-Za-z0-9_]{0,62}[A-Za-z0-9]{1}$").unwrap()
+    });
 
     NAME_REGEX.is_match(value)
 }

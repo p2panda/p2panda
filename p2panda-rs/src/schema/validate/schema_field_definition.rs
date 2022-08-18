@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::operation::plain::{PlainFields, PlainValue};
@@ -15,10 +15,10 @@ use crate::schema::SchemaId;
 /// 2. It begins with a letter
 /// 3. It uses only alphanumeric characters, digits and the underscore character
 fn validate_name(value: &str) -> bool {
-    lazy_static! {
+    static NAME_REGEX: Lazy<Regex> = Lazy::new(|| {
         // Unwrap as we checked the regular expression for correctness
-        static ref NAME_REGEX: Regex = Regex::new("^[A-Za-z]{1}[A-Za-z0-9_]{0,63}$").unwrap();
-    }
+        Regex::new("^[A-Za-z]{1}[A-Za-z0-9_]{0,63}$").unwrap()
+    });
 
     NAME_REGEX.is_match(value)
 }
@@ -43,14 +43,12 @@ fn validate_type(value: &str) -> bool {
 ///    hex-encoded operation ids, separated by underscores
 fn validate_relation_type(value: &str) -> bool {
     // Parse relation value
-    lazy_static! {
-        static ref RELATION_REGEX: Regex = {
-            let schema_id = "[A-Za-z]{1}[A-Za-z0-9_]{0,63}_([0-9A-Za-z]{68})(_[0-9A-Za-z]{68})*";
+    static RELATION_REGEX: Lazy<Regex> = Lazy::new(|| {
+        let schema_id = "[A-Za-z]{1}[A-Za-z0-9_]{0,63}_([0-9A-Za-z]{68})(_[0-9A-Za-z]{68})*";
 
-            // Unwrap as we checked the regular expression for correctness
-            Regex::new(&format!(r"(\w+)\(({})*\)", schema_id)).unwrap()
-        };
-    }
+        // Unwrap as we checked the regular expression for correctness
+        Regex::new(&format!(r"(\w+)\(({})*\)", schema_id)).unwrap()
+    });
 
     let groups = RELATION_REGEX.captures(value);
     if groups.is_none() {
