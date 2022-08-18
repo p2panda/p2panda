@@ -7,8 +7,8 @@ import { validate } from '../validate';
  * Ed25519 key pair to sign Bamboo entries with.
  */
 export class KeyPair {
-  /*
-   * @ignore
+  /**
+   * @internal
    */
   readonly __internal: wasm.KeyPair;
 

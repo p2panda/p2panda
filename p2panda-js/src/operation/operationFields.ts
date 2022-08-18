@@ -29,8 +29,8 @@ export type OperationValueArg = OperationValue | number;
  * Operation fields containing application data.
  */
 export class OperationFields {
-  /*
-   * @ignore
+  /**
+   * @internal
    */
   readonly __internal: wasm.OperationFields;
 
