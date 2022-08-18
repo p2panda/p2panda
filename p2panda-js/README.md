@@ -39,7 +39,7 @@
 
 <br />
 
-This library provides all tools required to write a client for the [`p2panda`] network. It is shipped both as a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web browser.
+This library provides all tools required to write a client, node or even your own protocol implementation for the [`p2panda`] network. It is shipped both as a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web browser.
 
 > In the future `p2panda-js` will have full feature parity with `p2panda-rs` to be able to write high-level client frameworks or node implementations in TypeScript. Until now `p2panda-js` provides basic methods to create, sign and encode data.
 
