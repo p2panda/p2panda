@@ -33,6 +33,7 @@ Highlights are marked with a pancake 🥞
 - Expose `from_bytes` for `EncodedOperation` and `EncodedEntry` [#445](https://github.com/p2panda/p2panda/pull/445) `rs`
 - Introduce new feature flags, rename `testing` to `test-utils` [#448](https://github.com/p2panda/p2panda/pull/448) `rs`
 - Replace `lazy_static` with `once_cell` [#449](https://github.com/p2panda/p2panda/pull/449) `rs`
+- Build ES Module, CommonJS, NodeJS and UMD modules with rollup [#450](https://github.com/p2panda/p2panda/pull/450) `js`
 
 ### Fixed
 
