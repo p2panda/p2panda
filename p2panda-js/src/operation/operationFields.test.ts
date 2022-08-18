@@ -112,7 +112,7 @@ describe('OperationFields', () => {
     }).toThrow("Could not insert new field: field 'test' already exists");
   });
 
-  it('returns "null" and does not throw when trying to get an inexistant field', () => {
+  it('returns "null" and does not throw when trying to get an inexistent field', () => {
     const fields = new OperationFields();
     expect(() => {
       fields.get('test');
