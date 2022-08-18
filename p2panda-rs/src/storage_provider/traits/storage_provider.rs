@@ -18,8 +18,8 @@ use crate::storage_provider::utils::Result;
 pub trait StorageProvider:
     EntryStore<Self::Entry> + LogStore<Self::StorageLog> + OperationStore<Self::Operation>
 {
-    // TODO: We can move these types into their own stores once we deprecate the
-    // higher level methods (publish_entry and next_entry_args) on StorageProvider.
+    // @TODO: We can move these types into their own stores once we deprecate the higher level
+    // methods (publish_entry and next_entry_args) on StorageProvider.
 
     /// An associated type representing an entry as it passes in and out of storage.
     type Entry: EntryWithOperation;

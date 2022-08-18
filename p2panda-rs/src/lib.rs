@@ -7,7 +7,47 @@
 //! `p2panda-js` with TypeScript definitions running in NodeJS or any modern web browser.
 //!
 //! [p2panda]: https://p2panda.org
-// @TODO: Bring back doc-string example here
+//!
+//! ## Example
+//!
+//! Creates and signs data which can be sent to a p2panda node.
+//!
+//! ```
+//! # extern crate p2panda_rs;
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! # use std::convert::TryFrom;
+//! # use p2panda_rs::entry::EntryBuilder;
+//! # use p2panda_rs::entry::encode::encode_entry;
+//! # use p2panda_rs::hash::Hash;
+//! # use p2panda_rs::identity::KeyPair;
+//! # use p2panda_rs::operation::{OperationBuilder, OperationFields, OperationValue, OperationId, Relation};
+//! # use p2panda_rs::operation::encode::encode_operation;
+//! # use p2panda_rs::schema::SchemaId;
+//! # use p2panda_rs::document::{DocumentId, DocumentViewId};
+//! # let view_id = OperationId::from(Hash::new_from_bytes(&[1, 2, 3]));
+//! # let profile_schema_id = SchemaId::new_application("profile", &view_id.into());
+//! // Generate new Ed25519 key pair
+//! let key_pair = KeyPair::new();
+//!
+//! // Add field data to "create" operation
+//! let operation = OperationBuilder::new(&profile_schema_id)
+//!     .fields(&[("username", "panda".into())])
+//!     .build()?;
+//!
+//! // Encode operation into bytes
+//! let encoded_operation = encode_operation(&operation)?;
+//!
+//! // Create Bamboo entry (append-only log data type) with operation as payload
+//! let entry = EntryBuilder::new()
+//!     .sign(&encoded_operation, &key_pair)?;
+//!
+//! // Encode entry into bytes
+//! let encoded_entry = encode_entry(&entry)?;
+//!
+//! println!("{} {}", encoded_entry, encoded_operation);
+//! # Ok(())
+//! # }
+//! ```
 #![warn(
     missing_copy_implementations,
     missing_debug_implementations,

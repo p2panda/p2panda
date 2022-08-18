@@ -6,7 +6,6 @@
 //! values. See examples for more details.
 //!
 //! Implemented using the [`rstest`](https://github.com/la10736/rstest) library.
-// @TODO: Bring back doc-string example here
 mod document_fixtures;
 mod entry_fixtures;
 mod hash_fixtures;

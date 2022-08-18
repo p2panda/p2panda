@@ -10,7 +10,6 @@
 //!
 //! In the p2panda network, Documents are materialised on nodes and the resulting document views
 //! are stored in the database.
-// @TODO: Bring back doc-string example here
 #[allow(clippy::module_inception)]
 mod document;
 mod document_id;
