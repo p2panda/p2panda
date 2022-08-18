@@ -3,6 +3,8 @@
 use std::convert::TryFrom;
 use std::slice::Iter;
 
+use serde::{Deserialize, Serialize};
+
 use crate::document::error::DocumentIdError;
 use crate::document::{DocumentId, DocumentViewId};
 use crate::operation::error::{
@@ -28,7 +30,7 @@ use crate::Validate;
 ///     |
 /// Document: [Comment "This was great!"]
 /// ```
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct Relation(DocumentId);
 
 impl Relation {
@@ -49,6 +51,23 @@ impl Validate for Relation {
     fn validate(&self) -> Result<(), Self::Error> {
         self.0.validate()?;
         Ok(())
+    }
+}
+
+impl<'de> Deserialize<'de> for Relation {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Deserialize into `DocumentId` struct
+        let document_id: DocumentId = Deserialize::deserialize(deserializer)?;
+
+        // Check format
+        document_id
+            .validate()
+            .map_err(|err| serde::de::Error::custom(format!("invalid document id, {}", err)))?;
+
+        Ok(Self(document_id))
     }
 }
 
@@ -83,7 +102,7 @@ impl Validate for Relation {
 /// Pinned relations give us immutability and the option to restore a historical state across
 /// documents. However, most cases will probably only need unpinned relations: For example when
 /// referring to a user-profile you probably want to always get the _latest_ version.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct PinnedRelation(DocumentViewId);
 
 impl PinnedRelation {
@@ -112,11 +131,28 @@ impl Validate for PinnedRelation {
     }
 }
 
+impl<'de> Deserialize<'de> for PinnedRelation {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Deserialize into `DocumentViewId` struct
+        let document_view_id: DocumentViewId = Deserialize::deserialize(deserializer)?;
+
+        // Check format
+        document_view_id.validate().map_err(|err| {
+            serde::de::Error::custom(format!("invalid document view id, {}", err))
+        })?;
+
+        Ok(Self(document_view_id))
+    }
+}
+
 /// A `RelationList` can be used to reference multiple foreign documents from a document field.
 ///
 /// The item order and occurrences inside a relation list are defined by the developers and users
 /// and have semantic meaning, for this reason we do not check against duplicates or ordering here.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[allow(clippy::len_without_is_empty)]
 pub struct RelationList(Vec<DocumentId>);
 
@@ -169,12 +205,30 @@ impl TryFrom<&[String]> for RelationList {
     }
 }
 
+impl<'de> Deserialize<'de> for RelationList {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Deserialize into `DocumentId` array
+        let document_ids: Vec<DocumentId> = Deserialize::deserialize(deserializer)?;
+
+        // Convert and check format
+        let relation_list = Self(document_ids);
+        relation_list
+            .validate()
+            .map_err(|err| serde::de::Error::custom(format!("invalid document id, {}", err)))?;
+
+        Ok(relation_list)
+    }
+}
+
 /// A `PinnedRelationList` can be used to reference multiple documents views.
 ///
 /// The item order and occurrences inside a pinned relation list are defined by the developers and
 /// users and have semantic meaning, for this reason we do not check against duplicates or ordering
 /// here.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[allow(clippy::len_without_is_empty)]
 pub struct PinnedRelationList(Vec<DocumentViewId>);
 
@@ -214,12 +268,35 @@ impl Validate for PinnedRelationList {
     }
 }
 
+impl<'de> Deserialize<'de> for PinnedRelationList {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Deserialize into `DocumentViewId` array
+        let document_view_ids: Vec<DocumentViewId> = Deserialize::deserialize(deserializer)?;
+
+        // Convert and check format
+        let pinned_relation_list = Self(document_view_ids);
+        pinned_relation_list.validate().map_err(|err| {
+            serde::de::Error::custom(format!("invalid document view id, {}", err))
+        })?;
+
+        Ok(pinned_relation_list)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
+    use ciborium::cbor;
     use rstest::rstest;
 
     use crate::document::{DocumentId, DocumentViewId};
     use crate::hash::Hash;
+    use crate::operation::OperationId;
+    use crate::serde::{deserialize_into, serialize_from, serialize_value};
     use crate::test_utils::fixtures::random_document_id;
     use crate::test_utils::fixtures::random_hash;
     use crate::Validate;
@@ -297,5 +374,160 @@ mod tests {
         let pinned_relation_list_different_order =
             PinnedRelationList::new(vec![operation_id_2.into(), operation_id_1.into()]);
         assert_ne!(pinned_relation_list, pinned_relation_list_different_order);
+    }
+
+    #[test]
+    fn serialize_relation() {
+        let hash_str = "0020b50b06774f909483c9c18e31b3bb17ff8f7d23088e9cc5a39260392259f34d42";
+        let bytes = serialize_from(Relation::new(DocumentId::from_str(hash_str).unwrap()));
+        assert_eq!(bytes, serialize_value(cbor!(hash_str)));
+    }
+
+    #[test]
+    fn deserialize_relation() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let relation: Relation = deserialize_into(&serialize_value(cbor!(hash_str))).unwrap();
+        assert_eq!(
+            Relation::new(DocumentId::from_str(hash_str).unwrap()),
+            relation
+        );
+
+        // Invalid hashes
+        let invalid_hash = deserialize_into::<Relation>(&serialize_value(cbor!("1234")));
+        assert!(invalid_hash.is_err());
+        let empty_hash = deserialize_into::<Relation>(&serialize_value(cbor!("")));
+        assert!(empty_hash.is_err());
+    }
+
+    #[test]
+    fn serialize_pinned_relation() {
+        let hash_str = "00208b050b24273b397f91a41e7f5030a853435dee0abbdc507dfc75a13809e7ba5f";
+        let bytes = serialize_from(PinnedRelation::new(
+            DocumentViewId::from_str(hash_str).unwrap(),
+        ));
+        assert_eq!(bytes, serialize_value(cbor!([hash_str])));
+    }
+
+    #[test]
+    fn deserialize_pinned_relation() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let pinned_relation: PinnedRelation = deserialize_into(&serialize_value(cbor!([
+            "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805"
+        ])))
+        .unwrap();
+        assert_eq!(
+            PinnedRelation::new(DocumentViewId::from_str(hash_str).unwrap()),
+            pinned_relation
+        );
+
+        // Invalid hashes
+        let invalid_hash = deserialize_into::<PinnedRelation>(&serialize_value(cbor!(["1234"])));
+        assert!(invalid_hash.is_err());
+        let empty_hash = deserialize_into::<PinnedRelation>(&serialize_value(cbor!([])));
+        assert!(empty_hash.is_err());
+
+        // Invalid (non-canonic) order of operation ids
+        let unordered = deserialize_into::<PinnedRelation>(&serialize_value(cbor!([
+            "0020f1ab6d8114c0e7ab0af3bfd6862daf6ee0c510bbdf129e1780edfa505e860ff7",
+            "0020a19353e7dfeb2f9031087c3428a2467bb684e25321f09298c64ce1a2fd5787d1",
+        ])));
+        assert!(unordered.is_err());
+
+        // Duplicate operation ids
+        let duplicate = deserialize_into::<PinnedRelation>(&serialize_value(cbor!([
+            "05018634222cc8c9d49c5f48e8aecf0412c2cd2082a6712676373eaa1660e7af",
+            "05018634222cc8c9d49c5f48e8aecf0412c2cd2082a6712676373eaa1660e7af",
+        ])));
+        assert!(duplicate.is_err());
+    }
+
+    #[test]
+    fn serialize_relation_list() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let bytes = serialize_from(RelationList::new(vec![
+            DocumentId::from_str(hash_str).unwrap()
+        ]));
+        assert_eq!(bytes, serialize_value(cbor!([hash_str])));
+    }
+
+    #[test]
+    fn deserialize_relation_list() {
+        let hash_str_1 = "0020deb1356bcdec02e05ce4f1fce51561bbfda68d1c4537c98c592b9e2bf9917122";
+        let hash_str_2 = "002051044a3cfec6fea09759133dbae95dce9b49aa172df7fbb085c9b932694b2805";
+
+        let relation_list: RelationList =
+            deserialize_into(&serialize_value(cbor!([hash_str_1, hash_str_2]))).unwrap();
+        assert_eq!(
+            RelationList::new(vec![
+                DocumentId::from_str(hash_str_1).unwrap(),
+                DocumentId::from_str(hash_str_2).unwrap()
+            ]),
+            relation_list
+        );
+
+        // Invalid hash
+        let invalid_hash = deserialize_into::<RelationList>(&serialize_value(cbor!(["1234"])));
+        assert!(invalid_hash.is_err());
+    }
+
+    #[test]
+    fn serialize_pinned_relation_list() {
+        let hash_str_1 = "002051044a3cfec6fea09759133dbae95dce9b49aa172df7fbb085c9b932694b2805";
+        let hash_str_2 = "0020deb1356bcdec02e05ce4f1fce51561bbfda68d1c4537c98c592b9e2bf9917122";
+        let hash_str_3 = "002084d3c7eb7085c920879da6ea6c94cf89777e8f427a32f49d441fcda80cd39483";
+
+        let bytes = serialize_from(PinnedRelationList::new(vec![
+            DocumentViewId::new(&[
+                OperationId::from_str(hash_str_1).unwrap(),
+                OperationId::from_str(hash_str_2).unwrap(),
+            ]),
+            DocumentViewId::new(&[OperationId::from_str(hash_str_3).unwrap()]),
+        ]));
+        assert_eq!(
+            bytes,
+            serialize_value(cbor!([[hash_str_1, hash_str_2], [hash_str_3]]))
+        );
+    }
+
+    #[test]
+    fn deserialize_pinned_relation_list() {
+        let hash_str_1 = "002051044a3cfec6fea09759133dbae95dce9b49aa172df7fbb085c9b932694b2805";
+        let hash_str_2 = "0020deb1356bcdec02e05ce4f1fce51561bbfda68d1c4537c98c592b9e2bf9917122";
+        let hash_str_3 = "002084d3c7eb7085c920879da6ea6c94cf89777e8f427a32f49d441fcda80cd39483";
+
+        let pinned_relation_list: PinnedRelationList = deserialize_into(&serialize_value(cbor!([
+            [hash_str_1, hash_str_2],
+            [hash_str_3]
+        ])))
+        .unwrap();
+        assert_eq!(
+            PinnedRelationList::new(vec![
+                DocumentViewId::new(&[
+                    OperationId::from_str(hash_str_1).unwrap(),
+                    OperationId::from_str(hash_str_2).unwrap(),
+                ]),
+                DocumentViewId::new(&[OperationId::from_str(hash_str_3).unwrap()]),
+            ]),
+            pinned_relation_list
+        );
+
+        // Invalid hash
+        let invalid_hash =
+            deserialize_into::<PinnedRelationList>(&serialize_value(cbor!([["1234"]])));
+        assert!(invalid_hash.is_err());
+
+        // Invalid (non-canonic) order of operation ids
+        let unordered = deserialize_into::<PinnedRelationList>(&serialize_value(cbor!([[
+            "0020f1ab6d8114c0e7ab0af3bfd6862daf6ee0c510bbdf129e1780edfa505e860ff7",
+            "0020a19353e7dfeb2f9031087c3428a2467bb684e25321f09298c64ce1a2fd5787d1",
+        ]])));
+        assert!(unordered.is_err());
+
+        // Duplicate operation ids
+        let duplicate = deserialize_into::<PinnedRelationList>(&serialize_value(cbor!([[
+            "05018634222cc8c9d49c5f48e8aecf0412c2cd2082a6712676373eaa1660e7af",
+            "05018634222cc8c9d49c5f48e8aecf0412c2cd2082a6712676373eaa1660e7af",
+        ]])));
+        assert!(duplicate.is_err());
     }
 }
