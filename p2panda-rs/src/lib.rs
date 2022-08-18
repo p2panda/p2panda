@@ -23,7 +23,7 @@
 // This must be imported here at the root of the crate in order for the `rstest` fixture macros to
 // work as expected.
 #![allow(clippy::single_component_path_imports)]
-#[cfg(any(feature = "testing", test))]
+#[cfg(any(feature = "test_utils", test))]
 use rstest_reuse;
 
 pub mod document;
@@ -36,7 +36,7 @@ pub mod schema;
 pub mod secret_group;
 pub mod serde;
 pub mod storage_provider;
-#[cfg(any(feature = "testing", test))]
+#[cfg(any(feature = "test_utils", test))]
 pub mod test_utils;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;

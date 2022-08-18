@@ -25,7 +25,7 @@ dwarf-debug-info = false
 crate-type = ["cdylib", "rlib"]
 
 [features]
-testing = ["dep:rstest", "dep:rstest_reuse", "dep:varu64", "dep:tokio"]
+test_utils = ["dep:rstest", "dep:rstest_reuse", "dep:varu64", "dep:tokio"]
 
 [dependencies]
 arrayvec = "^0.5.2"

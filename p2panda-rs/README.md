@@ -27,7 +27,7 @@
 
 <div align="center">
   <h3>
-    <a href="https://github.com/p2panda/p2panda">
+    <a href="https://github.com/p2panda/p2panda#installation">
       Installation
     </a>
     <span> | </span>
@@ -70,10 +70,6 @@ cargo test
 # Compile wasm as npm browser package into `pkg` folder
 wasm-pack build
 ```
-
-## Testing
-
-`p2panda-rs` provides tools which can be used for testing your code. Read more about the `test_utils` module [here](/p2panda-rs/src/test_utils/README.md).
 
 ## License
 
