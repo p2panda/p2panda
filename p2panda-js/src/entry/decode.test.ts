@@ -38,4 +38,15 @@ describe('decodeEntry', () => {
         'd3aed2095b1eb9a37ef065f20a2df90af0583da6081339a2689bc734dff0da04',
     );
   });
+
+  it('throws when decoding an invalid entry', () => {
+    // Only `tag` and `author` given
+    expect(() => {
+      decodeEntry(
+        '00b443811e711fdbfcbeccaf655e0ebe7a1c83490cc28d1516c5920178bef416c5',
+      );
+    }).toThrow(
+      'Could not decode entry: Error: Could not decode log_id, error with varu64 encoding',
+    );
+  });
 });

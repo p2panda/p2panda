@@ -30,6 +30,14 @@ export function setWasmPanicHook(): void;
 */
 export function generateHash(value: string): string;
 /**
+* Verify the integrity of a signed operation.
+* @param {string} public_key
+* @param {string} byte_string
+* @param {string} signature
+* @returns {any}
+*/
+export function verifySignature(public_key: string, byte_string: string, signature: string): any;
+/**
 * Creates, validates and encodes an operation as hexadecimal string.
 * @param {bigint} action
 * @param {string} schema_id
@@ -46,14 +54,6 @@ export function encodeOperation(action: bigint, schema_id: string, previous_oper
 * @returns {any}
 */
 export function decodeOperation(encoded_operation: string): any;
-/**
-* Verify the integrity of a signed operation.
-* @param {string} public_key
-* @param {string} byte_string
-* @param {string} signature
-* @returns {any}
-*/
-export function verifySignature(public_key: string, byte_string: string, signature: string): any;
 /**
 * Ed25519 key pair for authors to sign Bamboo entries with.
 */
@@ -135,11 +135,6 @@ export class OperationFields {
 * @returns {boolean}
 */
   isEmpty(): boolean;
-/**
-* Returns this instance formatted for debugging.
-* @returns {string}
-*/
-  toString(): string;
 }
 /**
 * Interface to create, update and retreive values from operation fields.
@@ -162,9 +157,4 @@ export class PlainFields {
 * @returns {boolean}
 */
   isEmpty(): boolean;
-/**
-* Returns this instance formatted for debugging.
-* @returns {string}
-*/
-  toString(): string;
 }

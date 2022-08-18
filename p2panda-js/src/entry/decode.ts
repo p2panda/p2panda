@@ -33,9 +33,9 @@ type Entry = {
 };
 
 /**
- * Signs and encodes an Bamboo entry with a given payload and key pair.
+ * Decodes an signed Bamboo entry.
  * @param {string} encodedEntry - Hexadecimal string of an encoded entry
- * @returns Bamboo Entry
+ * @returns {Entry} Bamboo Entry
  */
 export function decodeEntry(encodedEntry: string): Entry {
   validate(

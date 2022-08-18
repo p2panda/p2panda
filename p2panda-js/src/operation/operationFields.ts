@@ -4,6 +4,8 @@ import wasm from '../wasm';
 import { validate } from '../validate';
 import { isInt, isFloat } from '../utils';
 
+import type { OperationValue, EasyValues } from './';
+
 type FieldType =
   | 'str'
   | 'int'
@@ -14,24 +16,8 @@ type FieldType =
   | 'relation_list'
   | 'pinned_relation_list';
 
-type OperationValue =
-  | string
-  | bigint
-  | number
-  | boolean
-  | string[]
-  | string[][];
-
-/*
- * "Easy fields" to populate the operation with basic data types.
- *
- * This can be used to easily create operation fields, even when there is no
- * schema at hand. Please note that only unambigious field types like "str",
- * "int", "float" and "bool" can be used here
- */
-export type EasyFields = {
-  [fieldName: string]: string | number | bigint | boolean;
-};
+// Allow 'number' when inserting new operation values
+type OperationValueArg = OperationValue | number;
 
 /**
  * Operation fields containing application data.
@@ -41,13 +27,14 @@ export class OperationFields {
 
   /**
    * Creates a new instance of `OperationFields`.
-   * @param {EasyFields?} fields - "Easy fields" to populate the operation with
-   * basic data types. This can be used to easily create operation fields, even
-   * when there is no schema at hand. Please note that only unambigious field
-   * types like "str", "int", "float" and "bool" can be used here
+   * @param {EasyValues?} fields - "Easy field values" to populate the
+   * operation with basic data types. This can be used to easily create
+   * operation fields, even when there is no schema at hand. Please note that
+   * only unambigious field types like "str", "int", "float" and "bool" can be
+   * used here
    * @returns OperationFields instance
    */
-  constructor(fields?: EasyFields) {
+  constructor(fields?: EasyValues) {
     const operationFields = new wasm.OperationFields();
 
     // We can pass in "easy fields" into the constructor to allow the fast
@@ -87,7 +74,7 @@ export class OperationFields {
    * @param {FieldType} fieldType - Operation field type
    * @param {OperationValue} value - Actual user data
    */
-  insert(fieldName: string, fieldType: FieldType, value: OperationValue) {
+  insert(fieldName: string, fieldType: FieldType, value: OperationValueArg) {
     validate(
       {
         fieldName,

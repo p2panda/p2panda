@@ -1,33 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import wasm from '../wasm';
-import { OperationFields } from './';
+import { OperationFields, OPERATION_ACTIONS } from './';
 import { validate } from '../validate';
 
-import type { EasyFields } from './operationFields';
-
-// Operation actions encoded as integers
-const OPERATION_ACTIONS = {
-  create: 0,
-  update: 1,
-  delete: 2,
-};
+import type { EasyValues, OperationAction, OperationMeta } from './';
 
 /**
  * Arguments to create an operation.
  */
-type OperationArgs = {
-  // Operation action
-  action?: 'create' | 'update' | 'delete';
+type OperationArgs = OperationMeta & {
+  // Operation action, default is CREATE
+  action?: OperationAction;
 
-  // Id of schema this operation matches
-  schemaId: string;
-
-  // Document view id pointing at previous operations
-  previousOperations?: string[];
-
-  // Fields with user data
-  fields?: OperationFields | EasyFields;
+  // Fields with user data, needs to be set for CREATE and UPDATE operations
+  fields?: OperationFields | EasyValues;
 };
 
 /**
