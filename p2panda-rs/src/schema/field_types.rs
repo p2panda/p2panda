@@ -3,7 +3,7 @@
 use std::fmt::Display;
 use std::str::FromStr;
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::operation::OperationValue;
@@ -102,10 +102,10 @@ impl FromStr for FieldType {
 
         // Matches a field type name, followed by an optional group in parentheses that contains
         // the referenced schema for relation field types
-        lazy_static! {
+        static RELATION_REGEX: Lazy<Regex> = Lazy::new(|| {
             // Unwrap as we checked the regular expression for correctness
-            static ref RELATION_REGEX: Regex = Regex::new(r"(\w+)(\((.+)\))?").unwrap();
-        }
+            Regex::new(r"(\w+)(\((.+)\))?").unwrap()
+        });
 
         // @TODO: This might panic if input is invalid?
         let groups = RELATION_REGEX.captures(s).unwrap();

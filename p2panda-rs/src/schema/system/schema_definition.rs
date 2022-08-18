@@ -2,32 +2,30 @@
 
 use std::collections::BTreeMap;
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use crate::schema::error::SchemaIdError;
 use crate::schema::{FieldType, Schema, SchemaId};
 
 const DESCRIPTION: &str = "Publish data schemas for your application.";
 
-lazy_static! {
-    pub static ref SCHEMA_DEFINITION_V1: Schema = {
-        let mut fields = BTreeMap::new();
+pub static SCHEMA_DEFINITION_V1: Lazy<Schema> = Lazy::new(|| {
+    let mut fields = BTreeMap::new();
 
-        fields.insert("name".to_string(), FieldType::String);
-        fields.insert("description".to_string(), FieldType::String);
+    fields.insert("name".to_string(), FieldType::String);
+    fields.insert("description".to_string(), FieldType::String);
 
-        fields.insert(
-            "fields".to_string(),
-            FieldType::PinnedRelationList(SchemaId::SchemaFieldDefinition(1)),
-        );
+    fields.insert(
+        "fields".to_string(),
+        FieldType::PinnedRelationList(SchemaId::SchemaFieldDefinition(1)),
+    );
 
-        Schema {
-            id: SchemaId::SchemaDefinition(1),
-            description: DESCRIPTION.to_owned(),
-            fields,
-        }
-    };
-}
+    Schema {
+        id: SchemaId::SchemaDefinition(1),
+        description: DESCRIPTION.to_owned(),
+        fields,
+    }
+});
 
 /// Returns the `schema_definition` system schema with a given version.
 pub fn get_schema_definition(version: u8) -> Result<&'static Schema, SchemaIdError> {
