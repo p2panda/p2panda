@@ -14,8 +14,8 @@ use crate::operation::plain::PlainValue;
 use crate::operation::traits::{Actionable, Schematic};
 use crate::operation::validate::validate_operation_format;
 use crate::operation::{
-    EncodedOperation, OperationAction, OperationValue, OperationVersion, PinnedRelation,
-    PinnedRelationList, Relation, RelationList,
+    EncodedOperation, OperationAction, OperationId, OperationValue, OperationVersion,
+    PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
 use crate::schema::SchemaId;
 use crate::wasm::error::jserr;
@@ -180,24 +180,32 @@ impl OperationFields {
                 Ok(())
             }
             "pinned_relation" => {
-                // @TODO: Should order and de-duplicate value before
-                let relation: PinnedRelation = jserr!(
+                let operation_ids: Vec<OperationId> = jserr!(
                     deserialize_from_js(value),
                     "Expected an array of operation ids for field of type pinned relation list"
                 );
-                jserr!(relation.validate());
+
+                // De-duplicate and sort operation ids as the data comes via the programmatic API
+                let relation = PinnedRelation::new(DocumentViewId::new(&operation_ids));
+
                 jserr!(self
                     .0
                     .insert(name, OperationValue::PinnedRelation(relation)));
                 Ok(())
             }
             "pinned_relation_list" => {
-                // @TODO: Should order and de-duplicate values before
-                let relations: PinnedRelationList = jserr!(
+                let relations: Vec<Vec<OperationId>> = jserr!(
                     deserialize_from_js(value),
                     "Expected a nested array of operation ids for field of type pinned relation list"
                 );
-                jserr!(relations.validate());
+
+                // De-duplicate and sort operation ids as the data comes via the programmatic API
+                let document_view_ids: Vec<DocumentViewId> = relations
+                    .iter()
+                    .map(|operation_ids| DocumentViewId::new(&operation_ids))
+                    .collect();
+                let relations = PinnedRelationList::new(document_view_ids);
+
                 jserr!(self
                     .0
                     .insert(name, OperationValue::PinnedRelationList(relations)));

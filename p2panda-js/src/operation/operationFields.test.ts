@@ -39,6 +39,42 @@ describe('OperationFields', () => {
     expect(fields.get('h')).toEqual([[hash5], [hash6, hash7]]);
   });
 
+  it('sorts and de-duplicates document view ids for us', () => {
+    const fields = new OperationFields();
+
+    // Pinned relation
+    expect(() => {
+      fields.insert('a', 'pinned_relation', [
+        '0020fc29afb2f0620bf7417fda043dd13b8e2ef60a47b3f99f47bf8019f68c17411e',
+        '002020e572c9e4cb884754c047d3d6fec0ff9e700e446cb5f62167575475f7e31bd2',
+        '002020e572c9e4cb884754c047d3d6fec0ff9e700e446cb5f62167575475f7e31bd2',
+      ]);
+    }).not.toThrow();
+
+    expect(fields.get('a')).toEqual([
+      '002020e572c9e4cb884754c047d3d6fec0ff9e700e446cb5f62167575475f7e31bd2',
+      '0020fc29afb2f0620bf7417fda043dd13b8e2ef60a47b3f99f47bf8019f68c17411e',
+    ]);
+
+    // List of pinned relations
+    expect(() => {
+      fields.insert('b', 'pinned_relation_list', [
+        [
+          '0020fc29afb2f0620bf7417fda043dd13b8e2ef60a47b3f99f47bf8019f68c17411e',
+          '002020e572c9e4cb884754c047d3d6fec0ff9e700e446cb5f62167575475f7e31bd2',
+          '002020e572c9e4cb884754c047d3d6fec0ff9e700e446cb5f62167575475f7e31bd2',
+        ],
+      ]);
+    }).not.toThrow();
+
+    expect(fields.get('b')).toEqual([
+      [
+        '002020e572c9e4cb884754c047d3d6fec0ff9e700e446cb5f62167575475f7e31bd2',
+        '0020fc29afb2f0620bf7417fda043dd13b8e2ef60a47b3f99f47bf8019f68c17411e',
+      ],
+    ]);
+  });
+
   it('handles all sorts of numbers', () => {
     const fields = new OperationFields();
     fields.insert('a', 'int', 123);
