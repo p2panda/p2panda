@@ -80,10 +80,12 @@ impl<T: EntryWithOperation> From<T> for EncodedEntry {
 
 #[cfg(any(feature = "test-utils", test))]
 impl EncodedEntry {
+    /// Returns a new instance of `EncodedEntry` for testing.
     pub fn new(bytes: &[u8]) -> EncodedEntry {
         Self(bytes.to_owned())
     }
 
+    /// Converts hexadecimal string into bytes and returns as a new instance of `EncodedEntry`.
     pub fn from_hex(value: &str) -> EncodedEntry {
         let bytes = hex::decode(value).expect("invalid hexadecimal value");
         Self(bytes)

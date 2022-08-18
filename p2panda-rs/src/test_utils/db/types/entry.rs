@@ -22,6 +22,7 @@ pub struct StorageEntry {
 }
 
 impl StorageEntry {
+    /// Returns a new `StorageEntry` instance.
     pub fn new(encoded_entry: &EncodedEntry, operation: Option<&EncodedOperation>) -> Self {
         let entry = decode_entry(encoded_entry).expect("Invalid encoded entry given");
         Self {

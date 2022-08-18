@@ -13,6 +13,7 @@ pub fn schema_id(#[default(SCHEMA_ID)] schema_id_str: &str) -> SchemaId {
     SchemaId::new(schema_id_str).unwrap()
 }
 
+/// Generates a name of a schema field.
 #[fixture]
 pub fn schema_field_name(#[default("venue")] name: &str) -> FieldName {
     name.to_owned()
@@ -36,6 +37,7 @@ pub fn schema_field_type(
     }
 }
 
+/// Generates field which can be used to define a schema.
 #[fixture]
 pub fn schema_field(
     #[from(schema_field_name)] name: FieldName,

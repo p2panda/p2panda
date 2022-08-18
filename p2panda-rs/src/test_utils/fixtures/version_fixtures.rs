@@ -14,10 +14,19 @@ use crate::test_utils::fixtures::{key_pair, schema_id};
 /// Fixture struct which contains versioned p2panda data for testing.
 #[derive(Debug)]
 pub struct Fixture {
+    /// Entry which was encoded and signed with operation payload.
     pub entry: Entry,
+
+    /// Encoded representation of the entry.
     pub entry_encoded: EncodedEntry,
+
+    /// Key pair which was used to sign the entry.
     pub key_pair: KeyPair,
+
+    /// Encoded representation of the operation payload.
     pub operation_encoded: EncodedOperation,
+
+    /// Schema which matches the created operation.
     pub schema: Schema,
 }
 

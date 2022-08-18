@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Helper methods for preparing test databases.
 use rstest::fixture;
 
 use crate::document::{DocumentId, DocumentViewId};

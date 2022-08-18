@@ -55,10 +55,12 @@ impl Display for EncodedOperation {
 
 #[cfg(any(feature = "test-utils", test))]
 impl EncodedOperation {
+    /// Returns a new instance of `EncodedOperation` for testing.
     pub fn new(bytes: &[u8]) -> EncodedOperation {
         Self(bytes.to_owned())
     }
 
+    /// Converts hexadecimal string into bytes and returns as a new instance of `EncodedOperation`.
     pub fn from_hex(value: &str) -> EncodedOperation {
         let bytes = hex::decode(value).expect("invalid hexadecimal value");
         Self(bytes)
