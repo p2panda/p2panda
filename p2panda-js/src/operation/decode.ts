@@ -60,6 +60,6 @@ export function decodeOperation(encodedOperation: string): PlainOperation {
 
     return plainOperation;
   } catch (error) {
-    throw new Error(`Could not decode operation: ${error}`);
+    throw new Error(`Could not decode operation: ${(error as Error).message}`);
   }
 }

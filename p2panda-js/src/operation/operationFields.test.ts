@@ -73,9 +73,7 @@ describe('OperationFields', () => {
 
     expect(() => {
       fields.insert('test', 'str', 'Hello, World!');
-    }).toThrow(
-      "Could not insert new field: Error: field 'test' already exists",
-    );
+    }).toThrow("Could not insert new field: field 'test' already exists");
   });
 
   it('returns "null" and does not throw when trying to get an inexistant field', () => {

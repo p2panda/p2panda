@@ -35,7 +35,7 @@ describe('decodeOperation', () => {
         '84010063626C61A1646E616D6570416D616E697461206361657361726561',
       );
     }).toThrow(
-      "Could not decode operation: Error: malformed schema id `bla`: doesn't contain an underscore",
+      "Could not decode operation: malformed schema id `bla`: doesn't contain an underscore",
     );
   });
 });

@@ -77,7 +77,7 @@ describe('signAndEncodeEntry', () => {
         keyPair,
       );
     }).toThrow(
-      'Could not sign and encode entry: Error: backlink and skiplink not valid for this sequence number',
+      'Could not sign and encode entry: backlink and skiplink not valid for this sequence number',
     );
   });
 });

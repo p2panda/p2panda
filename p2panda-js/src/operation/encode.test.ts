@@ -34,4 +34,16 @@ describe('encodeOperation', () => {
         '6e5f7631a2646e616d656576656e7565647479706563737472',
     );
   });
+
+  it('throws an error when creating an invalid operation', () => {
+    // Fields and previous operations missing
+    expect(() => {
+      encodeOperation({
+        action: 'update',
+        schemaId: 'schema_field_definition_v1',
+      });
+    }).toThrow(
+      "Could not encode operation: expected 'fields' in CREATE or UPDATE operation",
+    );
+  });
 });

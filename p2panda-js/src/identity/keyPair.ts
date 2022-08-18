@@ -49,7 +49,9 @@ export class KeyPair {
         keyPair = wasm.KeyPair.fromPrivateKey(privateKey);
       } catch (error) {
         throw new Error(
-          `Could not recreate key pair from private key: ${error}`,
+          `Could not recreate key pair from private key: ${
+            (error as Error).message
+          }`,
         );
       }
     } else {
@@ -57,7 +59,9 @@ export class KeyPair {
       try {
         keyPair = new wasm.KeyPair();
       } catch (error) {
-        throw new Error(`Could not generate new key pair: ${error}`);
+        throw new Error(
+          `Could not generate new key pair: ${(error as Error).message}`,
+        );
       }
     }
 

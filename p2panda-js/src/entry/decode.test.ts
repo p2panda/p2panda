@@ -46,7 +46,7 @@ describe('decodeEntry', () => {
         '00b443811e711fdbfcbeccaf655e0ebe7a1c83490cc28d1516c5920178bef416c5',
       );
     }).toThrow(
-      'Could not decode entry: Error: Could not decode log_id, error with varu64 encoding',
+      'Could not decode entry: Could not decode log_id, error with varu64 encoding',
     );
   });
 });

@@ -99,7 +99,9 @@ export class OperationFields {
         this.__internal.insert(fieldName, fieldType, value);
       }
     } catch (error) {
-      throw new Error(`Could not insert new field: ${error}`);
+      throw new Error(
+        `Could not insert new field: ${(error as Error).message}`,
+      );
     }
   }
 

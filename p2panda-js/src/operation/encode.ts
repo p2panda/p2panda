@@ -70,6 +70,6 @@ export function encodeOperation(operation: OperationArgs): string {
       operationFields,
     );
   } catch (error) {
-    throw new Error(`Could not encode operation: ${error}`);
+    throw new Error(`Could not encode operation: ${(error as Error).message}`);
   }
 }

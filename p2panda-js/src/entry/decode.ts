@@ -52,6 +52,6 @@ export function decodeEntry(encodedEntry: string): Entry {
   try {
     return wasm.decodeEntry(encodedEntry);
   } catch (error) {
-    throw new Error(`Could not decode entry: ${error}`);
+    throw new Error(`Could not decode entry: ${(error as Error).message}`);
   }
 }

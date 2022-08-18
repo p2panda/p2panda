@@ -89,6 +89,8 @@ export function signAndEncodeEntry(entry: EntryArgs, keyPair: KeyPair): string {
       keyPair.__internal,
     );
   } catch (error) {
-    throw new Error(`Could not sign and encode entry: ${error}`);
+    throw new Error(
+      `Could not sign and encode entry: ${(error as Error).message}`,
+    );
   }
 }
