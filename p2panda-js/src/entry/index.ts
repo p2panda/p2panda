@@ -1,3 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-export { signPublishEntry } from './entry';
+export { signAndEncodeEntry } from './encode';
+export { decodeEntry } from './decode';

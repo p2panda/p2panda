@@ -9,7 +9,7 @@
 <div align="center">
   <!-- CI status -->
   <a href="https://github.com/p2panda/p2panda/actions">
-    <img src="https://img.shields.io/github/workflow/status/p2panda/p2panda/Build%20and%20test?style=flat-square" alt="CI Status" />
+    <img src="https://img.shields.io/github/checks-status/p2panda/p2panda/main?style=flat-square" alt="CI Status" />
   </a>
   <!-- Codecov report -->
   <a href="https://app.codecov.io/gh/p2panda/p2panda/">
@@ -27,7 +27,7 @@
 
 <div align="center">
   <h3>
-    <a href="https://github.com/p2panda/p2panda">
+    <a href="https://github.com/p2panda/p2panda#installation">
       Installation
     </a>
     <span> | </span>
@@ -47,7 +47,7 @@
 
 <br />
 
-This library provides all tools required to write a client for the [`p2panda`] network. It is shipped both as a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web browser.
+This library provides all tools required to write a client, node or even your own protocol implementation for the [`p2panda`] network. It is shipped both as a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web browser.
 
 Read the library [`documentation`] for installation guides and examples.
 

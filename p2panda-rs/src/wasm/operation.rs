@@ -1,34 +1,119 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::str::FromStr;
 
+#[cfg(test)]
+use serde::Deserialize;
+use serde::Serialize;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
-use crate::document::error::DocumentViewIdError;
-use crate::document::{DocumentId, DocumentViewId};
-use crate::operation::encode::encode_plain_operation;
-use crate::operation::plain::{PlainFields, PlainOperation, PlainValue};
-use crate::operation::{OperationAction, OperationId, OperationVersion, RelationList};
+use crate::document::DocumentViewId;
+use crate::operation::plain::PlainValue;
+use crate::operation::traits::{Actionable, Schematic};
+use crate::operation::validate::validate_operation_format;
+use crate::operation::{
+    EncodedOperation, OperationAction, OperationId, OperationValue, OperationVersion,
+    PinnedRelation, PinnedRelationList, Relation, RelationList,
+};
 use crate::schema::SchemaId;
 use crate::wasm::error::jserr;
 use crate::wasm::serde::{deserialize_from_js, serialize_to_js};
+use crate::Validate;
 
-/// Use `OperationFields` to attach application data to an [`Operation`].
-///
-// @TODO: This uses plain fields which are schemaless. In the future we want to use regular
-// operation fields and a wasm-compatible schema object.
+/// Helper method to convert from `OperationValue` to `JsValue`.
+fn operation_to_js_value(operation_value: &OperationValue) -> Result<JsValue, JsValue> {
+    match operation_value {
+        OperationValue::Boolean(value) => Ok(JsValue::from_bool(value.to_owned())),
+        OperationValue::Integer(value) => Ok(JsValue::from(value.to_owned())),
+        OperationValue::Float(value) => Ok(JsValue::from_f64(value.to_owned())),
+        OperationValue::String(value) => Ok(JsValue::from_str(value)),
+        OperationValue::Relation(value) => Ok(jserr!(serialize_to_js(value))),
+        OperationValue::RelationList(value) => Ok(jserr!(serialize_to_js(value))),
+        OperationValue::PinnedRelation(value) => Ok(jserr!(serialize_to_js(value))),
+        OperationValue::PinnedRelationList(value) => Ok(jserr!(serialize_to_js(value))),
+    }
+}
+
+/// Helper method to convert from `PlainValue` to `JsValue`.
+fn plain_to_js_value(plain_value: &PlainValue) -> Result<JsValue, JsValue> {
+    match plain_value {
+        PlainValue::Boolean(value) => Ok(JsValue::from_bool(value.to_owned())),
+        PlainValue::Integer(value) => Ok(JsValue::from(value.to_owned())),
+        PlainValue::Float(value) => Ok(JsValue::from_f64(value.to_owned())),
+        PlainValue::StringOrRelation(value) => Ok(JsValue::from_str(value)),
+        PlainValue::PinnedRelationOrRelationList(value) => Ok(jserr!(serialize_to_js(value))),
+        PlainValue::PinnedRelationList(value) => Ok(jserr!(serialize_to_js(value))),
+    }
+}
+
+/// Return value of [`decode_entry`] that holds the decoded entry and plain operation.
+#[derive(Serialize, Debug)]
+#[cfg_attr(test, derive(Deserialize))]
+#[serde(rename_all = "camelCase")]
+pub struct PlainOperation {
+    /// Version of this operation.
+    pub(crate) version: u64,
+
+    /// Describes if this operation creates, updates or deletes data.
+    pub(crate) action: u64,
+
+    /// The id of the schema for this operation.
+    pub(crate) schema_id: String,
+
+    /// Optional document view id containing the operation ids directly preceding this one in the
+    /// document.
+    pub(crate) previous_operations: Option<Vec<String>>,
+
+    /// Optional fields map holding the operation data.
+    pub(crate) fields: Option<PlainFields>,
+}
+
+/// Interface to create, update and retreive values from operation fields.
+#[wasm_bindgen]
+#[derive(Clone, Serialize, Debug)]
+#[cfg_attr(test, derive(Deserialize))]
+pub struct PlainFields(crate::operation::plain::PlainFields);
+
+#[wasm_bindgen]
+impl PlainFields {
+    /// Returns field value when existing.
+    #[wasm_bindgen]
+    pub fn get(&self, name: &str) -> Result<JsValue, JsValue> {
+        match self.0.get(name) {
+            Some(value) => Ok(jserr!(
+                plain_to_js_value(value),
+                "Could not retreive value from plain field"
+            )),
+            None => Ok(JsValue::NULL),
+        }
+    }
+
+    /// Returns the number of fields in this instance.
+    #[wasm_bindgen(js_name = length)]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns true when no field exists.
+    #[wasm_bindgen(js_name = isEmpty)]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+/// Interface to create, update and retreive values from operation fields.
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
-pub struct OperationFields(PlainFields);
+pub struct OperationFields(crate::operation::OperationFields);
 
 #[wasm_bindgen]
 impl OperationFields {
     /// Returns an `OperationFields` instance.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
-        Self(PlainFields::new())
+        Self(crate::operation::OperationFields::new())
     }
 
     /// Adds a field with a value and a given value type.
@@ -53,12 +138,12 @@ impl OperationFields {
         match value_type {
             "str" => {
                 let value_str = jserr!(value.as_string().ok_or("Invalid string value"));
-                jserr!(self.0.insert(name, PlainValue::StringOrRelation(value_str)));
+                jserr!(self.0.insert(name, OperationValue::String(value_str)));
                 Ok(())
             }
             "bool" => {
                 let value_bool = jserr!(value.as_bool().ok_or("Invalid boolean value"));
-                jserr!(self.0.insert(name, PlainValue::Boolean(value_bool)));
+                jserr!(self.0.insert(name, OperationValue::Boolean(value_bool)));
                 Ok(())
             }
             "int" => {
@@ -69,99 +154,61 @@ impl OperationFields {
                 // protocol.
                 let value_str = jserr!(value.as_string().ok_or("Must be passed as a string"));
                 let value_int: i64 = jserr!(value_str.parse(), "Invalid integer value");
-                jserr!(self.0.insert(name, PlainValue::Integer(value_int)));
+                jserr!(self.0.insert(name, OperationValue::Integer(value_int)));
                 Ok(())
             }
             "float" => {
                 let value_float = jserr!(value.as_f64().ok_or("Invalid float value"));
-                jserr!(self.0.insert(name, PlainValue::Float(value_float)));
+                jserr!(self.0.insert(name, OperationValue::Float(value_float)));
                 Ok(())
             }
             "relation" => {
-                // Pass document id as a string
-                let value_str = jserr!(value
-                    .as_string()
-                    .ok_or("Expected a document id string for field of type relation"));
-
-                // Convert to `DocumentId` to validate it
-                jserr!(
-                    DocumentId::from_str(&value_str),
-                    "Invalid document id found for relation"
+                let relation: Relation = jserr!(
+                    deserialize_from_js(value),
+                    "Expected a document id string for field of type relation"
                 );
-
-                // @TODO: Actually store a `DocumentId` as soon as we stop using plain operations
-                jserr!(self.0.insert(name, PlainValue::StringOrRelation(value_str)));
+                jserr!(relation.validate());
+                jserr!(self.0.insert(name, OperationValue::Relation(relation)));
                 Ok(())
             }
             "relation_list" => {
-                // Pass as array of strings
-                let relations_str: Vec<String> = jserr!(
+                let relations: RelationList = jserr!(
                     deserialize_from_js(value),
                     "Expected an array of operation ids for field of type relation list"
                 );
-
-                // Convert to array of document ids to validate it
-                jserr!(
-                    RelationList::try_from(relations_str.as_slice()),
-                    "Invalid document id found in relation list"
-                );
-
-                // @TODO: Actually store an array of `DocumentId` as soon as we don't use plain
-                // operations
-                jserr!(self.0.insert(
-                    name,
-                    PlainValue::PinnedRelationOrRelationList(relations_str)
-                ));
+                jserr!(self.0.insert(name, OperationValue::RelationList(relations)));
                 Ok(())
             }
             "pinned_relation" => {
-                // Pass as array of operation id strings
-                let operations_str: Vec<String> = jserr!(
+                let operation_ids: Vec<OperationId> = jserr!(
                     deserialize_from_js(value),
-                    "Expected an array of operation ids for field of type pinned relation"
+                    "Expected an array of operation ids for field of type pinned relation list"
                 );
 
-                // Convert to document view id to validate it
-                jserr!(
-                    DocumentViewId::try_from(operations_str.as_slice()),
-                    "Invalid operation id found in pinned relation"
-                );
+                // De-duplicate and sort operation ids as the data comes via the programmatic API
+                let relation = PinnedRelation::new(DocumentViewId::new(&operation_ids));
 
-                // @TODO: Actually store as `DocumentViewId` as soon as we don't use plain
-                // operations
-                jserr!(self.0.insert(
-                    name,
-                    PlainValue::PinnedRelationOrRelationList(operations_str)
-                ));
+                jserr!(self
+                    .0
+                    .insert(name, OperationValue::PinnedRelation(relation)));
                 Ok(())
             }
             "pinned_relation_list" => {
-                // Pass as array of string arrays
-                let relations_str: Vec<Vec<String>> = jserr!(
+                let relations: Vec<Vec<OperationId>> = jserr!(
                     deserialize_from_js(value),
                     "Expected a nested array of operation ids for field of type pinned relation list"
                 );
 
-                // Convert to document view ids to validate it
-                let document_view_ids: Result<(), DocumentViewIdError> =
-                    relations_str.iter().try_for_each(|operation_ids_str| {
-                        // Convert list of strings to list of operation ids aka a document view
-                        // id, this checks if list of operation ids is sorted and without any
-                        // duplicates
-                        let _: DocumentViewId = operation_ids_str.as_slice().try_into()?;
-                        Ok(())
-                    });
+                // De-duplicate and sort operation ids as the data comes via the programmatic API
+                let document_view_ids: Vec<DocumentViewId> = relations
+                    .iter()
+                    .map(|operation_ids| DocumentViewId::new(&operation_ids))
+                    .collect();
+                let relations = PinnedRelationList::new(document_view_ids);
 
-                jserr!(
-                    document_view_ids,
-                    "Invalid document view id found in pinned relation list"
-                );
-
-                // @TODO: Actually store as array of `DocumentViewId` as soon as we don't use plain
-                // operations
                 jserr!(self
                     .0
-                    .insert(name, PlainValue::PinnedRelationList(relations_str)));
+                    .insert(name, OperationValue::PinnedRelationList(relations)));
                 Ok(())
             }
             _ => Err(js_sys::Error::new("Unknown value type").into()),
@@ -170,16 +217,12 @@ impl OperationFields {
 
     /// Returns field of this `OperationFields` instance when existing.
     #[wasm_bindgen]
-    pub fn get(&mut self, name: &str) -> Result<JsValue, JsValue> {
+    pub fn get(&self, name: &str) -> Result<JsValue, JsValue> {
         match self.0.get(name) {
-            Some(PlainValue::Boolean(value)) => Ok(JsValue::from_bool(value.to_owned())),
-            Some(PlainValue::Float(value)) => Ok(JsValue::from_f64(value.to_owned())),
-            Some(PlainValue::Integer(value)) => Ok(JsValue::from(value.to_owned())),
-            Some(PlainValue::StringOrRelation(value)) => Ok(JsValue::from_str(value)),
-            Some(PlainValue::PinnedRelationOrRelationList(value)) => {
-                Ok(jserr!(serialize_to_js(value)))
-            }
-            Some(PlainValue::PinnedRelationList(value)) => Ok(jserr!(serialize_to_js(value))),
+            Some(value) => Ok(jserr!(
+                operation_to_js_value(value),
+                "Could not retreive value from operation field"
+            )),
             None => Ok(JsValue::NULL),
         }
     }
@@ -195,13 +238,6 @@ impl OperationFields {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-
-    /// Returns this instance formatted for debugging.
-    #[wasm_bindgen(js_name = toString)]
-    #[allow(clippy::inherent_to_string)]
-    pub fn to_string(&self) -> String {
-        format!("{:?}", self)
-    }
 }
 
 impl Default for OperationFields {
@@ -210,102 +246,86 @@ impl Default for OperationFields {
     }
 }
 
-/// Returns an encoded CREATE operation that creates a document of the provided schema.
-#[wasm_bindgen(js_name = encodeCreateOperation)]
-pub fn encode_create_operation(
-    schema_id: JsValue,
-    fields: OperationFields,
+/// Creates, validates and encodes an operation as hexadecimal string.
+#[wasm_bindgen(js_name = encodeOperation)]
+pub fn encode_operation(
+    action: u64,
+    schema_id: String,
+    previous_operations: JsValue,
+    fields: Option<OperationFields>,
 ) -> Result<String, JsValue> {
-    let schema_id: SchemaId = jserr!(
-        deserialize_from_js(schema_id.clone()),
-        format!("Invalid schema id: {:?}", schema_id)
-    );
+    // Convert parameters
+    let action = jserr!(OperationAction::try_from(action));
+    let schema_id = jserr!(SchemaId::from_str(&schema_id));
+    let document_view_id = if !previous_operations.is_undefined() {
+        let view_id: DocumentViewId = jserr!(
+            deserialize_from_js(previous_operations),
+            "Invalid document view id"
+        );
+        Some(view_id)
+    } else {
+        None
+    };
 
-    // @TODO: This does not validate if the operation is correct. We can implement it as soon a we
-    // use real operations with schemas again
-    let plain_operation = PlainOperation::new(
-        OperationVersion::V1,
-        OperationAction::Create,
+    // Create and validate operation
+    let operation = crate::operation::Operation {
+        version: OperationVersion::V1,
+        action,
         schema_id,
-        None,
-        Some(fields.0),
-    );
+        previous_operations: document_view_id,
+        fields: fields.map(|inner| inner.0),
+    };
+    jserr!(validate_operation_format(&operation));
 
-    let operation_encoded = jserr!(encode_plain_operation(&plain_operation));
+    // Encode and return it as hexadecimal string
+    let operation_encoded = jserr!(crate::operation::encode::encode_operation(&operation));
     Ok(operation_encoded.to_string())
 }
 
-/// Returns an encoded UPDATE operation that updates fields of a given document.
-#[wasm_bindgen(js_name = encodeUpdateOperation)]
-pub fn encode_update_operation(
-    schema_id: JsValue,
-    previous_operations: JsValue,
-    fields: OperationFields,
-) -> Result<String, JsValue> {
-    let schema_id: SchemaId = jserr!(deserialize_from_js(schema_id), "Invalid schema id");
-
-    // Decode JsValue into vector of strings
-    let prev_op_strings: Vec<String> = jserr!(
-        deserialize_from_js(previous_operations),
-        "Can not deserialize array"
+/// Decodes an operation into its plain form.
+///
+/// A plain operation has not been checked against a schema yet.
+#[wasm_bindgen(js_name = decodeOperation)]
+pub fn decode_operation(encoded_operation: String) -> Result<JsValue, JsValue> {
+    let operation_bytes = jserr!(
+        hex::decode(encoded_operation),
+        "Invalid hex-encoding of encoded operation"
     );
+    let operation_encoded = EncodedOperation::from_bytes(&operation_bytes);
 
-    // Create operation ids from strings and collect wrapped in a result
-    let prev_op_result: Result<Vec<OperationId>, _> = prev_op_strings
-        .iter()
-        .map(|prev_op| prev_op.parse())
-        .collect();
+    // Decode to plain operation
+    let operation_plain = jserr!(crate::operation::decode::decode_operation(
+        &operation_encoded
+    ));
 
-    let previous_ops = jserr!(prev_op_result);
-    let document_view_id = DocumentViewId::new(&previous_ops);
+    // Convert document view id into array of operation id strings
+    let previous_operations: Option<Vec<String>> = match operation_plain.previous_operations() {
+        Some(prev_ops) => {
+            let converted: Vec<String> = prev_ops
+                .graph_tips()
+                .iter()
+                .map(|operation_id| operation_id.to_string())
+                .collect();
 
-    // @TODO: This does not validate if the operation is correct. We can implement it as soon a we
-    // use real operations with schemas again
-    let plain_operation = PlainOperation::new(
-        OperationVersion::V1,
-        OperationAction::Update,
-        schema_id,
-        Some(document_view_id),
-        Some(fields.0),
-    );
+            Some(converted)
+        }
+        None => None,
+    };
 
-    let operation_encoded = jserr!(encode_plain_operation(&plain_operation));
-    Ok(operation_encoded.to_string())
-}
+    // Convert plain fields into map of js values
+    let fields = match operation_plain.fields() {
+        Some(inner) => Some(PlainFields(inner)),
+        None => None,
+    };
 
-/// Returns an encoded DELETE operation that deletes a given document.
-#[wasm_bindgen(js_name = encodeDeleteOperation)]
-pub fn encode_delete_operation(
-    schema_id: JsValue,
-    previous_operations: JsValue,
-) -> Result<String, JsValue> {
-    let schema_id: SchemaId = jserr!(deserialize_from_js(schema_id), "Invalid schema id");
-
-    // Decode JsValue into vector of strings
-    let prev_op_strings: Vec<String> = jserr!(
-        deserialize_from_js(previous_operations),
-        "Can not deserialize array"
-    );
-
-    // Create operation ids from strings and collect wrapped in a result
-    let prev_op_result: Result<Vec<OperationId>, _> = prev_op_strings
-        .iter()
-        .map(|prev_op| prev_op.parse())
-        .collect();
-
-    let previous_ops = jserr!(prev_op_result);
-    let document_view_id = DocumentViewId::new(&previous_ops);
-
-    // @TODO: This does not validate if the operation is correct. We can implement it as soon a we
-    // use real operations with schemas again
-    let plain_operation = PlainOperation::new(
-        OperationVersion::V1,
-        OperationAction::Update,
-        schema_id,
-        Some(document_view_id),
-        None,
-    );
-
-    let operation_encoded = jserr!(encode_plain_operation(&plain_operation));
-    Ok(operation_encoded.to_string())
+    // Convert to external wasm type and return it
+    let result_wasm = PlainOperation {
+        action: operation_plain.action().as_u64(),
+        version: operation_plain.version().as_u64(),
+        schema_id: operation_plain.schema_id().to_string(),
+        previous_operations,
+        fields,
+    };
+    let result = jserr!(serialize_to_js(&result_wasm));
+    Ok(result)
 }

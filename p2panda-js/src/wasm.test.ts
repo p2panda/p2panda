@@ -2,11 +2,12 @@
 
 import {
   KeyPair,
-  encodeCreateOperation,
-  verifySignature,
-  decodeEntry,
-  signEncodeEntry,
   OperationFields,
+  decodeEntry,
+  decodeOperation,
+  encodeOperation,
+  signAndEncodeEntry,
+  verifySignature,
 } from './wasm';
 
 const TEST_HASH =
@@ -125,11 +126,13 @@ describe('WebAssembly interface', () => {
       // Throw when relation is an invalid hash
       expect(() =>
         fields.insert('contact', 'relation', 'this is not a hash'),
-      ).toThrow('Invalid document id found for relation');
+      ).toThrow('Expected a document id string for field of type relation');
 
       expect(() =>
         fields.insert('contact', 'relation_list', ['this is not a hash']),
-      ).toThrow('Invalid document id found in relation list');
+      ).toThrow(
+        'Expected an array of operation ids for field of type relation list',
+      );
     });
   });
 
@@ -146,34 +149,54 @@ describe('WebAssembly interface', () => {
       fields.insert('description', 'str', 'Hello, Panda');
       expect(fields.get('description')).toBe('Hello, Panda');
 
-      const operationEncoded = encodeCreateOperation(TEST_SCHEMA_ID, fields);
+      const operationEncoded = encodeOperation(
+        BigInt(0),
+        TEST_SCHEMA_ID,
+        undefined,
+        fields,
+      );
 
       // Sign and encode entry
-      const { entryEncoded, entryHash } = signEncodeEntry(
-        keyPair,
-        operationEncoded,
-        undefined,
-        undefined,
-        BigInt(SEQ_NUM),
+      const entryEncoded = signAndEncodeEntry(
         BigInt(LOG_ID),
+        BigInt(SEQ_NUM),
+        undefined,
+        undefined,
+        operationEncoded,
+        keyPair,
       );
-      expect(entryHash.length).toBe(68);
 
       // Decode entry and return as JSON
-      const decodedEntry = decodeEntry(entryEncoded, operationEncoded);
+      const decodedEntry = decodeEntry(entryEncoded);
       expect(decodedEntry.logId).toEqual(BigInt(LOG_ID));
       expect(decodedEntry.seqNum).toEqual(BigInt(SEQ_NUM));
       expect(decodedEntry.backlink).toBeUndefined();
       expect(decodedEntry.skiplink).toBeUndefined();
-      expect(decodedEntry.operation.action).toBe('create');
-      expect(decodedEntry.operation.schemaId).toEqual(TEST_SCHEMA_ID);
+    });
+  });
+
+  describe('Operations', () => {
+    it('encodes and decodes operations', () => {
+      // Create operation with fields
+      const fields = new OperationFields();
+      fields.insert('description', 'str', 'Hello, Panda');
+      expect(fields.get('description')).toBe('Hello, Panda');
+
+      const operationEncoded = encodeOperation(
+        BigInt(0),
+        TEST_SCHEMA_ID,
+        undefined,
+        fields,
+      );
+
+      // Decode operation
+      const plainOperation = decodeOperation(operationEncoded);
+      expect(plainOperation.action).toBe(BigInt(0));
+      expect(plainOperation.schemaId).toEqual(TEST_SCHEMA_ID);
 
       // Test operation fields map
-      const { fields: operationFields } = decodedEntry.operation;
+      const operationFields = plainOperation.fields;
       expect(operationFields.get('description')).toBe('Hello, Panda');
-
-      // Test decoding entry without operation
-      expect(() => decodeEntry(entryEncoded)).not.toThrow();
     });
 
     it('encodes and decodes large integers correctly', () => {
@@ -184,12 +207,6 @@ describe('WebAssembly interface', () => {
       const LARGE_F64 = Number.MAX_VALUE;
       const LARGE_F64_NEGATIVE = Number.MIN_VALUE;
 
-      // Maximum unsigned u64 integer is 18446744073709551615
-      const LARGE_LOG_ID = '12345678912345678912';
-      const SEQ_NUM = 1;
-
-      const keyPair = new KeyPair();
-
       // Use large numbers as operation field values
       const fields = new OperationFields();
       fields.insert('large_i64', 'int', LARGE_I64);
@@ -197,31 +214,21 @@ describe('WebAssembly interface', () => {
       fields.insert('large_f64', 'float', LARGE_F64);
       fields.insert('large_f64_negative', 'float', LARGE_F64_NEGATIVE);
 
-      const operationEncoded = encodeCreateOperation(TEST_SCHEMA_ID, fields);
-
-      // Sign and encode entry with a very high `log_id` value
-      const { entryEncoded } = signEncodeEntry(
-        keyPair,
-        operationEncoded,
+      const operationEncoded = encodeOperation(
+        BigInt(0),
+        TEST_SCHEMA_ID,
         undefined,
-        undefined,
-        BigInt(SEQ_NUM),
-        BigInt(LARGE_LOG_ID),
+        fields,
       );
 
-      const decodedEntry = decodeEntry(entryEncoded, operationEncoded);
-      expect(decodedEntry.seqNum).toEqual(BigInt(SEQ_NUM));
-      expect(decodedEntry.logId).toEqual(BigInt(LARGE_LOG_ID));
-
-      const { fields: operationFields } = decodedEntry.operation;
-      expect(operationFields.get('large_i64')).toEqual(BigInt(LARGE_I64));
-      expect(operationFields.get('large_i64_negative')).toEqual(
+      const plainOperation = decodeOperation(operationEncoded);
+      const { fields: plainFields } = plainOperation;
+      expect(plainFields.get('large_i64')).toEqual(BigInt(LARGE_I64));
+      expect(plainFields.get('large_i64_negative')).toEqual(
         BigInt(LARGE_I64_NEGATIVE),
       );
-      expect(operationFields.get('large_f64')).toEqual(LARGE_F64);
-      expect(operationFields.get('large_f64_negative')).toEqual(
-        LARGE_F64_NEGATIVE,
-      );
+      expect(plainFields.get('large_f64')).toEqual(LARGE_F64);
+      expect(plainFields.get('large_f64_negative')).toEqual(LARGE_F64_NEGATIVE);
     });
   });
 });

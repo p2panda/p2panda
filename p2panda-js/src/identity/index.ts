@@ -1,3 +1,3 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-export { createKeyPair, recoverKeyPair } from './keyPair';
+export { KeyPair, verifySignature } from './keyPair';

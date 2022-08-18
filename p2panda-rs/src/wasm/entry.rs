@@ -6,40 +6,19 @@ use serde::Serialize;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
-use crate::document::DocumentViewId;
-use crate::entry::decode::decode_entry as decode;
-use crate::entry::encode::sign_and_encode_entry;
-use crate::entry::traits::{AsEncodedEntry, AsEntry};
-use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
+use crate::entry::traits::AsEntry;
+use crate::entry::{EncodedEntry, LogId, SeqNum};
 use crate::hash::Hash;
-use crate::operation::decode::decode_operation;
-use crate::operation::plain::PlainFields;
-use crate::operation::traits::{Actionable, Schematic};
 use crate::operation::EncodedOperation;
 use crate::wasm::error::jserr;
 use crate::wasm::serde::serialize_to_js;
 use crate::wasm::KeyPair;
 
-/// Return value of [`sign_encode_entry`] that holds the encoded entry and its hash.
-#[derive(Serialize, Debug)]
-#[cfg_attr(test, derive(Deserialize))]
-#[serde(rename_all = "camelCase")]
-pub struct SignEncodeEntryResult {
-    /// Encoded p2panda entry.
-    pub entry_encoded: String,
-
-    /// The hash of a p2panda entry.
-    pub entry_hash: String,
-
-    /// The hash of a p2panda operation.
-    pub operation_hash: String,
-}
-
 /// Return value of [`decode_entry`] that holds the decoded entry and plain operation.
 #[derive(Serialize, Debug)]
 #[cfg_attr(test, derive(Deserialize))]
 #[serde(rename_all = "camelCase")]
-pub struct DecodeEntryResult {
+pub struct Entry {
     /// Author of this entry.
     pub public_key: String,
 
@@ -55,138 +34,78 @@ pub struct DecodeEntryResult {
     /// Hash of previous Bamboo entry.
     pub backlink: Option<String>,
 
-    /// Ed25519 signature of entry.
-    pub signature: String,
-
     /// Payload size of entry.
     pub payload_size: u64,
 
     /// Hash of payload.
     pub payload_hash: String,
 
-    /// Payload of this entry.
-    pub operation: Option<DecodeOperationResult>,
+    /// Ed25519 signature of entry.
+    pub signature: String,
 }
 
-/// Return value of [`decode_entry`] that holds the decoded plain operation.
-///
-/// Even though operations are actually encoded as an array this object returns it as a map for
-/// better readability.
-#[derive(Serialize, Debug)]
-#[cfg_attr(test, derive(Deserialize))]
-#[serde(rename_all = "camelCase")]
-pub struct DecodeOperationResult {
-    /// Operation action.
-    pub action: String,
-
-    /// Operation version.
-    pub version: u64,
-
-    /// Schema id.
-    pub schema_id: String,
-
-    /// Previous operations.
-    pub previous_operations: Option<DocumentViewId>,
-
-    /// Operation fields.
-    pub fields: Option<PlainFields>,
-}
-
-/// Returns a signed and encoded entry that can be published to a p2panda node.
-///
-/// `entry_backlink_hash`, `entry_skiplink_hash`, `seq_num` and `log_id` are obtained by querying
-/// the `getEntryArguments` method of a p2panda node.
-#[wasm_bindgen(js_name = signEncodeEntry)]
-pub fn sign_encode_entry(
-    key_pair: &KeyPair,
-    encoded_operation: String,
-    entry_skiplink_hash: Option<String>,
-    entry_backlink_hash: Option<String>,
-    seq_num: u64,
+/// Returns a signed Bamboo entry.
+#[wasm_bindgen(js_name = signAndEncodeEntry)]
+pub fn sign_and_encode_entry(
     log_id: u64,
-) -> Result<JsValue, JsValue> {
+    seq_num: u64,
+    skiplink_hash: Option<String>,
+    backlink_hash: Option<String>,
+    payload: String,
+    key_pair: &KeyPair,
+) -> Result<String, JsValue> {
     // If skiplink_hash exists construct `Hash`
-    let skiplink_hash = match entry_skiplink_hash {
+    let skiplink = match skiplink_hash {
         Some(hash) => Some(jserr!(Hash::new(&hash))),
         None => None,
     };
 
     // If backlink_hash exists construct `Hash`
-    let backlink_hash = match entry_backlink_hash {
+    let backlink = match backlink_hash {
         Some(hash) => Some(jserr!(Hash::new(&hash))),
         None => None,
     };
 
-    // Create `SeqNum` instance
+    // Convert `SeqNum` and `LogId`
+    let log_id = LogId::new(log_id);
     let seq_num = jserr!(SeqNum::new(seq_num));
 
     // Convert to `EncodedOperation`
     let operation_bytes = jserr!(
-        hex::decode(encoded_operation),
+        hex::decode(payload),
         "Invalid hex-encoding of encoded operation"
     );
     let operation_encoded = EncodedOperation::from_bytes(&operation_bytes);
 
     // Sign and encode entry
-    let entry_encoded = jserr!(sign_and_encode_entry(
-        &LogId::new(log_id),
+    let entry_encoded = jserr!(crate::entry::encode::sign_and_encode_entry(
+        &log_id,
         &seq_num,
-        skiplink_hash.as_ref(),
-        backlink_hash.as_ref(),
+        skiplink.as_ref(),
+        backlink.as_ref(),
         &operation_encoded,
         key_pair.as_inner(),
     ));
 
-    // Serialise result to JavaScript object
-    let entry_operation_bundle = SignEncodeEntryResult {
-        entry_encoded: entry_encoded.to_string(),
-        entry_hash: entry_encoded.hash().to_string(),
-        operation_hash: operation_encoded.hash().to_string(),
-    };
-    let result = jserr!(serialize_to_js(&entry_operation_bundle));
-    Ok(result)
+    // Return result as a hexadecimal string
+    Ok(entry_encoded.to_string())
 }
 
-/// Decodes an entry and optional operation given their encoded form.
+/// Decodes an hexadecimal string into an `Entry`.
 #[wasm_bindgen(js_name = decodeEntry)]
-pub fn decode_entry(entry_str: String, operation_str: Option<String>) -> Result<JsValue, JsValue> {
-    // Convert encoded operation
-    let operation = match operation_str {
-        Some(hex_str) => {
-            let operation_bytes = jserr!(
-                hex::decode(hex_str),
-                "Invalid hex-encoding of encoded operation"
-            );
-            let operation_encoded = EncodedOperation::from_bytes(&operation_bytes);
-
-            // Decode to plain operation
-            // @TODO: We want actual operations here, but for this we need schemas
-            let operation_plain = jserr!(decode_operation(&operation_encoded));
-
-            // Convert to external wasm type
-            Some(DecodeOperationResult {
-                action: operation_plain.action().to_string(),
-                version: operation_plain.version().as_u64(),
-                schema_id: operation_plain.schema_id().to_string(),
-                previous_operations: operation_plain.previous_operations().cloned(),
-                fields: operation_plain.fields(),
-            })
-        }
-        None => None,
-    };
-
-    // Convert encoded entry
+pub fn decode_entry(encoded_entry: String) -> Result<JsValue, JsValue> {
+    // Convert hexadecimal string to bytes
     let entry_bytes = jserr!(
-        hex::decode(entry_str),
+        hex::decode(encoded_entry),
         "Invalid hex-encoding of encoded entry"
     );
     let entry_encoded = EncodedEntry::from_bytes(&entry_bytes);
 
-    // Decode entry
-    let entry: Entry = jserr!(decode(&entry_encoded));
+    // Decode Bamboo entry
+    let entry: crate::entry::Entry = jserr!(crate::entry::decode::decode_entry(&entry_encoded));
 
     // Serialise result to JavaScript object
-    let entry_operation_bundle = DecodeEntryResult {
+    let wasm_entry = Entry {
         public_key: entry.public_key().to_string(),
         seq_num: entry.seq_num().as_u64(),
         log_id: entry.log_id().as_u64(),
@@ -195,8 +114,7 @@ pub fn decode_entry(entry_str: String, operation_str: Option<String>) -> Result<
         payload_size: entry.payload_size(),
         payload_hash: entry.payload_hash().to_string(),
         signature: entry.signature().to_string(),
-        operation,
     };
-    let result = jserr!(serialize_to_js(&entry_operation_bundle));
+    let result = jserr!(serialize_to_js(&wasm_entry));
     Ok(result)
 }

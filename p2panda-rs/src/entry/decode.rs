@@ -140,7 +140,7 @@ mod tests {
     }
 
     #[rstest]
-    #[case::empty_string(EncodedEntry::new_from_str(""), "Bytes to decode had length of 0")]
+    #[case::empty_string(EncodedEntry::from_hex(""), "Bytes to decode had length of 0")]
     #[case::seq_number_zero(
         entry_signed_encoded_unvalidated(
             0,

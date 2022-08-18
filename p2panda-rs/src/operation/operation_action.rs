@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::fmt;
+use std::convert::TryInto;
 use std::fmt::Display;
+use std::{convert::TryFrom, fmt};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::operation::error::OperationActionError;
 
 /// Operations are categorised by their action type.
 ///
@@ -41,6 +44,19 @@ impl OperationAction {
     }
 }
 
+impl TryFrom<u64> for OperationAction {
+    type Error = OperationActionError;
+
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(OperationAction::Create),
+            1 => Ok(OperationAction::Update),
+            2 => Ok(OperationAction::Delete),
+            _ => Err(OperationActionError::UnknownAction(value)),
+        }
+    }
+}
+
 impl Serialize for OperationAction {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -57,15 +73,9 @@ impl<'de> Deserialize<'de> for OperationAction {
     {
         let action = u64::deserialize(deserializer)?;
 
-        match action {
-            0 => Ok(OperationAction::Create),
-            1 => Ok(OperationAction::Update),
-            2 => Ok(OperationAction::Delete),
-            _ => Err(serde::de::Error::custom(format!(
-                "unknown operation action {}",
-                action
-            ))),
-        }
+        action
+            .try_into()
+            .map_err(|err| serde::de::Error::custom(format!("{}", err)))
     }
 }
 
@@ -77,6 +87,8 @@ impl Display for OperationAction {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
+
     use ciborium::cbor;
 
     use crate::serde::{deserialize_into, serialize_from, serialize_value};
@@ -99,6 +111,19 @@ mod tests {
         assert_eq!(OperationAction::Create.as_u64(), 0);
         assert_eq!(OperationAction::Update.as_u64(), 1);
         assert_eq!(OperationAction::Delete.as_u64(), 2);
+    }
+
+    #[test]
+    fn from_u64() {
+        let create = OperationAction::try_from(0);
+        matches!(create, Ok(OperationAction::Create));
+        let update = OperationAction::try_from(1);
+        matches!(update, Ok(OperationAction::Update));
+        let delete = OperationAction::try_from(2);
+        matches!(delete, Ok(OperationAction::Delete));
+
+        let invalid = OperationAction::try_from(12);
+        assert!(invalid.is_err());
     }
 
     #[test]

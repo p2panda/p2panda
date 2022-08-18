@@ -9,7 +9,7 @@
 <div align="center">
   <!-- CI status -->
   <a href="https://github.com/p2panda/p2panda/actions">
-    <img src="https://img.shields.io/github/workflow/status/p2panda/p2panda/Build%20and%20test?style=flat-square" alt="CI Status" />
+    <img src="https://img.shields.io/github/checks-status/p2panda/p2panda/main?style=flat-square" alt="CI Status" />
   </a>
   <!-- Crates version -->
   <a href="https://crates.io/crates/p2panda-rs">
@@ -23,7 +23,7 @@
 
 <div align="center">
   <h3>
-    <a href="https://github.com/p2panda/p2panda">
+    <a href="https://github.com/p2panda/p2panda#installation">
       Installation
     </a>
     <span> | </span>
@@ -39,7 +39,9 @@
 
 <br />
 
-This library provides all tools required to write a client for the [`p2panda`] network. It is shipped both as a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web browser.
+This library provides all tools required to write a client, node or even your own protocol implementation for the [`p2panda`] network. It is shipped both as a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web browser.
+
+> In the future `p2panda-js` will have full feature parity with `p2panda-rs` to be able to write high-level client frameworks or node implementations in TypeScript. Until now `p2panda-js` provides basic methods to create, sign and encode data.
 
 [`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
@@ -59,9 +61,9 @@ npm i p2panda-js
 
 ### NodeJS
 
-```js
-import p2panda from 'p2panda-js';
-const keyPair = p2panda.createKeyPair();
+```javascript
+const { KeyPair } = require('p2panda-js');
+const keyPair = new KeyPair();
 console.log(keyPair.publicKey());
 ```
 
@@ -72,19 +74,19 @@ To quickly get started you can run `p2panda-js` in any modern browser like that:
 ```html
 <script src="p2panda-js/lib/browser/index.min.js"></script>
 <script>
-  const { initWebAssembly, createKeyPair } = p2panda;
+  const { initWebAssembly, KeyPair } = p2panda;
 
   async function run() {
-    // When using p2panda in the Browser, this method needs to be run once
+    // When using p2panda in the Browser, this method needs to run once
     // before using all other `p2panda-js` methods.
     //
-    // This is an initialization function which will "boot" the module and
+    // This is an initialisation function which will "boot" the module and
     // make it ready to use. Currently browsers don't support natively
     // imported WebAssembly as an ES module, but eventually the manual
-    // initialization won't be required!
+    // initialisation won't be required!
     await initWebAssembly();
 
-    const keyPair = createKeyPair();
+    const keyPair = new KeyPair();
     document.getElementById('publicKey').innerText = keyPair.publicKey();
   }
 
@@ -93,78 +95,33 @@ To quickly get started you can run `p2panda-js` in any modern browser like that:
 <div id="publicKey"></div>
 ```
 
-### React
+### Webpack
 
-```js
-import { createKeyPair, Session, initWebAssembly } from 'p2panda-js';
+```javascript
+import { initWebAssembly, KeyPair } from 'p2panda-js';
 
-// When running p2panda in the Browser, this method needs to be run once
-// before using all other `p2panda-js` methods
+// When using p2panda in the Browser, this method needs to run once
+// before using all other `p2panda-js` methods.
 await initWebAssembly();
 
-// This example uses the "chat" schema at which this hash is pointing. We are
-// still working on a good way for you to create and access data schemas. For
-// now you can use https://github.com/p2panda/fishyfish to do so
-const CHAT_SCHEMA =
-  'chat_message_0020a654068b26617ebd6574b1b03853193ccab2295a983bc85a5891793422832655';
-
-// Create a key pair for every usage context of p2panda, i.e. every device and
-// every piece of software that is used. Key pairs should never have to be
-// transferred between different devices of a user
-const keyPair = createKeyPair();
-
-// Open a long running connection to a p2panda node and configure it so all
-// calls in this session are executed using that key pair
-const session = new Session('https://welle.liebechaos.org').setKeyPair(keyPair);
-
-// Compose your operation payload, according to chosen schema
-const payload = {
-  message: 'Hi there',
-};
-
-// Send new chat operation to the node
-await session.create(payload, { schema: CHAT_SCHEMA });
-
-// Query instances from the p2panda node
-import { gql, useQuery } from '@apollo/client';
-
-const GET_CHAT_MESSAGES = gql`
-  all_${CHAT_SCHEMA} {
-    fields {
-      message
-    }
-  }
-`;
-
-const Chat = () => {
-  const { loading, error, data } = useQuery(GET_CHAT_MESSAGES);
-
-  if (loading) return 'Loading...';
-  if (error) return `Error! ${error.message}`;
-
-  return (
-    <ul>
-      {data[`all_${CHAT_SCHEMA}`].map((doc) => (
-        <li key={doc.id}>{doc.fields.message}</li>
-      ))}
-    </ul>
-  );
-};
+const keyPair = new KeyPair();
+console.log(keyPair.publicKey());
 ```
 
 ### Manually load `.wasm`
 
-Using `p2panda-js` in the browser automatically uses the version which inlines the WebAssembly inside the JavaScript file, encoded as a base64 string. While this works for most developers, it also doubles the size of the imported file. To avoid larger payloads and decoding times you can also load the `.wasm` file manually by replacing the file path to `p2panda-js/lib/slim/index.min.js` and initialize the module via `await initWebAssembly('p2panda-js/lib/slim/p2panda.wasm')`, make sure the `.wasm` file is hosted somewhere as well or your bundler knows about it.
+Using `p2panda-js` in the browser automatically uses the version which inlines the WebAssembly inside the JavaScript file, encoded as a base64 string. While this works for most developers, it also doubles the size of the imported file. To avoid larger payloads and decoding times you can also load the `.wasm` file manually by replacing the file path to `p2panda-js/lib/slim/index.min.js` and initialise the module by passing the path to the file into `initWebAssembly`, make sure the `.wasm` file is hosted somewhere as well or your bundler knows about it.
 
 ```javascript
-import { initWebAssembly, createKeyPair } from 'p2panda-js/slim';
+// Import from `slim` module to manually initialise WebAssembly code
+import { initWebAssembly, KeyPair } from 'p2panda-js/slim';
 import wasm from 'p2panda-js/p2panda.wasm';
 
-// When running p2panda in the Browser, this method needs to be run once
+// When running p2panda in the Browser, this method needs to run once
 // before using all other `p2panda-js` methods
 await initWebAssembly(wasm);
 
-const keyPair = createKeyPair();
+const keyPair = new KeyPair();
 console.log(keyPair.publicKey());
 ```
 
@@ -191,20 +148,6 @@ npm test
 
 # Compile wasm and bundle js package, requires `wasm-bindgen` and `wasm-opt`
 npm run build
-```
-
-### Debug logging
-
-Enable debug logging for node environments by setting an environment variable:
-
-```bash
-export DEBUG='p2panda*'
-```
-
-Enable debug logging from a browser console by storing a key `debug` in local storage:
-
-```js
-localStorage.debug = 'p2panda*';
 ```
 
 ### Documentation

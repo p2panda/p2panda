@@ -107,6 +107,7 @@ impl EntryBuilder {
 #[derive(Debug, Clone, Eq, PartialEq, StdHash)]
 pub struct Entry {
     /// Author of this entry.
+    // @TODO: Rename this to `public_key`
     pub(crate) author: Author,
 
     /// Used log for this entry.
