@@ -108,7 +108,15 @@ function config({
         }),
       ],
       // Treat wasm module as external for NodeJS builds
-      external: isNode ? ['./wasm/index.cjs'] : [],
+      external: isNode
+        ? [
+            // This is the "external" dependency we set via the "alias" plugin
+            './wasm/index.cjs',
+            // rollup falsly claims that this external dependency is missing,
+            // we ignore it here:
+            path.resolve(__dirname, 'src', 'wasm', 'index.cjs'),
+          ]
+        : [],
     },
     // Build TypeScript definitions
     {
