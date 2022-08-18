@@ -8,20 +8,20 @@ import { validate } from '../validate';
 /**
  * Arguments to create an Bamboo entry.
  */
-type EntryArgs = {
-  // Log id of entry, starting at 0
+export type EntryArgs = {
+  /** Log id of entry, starting at 0 */
   logId?: bigint | number | string;
 
-  // Sequence number of entry, starting at 1
+  /** Sequence number of entry, starting at 1 */
   seqNum?: bigint | number | string;
 
-  // Skiplink hash
+  /** Skiplink hash */
   skiplink?: string;
 
-  // Backlink hash, omitted when first entry in log
+  /** Backlink hash, omitted when first entry in log */
   backlink?: string;
 
-  // Payload this entry points at
+  /** Payload this entry points at */
   payload: string;
 };
 

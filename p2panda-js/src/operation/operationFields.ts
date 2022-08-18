@@ -6,7 +6,11 @@ import { isInt, isFloat } from '../utils';
 
 import type { OperationValue, EasyValues } from './';
 
-type FieldType =
+/**
+ * Field type string as defined by the p2panda specification indicating
+ * the operation value type.
+ */
+export type FieldType =
   | 'str'
   | 'int'
   | 'float'
@@ -16,13 +20,18 @@ type FieldType =
   | 'relation_list'
   | 'pinned_relation_list';
 
-// Allow 'number' when inserting new operation values
-type OperationValueArg = OperationValue | number;
+/**
+ * Allow 'number' when inserting new operation values.
+ */
+export type OperationValueArg = OperationValue | number;
 
 /**
  * Operation fields containing application data.
  */
 export class OperationFields {
+  /*
+   * @ignore
+   */
   readonly __internal: wasm.OperationFields;
 
   /**

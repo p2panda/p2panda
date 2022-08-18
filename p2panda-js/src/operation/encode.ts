@@ -9,7 +9,7 @@ import type { EasyValues, OperationAction, OperationMeta } from './';
 /**
  * Arguments to create an operation.
  */
-type OperationArgs = OperationMeta & {
+export type OperationArgs = OperationMeta & {
   // Operation action, default is CREATE
   action?: OperationAction;
 

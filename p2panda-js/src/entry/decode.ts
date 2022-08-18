@@ -6,29 +6,29 @@ import { validate } from '../validate';
 /**
  * Signed Bamboo entry.
  */
-type Entry = {
-  // Public key of the entry author
+export type Entry = {
+  /** Public key of the entry author */
   publicKey: string;
 
-  // Log id of entry, starting at 0
+  /** Log id of entry, starting at 0 */
   logId?: bigint;
 
-  // Sequence number of entry, starting at 1
+  /** Sequence number of entry, starting at 1 */
   seqNum?: bigint;
 
-  // Skiplink hash
+  /** Skiplink hash */
   skiplink?: string;
 
-  // Backlink hash, omitted when first entry in log
+  /** Backlink hash, omitted when first entry in log */
   backlink?: string;
 
-  // Size of the payload in bytes
+  /** Size of the payload in bytes */
   payloadSize: bigint;
 
-  // Hash of the payload
+  /** Hash of the payload */
   payloadHash: string;
 
-  // Ed25519 signature
+  /** Ed25519 signature */
   signature: string;
 };
 

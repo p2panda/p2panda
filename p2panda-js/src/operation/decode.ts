@@ -10,14 +10,14 @@ import type { OperationMeta, OperationAction, OperationValue } from './';
  * Plain operation with fields which have not been checked against a schema
  * yet.
  */
-type PlainOperation = OperationMeta & {
-  // Version of this operation encoding
+export type PlainOperation = OperationMeta & {
+  /** Version of this operation encoding */
   version: number;
 
-  // Operation action
+  /** Operation action */
   action: OperationAction;
 
-  // Plain fields which have not been checked against a schema yet
+  /** Plain fields which have not been checked against a schema yet */
   fields?: Map<string, OperationValue>;
 };
 
