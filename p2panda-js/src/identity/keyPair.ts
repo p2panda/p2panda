@@ -44,6 +44,7 @@ export class KeyPair {
 
     let keyPair: wasm.KeyPair;
     if (privateKey) {
+      // Recover key pair from private key when given
       try {
         keyPair = wasm.KeyPair.fromPrivateKey(privateKey);
       } catch (error) {
@@ -52,6 +53,7 @@ export class KeyPair {
         );
       }
     } else {
+      // Generate new key pair otherwise
       try {
         keyPair = new wasm.KeyPair();
       } catch (error) {

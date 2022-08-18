@@ -54,6 +54,19 @@ describe('OperationFields', () => {
     expect(fields.get('e')).toEqual(-123.5);
   });
 
+  it('gives us the correct number of fields', () => {
+    const fields = new OperationFields();
+    expect(fields.isEmpty()).toBe(true);
+    expect(fields.length()).toBe(0);
+
+    fields.insert('a', 'int', 123);
+    expect(fields.isEmpty()).toBe(false);
+    expect(fields.length()).toBe(1);
+
+    fields.insert('b', 'str', 'Hello, World!');
+    expect(fields.length()).toBe(2);
+  });
+
   it('throws when inserting a field twice', () => {
     const fields = new OperationFields();
     fields.insert('test', 'str', 'Hello, World!');
@@ -65,17 +78,39 @@ describe('OperationFields', () => {
     );
   });
 
+  it('returns "null" and does not throw when trying to get an inexistant field', () => {
+    const fields = new OperationFields();
+    expect(() => {
+      fields.get('test');
+    }).not.toThrow();
+    expect(fields.get('test')).toBeNull();
+  });
+
   it('allows an easy way to create fields', () => {
     const fields = new OperationFields({
       a: 'Hallo, Welt!',
       b: 123,
       c: false,
       d: 21.3,
+      e: BigInt(Number.MAX_SAFE_INTEGER),
     });
 
     expect(fields.get('a')).toEqual('Hallo, Welt!');
     expect(fields.get('b')).toEqual(BigInt(123));
     expect(fields.get('c')).toEqual(false);
     expect(fields.get('d')).toEqual(21.3);
+    expect(fields.get('e')).toEqual(BigInt(Number.MAX_SAFE_INTEGER));
+  });
+
+  it('throws an error when trying to create more complex easy fields', () => {
+    expect(() => {
+      new OperationFields({
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        a: [
+          '0020fc29afb2f0620bf7417fda043dd13b8e2ef60a47b3f99f47bf8019f68c17411e',
+        ],
+      });
+    }).toThrow();
   });
 });

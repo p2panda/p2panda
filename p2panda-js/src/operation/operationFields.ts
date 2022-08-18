@@ -22,8 +22,15 @@ type OperationValue =
   | string[]
   | string[][];
 
+/*
+ * "Easy fields" to populate the operation with basic data types.
+ *
+ * This can be used to easily create operation fields, even when there is no
+ * schema at hand. Please note that only unambigious field types like "str",
+ * "int", "float" and "bool" can be used here
+ */
 export type EasyFields = {
-  [fieldName: string]: string | number | boolean;
+  [fieldName: string]: string | number | bigint | boolean;
 };
 
 /**
@@ -34,12 +41,21 @@ export class OperationFields {
 
   /**
    * Creates a new instance of `OperationFields`.
-   * @param {EasyFields?} fields - Basic fields to populate the operation with initial data
+   * @param {EasyFields?} fields - "Easy fields" to populate the operation with
+   * basic data types. This can be used to easily create operation fields, even
+   * when there is no schema at hand. Please note that only unambigious field
+   * types like "str", "int", "float" and "bool" can be used here
    * @returns OperationFields instance
    */
   constructor(fields?: EasyFields) {
     const operationFields = new wasm.OperationFields();
 
+    // We can pass in "easy fields" into the constructor to allow the fast
+    // creation of unambigious field types, meaning that we can guess the field
+    // type even without a schema at hand.
+    //
+    // Integers are converted to strings to be able to pass large numbers into
+    // wasm context
     if (fields) {
       Object.keys(fields).forEach((fieldName) => {
         const value = fields[fieldName];
@@ -50,11 +66,13 @@ export class OperationFields {
           operationFields.insert(fieldName, 'bool', value);
         } else if (typeof value === 'number' && isInt(value)) {
           operationFields.insert(fieldName, 'int', value.toString());
+        } else if (typeof value === 'bigint') {
+          operationFields.insert(fieldName, 'int', value.toString());
         } else if (typeof value === 'number' && isFloat(value)) {
           operationFields.insert(fieldName, 'float', value);
         } else {
           throw new Error(
-            `Only basic field types are allowed when using constructor`,
+            `Only basic field types like "str", "bool", "int" and "float" are allowed when using constructor`,
           );
         }
       });
@@ -101,7 +119,7 @@ export class OperationFields {
   /**
    * Gets a value from a field.
    * @param {string} fieldName - Name of the field, needs to match schema
-   * @returns User data
+   * @returns {OperationValue} User data
    */
   get(fieldName: string): OperationValue {
     validate(
@@ -116,5 +134,21 @@ export class OperationFields {
     );
 
     return this.__internal.get(fieldName);
+  }
+
+  /**
+   * Returns the number of fields.
+   * @returns {number}
+   */
+  length(): number {
+    return this.__internal.length();
+  }
+
+  /**
+   * Returns true when there are no fields given.
+   * @returns {boolean}
+   */
+  isEmpty(): boolean {
+    return this.__internal.isEmpty();
   }
 }

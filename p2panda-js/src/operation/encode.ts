@@ -6,6 +6,7 @@ import { validate } from '../validate';
 
 import type { EasyFields } from './operationFields';
 
+// Operation actions encoded as integers
 const OPERATION_ACTIONS = {
   create: 0,
   update: 1,
@@ -19,13 +20,13 @@ type OperationArgs = {
   // Operation action
   action?: 'create' | 'update' | 'delete';
 
-  // Schema id
+  // Id of schema this operation matches
   schemaId: string;
 
   // Document view id pointing at previous operations
   previousOperations?: string[];
 
-  // Fields
+  // Fields with user data
   fields?: OperationFields | EasyFields;
 };
 
@@ -63,7 +64,8 @@ export function encodeOperation(operation: OperationArgs): string {
     throw new Error(`Unknown operation action "${action}"`);
   }
 
-  // We can pass `OperationFields` instance or the easy fields (simple object) for convenience
+  // We can pass `OperationFields` instance or the easy fields (simple object)
+  // for our convenience
   let operationFields;
   if (fields !== undefined) {
     if (fields instanceof OperationFields) {
