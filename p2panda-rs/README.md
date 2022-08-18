@@ -71,10 +71,6 @@ cargo test
 wasm-pack build
 ```
 
-## Testing
-
-`p2panda-rs` provides tools which can be used for testing your code. Read more about the `test_utils` module [here](/p2panda-rs/src/test_utils/README.md).
-
 ## License
 
 GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)

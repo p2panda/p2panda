@@ -30,7 +30,8 @@ Highlights are marked with a pancake 🥞
 - Introduce new node and browser builds for JavaScript, export TypeScript definitions [#429](https://github.com/p2panda/p2panda/pull/429) `js`
 - Refactored benchmarks to include schema validation [#430](https://github.com/p2panda/p2panda/pull/414) `rs`
 - Replace `@apollo/client` with `graphql-request` [#441](https://github.com/p2panda/p2panda/pull/441) `js`
-- Make from_bytes public for `EncodedOperation` & `EncodedEntry`[#445](https://github.com/p2panda/p2panda/pull/445) `rs`
+- Expose `from_bytes` for `EncodedOperation` and `EncodedEntry` [#445](https://github.com/p2panda/p2panda/pull/445) `rs`
+- Introduce new feature flags, rename `testing` to `test-utils` [#448](https://github.com/p2panda/p2panda/pull/448) `rs`
 
 ### Fixed
 

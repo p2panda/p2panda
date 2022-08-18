@@ -25,49 +25,44 @@ dwarf-debug-info = false
 crate-type = ["cdylib", "rlib"]
 
 [features]
-testing = ["dep:rstest", "dep:rstest_reuse", "dep:varu64", "dep:tokio"]
+test-utils = ["storage-provider", "dep:rstest", "dep:rstest_reuse", "dep:varu64", "dep:tokio", "dep:async-trait"]
+secret-group = ["dep:openmls", "dep:openmls_memory_keystore", "dep:openmls_rust_crypto", "dep:openmls_traits", "dep:tls_codec"]
+storage-provider = ["dep:async-trait"]
 
 [dependencies]
 arrayvec = "^0.5.2"
-async-trait = "^0.1.56"
+async-trait = { version = "^0.1.56", optional = true }
 bamboo-rs-core-ed25519-yasmf = "^0.1.1"
 ciborium = "^0.2.0"
-ed25519 = "^1.5.2"
 ed25519-dalek = "^1.0.1"
 hex = { version = "^0.4.3", features = ["serde"] }
 lazy_static = "^1.4.0"
 lipmaa-link = "^0.2.2"
 log = "^0.4.17"
-openmls = { version = "^0.4.1", features = ["crypto-subtle"] }
-openmls_memory_keystore = "^0.1.0"
-openmls_rust_crypto = "^0.1.0"
-openmls_traits = "^0.1.0"
+openmls = { version = "^0.4.1", features = ["crypto-subtle"], optional = true }
+openmls_memory_keystore = { version = "^0.1.0", optional = true }
+openmls_rust_crypto = { version = "^0.1.0", optional = true }
+openmls_traits = { version = "^0.1.0", optional = true }
+rand = "^0.7.3"
 regex = "^1.5.6"
 rstest = { version = "^0.15.0", optional = true }
 rstest_reuse = { version = "^0.3.0", optional = true }
 serde = { version = "^1.0.137", features = ["derive"] }
-serde-wasm-bindgen = "^0.4.3"
-serde_repr = "^0.1.8"
 thiserror = "^1.0.31"
-tls_codec = { version = "^0.2.0", features = ["derive", "serde_serialize"] }
-tokio = { version = "1.19.2", features = [
-  "rt",
-  "macros",
-  "rt-multi-thread",
-], optional = true }
+tls_codec = { version = "^0.2.0", features = ["derive", "serde_serialize"], optional = true }
+tokio = { version = "1.19.2", features = [ "rt", "macros", "rt-multi-thread" ], optional = true }
 varu64 = { version = "^0.7.0", default-features = false, optional = true }
 yasmf-hash = "^0.1.1"
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-rand = "^0.7.3"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "^0.1.7"
 js-sys = "^0.3.58"
 rand = { version = "^0.7.3", features = ["wasm-bindgen"] }
+serde-wasm-bindgen = "^0.4.3"
 wasm-bindgen = "^0.2.82"
 
 [dev-dependencies]
+async-trait = "^0.1.56"
 criterion = "^0.3.5"
 ctor = "^0.1.22"
 incremental-topo = "^0.1.2"
