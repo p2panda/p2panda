@@ -18,12 +18,6 @@ export function signAndEncodeEntry(log_id: bigint, seq_num: bigint, skiplink_has
 */
 export function decodeEntry(encoded_entry: string): any;
 /**
-* Sets a [`panic hook`] for better error messages in NodeJS or web browser.
-*
-* [`panic hook`]: https://crates.io/crates/console_error_panic_hook
-*/
-export function setWasmPanicHook(): void;
-/**
 * Returns hash of an hexadecimal encoded value.
 * @param {string} value
 * @returns {string}
@@ -54,6 +48,12 @@ export function encodeOperation(action: bigint, schema_id: string, previous_oper
 * @returns {any}
 */
 export function decodeOperation(encoded_operation: string): any;
+/**
+* Sets a [`panic hook`] for better error messages in NodeJS or web browser.
+*
+* [`panic hook`]: https://crates.io/crates/console_error_panic_hook
+*/
+export function setWasmPanicHook(): void;
 /**
 * Ed25519 key pair for authors to sign Bamboo entries with.
 */
