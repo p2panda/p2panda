@@ -15,6 +15,7 @@ Highlights are marked with a pancake 🥞
 - Helpers and conversion implementations to create schemas and operations more easily [#416](https://github.com/p2panda/p2panda/pull/416) `rs`
 - Untagged operation format, schema validation, new operation and entry API [#415](https://github.com/p2panda/p2panda/pull/415) `rs`
 - Serde trait implementations for `DocumentId` and all relations [#446](https://github.com/p2panda/p2panda/pull/446) `rs`
+- Introduce new low-level API for `p2panda-js`, move `Session` into new repository [#447](https://github.com/p2panda/p2panda/pull/447) `js`
 
 ### Changed
 
