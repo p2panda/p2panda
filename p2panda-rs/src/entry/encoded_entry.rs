@@ -76,7 +76,7 @@ impl<T: EntryWithOperation> From<T> for EncodedEntry {
     }
 }
 
-#[cfg(any(feature = "test_utils", test))]
+#[cfg(any(feature = "test-utils", test))]
 impl EncodedEntry {
     pub fn new(bytes: &[u8]) -> EncodedEntry {
         Self(bytes.to_owned())
