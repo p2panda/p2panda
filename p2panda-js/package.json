@@ -2,44 +2,41 @@
   "name": "p2panda-js",
   "version": "0.4.0",
   "description": "All the things a panda needs",
-  "main": "./lib/node/index.js",
-  "browser": "./lib/browser/index.min.js",
-  "types": "./lib/types/index.d.ts",
+  "type": "module",
+  "main": "./lib/umd/index.js",
+  "module": "./lib/esm/index.js",
+  "types": "./lib/umd/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
+      "types": "./lib/cjs/index.d.ts",
       "node": "./lib/node/index.js",
-      "import": "./lib/browser/index.js",
-      "browser": "./lib/browser/index.min.js"
+      "import": "./lib/esm/index.js",
+      "default": "./lib/cjs/index.js"
     },
     "./slim": {
-      "types": "./lib/types/index.slim.d.ts",
-      "import": "./lib/slim/index.js",
-      "browser": "./lib/slim/index.min.js"
+      "types": "./lib/cjs-slim/index.d.ts",
+      "node": "./lib/node/index.js",
+      "import": "./lib/esm-slim/index.js",
+      "default": "./lib/cjs-slim/index.js"
     },
-    "./p2panda.wasm": "./lib/slim/p2panda.wasm",
+    "./p2panda.wasm": "./lib/p2panda.wasm",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "cross-env NODE_ENV=production run-s clear wasm wasm:types webpack",
+    "build": "cross-env NODE_ENV=production run-s clear wasm wasm:types rollup",
     "clear": "rimraf ./lib ./wasm",
     "docs": "typedoc src/index.ts",
     "lint": "eslint --ext .ts .",
-    "typecheck": "tsc --noEmit",
+    "rollup": "rollup -c",
     "test": "cross-env NODE_ENV=development run-s clear wasm test:jest",
     "test:jest": "jest --coverage=$npm_config_coverage",
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm test' --ext js,ts,json",
+    "typecheck": "tsc --noEmit",
     "wasm": "./scripts/compile-wasm.sh",
-    "wasm:types": "cp ./wasm/node/index.d.ts ./src/wasm.d.ts",
-    "webpack": "run-p webpack:slim webpack:slim-minimize webpack:browser webpack:browser-minimize webpack:node --aggregate-output",
-    "webpack:browser": "webpack --config-name browser --color",
-    "webpack:browser-minimize": "webpack --config-name browser-minimize --color",
-    "webpack:node": "webpack --config-name node --color",
-    "webpack:slim": "webpack --config-name slim --color",
-    "webpack:slim-minimize": "webpack --config-name slim-minimize --color"
+    "wasm:types": "cp ./wasm/node/index.d.ts ./src/wasm.d.ts"
   },
   "engines": {
-    "node": ">= v12.0.0"
+    "node": ">= v16.0.0"
   },
   "repository": {
     "type": "git",
@@ -57,33 +54,32 @@
   },
   "homepage": "https://github.com/p2panda/p2panda#readme",
   "devDependencies": {
-    "@babel/cli": "^7.18.10",
-    "@babel/core": "^7.18.10",
-    "@babel/register": "^7.18.9",
-    "@tsconfig/node12": "^1.0.11",
-    "@types/copy-webpack-plugin": "^8.0.1",
+    "@rollup/plugin-alias": "^3.1.9",
+    "@rollup/plugin-commonjs": "^22.0.2",
+    "@rollup/plugin-typescript": "^8.3.4",
+    "@rollup/plugin-wasm": "^5.2.0",
+    "@tsconfig/node16": "^1.0.3",
     "@types/jest": "^28.1.7",
     "@types/node": "^18.7.6",
     "@typescript-eslint/eslint-plugin": "^5.33.1",
     "@typescript-eslint/parser": "^5.33.1",
-    "babel-loader": "^8.2.5",
-    "copy-webpack-plugin": "^11.0.0",
     "cross-env": "^7.0.3",
     "eslint": "^8.22.0",
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-prettier": "^4.2.1",
-    "eslint-webpack-plugin": "^3.2.0",
     "jest": "^28.1.3",
     "nodemon": "^2.0.19",
     "npm-run-all": "^4.1.5",
     "prettier": "^2.7.1",
     "rimraf": "^3.0.2",
+    "rollup": "^2.78.0",
+    "rollup-plugin-define": "^1.0.1",
+    "rollup-plugin-dts": "^4.2.2",
+    "rollup-plugin-terser": "^7.0.2",
     "ts-jest": "^28.0.8",
-    "ts-loader": "^9.3.1",
     "ts-node": "^10.9.1",
+    "tslib": "^2.4.0",
     "typedoc": "^0.23.10",
-    "typescript": "^4.7.4",
-    "webpack": "^5.74.0",
-    "webpack-cli": "^4.10.0"
+    "typescript": "^4.7.4"
   }
 }

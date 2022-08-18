@@ -1,23 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
-* Returns a signed Bamboo entry.
-* @param {bigint} log_id
-* @param {bigint} seq_num
-* @param {string | undefined} skiplink_hash
-* @param {string | undefined} backlink_hash
-* @param {string} payload
-* @param {KeyPair} key_pair
-* @returns {string}
-*/
-export function signAndEncodeEntry(log_id: bigint, seq_num: bigint, skiplink_hash: string | undefined, backlink_hash: string | undefined, payload: string, key_pair: KeyPair): string;
-/**
-* Decodes an hexadecimal string into an `Entry`.
-* @param {string} encoded_entry
-* @returns {any}
-*/
-export function decodeEntry(encoded_entry: string): any;
-/**
 * Returns hash of an hexadecimal encoded value.
 * @param {string} value
 * @returns {string}
@@ -54,6 +37,23 @@ export function decodeOperation(encoded_operation: string): any;
 * [`panic hook`]: https://crates.io/crates/console_error_panic_hook
 */
 export function setWasmPanicHook(): void;
+/**
+* Returns a signed Bamboo entry.
+* @param {bigint} log_id
+* @param {bigint} seq_num
+* @param {string | undefined} skiplink_hash
+* @param {string | undefined} backlink_hash
+* @param {string} payload
+* @param {KeyPair} key_pair
+* @returns {string}
+*/
+export function signAndEncodeEntry(log_id: bigint, seq_num: bigint, skiplink_hash: string | undefined, backlink_hash: string | undefined, payload: string, key_pair: KeyPair): string;
+/**
+* Decodes an hexadecimal string into an `Entry`.
+* @param {string} encoded_entry
+* @returns {any}
+*/
+export function decodeEntry(encoded_entry: string): any;
 /**
 * Ed25519 key pair for authors to sign Bamboo entries with.
 */
