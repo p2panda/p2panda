@@ -136,20 +136,6 @@ npm test
 npm run build
 ```
 
-### Debug logging
-
-Enable debug logging for node environments by setting an environment variable:
-
-```bash
-export DEBUG='p2panda*'
-```
-
-Enable debug logging from a browser console by storing a key `debug` in local storage:
-
-```js
-localStorage.debug = 'p2panda*';
-```
-
 ### Documentation
 
 ```bash
