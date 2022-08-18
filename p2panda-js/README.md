@@ -9,7 +9,7 @@
 <div align="center">
   <!-- CI status -->
   <a href="https://github.com/p2panda/p2panda/actions">
-    <img src="https://img.shields.io/github/workflow/status/p2panda/p2panda/Build%20and%20test?style=flat-square" alt="CI Status" />
+    <img src="https://img.shields.io/github/checks-status/p2panda/p2panda/main?style=flat-square" alt="CI Status" />
   </a>
   <!-- Crates version -->
   <a href="https://crates.io/crates/p2panda-rs">
@@ -23,7 +23,7 @@
 
 <div align="center">
   <h3>
-    <a href="https://github.com/p2panda/p2panda">
+    <a href="https://github.com/p2panda/p2panda#installation">
       Installation
     </a>
     <span> | </span>
