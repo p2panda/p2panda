@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix validation of relations pointing at system schema ids [#453](https://github.com/p2panda/p2panda/pull/453) `rs`
+
 ## [0.5.0]
 
 Released on 2022-08-19: :package: `p2panda-js` and :package: `p2panda-rs`
