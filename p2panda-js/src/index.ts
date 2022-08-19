@@ -17,11 +17,11 @@ import { setWasmPanicHook } from './wasm';
  * 2. UMD, CJS and ESM builds with inlined WebAssembly code running in the
  * browser: WebAssembly needs to be decoded and initialised by calling
  * `initWebAssembly` once before all other methods. This will also implicitly
- * acticate debug tools for better error messages in WebAssembly code.
+ * activate debug tools for better error messages in WebAssembly code.
  *
  * 3. CJS and ESM "slim" builds running in browser: WebAssembly needs to be
  * initialised by providing external "p2panda.wasm" file path as an input
- * when calling `initWebAssembly` methods. This will also implicitly acticate
+ * when calling `initWebAssembly` methods. This will also implicitly activate
  * debug tools for better error messages in WebAssembly code.
  */
 // Passing in an "input" is not required for NodeJS builds. Still we mention it
