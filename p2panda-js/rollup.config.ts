@@ -136,7 +136,7 @@ function getOutputs({ format, mode }: Config): OutputOptions[] {
   return result;
 }
 
-function getPlugins({ format, mode }: Config): Plugin[] {
+function getPlugins({ mode }: Config): Plugin[] {
   const result: Plugin[] = [];
 
   // Set `BUILD_TARGET_WEB` flag in `./src/wasm.js` file to control if

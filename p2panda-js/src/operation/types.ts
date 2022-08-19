@@ -14,4 +14,3 @@ export const OPERATION_ACTIONS = {
  */
 export const OPERATION_ACTIONS_INDEX: { [action: number]: string } =
   Object.fromEntries(Object.entries(OPERATION_ACTIONS).map(([k, v]) => [v, k]));
-
