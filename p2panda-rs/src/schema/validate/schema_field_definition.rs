@@ -44,10 +44,8 @@ fn validate_type(value: &str) -> bool {
 fn validate_relation_type(value: &str) -> bool {
     // Parse relation value
     static RELATION_REGEX: Lazy<Regex> = Lazy::new(|| {
-        let schema_id = "[A-Za-z]{1}[A-Za-z0-9_]{0,63}_([0-9A-Za-z]{68})(_[0-9A-Za-z]{68})*";
-
         // Unwrap as we checked the regular expression for correctness
-        Regex::new(&format!(r"(\w+)\(({})*\)", schema_id)).unwrap()
+        Regex::new(r"(\w+)\(([_0-9A-Za-z]*)\)").unwrap()
     });
 
     let groups = RELATION_REGEX.captures(value);
@@ -202,6 +200,8 @@ mod test {
     #[case("int")]
     #[case("str")]
     #[case("float")]
+    #[case("relation(schema_field_definition_v1)")]
+    #[case("relation(schema_definition_v1)")]
     #[case(concat!(
         "relation(",
         "venues_with_garden",
