@@ -43,7 +43,11 @@
 
 <br/>
 
-This library provides all tools required to write a client, node or even your own protocol implementation for the [`p2panda`] network. It is shipped both as a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web browser.
+This library provides all tools required to write a client, node or even your
+own protocol implementation for the [`p2panda`] network. It is shipped both as
+a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package
+[`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web
+browser.
 
 [`p2panda`]: https://github.com/p2panda/handbook
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
@@ -77,9 +81,9 @@ let key_pair = KeyPair::new();
 println!("{}", key_pair.public_key());
 ```
 
-See [the demo application](https://p2panda.org/demo/#) and its
-[source code](https://github.com/p2panda/beep-boop). More examples can be found
-in the [`p2panda-rs`] and [`p2panda-js`] directories.
+See [the demo application](https://p2panda.org/demo/#) and its [source
+code](https://github.com/p2panda/beep-boop). More examples can be found in the
+[`p2panda-rs`] and [`p2panda-js`] directories.
 
 ## Installation
 
@@ -89,7 +93,7 @@ If you are using `p2panda` in web browsers or NodeJS applications run:
 $ npm i p2panda-js
 ```
 
-For Rust environments and with [cargo-edit] installed run:
+For Rust environments run:
 
 ```bash
 $ cargo add p2panda-rs
@@ -101,14 +105,12 @@ Visit the corresponding folders for development instructions:
 - [`p2panda-rs`](https://github.com/p2panda/p2panda/tree/main/p2panda-rs)
 - [`p2panda-js`](https://github.com/p2panda/p2panda/tree/main/p2panda-js)
 
-[cargo-edit]: https://github.com/killercup/cargo-edit
-
 ## Benchmarks
 
-Performance benchmarks can be found in [benches](/benches). You can run them
-using [`cargo-criterion`](https://crates.io/crates/cargo-criterion):
+Performance benchmarks can be found in [benches](/p2panda-rs/benches). You can
+run them using [`cargo-criterion`](https://crates.io/crates/cargo-criterion):
 
-```sh
+```bash
 $ cargo install cargo-criterion
 $ cargo criterion
 # An HTML report with plots is generated automatically
