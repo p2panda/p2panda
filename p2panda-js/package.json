@@ -23,16 +23,17 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "cross-env NODE_ENV=production run-s clear wasm wasm:types rollup",
+    "build": "cross-env NODE_ENV=production run-s clear wasm wasm:types rollup wasm:copy",
     "clear": "rimraf ./lib ./wasm",
     "docs": "typedoc src/index.ts",
     "lint": "eslint --ext .ts .",
-    "rollup": "rollup -c",
+    "rollup": "rollup -c rollup.config.ts --configPlugin typescript",
     "test": "cross-env NODE_ENV=development run-s clear wasm test:jest",
     "test:jest": "jest --coverage=$npm_config_coverage",
     "test:watch": "nodemon --watch '../p2panda-rs/src/*' --watch './src/*' --exec 'npm test' --ext js,ts,json",
     "typecheck": "tsc --noEmit",
     "wasm": "./scripts/compile-wasm.sh",
+    "wasm:copy": "cp ./wasm/web/index_bg.wasm ./lib/p2panda.wasm",
     "wasm:types": "cp ./wasm/node/index.d.ts ./src/wasm.d.ts"
   },
   "engines": {
