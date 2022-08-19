@@ -61,7 +61,7 @@ npm i p2panda-js
 
 Since `p2panda-js` contains WebAssembly code, it is necessary to initialise it before using the methods in the Browser. This initialisation step is not required in NodeJS contexts.
 
-To make this step a little bit easier `p2panda-s` inlines the WebAssembly code as a base64 string which gets decoded automatically during initialisation. For manual initialisation the package also provides "slim" versions where you need to provide a path to the ".wasm" file yourself, you can read about this approach further below.
+To make this step a little bit easier `p2panda-js` inlines the WebAssembly code as a base64 string which gets decoded automatically during initialisation. For manual initialisation the package also comes with "slim" versions where you need to provide a path to the ".wasm" file yourself, you can read about this approach [further below](#manually-load-wasm).
 
 ### NodeJS
 
