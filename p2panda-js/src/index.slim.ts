@@ -4,7 +4,7 @@
 // external file to allow for smaller file sizes and skipping the decoding
 // step.
 //
-// Developers do need to specify an path of the '.wasm' file in the
+// Developers do need to specify a path of the '.wasm' file in the
 // `initWebAssembly` method.
 import init, { InitInput, setWasmPanicHook } from '../wasm/web';
 

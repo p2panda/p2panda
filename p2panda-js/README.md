@@ -57,7 +57,11 @@ npm i p2panda-js
 
 ## Usage
 
-`p2panda-js` runs both in NodeJS and web browsers and can be integrated in a bundle for example via Webpack or Rollup.
+`p2panda-js` runs both in NodeJS and web browsers and comes as a ES, CommonJS or UMD module. It can easily be integrated into Webpack, Rollup or other tools.
+
+Since `p2panda-js` contains WebAssembly code, it is necessary to initialise it before using the methods in the Browser. This initialisation step is not required in NodeJS contexts.
+
+To make this step a little bit easier `p2panda-s` inlines the WebAssembly code as a base64 string which gets decoded automatically during initialisation. For manual initialisation the package also provides "slim" versions where you need to provide a path to the ".wasm" file yourself, you can read about this approach further below.
 
 ### NodeJS
 
@@ -69,7 +73,7 @@ console.log(keyPair.publicKey());
 
 ### Browser
 
-To quickly get started you can run `p2panda-js` in any modern browser like that:
+To quickly get started you can run `p2panda-js` in any modern browser as an ES module like that:
 
 ```html
 <script type="module">
@@ -83,7 +87,7 @@ To quickly get started you can run `p2panda-js` in any modern browser like that:
 </script>
 ```
 
-Or use the "slim" version if you want a more efficient way to get started:
+Or use the "slim" version if you want to provide the ".wasm" file manually:
 
 ```html
 <script type="module">
@@ -98,7 +102,7 @@ Or use the "slim" version if you want a more efficient way to get started:
 </script>
 ```
 
-### Webpack
+### Bundlers
 
 ```javascript
 import { initWebAssembly, KeyPair } from 'p2panda-js';
@@ -112,14 +116,14 @@ console.log(keyPair.publicKey());
 
 ### Manually load `.wasm`
 
-Running `p2panda-js` in the browser automatically inlines the WebAssembly inside the JavaScript file, encoded as a base64 string. While this works for most developers, it also doubles the size of the imported file. To avoid larger payloads and decoding times you can load the `.wasm` file manually by using a "slim" version and initialise the module by passing the path to the file into `initWebAssembly`.
+Running `p2panda-js` in the browser automatically inlines the WebAssembly inside the JavaScript file, encoded as a base64 string. While this works for most developers, it also doubles the size of the imported file. To avoid larger payloads and decoding times you can load the `.wasm` file manually by using a "slim" version. For this you need to initialise the module by passing the path to the file into `initWebAssembly`:
 
 ```javascript
 // Import from `slim` module to manually initialise WebAssembly code
 import { initWebAssembly, KeyPair } from 'p2panda-js/slim';
 import wasm from 'p2panda-js/p2panda.wasm';
 
-// When running p2panda in the Browser, this method needs to run once
+// When running p2panda in the browser, this method needs to run once
 // before using all other `p2panda-js` methods
 await initWebAssembly(wasm);
 
@@ -171,6 +175,4 @@ GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)
 <img src="https://p2panda.org/images/ngi-logo.png" width="auto" height="80px"><br />
 <img src="https://p2panda.org/images/eu-flag-logo.png" width="auto" height="80px">
 
-*This project has received funding from the European Union’s Horizon 2020
-research and innovation programme within the framework of the NGI-POINTER
-Project funded under grant agreement No 871528*
+*This project has received funding from the European Union’s Horizon 2020 research and innovation programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528*
