@@ -55,13 +55,13 @@ browser.
 
 ## Features
 
-- Generate Ed25519 author key pairs.
+- Generate Ed25519 key pairs.
 - Create and encode [`Bamboo`] entries.
-- Publish schemas.
+- Publish schemas and validate data.
 - Create, update and delete data collaboratively.
 - Encrypt data with [`OpenMLS`].
-- Send new entries to [`node`] servers.
-- Query and filter data in the network.
+- Materialise documents from data changes.
+- Prepare data for [`node`] servers.
 
 [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 [`node`]: https://github.com/p2panda/aquadoggo
