@@ -8,10 +8,9 @@
 /wasm
 docs
 jest.config.ts
+rollup.config.ts
 scripts
 src
 test
 tsconfig.json
 typedoc.json
-webpack
-webpack.config.ts
