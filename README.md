@@ -67,14 +67,12 @@ This library provides all tools required to write a client, node or even your ow
 
 ```javascript
 import { KeyPair } from "p2panda-js";
-
 const keyPair = new KeyPair();
 console.log(keyPair.publicKey());
 ```
 
 ```rust
 use p2panda_rs::identity::KeyPair;
-
 let key_pair = KeyPair::new();
 println!("{}", key_pair.public_key());
 ```

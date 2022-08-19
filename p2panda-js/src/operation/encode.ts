@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import * as wasm from '../wasm';
-import { OperationFields, OPERATION_ACTIONS } from './';
+import { OPERATION_ACTIONS } from './constants';
+import { OperationFields } from './operationFields';
 import { validate } from '../validate';
 
 import type { EasyValues, OperationAction, OperationMeta } from './';
