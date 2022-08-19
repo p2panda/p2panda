@@ -11,6 +11,7 @@ use yasmf_hash::MAX_YAMF_HASH_SIZE;
 use crate::document::DocumentViewId;
 use crate::operation::OperationId;
 use crate::schema::error::SchemaIdError;
+use crate::schema::validate::validate_name;
 use crate::Human;
 
 /// Spelling of _schema definition_ schema
@@ -144,16 +145,21 @@ impl SchemaId {
             }
         }
 
-        // @TODO: We should check here if the name in the schema id follows the specification
-        // Related issue: https://github.com/p2panda/p2panda/issues/425
-
         // Since we've built the array from the back, we have to reverse it again to get the
         // original order
         operation_ids.reverse();
 
+        // Validate if the name is given and correct
         if remainder.is_empty() {
             return Err(SchemaIdError::MissingApplicationSchemaName(
                 id_str.to_string(),
+            ));
+        }
+
+        if !validate_name(remainder) {
+            return Err(SchemaIdError::MalformedSchemaId(
+                id_str.to_string(),
+                "name contains too many or invalid characters".to_string(),
             ));
         }
 
@@ -294,6 +300,11 @@ mod test {
         "_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
         "application schema id is missing a name: _0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c\
         7b9ab46293111c48fc78b"
+    )]
+    // Name contains invalid characters
+    #[case(
+        "abc2%_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b",
+        "malformed schema id `abc2%_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b`: name contains too many or invalid characters"
     )]
     // This name is too long, parser will fail trying to read its last section as an operation id
     #[case(

@@ -12,7 +12,7 @@ use crate::schema::validate::error::SchemaDefinitionError;
 /// 2. It begins with a letter
 /// 3. It uses only alphanumeric characters, digits and the underscore character
 /// 4. It doesn't end with an underscore
-fn validate_name(value: &str) -> bool {
+pub fn validate_name(value: &str) -> bool {
     static NAME_REGEX: Lazy<Regex> = Lazy::new(|| {
         // Unwrap as we checked the regular expression for correctness
         Regex::new("^[A-Za-z]{1}[A-Za-z0-9_]{0,62}[A-Za-z0-9]{1}$").unwrap()
