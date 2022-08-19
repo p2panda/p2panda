@@ -107,8 +107,9 @@ Visit the corresponding folders for development instructions:
 
 ## Benchmarks
 
-Performance benchmarks can be found in [benches](/p2panda-rs/benches). You can
-run them using [`cargo-criterion`](https://crates.io/crates/cargo-criterion):
+Performance benchmarks can be found in [benches](/p2panda-rs/benchmarks). You
+can run them using
+[`cargo-criterion`](https://crates.io/crates/cargo-criterion):
 
 ```bash
 $ cargo install cargo-criterion
