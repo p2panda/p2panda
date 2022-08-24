@@ -5,12 +5,19 @@ import { OPERATION_ACTIONS } from './constants';
 import { OperationFields } from './operationFields';
 import { validate } from '../validate';
 
-import type { EasyValues, OperationAction, OperationMeta } from './';
+import type { EasyValues, OperationAction } from './';
 
 /**
  * Arguments to create an operation.
  */
-export type OperationArgs = OperationMeta & {
+export type OperationArgs = {
+  /** Id of schema this operation matches */
+  schemaId: string;
+
+  /** Document view id pointing at previous operations, needs to be set
+   * for UPDATE and DELETE operations */
+  previous?: string[] | string;
+
   /** Operation action, default is CREATE */
   action?: OperationAction;
 
@@ -26,12 +33,17 @@ export type OperationArgs = OperationMeta & {
 export function encodeOperation(operation: OperationArgs): string {
   validate({ operation }, { operation: { type: 'object' } });
 
-  const {
-    action = 'create',
-    schemaId,
-    previousOperations = undefined,
-    fields = undefined,
-  } = operation;
+  const { action = 'create', schemaId, fields = undefined } = operation;
+
+  let previous: string[] | undefined = undefined;
+  if (typeof operation.previous === 'string') {
+    // Automatically convert `viewId` string into array with operation ids. As
+    // view ids come usually as strings from the GraphQL API, this conversion
+    // can be quite convenient!
+    previous = operation.previous.split('_');
+  } else if (typeof operation.previous === 'object') {
+    previous = operation.previous;
+  }
 
   validate(
     {
@@ -67,7 +79,7 @@ export function encodeOperation(operation: OperationArgs): string {
     return wasm.encodeOperation(
       BigInt(OPERATION_ACTIONS[action]),
       schemaId,
-      previousOperations,
+      previous,
       operationFields,
     );
   } catch (error) {

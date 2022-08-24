@@ -10,11 +10,11 @@ export function generateHash(value: string): string;
 * Creates, validates and encodes an operation as hexadecimal string.
 * @param {bigint} action
 * @param {string} schema_id
-* @param {any} previous_operations
+* @param {any} previous
 * @param {OperationFields | undefined} fields
 * @returns {string}
 */
-export function encodeOperation(action: bigint, schema_id: string, previous_operations: any, fields?: OperationFields): string;
+export function encodeOperation(action: bigint, schema_id: string, previous: any, fields?: OperationFields): string;
 /**
 * Decodes an operation into its plain form.
 *

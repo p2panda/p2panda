@@ -50,8 +50,8 @@ export function decodeOperation(encodedOperation: string): PlainOperation {
       schemaId: result.schemaId,
     };
 
-    if (result.previousOperations) {
-      plainOperation.previousOperations = result.previousOperations;
+    if (result.previous) {
+      plainOperation.previous = result.previous;
     }
 
     if (result.fields) {

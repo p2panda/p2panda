@@ -64,7 +64,7 @@ pub struct PlainOperation {
 
     /// Optional document view id containing the operation ids directly preceding this one in the
     /// document.
-    pub(crate) previous_operations: Option<Vec<String>>,
+    pub(crate) previous: Option<Vec<String>>,
 
     /// Optional fields map holding the operation data.
     pub(crate) fields: Option<PlainFields>,
@@ -251,17 +251,15 @@ impl Default for OperationFields {
 pub fn encode_operation(
     action: u64,
     schema_id: String,
-    previous_operations: JsValue,
+    previous: JsValue,
     fields: Option<OperationFields>,
 ) -> Result<String, JsValue> {
     // Convert parameters
     let action = jserr!(OperationAction::try_from(action));
     let schema_id = jserr!(SchemaId::from_str(&schema_id));
-    let document_view_id = if !previous_operations.is_undefined() {
-        let view_id: DocumentViewId = jserr!(
-            deserialize_from_js(previous_operations),
-            "Invalid document view id"
-        );
+    let document_view_id = if !previous.is_undefined() {
+        let view_id: DocumentViewId =
+            jserr!(deserialize_from_js(previous), "Invalid document view id");
         Some(view_id)
     } else {
         None
@@ -299,7 +297,7 @@ pub fn decode_operation(encoded_operation: String) -> Result<JsValue, JsValue> {
     ));
 
     // Convert document view id into array of operation id strings
-    let previous_operations: Option<Vec<String>> = match operation_plain.previous_operations() {
+    let previous: Option<Vec<String>> = match operation_plain.previous_operations() {
         Some(prev_ops) => {
             let converted: Vec<String> = prev_ops
                 .graph_tips()
@@ -323,7 +321,7 @@ pub fn decode_operation(encoded_operation: String) -> Result<JsValue, JsValue> {
         action: operation_plain.action().as_u64(),
         version: operation_plain.version().as_u64(),
         schema_id: operation_plain.schema_id().to_string(),
-        previous_operations,
+        previous,
         fields,
     };
     let result = jserr!(serialize_to_js(&result_wasm));
