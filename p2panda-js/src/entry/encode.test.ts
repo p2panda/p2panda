@@ -10,7 +10,7 @@ describe('signAndEncodeEntry', () => {
     );
 
     const entry = {
-      payload: '112233',
+      operation: '112233',
     };
 
     const result = signAndEncodeEntry(entry, keyPair);
@@ -28,7 +28,7 @@ describe('signAndEncodeEntry', () => {
     );
 
     const entry = {
-      payload: '112233',
+      operation: '112233',
       logId: 15,
       seqNum: '2331',
       backlink:
@@ -47,7 +47,7 @@ describe('signAndEncodeEntry', () => {
       signAndEncodeEntry(
         {
           logId: BigInt(-12),
-          payload: '1234',
+          operation: '1234',
         },
         keyPair,
       );
@@ -57,7 +57,7 @@ describe('signAndEncodeEntry', () => {
       signAndEncodeEntry(
         {
           seqNum: BigInt(0),
-          payload: '1234',
+          operation: '1234',
         },
         keyPair,
       );
@@ -72,7 +72,7 @@ describe('signAndEncodeEntry', () => {
       signAndEncodeEntry(
         {
           seqNum: BigInt(2),
-          payload: '1234',
+          operation: '1234',
         },
         keyPair,
       );

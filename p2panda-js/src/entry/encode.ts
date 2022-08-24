@@ -21,8 +21,8 @@ export type EntryArgs = {
   /** Backlink hash, omitted when first entry in log */
   backlink?: string;
 
-  /** Payload this entry points at */
-  payload: string;
+  /** Operation payload this entry points at */
+  operation: string;
 };
 
 /**
@@ -40,7 +40,7 @@ export function signAndEncodeEntry(entry: EntryArgs, keyPair: KeyPair): string {
     },
   );
 
-  const { skiplink = undefined, backlink = undefined, payload } = entry;
+  const { skiplink = undefined, backlink = undefined, operation } = entry;
 
   // Convert arguments always to BigInt, set defaults if undefined
   const logId = toBigInt(entry.logId, BigInt(0));
@@ -52,7 +52,7 @@ export function signAndEncodeEntry(entry: EntryArgs, keyPair: KeyPair): string {
       seqNum,
       skiplink,
       backlink,
-      payload,
+      operation,
     },
     {
       logId: {
@@ -73,7 +73,7 @@ export function signAndEncodeEntry(entry: EntryArgs, keyPair: KeyPair): string {
         optional: true,
         validHex: true,
       },
-      payload: {
+      operation: {
         validHex: true,
       },
     },
@@ -85,7 +85,7 @@ export function signAndEncodeEntry(entry: EntryArgs, keyPair: KeyPair): string {
       seqNum,
       skiplink,
       backlink,
-      payload,
+      operation,
       keyPair.__internal,
     );
   } catch (error) {
