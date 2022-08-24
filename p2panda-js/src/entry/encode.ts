@@ -30,6 +30,24 @@ export type EntryArgs = {
  * @param {EntryArgs} entry - Arguments to create the entry
  * @param {KeyPair} keyPair - Key pair to sign the entry with
  * @returns Hexadecimal encoded entry
+ * @example
+ * ```
+ * import { KeyPair, signAndEncodeEntry, encodeOperation } from 'p2panda-js';
+ *
+ * const keyPair = new KeyPair();
+ *
+ * const operation = encodeOperation({
+ *   schemaId: 'venues_0020c9db3376fa753b041e199ebfe1c0e6dfb50ca7924c7eedfdd35f141ac8d1207c',
+ *   fields: {
+ *     name: 'Klangkeller',
+ *   },
+ * });
+ *
+ * const entry = signAndEncodeEntry({
+ *   logId: 2,
+ *   operation,
+ * }, keyPair);
+ * ```
  */
 export function signAndEncodeEntry(entry: EntryArgs, keyPair: KeyPair): string {
   validate(

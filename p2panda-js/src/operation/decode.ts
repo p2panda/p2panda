@@ -26,6 +26,17 @@ export type PlainOperation = OperationMeta & {
  * @param {string} encodedOperation - Hexadecimal string of an encoded operation
  * @returns {PlainOperation} Plain operation which has not been checked against
  * a schema yet
+ * @example
+ * ```
+ * import { decodeOperation } from 'p2panda-js';
+ *
+ * const encodedOperation =
+ *   '840100781a736368656d615f6669656c645f646566696e697469' +
+ *   '6f6e5f7631a2646e616d656576656e7565647479706563737472';
+ *
+ * const result = decodeOperation(encodedOperation);
+ * console.log(result.action); // "create"
+ * ```
  */
 export function decodeOperation(encodedOperation: string): PlainOperation {
   validate(

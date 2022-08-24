@@ -5,6 +5,13 @@ import { validate } from '../validate';
 
 /**
  * Ed25519 key pair to sign Bamboo entries with.
+ * @example
+ * ```
+ * import { KeyPair } from 'p2panda-js';
+ *
+ * const keyPair = new KeyPair();
+ * console.log(keyPair.publicKey());
+ * ```
  */
 export class KeyPair {
   /**
@@ -30,6 +37,12 @@ export class KeyPair {
    * corresponding parts of the key, then your KeyPair will be broken and it
    * will be your fault.
    * @returns KeyPair instance
+   * @example
+   * ```
+   * import { KeyPair } from 'p2panda-js';
+   *
+   * const keyPair = new KeyPair('1f9e81007da0c007314a151be11be392de4cdc76888fbc5a8c62aa03c6730c6a');
+   * ```
    */
   constructor(privateKey?: string) {
     validate(
@@ -114,6 +127,14 @@ export class KeyPair {
  * @param {string} bytes - Any byte sequence encoded as a hexadecimal string
  * @param {string} signature - Ed25519 signature string
  * @returns {boolean} True if claimed signature is correct
+ * @example
+ * ```
+ * import { KeyPair, verifySignature } from 'p2panda-js';
+ *
+ * const keyPair = new KeyPair();
+ * const signature = keyPair.sign('aabbcc');
+ * verifySignature(keyPair.publicKey(), 'aabbcc', signature); // true
+ * ```
  */
 export function verifySignature(
   publicKey: string,

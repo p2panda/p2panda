@@ -29,6 +29,19 @@ export type OperationArgs = {
  * Creates and encodes an p2panda operation.
  * @param {OperationArgs} operation - Arguments to create the operation
  * @returns Hexadecimal encoded operation
+ * @example
+ * ```
+ * import { encodeOperation } from 'p2panda-js';
+ *
+ * const result = encodeOperation({
+ *   action: 'update',
+ *   schemaId: 'venues_0020c9db3376fa753b041e199ebfe1c0e6dfb50ca7924c7eedfdd35f141ac8d1207c',
+ *   previous: '00205f00bd1174909d6f7060800f3b9969e433dd564f9b75772d202f6ea48e5415e0',
+ *   fields: {
+ *     name: 'Untergruen',
+ *   },
+ * });
+ * ```
  */
 export function encodeOperation(operation: OperationArgs): string {
   validate({ operation }, { operation: { type: 'object' } });
