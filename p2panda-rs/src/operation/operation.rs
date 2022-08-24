@@ -10,8 +10,8 @@ use crate::schema::SchemaId;
 
 /// Create new operations.
 ///
-/// Ceating operations with the `OperationBuilder` does not validate them yet against their claimed
-/// schemas. You can use `validate_operation` for this.
+/// Creating operations with the `OperationBuilder` does not validate them yet against their
+/// claimed schemas. You can use `validate_operation` for this.
 #[derive(Clone, Debug)]
 pub struct OperationBuilder {
     /// Action of this operation.
