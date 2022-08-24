@@ -184,12 +184,7 @@ fn encodes_operations() {
     let previous = Array::new();
     previous.push(&JsValue::from_str(document_id.as_str()));
 
-    let update_operation = encode_operation(
-        1,
-        schema_id.clone(),
-        previous.into(),
-        Some(fields),
-    );
+    let update_operation = encode_operation(1, schema_id.clone(), previous.into(), Some(fields));
     assert!(update_operation.is_ok());
 
     // ~~~~~~
