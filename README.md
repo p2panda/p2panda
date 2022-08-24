@@ -81,8 +81,8 @@ let key_pair = KeyPair::new();
 println!("{}", key_pair.public_key());
 ```
 
-See [the demo application](https://p2panda.org/demo/#) and its [source
-code](https://github.com/p2panda/beep-boop). More examples can be found in the
+See [the demo application](https://p2panda.org) and its [source
+code](https://github.com/p2panda/zoo-adventures). More examples can be found in the
 [`p2panda-rs`] and [`p2panda-js`] directories.
 
 ## Installation
