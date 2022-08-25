@@ -9,7 +9,7 @@
 //! Entries contain p2panda operations as their payload, giving them security against malicious
 //! behaviour in a distributed system and authenticity with digital signatures.
 //!
-//! ## Decoding
+//! ## Create and decode entries
 //!
 //! Entries can be created programmatically via the API (`EntryBuilder`) or decoded from raw bytes
 //! (`EncodedEntry`). In both cases different validation steps need to be applied to make sure the
