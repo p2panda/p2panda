@@ -7,6 +7,13 @@ import { validate } from '../validate';
  * Generates a hash (BLAKE3 wrapped in YASMF container) from any value.
  * @param {string} value - Data encoded as hexadecimal string
  * @returns {string} Generated hash, encoded as hexadecimal string
+ * @example
+ * ```
+ * import { generateHash } from 'p2panda-js';
+ *
+ * const result = generateHash('aabbcc');
+ * console.log(result); // "0020d5f1c831db4153ae65d0bd3edf6b88eb8f5c9985e35d5192e371f5b469eeb4c4"
+ * ```
  */
 export function generateHash(value: string): string {
   validate(

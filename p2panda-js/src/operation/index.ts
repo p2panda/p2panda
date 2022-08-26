@@ -14,7 +14,7 @@ export type OperationMeta = {
 
   /** Document view id pointing at previous operations, needs to be set
    * for UPDATE and DELETE operations */
-  previousOperations?: string[];
+  previous?: string[];
 };
 
 /**

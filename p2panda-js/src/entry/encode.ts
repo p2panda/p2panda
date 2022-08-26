@@ -21,8 +21,8 @@ export type EntryArgs = {
   /** Backlink hash, omitted when first entry in log */
   backlink?: string;
 
-  /** Payload this entry points at */
-  payload: string;
+  /** Operation payload this entry points at */
+  operation: string;
 };
 
 /**
@@ -30,6 +30,24 @@ export type EntryArgs = {
  * @param {EntryArgs} entry - Arguments to create the entry
  * @param {KeyPair} keyPair - Key pair to sign the entry with
  * @returns Hexadecimal encoded entry
+ * @example
+ * ```
+ * import { KeyPair, signAndEncodeEntry, encodeOperation } from 'p2panda-js';
+ *
+ * const keyPair = new KeyPair();
+ *
+ * const operation = encodeOperation({
+ *   schemaId: 'venues_0020c9db3376fa753b041e199ebfe1c0e6dfb50ca7924c7eedfdd35f141ac8d1207c',
+ *   fields: {
+ *     name: 'Klangkeller',
+ *   },
+ * });
+ *
+ * const entry = signAndEncodeEntry({
+ *   logId: 2,
+ *   operation,
+ * }, keyPair);
+ * ```
  */
 export function signAndEncodeEntry(entry: EntryArgs, keyPair: KeyPair): string {
   validate(
@@ -40,7 +58,7 @@ export function signAndEncodeEntry(entry: EntryArgs, keyPair: KeyPair): string {
     },
   );
 
-  const { skiplink = undefined, backlink = undefined, payload } = entry;
+  const { skiplink = undefined, backlink = undefined, operation } = entry;
 
   // Convert arguments always to BigInt, set defaults if undefined
   const logId = toBigInt(entry.logId, BigInt(0));
@@ -52,7 +70,7 @@ export function signAndEncodeEntry(entry: EntryArgs, keyPair: KeyPair): string {
       seqNum,
       skiplink,
       backlink,
-      payload,
+      operation,
     },
     {
       logId: {
@@ -73,7 +91,7 @@ export function signAndEncodeEntry(entry: EntryArgs, keyPair: KeyPair): string {
         optional: true,
         validHex: true,
       },
-      payload: {
+      operation: {
         validHex: true,
       },
     },
@@ -85,7 +103,7 @@ export function signAndEncodeEntry(entry: EntryArgs, keyPair: KeyPair): string {
       seqNum,
       skiplink,
       backlink,
-      payload,
+      operation,
       keyPair.__internal,
     );
   } catch (error) {

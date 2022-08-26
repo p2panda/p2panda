@@ -21,7 +21,7 @@ describe('decodeOperation', () => {
     expect(result.schemaId).toBe(
       'mushrooms_0020bcbe6b8bd0ce2814b0551d587aee3bd124cec73adc7e0cb053e7179f3d347ef0',
     );
-    expect(result.previousOperations).toEqual([
+    expect(result.previous).toEqual([
       '0020893fdc7c025b524b7125da274fed22e845a3bdd585cc817dbd95ea4807b66962',
       '00209924e86db5b6704898bc954f58aac56faf9555f7b7d7ca903f35ea5d5c1663b7',
     ]);

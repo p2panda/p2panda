@@ -181,15 +181,10 @@ fn encodes_operations() {
     let document_id = EncodedOperation::from_hex(&create_operation.unwrap()).hash();
 
     // Encode another UPDATE operation and refer to previous CREATE operation
-    let previous_operations = Array::new();
-    previous_operations.push(&JsValue::from_str(document_id.as_str()));
+    let previous = Array::new();
+    previous.push(&JsValue::from_str(document_id.as_str()));
 
-    let update_operation = encode_operation(
-        1,
-        schema_id.clone(),
-        previous_operations.into(),
-        Some(fields),
-    );
+    let update_operation = encode_operation(1, schema_id.clone(), previous.into(), Some(fields));
     assert!(update_operation.is_ok());
 
     // ~~~~~~
@@ -200,10 +195,10 @@ fn encodes_operations() {
     let update_op_hash = EncodedOperation::from_hex(&update_operation.unwrap()).hash();
 
     // Encode another DELETE operation and refer to previous UPDATE operation
-    let previous_operations = Array::new();
-    previous_operations.push(&JsValue::from_str(update_op_hash.as_str()));
+    let previous = Array::new();
+    previous.push(&JsValue::from_str(update_op_hash.as_str()));
 
-    let delete_operation = encode_operation(2, schema_id, previous_operations.into(), None);
+    let delete_operation = encode_operation(2, schema_id, previous.into(), None);
     assert!(delete_operation.is_ok());
 }
 
