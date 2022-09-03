@@ -270,7 +270,7 @@ pub fn encode_operation(
         version: OperationVersion::V1,
         action,
         schema_id,
-        previous_operations: document_view_id,
+        previous: document_view_id,
         fields: fields.map(|inner| inner.0),
     };
     jserr!(validate_operation_format(&operation));
@@ -297,9 +297,9 @@ pub fn decode_operation(encoded_operation: String) -> Result<JsValue, JsValue> {
     ));
 
     // Convert document view id into array of operation id strings
-    let previous: Option<Vec<String>> = match operation_plain.previous_operations() {
-        Some(prev_ops) => {
-            let converted: Vec<String> = prev_ops
+    let previous: Option<Vec<String>> = match operation_plain.previous() {
+        Some(previous) => {
+            let converted: Vec<String> = previous
                 .graph_tips()
                 .iter()
                 .map(|operation_id| operation_id.to_string())

@@ -30,8 +30,8 @@ pub struct VerifiedOperation {
     /// Schema instance of this operation.
     pub(crate) schema_id: SchemaId,
 
-    /// Previous operations field.
-    pub(crate) previous_operations: Option<DocumentViewId>,
+    /// Previous field which contains the last known view id for the target document.
+    pub(crate) previous: Option<DocumentViewId>,
 
     /// Operation fields.
     pub(crate) fields: Option<OperationFields>,
@@ -74,8 +74,8 @@ impl AsOperation for VerifiedOperation {
     }
 
     /// Returns vector of this operation's previous operation ids
-    fn previous_operations(&self) -> Option<DocumentViewId> {
-        self.previous_operations.clone()
+    fn previous(&self) -> Option<DocumentViewId> {
+        self.previous.clone()
     }
 }
 
@@ -103,7 +103,7 @@ impl VerifiedOperation {
             version: OperationVersion::V1,
             action: operation.action(),
             schema_id: operation.schema_id(),
-            previous_operations: operation.previous_operations(),
+            previous: operation.previous(),
             fields: operation.fields(),
         }
     }
@@ -146,7 +146,7 @@ mod tests {
         operation.action();
         operation.version();
         operation.schema_id();
-        operation.previous_operations();
+        operation.previous();
         operation.has_fields();
         operation.has_previous_operations();
     }

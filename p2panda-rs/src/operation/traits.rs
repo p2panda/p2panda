@@ -19,7 +19,7 @@ pub trait Actionable {
     fn action(&self) -> OperationAction;
 
     /// Returns a list of previous operations.
-    fn previous_operations(&self) -> Option<&DocumentViewId>;
+    fn previous(&self) -> Option<&DocumentViewId>;
 }
 
 /// Trait representing an "operation-like" struct which contains data fields that can be checked
@@ -48,16 +48,16 @@ pub trait AsOperation {
     fn fields(&self) -> Option<OperationFields>;
 
     /// Returns vector of this operation's previous operation ids
-    fn previous_operations(&self) -> Option<DocumentViewId>;
+    fn previous(&self) -> Option<DocumentViewId>;
 
     /// Returns true if operation contains fields.
     fn has_fields(&self) -> bool {
         self.fields().is_some()
     }
 
-    /// Returns true if previous_operations contains a document view id.
+    /// Returns true if previous contains a document view id.
     fn has_previous_operations(&self) -> bool {
-        self.previous_operations().is_some()
+        self.previous().is_some()
     }
 
     /// Returns true when instance is CREATE operation.

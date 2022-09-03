@@ -141,7 +141,7 @@ impl DocumentBuilder {
                 version: operation.version(),
                 action: operation.action(),
                 schema_id: operation.schema_id(),
-                previous_operations: operation.previous_operations(),
+                previous: operation.previous(),
                 fields: operation.fields(),
                 public_key: operation.public_key().to_owned(),
             })
@@ -340,7 +340,7 @@ mod tests {
             .unwrap();
 
         // Panda publishes an UPDATE operation.
-        // It contains the id of the previous operation in it's `previous_operations` array
+        // It contains the id of the previous operation in it's `previous` array
         //
         // DOCUMENT: [panda_1]<--[panda_2]
         //
@@ -348,7 +348,7 @@ mod tests {
         let panda_operation_2 = OperationBuilder::new(schema.id())
             .action(OperationAction::Update)
             .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
-            .previous_operations(&panda_entry_1.hash().into())
+            .previous(&panda_entry_1.hash().into())
             .build()
             .unwrap();
 
@@ -368,7 +368,7 @@ mod tests {
                 "name",
                 OperationValue::String("Penguin Cafe!!!".to_string()),
             )])
-            .previous_operations(&panda_entry_1.hash().into())
+            .previous(&panda_entry_1.hash().into())
             .build()
             .unwrap();
 
@@ -377,7 +377,7 @@ mod tests {
             .unwrap();
 
         // Penguin publishes a new operation while now being aware of the previous branching situation.
-        // Their `previous_operations` field now contains 2 operation id's.
+        // Their `previous` field now contains 2 operation id's.
         //
         // DOCUMENT: [panda_1]<--[penguin_1]<---[penguin_2]
         //                    \----[panda_2]<--/
@@ -388,7 +388,7 @@ mod tests {
                 "name",
                 OperationValue::String("Polar Bear Cafe".to_string()),
             )])
-            .previous_operations(&DocumentViewId::new(&[
+            .previous(&DocumentViewId::new(&[
                 penguin_entry_1.hash().into(),
                 panda_entry_2.hash().into(),
             ]))
@@ -410,7 +410,7 @@ mod tests {
                 "name",
                 OperationValue::String("Polar Bear Cafe!!!!!!!!!!".to_string()),
             )])
-            .previous_operations(&penguin_entry_2.hash().into())
+            .previous(&penguin_entry_2.hash().into())
             .build()
             .unwrap();
 
@@ -653,7 +653,7 @@ mod tests {
         );
 
         // Panda publishes an UPDATE operation.
-        // It contains the id of the previous operation in it's `previous_operations` array
+        // It contains the id of the previous operation in it's `previous` array
         //
         // DOCUMENT: [panda_1]<--[panda_2]
         //
@@ -661,7 +661,7 @@ mod tests {
         let panda_operation_2 = OperationBuilder::new(schema.id())
             .action(OperationAction::Update)
             .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
-            .previous_operations(&DocumentViewId::new(&[panda_operation_1.id().to_owned()]))
+            .previous(&DocumentViewId::new(&[panda_operation_1.id().to_owned()]))
             .build()
             .unwrap();
 
@@ -685,7 +685,7 @@ mod tests {
                 "name",
                 OperationValue::String("Penguin Cafe!!!".to_string()),
             )])
-            .previous_operations(&DocumentViewId::new(&[panda_operation_2.id().to_owned()]))
+            .previous(&DocumentViewId::new(&[panda_operation_2.id().to_owned()]))
             .build()
             .unwrap();
 

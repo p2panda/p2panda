@@ -193,8 +193,8 @@ pub async fn next_args<S: StorageProvider>(
 /// - If this is a create operation:
 ///   - derive the document id from the entry hash.
 /// - In all other cases:
-///   - verify that all operations in previous_operations exist in the database,
-///   - verify that all operations in previous_operations are from the same document,
+///   - verify that all operations in previous exist in the database,
+///   - verify that all operations in previous are from the same document,
 ///   - ensure that the document is not deleted.
 /// - Verify that the claimed log id matches the expected log id for this public key and log.
 ///
@@ -282,12 +282,11 @@ pub async fn publish<S: StorageProvider>(
         }
         _ => {
             // We can unwrap previous operations here as we know all UPDATE and DELETE operations contain them.
-            let previous_operations = operation.previous_operations().unwrap();
+            let previous = operation.previous().unwrap();
 
             // Get the document_id for the document_view_id contained in previous operations.
             // This performs several validation steps (check method doc string).
-            let document_id =
-                get_checked_document_id_for_view_id(store, &previous_operations).await?;
+            let document_id = get_checked_document_id_for_view_id(store, &previous).await?;
 
             // Ensure the document isn't deleted.
             ensure_document_not_deleted(store, &document_id)
@@ -446,7 +445,7 @@ mod tests {
         // Store another entry and operation, from a different public_key, which perform an update on the earlier operation.
         let update_operation = OperationBuilder::new(schema.id())
             .action(OperationAction::Update)
-            .previous_operations(&operation_one_id.clone().into())
+            .previous(&operation_one_id.clone().into())
             .fields(&test_fields())
             .build()
             .unwrap();
@@ -569,7 +568,7 @@ mod tests {
         // The operations to be removed from the db
         #[case] operations_to_remove: &[LogIdAndSeqNum],
         // The previous operations described by their log id and seq number (log_id, seq_num)
-        #[case] previous_operations: &[LogIdAndSeqNum],
+        #[case] previous: &[LogIdAndSeqNum],
         #[case] key_pair: KeyPair,
         #[from(test_db_config)]
         #[with(8, 2, 1)]
@@ -584,7 +583,7 @@ mod tests {
         let document = documents.first().map(|id| id.as_str().parse().unwrap());
 
         // Map the passed &[LogIdAndSeqNum] into a DocumentViewId containing the claimed operations.
-        let previous_operations: Vec<OperationId> = previous_operations
+        let previous: Vec<OperationId> = previous
             .iter()
             .filter_map(|(log_id, seq_num)| {
                 store
@@ -602,12 +601,12 @@ mod tests {
             .collect();
 
         // Construct document view id for previous operations.
-        let document_view_id = DocumentViewId::new(&previous_operations);
+        let document_view_id = DocumentViewId::new(&previous);
 
         // Compose the next operation.
         let next_operation = OperationBuilder::new(schema.id())
             .action(OperationAction::Update)
-            .previous_operations(&document_view_id)
+            .previous(&document_view_id)
             .fields(&test_fields())
             .build()
             .unwrap();
@@ -881,7 +880,7 @@ mod tests {
 
         let update_operation = OperationBuilder::new(schema.id())
             .action(OperationAction::Update)
-            .previous_operations(&document_view_id)
+            .previous(&document_view_id)
             .fields(&test_fields())
             .build()
             .unwrap();
@@ -994,7 +993,7 @@ mod tests {
 
         let delete_operation = OperationBuilder::new(schema.id())
             .action(OperationAction::Delete)
-            .previous_operations(&document_view_id)
+            .previous(&document_view_id)
             .build()
             .unwrap();
 

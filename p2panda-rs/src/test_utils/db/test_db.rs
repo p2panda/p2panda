@@ -211,7 +211,7 @@ pub async fn populate_store<S: StorageProvider>(
     let mut documents: Vec<DocumentId> = Vec::new();
     for key_pair in &key_pairs {
         for _log_id in 0..config.no_of_logs {
-            let mut previous_operation: Option<DocumentViewId> = None;
+            let mut previous: Option<DocumentViewId> = None;
 
             for index in 0..config.no_of_entries {
                 // Create an operation based on the current index and whether this document should
@@ -226,9 +226,7 @@ pub async fn populate_store<S: StorageProvider>(
                     seq if seq == (config.no_of_entries - 1) && config.with_delete => {
                         OperationBuilder::new(config.schema.id())
                             .action(OperationAction::Delete)
-                            .previous_operations(
-                                &previous_operation.expect("Previous operations should be set"),
-                            )
+                            .previous(&previous.expect("Previous should be set"))
                             .build()
                             .expect("Error building operation")
                     }
@@ -236,9 +234,7 @@ pub async fn populate_store<S: StorageProvider>(
                     _ => OperationBuilder::new(config.schema.id())
                         .action(OperationAction::Update)
                         .fields(&config.update_operation_fields)
-                        .previous_operations(
-                            &previous_operation.expect("Previous operations should be set"),
-                        )
+                        .previous(&previous.expect("Previous should be set"))
                         .build()
                         .expect("Error building operation"),
                 };
@@ -249,8 +245,8 @@ pub async fn populate_store<S: StorageProvider>(
                         .await
                         .expect("Send to store");
 
-                // Set the previous_operations based on the backlink
-                previous_operation = publish_entry_response.backlink.map(DocumentViewId::from);
+                // Set the previous based on the backlink
+                previous = publish_entry_response.backlink.map(DocumentViewId::from);
 
                 // Push this document id to the test data.
                 if index == 0 {
@@ -273,7 +269,7 @@ pub async fn send_to_store<S: StorageProvider>(
     let public_key = PublicKey::from(key_pair.public_key());
 
     // Get the next args.
-    let next_args = next_args(store, &public_key, operation.previous_operations()).await?;
+    let next_args = next_args(store, &public_key, operation.previous()).await?;
 
     // Encode the operation.
     let encoded_operation = encode_operation(operation)?;

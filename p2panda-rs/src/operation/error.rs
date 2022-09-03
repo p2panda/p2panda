@@ -59,12 +59,12 @@ pub enum ValidateOperationError {
     #[error("unexpected 'fields' in DELETE operation")]
     UnexpectedFields,
 
-    /// Expected `previous_operations` in UPDATE or DELETE operation.
-    #[error("expected 'previous_operations' in UPDATE or DELETE operation")]
+    /// Expected `previous` in UPDATE or DELETE operation.
+    #[error("expected 'previous' in UPDATE or DELETE operation")]
     ExpectedPreviousOperations,
 
-    /// Unexpected `previous_operations` in CREATE operation.
-    #[error("unexpected 'previous_operations' in CREATE operation")]
+    /// Unexpected `previous` in CREATE operation.
+    #[error("unexpected 'previous' in CREATE operation")]
     UnexpectedPreviousOperations,
 
     /// Handle errors from `schema::validate` module.

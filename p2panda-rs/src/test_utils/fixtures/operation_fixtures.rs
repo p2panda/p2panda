@@ -40,17 +40,17 @@ pub fn operation_value() -> OperationValue {
 /// Returns document view id of any number of operations containing random hashes.
 #[fixture]
 pub fn random_previous_operations(#[default(1)] num: u32) -> DocumentViewId {
-    let mut previous_operations: Vec<OperationId> = Vec::new();
+    let mut previous: Vec<OperationId> = Vec::new();
 
     for _ in 0..num {
-        previous_operations.push(random_hash().into())
+        previous.push(random_hash().into())
     }
 
     // Make sure the random hashes are sorted, otherwise validation will fail when creating the
     // document view id
-    previous_operations.sort();
+    previous.sort();
 
-    DocumentViewId::new(&previous_operations)
+    DocumentViewId::new(&previous)
 }
 
 /// Returns operation fields populated with test values.
@@ -78,21 +78,21 @@ pub fn some_fields(
 /// Returns an operation.
 ///
 /// If a value for `fields` is provided, this is a CREATE operation. If values for both `fields`
-/// and `previous_operations` are provided, this is an UPDATE operation. If no value for `fields`
+/// and `previous` are provided, this is an UPDATE operation. If no value for `fields`
 /// is provided, this is a DELETE operation.
 #[fixture]
 pub fn operation(
     #[from(some_fields)] fields: Option<OperationFields>,
-    #[default(None)] previous_operations: Option<DocumentViewId>,
+    #[default(None)] previous: Option<DocumentViewId>,
     #[from(schema_id)] schema_id: SchemaId,
 ) -> Operation {
     match fields {
         // It's a CREATE operation
-        Some(fields) if previous_operations.is_none() => Operation {
+        Some(fields) if previous.is_none() => Operation {
             version: OperationVersion::V1,
             action: OperationAction::Create,
             schema_id,
-            previous_operations: None,
+            previous: None,
             fields: Some(fields),
         },
         // It's an UPDATE operation
@@ -100,7 +100,7 @@ pub fn operation(
             version: OperationVersion::V1,
             action: OperationAction::Update,
             schema_id,
-            previous_operations,
+            previous,
             fields: Some(fields),
         },
         // It's a DELETE operation
@@ -108,7 +108,7 @@ pub fn operation(
             version: OperationVersion::V1,
             action: OperationAction::Delete,
             schema_id,
-            previous_operations,
+            previous,
             fields: None,
         },
     }
@@ -118,11 +118,11 @@ pub fn operation(
 #[fixture]
 pub fn operation_with_schema(
     #[from(some_fields)] fields: Option<OperationFields>,
-    #[default(None)] previous_operations: Option<DocumentViewId>,
+    #[default(None)] previous: Option<DocumentViewId>,
 ) -> Operation {
     let schema_id = schema_id(SCHEMA_ID);
 
-    operation(fields, previous_operations, schema_id)
+    operation(fields, previous, schema_id)
 }
 
 /// Returns an constant CREATE operation with a constant testing schema id.
@@ -144,16 +144,16 @@ pub fn encoded_create_operation_with_schema() -> EncodedOperation {
 /// Generates verified operation instance.
 ///
 /// If a value for `fields` is provided, this is a CREATE operation. If values for both `fields`
-/// and `previous_operations` are provided, this is an UPDATE operation. If no value for `fields`
+/// and `previous` are provided, this is an UPDATE operation. If no value for `fields`
 /// is provided, this is a DELETE operation.
 #[fixture]
 pub fn verified_operation(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[from(schema)] schema: Schema,
-    #[default(None)] previous_operations: Option<DocumentViewId>,
+    #[default(None)] previous: Option<DocumentViewId>,
     #[from(key_pair)] key_pair: KeyPair,
 ) -> VerifiedOperation {
-    let operation = operation(fields, previous_operations, schema.id().clone());
+    let operation = operation(fields, previous, schema.id().clone());
     let operation_plain: PlainOperation = (&operation).into();
     let operation_encoded = encode_plain_operation(&operation_plain).unwrap();
 
@@ -185,7 +185,7 @@ pub fn verified_operation(
 #[fixture]
 pub fn verified_operation_with_schema(
     #[from(some_fields)] fields: Option<OperationFields>,
-    #[default(None)] previous_operations: Option<DocumentViewId>,
+    #[default(None)] previous: Option<DocumentViewId>,
     #[from(key_pair)] key_pair: KeyPair,
 ) -> VerifiedOperation {
     let schema_id = schema_id(SCHEMA_ID);
@@ -196,7 +196,7 @@ pub fn verified_operation_with_schema(
         "Test schema",
     );
 
-    verified_operation(fields, schema, previous_operations, key_pair)
+    verified_operation(fields, schema, previous, key_pair)
 }
 
 /// Returns encoded operation as hexadecimal string.
@@ -210,10 +210,10 @@ pub fn encoded_create_string(operation: Operation) -> String {
 #[fixture]
 pub fn encoded_operation(
     #[from(some_fields)] fields: Option<OperationFields>,
-    #[default(None)] previous_operations: Option<DocumentViewId>,
+    #[default(None)] previous: Option<DocumentViewId>,
     #[from(schema_id)] schema_id: SchemaId,
 ) -> EncodedOperation {
-    let operation = operation(fields, previous_operations, schema_id);
+    let operation = operation(fields, previous, schema_id);
     encode_operation(&operation).unwrap()
 }
 
@@ -230,12 +230,12 @@ pub fn create_operation(
 #[fixture]
 pub fn update_operation(
     #[default(test_fields())] fields: Vec<(&str, OperationValue)>,
-    #[from(document_view_id)] previous_operations: DocumentViewId,
+    #[from(document_view_id)] previous: DocumentViewId,
     #[from(schema_id)] schema_id: SchemaId,
 ) -> Operation {
     operation(
         Some(operation_fields(fields.to_vec())),
-        Some(previous_operations),
+        Some(previous),
         schema_id,
     )
 }
@@ -243,8 +243,8 @@ pub fn update_operation(
 /// Helper method for easily constructing a DELETE operation.
 #[fixture]
 pub fn delete_operation(
-    #[from(document_view_id)] previous_operations: DocumentViewId,
+    #[from(document_view_id)] previous: DocumentViewId,
     #[from(schema_id)] schema_id: SchemaId,
 ) -> Operation {
-    operation(None, Some(previous_operations), schema_id)
+    operation(None, Some(previous), schema_id)
 }

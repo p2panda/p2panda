@@ -109,7 +109,7 @@ pub fn validate_operation_with_entry(
         version: AsOperation::version(&operation),
         action: AsOperation::action(&operation),
         schema_id: AsOperation::schema_id(&operation),
-        previous_operations: AsOperation::previous_operations(&operation),
+        previous: AsOperation::previous(&operation),
         fields: AsOperation::fields(&operation),
     })
 }
@@ -125,22 +125,16 @@ pub fn validate_operation_format<O: Actionable + Schematic>(
     match operation.action() {
         OperationAction::Create => {
             // We don't want to return the fields here so we ignore them.
-            let _ = validate_create_operation_format(
-                operation.previous_operations(),
-                operation.fields(),
-            )?;
+            let _ = validate_create_operation_format(operation.previous(), operation.fields())?;
             Ok(())
         }
         OperationAction::Update => {
             // We don't want to return the fields here so we ignore them.
-            let _ = validate_update_operation_format(
-                operation.previous_operations(),
-                operation.fields(),
-            )?;
+            let _ = validate_update_operation_format(operation.previous(), operation.fields())?;
             Ok(())
         }
         OperationAction::Delete => {
-            validate_delete_operation_format(operation.previous_operations(), operation.fields())
+            validate_delete_operation_format(operation.previous(), operation.fields())
         }
     }
 }
@@ -157,7 +151,7 @@ pub fn validate_operation<O: Actionable + Schematic>(
     operation: &O,
     schema: &Schema,
 ) -> Result<Operation, ValidateOperationError> {
-    let previous_operations = operation.previous_operations();
+    let previous = operation.previous();
     let fields = operation.fields();
 
     // Make sure the schema id and given schema matches
@@ -169,9 +163,9 @@ pub fn validate_operation<O: Actionable + Schematic>(
     }
 
     match operation.action() {
-        OperationAction::Create => validate_create_operation(previous_operations, fields, schema),
-        OperationAction::Update => validate_update_operation(previous_operations, fields, schema),
-        OperationAction::Delete => validate_delete_operation(previous_operations, fields, schema),
+        OperationAction::Create => validate_create_operation(previous, fields, schema),
+        OperationAction::Update => validate_update_operation(previous, fields, schema),
+        OperationAction::Delete => validate_delete_operation(previous, fields, schema),
     }
 }
 
@@ -230,7 +224,7 @@ fn validate_create_operation(
         version: OperationVersion::V1,
         action: OperationAction::Create,
         schema_id: schema.id().to_owned(),
-        previous_operations: None,
+        previous: None,
         fields: Some(validated_fields),
     })
 }
@@ -248,7 +242,7 @@ fn validate_update_operation(
         version: OperationVersion::V1,
         action: OperationAction::Update,
         schema_id: schema.id().to_owned(),
-        previous_operations: plain_previous_operations.cloned(),
+        previous: plain_previous_operations.cloned(),
         fields: Some(validated_fields),
     })
 }
@@ -265,7 +259,7 @@ fn validate_delete_operation(
         version: OperationVersion::V1,
         action: OperationAction::Delete,
         schema_id: schema.id().to_owned(),
-        previous_operations: plain_previous_operations.cloned(),
+        previous: plain_previous_operations.cloned(),
         fields: None,
     })
 }
@@ -456,7 +450,7 @@ mod tests {
         // Correct UPDATE operation matching schema
         let operation = OperationBuilder::new(schema.id())
             .action(OperationAction::Update)
-            .previous_operations(&document_view_id)
+            .previous(&document_view_id)
             .fields(&[("address", document_id.into())])
             .build()
             .unwrap();

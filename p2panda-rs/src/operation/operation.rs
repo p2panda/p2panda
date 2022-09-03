@@ -20,8 +20,8 @@ pub struct OperationBuilder {
     /// Schema instance of this operation.
     schema_id: SchemaId,
 
-    /// Previous operations field.
-    previous_operations: Option<DocumentViewId>,
+    /// Previous field which contains the last known view id for the target document.
+    previous: Option<DocumentViewId>,
 
     /// Operation fields.
     fields: Option<OperationFields>,
@@ -33,7 +33,7 @@ impl OperationBuilder {
         Self {
             action: OperationAction::Create,
             schema_id: schema_id.to_owned(),
-            previous_operations: None,
+            previous: None,
             fields: None,
         }
     }
@@ -51,8 +51,8 @@ impl OperationBuilder {
     }
 
     /// Set previous operations.
-    pub fn previous_operations(mut self, previous_operations: &DocumentViewId) -> Self {
-        self.previous_operations = Some(previous_operations.to_owned());
+    pub fn previous(mut self, previous: &DocumentViewId) -> Self {
+        self.previous = Some(previous.to_owned());
         self
     }
 
@@ -83,7 +83,7 @@ impl OperationBuilder {
             action: self.action,
             version: OperationVersion::V1,
             schema_id: self.schema_id.to_owned(),
-            previous_operations: self.previous_operations.to_owned(),
+            previous: self.previous.to_owned(),
             fields: self.fields.to_owned(),
         };
 
@@ -103,7 +103,7 @@ impl OperationBuilder {
 /// "materialisation" process. If a DELETE operation is published it signals the deletion of the
 /// entire graph and no more UPDATE operations should be published.
 ///
-/// All UPDATE and DELETE operations have a `previous_operations` field which contains a vector of
+/// All UPDATE and DELETE operations have a `previous` field which contains a vector of
 /// operation ids which identify the known branch tips at the time of publication. These allow us
 /// to build the graph and retain knowledge of the graph state at the time the specific operation
 /// was published.
@@ -120,7 +120,7 @@ pub struct Operation {
 
     /// Optional document view id containing the operation ids directly preceding this one in the
     /// document.
-    pub(crate) previous_operations: Option<DocumentViewId>,
+    pub(crate) previous: Option<DocumentViewId>,
 
     /// Optional fields map holding the operation data.
     pub(crate) fields: Option<OperationFields>,
@@ -143,8 +143,8 @@ impl AsOperation for Operation {
     }
 
     /// Returns known previous operations vector of this operation.
-    fn previous_operations(&self) -> Option<DocumentViewId> {
-        self.previous_operations.clone()
+    fn previous(&self) -> Option<DocumentViewId> {
+        self.previous.clone()
     }
 
     /// Returns application data fields of operation.
@@ -162,8 +162,8 @@ impl Actionable for Operation {
         self.action
     }
 
-    fn previous_operations(&self) -> Option<&DocumentViewId> {
-        self.previous_operations.as_ref()
+    fn previous(&self) -> Option<&DocumentViewId> {
+        self.previous.as_ref()
     }
 }
 
@@ -199,13 +199,13 @@ mod tests {
 
         let operation = OperationBuilder::new(&schema_id)
             .action(OperationAction::Update)
-            .previous_operations(&document_view_id)
+            .previous(&document_view_id)
             .fields(&fields)
             .build()
             .unwrap();
 
         assert_eq!(operation.action(), OperationAction::Update);
-        assert_eq!(operation.previous_operations(), Some(document_view_id));
+        assert_eq!(operation.previous(), Some(document_view_id));
         assert_eq!(operation.fields(), Some(fields.into()));
         assert_eq!(operation.version(), OperationVersion::V1);
         assert_eq!(operation.schema_id(), schema_id);
@@ -219,11 +219,11 @@ mod tests {
             .build()
             .is_ok());
 
-        // CREATE operations must not contain previous_operations
+        // CREATE operations must not contain previous
         assert!(OperationBuilder::new(&schema_id)
             .action(OperationAction::Create)
             .fields(&[("year", 2020.into())])
-            .previous_operations(&document_view_id)
+            .previous(&document_view_id)
             .build()
             .is_err());
 
@@ -237,18 +237,18 @@ mod tests {
         assert!(OperationBuilder::new(&schema_id)
             .action(OperationAction::Update)
             .fields(&[("year", 2020.into())])
-            .previous_operations(&document_view_id)
+            .previous(&document_view_id)
             .build()
             .is_ok());
 
         // UPDATE operations must have fields
         assert!(OperationBuilder::new(&schema_id)
             .action(OperationAction::Update)
-            .previous_operations(&document_view_id)
+            .previous(&document_view_id)
             .build()
             .is_err());
 
-        // UPDATE operations must have previous_operations
+        // UPDATE operations must have previous
         assert!(OperationBuilder::new(&schema_id)
             .action(OperationAction::Update)
             .fields(&[("year", 2020.into())])
@@ -258,19 +258,19 @@ mod tests {
         // correct DELETE operation
         assert!(OperationBuilder::new(&schema_id)
             .action(OperationAction::Delete)
-            .previous_operations(&document_view_id)
+            .previous(&document_view_id)
             .build()
             .is_ok());
 
         // DELETE operations must not have fields
         assert!(OperationBuilder::new(&schema_id)
             .action(OperationAction::Delete)
-            .previous_operations(&document_view_id)
+            .previous(&document_view_id)
             .fields(&[("year", 2020.into())])
             .build()
             .is_err());
 
-        // DELETE operations must have previous_operations
+        // DELETE operations must have previous
         assert!(OperationBuilder::new(&schema_id)
             .action(OperationAction::Update)
             .build()

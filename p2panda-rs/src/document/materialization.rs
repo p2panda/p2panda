@@ -20,8 +20,8 @@ pub(crate) fn build_graph(
 
     // Add links between operations in the graph.
     for operation in operations {
-        if let Some(previous_operations) = operation.previous_operations() {
-            for previous in previous_operations.iter() {
+        if let Some(previous) = operation.previous() {
+            for previous in previous.iter() {
                 let success = graph.add_link(previous, operation.id());
                 if !success {
                     return Err(DocumentBuilderError::InvalidOperationLink(
