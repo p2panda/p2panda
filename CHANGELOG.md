@@ -13,6 +13,8 @@ Highlights are marked with a pancake 🥞
 
 - Rename `previousOperations` field to `previous`, add examples [#459](https://github.com/p2panda/p2panda/pull/459) `js`
 - Updated diagrams and doc-strings [#460](https://github.com/p2panda/p2panda/pull/460) `rs`
+- Rename `Author` to `PublicKey` [#461](https://github.com/p2panda/p2panda/pull/461) `rs` `js`
+- Rename `previous_operations` to `previous` [#461](https://github.com/p2panda/p2panda/pull/461) `rs` `js`
 
 ### Fixed
 
