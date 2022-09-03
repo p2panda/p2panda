@@ -323,7 +323,7 @@ pub async fn publish<S: StorageProvider>(
     let next_seq_num = increment_seq_num(&mut seq_num.clone()).map_err(|_| {
         format!(
             "Max sequence number reached for {} log {}",
-            public key.display(),
+            public_key.display(),
             log_id.as_u64()
         )
     })?;

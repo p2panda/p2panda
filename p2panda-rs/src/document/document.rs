@@ -56,9 +56,9 @@ impl Document {
         &self.view_id
     }
 
-    /// Get the document author.
+    /// Get the document author's public key.
     pub fn author(&self) -> &PublicKey {
-        &self.public_key
+        &self.author
     }
 
     /// Get the document schema.
