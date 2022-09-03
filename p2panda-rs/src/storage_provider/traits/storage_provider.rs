@@ -6,7 +6,7 @@ use crate::document::DocumentId;
 use crate::hash::Hash;
 use crate::operation::traits::AsVerifiedOperation;
 use crate::storage_provider::traits::{
-    AsStorageLog, EntryStore, EntryWithOperation, LogStore, OperationStore,
+    AsStorageLog, DocumentStore, EntryStore, EntryWithOperation, LogStore, OperationStore,
 };
 use crate::storage_provider::utils::Result;
 
@@ -16,11 +16,11 @@ use crate::storage_provider::utils::Result;
 // encapsulating the storage traits required for the `domain` methods.
 #[async_trait]
 pub trait StorageProvider:
-    EntryStore<Self::Entry> + LogStore<Self::StorageLog> + OperationStore<Self::Operation>
+    EntryStore<Self::Entry>
+    + LogStore<Self::StorageLog>
+    + OperationStore<Self::Operation>
+    + DocumentStore
 {
-    // @TODO: We can move these types into their own stores once we deprecate the higher level
-    // methods (publish_entry and next_entry_args) on StorageProvider.
-
     /// An associated type representing an entry as it passes in and out of storage.
     type Entry: EntryWithOperation;
 
