@@ -111,7 +111,7 @@ Released on 2022-07-01: :package: `p2panda-js` and :package: `p2panda-rs`
 - Additional constructor method for `OperationWithMeta` [#322](https://github.com/p2panda/p2panda/pull/322) `rs`
 - Minor method renaming in `EntryStore` [#323](https://github.com/p2panda/p2panda/pull/323) `rs`
 - Require storage provider errors to be thread-safe [#340](https://github.com/p2panda/p2panda/pull/340)
-- Make `previous` a `DocumentViewId` [#342](https://github.com/p2panda/p2panda/pull/342) `rs`
+- Make `previous_operations` a `DocumentViewId` [#342](https://github.com/p2panda/p2panda/pull/342) `rs`
 - Restructure / refactor `test_utils` and place behind `testing` flag [#344](https://github.com/p2panda/p2panda/pull/344) `rs`
 - Update `openmls` crate to `v0.4.1` [#336](https://github.com/p2panda/p2panda/pull/336) `rs`
 - Replace `OperationWithMeta` with `VerifiedOperation` [#353](https://github.com/p2panda/p2panda/pull/353) `rs`
@@ -162,7 +162,7 @@ Released on 2022-02-02: :package: `p2panda-js` and 2022-06-11: :package: `p2pand
 - Update JavaScript dependencies, remove deprecated eslint-loader [#155](https://github.com/p2panda/p2panda/pull/155) `js`
 - Split utils modules in `test_utils` into utils.rs and constants.rs [#157](https://github.com/p2panda/p2panda/pull/157) `rs`
 - Use traits for validation methods in `Schema` [#160](https://github.com/p2panda/p2panda/pull/160) `rs`
-- Add `previous` field in `Operation` [#163](https://github.com/p2panda/p2panda/pull/163) _BREAKING_ `rs` `js`
+- Add `previous_operations` field in `Operation` [#163](https://github.com/p2panda/p2panda/pull/163) _BREAKING_ `rs` `js`
 - Introduce `OperationWithMeta` struct [#163](https://github.com/p2panda/p2panda/pull/163) `rs`
 - Update API and mocks to reflect yasmf hash and document flow changes [#165](https://github.com/p2panda/p2panda/pull/165) _BREAKING_ `rs` `js`
 - Change to new `rustdoc::missing_doc_code_examples` linter name [#168](https://github.com/p2panda/p2panda/pull/168) `rs`
