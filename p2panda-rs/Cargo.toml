@@ -20,8 +20,21 @@ categories = ["web-programming", "wasm", "cryptography"]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-test-utils = ["storage-provider", "dep:rstest", "dep:rstest_reuse", "dep:varu64", "dep:tokio", "dep:async-trait"]
-secret-group = ["dep:openmls", "dep:openmls_memory_keystore", "dep:openmls_rust_crypto", "dep:openmls_traits", "dep:tls_codec"]
+test-utils = [
+  "storage-provider",
+  "dep:rstest",
+  "dep:rstest_reuse",
+  "dep:varu64",
+  "dep:tokio",
+  "dep:async-trait",
+]
+secret-group = [
+  "dep:openmls",
+  "dep:openmls_memory_keystore",
+  "dep:openmls_rust_crypto",
+  "dep:openmls_traits",
+  "dep:tls_codec",
+]
 storage-provider = ["dep:async-trait"]
 
 [dependencies]
@@ -44,8 +57,15 @@ rstest = { version = "^0.15.0", optional = true }
 rstest_reuse = { version = "^0.3.0", optional = true }
 serde = { version = "^1.0.143", features = ["derive"] }
 thiserror = "^1.0.32"
-tls_codec = { version = "^0.2.0", features = ["derive", "serde_serialize"], optional = true }
-tokio = { version = "^1.20.1", features = [ "rt", "macros", "rt-multi-thread" ], optional = true }
+tls_codec = { version = "^0.2.0", features = [
+  "derive",
+  "serde_serialize",
+], optional = true }
+tokio = { version = "^1.20.1", features = [
+  "rt",
+  "macros",
+  "rt-multi-thread",
+], optional = true }
 varu64 = { version = "^0.7.0", default-features = false, optional = true }
 yasmf-hash = "^0.1.1"
 
@@ -65,7 +85,7 @@ openmls = { version = "^0.4.1", features = ["crypto-subtle", "test-utils"] }
 pretty_env_logger = "^0.4.0"
 rstest = "^0.15.0"
 rstest_reuse = "^0.3.0"
-tokio = { version = "^1.20.1", features = ["rt", "macros", "rt-multi-thread"] }
+tokio = { version = "^1.20.1", features = ["rt", "macros"] }
 varu64 = { version = "^0.7.0", default-features = false }
 wasm-bindgen-test = "^0.3.31"
 
