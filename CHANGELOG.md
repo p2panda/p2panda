@@ -47,6 +47,7 @@ Released on 2022-08-19: :package: `p2panda-js` and :package: `p2panda-rs`
 - Introduce new feature flags, rename `testing` to `test-utils` [#448](https://github.com/p2panda/p2panda/pull/448) `rs`
 - Replace `lazy_static` with `once_cell` [#449](https://github.com/p2panda/p2panda/pull/449) `rs`
 - Build ES Module, CommonJS, NodeJS and UMD modules with rollup [#450](https://github.com/p2panda/p2panda/pull/450) `js`
+- Require `DocumentStore` trait on `StorageProvider` [#456](https://github.com/p2panda/p2panda/pull/456) `rs`
 
 ### Fixed
 

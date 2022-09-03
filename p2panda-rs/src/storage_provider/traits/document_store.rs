@@ -7,9 +7,6 @@ use crate::schema::SchemaId;
 use crate::storage_provider::error::DocumentStorageError;
 
 /// Storage traits for documents and document views.
-///
-/// This trait should be implemented on the root storage provider struct. It's definitions make up
-/// the required methods for inserting into and querying documents and document views from storage.
 #[async_trait]
 pub trait DocumentStore {
     /// Insert document view into storage.
@@ -51,7 +48,7 @@ pub trait DocumentStore {
     /// Get the most recent view for all documents which follow the passed schema.
     ///
     /// Returns a vector of `DocumentView`, or an empty vector if none were found. Returns
-    /// an error when a fatal storage error occured.
+    /// an error when a fatal storage error occured.  
     async fn get_documents_by_schema(
         &self,
         schema_id: &SchemaId,
