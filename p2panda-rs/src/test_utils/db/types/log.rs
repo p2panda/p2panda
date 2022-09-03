@@ -2,15 +2,15 @@
 
 use crate::document::DocumentId;
 use crate::entry::LogId;
-use crate::identity::Author;
+use crate::identity::PublicKey;
 use crate::schema::SchemaId;
 use crate::storage_provider::traits::AsStorageLog;
 
-/// A log entry represented as a concatenated string of `"{author}-{schema}-{document_id}-{log_id}"`
+/// A log entry represented as a concatenated string of `"{public_key}-{schema}-{document_id}-{log_id}"`
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StorageLog {
     /// Public key of the author.
-    pub author: Author,
+    pub public_key: PublicKey,
 
     /// Log id used for this document.
     pub log_id: LogId,
@@ -24,17 +24,22 @@ pub struct StorageLog {
 
 /// Implement `AsStorageLog` trait for our `StorageLog` struct
 impl AsStorageLog for StorageLog {
-    fn new(author: &Author, schema: &SchemaId, document: &DocumentId, log_id: &LogId) -> Self {
+    fn new(
+        public_key: &PublicKey,
+        schema: &SchemaId,
+        document: &DocumentId,
+        log_id: &LogId,
+    ) -> Self {
         StorageLog {
-            author: author.clone(),
+            public_key: public_key.clone(),
             log_id: *log_id,
             document: document.clone(),
             schema: schema.clone(),
         }
     }
 
-    fn author(&self) -> Author {
-        self.author.clone()
+    fn public_key(&self) -> PublicKey {
+        self.public_key.clone()
     }
 
     fn schema_id(&self) -> SchemaId {

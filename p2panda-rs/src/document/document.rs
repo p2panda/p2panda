@@ -5,7 +5,7 @@ use std::fmt::Display;
 use crate::document::error::DocumentBuilderError;
 use crate::document::materialization::{build_graph, reduce};
 use crate::document::{DocumentId, DocumentView, DocumentViewId};
-use crate::identity::Author;
+use crate::identity::PublicKey;
 use crate::operation::traits::{AsOperation, AsVerifiedOperation};
 use crate::operation::{OperationId, VerifiedOperation};
 use crate::schema::SchemaId;
@@ -39,7 +39,7 @@ pub struct DocumentMeta {
 pub struct Document {
     id: DocumentId,
     view_id: DocumentViewId,
-    author: Author,
+    author: PublicKey,
     schema: SchemaId,
     view: Option<DocumentView>,
     meta: DocumentMeta,
@@ -57,8 +57,8 @@ impl Document {
     }
 
     /// Get the document author.
-    pub fn author(&self) -> &Author {
-        &self.author
+    pub fn author(&self) -> &PublicKey {
+        &self.public_key
     }
 
     /// Get the document schema.
@@ -271,7 +271,7 @@ mod tests {
 
     use crate::document::{DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue};
     use crate::entry::traits::AsEncodedEntry;
-    use crate::identity::{Author, KeyPair};
+    use crate::identity::{KeyPair, PublicKey};
     use crate::operation::traits::AsVerifiedOperation;
     use crate::operation::{
         OperationAction, OperationBuilder, OperationId, OperationValue, VerifiedOperation,
@@ -464,7 +464,7 @@ mod tests {
         assert_eq!(document.view().unwrap().get("name"), exp_result.get("name"));
         assert!(document.is_edited());
         assert!(!document.is_deleted());
-        assert_eq!(document.author(), &Author::from(panda.public_key()));
+        assert_eq!(document.author(), &PublicKey::from(panda.public_key()));
         assert_eq!(document.schema(), schema.id());
         assert_eq!(operation_order, expected_op_order);
         assert_eq!(document.view_id().graph_tips(), expected_graph_tips);
@@ -498,7 +498,7 @@ mod tests {
         );
         assert!(replica_1.is_edited());
         assert!(!replica_1.is_deleted());
-        assert_eq!(replica_1.author(), &Author::from(panda.public_key()));
+        assert_eq!(replica_1.author(), &PublicKey::from(panda.public_key()));
         assert_eq!(replica_1.schema(), schema.id());
         assert_eq!(operation_order, expected_op_order);
         assert_eq!(replica_1.view_id().graph_tips(), expected_graph_tips);
@@ -630,8 +630,8 @@ mod tests {
     async fn builds_specific_document_view(
         #[with(vec![("name".to_string(), FieldType::String)])] schema: Schema,
     ) {
-        let panda = Author::from(KeyPair::new().public_key());
-        let penguin = Author::from(KeyPair::new().public_key());
+        let panda = PublicKey::from(KeyPair::new().public_key());
+        let penguin = PublicKey::from(KeyPair::new().public_key());
 
         // Panda publishes a CREATE operation.
         // This instantiates a new document.

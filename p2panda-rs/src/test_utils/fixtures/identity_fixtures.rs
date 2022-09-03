@@ -2,7 +2,7 @@
 
 use rstest::fixture;
 
-use crate::identity::{Author, KeyPair};
+use crate::identity::{KeyPair, PublicKey};
 use crate::test_utils::constants::PRIVATE_KEY;
 
 /// Fixture which injects the default private key string into a test method.
@@ -11,11 +11,11 @@ pub fn private_key() -> String {
     PRIVATE_KEY.into()
 }
 
-/// Fixture which injects the default author into a test method.
+/// Fixture which injects the default public key into a test method.
 #[fixture]
-pub fn public_key() -> Author {
+pub fn public_key() -> PublicKey {
     let key_pair = KeyPair::from_private_key_str(PRIVATE_KEY).unwrap();
-    Author::from(key_pair.public_key())
+    PublicKey::from(key_pair.public_key())
 }
 
 /// Fixture which injects the default KeyPair into a test method. Default value can be overridden

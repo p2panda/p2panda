@@ -10,7 +10,7 @@ use crate::entry::error::EntryBuilderError;
 use crate::entry::traits::AsEntry;
 use crate::entry::{LogId, SeqNum, Signature};
 use crate::hash::Hash;
-use crate::identity::{Author, KeyPair};
+use crate::identity::{KeyPair, PublicKey};
 use crate::operation::EncodedOperation;
 #[cfg(any(feature = "storage-provider", test))]
 use crate::storage_provider::traits::EntryWithOperation;
@@ -107,9 +107,8 @@ impl EntryBuilder {
 /// [`Bamboo`]: https://github.com/AljoschaMeyer/bamboo
 #[derive(Debug, Clone, Eq, PartialEq, StdHash)]
 pub struct Entry {
-    /// Author of this entry.
-    // @TODO: Rename this to `public_key`
-    pub(crate) author: Author,
+    /// PublicKey of this entry.
+    pub(crate) public_key: PublicKey,
 
     /// Used log for this entry.
     pub(crate) log_id: LogId,
@@ -135,8 +134,8 @@ pub struct Entry {
 
 impl AsEntry for Entry {
     /// Returns public key of entry.
-    fn public_key(&self) -> &Author {
-        &self.author
+    fn public_key(&self) -> &PublicKey {
+        &self.public_key
     }
 
     /// Returns log id of entry.
@@ -190,7 +189,7 @@ impl From<BambooEntry<&[u8], &[u8]>> for Entry {
         let seq_num = entry.seq_num.try_into().expect("invalid sequence number");
 
         Entry {
-            author: (&entry.author).into(),
+            public_key: (&entry.author).into(),
             log_id: entry.log_id.into(),
             seq_num,
             skiplink,
@@ -206,7 +205,7 @@ impl From<BambooEntry<&[u8], &[u8]>> for Entry {
 impl<T: EntryWithOperation> From<T> for Entry {
     fn from(entry: T) -> Self {
         Entry {
-            author: entry.public_key().to_owned(),
+            public_key: entry.public_key().to_owned(),
             log_id: entry.log_id().to_owned(),
             seq_num: entry.seq_num().to_owned(),
             skiplink: entry.skiplink().cloned(),
@@ -225,7 +224,7 @@ mod tests {
     use crate::entry::traits::AsEntry;
     use crate::entry::{LogId, SeqNum};
     use crate::hash::Hash;
-    use crate::identity::{Author, KeyPair};
+    use crate::identity::{KeyPair, PublicKey};
     use crate::operation::EncodedOperation;
     use crate::test_utils::fixtures::{encoded_operation, key_pair, random_hash};
 
@@ -247,7 +246,7 @@ mod tests {
             .sign(&encoded_operation, &key_pair)
             .unwrap();
 
-        assert_eq!(entry.public_key(), &Author::from(key_pair.public_key()));
+        assert_eq!(entry.public_key(), &PublicKey::from(key_pair.public_key()));
         assert_eq!(entry.log_id(), &log_id);
         assert_eq!(entry.seq_num(), &seq_num);
         assert_eq!(entry.skiplink(), None);

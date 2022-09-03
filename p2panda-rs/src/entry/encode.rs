@@ -59,7 +59,7 @@ pub fn sign_entry(
     // entry fields.
     let entry: BambooEntry<_, &[u8]> = BambooEntry {
         is_end_of_feed: false,
-        author: key_pair.public_key().to_owned(),
+        public_key: key_pair.public_key().to_owned(),
         log_id: log_id.as_u64(),
         seq_num: seq_num.as_u64(),
         lipmaa_link,
@@ -78,7 +78,7 @@ pub fn sign_entry(
     let signature = key_pair.sign(&entry_bytes[..entry_size]);
 
     let signed_entry = Entry {
-        author: key_pair.public_key().into(),
+        public_key: key_pair.public_key().into(),
         log_id: log_id.to_owned(),
         seq_num: seq_num.to_owned(),
         skiplink: skiplink_hash.cloned(),
@@ -104,7 +104,7 @@ pub fn encode_entry(entry: &Entry) -> Result<EncodedEntry, EncodeEntryError> {
 
     let entry: BambooEntry<_, &[u8]> = BambooEntry {
         is_end_of_feed: false,
-        author: entry.public_key().into(),
+        public_key: entry.public_key().into(),
         log_id: entry.log_id().as_u64(),
         seq_num: entry.seq_num().as_u64(),
         lipmaa_link: entry.skiplink().map(|link| link.into()),

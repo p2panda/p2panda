@@ -33,7 +33,7 @@ pub trait StorageProvider:
     /// Returns the related document for any entry.
     ///
     /// Every entry is part of a document and, through that, associated with a specific log id used
-    /// by this document and author. This method returns that document id by looking up the log
+    /// by this document and public key. This method returns that document id by looking up the log
     /// that the entry was stored in.
     ///
     /// If the passed entry cannot be found, or it's associated document doesn't exist yet, `None`

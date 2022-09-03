@@ -4,43 +4,43 @@ use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
-use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
+use ed25519_dalek::{PublicKey as Ed25519PublicKey, PUBLIC_KEY_LENGTH};
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::identity::error::AuthorError;
+use crate::identity::error::PublicKeyError;
 use crate::{Human, Validate};
 
 /// Authors are hex encoded Ed25519 public key strings.
 #[derive(Clone, Debug, Serialize, Eq, StdHash, PartialEq)]
-pub struct Author(String);
+pub struct PublicKey(String);
 
-impl Author {
-    /// Validates and wraps Ed25519 public key string into a new `Author` instance.
+impl PublicKey {
+    /// Validates and wraps Ed25519 public key string into a new `PublicKey` instance.
     ///
     /// ## Example
     ///
     /// ```
     /// # extern crate p2panda_rs;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// use p2panda_rs::identity::{Author, KeyPair};
+    /// use p2panda_rs::identity::{PublicKey, KeyPair};
     ///
     /// // Generate new Ed25519 key pair
     /// let key_pair = KeyPair::new();
     /// let public_key = key_pair.public_key();
     ///
-    /// // Create an `Author` instance from a public key
-    /// let author = Author::from(public_key);
+    /// // Create an `PublicKey` instance from a public key
+    /// let public_key = PublicKey::from(public_key);
     ///
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(value: &str) -> Result<Self, AuthorError> {
-        let author = Self(String::from(value));
-        author.validate()?;
-        Ok(author)
+    pub fn new(value: &str) -> Result<Self, PublicKeyError> {
+        let public_key = Self(String::from(value));
+        public_key.validate()?;
+        Ok(public_key)
     }
 
-    /// Returns author represented as bytes.
+    /// Returns public_key represented as bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
         // Unwrap as we already checked the inner hex values
         hex::decode(&self.0).unwrap()
@@ -52,31 +52,31 @@ impl Author {
     }
 }
 
-impl Display for Author {
+impl Display for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
     }
 }
 
-impl Human for Author {
+impl Human for PublicKey {
     /// Return a shortened six character representation.
     ///
     /// ## Example
     ///
     /// ```
-    /// # use p2panda_rs::identity::Author;
+    /// # use p2panda_rs::identity::PublicKey;
     /// # use p2panda_rs::Human;
     /// let pub_key = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
-    /// let author = pub_key.parse::<Author>().unwrap();
-    /// assert_eq!(author.display(), "<Author a5d982>");
+    /// let public_key = pub_key.parse::<PublicKey>().unwrap();
+    /// assert_eq!(public_key.display(), "<PublicKey a5d982>");
     /// ```
     fn display(&self) -> String {
         let offset = PUBLIC_KEY_LENGTH * 2 - 6;
-        format!("<Author {}>", &self.0[offset..])
+        format!("<PublicKey {}>", &self.0[offset..])
     }
 }
 
-impl<'de> Deserialize<'de> for Author {
+impl<'de> Deserialize<'de> for PublicKey {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -85,50 +85,50 @@ impl<'de> Deserialize<'de> for Author {
         let public_key: String = Deserialize::deserialize(deserializer)?;
 
         // Check format
-        Author::new(&public_key)
+        PublicKey::new(&public_key)
             .map_err(|err| serde::de::Error::custom(format!("invalid public key {}", err)))
     }
 }
 
-/// Convert ed25519_dalek `PublicKey` to `Author` instance.
-impl From<&PublicKey> for Author {
-    fn from(public_key: &PublicKey) -> Self {
+/// Convert ed25519_dalek `PublicKey` to `PublicKey` instance.
+impl From<&Ed25519PublicKey> for PublicKey {
+    fn from(public_key: &Ed25519PublicKey) -> Self {
         // Unwrap as we already trust that `PublicKey` is correct
         Self::new(&hex::encode(public_key.to_bytes())).unwrap()
     }
 }
 
-impl From<&Author> for PublicKey {
-    fn from(author: &Author) -> Self {
-        // Unwrap as we already trust that `Author` is correct
-        PublicKey::from_bytes(&author.to_bytes()).unwrap()
+impl From<&PublicKey> for Ed25519PublicKey {
+    fn from(public_key: &PublicKey) -> Self {
+        // Unwrap as we already trust that `PublicKey` is correct
+        Ed25519PublicKey::from_bytes(&public_key.to_bytes()).unwrap()
     }
 }
 
-/// Convert any hex-encoded string representation of an Ed25519 public key into an `Author`
+/// Convert any hex-encoded string representation of an Ed25519 public key into an `PublicKey`
 /// instance.
-impl FromStr for Author {
-    type Err = AuthorError;
+impl FromStr for PublicKey {
+    type Err = PublicKeyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::new(s)
     }
 }
 
-impl Validate for Author {
-    type Error = AuthorError;
+impl Validate for PublicKey {
+    type Error = PublicKeyError;
 
     fn validate(&self) -> Result<(), Self::Error> {
-        // Check if author is hex encoded
+        // Check if public_key is hex encoded
         match hex::decode(&self.0) {
             Ok(bytes) => {
                 // Check if length is correct
                 if bytes.len() != PUBLIC_KEY_LENGTH {
-                    return Err(AuthorError::InvalidLength);
+                    return Err(PublicKeyError::InvalidLength);
                 }
             }
             Err(_) => {
-                return Err(AuthorError::InvalidHexEncoding);
+                return Err(PublicKeyError::InvalidHexEncoding);
             }
         }
 
@@ -138,30 +138,31 @@ impl Validate for Author {
 
 #[cfg(test)]
 mod tests {
-    use ed25519_dalek::{PublicKey, PUBLIC_KEY_LENGTH};
+    use ed25519_dalek::{PublicKey as Ed25519PublicKey, PUBLIC_KEY_LENGTH};
 
-    use crate::identity::error::AuthorError;
+    use crate::identity::error::PublicKeyError;
     use crate::Human;
 
-    use super::Author;
+    use super::PublicKey;
 
     #[test]
     fn validate() {
         // Invalid hexadecimal characters
         assert!(matches!(
-            Author::new("vzf4f58a2d89e93313f2de99604a814ezea9800of217b140e9l3a7ba59a5d98p"),
-            Err(AuthorError::InvalidHexEncoding)
+            PublicKey::new("vzf4f58a2d89e93313f2de99604a814ezea9800of217b140e9l3a7ba59a5d98p"),
+            Err(PublicKeyError::InvalidHexEncoding)
         ));
 
         // Invalid length
         assert!(matches!(
-            Author::new("123456789ffa"),
-            Err(AuthorError::InvalidLength)
+            PublicKey::new("123456789ffa"),
+            Err(PublicKeyError::InvalidLength)
         ));
 
         // Valid public key string
         assert!(
-            Author::new("7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982").is_ok()
+            PublicKey::new("7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982")
+                .is_ok()
         );
     }
 
@@ -172,8 +173,8 @@ mod tests {
             243, 218, 166, 35, 37, 175, 2, 26, 104, 247, 7, 81, 26,
         ];
 
-        let author = Author::new(&hex::encode(public_key_bytes)).unwrap();
-        assert_eq!(author.to_bytes(), public_key_bytes.to_vec());
+        let public_key = PublicKey::new(&hex::encode(public_key_bytes)).unwrap();
+        assert_eq!(public_key.to_bytes(), public_key_bytes.to_vec());
     }
 
     #[test]
@@ -182,36 +183,36 @@ mod tests {
             215, 90, 152, 1, 130, 177, 10, 183, 213, 75, 254, 211, 201, 100, 7, 58, 14, 225, 114,
             243, 218, 166, 35, 37, 175, 2, 26, 104, 247, 7, 81, 26,
         ];
-        let public_key = PublicKey::from_bytes(&public_key_bytes).unwrap();
+        let public_key = Ed25519PublicKey::from_bytes(&public_key_bytes).unwrap();
 
-        // Convert `ed25519_dalek` `PublicKey` into `Author` instance
-        let author: Author = (&public_key).into();
-        assert_eq!(author.to_string(), hex::encode(public_key_bytes));
+        // Convert `ed25519_dalek` `PublicKey` into `PublicKey` instance
+        let public_key: PublicKey = (&public_key).into();
+        assert_eq!(public_key.to_string(), hex::encode(public_key_bytes));
     }
 
     #[test]
     fn from_str() {
-        // Convert string into `Author` instance
-        let author_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
-        let author: Author = author_str.parse().unwrap();
-        assert_eq!(author_str, author.as_str());
+        // Convert string into `PublicKey` instance
+        let public_key_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
+        let public_key: PublicKey = public_key_str.parse().unwrap();
+        assert_eq!(public_key_str, public_key.as_str());
     }
 
     #[test]
     fn string_representation() {
-        let author_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
-        let author = Author::new(author_str).unwrap();
+        let public_key_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
+        let public_key = PublicKey::new(public_key_str).unwrap();
 
-        assert_eq!(author_str, author.as_str());
-        assert_eq!(author_str, author.to_string());
-        assert_eq!(author_str, format!("{}", author));
+        assert_eq!(public_key_str, public_key.as_str());
+        assert_eq!(public_key_str, public_key.to_string());
+        assert_eq!(public_key_str, format!("{}", public_key));
     }
 
     #[test]
     fn short_representation() {
-        let author_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
-        let author = Author::new(author_str).unwrap();
+        let public_key_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
+        let public_key = PublicKey::new(public_key_str).unwrap();
 
-        assert_eq!(author.display(), "<Author a5d982>");
+        assert_eq!(public_key.display(), "<PublicKey a5d982>");
     }
 }

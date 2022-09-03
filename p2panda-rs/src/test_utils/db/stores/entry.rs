@@ -7,7 +7,7 @@ use log::debug;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::hash::Hash;
-use crate::identity::Author;
+use crate::identity::PublicKey;
 use crate::operation::EncodedOperation;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::EntryStorageError;
@@ -47,33 +47,35 @@ impl EntryStore<StorageEntry> for MemoryStore {
         Ok(entries.get(hash).cloned())
     }
 
-    /// Returns entry at sequence position within an author's log.
+    /// Returns entry at sequence position within a log.
     async fn get_entry_at_seq_num(
         &self,
-        author: &Author,
+        public_key: &PublicKey,
         log_id: &LogId,
         seq_num: &SeqNum,
     ) -> Result<Option<StorageEntry>, EntryStorageError> {
         let entries = self.entries.lock().unwrap();
 
         let entry = entries.values().find(|entry| {
-            entry.seq_num() == seq_num && entry.public_key() == author && entry.log_id() == log_id
+            entry.seq_num() == seq_num
+                && entry.public_key() == public_key
+                && entry.log_id() == log_id
         });
 
         Ok(entry.cloned())
     }
 
-    /// Returns the latest Bamboo entry of an author's log.
+    /// Returns the latest Bamboo entry of a log.
     async fn get_latest_entry(
         &self,
-        author: &Author,
+        public_key: &PublicKey,
         log_id: &LogId,
     ) -> Result<Option<StorageEntry>, EntryStorageError> {
         let entries = self.entries.lock().unwrap();
 
         let latest_entry = entries
             .iter()
-            .filter(|(_, entry)| entry.public_key() == author && entry.log_id() == log_id)
+            .filter(|(_, entry)| entry.public_key() == public_key && entry.log_id() == log_id)
             .max_by_key(|(_, entry)| entry.seq_num().as_u64());
 
         Ok(latest_entry.map(|(_, entry)| entry).cloned())
@@ -82,7 +84,7 @@ impl EntryStore<StorageEntry> for MemoryStore {
     /// Returns the given range of log entries.
     async fn get_paginated_log_entries(
         &self,
-        author: &Author,
+        public_key: &PublicKey,
         log_id: &LogId,
         seq_num: &SeqNum,
         max_number_of_entries: usize,
@@ -91,7 +93,10 @@ impl EntryStore<StorageEntry> for MemoryStore {
         let mut seq_num = *seq_num;
 
         while entries.len() < max_number_of_entries {
-            match self.get_entry_at_seq_num(author, log_id, &seq_num).await? {
+            match self
+                .get_entry_at_seq_num(public_key, log_id, &seq_num)
+                .await?
+            {
                 Some(next_entry) => entries.push(next_entry),
                 None => break,
             };
@@ -128,7 +133,7 @@ impl EntryStore<StorageEntry> for MemoryStore {
 
     async fn get_certificate_pool(
         &self,
-        author: &Author,
+        public_key: &PublicKey,
         log_id: &LogId,
         initial_seq_num: &SeqNum,
     ) -> Result<Vec<StorageEntry>, EntryStorageError> {
@@ -141,7 +146,10 @@ impl EntryStore<StorageEntry> for MemoryStore {
         let mut cert_pool: Vec<StorageEntry> = Vec::new();
 
         for seq_num in cert_pool_seq_nums {
-            let entry = match self.get_entry_at_seq_num(author, log_id, &seq_num).await? {
+            let entry = match self
+                .get_entry_at_seq_num(public_key, log_id, &seq_num)
+                .await?
+            {
                 Some(entry) => Ok(entry),
                 None => Err(EntryStorageError::CertPoolEntryMissing(seq_num.as_u64())),
             }?;
@@ -159,7 +167,7 @@ mod tests {
     use crate::entry::decode::decode_entry;
     use crate::entry::traits::{AsEncodedEntry, AsEntry};
     use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
-    use crate::identity::{Author, KeyPair};
+    use crate::identity::{KeyPair, PublicKey};
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{AsStorageLog, EntryStore, LogStore};
     use crate::test_utils::db::test_db::{test_db, TestDatabase};
@@ -326,26 +334,26 @@ mod tests {
     ) {
         let db = db.await;
 
-        let author = Author::from(key_pair.public_key());
+        let public_key = PublicKey::from(key_pair.public_key());
         let log_id = LogId::default();
 
         let five_entries = db
             .store
-            .get_paginated_log_entries(&author, &log_id, &SeqNum::new(1).unwrap(), 5)
+            .get_paginated_log_entries(&public_key, &log_id, &SeqNum::new(1).unwrap(), 5)
             .await
             .unwrap();
         assert_eq!(five_entries.len(), 5);
 
         let end_of_log_reached = db
             .store
-            .get_paginated_log_entries(&author, &log_id, &SeqNum::new(1).unwrap(), 1000)
+            .get_paginated_log_entries(&public_key, &log_id, &SeqNum::new(1).unwrap(), 1000)
             .await
             .unwrap();
         assert_eq!(end_of_log_reached.len(), 16);
 
         let first_entry_not_found = db
             .store
-            .get_paginated_log_entries(&author, &log_id, &SeqNum::new(10000).unwrap(), 1)
+            .get_paginated_log_entries(&public_key, &log_id, &SeqNum::new(10000).unwrap(), 1)
             .await
             .unwrap();
         assert!(first_entry_not_found.is_empty());
@@ -362,12 +370,12 @@ mod tests {
     ) {
         let db = db.await;
 
-        let author = Author::from(key_pair.public_key());
+        let public_key = PublicKey::from(key_pair.public_key());
         let log_id = LogId::default();
 
         let cert_pool = db
             .store
-            .get_certificate_pool(&author, &log_id, &SeqNum::new(16).unwrap())
+            .get_certificate_pool(&public_key, &log_id, &SeqNum::new(16).unwrap())
             .await
             .unwrap();
 

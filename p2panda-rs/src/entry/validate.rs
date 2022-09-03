@@ -8,7 +8,7 @@ use crate::entry::error::ValidateEntryError;
 use crate::entry::traits::AsEntry;
 use crate::entry::{EncodedEntry, Entry, Signature};
 use crate::hash::Hash;
-use crate::identity::{Author, KeyPair};
+use crate::identity::{KeyPair, PublicKey};
 use crate::operation::EncodedOperation;
 
 /// Checks if backlink- and skiplink are correctly set for the given sequence number (#E3).
@@ -113,7 +113,7 @@ pub fn validate_log_integrity(
 
 /// Checks if the entry is authentic by verifying the public key with the given signature (#E5).
 pub fn validate_signature(
-    public_key: &Author,
+    public_key: &PublicKey,
     signature: &Signature,
     encoded_entry: &EncodedEntry,
 ) -> Result<(), ValidateEntryError> {
@@ -182,7 +182,7 @@ mod tests {
         let signature: Signature = key_pair.sign(b"abc").into();
         let encoded_entry = encode_entry(&entry).unwrap();
 
-        // Author does not match signature
+        // PublicKey does not match signature
         assert!(validate_signature(
             &key_pair.public_key().into(),
             entry.signature(),
@@ -190,7 +190,7 @@ mod tests {
         )
         .is_err());
 
-        // Signature does not match author
+        // Signature does not match public key
         assert!(validate_signature(entry.public_key(), &signature, &encoded_entry).is_err());
 
         // Entry bytes are not matching

@@ -7,7 +7,7 @@ use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::encode::{encode_entry, sign_entry};
 use crate::entry::traits::AsEncodedEntry;
 use crate::entry::EncodedEntry;
-use crate::identity::{Author, KeyPair};
+use crate::identity::{KeyPair, PublicKey};
 use crate::operation::encode::encode_operation;
 use crate::operation::traits::Actionable;
 use crate::operation::{Operation, OperationAction, OperationBuilder, OperationValue};
@@ -26,11 +26,11 @@ pub struct PopulateDatabaseConfig {
     /// Number of entries per log/document.
     pub no_of_entries: usize,
 
-    /// Number of logs for each author.
+    /// Number of logs for each public key.
     pub no_of_logs: usize,
 
-    /// Number of authors, each with logs populated as defined above.
-    pub no_of_authors: usize,
+    /// Number of public keys, each with logs populated as defined above.
+    pub no_of_public_keys: usize,
 
     /// A boolean flag for wether all logs should contain a delete operation.
     pub with_delete: bool,
@@ -50,7 +50,7 @@ impl Default for PopulateDatabaseConfig {
         Self {
             no_of_entries: 0,
             no_of_logs: 0,
-            no_of_authors: 0,
+            no_of_public_keys: 0,
             with_delete: false,
             schema: constants::schema(),
             create_operation_fields: constants::test_fields(),
@@ -64,11 +64,11 @@ impl Default for PopulateDatabaseConfig {
 pub fn test_db_config(
     // Number of entries per log/document
     #[default(0)] no_of_entries: usize,
-    // Number of logs for each author
+    // Number of logs for each public key
     #[default(0)] no_of_logs: usize,
-    // Number of authors, each with logs populated as defined above
-    #[default(0)] no_of_authors: usize,
-    // A boolean flag for wether all logs should contain a delete operation
+    // Number of public keys, each with logs populated as defined above
+    #[default(0)] no_of_public_keys: usize,
+    // A boolean flag for whether all logs should contain a delete operation
     #[default(false)] with_delete: bool,
     // The schema used for all operations in the db
     #[from(schema)] schema: Schema,
@@ -86,7 +86,7 @@ pub fn test_db_config(
     PopulateDatabaseConfig {
         no_of_entries,
         no_of_logs,
-        no_of_authors,
+        no_of_public_keys,
         with_delete,
         schema,
         create_operation_fields,
@@ -139,10 +139,10 @@ pub struct TestData {
 pub async fn test_db(
     // Number of entries per log/document
     #[default(0)] no_of_entries: usize,
-    // Number of logs for each author
+    // Number of logs for each public key
     #[default(0)] no_of_logs: usize,
-    // Number of authors, each with logs populated as defined above
-    #[default(0)] no_of_authors: usize,
+    // Number of public keys, each with logs populated as defined above
+    #[default(0)] no_of_public_keys: usize,
     // A boolean flag for wether all logs should contain a delete operation
     #[default(false)] with_delete: bool,
     // The schema used for all operations in the db
@@ -161,7 +161,7 @@ pub async fn test_db(
     let config = PopulateDatabaseConfig {
         no_of_entries,
         no_of_logs,
-        no_of_authors,
+        no_of_public_keys,
         with_delete,
         schema,
         create_operation_fields,
@@ -183,14 +183,14 @@ pub async fn test_db(
 ///
 /// If there is only one key_pair in the list it will always be the default testing
 /// key pair.
-pub fn test_key_pairs(no_of_authors: usize) -> Vec<KeyPair> {
+pub fn test_key_pairs(no_of_public_keys: usize) -> Vec<KeyPair> {
     let mut key_pairs = Vec::new();
-    match no_of_authors {
+    match no_of_public_keys {
         0 => (),
         1 => key_pairs.push(KeyPair::from_private_key_str(constants::PRIVATE_KEY).unwrap()),
         _ => {
             key_pairs.push(KeyPair::from_private_key_str(constants::PRIVATE_KEY).unwrap());
-            for _index in 1..no_of_authors {
+            for _index in 1..no_of_public_keys {
                 key_pairs.push(KeyPair::new())
             }
         }
@@ -207,7 +207,7 @@ pub async fn populate_store<S: StorageProvider>(
     store: &S,
     config: &PopulateDatabaseConfig,
 ) -> (Vec<KeyPair>, Vec<DocumentId>) {
-    let key_pairs = test_key_pairs(config.no_of_authors);
+    let key_pairs = test_key_pairs(config.no_of_public_keys);
     let mut documents: Vec<DocumentId> = Vec::new();
     for key_pair in &key_pairs {
         for _log_id in 0..config.no_of_logs {
@@ -269,11 +269,11 @@ pub async fn send_to_store<S: StorageProvider>(
     schema: &Schema,
     key_pair: &KeyPair,
 ) -> Result<(EncodedEntry, EntryArgsResponse)> {
-    // Get an Author from the key_pair.
-    let author = Author::from(key_pair.public_key());
+    // Get public key from the key pair.
+    let public_key = PublicKey::from(key_pair.public_key());
 
     // Get the next args.
-    let next_args = next_args(store, &author, operation.previous_operations()).await?;
+    let next_args = next_args(store, &public_key, operation.previous_operations()).await?;
 
     // Encode the operation.
     let encoded_operation = encode_operation(operation)?;

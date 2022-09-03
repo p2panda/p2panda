@@ -25,7 +25,7 @@ pub trait OperationStore<StorageOperation: AsVerifiedOperation> {
 
     /// Get an operation identified by it's OperationId.
     ///
-    /// Returns a type implementing `AsVerifiedOperation` which includes `Author`, `DocumentId` and
+    /// Returns a type implementing `AsVerifiedOperation` which includes `PublicKey`, `DocumentId` and
     /// `OperationId` metadata.
     async fn get_operation_by_id(
         &self,

@@ -5,12 +5,12 @@ use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 
 use crate::entry::{LogId, SeqNum, Signature};
 use crate::hash::Hash;
-use crate::identity::Author;
+use crate::identity::PublicKey;
 
 /// Trait representing an "entry-like" struct.
 pub trait AsEntry {
     /// Returns public key of entry.
-    fn public_key(&self) -> &Author;
+    fn public_key(&self) -> &PublicKey;
 
     /// Returns log id of entry.
     fn log_id(&self) -> &LogId;
