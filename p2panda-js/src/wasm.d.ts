@@ -7,22 +7,14 @@
 */
 export function generateHash(value: string): string;
 /**
-* Verify the integrity of a signed operation.
-* @param {string} public_key
-* @param {string} byte_string
-* @param {string} signature
-* @returns {any}
-*/
-export function verifySignature(public_key: string, byte_string: string, signature: string): any;
-/**
 * Creates, validates and encodes an operation as hexadecimal string.
 * @param {bigint} action
 * @param {string} schema_id
-* @param {any} previous_operations
+* @param {any} previous
 * @param {OperationFields | undefined} fields
 * @returns {string}
 */
-export function encodeOperation(action: bigint, schema_id: string, previous_operations: any, fields?: OperationFields): string;
+export function encodeOperation(action: bigint, schema_id: string, previous: any, fields?: OperationFields): string;
 /**
 * Decodes an operation into its plain form.
 *
@@ -31,6 +23,14 @@ export function encodeOperation(action: bigint, schema_id: string, previous_oper
 * @returns {any}
 */
 export function decodeOperation(encoded_operation: string): any;
+/**
+* Verify the integrity of a signed operation.
+* @param {string} public_key
+* @param {string} byte_string
+* @param {string} signature
+* @returns {any}
+*/
+export function verifySignature(public_key: string, byte_string: string, signature: string): any;
 /**
 * Sets a [`panic hook`] for better error messages in NodeJS or web browser.
 *

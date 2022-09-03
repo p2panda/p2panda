@@ -27,6 +27,25 @@ export type OperationValueArg = OperationValue | number;
 
 /**
  * Operation fields containing application data.
+ * @example
+ * ```
+ * import { OperationFields, encodeOperation } from 'p2panda-js';
+ *
+ * const fields = new OperationFields({
+ *   name: 'Panda Party!',
+ * });
+ *
+ * fields.insert(
+ *   'venue',
+ *   'relation',
+ *   '002078619bd4beff4bec4d4ccf75a7a5c25bf5d3c37fbd051a45debf1f17a1f75230'
+ * );
+ *
+ * const operation = encodeOperation({
+ *   schemaId: 'events_00203ebb383f195f2923d51ac9929a8dbf7fba65dcddff874dfbe5ef131362696636',
+ *   fields,
+ * });
+ * ```
  */
 export class OperationFields {
   /**
@@ -42,6 +61,15 @@ export class OperationFields {
    * only unambigious field types like "str", "int", "float" and "bool" can be
    * used here
    * @returns OperationFields instance
+   * @example
+   * ```
+   * import { OperationFields } from 'p2panda-js';
+   *
+   * const fields = new OperationFields({
+   *   hasDate: true,
+   *   latestYear: 2002,
+   * });
+   * ```
    */
   constructor(fields?: EasyValues) {
     const operationFields = new wasm.OperationFields();
@@ -82,6 +110,13 @@ export class OperationFields {
    * @param {string} fieldName - Name of the field, needs to match schema
    * @param {FieldType} fieldType - Operation field type
    * @param {OperationValue} value - Actual user data
+   * @example
+   * ```
+   * import { OperationFields } from 'p2panda-js';
+   *
+   * const fields = new OperationFields();
+   * fields.insert('venue', 'relation', '002078619bd4beff4bec4d4ccf75a7a5c25bf5d3c37fbd051a45debf1f17a1f75230');
+   * ```
    */
   insert(fieldName: string, fieldType: FieldType, value: OperationValueArg) {
     validate(

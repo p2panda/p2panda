@@ -6,15 +6,13 @@
 //! update or delete documents.
 //!
 //! Every operations contains application data which is formed after a schema. To be able to decode
-//! an operation, a schema aids with getting the data out of the operation and validation.
+//! an operation, a schema aids with getting the data out of the operation.
 //!
-//! ## Decoding
+//! ## Build or decode operation
 //!
-//! There are two approaches (similar to `Entry`) to create an `Operation`. Both of them require
-//! you to have a `Schema` instance at hand as there is no other way to find out the types of the
-//! operation fields.
+//! There are two approaches (similar to `Entry`) to create an `Operation`.
 //!
-//! To programmatically create an `Operation`, use the `OperationBuilder`, when working with
+//! To programmatically create an `Operation`, use the `OperationBuilder`. When working with
 //! operations coming in as bytes, you can use the `decode_operation` method to first deserialize
 //! it into a `PlainOperation` instance, which is a schemaless object giving you already access to
 //! the "header" data, like the schema id.
@@ -27,11 +25,11 @@
 //! ```text
 //!              ┌────────────────┐
 //!              │OperationBuilder├──────────build()──────────────┐
-//!              └────────────────┘            ▲                  │
-//!                                            │                  │
-//!                                            │                  │
-//!                                            │                  ▼
-//!                                         ┌──┴───┐          ┌─────────┐
+//!              └────────────────┘                               │
+//!                                                               │
+//!                                                               │
+//!                                                               ▼
+//!                                         ┌──────┐          ┌─────────┐
 //!                                         │Schema│          │Operation│
 //!                                         └──┬───┘          └─────────┘
 //!                                            │                  ▲
@@ -51,7 +49,7 @@
 //!
 //! Please note that `Operation` in itself is immutable and can not directly be deserialized, there
 //! are only these above mentioned approaches to arrive at it. Both approaches apply all means to
-//! validate the integrity, schema and correct encoding of the operation as per specification.
+//! validate the integrity and correct encoding of the operation as per specification.
 //!
 //! ## Encoding
 //!
@@ -66,7 +64,7 @@
 //!
 //! ## Validation
 //!
-//! The above mentioned high-level methods will automatically do different sorts of validation
+//! The above mentioned high-level methods will automatically apply different sorts of validation
 //! checks. All low-level methods can also be used independently, depending on your implementation:
 //!
 //! 1. Correct hexadecimal encoding (when using human-readable encoding format) (#OP1)
@@ -81,7 +79,7 @@
 //! _after_ we obtained the schema, while we can already check the correct operation format
 //! _before_.
 //!
-//! This module also provides a high-level method `validate_operation_and_entry` which will apply
+//! This module also provides a high-level method `validate_operation_with_entry` which will apply
 //! _all_ checks required to verify the integrity of an operation and entry. This includes all
 //! validation steps listed above plus the ones mentioned in the `entry` module. Since this
 //! validation requires you to provide a `Schema` instance and the regarding back- & skiplink
@@ -112,7 +110,7 @@
 //!                     │               │      │   │    │          │          │
 //!                     │               │      │   │    │          │          │
 //!                     │               ▼      ▼   ▼    ▼          ▼          │
-//!                     └───────────►  validate_operation_and_entry() ◄───────┘
+//!                     └───────────►  validate_operation_with_entry() ◄──────┘
 //!                                                 │
 //!                                                 │
 //!                                                 │

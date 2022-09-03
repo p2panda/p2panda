@@ -27,6 +27,10 @@
       Installation
     </a>
     <span> | </span>
+    <a href="https://p2panda.org/lib/p2panda-js">
+      API
+    </a>
+    <span> | </span>
     <a href="https://github.com/p2panda/p2panda/releases">
       Releases
     </a>

@@ -9,6 +9,11 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Changed
+
+- Rename `previousOperations` field to `previous`, add examples [#459](https://github.com/p2panda/p2panda/pull/459) `js`
+- Updated diagrams and doc-strings [#460](https://github.com/p2panda/p2panda/pull/460) `rs`
+
 ### Fixed
 
 - Fix validation of relations pointing at system schema ids [#453](https://github.com/p2panda/p2panda/pull/453) `rs`
