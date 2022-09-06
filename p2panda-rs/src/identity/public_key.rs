@@ -8,7 +8,7 @@ use ed25519_dalek::{PublicKey as Ed25519PublicKey, PUBLIC_KEY_LENGTH};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::identity::error::PublicKeyError;
-use crate::{Human, Validate};
+use crate::Human;
 
 /// Authors are hex encoded Ed25519 public key strings.
 #[derive(Clone, Debug, Serialize, Copy)]
