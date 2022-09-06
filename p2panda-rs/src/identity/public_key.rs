@@ -50,7 +50,6 @@ impl PublicKey {
 
         let ed25519_public_key = Ed25519PublicKey::from_bytes(&bytes)?;
         let public_key = Self(ed25519_public_key);
-        public_key.validate()?;
         Ok(public_key)
     }
 
@@ -127,27 +126,6 @@ impl FromStr for PublicKey {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::new(s)
-    }
-}
-
-impl Validate for PublicKey {
-    type Error = PublicKeyError;
-
-    fn validate(&self) -> Result<(), Self::Error> {
-        // Check if public_key is hex encoded
-        match hex::decode(&self.0) {
-            Ok(bytes) => {
-                // Check if length is correct
-                if bytes.len() != PUBLIC_KEY_LENGTH {
-                    return Err(PublicKeyError::InvalidLength);
-                }
-            }
-            Err(_) => {
-                return Err(PublicKeyError::InvalidHexEncoding);
-            }
-        }
-
-        Ok(())
     }
 }
 
