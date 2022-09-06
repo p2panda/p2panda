@@ -12,7 +12,7 @@ use crate::identity::error::PublicKeyError;
 use crate::{Human, Validate};
 
 /// Authors are hex encoded Ed25519 public key strings.
-#[derive(Clone, Debug, Serialize, Eq, PartialEq, StdHash)]
+#[derive(Clone, Debug, Serialize, Eq, PartialEq)]
 pub struct PublicKey(Ed25519PublicKey);
 
 impl PublicKey {
@@ -147,6 +147,12 @@ impl Validate for PublicKey {
         }
 
         Ok(())
+    }
+}
+
+impl StdHash for PublicKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.to_bytes().hash(state)
     }
 }
 
