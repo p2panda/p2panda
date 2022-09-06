@@ -11,7 +11,7 @@ use crate::identity::error::PublicKeyError;
 use crate::{Human, Validate};
 
 /// Authors are hex encoded Ed25519 public key strings.
-#[derive(Clone, Debug, Serialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Serialize, Copy)]
 pub struct PublicKey(Ed25519PublicKey);
 
 impl PublicKey {
@@ -149,6 +149,14 @@ impl StdHash for PublicKey {
         self.to_bytes().hash(state)
     }
 }
+
+impl PartialEq for PublicKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for PublicKey {}
 
 #[cfg(test)]
 mod tests {
