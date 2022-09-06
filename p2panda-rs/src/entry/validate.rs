@@ -184,7 +184,7 @@ mod tests {
 
         // PublicKey does not match signature
         assert!(
-            validate_signature(key_pair.public_key(), entry.signature(), &encoded_entry).is_err()
+            validate_signature(&key_pair.public_key(), entry.signature(), &encoded_entry).is_err()
         );
 
         // Signature does not match public key

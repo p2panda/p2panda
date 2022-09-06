@@ -78,7 +78,7 @@ pub fn sign_entry(
     let signature = key_pair.sign(&entry_bytes[..entry_size]);
 
     let signed_entry = Entry {
-        public_key: key_pair.public_key().to_owned(),
+        public_key: key_pair.public_key(),
         log_id: log_id.to_owned(),
         seq_num: seq_num.to_owned(),
         skiplink: skiplink_hash.cloned(),

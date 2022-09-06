@@ -464,7 +464,7 @@ mod tests {
         assert_eq!(document.view().unwrap().get("name"), exp_result.get("name"));
         assert!(document.is_edited());
         assert!(!document.is_deleted());
-        assert_eq!(document.author(), panda.public_key());
+        assert_eq!(document.author(), &panda.public_key());
         assert_eq!(document.schema(), schema.id());
         assert_eq!(operation_order, expected_op_order);
         assert_eq!(document.view_id().graph_tips(), expected_graph_tips);
@@ -498,7 +498,7 @@ mod tests {
         );
         assert!(replica_1.is_edited());
         assert!(!replica_1.is_deleted());
-        assert_eq!(replica_1.author(), panda.public_key());
+        assert_eq!(replica_1.author(), &panda.public_key());
         assert_eq!(replica_1.schema(), schema.id());
         assert_eq!(operation_order, expected_op_order);
         assert_eq!(replica_1.view_id().graph_tips(), expected_graph_tips);

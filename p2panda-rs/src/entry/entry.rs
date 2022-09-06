@@ -246,7 +246,7 @@ mod tests {
             .sign(&encoded_operation, &key_pair)
             .unwrap();
 
-        assert_eq!(entry.public_key(), key_pair.public_key());
+        assert_eq!(entry.public_key(), &key_pair.public_key());
         assert_eq!(entry.log_id(), &log_id);
         assert_eq!(entry.seq_num(), &seq_num);
         assert_eq!(entry.skiplink(), None);

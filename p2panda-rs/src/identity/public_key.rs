@@ -113,6 +113,13 @@ impl From<&PublicKey> for Ed25519PublicKey {
     }
 }
 
+impl From<PublicKey> for Ed25519PublicKey {
+    fn from(public_key: PublicKey) -> Self {
+        // Unwrap as we already trust that `PublicKey` is correct
+        Ed25519PublicKey::from_bytes(&public_key.to_bytes()).unwrap()
+    }
+}
+
 /// Convert any hex-encoded string representation of an Ed25519 public key into an `PublicKey`
 /// instance.
 impl FromStr for PublicKey {
