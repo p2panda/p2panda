@@ -58,16 +58,11 @@ impl PublicKey {
     pub fn to_bytes(&self) -> [u8; PUBLIC_KEY_LENGTH] {
         self.0.to_bytes()
     }
-
-    /// Returns hexadecimal representation of public key bytes as `String`.
-    pub fn to_string(&self) -> String {
-        hex::encode(self.to_bytes())
-    }
 }
 
 impl Display for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", hex::encode(self.to_bytes()))
     }
 }
 
