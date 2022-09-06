@@ -115,7 +115,7 @@ pub fn entry_signed_encoded_unvalidated(
     next_byte_num += 1;
 
     // Encode the author
-    let author_bytes = key_pair.public_key().as_bytes();
+    let author_bytes = key_pair.public_key().to_bytes();
     entry_bytes[next_byte_num..author_bytes.len() + next_byte_num]
         .copy_from_slice(&author_bytes[..]);
     next_byte_num += author_bytes.len();

@@ -224,7 +224,7 @@ mod tests {
     use crate::entry::traits::AsEntry;
     use crate::entry::{LogId, SeqNum};
     use crate::hash::Hash;
-    use crate::identity::{KeyPair, PublicKey};
+    use crate::identity::KeyPair;
     use crate::operation::EncodedOperation;
     use crate::test_utils::fixtures::{encoded_operation, key_pair, random_hash};
 
@@ -246,7 +246,7 @@ mod tests {
             .sign(&encoded_operation, &key_pair)
             .unwrap();
 
-        assert_eq!(entry.public_key(), &PublicKey::from(key_pair.public_key()));
+        assert_eq!(entry.public_key(), key_pair.public_key());
         assert_eq!(entry.log_id(), &log_id);
         assert_eq!(entry.seq_num(), &seq_num);
         assert_eq!(entry.skiplink(), None);

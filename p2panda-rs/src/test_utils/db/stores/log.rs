@@ -75,7 +75,7 @@ mod tests {
 
     use crate::document::DocumentId;
     use crate::entry::LogId;
-    use crate::identity::{KeyPair, PublicKey};
+    use crate::identity::KeyPair;
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{AsStorageLog, LogStore};
     use crate::test_utils::db::{MemoryStore, StorageLog};
@@ -87,7 +87,7 @@ mod tests {
         // Instantiate a new store.
         let store = MemoryStore::default();
 
-        let public_key = PublicKey::from(key_pair.public_key());
+        let public_key = key_pair.public_key();
         let log = StorageLog::new(&public_key, &schema_id, &document_id, &LogId::default());
 
         // Insert a log into the store.
@@ -106,7 +106,7 @@ mod tests {
         // Instantiate a new store.
         let store = MemoryStore::default();
 
-        let public_key = PublicKey::from(key_pair.public_key());
+        let public_key = key_pair.public_key();
         let log_id = store.next_log_id(&public_key).await.unwrap();
         assert_eq!(log_id, LogId::default());
 
@@ -124,7 +124,7 @@ mod tests {
         // Instantiate a new store.
         let store = MemoryStore::default();
 
-        let public_key = PublicKey::from(key_pair.public_key());
+        let public_key = key_pair.public_key();
         let log_id = store.latest_log_id(&public_key).await.unwrap();
         assert_eq!(log_id, None);
 

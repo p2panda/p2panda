@@ -513,7 +513,7 @@ mod tests {
         let (key_pairs, _) = populate_store(&store, &config).await;
 
         // The public key who has published to the db.
-        let public_key = PublicKey::from(key_pairs[0].public_key());
+        let public_key = key_pairs[0].public_key();
 
         // Get the latest entry from the db.
         let next_entry = store
@@ -577,7 +577,7 @@ mod tests {
         let store = MemoryStore::default();
         let (key_pairs, documents) = populate_store(&store, &config).await;
 
-        let existing_public_key = PublicKey::from(key_pairs[0].public_key());
+        let existing_public_key = key_pairs[0].public_key();
 
         // Get the document id.
         let document = documents.first().map(|id| id.as_str().parse().unwrap());
@@ -594,7 +594,7 @@ mod tests {
                     .find(|entry| {
                         entry.seq_num().as_u64() == *seq_num
                             && entry.log_id().as_u64() == *log_id
-                            && *entry.public_key() == existing_public_key
+                            && entry.public_key() == existing_public_key
                     })
                     .map(|entry| entry.hash().into())
             })
@@ -612,7 +612,7 @@ mod tests {
             .unwrap();
 
         // The existing_public_key who will publish the next entry.
-        let public_key_to_publish = PublicKey::from(key_pair.public_key());
+        let public_key_to_publish = key_pair.public_key();
         let next_args = next_args(&store, &public_key_to_publish, document.as_ref())
             .await
             .unwrap();
@@ -674,8 +674,8 @@ mod tests {
         let store = MemoryStore::default();
         let (key_pairs, _) = populate_store(&store, &config).await;
 
-        let public_key_with_removed_operations = PublicKey::from(key_pairs[0].public_key());
-        let public_key_making_request = PublicKey::from(key_pair.public_key());
+        let public_key_with_removed_operations = key_pairs[0].public_key();
+        let public_key_making_request = key_pair.public_key();
 
         // Map the passed &[LogIdAndSeqNum] into a DocumentViewId containing the claimed operations.
         let document_view_id: Vec<OperationId> = document_view_id
@@ -689,7 +689,7 @@ mod tests {
                     .find(|entry| {
                         entry.seq_num().as_u64() == *seq_num
                             && entry.log_id().as_u64() == *log_id
-                            && *entry.public_key() == public_key_with_removed_operations
+                            && entry.public_key() == public_key_with_removed_operations
                     })
                     .map(|entry| entry.hash().into())
             })
@@ -748,7 +748,7 @@ mod tests {
         let (key_pairs, _) = populate_store(&store, &config).await;
 
         // The public key who published the entries.
-        let public_key = PublicKey::from(key_pairs[0].public_key());
+        let public_key = key_pairs[0].public_key();
 
         // Construct the passed document view id (specified by a single sequence number)
         let document_view_id: Option<DocumentViewId> = document_view_id.map(|seq_num| {
@@ -876,7 +876,7 @@ mod tests {
 
         let document_id = documents.first().unwrap();
         let document_view_id: DocumentViewId = document_id.as_str().parse().unwrap();
-        let public_key_performing_update = PublicKey::from(key_pair.public_key());
+        let public_key_performing_update = key_pair.public_key();
 
         let update_operation = OperationBuilder::new(schema.id())
             .action(OperationAction::Update)
@@ -989,7 +989,7 @@ mod tests {
 
         let document_id = documents.first().unwrap();
         let document_view_id: DocumentViewId = document_id.as_str().parse().unwrap();
-        let public_key_performing_update = PublicKey::from(key_pair.public_key());
+        let public_key_performing_update = key_pair.public_key();
 
         let delete_operation = OperationBuilder::new(schema.id())
             .action(OperationAction::Delete)
@@ -1045,7 +1045,7 @@ mod tests {
 
         let document_id = documents.first().unwrap();
         let document_view_id: DocumentViewId = document_id.as_str().parse().unwrap();
-        let public_key = PublicKey::from(key_pair.public_key());
+        let public_key = key_pair.public_key();
 
         let result = next_args(&store, &public_key, Some(&document_view_id)).await;
 
@@ -1062,7 +1062,7 @@ mod tests {
 
         let num_of_entries = 13;
         let mut document_id: Option<DocumentId> = None;
-        let public_key = PublicKey::from(key_pair.public_key());
+        let public_key = key_pair.public_key();
 
         for index in 0..num_of_entries {
             let document_view_id: Option<DocumentViewId> =
@@ -1135,7 +1135,7 @@ mod tests {
         let store = MemoryStore::default();
         let _ = populate_store(&store, &config).await;
 
-        let public_key = PublicKey::from(key_pair.public_key());
+        let public_key = key_pair.public_key();
 
         let entry_two = store
             .get_entry_at_seq_num(&public_key, &LogId::default(), &SeqNum::new(2).unwrap())
@@ -1179,7 +1179,7 @@ mod tests {
         let store = MemoryStore::default();
         let _ = populate_store(&store, &config).await;
 
-        let public_key = PublicKey::from(key_pair.public_key());
+        let public_key = key_pair.public_key();
 
         // Get the latest entry, we will use it's operation in all other entries (doesn't matter if it's a duplicate, just need the previous
         // operations to exist).

@@ -167,7 +167,7 @@ mod tests {
     use crate::entry::decode::decode_entry;
     use crate::entry::traits::{AsEncodedEntry, AsEntry};
     use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
-    use crate::identity::{KeyPair, PublicKey};
+    use crate::identity::KeyPair;
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{AsStorageLog, EntryStore, LogStore};
     use crate::test_utils::db::test_db::{test_db, TestDatabase};
@@ -334,7 +334,7 @@ mod tests {
     ) {
         let db = db.await;
 
-        let public_key = PublicKey::from(key_pair.public_key());
+        let public_key = key_pair.public_key();
         let log_id = LogId::default();
 
         let five_entries = db
@@ -370,7 +370,7 @@ mod tests {
     ) {
         let db = db.await;
 
-        let public_key = PublicKey::from(key_pair.public_key());
+        let public_key = key_pair.public_key();
         let log_id = LogId::default();
 
         let cert_pool = db

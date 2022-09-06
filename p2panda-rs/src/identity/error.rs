@@ -19,6 +19,10 @@ pub enum KeyPairError {
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum PublicKeyError {
+    /// Handle errors from `ed25519` crate.
+    #[error(transparent)]
+    Ed25519(#[from] ed25519_dalek::ed25519::Error),
+
     /// PublicKey string does not have the right length.
     #[error("invalid public key key length")]
     InvalidLength,

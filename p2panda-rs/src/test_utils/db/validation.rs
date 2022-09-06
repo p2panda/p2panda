@@ -236,7 +236,7 @@ mod tests {
     use crate::document::DocumentId;
     use crate::entry::traits::AsEntry;
     use crate::entry::{LogId, SeqNum};
-    use crate::identity::{KeyPair, PublicKey};
+    use crate::identity::KeyPair;
     use crate::test_utils::constants::PRIVATE_KEY;
     use crate::test_utils::db::test_db::{populate_store, test_db_config, PopulateDatabaseConfig};
     use crate::test_utils::db::MemoryStore;
@@ -326,7 +326,7 @@ mod tests {
         // Unwrap the passed document id or select the first valid one from the database.
         let document_id = document_id.unwrap_or_else(|| documents.first().unwrap().to_owned());
 
-        let public_key = PublicKey::from(key_pair.public_key());
+        let public_key = key_pair.public_key();
 
         verify_document_log_id(&store, &public_key, &claimed_log_id, &document_id)
             .await
@@ -357,7 +357,7 @@ mod tests {
         let store = MemoryStore::default();
         let _ = populate_store(&store, &config).await;
 
-        let public_key = PublicKey::from(key_pair.public_key());
+        let public_key = key_pair.public_key();
 
         get_expected_skiplink(&store, &public_key, &log_id, &seq_num)
             .await
@@ -388,7 +388,7 @@ mod tests {
         let store = MemoryStore::default();
         let _ = populate_store(&store, &config).await;
 
-        let public_key = PublicKey::from(key_pair.public_key());
+        let public_key = key_pair.public_key();
 
         let skiplink_entry =
             get_expected_skiplink(&store, &public_key, &LogId::default(), &seq_num)

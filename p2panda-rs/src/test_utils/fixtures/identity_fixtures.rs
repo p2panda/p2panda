@@ -15,7 +15,7 @@ pub fn private_key() -> String {
 #[fixture]
 pub fn public_key() -> PublicKey {
     let key_pair = KeyPair::from_private_key_str(PRIVATE_KEY).unwrap();
-    PublicKey::from(key_pair.public_key())
+    key_pair.public_key().to_owned()
 }
 
 /// Fixture which injects the default KeyPair into a test method. Default value can be overridden

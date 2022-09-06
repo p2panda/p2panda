@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::TryFrom;
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
@@ -11,8 +12,8 @@ use crate::identity::error::PublicKeyError;
 use crate::{Human, Validate};
 
 /// Authors are hex encoded Ed25519 public key strings.
-#[derive(Clone, Debug, Serialize, Eq, StdHash, PartialEq)]
-pub struct PublicKey(String);
+#[derive(Clone, Debug, Serialize, Eq, PartialEq, StdHash)]
+pub struct PublicKey(Ed25519PublicKey);
 
 impl PublicKey {
     /// Validates and wraps Ed25519 public key string into a new `PublicKey` instance.
@@ -35,20 +36,33 @@ impl PublicKey {
     /// # }
     /// ```
     pub fn new(value: &str) -> Result<Self, PublicKeyError> {
-        let public_key = Self(String::from(value));
+        let bytes = match hex::decode(value) {
+            Ok(bytes) => {
+                // Check if length is correct
+                if bytes.len() != PUBLIC_KEY_LENGTH {
+                    return Err(PublicKeyError::InvalidLength);
+                }
+                bytes
+            }
+            Err(_) => {
+                return Err(PublicKeyError::InvalidHexEncoding);
+            }
+        };
+
+        let ed25519_public_key = Ed25519PublicKey::from_bytes(&bytes)?;
+        let public_key = Self(ed25519_public_key);
         public_key.validate()?;
         Ok(public_key)
     }
 
     /// Returns public_key represented as bytes.
-    pub fn to_bytes(&self) -> Vec<u8> {
-        // Unwrap as we already checked the inner hex values
-        hex::decode(&self.0).unwrap()
+    pub fn to_bytes(&self) -> [u8; PUBLIC_KEY_LENGTH] {
+        self.0.to_bytes()
     }
 
     /// Returns hexadecimal representation of public key bytes as `&str`.
     pub fn as_str(&self) -> &str {
-        self.0.as_str()
+        &hex::encode(self.0.as_bytes())
     }
 }
 
@@ -72,7 +86,7 @@ impl Human for PublicKey {
     /// ```
     fn display(&self) -> String {
         let offset = PUBLIC_KEY_LENGTH * 2 - 6;
-        format!("<PublicKey {}>", &self.0[offset..])
+        format!("<PublicKey {}>", &self.as_str()[offset..])
     }
 }
 
@@ -174,7 +188,7 @@ mod tests {
         ];
 
         let public_key = PublicKey::new(&hex::encode(public_key_bytes)).unwrap();
-        assert_eq!(public_key.to_bytes(), public_key_bytes.to_vec());
+        assert_eq!(public_key.to_bytes(), public_key_bytes);
     }
 
     #[test]

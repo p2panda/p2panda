@@ -118,7 +118,7 @@ pub fn validate_signature(
     encoded_entry: &EncodedEntry,
 ) -> Result<(), ValidateEntryError> {
     KeyPair::verify(
-        &public_key.into(),
+        public_key,
         &encoded_entry.unsigned_bytes(),
         &signature.into(),
     )?;
@@ -183,12 +183,9 @@ mod tests {
         let encoded_entry = encode_entry(&entry).unwrap();
 
         // PublicKey does not match signature
-        assert!(validate_signature(
-            &key_pair.public_key().into(),
-            entry.signature(),
-            &encoded_entry
-        )
-        .is_err());
+        assert!(
+            validate_signature(key_pair.public_key(), entry.signature(), &encoded_entry).is_err()
+        );
 
         // Signature does not match public key
         assert!(validate_signature(entry.public_key(), &signature, &encoded_entry).is_err());

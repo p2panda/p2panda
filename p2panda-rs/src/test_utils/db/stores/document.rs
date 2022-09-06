@@ -120,7 +120,6 @@ mod tests {
     use crate::document::{DocumentBuilder, DocumentView, DocumentViewFields, DocumentViewId};
     use crate::entry::traits::AsEncodedEntry;
     use crate::entry::{LogId, SeqNum};
-    use crate::identity::PublicKey;
     use crate::operation::traits::AsOperation;
     use crate::operation::OperationId;
     use crate::schema::SchemaId;
@@ -138,7 +137,7 @@ mod tests {
         db: TestDatabase,
     ) {
         let db = db.await;
-        let public_key = PublicKey::from(db.test_data.key_pairs[0].public_key());
+        let public_key = db.test_data.key_pairs[0].public_key();
 
         // Get one entry from the pre-polulated db
         let entry = db

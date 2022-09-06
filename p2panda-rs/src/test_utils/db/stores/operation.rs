@@ -230,7 +230,7 @@ mod tests {
     ) {
         let db = db.await;
 
-        let public_key = PublicKey::from(key_pair.public_key());
+        let public_key = key_pair.public_key();
 
         let latest_entry = db
             .store

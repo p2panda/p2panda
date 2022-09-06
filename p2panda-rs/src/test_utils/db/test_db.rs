@@ -7,7 +7,7 @@ use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::encode::{encode_entry, sign_entry};
 use crate::entry::traits::AsEncodedEntry;
 use crate::entry::EncodedEntry;
-use crate::identity::{KeyPair, PublicKey};
+use crate::identity::KeyPair;
 use crate::operation::encode::encode_operation;
 use crate::operation::traits::Actionable;
 use crate::operation::{Operation, OperationAction, OperationBuilder, OperationValue};
@@ -266,7 +266,7 @@ pub async fn send_to_store<S: StorageProvider>(
     key_pair: &KeyPair,
 ) -> Result<(EncodedEntry, EntryArgsResponse)> {
     // Get public key from the key pair.
-    let public_key = PublicKey::from(key_pair.public_key());
+    let public_key = key_pair.public_key();
 
     // Get the next args.
     let next_args = next_args(store, &public_key, operation.previous()).await?;
