@@ -92,10 +92,10 @@ impl KeyPair {
     }
 
     /// Returns the public half of the key pair.
-    pub fn public_key(&self) -> &PublicKey {
+    pub fn public_key(&self) -> PublicKey {
         let public_key = &self.0.public;
         let public_key: PublicKey = public_key.into();
-        &public_key
+        public_key
     }
 
     /// Returns the private half of the key pair.
@@ -170,13 +170,13 @@ mod tests {
         let key_pair = KeyPair::new();
         let bytes = b"test";
         let signature = key_pair.sign(bytes);
-        assert!(KeyPair::verify(key_pair.public_key(), bytes, &signature).is_ok());
+        assert!(KeyPair::verify(&key_pair.public_key(), bytes, &signature).is_ok());
 
         // Invalid data
-        assert!(KeyPair::verify(key_pair.public_key(), b"not test", &signature).is_err());
+        assert!(KeyPair::verify(&key_pair.public_key(), b"not test", &signature).is_err());
 
         // Invalid public key
         let key_pair_2 = KeyPair::new();
-        assert!(KeyPair::verify(key_pair_2.public_key(), bytes, &signature).is_err());
+        assert!(KeyPair::verify(&key_pair_2.public_key(), bytes, &signature).is_err());
     }
 }

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::TryFrom;
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
@@ -60,15 +59,15 @@ impl PublicKey {
         self.0.to_bytes()
     }
 
-    /// Returns hexadecimal representation of public key bytes as `&str`.
-    pub fn as_str(&self) -> &str {
-        &hex::encode(self.0.as_bytes())
+    /// Returns hexadecimal representation of public key bytes as `String`.
+    pub fn to_string(&self) -> String {
+        hex::encode(self.to_bytes())
     }
 }
 
 impl Display for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_str())
+        write!(f, "{}", self.to_string())
     }
 }
 
@@ -86,7 +85,7 @@ impl Human for PublicKey {
     /// ```
     fn display(&self) -> String {
         let offset = PUBLIC_KEY_LENGTH * 2 - 6;
-        format!("<PublicKey {}>", &self.as_str()[offset..])
+        format!("<PublicKey {}>", &self.to_string()[offset..])
     }
 }
 
@@ -215,7 +214,7 @@ mod tests {
         // Convert string into `PublicKey` instance
         let public_key_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
         let public_key: PublicKey = public_key_str.parse().unwrap();
-        assert_eq!(public_key_str, public_key.as_str());
+        assert_eq!(public_key_str, public_key.to_string());
     }
 
     #[test]
@@ -223,7 +222,7 @@ mod tests {
         let public_key_str = "7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982";
         let public_key = PublicKey::new(public_key_str).unwrap();
 
-        assert_eq!(public_key_str, public_key.as_str());
+        assert_eq!(public_key_str, public_key.to_string());
         assert_eq!(public_key_str, public_key.to_string());
         assert_eq!(public_key_str, format!("{}", public_key));
     }

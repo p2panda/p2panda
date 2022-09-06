@@ -20,8 +20,7 @@ impl LogStore<StorageLog> for MemoryStore {
             log.public_key()
         );
 
-        let public_key_log_id_str =
-            log.public_key().as_str().to_string() + &log.id().as_u64().to_string();
+        let public_key_log_id_str = log.public_key().to_string() + &log.id().as_u64().to_string();
         let mut logs = self.logs.lock().unwrap();
         logs.insert(public_key_log_id_str, log);
         Ok(true)

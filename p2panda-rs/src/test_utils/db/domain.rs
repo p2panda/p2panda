@@ -594,7 +594,7 @@ mod tests {
                     .find(|entry| {
                         entry.seq_num().as_u64() == *seq_num
                             && entry.log_id().as_u64() == *log_id
-                            && entry.public_key() == existing_public_key
+                            && entry.public_key() == &existing_public_key
                     })
                     .map(|entry| entry.hash().into())
             })
@@ -689,7 +689,7 @@ mod tests {
                     .find(|entry| {
                         entry.seq_num().as_u64() == *seq_num
                             && entry.log_id().as_u64() == *log_id
-                            && entry.public_key() == public_key_with_removed_operations
+                            && entry.public_key() == &public_key_with_removed_operations
                     })
                     .map(|entry| entry.hash().into())
             })
