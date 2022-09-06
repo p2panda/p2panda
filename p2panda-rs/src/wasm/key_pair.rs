@@ -2,11 +2,11 @@
 
 use std::convert::TryFrom;
 
-use ed25519_dalek::{PublicKey, Signature};
+use ed25519_dalek::Signature;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
-use crate::identity::KeyPair as KeyPairNonWasm;
+use crate::identity::{KeyPair as KeyPairNonWasm, PublicKey};
 use crate::wasm::error::jserr;
 
 /// Ed25519 key pair for authors to sign Bamboo entries with.
@@ -74,7 +74,7 @@ pub fn verify_signature(
     let signature_bytes = jserr!(hex::decode(signature));
 
     // Create `PublicKey` and `Signature` instances from bytes
-    let public_key = jserr!(PublicKey::from_bytes(&public_key_bytes));
+    let public_key = jserr!(PublicKey::new(&hex::encode(&public_key_bytes)));
     let signature = jserr!(Signature::try_from(&signature_bytes[..]));
 
     // Verify signature for given public key and operation
