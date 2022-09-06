@@ -40,7 +40,7 @@ describe('decodeEntry', () => {
   });
 
   it('throws when decoding an invalid entry', () => {
-    // Only `tag` and `author` given
+    // Only `tag` and `publicKey` given
     expect(() => {
       decodeEntry(
         '00b443811e711fdbfcbeccaf655e0ebe7a1c83490cc28d1516c5920178bef416c5',

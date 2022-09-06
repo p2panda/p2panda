@@ -3,7 +3,7 @@
 use std::hash::Hash as StdHash;
 
 use crate::document::DocumentViewId;
-use crate::identity::Author;
+use crate::identity::PublicKey;
 use crate::operation::traits::{AsOperation, AsVerifiedOperation};
 #[cfg(test)]
 use crate::operation::Operation;
@@ -12,10 +12,10 @@ use crate::schema::SchemaId;
 
 /// An operation which has been encoded and published on a signed entry.
 ///
-/// Contains the values of an operation as well as its author and id. This
+/// Contains the values of an operation as well as its id and authors' public key. This
 /// [operation id][OperationId] is only available on [`VerifiedOperation`] and not on
-/// [`Operation`] because it is derived from the hash of the signed entry an operation is encoded
-/// on.
+/// [`Operation`] because it is derived from the hash of the signed entry an operation is
+/// encoded on.
 #[derive(Debug, Clone)]
 pub struct VerifiedOperation {
     /// Identifier of the operation.
@@ -30,14 +30,14 @@ pub struct VerifiedOperation {
     /// Schema instance of this operation.
     pub(crate) schema_id: SchemaId,
 
-    /// Previous operations field.
-    pub(crate) previous_operations: Option<DocumentViewId>,
+    /// Previous field which contains the last known view id for the target document.
+    pub(crate) previous: Option<DocumentViewId>,
 
     /// Operation fields.
     pub(crate) fields: Option<OperationFields>,
 
     /// The public key of the key pair used to publish this operation.
-    pub(crate) public_key: Author,
+    pub(crate) public_key: PublicKey,
 }
 
 impl AsVerifiedOperation for VerifiedOperation {
@@ -47,7 +47,7 @@ impl AsVerifiedOperation for VerifiedOperation {
     }
 
     /// Returns the public key of the author of this operation.
-    fn public_key(&self) -> &Author {
+    fn public_key(&self) -> &PublicKey {
         &self.public_key
     }
 }
@@ -74,8 +74,8 @@ impl AsOperation for VerifiedOperation {
     }
 
     /// Returns vector of this operation's previous operation ids
-    fn previous_operations(&self) -> Option<DocumentViewId> {
-        self.previous_operations.clone()
+    fn previous(&self) -> Option<DocumentViewId> {
+        self.previous.clone()
     }
 }
 
@@ -96,14 +96,14 @@ impl StdHash for VerifiedOperation {
 #[cfg(test)]
 impl VerifiedOperation {
     /// Create a verified operation from it's unverified parts for testing.
-    pub fn new(public_key: &Author, operation: &Operation, operation_id: &OperationId) -> Self {
+    pub fn new(public_key: &PublicKey, operation: &Operation, operation_id: &OperationId) -> Self {
         Self {
             id: operation_id.to_owned(),
             public_key: public_key.to_owned(),
             version: OperationVersion::V1,
             action: operation.action(),
             schema_id: operation.schema_id(),
-            previous_operations: operation.previous_operations(),
+            previous: operation.previous(),
             fields: operation.fields(),
         }
     }
@@ -146,7 +146,7 @@ mod tests {
         operation.action();
         operation.version();
         operation.schema_id();
-        operation.previous_operations();
+        operation.previous();
         operation.has_fields();
         operation.has_previous_operations();
     }

@@ -19,7 +19,7 @@ use crate::wasm::KeyPair;
 #[cfg_attr(test, derive(Deserialize))]
 #[serde(rename_all = "camelCase")]
 pub struct Entry {
-    /// Author of this entry.
+    /// PublicKey of this entry.
     pub public_key: String,
 
     /// Used log for this entry.

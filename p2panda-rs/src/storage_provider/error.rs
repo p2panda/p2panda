@@ -5,16 +5,16 @@ use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::error::{LogIdError, SeqNumError, ValidateEntryError};
 use crate::hash::error::HashError;
 use crate::hash::Hash;
-use crate::identity::error::AuthorError;
+use crate::identity::error::PublicKeyError;
 use crate::operation::error::ValidateOperationError;
 use crate::operation::OperationId;
 
 /// Data validation errors which can occur in the storage traits.
 #[derive(thiserror::Error, Debug)]
 pub enum ValidationError {
-    /// Error returned from validating p2panda-rs `Author` data types.
+    /// Error returned from validating p2panda-rs `PublicKey` data types.
     #[error(transparent)]
-    AuthorValidation(#[from] AuthorError),
+    AuthorValidation(#[from] PublicKeyError),
 
     /// Error returned from validating p2panda-rs `Hash` data types.
     #[error(transparent)]

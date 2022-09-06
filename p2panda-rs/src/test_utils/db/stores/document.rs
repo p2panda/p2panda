@@ -120,7 +120,6 @@ mod tests {
     use crate::document::{DocumentBuilder, DocumentView, DocumentViewFields, DocumentViewId};
     use crate::entry::traits::AsEncodedEntry;
     use crate::entry::{LogId, SeqNum};
-    use crate::identity::Author;
     use crate::operation::traits::AsOperation;
     use crate::operation::OperationId;
     use crate::schema::SchemaId;
@@ -138,12 +137,12 @@ mod tests {
         db: TestDatabase,
     ) {
         let db = db.await;
-        let author = Author::from(db.test_data.key_pairs[0].public_key());
+        let public_key = db.test_data.key_pairs[0].public_key();
 
         // Get one entry from the pre-polulated db
         let entry = db
             .store
-            .get_entry_at_seq_num(&author, &LogId::default(), &SeqNum::new(1).unwrap())
+            .get_entry_at_seq_num(&public_key, &LogId::default(), &SeqNum::new(1).unwrap())
             .await
             .unwrap()
             .unwrap();

@@ -60,9 +60,9 @@ impl StorageProvider for MemoryStore {
 
         let logs = self.logs.lock().unwrap();
 
-        let log = logs
-            .iter()
-            .find(|(_, log)| &log.id() == entry.log_id() && &log.author() == entry.public_key());
+        let log = logs.iter().find(|(_, log)| {
+            &log.id() == entry.log_id() && &log.public_key() == entry.public_key()
+        });
 
         Ok(log.map(|(_, log)| log.document_id()))
     }

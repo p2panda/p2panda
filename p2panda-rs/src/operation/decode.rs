@@ -233,7 +233,7 @@ mod tests {
     )]
     #[case::missing_previous_operations_delete(
         cbor!([1, 2, SCHEMA_ID ]),
-        "missing previous_operations for this operation action"
+        "missing previous for this operation action"
     )]
     #[case::missing_fields_create(
         cbor!([1, 0, SCHEMA_ID ]),

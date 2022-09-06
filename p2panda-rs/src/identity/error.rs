@@ -15,15 +15,19 @@ pub enum KeyPairError {
     HexEncoding(#[from] hex::FromHexError),
 }
 
-/// Custom error types for `Author`.
+/// Custom error types for `PublicKey`.
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
-pub enum AuthorError {
-    /// Author string does not have the right length.
-    #[error("invalid author key length")]
+pub enum PublicKeyError {
+    /// Handle errors from `ed25519` crate.
+    #[error(transparent)]
+    Ed25519(#[from] ed25519_dalek::ed25519::Error),
+
+    /// PublicKey string does not have the right length.
+    #[error("invalid public key key length")]
     InvalidLength,
 
-    /// Author string contains invalid hex characters.
-    #[error("invalid hex encoding in author string")]
+    /// PublicKey string contains invalid hex characters.
+    #[error("invalid hex encoding in public key string")]
     InvalidHexEncoding,
 }

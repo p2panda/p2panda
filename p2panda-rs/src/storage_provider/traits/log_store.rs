@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::document::DocumentId;
 use crate::entry::LogId;
-use crate::identity::Author;
+use crate::identity::PublicKey;
 use crate::storage_provider::error::LogStorageError;
 use crate::storage_provider::traits::AsStorageLog;
 
@@ -20,15 +20,16 @@ pub trait LogStore<StorageLog: AsStorageLog> {
     /// Get a log from storage
     async fn get(
         &self,
-        author: &Author,
+        public_key: &PublicKey,
         document_id: &DocumentId,
     ) -> Result<Option<LogId>, LogStorageError>;
 
-    /// Determines the next unused log_id of an author.
-    async fn next_log_id(&self, author: &Author) -> Result<LogId, LogStorageError>;
+    /// Determines the next unused log id for a public key.
+    async fn next_log_id(&self, public_key: &PublicKey) -> Result<LogId, LogStorageError>;
 
-    /// Determines the latest used log id for an author.
+    /// Determines the latest used log id for a public key.
     ///
     /// Returns None when no log has been used yet.
-    async fn latest_log_id(&self, author: &Author) -> Result<Option<LogId>, LogStorageError>;
+    async fn latest_log_id(&self, public_key: &PublicKey)
+        -> Result<Option<LogId>, LogStorageError>;
 }

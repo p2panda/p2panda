@@ -4,20 +4,20 @@ use crate::entry::decode::decode_entry;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::hash::Hash;
-use crate::identity::Author;
+use crate::identity::PublicKey;
 use crate::operation::EncodedOperation;
 use crate::storage_provider::traits::EntryWithOperation;
 
 /// A struct which represents an entry and operation pair in storage as a concatenated string.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StorageEntry {
-    /// Public key of the author.
+    /// The decoded entry.
     pub entry: Entry,
 
-    /// Actual Bamboo entry data.
+    /// The encoded entry.
     pub encoded_entry: EncodedEntry,
 
-    /// The entry payload.
+    /// The optional entry payload, which is an encoded operation.
     pub payload: Option<EncodedOperation>,
 }
 
@@ -56,7 +56,7 @@ impl AsEntry for StorageEntry {
         self.entry.log_id()
     }
 
-    fn public_key(&self) -> &Author {
+    fn public_key(&self) -> &PublicKey {
         self.entry.public_key()
     }
 

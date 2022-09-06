@@ -33,7 +33,7 @@ impl Actionable for PlainOperation {
         self.1
     }
 
-    fn previous_operations(&self) -> Option<&DocumentViewId> {
+    fn previous(&self) -> Option<&DocumentViewId> {
         self.3.as_ref()
     }
 }
@@ -82,13 +82,13 @@ impl<'de> Deserialize<'de> for PlainOperation {
                     serde::de::Error::custom("missing schema id field in operation format")
                 })?;
 
-                let previous_operations = match action {
+                let previous = match action {
                     OperationAction::Create => None,
                     OperationAction::Update | OperationAction::Delete => {
                         let document_view_id: DocumentViewId =
                             seq.next_element()?.ok_or_else(|| {
                                 serde::de::Error::custom(
-                                    "missing previous_operations for this operation action",
+                                    "missing previous for this operation action",
                                 )
                             })?;
 
@@ -118,13 +118,7 @@ impl<'de> Deserialize<'de> for PlainOperation {
                     None => (),
                 };
 
-                Ok(PlainOperation(
-                    version,
-                    action,
-                    schema_id,
-                    previous_operations,
-                    fields,
-                ))
+                Ok(PlainOperation(version, action, schema_id, previous, fields))
             }
         }
 
@@ -138,7 +132,7 @@ impl From<&Operation> for PlainOperation {
             AsOperation::version(operation),
             AsOperation::action(operation),
             AsOperation::schema_id(operation),
-            AsOperation::previous_operations(operation),
+            AsOperation::previous(operation),
             AsOperation::fields(operation)
                 .as_ref()
                 .map(|fields| fields.into()),
@@ -169,10 +163,7 @@ mod tests {
         assert_eq!(plain_operation.version(), operation.version());
         assert_eq!(plain_operation.schema_id(), operation.schema_id());
         assert_eq!(plain_operation.fields(), operation.fields());
-        assert_eq!(
-            plain_operation.previous_operations(),
-            operation.previous_operations()
-        );
+        assert_eq!(plain_operation.previous(), operation.previous());
     }
 
     #[rstest]

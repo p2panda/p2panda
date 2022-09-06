@@ -82,7 +82,7 @@ mod tests {
         let encoded_entry = encode_entry(&entry).unwrap();
 
         let verification = KeyPair::verify(
-            &entry.public_key().into(),
+            entry.public_key(),
             &encoded_entry.unsigned_bytes(),
             &entry.signature().into(),
         );

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use ed25519_dalek::{Keypair as Ed25519Keypair, PublicKey, SecretKey, Signature, Signer, Verifier};
+use ed25519_dalek::{
+    Keypair as Ed25519Keypair, PublicKey as Ed25519PubicKey, SecretKey, Signature, Signer, Verifier,
+};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 
 use crate::identity::error::KeyPairError;
+use crate::identity::PublicKey;
 
 /// Ed25519 key pair for authors to sign Bamboo entries with.
 #[derive(Debug, Serialize, Deserialize)]
@@ -71,7 +74,7 @@ impl KeyPair {
     /// ```
     pub fn from_private_key(private_key: &SecretKey) -> Result<Self, KeyPairError> {
         // Derive public part from secret part
-        let public_key: PublicKey = private_key.into();
+        let public_key: Ed25519PubicKey = private_key.into();
 
         // Assemble key pair from both parts
         let bytes = [private_key.to_bytes(), public_key.to_bytes()].concat();
@@ -89,8 +92,10 @@ impl KeyPair {
     }
 
     /// Returns the public half of the key pair.
-    pub fn public_key(&self) -> &PublicKey {
-        &self.0.public
+    pub fn public_key(&self) -> PublicKey {
+        let public_key = &self.0.public;
+        let public_key: PublicKey = public_key.into();
+        public_key
     }
 
     /// Returns the private half of the key pair.
@@ -128,6 +133,7 @@ impl KeyPair {
         bytes: &[u8],
         signature: &Signature,
     ) -> Result<(), KeyPairError> {
+        let public_key: Ed25519PubicKey = public_key.into();
         public_key.verify(bytes, signature)?;
         Ok(())
     }
@@ -164,13 +170,13 @@ mod tests {
         let key_pair = KeyPair::new();
         let bytes = b"test";
         let signature = key_pair.sign(bytes);
-        assert!(KeyPair::verify(key_pair.public_key(), bytes, &signature).is_ok());
+        assert!(KeyPair::verify(&key_pair.public_key(), bytes, &signature).is_ok());
 
         // Invalid data
-        assert!(KeyPair::verify(key_pair.public_key(), b"not test", &signature).is_err());
+        assert!(KeyPair::verify(&key_pair.public_key(), b"not test", &signature).is_err());
 
         // Invalid public key
         let key_pair_2 = KeyPair::new();
-        assert!(KeyPair::verify(key_pair_2.public_key(), bytes, &signature).is_err());
+        assert!(KeyPair::verify(&key_pair_2.public_key(), bytes, &signature).is_err());
     }
 }

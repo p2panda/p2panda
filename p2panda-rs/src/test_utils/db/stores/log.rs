@@ -5,7 +5,7 @@ use log::debug;
 
 use crate::document::DocumentId;
 use crate::entry::LogId;
-use crate::identity::Author;
+use crate::identity::PublicKey;
 use crate::storage_provider::error::LogStorageError;
 use crate::storage_provider::traits::{AsStorageLog, LogStore};
 use crate::test_utils::db::{MemoryStore, StorageLog};
@@ -17,44 +17,47 @@ impl LogStore<StorageLog> for MemoryStore {
         debug!(
             "Inserting log {} into store for {}",
             log.id().as_u64(),
-            log.author()
+            log.public_key()
         );
 
-        let author_log_id_str = log.author().as_str().to_string() + &log.id().as_u64().to_string();
+        let public_key_log_id_str = log.public_key().to_string() + &log.id().as_u64().to_string();
         let mut logs = self.logs.lock().unwrap();
-        logs.insert(author_log_id_str, log);
+        logs.insert(public_key_log_id_str, log);
         Ok(true)
     }
 
     /// Get a log from storage
     async fn get(
         &self,
-        author: &Author,
+        public_key: &PublicKey,
         document_id: &DocumentId,
     ) -> Result<Option<LogId>, LogStorageError> {
         let logs = self.logs.lock().unwrap();
 
         let log = logs
             .values()
-            .find(|log| log.document_id() == *document_id && log.author() == *author);
+            .find(|log| log.document_id() == *document_id && log.public_key() == *public_key);
 
         let log_id = log.map(|log| log.id());
         Ok(log_id)
     }
 
-    async fn next_log_id(&self, author: &Author) -> Result<LogId, LogStorageError> {
+    async fn next_log_id(&self, public_key: &PublicKey) -> Result<LogId, LogStorageError> {
         let logs = self.logs.lock().unwrap();
 
-        let author_logs = logs.values().filter(|log| log.author() == *author);
-        let next_log_id = author_logs.count();
+        let public_key_logs = logs.values().filter(|log| log.public_key() == *public_key);
+        let next_log_id = public_key_logs.count();
         Ok(LogId::new(next_log_id as u64))
     }
 
-    async fn latest_log_id(&self, author: &Author) -> Result<Option<LogId>, LogStorageError> {
+    async fn latest_log_id(
+        &self,
+        public_key: &PublicKey,
+    ) -> Result<Option<LogId>, LogStorageError> {
         let logs = self.logs.lock().unwrap();
 
-        let author_logs = logs.values().filter(|log| log.author() == *author);
-        let log_count = author_logs.count();
+        let public_key_logs = logs.values().filter(|log| log.public_key() == *public_key);
+        let log_count = public_key_logs.count();
 
         if log_count == 0 {
             Ok(None)
@@ -71,7 +74,7 @@ mod tests {
 
     use crate::document::DocumentId;
     use crate::entry::LogId;
-    use crate::identity::{Author, KeyPair};
+    use crate::identity::KeyPair;
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{AsStorageLog, LogStore};
     use crate::test_utils::db::{MemoryStore, StorageLog};
@@ -83,14 +86,14 @@ mod tests {
         // Instantiate a new store.
         let store = MemoryStore::default();
 
-        let author = Author::from(key_pair.public_key());
-        let log = StorageLog::new(&author, &schema_id, &document_id, &LogId::default());
+        let public_key = key_pair.public_key();
+        let log = StorageLog::new(&public_key, &schema_id, &document_id, &LogId::default());
 
         // Insert a log into the store.
         assert!(store.insert_log(log).await.is_ok());
 
-        // Get a log_id from the store by author and document_id.
-        let log_id = store.get(&author, &document_id).await;
+        // Get a log_id from the store by public_key and document_id.
+        let log_id = store.get(&public_key, &document_id).await;
 
         assert!(log_id.is_ok());
         assert_eq!(log_id.unwrap().unwrap(), LogId::default())
@@ -102,15 +105,15 @@ mod tests {
         // Instantiate a new store.
         let store = MemoryStore::default();
 
-        let author = Author::from(key_pair.public_key());
-        let log_id = store.next_log_id(&author).await.unwrap();
+        let public_key = key_pair.public_key();
+        let log_id = store.next_log_id(&public_key).await.unwrap();
         assert_eq!(log_id, LogId::default());
 
-        let log = StorageLog::new(&author, &schema_id, &document_id, &LogId::default());
+        let log = StorageLog::new(&public_key, &schema_id, &document_id, &LogId::default());
 
         assert!(store.insert_log(log).await.is_ok());
 
-        let log_id = store.next_log_id(&author).await.unwrap();
+        let log_id = store.next_log_id(&public_key).await.unwrap();
         assert_eq!(log_id, LogId::new(1));
     }
 
@@ -120,15 +123,15 @@ mod tests {
         // Instantiate a new store.
         let store = MemoryStore::default();
 
-        let author = Author::from(key_pair.public_key());
-        let log_id = store.latest_log_id(&author).await.unwrap();
+        let public_key = key_pair.public_key();
+        let log_id = store.latest_log_id(&public_key).await.unwrap();
         assert_eq!(log_id, None);
 
-        let log = StorageLog::new(&author, &schema_id, &document_id, &LogId::default());
+        let log = StorageLog::new(&public_key, &schema_id, &document_id, &LogId::default());
 
         assert!(store.insert_log(log).await.is_ok());
 
-        let log_id = store.latest_log_id(&author).await.unwrap();
+        let log_id = store.latest_log_id(&public_key).await.unwrap();
         assert_eq!(log_id, Some(LogId::default()));
     }
 }

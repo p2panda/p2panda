@@ -2,7 +2,7 @@
 
 //! Interfaces for interactions for operation-like structs.
 use crate::document::DocumentViewId;
-use crate::identity::Author;
+use crate::identity::PublicKey;
 use crate::operation::plain::PlainFields;
 use crate::operation::{OperationAction, OperationFields, OperationId, OperationVersion};
 use crate::schema::SchemaId;
@@ -19,7 +19,7 @@ pub trait Actionable {
     fn action(&self) -> OperationAction;
 
     /// Returns a list of previous operations.
-    fn previous_operations(&self) -> Option<&DocumentViewId>;
+    fn previous(&self) -> Option<&DocumentViewId>;
 }
 
 /// Trait representing an "operation-like" struct which contains data fields that can be checked
@@ -48,16 +48,16 @@ pub trait AsOperation {
     fn fields(&self) -> Option<OperationFields>;
 
     /// Returns vector of this operation's previous operation ids
-    fn previous_operations(&self) -> Option<DocumentViewId>;
+    fn previous(&self) -> Option<DocumentViewId>;
 
     /// Returns true if operation contains fields.
     fn has_fields(&self) -> bool {
         self.fields().is_some()
     }
 
-    /// Returns true if previous_operations contains a document view id.
+    /// Returns true if previous contains a document view id.
     fn has_previous_operations(&self) -> bool {
-        self.previous_operations().is_some()
+        self.previous().is_some()
     }
 
     /// Returns true when instance is CREATE operation.
@@ -79,9 +79,9 @@ pub trait AsOperation {
 /// Trait to be implemented on a struct representing an operation which has been encoded and
 /// published on a signed entry.
 ///
-/// Contains the values of an operation as well as it's author and id. The reason an unpublished
-/// operation has no id is that the id is derived from the hash of the signed entry an operation is
-/// encoded on.
+/// Contains the values of an operation as well as it's id and the public key of it's author.
+/// The reason an unpublished operation has no id is that the id is derived from the hash of
+/// the signed entry an operation is encoded on.
 ///
 /// [`StorageProvider`][crate::storage_provider::traits::StorageProvider] implementations should
 /// implement this for a data structure that represents an operation as it is stored in the
@@ -91,5 +91,5 @@ pub trait AsVerifiedOperation: AsOperation {
     fn id(&self) -> &OperationId;
 
     /// Returns the public key of the author of this operation.
-    fn public_key(&self) -> &Author;
+    fn public_key(&self) -> &PublicKey;
 }

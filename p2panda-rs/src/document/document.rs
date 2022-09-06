@@ -5,7 +5,7 @@ use std::fmt::Display;
 use crate::document::error::DocumentBuilderError;
 use crate::document::materialization::{build_graph, reduce};
 use crate::document::{DocumentId, DocumentView, DocumentViewId};
-use crate::identity::Author;
+use crate::identity::PublicKey;
 use crate::operation::traits::{AsOperation, AsVerifiedOperation};
 use crate::operation::{OperationId, VerifiedOperation};
 use crate::schema::SchemaId;
@@ -39,7 +39,7 @@ pub struct DocumentMeta {
 pub struct Document {
     id: DocumentId,
     view_id: DocumentViewId,
-    author: Author,
+    author: PublicKey,
     schema: SchemaId,
     view: Option<DocumentView>,
     meta: DocumentMeta,
@@ -56,8 +56,8 @@ impl Document {
         &self.view_id
     }
 
-    /// Get the document author.
-    pub fn author(&self) -> &Author {
+    /// Get the document author's public key.
+    pub fn author(&self) -> &PublicKey {
         &self.author
     }
 
@@ -141,7 +141,7 @@ impl DocumentBuilder {
                 version: operation.version(),
                 action: operation.action(),
                 schema_id: operation.schema_id(),
-                previous_operations: operation.previous_operations(),
+                previous: operation.previous(),
                 fields: operation.fields(),
                 public_key: operation.public_key().to_owned(),
             })
@@ -271,7 +271,7 @@ mod tests {
 
     use crate::document::{DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue};
     use crate::entry::traits::AsEncodedEntry;
-    use crate::identity::{Author, KeyPair};
+    use crate::identity::KeyPair;
     use crate::operation::traits::AsVerifiedOperation;
     use crate::operation::{
         OperationAction, OperationBuilder, OperationId, OperationValue, VerifiedOperation,
@@ -340,7 +340,7 @@ mod tests {
             .unwrap();
 
         // Panda publishes an UPDATE operation.
-        // It contains the id of the previous operation in it's `previous_operations` array
+        // It contains the id of the previous operation in it's `previous` array
         //
         // DOCUMENT: [panda_1]<--[panda_2]
         //
@@ -348,7 +348,7 @@ mod tests {
         let panda_operation_2 = OperationBuilder::new(schema.id())
             .action(OperationAction::Update)
             .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
-            .previous_operations(&panda_entry_1.hash().into())
+            .previous(&panda_entry_1.hash().into())
             .build()
             .unwrap();
 
@@ -368,7 +368,7 @@ mod tests {
                 "name",
                 OperationValue::String("Penguin Cafe!!!".to_string()),
             )])
-            .previous_operations(&panda_entry_1.hash().into())
+            .previous(&panda_entry_1.hash().into())
             .build()
             .unwrap();
 
@@ -377,7 +377,7 @@ mod tests {
             .unwrap();
 
         // Penguin publishes a new operation while now being aware of the previous branching situation.
-        // Their `previous_operations` field now contains 2 operation id's.
+        // Their `previous` field now contains 2 operation id's.
         //
         // DOCUMENT: [panda_1]<--[penguin_1]<---[penguin_2]
         //                    \----[panda_2]<--/
@@ -388,7 +388,7 @@ mod tests {
                 "name",
                 OperationValue::String("Polar Bear Cafe".to_string()),
             )])
-            .previous_operations(&DocumentViewId::new(&[
+            .previous(&DocumentViewId::new(&[
                 penguin_entry_1.hash().into(),
                 panda_entry_2.hash().into(),
             ]))
@@ -410,7 +410,7 @@ mod tests {
                 "name",
                 OperationValue::String("Polar Bear Cafe!!!!!!!!!!".to_string()),
             )])
-            .previous_operations(&penguin_entry_2.hash().into())
+            .previous(&penguin_entry_2.hash().into())
             .build()
             .unwrap();
 
@@ -464,7 +464,7 @@ mod tests {
         assert_eq!(document.view().unwrap().get("name"), exp_result.get("name"));
         assert!(document.is_edited());
         assert!(!document.is_deleted());
-        assert_eq!(document.author(), &Author::from(panda.public_key()));
+        assert_eq!(document.author(), &panda.public_key());
         assert_eq!(document.schema(), schema.id());
         assert_eq!(operation_order, expected_op_order);
         assert_eq!(document.view_id().graph_tips(), expected_graph_tips);
@@ -498,7 +498,7 @@ mod tests {
         );
         assert!(replica_1.is_edited());
         assert!(!replica_1.is_deleted());
-        assert_eq!(replica_1.author(), &Author::from(panda.public_key()));
+        assert_eq!(replica_1.author(), &panda.public_key());
         assert_eq!(replica_1.schema(), schema.id());
         assert_eq!(operation_order, expected_op_order);
         assert_eq!(replica_1.view_id().graph_tips(), expected_graph_tips);
@@ -630,8 +630,8 @@ mod tests {
     async fn builds_specific_document_view(
         #[with(vec![("name".to_string(), FieldType::String)])] schema: Schema,
     ) {
-        let panda = Author::from(KeyPair::new().public_key());
-        let penguin = Author::from(KeyPair::new().public_key());
+        let panda = KeyPair::new().public_key().to_owned();
+        let penguin = KeyPair::new().public_key().to_owned();
 
         // Panda publishes a CREATE operation.
         // This instantiates a new document.
@@ -653,7 +653,7 @@ mod tests {
         );
 
         // Panda publishes an UPDATE operation.
-        // It contains the id of the previous operation in it's `previous_operations` array
+        // It contains the id of the previous operation in it's `previous` array
         //
         // DOCUMENT: [panda_1]<--[panda_2]
         //
@@ -661,7 +661,7 @@ mod tests {
         let panda_operation_2 = OperationBuilder::new(schema.id())
             .action(OperationAction::Update)
             .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
-            .previous_operations(&DocumentViewId::new(&[panda_operation_1.id().to_owned()]))
+            .previous(&DocumentViewId::new(&[panda_operation_1.id().to_owned()]))
             .build()
             .unwrap();
 
@@ -685,7 +685,7 @@ mod tests {
                 "name",
                 OperationValue::String("Penguin Cafe!!!".to_string()),
             )])
-            .previous_operations(&DocumentViewId::new(&[panda_operation_2.id().to_owned()]))
+            .previous(&DocumentViewId::new(&[panda_operation_2.id().to_owned()]))
             .build()
             .unwrap();
 

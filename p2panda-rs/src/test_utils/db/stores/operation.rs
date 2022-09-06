@@ -42,7 +42,7 @@ impl OperationStore<VerifiedOperation> for MemoryStore {
 
     /// Get an operation identified by it's OperationId.
     ///
-    /// Returns a type implementing `AsVerifiedOperation` which includes `Author`, `DocumentId` and
+    /// Returns a type implementing `AsVerifiedOperation` which includes `PublicKey`, `DocumentId` and
     /// `OperationId` metadata.
     async fn get_operation_by_id(
         &self,
@@ -92,7 +92,7 @@ mod tests {
     use crate::document::DocumentId;
     use crate::entry::traits::AsEncodedEntry;
     use crate::entry::LogId;
-    use crate::identity::{Author, KeyPair};
+    use crate::identity::{KeyPair, PublicKey};
     use crate::operation::traits::{AsOperation, AsVerifiedOperation};
     use crate::operation::{Operation, OperationId, VerifiedOperation};
     use crate::storage_provider::traits::{EntryStore, StorageProvider};
@@ -114,7 +114,7 @@ mod tests {
     #[tokio::test]
     async fn insert_get_operations(
         #[case] operation: Operation,
-        #[from(public_key)] author: Author,
+        #[from(public_key)] public_key: PublicKey,
         operation_id: OperationId,
         document_id: DocumentId,
         #[from(test_db)]
@@ -123,7 +123,7 @@ mod tests {
     ) {
         let db = db.await;
         // Construct the storage operation.
-        let operation = VerifiedOperation::new(&author, &operation, &operation_id);
+        let operation = VerifiedOperation::new(&public_key, &operation, &operation_id);
 
         // Insert the doggo operation into the db, returns Ok(true) when succesful.
         let result = db.store.insert_operation(&operation, &document_id).await;
@@ -230,11 +230,11 @@ mod tests {
     ) {
         let db = db.await;
 
-        let author = Author::from(key_pair.public_key());
+        let public_key = key_pair.public_key();
 
         let latest_entry = db
             .store
-            .get_latest_entry(&author, &LogId::default())
+            .get_latest_entry(&public_key, &LogId::default())
             .await
             .unwrap()
             .unwrap();
