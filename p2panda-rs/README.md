@@ -53,8 +53,6 @@ a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package
 [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web
 browser.
 
-Read the library [`documentation`] for installation guides and examples.
-
 > The core p2panda [specification](https://p2panda.org/specification/) is in a 
 stable state but still under review so please be prepared for breaking API 
 changes until we reach `v1.0`. Currently no p2panda implementation has recieved 
