@@ -67,7 +67,7 @@ a security audit.
 [`documentation`]: https://github.com/p2panda/p2panda
 [`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
-[`p2panda`]: https://github.com/p2panda/handbook
+[`p2panda`]: https://p2panda.org
 
 ## Development
 
