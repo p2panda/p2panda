@@ -52,7 +52,6 @@ stable state but still under review so please be prepared for breaking API
 changes until we reach `v1.0`. Currently no p2panda implementation has recieved 
 a security audit.
 
-
 [`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
 [`p2panda`]: https://p2panda.org
@@ -63,6 +62,32 @@ To install `p2panda-js` from the NPM package, run:
 
 ```
 npm i p2panda-js
+```
+
+## Example
+
+```typescript
+import { KeyPair, signAndEncodeEntry, encodeOperation } from 'p2panda-js';
+
+// Id of the schema which describes the data we want to publish. This should
+// already be known to the node we are publishing to.
+const SCHEMA_ID = 'profile_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b';
+
+// Generate new Ed25519 key pair.
+const keyPair = new KeyPair();
+
+// Add field data to "create" operation and encode operation into bytes.
+const operation = encodeOperation({
+  schemaId: SCHEMA_ID,
+  fields: {
+    username: 'Panda',
+  },
+});
+
+// Create Bamboo entry (append-only log data type) with operation as payload and encode it.
+const entry = signAndEncodeEntry({ operation }, keyPair);
+
+console.log(entry, operation);
 ```
 
 ## Usage
