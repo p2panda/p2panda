@@ -53,14 +53,11 @@ a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package
 [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web
 browser.
 
-> The core p2panda [specification](https://p2panda.org/specification/) is in a 
-stable state but still under review so please be prepared for breaking API 
-changes until we reach `v1.0`. Currently no p2panda implementation has recieved 
-a security audit.
+> The core p2panda [`specification`] is fully functional but still under review
+> so please be prepared for breaking API changes until we reach `v1.0`.
+> Currently no p2panda implementation has recieved a security audit.
 
-[`p2panda`]: https://p2panda.org/
-[`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
-[`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
+[`specification`]: https://p2panda.org/specification
 
 ## Features
 
@@ -108,11 +105,11 @@ For Rust environments run:
 $ cargo add p2panda-rs
 ```
 
-## Development
+## Documentation
 
-Visit the corresponding folders for development instructions:
-- [`p2panda-rs`](https://github.com/p2panda/p2panda/tree/main/p2panda-rs)
-- [`p2panda-js`](https://github.com/p2panda/p2panda/tree/main/p2panda-js)
+Visit the corresponding folders for development instructions and documentation:
+- [`p2panda-rs`]
+- [`p2panda-js`]
 
 ## Benchmarks
 
@@ -143,3 +140,7 @@ GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)
 *This project has received funding from the European Union’s Horizon 2020
 research and innovation programme within the framework of the NGI-POINTER
 Project funded under grant agreement No 871528*
+
+[`p2panda`]: https://p2panda.org
+[`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
+[`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
