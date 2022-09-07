@@ -49,7 +49,7 @@ a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package
 [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web
 browser.
 
-[`p2panda`]: https://github.com/p2panda/handbook
+[`p2panda`]: https://p2panda.org/
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
 [`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 
