@@ -55,6 +55,11 @@ browser.
 
 Read the library [`documentation`] for installation guides and examples.
 
+> The core p2panda [specification](https://p2panda.org/specification/) is in a 
+stable state but still under review so please be prepared for breaking API 
+changes until we reach `v1.0`. Currently no p2panda implementation has recieved 
+a security audit.
+
 [`documentation`]: https://github.com/p2panda/p2panda
 [`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
