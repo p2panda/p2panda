@@ -32,7 +32,7 @@
     </a>
     <span> | </span>
     <a href="https://docs.rs/p2panda-rs">
-      API
+      Docs
     </a>
     <span> | </span>
     <a href="https://github.com/p2panda/p2panda/releases">
