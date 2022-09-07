@@ -24,7 +24,7 @@
 <div align="center">
   <h3>
     <a href="https://p2panda.org/lib/p2panda-js">
-      API
+      Docs
     </a>
     <span> | </span>
     <a href="https://github.com/p2panda/p2panda/releases">
