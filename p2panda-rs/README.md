@@ -64,8 +64,6 @@ browser.
 
 ## Installation
 
-With [`cargo-edit`](https://github.com/killercup/cargo-edit) installed run:
-
 ```bash
 cargo add p2panda-rs
 ```
