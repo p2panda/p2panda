@@ -35,8 +35,8 @@
       Releases
     </a>
     <span> | </span>
-    <a href="https://github.com/p2panda/handbook#how-to-contribute">
-      Contributing
+    <a href="https://p2panda.org/about/contribute">
+      Contribute
     </a>
     <span> | </span>
     <a href="https://p2panda.org">
