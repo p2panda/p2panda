@@ -85,7 +85,7 @@ use p2panda_rs::operation::OperationBuilder;
 pub const SCHEMA_ID_STR: &str =
     "profile_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 
-    // Generate new Ed25519 key pair.
+// Generate new Ed25519 key pair.
 let key_pair = KeyPair::new();
 
 // Add field data to "create" operation.
@@ -108,7 +108,7 @@ println!("{} {}", encoded_entry, encoded_operation);
 To run this example from the `examples/` folder like so:
 
 ```bash
-cargo run --example=readme
+cargo run --example=create_operation
 ```
 
 ## Development
