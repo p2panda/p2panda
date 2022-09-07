@@ -53,15 +53,14 @@ a Rust crate [`p2panda-rs`] with WebAssembly bindings and a NPM package
 [`p2panda-js`] with TypeScript definitions running in NodeJS or any modern web
 browser.
 
-> The core p2panda [specification](https://p2panda.org/specification/) is in a 
-stable state but still under review so please be prepared for breaking API 
-changes until we reach `v1.0`. Currently no p2panda implementation has recieved 
-a security audit.
+> The core p2panda [`specification`] is fully functional but still under review
+> so please be prepared for breaking API changes until we reach `v1.0`.
+> Currently no p2panda implementation has recieved a security audit.
 
-[`documentation`]: https://github.com/p2panda/p2panda
 [`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
 [`p2panda`]: https://p2panda.org
+[`specification`]: https://p2panda.org/specification
 
 ## Installation
 
@@ -105,7 +104,7 @@ let encoded_entry = encode_entry(&entry)?;
 println!("{} {}", encoded_entry, encoded_operation);
 ```
 
-To run this example from the `examples/` folder like so:
+Run this code from the `examples` folder:
 
 ```bash
 cargo run --example=create_operation
