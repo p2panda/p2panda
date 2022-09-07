@@ -9,14 +9,14 @@ use p2panda_rs::operation::OperationBuilder;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Id of the schema which describes the data we want to publish. This should
     // already be known to the node we are publishing to.
-    pub const SCHEMA_ID_STR: &str =
+    pub const SCHEMA_ID: &str =
         "profile_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b";
 
     // Generate new Ed25519 key pair.
     let key_pair = KeyPair::new();
 
     // Add field data to "create" operation.
-    let operation = OperationBuilder::new(&SCHEMA_ID_STR.parse()?)
+    let operation = OperationBuilder::new(&SCHEMA_ID.parse()?)
         .fields(&[("username", "panda".into())])
         .build()?;
 
