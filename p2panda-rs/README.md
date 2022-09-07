@@ -27,10 +27,6 @@
 
 <div align="center">
   <h3>
-    <a href="https://github.com/p2panda/p2panda#installation">
-      Installation
-    </a>
-    <span> | </span>
     <a href="https://docs.rs/p2panda-rs">
       Docs
     </a>
@@ -68,6 +64,12 @@ a security audit.
 [`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
 [`p2panda`]: https://p2panda.org
+
+## Installation
+
+```bash
+cargo add p2panda-rs
+```
 
 ## Development
 
