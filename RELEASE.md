@@ -10,7 +10,7 @@ _This is an example for publising version `1.2.0`._
   [Github page](https://github.com/p2panda/p2panda).
 2. Make sure you are on the `main` branch.
 3. Run the test suites and make sure all tests pass:
-    - p2panda-rs: `cargo test`
+    - p2panda-rs: `cargo test --all-features`
     - p2panda-js: `npm run test` and also test `npm run build`
 4. Make sure that all examples in the `README.md` (including the ones in the
    sub-folders) are still up-to-date with the latest API changes.
