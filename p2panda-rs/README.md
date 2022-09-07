@@ -38,7 +38,7 @@
     <a href="https://github.com/p2panda/handbook#how-to-contribute">
       Contributing
     </a>
-        <span> | </span>
+    <span> | </span>
     <a href="https://p2panda.org">
       Website
     </a>
@@ -64,6 +64,8 @@ a security audit.
 [`p2panda`]: https://p2panda.org
 
 ## Installation
+
+With [`cargo-edit`](https://github.com/killercup/cargo-edit) installed run:
 
 ```bash
 cargo add p2panda-rs
