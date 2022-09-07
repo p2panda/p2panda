@@ -47,6 +47,12 @@ This library provides all tools required to write a client, node or even your ow
 
 > In the future `p2panda-js` will have full feature parity with `p2panda-rs` to be able to write high-level client frameworks or node implementations in TypeScript. Until now `p2panda-js` provides basic methods to create, sign and encode data.
 
+> The core p2panda [specification](https://p2panda.org/specification/) is in a 
+stable state but still under review so please be prepared for breaking API 
+changes until we reach `v1.0`. Currently no p2panda implementation has recieved 
+a security audit.
+
+
 [`p2panda-js`]: https://github.com/p2panda/p2panda/tree/main/p2panda-js
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
 [`p2panda`]: https://p2panda.org
