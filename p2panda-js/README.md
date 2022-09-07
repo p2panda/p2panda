@@ -23,10 +23,6 @@
 
 <div align="center">
   <h3>
-    <a href="https://github.com/p2panda/p2panda#installation">
-      Installation
-    </a>
-    <span> | </span>
     <a href="https://p2panda.org/lib/p2panda-js">
       API
     </a>
@@ -37,6 +33,10 @@
     <span> | </span>
     <a href="https://github.com/p2panda/handbook#how-to-contribute">
       Contributing
+    </a>
+    <span> | </span>
+    <a href="https://p2panda.org">
+      Website
     </a>
   </h3>
 </div>
