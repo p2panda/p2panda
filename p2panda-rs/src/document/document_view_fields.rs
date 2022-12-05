@@ -3,8 +3,8 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
-use crate::operation::traits::{AsOperation, AsVerifiedOperation};
-use crate::operation::{OperationFields, OperationId, OperationValue, VerifiedOperation};
+use crate::operation::traits::{AsOperation, WithOperationID};
+use crate::operation::{OperationFields, OperationId, OperationValue};
 
 /// The current value of a document fiew field as well as the id of the operation it came from.
 #[derive(Clone, Debug, PartialEq)]
@@ -95,8 +95,8 @@ impl Default for DocumentViewFields {
     }
 }
 
-impl From<VerifiedOperation> for DocumentViewFields {
-    fn from(operation: VerifiedOperation) -> Self {
+impl<T: AsOperation + WithOperationID> From<T> for DocumentViewFields {
+    fn from(operation: T) -> Self {
         let mut document_view_fields = DocumentViewFields::new();
 
         if let Some(fields) = operation.fields() {
@@ -114,8 +114,9 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::{DocumentViewFields, DocumentViewValue};
-    use crate::operation::traits::{AsOperation, AsVerifiedOperation};
-    use crate::operation::{OperationId, OperationValue, VerifiedOperation};
+    use crate::operation::traits::{AsOperation, WithOperationID};
+    use crate::operation::{OperationId, OperationValue};
+    use crate::test_utils::db::PublishedOperation;
     use crate::test_utils::fixtures::{random_operation_id, verified_operation};
 
     #[rstest]
@@ -152,14 +153,14 @@ mod tests {
     }
 
     #[rstest]
-    fn from_meta_operation(verified_operation: VerifiedOperation) {
+    fn from_meta_operation(verified_operation: PublishedOperation) {
         let document_view_fields = DocumentViewFields::from(verified_operation.clone());
         let operation_fields = verified_operation.fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
 
     #[rstest]
-    fn new_from_operation_fields(verified_operation: VerifiedOperation) {
+    fn new_from_operation_fields(verified_operation: PublishedOperation) {
         let document_view_fields = DocumentViewFields::new_from_operation_fields(
             verified_operation.id(),
             &verified_operation.fields().unwrap(),

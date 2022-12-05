@@ -84,7 +84,7 @@ pub enum FieldsError {
     UnknownField,
 }
 
-/// Errors from converting to a `VerifiedOperation` in `operation:validate` module.
+/// Errors from converting to a `PublishedOperation` in `operation:validate` module.
 #[derive(Error, Debug)]
 pub enum VerifiedOperationError {
     /// Handle errors from `operation::validate` module.

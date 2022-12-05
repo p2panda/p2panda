@@ -1,32 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Methods to reduce a list of operations into a single view.
+
 use crate::document::error::DocumentBuilderError;
 use crate::document::{DocumentViewFields, DocumentViewValue, IsDeleted, IsEdited};
 use crate::graph::Graph;
-use crate::operation::traits::{AsOperation, AsVerifiedOperation};
-use crate::operation::{OperationId, VerifiedOperation};
+use crate::identity::PublicKey;
+use crate::operation::traits::AsOperation;
+use crate::operation::{Operation, OperationId};
 
 /// Construct a graph from a list of operations.
 pub(crate) fn build_graph(
-    operations: &[VerifiedOperation],
-) -> Result<Graph<OperationId, VerifiedOperation>, DocumentBuilderError> {
+    operations: &[(OperationId, Operation, PublicKey)],
+) -> Result<Graph<OperationId, (OperationId, Operation, PublicKey)>, DocumentBuilderError> {
     let mut graph = Graph::new();
 
     // Add all operations to the graph.
-    for operation in operations {
-        graph.add_node(operation.id(), operation.clone());
+    for (id, operation, public_key) in operations {
+        graph.add_node(id, (id.to_owned(), operation.to_owned(), *public_key));
     }
 
     // Add links between operations in the graph.
-    for operation in operations {
+    for (id, operation, _public_key) in operations {
         if let Some(previous) = operation.previous() {
             for previous in previous.iter() {
-                let success = graph.add_link(previous, operation.id());
+                let success = graph.add_link(previous, id);
                 if !success {
-                    return Err(DocumentBuilderError::InvalidOperationLink(
-                        operation.id().to_owned(),
-                    ));
+                    return Err(DocumentBuilderError::InvalidOperationLink(id.to_owned()));
                 }
             }
         }
@@ -42,13 +42,13 @@ pub(crate) fn build_graph(
 /// flag is set to true. If the document contains one or more UPDATE operations, then the reduced
 /// view is returned and the `edited` flag is set to true.
 pub(crate) fn reduce(
-    ordered_operations: &[VerifiedOperation],
+    ordered_operations: &[(OperationId, Operation, PublicKey)],
 ) -> (Option<DocumentViewFields>, IsEdited, IsDeleted) {
     let mut is_edited = false;
 
     let mut document_view_fields = DocumentViewFields::new();
 
-    for operation in ordered_operations {
+    for (id, operation, _public_key) in ordered_operations {
         if operation.is_delete() {
             return (None, true, true);
         }
@@ -59,7 +59,7 @@ pub(crate) fn reduce(
 
         if let Some(fields) = operation.fields() {
             for (key, value) in fields.iter() {
-                let document_view_value = DocumentViewValue::new(operation.id(), value);
+                let document_view_value = DocumentViewValue::new(id, value);
                 document_view_fields.insert(key, document_view_value);
             }
         }
@@ -72,27 +72,27 @@ pub(crate) fn reduce(
 mod tests {
     use rstest::rstest;
 
-    use crate::operation::{OperationValue, VerifiedOperation};
+    use crate::identity::PublicKey;
+    use crate::operation::{Operation, OperationValue};
     use crate::test_utils::fixtures::{
-        operation_fields, random_previous_operations, verified_operation_with_schema,
+        create_operation, delete_operation, public_key, random_operation_id, update_operation,
     };
 
     use super::reduce;
 
     #[rstest]
     fn reduces_operations(
-        #[from(verified_operation_with_schema)] create_operation: VerifiedOperation,
-        #[from(verified_operation_with_schema)]
-        #[with(
-            Some(operation_fields(vec![("username", OperationValue::String("Yahooo!".into()))])),
-            Some(random_previous_operations(1))
-        )]
-        update_operation: VerifiedOperation,
-        #[from(verified_operation_with_schema)]
-        #[with(None, Some(random_previous_operations(1)))]
-        delete_operation: VerifiedOperation,
+        #[with(vec![("username", OperationValue::String("bubu".into()))])]
+        create_operation: Operation,
+        #[with(vec![("username", OperationValue::String("Yahooo!".into()))])]
+        update_operation: Operation,
+        delete_operation: Operation,
+        public_key: PublicKey,
     ) {
-        let (reduced_create, is_edited, is_deleted) = reduce(&[create_operation.clone()]);
+        let mut operations = Vec::new();
+        operations.push((random_operation_id(), create_operation, public_key));
+        let (reduced_create, is_edited, is_deleted) = reduce(&operations);
+
         assert_eq!(
             *reduced_create.unwrap().get("username").unwrap().value(),
             OperationValue::String("bubu".to_string())
@@ -100,8 +100,9 @@ mod tests {
         assert!(!is_edited);
         assert!(!is_deleted);
 
-        let (reduced_update, is_edited, is_deleted) =
-            reduce(&[create_operation.clone(), update_operation.clone()]);
+        operations.push((random_operation_id(), update_operation, public_key));
+        let (reduced_update, is_edited, is_deleted) = reduce(&operations);
+
         assert_eq!(
             *reduced_update.unwrap().get("username").unwrap().value(),
             OperationValue::String("Yahooo!".to_string())
@@ -109,8 +110,8 @@ mod tests {
         assert!(is_edited);
         assert!(!is_deleted);
 
-        let (reduced_delete, is_edited, is_deleted) =
-            reduce(&[create_operation, update_operation, delete_operation]);
+        operations.push((random_operation_id(), delete_operation, public_key));
+        let (reduced_delete, is_edited, is_deleted) = reduce(&operations);
 
         // The value remains the same, but the deleted flag is true now.
         assert!(reduced_delete.is_none());

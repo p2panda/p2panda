@@ -48,8 +48,7 @@ pub trait Schematic {
     fn fields(&self) -> Option<PlainFields>;
 }
 
-/// Trait to be implemented on [`Operation`] and
-/// [`VerifiedOperation`][crate::operation::VerifiedOperation] structs.
+/// Trait to be implemented on "operation-like" structs.
 pub trait AsOperation {
     /// Returns action type of operation.
     fn action(&self) -> OperationAction;

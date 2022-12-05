@@ -117,7 +117,7 @@
 //!                                                 │
 //!                                                 ▼
 //!                                         ┌─────────────────┐
-//!                                         │VerifiedOperation│
+//!                                         │PublishedOperation│
 //!                                         └─────────────────┘
 //! ```
 pub mod decode;
