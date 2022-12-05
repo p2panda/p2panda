@@ -108,13 +108,10 @@ impl Validate for DocumentViewId {
             operation_id.validate()?;
 
             // Check if it is sorted, this indirectly also checks against duplicates
-            match prev_operation_id {
-                Some(prev) => {
-                    if prev >= operation_id {
-                        return Err(DocumentViewIdError::UnsortedOperationIds);
-                    }
+            if let Some(prev) = prev_operation_id {
+                if prev >= operation_id {
+                    return Err(DocumentViewIdError::UnsortedOperationIds);
                 }
-                None => (),
             }
 
             prev_operation_id = Some(operation_id);

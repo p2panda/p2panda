@@ -107,15 +107,12 @@ impl<'de> Deserialize<'de> for PlainOperation {
                     OperationAction::Delete => None,
                 };
 
-                match seq.size_hint() {
-                    Some(items_left) => {
-                        if items_left > 0 {
-                            return Err(serde::de::Error::custom(
-                                "too many items for this operation action",
-                            ));
-                        }
+                if let Some(items_left) = seq.size_hint() {
+                    if items_left > 0 {
+                        return Err(serde::de::Error::custom(
+                            "too many items for this operation action",
+                        ));
                     }
-                    None => (),
                 };
 
                 Ok(PlainOperation(version, action, schema_id, previous, fields))
