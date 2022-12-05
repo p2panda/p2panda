@@ -8,7 +8,7 @@ use crate::operation::{OperationAction, OperationFields, OperationId, OperationV
 use crate::schema::SchemaId;
 
 /// Trait representing a struct encapsulating data which has been signed by an author.
-/// 
+///
 /// The method returns the public key of the keypair used to perform signing.
 pub trait WithPublicKey {
     /// Returns the public key of the author of this entry or operation.
@@ -16,8 +16,8 @@ pub trait WithPublicKey {
 }
 
 /// Trait representing the id of an "operation-like" struct.
-/// 
-/// Returns an operation's id which is derived from the hash of the entry it was published with. 
+///
+/// Returns an operation's id which is derived from the hash of the entry it was published with.
 pub trait WithOperationID {
     /// Returns the identifier for this operation.
     fn id(&self) -> &OperationId;

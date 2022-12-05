@@ -9,7 +9,9 @@ use crate::hash::Hash;
 use crate::operation::error::ValidateOperationError;
 use crate::operation::plain::{PlainFields, PlainOperation};
 use crate::operation::traits::{Actionable, Schematic};
-use crate::operation::{EncodedOperation, Operation, OperationAction, OperationVersion, OperationId};
+use crate::operation::{
+    EncodedOperation, Operation, OperationAction, OperationId, OperationVersion,
+};
 use crate::schema::validate::{validate_all_fields, validate_only_given_fields};
 use crate::schema::Schema;
 use crate::Human;
@@ -26,7 +28,7 @@ use crate::Human;
 /// 3. Look up a `Schema` instance (for example in a schema provider) via the schema id you
 ///    received from the decoded `PlainOperation`
 /// 4. Look up `Entry` instances for the back- & skiplinks claimed by the decoded entry
-/// 5. Use decoded and encoded data for this method to apply all checks which guarantees 
+/// 5. Use decoded and encoded data for this method to apply all checks which guarantees
 ///    authenticity, log integrity, correct operation format, schema validity etc. Returns
 ///    the operation and it's id.
 ///

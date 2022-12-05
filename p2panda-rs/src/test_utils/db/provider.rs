@@ -13,7 +13,7 @@ use crate::schema::SchemaId;
 use crate::storage_provider::traits::AsStorageLog;
 use crate::storage_provider::traits::StorageProvider;
 use crate::storage_provider::utils::Result;
-use crate::test_utils::db::{StorageEntry, StorageLog, PublishedOperation};
+use crate::test_utils::db::{PublishedOperation, StorageEntry, StorageLog};
 
 type AuthorPlusLogId = String;
 

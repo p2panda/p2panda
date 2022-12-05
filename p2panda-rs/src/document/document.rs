@@ -334,7 +334,7 @@ mod tests {
     use crate::test_utils::db::test_db::send_to_store;
     use crate::test_utils::db::{MemoryStore, PublishedOperation};
     use crate::test_utils::fixtures::{
-        operation_fields, random_document_view_id, random_operation_id, schema, published_operation,
+        operation_fields, published_operation, random_document_view_id, random_operation_id, schema,
     };
     use crate::Human;
 
@@ -662,7 +662,9 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn more_than_one_create(#[from(published_operation)] create_operation: PublishedOperation) {
+    async fn more_than_one_create(
+        #[from(published_operation)] create_operation: PublishedOperation,
+    ) {
         let document: Result<Document, _> = vec![&create_operation, &create_operation].try_into();
 
         assert_eq!(
