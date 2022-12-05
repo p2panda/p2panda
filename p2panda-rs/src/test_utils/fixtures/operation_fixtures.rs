@@ -11,10 +11,11 @@ use crate::operation::plain::PlainOperation;
 use crate::operation::validate::validate_operation_with_entry;
 use crate::operation::{
     EncodedOperation, Operation, OperationAction, OperationFields, OperationId, OperationValue,
-    OperationVersion, VerifiedOperation,
+    OperationVersion,
 };
 use crate::schema::{Schema, SchemaId};
 use crate::test_utils::constants::{test_fields, HASH, SCHEMA_ID};
+use crate::test_utils::db::PublishedOperation;
 use crate::test_utils::fixtures::{
     document_view_id, key_pair, random_hash, schema, schema_fields, schema_id,
 };
@@ -152,7 +153,7 @@ pub fn verified_operation(
     #[from(schema)] schema: Schema,
     #[default(None)] previous: Option<DocumentViewId>,
     #[from(key_pair)] key_pair: KeyPair,
-) -> VerifiedOperation {
+) -> PublishedOperation {
     let operation = operation(fields, previous, schema.id().clone());
     let operation_plain: PlainOperation = (&operation).into();
     let operation_encoded = encode_plain_operation(&operation_plain).unwrap();
@@ -169,7 +170,7 @@ pub fn verified_operation(
 
     let entry_encoded = encode_entry(&entry).unwrap();
 
-    validate_operation_with_entry(
+    let (operation, id) = validate_operation_with_entry(
         &entry,
         &entry_encoded,
         None,
@@ -178,7 +179,9 @@ pub fn verified_operation(
         &operation_encoded,
         &schema,
     )
-    .unwrap()
+    .unwrap();
+
+    PublishedOperation(id, operation, key_pair.public_key())
 }
 
 /// Generates verified operation instance with a constant schema.
@@ -187,7 +190,7 @@ pub fn verified_operation_with_schema(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] previous: Option<DocumentViewId>,
     #[from(key_pair)] key_pair: KeyPair,
-) -> VerifiedOperation {
+) -> PublishedOperation {
     let schema_id = schema_id(SCHEMA_ID);
 
     let schema = schema(

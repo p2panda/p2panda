@@ -8,12 +8,12 @@ use async_trait::async_trait;
 use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::hash::Hash;
-use crate::operation::{OperationId, VerifiedOperation};
+use crate::operation::OperationId;
 use crate::schema::SchemaId;
 use crate::storage_provider::traits::AsStorageLog;
 use crate::storage_provider::traits::StorageProvider;
 use crate::storage_provider::utils::Result;
-use crate::test_utils::db::{StorageEntry, StorageLog};
+use crate::test_utils::db::{StorageEntry, StorageLog, PublishedOperation};
 
 type AuthorPlusLogId = String;
 
@@ -29,7 +29,7 @@ pub struct MemoryStore {
     pub entries: Arc<Mutex<HashMap<Hash, StorageEntry>>>,
 
     /// Stored operations
-    pub operations: Arc<Mutex<HashMap<OperationId, (DocumentId, VerifiedOperation)>>>,
+    pub operations: Arc<Mutex<HashMap<OperationId, (DocumentId, PublishedOperation)>>>,
 
     /// Stored documents
     pub documents: Arc<Mutex<HashMap<DocumentId, Document>>>,
@@ -44,7 +44,7 @@ impl StorageProvider for MemoryStore {
 
     type StorageLog = StorageLog;
 
-    type Operation = VerifiedOperation;
+    type Operation = PublishedOperation;
 
     async fn get_document_by_entry(&self, entry_hash: &Hash) -> Result<Option<DocumentId>> {
         let entries = self.entries.lock().unwrap();

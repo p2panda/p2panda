@@ -3,4 +3,4 @@
 mod document;
 mod entry;
 mod log;
-mod operation;
+pub mod operation;

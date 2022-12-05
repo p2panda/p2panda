@@ -89,7 +89,7 @@ fn many_valid_operations(#[case] operation: Operation) {}
         $crate::test_utils::constants::PRIVATE_KEY
     )
 ))]
-fn many_verified_operations(#[case] operation: VerifiedOperation) {}
+fn many_verified_operations(#[case] operation: PublishedOperation) {}
 
 /// This template contains examples of all structs which implement the `AsOperation` trait.
 #[template]
