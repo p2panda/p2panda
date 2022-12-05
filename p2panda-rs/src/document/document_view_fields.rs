@@ -117,7 +117,7 @@ mod tests {
     use crate::operation::traits::{AsOperation, WithOperationID};
     use crate::operation::{OperationId, OperationValue};
     use crate::test_utils::db::PublishedOperation;
-    use crate::test_utils::fixtures::{random_operation_id, verified_operation};
+    use crate::test_utils::fixtures::{published_operation, random_operation_id};
 
     #[rstest]
     fn construct_fields(#[from(random_operation_id)] value_id: OperationId) {
@@ -153,19 +153,19 @@ mod tests {
     }
 
     #[rstest]
-    fn from_meta_operation(verified_operation: PublishedOperation) {
-        let document_view_fields = DocumentViewFields::from(verified_operation.clone());
-        let operation_fields = verified_operation.fields().unwrap();
+    fn from_meta_operation(#[from(published_operation)] operation: PublishedOperation) {
+        let document_view_fields = DocumentViewFields::from(operation.clone());
+        let operation_fields = operation.fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
 
     #[rstest]
-    fn new_from_operation_fields(verified_operation: PublishedOperation) {
+    fn new_from_operation_fields(#[from(published_operation)] operation: PublishedOperation) {
         let document_view_fields = DocumentViewFields::new_from_operation_fields(
-            verified_operation.id(),
-            &verified_operation.fields().unwrap(),
+            operation.id(),
+            &operation.fields().unwrap(),
         );
-        let operation_fields = verified_operation.fields().unwrap();
+        let operation_fields = operation.fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
 }

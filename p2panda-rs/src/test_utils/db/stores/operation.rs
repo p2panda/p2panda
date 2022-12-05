@@ -30,7 +30,7 @@ impl OperationStore<PublishedOperation> for MemoryStore {
 
         let is_duplicate_id = operations
             .values()
-            .any(|(_document_id, verified_operation)| verified_operation.0 == *id);
+            .any(|(_document_id, published_operation)| published_operation.0 == *id);
 
         if is_duplicate_id {
             return Err(OperationStorageError::InsertionError(id.clone()));
@@ -65,7 +65,7 @@ impl OperationStore<PublishedOperation> for MemoryStore {
         let operations = self.operations.lock().unwrap();
         Ok(operations
             .values()
-            .find(|(_document_id, verified_operation)| verified_operation.id() == id)
+            .find(|(_document_id, published_operation)| published_operation.id() == id)
             .map(|(document_id, _operation)| document_id.clone()))
     }
 

@@ -148,7 +148,7 @@ pub fn encoded_create_operation_with_schema() -> EncodedOperation {
 /// and `previous` are provided, this is an UPDATE operation. If no value for `fields`
 /// is provided, this is a DELETE operation.
 #[fixture]
-pub fn verified_operation(
+pub fn published_operation(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[from(schema)] schema: Schema,
     #[default(None)] previous: Option<DocumentViewId>,
@@ -199,7 +199,7 @@ pub fn verified_operation_with_schema(
         "Test schema",
     );
 
-    verified_operation(fields, schema, previous, key_pair)
+    published_operation(fields, schema, previous, key_pair)
 }
 
 /// Returns encoded operation as hexadecimal string.

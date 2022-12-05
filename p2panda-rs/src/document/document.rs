@@ -334,14 +334,14 @@ mod tests {
     use crate::test_utils::db::test_db::send_to_store;
     use crate::test_utils::db::{MemoryStore, PublishedOperation};
     use crate::test_utils::fixtures::{
-        operation_fields, random_document_view_id, random_operation_id, schema, verified_operation,
+        operation_fields, random_document_view_id, random_operation_id, schema, published_operation,
     };
     use crate::Human;
 
     use super::DocumentBuilder;
 
     #[rstest]
-    fn string_representation(#[from(verified_operation)] operation: PublishedOperation) {
+    fn string_representation(#[from(published_operation)] operation: PublishedOperation) {
         let document: Document = vec![&operation].try_into().unwrap();
 
         assert_eq!(
@@ -568,7 +568,7 @@ mod tests {
 
     #[rstest]
     fn must_have_create_operation(
-        #[from(verified_operation)]
+        #[from(published_operation)]
         #[with(
             Some(operation_fields(constants::test_fields())),
             constants::schema(),
@@ -586,10 +586,10 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn incorrect_previous_operations(
-        #[from(verified_operation)]
+        #[from(published_operation)]
         #[with(Some(operation_fields(constants::test_fields())), constants::schema())]
         create_operation: PublishedOperation,
-        #[from(verified_operation)]
+        #[from(published_operation)]
         #[with(
             Some(operation_fields(constants::test_fields())),
             constants::schema(),
@@ -611,14 +611,14 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn operation_schemas_not_matching() {
-        let create_operation = verified_operation(
+        let create_operation = published_operation(
             Some(operation_fields(constants::test_fields())),
             constants::schema(),
             None,
             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
         );
 
-        let update_operation = verified_operation(
+        let update_operation = published_operation(
             Some(operation_fields(vec![
                 ("name", "is_cute".into()),
                 ("type", "bool".into()),
@@ -641,11 +641,11 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn is_deleted(
-        #[from(verified_operation)]
+        #[from(published_operation)]
         #[with(Some(operation_fields(constants::test_fields())), constants::schema())]
         create_operation: PublishedOperation,
     ) {
-        let delete_operation = verified_operation(
+        let delete_operation = published_operation(
             None,
             constants::schema(),
             Some(DocumentViewId::new(&[create_operation.id().to_owned()])),
@@ -662,7 +662,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn more_than_one_create(#[from(verified_operation)] create_operation: PublishedOperation) {
+    async fn more_than_one_create(#[from(published_operation)] create_operation: PublishedOperation) {
         let document: Result<Document, _> = vec![&create_operation, &create_operation].try_into();
 
         assert_eq!(
