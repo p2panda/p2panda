@@ -70,6 +70,10 @@ pub enum ValidateOperationError {
     /// Handle errors from `schema::validate` module.
     #[error(transparent)]
     SchemaValidation(#[from] crate::schema::validate::error::ValidationError),
+
+    /// Handle errors from `entry::validate` module.
+    #[error(transparent)]
+    ValidateEntryError(#[from] crate::entry::error::ValidateEntryError),
 }
 
 /// Error types for methods of plain fields or operation fields.
@@ -82,18 +86,6 @@ pub enum FieldsError {
     /// Tried to interact with an unknown field.
     #[error("field does not exist")]
     UnknownField,
-}
-
-/// Errors from converting to a `PublishedOperation` in `operation:validate` module.
-#[derive(Error, Debug)]
-pub enum VerifiedOperationError {
-    /// Handle errors from `operation::validate` module.
-    #[error(transparent)]
-    ValidateOperationError(#[from] ValidateOperationError),
-
-    /// Handle errors from `entry::validate` module.
-    #[error(transparent)]
-    ValidateEntryError(#[from] crate::entry::error::ValidateEntryError),
 }
 
 /// Errors from `OperationId` struct.

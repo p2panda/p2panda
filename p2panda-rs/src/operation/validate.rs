@@ -6,7 +6,7 @@ use crate::entry::traits::AsEncodedEntry;
 use crate::entry::validate::{validate_log_integrity, validate_payload};
 use crate::entry::{EncodedEntry, Entry};
 use crate::hash::Hash;
-use crate::operation::error::{ValidateOperationError, VerifiedOperationError};
+use crate::operation::error::ValidateOperationError;
 use crate::operation::plain::{PlainFields, PlainOperation};
 use crate::operation::traits::{Actionable, Schematic};
 use crate::operation::{EncodedOperation, Operation, OperationAction, OperationVersion, OperationId};
@@ -26,9 +26,9 @@ use crate::Human;
 /// 3. Look up a `Schema` instance (for example in a schema provider) via the schema id you
 ///    received from the decoded `PlainOperation`
 /// 4. Look up `Entry` instances for the back- & skiplinks claimed by the decoded entry
-/// 5. Use decoded and encoded data for this method to apply all checks and create a
-///    `VerifiedOperation` instance which guarantees authenticity, log integrity, correct operation
-///    format, schema validity etc.
+/// 5. Use decoded and encoded data for this method to apply all checks which guarantees 
+///    authenticity, log integrity, correct operation format, schema validity etc. Returns
+///    the operation and it's id.
 ///
 /// This method applies the following validation steps:
 ///
@@ -88,7 +88,7 @@ pub fn validate_operation_with_entry(
     plain_operation: &PlainOperation,
     operation_encoded: &EncodedOperation,
     schema: &Schema,
-) -> Result<(Operation, OperationId), VerifiedOperationError> {
+) -> Result<(Operation, OperationId), ValidateOperationError> {
     // Verify that the entry belongs to this operation
     validate_payload(entry, operation_encoded)?;
 
