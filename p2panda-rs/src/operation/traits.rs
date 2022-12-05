@@ -91,21 +91,3 @@ pub trait AsOperation {
         self.action() == OperationAction::Delete
     }
 }
-
-/// Trait to be implemented on a struct representing an operation which has been encoded and
-/// published on a signed entry.
-///
-/// Contains the values of an operation as well as it's id and the public key of it's author.
-/// The reason an unpublished operation has no id is that the id is derived from the hash of
-/// the signed entry an operation is encoded on.
-///
-/// [`StorageProvider`][crate::storage_provider::traits::StorageProvider] implementations should
-/// implement this for a data structure that represents an operation as it is stored in the
-/// database.
-pub trait AsVerifiedOperation: AsOperation {
-    /// Returns the identifier for this operation.
-    fn id(&self) -> &OperationId;
-
-    /// Returns the public key of the author of this operation.
-    fn public_key(&self) -> &PublicKey;
-}

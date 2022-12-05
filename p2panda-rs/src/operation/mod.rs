@@ -135,7 +135,6 @@ pub mod plain;
 mod relation;
 pub mod traits;
 pub mod validate;
-mod verified_operation;
 
 pub use encoded_operation::EncodedOperation;
 pub use operation::{Operation, OperationBuilder};
@@ -145,4 +144,3 @@ pub use operation_id::OperationId;
 pub use operation_value::OperationValue;
 pub use operation_version::OperationVersion;
 pub use relation::{PinnedRelation, PinnedRelationList, Relation, RelationList};
-pub use verified_operation::VerifiedOperation;
