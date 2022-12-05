@@ -50,62 +50,50 @@ pub fn validate_log_integrity(
     skiplink: Option<(&Entry, &Hash)>,
     backlink: Option<(&Entry, &Hash)>,
 ) -> Result<(), ValidateEntryError> {
-    match skiplink {
-        Some((link, link_hash)) => {
-            // Is the claimed link entry part of the same log?
-            if entry.log_id() != link.log_id() {
-                return Err(ValidateEntryError::WrongSkiplinkLogId(
-                    entry.log_id().as_u64(),
-                    link.log_id().as_u64(),
-                ));
-            }
+    if let Some((link, link_hash)) = skiplink {
+        // Is the claimed link entry part of the same log?
+        if entry.log_id() != link.log_id() {
+            return Err(ValidateEntryError::WrongSkiplinkLogId(
+                entry.log_id().as_u64(),
+                link.log_id().as_u64(),
+            ));
+        }
 
-            match entry.skiplink() {
-                Some(entry_link) => {
-                    // Is the claimed hash matching with what is in the log?
-                    // Unwrap here as we know this skiplink exists
-                    if entry_link != link_hash {
-                        return Err(ValidateEntryError::WrongSkiplinkHash);
-                    }
-                }
-                None => (),
-            }
-
-            // Are the claimed entries published by the same key?
-            if entry.public_key() != link.public_key() {
-                return Err(ValidateEntryError::WrongSkiplinkAuthor);
+        if let Some(entry_link) = entry.skiplink() {
+            // Is the claimed hash matching with what is in the log?
+            // Unwrap here as we know this skiplink exists
+            if entry_link != link_hash {
+                return Err(ValidateEntryError::WrongSkiplinkHash);
             }
         }
-        None => (),
+
+        // Are the claimed entries published by the same key?
+        if entry.public_key() != link.public_key() {
+            return Err(ValidateEntryError::WrongSkiplinkAuthor);
+        }
     };
 
-    match backlink {
-        Some((link, link_hash)) => {
-            // Is the claimed link entry part of the same log?
-            if entry.log_id() != link.log_id() {
-                return Err(ValidateEntryError::WrongBacklinkLogId(
-                    entry.log_id().as_u64(),
-                    link.log_id().as_u64(),
-                ));
-            }
+    if let Some((link, link_hash)) = backlink {
+        // Is the claimed link entry part of the same log?
+        if entry.log_id() != link.log_id() {
+            return Err(ValidateEntryError::WrongBacklinkLogId(
+                entry.log_id().as_u64(),
+                link.log_id().as_u64(),
+            ));
+        }
 
-            match entry.backlink() {
-                Some(entry_link) => {
-                    // Is the claimed hash matching with what is in the log?
-                    // Unwrap here as we know this backlink exists
-                    if entry_link != link_hash {
-                        return Err(ValidateEntryError::WrongBacklinkHash);
-                    }
-                }
-                None => (),
-            }
-
-            // Are the claimed entries published by the same key?
-            if entry.public_key() != link.public_key() {
-                return Err(ValidateEntryError::WrongBacklinkAuthor);
+        if let Some(entry_link) = entry.backlink() {
+            // Is the claimed hash matching with what is in the log?
+            // Unwrap here as we know this backlink exists
+            if entry_link != link_hash {
+                return Err(ValidateEntryError::WrongBacklinkHash);
             }
         }
-        None => (),
+
+        // Are the claimed entries published by the same key?
+        if entry.public_key() != link.public_key() {
+            return Err(ValidateEntryError::WrongBacklinkAuthor);
+        }
     };
 
     Ok(())
