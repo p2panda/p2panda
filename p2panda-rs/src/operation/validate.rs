@@ -2,16 +2,14 @@
 
 //! Collection of low-level validation methods for operations.
 use crate::document::DocumentViewId;
-use crate::entry::traits::{AsEncodedEntry, AsEntry};
+use crate::entry::traits::AsEncodedEntry;
 use crate::entry::validate::{validate_log_integrity, validate_payload};
 use crate::entry::{EncodedEntry, Entry};
 use crate::hash::Hash;
 use crate::operation::error::{ValidateOperationError, VerifiedOperationError};
 use crate::operation::plain::{PlainFields, PlainOperation};
-use crate::operation::traits::{Actionable, AsOperation, Schematic};
-use crate::operation::{
-    EncodedOperation, Operation, OperationAction, OperationVersion, VerifiedOperation,
-};
+use crate::operation::traits::{Actionable, Schematic};
+use crate::operation::{EncodedOperation, Operation, OperationAction, OperationVersion, OperationId};
 use crate::schema::validate::{validate_all_fields, validate_only_given_fields};
 use crate::schema::Schema;
 use crate::Human;
@@ -77,9 +75,9 @@ use crate::Human;
 ///                                                 │
 ///                                                 │
 ///                                                 ▼
-///                                         ┌─────────────────┐
-///                                         │VerifiedOperation│
-///                                         └─────────────────┘
+///                                     ┌────────────────────────┐
+///                                     │(Operation, OperationId)│
+///                                     └────────────────────────┘
 /// ```
 #[allow(clippy::too_many_arguments)]
 pub fn validate_operation_with_entry(
@@ -90,7 +88,7 @@ pub fn validate_operation_with_entry(
     plain_operation: &PlainOperation,
     operation_encoded: &EncodedOperation,
     schema: &Schema,
-) -> Result<VerifiedOperation, VerifiedOperationError> {
+) -> Result<(Operation, OperationId), VerifiedOperationError> {
     // Verify that the entry belongs to this operation
     validate_payload(entry, operation_encoded)?;
 
@@ -103,15 +101,7 @@ pub fn validate_operation_with_entry(
     // Validate and convert plain operation with the help of a schema
     let operation = validate_operation(plain_operation, schema)?;
 
-    Ok(VerifiedOperation {
-        id: operation_id,
-        public_key: entry.public_key().to_owned(),
-        version: AsOperation::version(&operation),
-        action: AsOperation::action(&operation),
-        schema_id: AsOperation::schema_id(&operation),
-        previous: AsOperation::previous(&operation),
-        fields: AsOperation::fields(&operation),
-    })
+    Ok((operation, operation_id))
 }
 
 /// Check the format of an operation-like data type.
