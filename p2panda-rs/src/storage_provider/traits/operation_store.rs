@@ -3,8 +3,9 @@
 use async_trait::async_trait;
 
 use crate::document::DocumentId;
-use crate::operation::traits::AsVerifiedOperation;
-use crate::operation::{OperationId, VerifiedOperation};
+use crate::identity::PublicKey;
+use crate::operation::traits::{AsOperation, WithOperationID, WithPublicKey};
+use crate::operation::{Operation, OperationId};
 use crate::storage_provider::error::OperationStorageError;
 
 /// Trait which handles all storage actions relating to `Operation`s.
@@ -12,14 +13,16 @@ use crate::storage_provider::error::OperationStorageError;
 /// This trait should be implemented on the root storage provider struct. It's definitions make up
 /// the required methods for inserting and querying operations from storage.
 #[async_trait]
-pub trait OperationStore<StorageOperation: AsVerifiedOperation> {
+pub trait OperationStore<T: AsOperation + WithPublicKey + WithOperationID> {
     /// Insert an operation into the db.
     ///
     /// The passed operation must implement the `AsVerifiedOperation` trait. Errors when
     /// a fatal DB error occurs.
     async fn insert_operation(
         &self,
-        operation: &VerifiedOperation,
+        id: &OperationId,
+        public_key: &PublicKey,
+        operation: &Operation,
         document_id: &DocumentId,
     ) -> Result<(), OperationStorageError>;
 
@@ -30,7 +33,7 @@ pub trait OperationStore<StorageOperation: AsVerifiedOperation> {
     async fn get_operation_by_id(
         &self,
         id: &OperationId,
-    ) -> Result<Option<StorageOperation>, OperationStorageError>;
+    ) -> Result<Option<T>, OperationStorageError>;
 
     /// Get the id of the document an operation is contained within.
     ///
@@ -49,5 +52,5 @@ pub trait OperationStore<StorageOperation: AsVerifiedOperation> {
     async fn get_operations_by_document_id(
         &self,
         id: &DocumentId,
-    ) -> Result<Vec<StorageOperation>, OperationStorageError>;
+    ) -> Result<Vec<T>, OperationStorageError>;
 }

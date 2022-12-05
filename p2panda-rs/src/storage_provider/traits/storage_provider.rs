@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::document::DocumentId;
 use crate::hash::Hash;
-use crate::operation::traits::AsVerifiedOperation;
+use crate::operation::traits::{AsOperation, WithOperationID, WithPublicKey};
 use crate::storage_provider::traits::{
     AsStorageLog, DocumentStore, EntryStore, EntryWithOperation, LogStore, OperationStore,
 };
@@ -28,7 +28,7 @@ pub trait StorageProvider:
     type StorageLog: AsStorageLog;
 
     /// An associated type representing an operation as it passes in and out of storage.
-    type Operation: AsVerifiedOperation;
+    type Operation: AsOperation + WithOperationID + WithPublicKey;
 
     /// Returns the related document for any entry.
     ///
