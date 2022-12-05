@@ -31,17 +31,18 @@ _This is an example for publising version `1.2.0`._
    --no-git-tag-version [major|minor|patch]` (this is using [semantic
    versioning](https://semver.org/)).
 10. Bump the package version in `Cargo.toml` by hand.
-11. Commit the version changes with a commit message `1.2.0`.
-12. Run `git tag v1.2.0` and push including your tags using `pit push origin
+11. Change the examples in the `README.md` which import `p2panda-js` by version to use the latest version
+12. Commit the version changes with a commit message `1.2.0`.
+13. Run `git tag v1.2.0` and push including your tags using `pit push origin
     main --tags`.
 
 ## Publishing releases
 
-13. Copy the changelog entry you authored into Github's [new release
+14. Copy the changelog entry you authored into Github's [new release
     page](https://github.com/p2panda/p2panda/releases/new)'s description field.
     Title it with your version `v1.2.0`.
-14. Run `cargo publish` in `p2panda-rs`.
-15. Run `npm run build` in `p2panda-js`.
-16. Run `npm pack --dry-run` to check the file listing you are about to publish
+15. Run `cargo publish` in `p2panda-rs`.
+16. Run `npm run build` in `p2panda-js`.
+17. Run `npm pack --dry-run` to check the file listing you are about to publish
     doesn't contain any unwanted files.
-17. Run `npm publish` and check the window for any birds outside your window.
+18. Run `npm publish` and check the window for any birds outside your window.
