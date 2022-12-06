@@ -186,7 +186,7 @@ pub fn published_operation(
 
 /// Generates verified operation instance with a constant schema.
 #[fixture]
-pub fn verified_operation_with_schema(
+pub fn published_operation_with_schema(
     #[from(some_fields)] fields: Option<OperationFields>,
     #[default(None)] previous: Option<DocumentViewId>,
     #[from(key_pair)] key_pair: KeyPair,
