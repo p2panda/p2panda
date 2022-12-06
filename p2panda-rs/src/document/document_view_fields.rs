@@ -153,7 +153,7 @@ mod tests {
     }
 
     #[rstest]
-    fn from_meta_operation(#[from(published_operation)] operation: PublishedOperation) {
+    fn from_published_operation(#[from(published_operation)] operation: PublishedOperation) {
         let document_view_fields = DocumentViewFields::from(operation.clone());
         let operation_fields = operation.fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
