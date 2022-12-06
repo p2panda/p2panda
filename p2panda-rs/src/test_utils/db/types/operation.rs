@@ -8,7 +8,7 @@ use crate::operation::{
 };
 use crate::schema::SchemaId;
 
-/// On operation, it's id, and the public key of the keypair which signed it.
+/// An operation with it's id and the public key of the keypair which signed it.
 #[derive(Debug, Clone)]
 pub struct PublishedOperation(pub OperationId, pub Operation, pub PublicKey);
 
