@@ -137,5 +137,5 @@ fn many_published_operations(#[case] operation: PublishedOperation) {}
 fn implements_as_operation(#[case] operation: impl AsOperation) {}
 
 pub use implements_as_operation;
-pub use many_valid_operations;
 pub use many_published_operations;
+pub use many_valid_operations;
