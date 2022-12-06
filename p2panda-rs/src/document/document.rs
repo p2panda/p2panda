@@ -120,31 +120,7 @@ impl<T: AsOperation + WithOperationID + WithPublicKey> TryFrom<&Vec<T>> for Docu
     }
 }
 
-/// A struct for building [documents][`Document`] from a collection of [operations with
-/// metadata][`crate::operation::PublishedOperation`].
-///
-/// ## Example
-///
-/// ```
-/// # extern crate p2panda_rs;
-/// # #[cfg(test)]
-/// # mod tests {
-/// # use rstest::rstest;
-/// # use p2panda_rs::document::DocumentBuilder;
-/// # use p2panda_rs::operation::PublishedOperation;
-/// # use p2panda_rs::test_utils::meta_operation;
-/// #
-/// # #[rstest]
-/// # fn main(#[from(meta_operation)] operation: PublishedOperation) -> () {
-/// // You need a `Vec<PublishedOperation>` that includes the `CREATE` operation
-/// let operations: Vec<PublishedOperation> = vec![operation];
-///
-/// // Then you can make a `Document` from it
-/// let document = DocumentBuilder::new(operations).build();
-/// assert!(document.is_ok());
-/// # }
-/// # }
-/// ```
+/// A struct for building [documents][`Document`] from a collection of operations.
 #[derive(Debug, Clone)]
 pub struct DocumentBuilder(Vec<(OperationId, Operation, PublicKey)>);
 
