@@ -102,7 +102,10 @@ impl Human for Document {
     }
 }
 
-impl<T: AsOperation + WithOperationID + WithPublicKey> TryFrom<Vec<&T>> for Document {
+impl<T> TryFrom<Vec<&T>> for Document
+where
+    T: AsOperation + WithOperationID + WithPublicKey,
+{
     type Error = DocumentBuilderError;
 
     fn try_from(operations: Vec<&T>) -> Result<Self, Self::Error> {
@@ -111,7 +114,10 @@ impl<T: AsOperation + WithOperationID + WithPublicKey> TryFrom<Vec<&T>> for Docu
     }
 }
 
-impl<T: AsOperation + WithOperationID + WithPublicKey> TryFrom<&Vec<T>> for Document {
+impl<T> TryFrom<&Vec<T>> for Document
+where
+    T: AsOperation + WithOperationID + WithPublicKey,
+{
     type Error = DocumentBuilderError;
 
     fn try_from(operations: &Vec<T>) -> Result<Self, Self::Error> {
@@ -246,7 +252,10 @@ impl DocumentBuilder {
     }
 }
 
-impl<T: AsOperation + WithOperationID + WithPublicKey> From<Vec<&T>> for DocumentBuilder {
+impl<T> From<Vec<&T>> for DocumentBuilder
+where
+    T: AsOperation + WithOperationID + WithPublicKey,
+{
     fn from(operations: Vec<&T>) -> Self {
         let operations = operations
             .iter()
@@ -269,7 +278,10 @@ impl<T: AsOperation + WithOperationID + WithPublicKey> From<Vec<&T>> for Documen
     }
 }
 
-impl<T: AsOperation + WithOperationID + WithPublicKey> From<&Vec<T>> for DocumentBuilder {
+impl<T> From<&Vec<T>> for DocumentBuilder
+where
+    T: AsOperation + WithOperationID + WithPublicKey,
+{
     fn from(operations: &Vec<T>) -> Self {
         let operations = operations
             .iter()
