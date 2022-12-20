@@ -23,8 +23,11 @@ pub trait LogStore {
         document: &DocumentId,
     ) -> Result<bool, LogStorageError>;
 
-    /// Get a log from storage
-    async fn get(
+    /// Get the log id for a public key and document id.
+    /// 
+    /// Returns an option containing the id or none if no log exists for the requested
+    /// public key and document id.
+    async fn get_log_id(
         &self,
         public_key: &PublicKey,
         document_id: &DocumentId,
