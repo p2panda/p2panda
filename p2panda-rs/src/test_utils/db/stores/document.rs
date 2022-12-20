@@ -77,7 +77,7 @@ impl DocumentStore for MemoryStore {
     /// occured.
     ///
     /// Note: if no view for this document was found, it might have been deleted.
-    async fn get_document_by_id(
+    async fn get_latest_view_for_document(
         &self,
         id: &DocumentId,
     ) -> Result<Option<DocumentView>, DocumentStorageError> {
@@ -121,7 +121,7 @@ impl DocumentStore for MemoryStore {
     ///
     /// Returns a vector of `DocumentView`, or an empty vector if none were found. Returns
     /// an error when a fatal storage error occured.
-    async fn get_documents_by_schema(
+    async fn get_document_views_by_schema(
         &self,
         schema_id: &SchemaId,
     ) -> Result<Vec<DocumentView>, DocumentStorageError> {
@@ -300,7 +300,7 @@ mod tests {
 
         let document_view = db
             .store
-            .get_document_by_id(document.id())
+            .get_latest_view_for_document(document.id())
             .await
             .unwrap()
             .unwrap();
@@ -336,14 +336,14 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let document_view = db.store.get_document_by_id(document.id()).await.unwrap();
+        let document_view = db.store.get_latest_view_for_document(document.id()).await.unwrap();
 
         assert!(document_view.is_none());
     }
 
     #[rstest]
     #[tokio::test]
-    async fn get_documents_by_schema_deleted_document(
+    async fn get_document_views_by_schema_deleted_document(
         #[from(test_db)]
         #[with(10, 1, 1, true)]
         #[future]
@@ -365,7 +365,7 @@ mod tests {
 
         let document_views = db
             .store
-            .get_documents_by_schema(&constants::SCHEMA_ID.parse().unwrap())
+            .get_document_views_by_schema(&constants::SCHEMA_ID.parse().unwrap())
             .await
             .unwrap();
 
@@ -403,7 +403,7 @@ mod tests {
             let result = db.store.insert_document(&document).await;
             assert!(result.is_ok());
 
-            let document_view = db.store.get_document_by_id(document.id()).await.unwrap();
+            let document_view = db.store.get_latest_view_for_document(document.id()).await.unwrap();
             assert!(document_view.is_some());
         }
     }
@@ -431,7 +431,7 @@ mod tests {
             db.store.insert_document(&document).await.unwrap();
         }
 
-        let schema_documents = db.store.get_documents_by_schema(&schema_id).await.unwrap();
+        let schema_documents = db.store.get_document_views_by_schema(&schema_id).await.unwrap();
 
         assert_eq!(schema_documents.len(), 2);
     }

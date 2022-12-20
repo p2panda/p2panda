@@ -41,7 +41,7 @@ pub trait DocumentStore {
     /// occured.
     ///
     /// Note: if no view for this document was found, it might have been deleted.
-    async fn get_document_by_id(
+    async fn get_latest_view_for_document(
         &self,
         id: &DocumentId,
     ) -> Result<Option<DocumentView>, DocumentStorageError>;
@@ -63,7 +63,7 @@ pub trait DocumentStore {
     ///
     /// Returns a vector of `DocumentView`, or an empty vector if none were found. Returns
     /// an error when a fatal storage error occured.  
-    async fn get_documents_by_schema(
+    async fn get_document_views_by_schema(
         &self,
         schema_id: &SchemaId,
     ) -> Result<Vec<DocumentView>, DocumentStorageError>;
