@@ -16,7 +16,10 @@ use crate::storage_provider::error::EntryStorageError;
 /// This trait should be implemented on the root storage provider struct. It's definitions make up
 /// the required methods for inserting and querying entries from storage.
 #[async_trait]
-pub trait EntryStore<Entry: AsEntry + AsEncodedEntry> {
+pub trait EntryStore {
+    /// An associated type representing an entry retrieved from storage.
+    type Entry: AsEntry + AsEncodedEntry + Into<P2pandaEntry>;
+
     /// Insert an entry into storage.
     ///
     /// No validation of the passed values occurs, this is assumed to have already happened
@@ -40,10 +43,10 @@ pub trait EntryStore<Entry: AsEntry + AsEncodedEntry> {
         public_key: &PublicKey,
         log_id: &LogId,
         seq_num: &SeqNum,
-    ) -> Result<Option<Entry>, EntryStorageError>;
+    ) -> Result<Option<Self::Entry>, EntryStorageError>;
 
     /// Get an entry by it's hash.
-    async fn get_entry_by_hash(&self, hash: &Hash) -> Result<Option<Entry>, EntryStorageError>;
+    async fn get_entry_by_hash(&self, hash: &Hash) -> Result<Option<Self::Entry>, EntryStorageError>;
 
     /// Get the latest Bamboo entry of public key's log.
     ///
@@ -54,7 +57,7 @@ pub trait EntryStore<Entry: AsEntry + AsEncodedEntry> {
         &self,
         public_key: &PublicKey,
         log_id: &LogId,
-    ) -> Result<Option<Entry>, EntryStorageError>;
+    ) -> Result<Option<Self::Entry>, EntryStorageError>;
 
     /// Get a vector of all entries of a given schema.
     ///
@@ -64,7 +67,7 @@ pub trait EntryStore<Entry: AsEntry + AsEncodedEntry> {
     async fn get_entries_by_schema(
         &self,
         schema: &SchemaId,
-    ) -> Result<Vec<Entry>, EntryStorageError>;
+    ) -> Result<Vec<Self::Entry>, EntryStorageError>;
 
     /// Get all entries of a log from a specified sequence number up to passed max number of entries.
     ///
@@ -76,7 +79,7 @@ pub trait EntryStore<Entry: AsEntry + AsEncodedEntry> {
         log_id: &LogId,
         seq_num: &SeqNum,
         max_number_of_entries: usize,
-    ) -> Result<Vec<Entry>, EntryStorageError>;
+    ) -> Result<Vec<Self::Entry>, EntryStorageError>;
 
     /// Get all entries which make up the certificate pool for the given entry.
     ///
@@ -88,5 +91,5 @@ pub trait EntryStore<Entry: AsEntry + AsEncodedEntry> {
         author_id: &PublicKey,
         log_id: &LogId,
         seq_num: &SeqNum,
-    ) -> Result<Vec<Entry>, EntryStorageError>;
+    ) -> Result<Vec<Self::Entry>, EntryStorageError>;
 }

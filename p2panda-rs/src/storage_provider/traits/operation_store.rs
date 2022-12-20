@@ -13,7 +13,11 @@ use crate::storage_provider::error::OperationStorageError;
 /// This trait should be implemented on the root storage provider struct. It's definitions make up
 /// the required methods for inserting and querying operations from storage.
 #[async_trait]
-pub trait OperationStore<T: AsOperation + WithPublicKey + WithOperationId> {
+pub trait OperationStore {
+
+    /// An associated type representing an operation as it passes in and out of storage.
+    type Operation: AsOperation + WithOperationId + WithPublicKey;
+
     /// Insert an operation into the db.
     ///
     /// The passed operation must implement the `AsVerifiedOperation` trait. Errors when
@@ -33,7 +37,7 @@ pub trait OperationStore<T: AsOperation + WithPublicKey + WithOperationId> {
     async fn get_operation_by_id(
         &self,
         id: &OperationId,
-    ) -> Result<Option<T>, OperationStorageError>;
+    ) -> Result<Option<Self::Operation>, OperationStorageError>;
 
     /// Get the id of the document an operation is contained within.
     ///
@@ -52,5 +56,5 @@ pub trait OperationStore<T: AsOperation + WithPublicKey + WithOperationId> {
     async fn get_operations_by_document_id(
         &self,
         id: &DocumentId,
-    ) -> Result<Vec<T>, OperationStorageError>;
+    ) -> Result<Vec<Self::Operation>, OperationStorageError>;
 }

@@ -8,7 +8,7 @@ use crate::entry::{LogId, SeqNum};
 use crate::identity::PublicKey;
 use crate::operation::traits::AsOperation;
 use crate::storage_provider::error::{EntryStorageError, LogStorageError, OperationStorageError};
-use crate::storage_provider::traits::StorageProvider;
+use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 use crate::Human;
 
 /// Error type used in the validation module.
@@ -67,7 +67,7 @@ pub fn is_next_seq_num(
 /// - Retrieve the stored log id for the document id
 ///   - If found, ensure it matches the claimed log id
 ///   - If not found retrieve the next available log id for this public key and ensure that matches
-pub async fn verify_document_log_id<S: StorageProvider>(
+pub async fn verify_document_log_id<S: LogStore>(
     store: &S,
     public_key: &PublicKey,
     claimed_log_id: &LogId,
@@ -110,7 +110,7 @@ pub async fn verify_document_log_id<S: StorageProvider>(
 /// An error is returned if:
 /// - seq num 1 was passed in, which can not have a skiplink
 /// - the expected skiplink target could not be found in the database.
-pub async fn get_expected_skiplink<S: StorageProvider>(
+pub async fn get_expected_skiplink<S: EntryStore>(
     store: &S,
     public_key: &PublicKey,
     log_id: &LogId,
@@ -145,7 +145,7 @@ pub async fn get_expected_skiplink<S: StorageProvider>(
 /// Takes the following steps:
 /// - retrieve all operations for the given document id
 /// - ensure none of them contain a DELETE action
-pub async fn ensure_document_not_deleted<S: StorageProvider>(
+pub async fn ensure_document_not_deleted<S: OperationStore>(
     store: &S,
     document_id: &DocumentId,
 ) -> Result<(), ValidationError> {
@@ -162,7 +162,7 @@ pub async fn ensure_document_not_deleted<S: StorageProvider>(
 /// Takes the following steps:
 /// - retrieve the latest log id for the given public key
 /// - safely increment it by 1
-pub async fn next_log_id<S: StorageProvider>(
+pub async fn next_log_id<S: LogStore>(
     store: &S,
     public_key: &PublicKey,
 ) -> Result<LogId, ValidationError> {
@@ -198,7 +198,7 @@ pub fn increment_log_id(log_id: &mut LogId) -> Result<LogId, ValidationError> {
 ///
 /// - any of the operations contained in the view id _don't_ exist in the store
 /// - any of the operations contained in the view id return a different document id than any of the others
-pub async fn get_checked_document_id_for_view_id<S: StorageProvider>(
+pub async fn get_checked_document_id_for_view_id<S: OperationStore>(
     store: &S,
     view_id: &DocumentViewId,
 ) -> Result<DocumentId, ValidationError> {

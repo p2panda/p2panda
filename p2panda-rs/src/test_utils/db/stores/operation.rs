@@ -12,7 +12,9 @@ use crate::storage_provider::traits::OperationStore;
 use crate::test_utils::db::{MemoryStore, PublishedOperation};
 
 #[async_trait]
-impl OperationStore<PublishedOperation> for MemoryStore {
+impl OperationStore for MemoryStore {
+    type Operation = PublishedOperation;
+    
     async fn insert_operation(
         &self,
         id: &OperationId,

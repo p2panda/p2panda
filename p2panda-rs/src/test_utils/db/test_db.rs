@@ -12,7 +12,7 @@ use crate::operation::encode::encode_operation;
 use crate::operation::traits::Actionable;
 use crate::operation::{Operation, OperationAction, OperationBuilder, OperationValue};
 use crate::schema::Schema;
-use crate::storage_provider::traits::StorageProvider;
+use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 use crate::storage_provider::utils::Result;
 use crate::test_utils::constants;
 use crate::test_utils::db::{EntryArgsResponse, MemoryStore};
@@ -203,7 +203,7 @@ pub fn test_key_pairs(no_of_public_keys: usize) -> Vec<KeyPair> {
 /// Passed parameters define what the db should contain. The first entry in each log contains a
 /// valid CREATE operation following entries contain duplicate UPDATE operations. If the
 /// with_delete flag is set to true the last entry in all logs contain be a DELETE operation.
-pub async fn populate_store<S: StorageProvider>(
+pub async fn populate_store<S: EntryStore + LogStore + OperationStore>(
     store: &S,
     config: &PopulateDatabaseConfig,
 ) -> (Vec<KeyPair>, Vec<DocumentId>) {
@@ -259,7 +259,7 @@ pub async fn populate_store<S: StorageProvider>(
 }
 
 /// Helper method for publishing an operation encoded on an entry to a store.
-pub async fn send_to_store<S: StorageProvider>(
+pub async fn send_to_store<S: EntryStore + LogStore + OperationStore>(
     store: &S,
     operation: &Operation,
     schema: &Schema,

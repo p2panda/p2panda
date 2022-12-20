@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Implementations of all `StorageProvider` traits.
+//! Implementations of all storage provider traits.
 //!
 //! Used in the mock node and for testing.
 pub mod domain;

@@ -17,7 +17,7 @@ use crate::operation::traits::AsOperation;
 use crate::operation::validate::validate_operation_with_entry;
 use crate::operation::{EncodedOperation, OperationAction};
 use crate::schema::Schema;
-use crate::storage_provider::traits::StorageProvider;
+use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 use crate::storage_provider::utils::Result;
 use crate::test_utils::db::validation::{
     ensure_document_not_deleted, get_expected_skiplink, increment_seq_num, is_next_seq_num,
@@ -61,7 +61,7 @@ use super::validation::get_checked_document_id_for_view_id;
 /// - get the latest seq num for this public key and log and safely increment
 ///
 /// Finally, return next arguments
-pub async fn next_args<S: StorageProvider>(
+pub async fn next_args<S: EntryStore + LogStore + OperationStore>(
     store: &S,
     public_key: &PublicKey,
     document_view_id: Option<&DocumentViewId>,
@@ -206,7 +206,7 @@ pub async fn next_args<S: StorageProvider>(
 /// - Store the operation.
 ///
 /// ## Compute and return next entry arguments
-pub async fn publish<S: StorageProvider>(
+pub async fn publish<S: EntryStore + LogStore + OperationStore>(
     store: &S,
     schema: &Schema,
     encoded_entry: &EncodedEntry,
@@ -308,7 +308,9 @@ pub async fn publish<S: StorageProvider>(
 
     // If this is the first entry in a new log we insert it here.
     if entry.seq_num().is_first() {
-        store.insert_log(log_id, public_key, &operation.schema_id(), &document_id).await?;
+        store
+            .insert_log(log_id, public_key, &operation.schema_id(), &document_id)
+            .await?;
     }
 
     /////////////////////////////////////

@@ -17,7 +17,9 @@ use crate::test_utils::db::{MemoryStore, StorageEntry};
 
 /// Implement `EntryStore` trait on `MemoryStore`
 #[async_trait]
-impl EntryStore<StorageEntry> for MemoryStore {
+impl EntryStore for MemoryStore {
+    type Entry = StorageEntry;
+    
     /// Insert an entry into storage.
     async fn insert_entry(
         &self,
