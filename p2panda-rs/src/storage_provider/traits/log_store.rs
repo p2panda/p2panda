@@ -33,9 +33,6 @@ pub trait LogStore {
         document_id: &DocumentId,
     ) -> Result<Option<LogId>, LogStorageError>;
 
-    /// Determines the next unused log id for a public key.
-    async fn next_log_id(&self, public_key: &PublicKey) -> Result<LogId, LogStorageError>;
-
     /// Determines the latest used log id for a public key.
     ///
     /// Returns None when no log has been used yet.

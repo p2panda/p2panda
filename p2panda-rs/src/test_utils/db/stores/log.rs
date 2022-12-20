@@ -52,14 +52,6 @@ impl LogStore for MemoryStore {
         Ok(log_id.cloned())
     }
 
-    async fn next_log_id(&self, public_key: &PublicKey) -> Result<LogId, LogStorageError> {
-        let logs = self.logs.lock().unwrap();
-
-        let public_key_logs = logs.values().filter(|(pk, _, _, _)| pk == public_key);
-        let next_log_id = public_key_logs.count();
-        Ok(LogId::new(next_log_id as u64))
-    }
-
     async fn latest_log_id(
         &self,
         public_key: &PublicKey,
@@ -109,25 +101,6 @@ mod tests {
 
         assert!(log_id.is_ok());
         assert_eq!(log_id.unwrap().unwrap(), LogId::default())
-    }
-
-    #[rstest]
-    #[tokio::test]
-    async fn get_next_log_id(key_pair: KeyPair, schema_id: SchemaId, document_id: DocumentId) {
-        // Instantiate a new store.
-        let store = MemoryStore::default();
-
-        let public_key = key_pair.public_key();
-        let log_id = store.next_log_id(&public_key).await.unwrap();
-        assert_eq!(log_id, LogId::default());
-
-        assert!(store
-            .insert_log(&LogId::default(), &public_key, &schema_id, &document_id)
-            .await
-            .is_ok());
-
-        let log_id = store.next_log_id(&public_key).await.unwrap();
-        assert_eq!(log_id, LogId::new(1));
     }
 
     #[rstest]
