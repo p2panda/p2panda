@@ -97,7 +97,7 @@ mod tests {
     use crate::identity::{KeyPair, PublicKey};
     use crate::operation::traits::{AsOperation, WithOperationId, WithPublicKey};
     use crate::operation::{Operation, OperationId};
-    use crate::storage_provider::traits::{EntryStore, StorageProvider};
+    use crate::storage_provider::traits::{EntryStore, DocumentStore};
     use crate::test_utils::constants;
     use crate::test_utils::db::test_db::{test_db, TestDatabase};
     use crate::test_utils::fixtures::{

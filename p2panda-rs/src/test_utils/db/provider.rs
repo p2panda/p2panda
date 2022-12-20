@@ -7,13 +7,11 @@ use async_trait::async_trait;
 
 use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
 use crate::entry::LogId;
-use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::hash::Hash;
 use crate::identity::PublicKey;
 use crate::operation::OperationId;
 use crate::schema::SchemaId;
 use crate::storage_provider::traits::StorageProvider;
-use crate::storage_provider::utils::Result;
 use crate::test_utils::db::{PublishedOperation, StorageEntry};
 
 type PublickeyLogId = String;
@@ -45,25 +43,4 @@ impl StorageProvider for MemoryStore {
     type Entry = StorageEntry;
 
     type Operation = PublishedOperation;
-
-    async fn get_document_by_entry(&self, entry_hash: &Hash) -> Result<Option<DocumentId>> {
-        let entries = self.entries.lock().unwrap();
-
-        let entry = entries
-            .iter()
-            .find(|(_, entry)| entry.hash() == *entry_hash);
-
-        let entry = match entry {
-            Some((_, entry)) => entry,
-            None => return Ok(None),
-        };
-
-        let logs = self.logs.lock().unwrap();
-
-        let log = logs.iter().find(|(_, (public_key, log_id, _, _))| {
-            log_id == entry.log_id() && public_key == entry.public_key()
-        });
-
-        Ok(log.map(|(_, (_, _, _, document_id))| document_id.to_owned()))
-    }
 }

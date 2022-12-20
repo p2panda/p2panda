@@ -8,7 +8,6 @@ use crate::operation::traits::{AsOperation, WithOperationId, WithPublicKey};
 use crate::storage_provider::traits::{
     DocumentStore, EntryStore, EntryWithOperation, LogStore, OperationStore,
 };
-use crate::storage_provider::utils::Result;
 
 /// Trait which handles all high level storage queries and insertions.
 // @TODO: we no longer have any high level API methods living here, we can move

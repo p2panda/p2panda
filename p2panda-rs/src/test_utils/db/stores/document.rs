@@ -4,6 +4,8 @@ use async_trait::async_trait;
 use log::debug;
 
 use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
+use crate::entry::traits::{AsEncodedEntry, AsEntry};
+use crate::hash::Hash;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::DocumentStorageError;
 use crate::storage_provider::traits::DocumentStore;
@@ -89,6 +91,30 @@ impl DocumentStore for MemoryStore {
             Some(document) => Ok(document.view().map(|view| view.to_owned())),
             None => Ok(None),
         }
+    }
+
+    async fn get_document_by_entry(
+        &self,
+        entry_hash: &Hash,
+    ) -> Result<Option<DocumentId>, DocumentStorageError> {
+        let entries = self.entries.lock().unwrap();
+
+        let entry = entries
+            .iter()
+            .find(|(_, entry)| entry.hash() == *entry_hash);
+
+        let entry = match entry {
+            Some((_, entry)) => entry,
+            None => return Ok(None),
+        };
+
+        let logs = self.logs.lock().unwrap();
+
+        let log = logs.iter().find(|(_, (public_key, log_id, _, _))| {
+            log_id == entry.log_id() && public_key == entry.public_key()
+        });
+
+        Ok(log.map(|(_, (_, _, _, document_id))| document_id.to_owned()))
     }
 
     /// Get the most recent view for all documents which follow the passed schema.
