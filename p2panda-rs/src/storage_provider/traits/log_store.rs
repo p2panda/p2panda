@@ -5,17 +5,23 @@ use async_trait::async_trait;
 use crate::document::DocumentId;
 use crate::entry::LogId;
 use crate::identity::PublicKey;
+use crate::schema::SchemaId;
 use crate::storage_provider::error::LogStorageError;
-use crate::storage_provider::traits::AsStorageLog;
 
-/// Trait which handles all storage actions relating to `StorageLog`s.
+/// Trait which defines storage actions relating to logs.
 ///
 /// This trait should be implemented on the root storage provider struct. It's definitions
 /// make up the required methods for inserting and querying logs from storage.
 #[async_trait]
-pub trait LogStore<StorageLog: AsStorageLog> {
+pub trait LogStore {
     /// Insert a log into storage.
-    async fn insert_log(&self, value: StorageLog) -> Result<bool, LogStorageError>;
+    async fn insert_log(
+        &self,
+        log_id: &LogId,
+        public_key: &PublicKey,
+        schema: &SchemaId,
+        document: &DocumentId,
+    ) -> Result<bool, LogStorageError>;
 
     /// Get a log from storage
     async fn get(
