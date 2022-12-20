@@ -3,7 +3,6 @@
 use async_trait::async_trait;
 
 use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
-use crate::hash::Hash;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::DocumentStorageError;
 
@@ -45,19 +44,6 @@ pub trait DocumentStore {
         &self,
         id: &DocumentId,
     ) -> Result<Option<DocumentView>, DocumentStorageError>;
-
-    /// Returns the related document for any entry.
-    ///
-    /// Every entry is part of a document and, through that, associated with a specific log id used
-    /// by this document and public key. This method returns that document id by looking up the log
-    /// that the entry was stored in.
-    ///
-    /// If the passed entry cannot be found, or it's associated document doesn't exist yet, `None`
-    /// is returned.
-    async fn get_document_by_entry(
-        &self,
-        entry_hash: &Hash,
-    ) -> Result<Option<DocumentId>, DocumentStorageError>;
 
     /// Get the most recent view for all documents which follow the passed schema.
     ///

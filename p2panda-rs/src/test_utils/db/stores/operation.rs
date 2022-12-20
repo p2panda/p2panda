@@ -14,7 +14,7 @@ use crate::test_utils::db::{MemoryStore, PublishedOperation};
 #[async_trait]
 impl OperationStore for MemoryStore {
     type Operation = PublishedOperation;
-    
+
     async fn insert_operation(
         &self,
         id: &OperationId,
@@ -99,7 +99,7 @@ mod tests {
     use crate::identity::{KeyPair, PublicKey};
     use crate::operation::traits::{AsOperation, WithOperationId, WithPublicKey};
     use crate::operation::{Operation, OperationId};
-    use crate::storage_provider::traits::{EntryStore, DocumentStore};
+    use crate::storage_provider::traits::EntryStore;
     use crate::test_utils::constants;
     use crate::test_utils::db::test_db::{test_db, TestDatabase};
     use crate::test_utils::fixtures::{
@@ -255,7 +255,7 @@ mod tests {
 
         let document_id = db
             .store
-            .get_document_by_entry(&latest_entry.hash())
+            .get_document_by_operation_id(&latest_entry.hash().into())
             .await
             .unwrap()
             .unwrap();
