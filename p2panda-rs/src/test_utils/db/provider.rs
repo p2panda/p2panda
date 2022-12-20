@@ -6,16 +6,18 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 
 use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
+use crate::entry::LogId;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::hash::Hash;
+use crate::identity::PublicKey;
 use crate::operation::OperationId;
 use crate::schema::SchemaId;
-use crate::storage_provider::traits::AsStorageLog;
 use crate::storage_provider::traits::StorageProvider;
 use crate::storage_provider::utils::Result;
-use crate::test_utils::db::{PublishedOperation, StorageEntry, StorageLog};
+use crate::test_utils::db::{PublishedOperation, StorageEntry};
 
-type AuthorPlusLogId = String;
+type PublickeyLogId = String;
+type Log = (PublicKey, LogId, SchemaId, DocumentId);
 
 /// An in-memory implementation of p2panda storage provider traits.
 ///
@@ -23,7 +25,7 @@ type AuthorPlusLogId = String;
 #[derive(Default, Debug, Clone)]
 pub struct MemoryStore {
     /// Stored logs
-    pub logs: Arc<Mutex<HashMap<AuthorPlusLogId, StorageLog>>>,
+    pub logs: Arc<Mutex<HashMap<PublickeyLogId, Log>>>,
 
     /// Stored entries
     pub entries: Arc<Mutex<HashMap<Hash, StorageEntry>>>,
@@ -42,8 +44,6 @@ pub struct MemoryStore {
 impl StorageProvider for MemoryStore {
     type Entry = StorageEntry;
 
-    type StorageLog = StorageLog;
-
     type Operation = PublishedOperation;
 
     async fn get_document_by_entry(&self, entry_hash: &Hash) -> Result<Option<DocumentId>> {
@@ -60,10 +60,10 @@ impl StorageProvider for MemoryStore {
 
         let logs = self.logs.lock().unwrap();
 
-        let log = logs.iter().find(|(_, log)| {
-            &log.id() == entry.log_id() && &log.public_key() == entry.public_key()
+        let log = logs.iter().find(|(_, (public_key, log_id, _, _))| {
+            log_id == entry.log_id() && public_key == entry.public_key()
         });
 
-        Ok(log.map(|(_, log)| log.document_id()))
+        Ok(log.map(|(_, (_, _, _, document_id))| document_id.to_owned()))
     }
 }

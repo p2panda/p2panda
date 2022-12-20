@@ -17,7 +17,7 @@ use crate::operation::traits::AsOperation;
 use crate::operation::validate::validate_operation_with_entry;
 use crate::operation::{EncodedOperation, OperationAction};
 use crate::schema::Schema;
-use crate::storage_provider::traits::{AsStorageLog, StorageProvider};
+use crate::storage_provider::traits::StorageProvider;
 use crate::storage_provider::utils::Result;
 use crate::test_utils::db::validation::{
     ensure_document_not_deleted, get_expected_skiplink, increment_seq_num, is_next_seq_num,
@@ -105,7 +105,7 @@ pub async fn next_args<S: StorageProvider>(
     /////////////////////////
 
     // Retrieve the log_id for the found document_id and public key.
-    let log_id = store.get(public_key, &document_id).await?;
+    let log_id = store.get_log_id(public_key, &document_id).await?;
 
     // Check if an existing log id was found for this public key and document.
     match log_id {
@@ -308,9 +308,7 @@ pub async fn publish<S: StorageProvider>(
 
     // If this is the first entry in a new log we insert it here.
     if entry.seq_num().is_first() {
-        let log = S::StorageLog::new(public_key, &operation.schema_id(), &document_id, log_id);
-
-        store.insert_log(log).await?;
+        store.insert_log(log_id, public_key, &operation.schema_id(), &document_id).await?;
     }
 
     /////////////////////////////////////

@@ -74,7 +74,7 @@ pub async fn verify_document_log_id<S: StorageProvider>(
     document_id: &DocumentId,
 ) -> Result<(), ValidationError> {
     // Check if there is a log id registered for this document and public key already in the store.
-    match store.get(public_key, document_id).await? {
+    match store.get_log_id(public_key, document_id).await? {
         Some(expected_log_id) => {
             // If there is, check it matches the log id encoded in the entry
             if *claimed_log_id != expected_log_id {

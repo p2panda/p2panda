@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use lipmaa_link::get_lipmaa_links_back_to;
 use log::debug;
 
+use crate::document::DocumentId;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::hash::Hash;
@@ -11,8 +12,8 @@ use crate::identity::PublicKey;
 use crate::operation::EncodedOperation;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::EntryStorageError;
-use crate::storage_provider::traits::{AsStorageLog, EntryStore};
-use crate::test_utils::db::{MemoryStore, StorageEntry, StorageLog};
+use crate::storage_provider::traits::EntryStore;
+use crate::test_utils::db::{MemoryStore, StorageEntry};
 
 /// Implement `EntryStore` trait on `MemoryStore`
 #[async_trait]
@@ -116,15 +117,15 @@ impl EntryStore<StorageEntry> for MemoryStore {
         let entries = self.entries.lock().unwrap();
         let logs = self.logs.lock().unwrap();
 
-        let schema_logs: Vec<&StorageLog> = logs
+        let schema_logs: Vec<&(PublicKey, LogId, SchemaId, DocumentId)> = logs
             .iter()
-            .filter(|(_, log)| log.schema_id() == *schema)
+            .filter(|(_, (_, _, schema_id, _))| schema_id == schema)
             .map(|(_, log)| log)
             .collect();
 
         let entries: Vec<StorageEntry> = entries
             .iter()
-            .filter(|(_, entry)| schema_logs.iter().any(|log| &log.id() == entry.log_id()))
+            .filter(|(_, entry)| schema_logs.iter().any(|(_, log_id, _, _)| log_id == entry.log_id()))
             .map(|(_, entry)| entry.to_owned())
             .collect();
 
@@ -169,9 +170,9 @@ mod tests {
     use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::schema::SchemaId;
-    use crate::storage_provider::traits::{AsStorageLog, EntryStore, LogStore};
+    use crate::storage_provider::traits::{EntryStore, LogStore};
     use crate::test_utils::db::test_db::{test_db, TestDatabase};
-    use crate::test_utils::db::{MemoryStore, StorageLog};
+    use crate::test_utils::db::MemoryStore;
     use crate::test_utils::fixtures::{encoded_entry, key_pair, schema_id};
 
     #[rstest]
@@ -256,12 +257,12 @@ mod tests {
 
         // Insert a log for this entry into the store.
         store
-            .insert_log(StorageLog::new(
+            .insert_log(
+                entry.log_id(),
                 entry.public_key(),
                 &schema_id,
                 &encoded_entry.hash().into(),
-                entry.log_id(),
-            ))
+            )
             .await
             .unwrap();
 
