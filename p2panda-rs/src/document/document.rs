@@ -8,9 +8,12 @@ use crate::document::materialization::{build_graph, reduce};
 use crate::document::{DocumentId, DocumentView, DocumentViewId};
 use crate::identity::PublicKey;
 use crate::operation::traits::{AsOperation, WithOperationId, WithPublicKey};
+use crate::operation::OperationValue;
 use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::Human;
+
+use super::DocumentViewValue;
 
 /// Flag to indicate if document was edited by at least one author.
 pub type IsEdited = bool;
@@ -50,6 +53,14 @@ impl Document {
     /// Get the document id.
     pub fn id(&self) -> &DocumentId {
         &self.id
+    }
+
+    /// Get the value for a field on this document.
+    pub fn get(&self, key: &str) -> Option<&OperationValue> {
+        if let Some(view) = self.view() {
+            return view.get(key).map(|view_value| view_value.value());
+        }
+        None
     }
 
     /// Get the document view id.

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Errors from storage provider and associated traits.
+use crate::document::error::DocumentBuilderError;
 use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::error::{LogIdError, SeqNumError, ValidateEntryError};
 use crate::hash::error::HashError;
@@ -124,4 +125,16 @@ pub enum DocumentStorageError {
     /// Error which originates in `insert_document()` when the insertion fails.
     #[error("Error occured when inserting a document with id {0:?} into storage")]
     DocumentInsertionError(DocumentId),
+
+    /// Error returned from validating p2panda-rs `Operation` data types.
+    #[error(transparent)]
+    OperationValidation(#[from] ValidateOperationError),
+
+    /// Error returned from `OperationStorage`.
+    #[error(transparent)]
+    OperationStorageError(#[from] OperationStorageError),
+
+    /// Error returned from `DocumentBuilder`.
+    #[error(transparent)]
+    DocumentBuilderError(#[from] DocumentBuilderError),
 }
