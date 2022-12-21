@@ -1252,7 +1252,7 @@ mod tests {
 
         // try and get the MAX_SEQ_NUM entry again (it shouldn't be there)
         let entry_at_max_seq_num = store
-            .get_entry_by_hash(&encoded_entry.hash())
+            .get_entry(&encoded_entry.hash())
             .await
             .unwrap();
 

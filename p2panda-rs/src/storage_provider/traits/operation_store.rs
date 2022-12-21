@@ -34,7 +34,7 @@ pub trait OperationStore {
     ///
     /// Returns a type implementing `AsVerifiedOperation` which includes `PublicKey`, `DocumentId` and
     /// `OperationId` metadata.
-    async fn get_operation_by_id(
+    async fn get_operation(
         &self,
         id: &OperationId,
     ) -> Result<Option<Self::Operation>, OperationStorageError>;

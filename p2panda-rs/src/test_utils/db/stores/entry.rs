@@ -41,7 +41,7 @@ impl EntryStore for MemoryStore {
     }
 
     /// Get an entry by it's hash id.
-    async fn get_entry_by_hash(
+    async fn get_entry(
         &self,
         hash: &Hash,
     ) -> Result<Option<StorageEntry>, EntryStorageError> {
@@ -276,7 +276,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn get_entry_by_hash(
+    async fn get_entry(
         #[from(test_db)]
         #[with(3, 1, 1)]
         #[future]
@@ -303,7 +303,7 @@ mod tests {
         assert_eq!(
             *entry_one,
             db.store
-                .get_entry_by_hash(&entry_one.hash())
+                .get_entry(&entry_one.hash())
                 .await
                 .unwrap()
                 .unwrap()
@@ -311,7 +311,7 @@ mod tests {
         assert_eq!(
             *entry_two,
             db.store
-                .get_entry_by_hash(&entry_two.hash())
+                .get_entry(&entry_two.hash())
                 .await
                 .unwrap()
                 .unwrap()
@@ -319,7 +319,7 @@ mod tests {
         assert_eq!(
             *entry_three,
             db.store
-                .get_entry_by_hash(&entry_three.hash())
+                .get_entry(&entry_three.hash())
                 .await
                 .unwrap()
                 .unwrap()

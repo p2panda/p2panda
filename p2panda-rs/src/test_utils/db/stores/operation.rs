@@ -48,7 +48,7 @@ impl OperationStore for MemoryStore {
     ///
     /// Returns a type implementing `AsVerifiedOperation` which includes `PublicKey`, `DocumentId` and
     /// `OperationId` metadata.
-    async fn get_operation_by_id(
+    async fn get_operation(
         &self,
         id: &OperationId,
     ) -> Result<Option<PublishedOperation>, OperationStorageError> {
@@ -137,7 +137,7 @@ mod tests {
         // Request the previously inserted operation by it's id.
         let returned_operation = db
             .store
-            .get_operation_by_id(&operation_id)
+            .get_operation(&operation_id)
             .await
             .unwrap()
             .unwrap();

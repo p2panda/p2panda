@@ -46,7 +46,7 @@ pub trait EntryStore {
     ) -> Result<Option<Self::Entry>, EntryStorageError>;
 
     /// Get an entry by it's hash.
-    async fn get_entry_by_hash(&self, hash: &Hash) -> Result<Option<Self::Entry>, EntryStorageError>;
+    async fn get_entry(&self, hash: &Hash) -> Result<Option<Self::Entry>, EntryStorageError>;
 
     /// Get the latest Bamboo entry of public key's log.
     ///
