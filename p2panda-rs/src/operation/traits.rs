@@ -18,7 +18,7 @@ pub trait WithPublicKey {
 /// Trait representing the id of an "operation-like" struct.
 ///
 /// Returns an operation's id which is derived from the hash of the entry it was published with.
-pub trait WithOperationID {
+pub trait WithOperationId {
     /// Returns the identifier for this operation.
     fn id(&self) -> &OperationId;
 }

@@ -5,7 +5,7 @@ use log::debug;
 
 use crate::document::DocumentId;
 use crate::identity::PublicKey;
-use crate::operation::traits::{AsOperation, WithOperationID};
+use crate::operation::traits::{AsOperation, WithOperationId};
 use crate::operation::{Operation, OperationId};
 use crate::storage_provider::error::OperationStorageError;
 use crate::storage_provider::traits::OperationStore;
@@ -95,7 +95,7 @@ mod tests {
     use crate::entry::traits::AsEncodedEntry;
     use crate::entry::LogId;
     use crate::identity::{KeyPair, PublicKey};
-    use crate::operation::traits::{AsOperation, WithOperationID, WithPublicKey};
+    use crate::operation::traits::{AsOperation, WithOperationId, WithPublicKey};
     use crate::operation::{Operation, OperationId};
     use crate::storage_provider::traits::{EntryStore, StorageProvider};
     use crate::test_utils::constants;

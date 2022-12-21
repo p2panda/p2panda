@@ -2,7 +2,7 @@
 
 use crate::document::DocumentViewId;
 use crate::identity::PublicKey;
-use crate::operation::traits::{AsOperation, WithOperationID, WithPublicKey};
+use crate::operation::traits::{AsOperation, WithOperationId, WithPublicKey};
 use crate::operation::{
     Operation, OperationAction, OperationFields, OperationId, OperationVersion,
 };
@@ -19,7 +19,7 @@ impl WithPublicKey for PublishedOperation {
     }
 }
 
-impl WithOperationID for PublishedOperation {
+impl WithOperationId for PublishedOperation {
     /// Returns the identifier for this operation.
     fn id(&self) -> &OperationId {
         &self.0

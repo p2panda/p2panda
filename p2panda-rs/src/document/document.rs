@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
-use std::fmt::Debug;
-use std::fmt::Display;
+use std::fmt::{Display, Debug};
 
 use crate::document::error::DocumentBuilderError;
 use crate::document::materialization::{build_graph, reduce};
 use crate::document::{DocumentId, DocumentView, DocumentViewId};
 use crate::identity::PublicKey;
-use crate::operation::traits::{AsOperation, WithOperationID, WithPublicKey};
+use crate::operation::traits::{AsOperation, WithOperationId, WithPublicKey};
 use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::Human;
@@ -104,7 +103,7 @@ impl Human for Document {
 
 impl<T> TryFrom<Vec<&T>> for Document
 where
-    T: AsOperation + WithOperationID + WithPublicKey,
+    T: AsOperation + WithOperationId + WithPublicKey,
 {
     type Error = DocumentBuilderError;
 
@@ -116,7 +115,7 @@ where
 
 impl<T> TryFrom<&Vec<T>> for Document
 where
-    T: AsOperation + WithOperationID + WithPublicKey,
+    T: AsOperation + WithOperationId + WithPublicKey,
 {
     type Error = DocumentBuilderError;
 
@@ -254,7 +253,7 @@ impl DocumentBuilder {
 
 impl<T> From<Vec<&T>> for DocumentBuilder
 where
-    T: AsOperation + WithOperationID + WithPublicKey,
+    T: AsOperation + WithOperationId + WithPublicKey,
 {
     fn from(operations: Vec<&T>) -> Self {
         let operations = operations
@@ -280,7 +279,7 @@ where
 
 impl<T> From<&Vec<T>> for DocumentBuilder
 where
-    T: AsOperation + WithOperationID + WithPublicKey,
+    T: AsOperation + WithOperationId + WithPublicKey,
 {
     fn from(operations: &Vec<T>) -> Self {
         let operations = operations
@@ -315,7 +314,7 @@ mod tests {
     };
     use crate::entry::traits::AsEncodedEntry;
     use crate::identity::KeyPair;
-    use crate::operation::traits::WithOperationID;
+    use crate::operation::traits::WithOperationId;
     use crate::operation::{OperationAction, OperationBuilder, OperationId, OperationValue};
     use crate::schema::{FieldType, Schema, SchemaId};
     use crate::test_utils::constants::{self, PRIVATE_KEY};

@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::document::DocumentId;
 use crate::identity::PublicKey;
-use crate::operation::traits::{AsOperation, WithOperationID, WithPublicKey};
+use crate::operation::traits::{AsOperation, WithOperationId, WithPublicKey};
 use crate::operation::{Operation, OperationId};
 use crate::storage_provider::error::OperationStorageError;
 
@@ -13,7 +13,7 @@ use crate::storage_provider::error::OperationStorageError;
 /// This trait should be implemented on the root storage provider struct. It's definitions make up
 /// the required methods for inserting and querying operations from storage.
 #[async_trait]
-pub trait OperationStore<T: AsOperation + WithPublicKey + WithOperationID> {
+pub trait OperationStore<T: AsOperation + WithPublicKey + WithOperationId> {
     /// Insert an operation into the db.
     ///
     /// The passed operation must implement the `AsVerifiedOperation` trait. Errors when
