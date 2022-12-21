@@ -60,7 +60,7 @@ impl OperationStore for MemoryStore {
     ///
     /// If no document was found, then this method returns a result wrapping
     /// a None variant.
-    async fn get_document_by_operation_id(
+    async fn get_document_id_by_operation_id(
         &self,
         id: &OperationId,
     ) -> Result<Option<DocumentId>, OperationStorageError> {
@@ -189,7 +189,7 @@ mod tests {
 
         assert!(db
             .store
-            .get_document_by_operation_id(&create_operation_id)
+            .get_document_id_by_operation_id(&create_operation_id)
             .await
             .unwrap()
             .is_none());
@@ -206,7 +206,7 @@ mod tests {
 
         assert_eq!(
             db.store
-                .get_document_by_operation_id(&create_operation_id)
+                .get_document_id_by_operation_id(&create_operation_id)
                 .await
                 .unwrap()
                 .unwrap(),
@@ -225,7 +225,7 @@ mod tests {
 
         assert_eq!(
             db.store
-                .get_document_by_operation_id(&update_operation_id)
+                .get_document_id_by_operation_id(&update_operation_id)
                 .await
                 .unwrap()
                 .unwrap(),
@@ -255,7 +255,7 @@ mod tests {
 
         let document_id = db
             .store
-            .get_document_by_operation_id(&latest_entry.hash().into())
+            .get_document_id_by_operation_id(&latest_entry.hash().into())
             .await
             .unwrap()
             .unwrap();

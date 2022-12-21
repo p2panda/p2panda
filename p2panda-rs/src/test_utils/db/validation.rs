@@ -205,7 +205,7 @@ pub async fn get_checked_document_id_for_view_id<S: OperationStore>(
     let mut found_document_ids: HashSet<DocumentId> = HashSet::new();
     for operation in view_id.iter() {
         // If any operation can't be found return an error at this point already.
-        let document_id = store.get_document_by_operation_id(operation).await?;
+        let document_id = store.get_document_id_by_operation_id(operation).await?;
 
         if document_id.is_none() {
             return Err(ValidationError::Custom(format!(

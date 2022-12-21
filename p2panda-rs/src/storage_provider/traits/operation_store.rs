@@ -43,7 +43,7 @@ pub trait OperationStore {
     ///
     /// If no document was found, then this method returns a result wrapping
     /// a None variant.
-    async fn get_document_by_operation_id(
+    async fn get_document_id_by_operation_id(
         &self,
         id: &OperationId,
     ) -> Result<Option<DocumentId>, OperationStorageError>;
