@@ -254,7 +254,7 @@ pub async fn publish<S: StorageProvider>(
     });
 
     // Perform validation of the entry and it's operation.
-    let operation = validate_operation_with_entry(
+    let (operation, operation_id) = validate_operation_with_entry(
         &entry,
         encoded_entry,
         skiplink_params.as_ref().map(|(entry, hash)| (entry, hash)),
@@ -352,7 +352,9 @@ pub async fn publish<S: StorageProvider>(
         .insert_entry(&entry, encoded_entry, Some(encoded_operation))
         .await?;
     // Insert the operation into the store.
-    store.insert_operation(&operation, &document_id).await?;
+    store
+        .insert_operation(&operation_id, public_key, &operation, &document_id)
+        .await?;
 
     Ok(next_args)
 }

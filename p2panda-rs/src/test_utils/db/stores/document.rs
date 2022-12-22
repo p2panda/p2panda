@@ -113,11 +113,14 @@ impl DocumentStore for MemoryStore {
 }
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
     use std::str::FromStr;
 
     use rstest::rstest;
 
-    use crate::document::{DocumentBuilder, DocumentView, DocumentViewFields, DocumentViewId};
+    use crate::document::{
+        Document, DocumentBuilder, DocumentView, DocumentViewFields, DocumentViewId,
+    };
     use crate::entry::traits::AsEncodedEntry;
     use crate::entry::{LogId, SeqNum};
     use crate::operation::traits::AsOperation;
@@ -126,6 +129,7 @@ mod tests {
     use crate::storage_provider::traits::{DocumentStore, EntryStore, OperationStore};
     use crate::test_utils::constants::{self, test_fields};
     use crate::test_utils::db::test_db::{test_db, TestDatabase};
+    use crate::test_utils::db::PublishedOperation;
     use crate::test_utils::fixtures::random_document_view_id;
 
     #[rstest]
@@ -219,13 +223,13 @@ mod tests {
         let db = db.await;
         let document_id = db.test_data.documents[0].clone();
 
-        let document_operations = db
+        let operations: Vec<PublishedOperation> = db
             .store
             .get_operations_by_document_id(&document_id)
             .await
             .unwrap();
 
-        let document = DocumentBuilder::new(document_operations).build().unwrap();
+        let document = Document::try_from(&operations).unwrap();
 
         let result = db.store.insert_document(&document).await;
 
@@ -257,14 +261,13 @@ mod tests {
         let db = db.await;
         let document_id = db.test_data.documents[0].clone();
 
-        let document_operations = db
+        let operations = db
             .store
             .get_operations_by_document_id(&document_id)
             .await
             .unwrap();
 
-        let document = DocumentBuilder::new(document_operations).build().unwrap();
-
+        let document = Document::try_from(&operations).unwrap();
         let result = db.store.insert_document(&document).await;
 
         assert!(result.is_ok());
@@ -295,13 +298,13 @@ mod tests {
         let db = db.await;
         let document_id = db.test_data.documents[0].clone();
 
-        let document_operations = db
+        let operations = db
             .store
             .get_operations_by_document_id(&document_id)
             .await
             .unwrap();
 
-        let document = DocumentBuilder::new(document_operations).build().unwrap();
+        let document = Document::try_from(&operations).unwrap();
 
         let result = db.store.insert_document(&document).await;
 
@@ -323,14 +326,13 @@ mod tests {
         let db = db.await;
         let document_id = db.test_data.documents[0].clone();
 
-        let document_operations = db
+        let operations = db
             .store
             .get_operations_by_document_id(&document_id)
             .await
             .unwrap();
 
-        let document = DocumentBuilder::new(document_operations).build().unwrap();
-
+        let document = Document::try_from(&operations).unwrap();
         let result = db.store.insert_document(&document).await;
 
         assert!(result.is_ok());
@@ -355,13 +357,13 @@ mod tests {
         let db = db.await;
         let document_id = db.test_data.documents[0].clone();
 
-        let document_operations = db
+        let operations = db
             .store
             .get_operations_by_document_id(&document_id)
             .await
             .unwrap();
 
-        let document = DocumentBuilder::new(document_operations).build().unwrap();
+        let document = Document::try_from(&operations).unwrap();
 
         let mut current_operations = Vec::new();
 
@@ -392,13 +394,13 @@ mod tests {
         let schema_id = SchemaId::from_str(constants::SCHEMA_ID).unwrap();
 
         for document_id in &db.test_data.documents {
-            let document_operations = db
+            let operations = db
                 .store
                 .get_operations_by_document_id(document_id)
                 .await
                 .unwrap();
 
-            let document = DocumentBuilder::new(document_operations).build().unwrap();
+            let document = Document::try_from(&operations).unwrap();
 
             db.store.insert_document(&document).await.unwrap();
         }

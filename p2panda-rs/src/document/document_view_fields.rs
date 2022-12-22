@@ -3,8 +3,8 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
-use crate::operation::traits::{AsOperation, AsVerifiedOperation};
-use crate::operation::{OperationFields, OperationId, OperationValue, VerifiedOperation};
+use crate::operation::traits::{AsOperation, WithOperationId};
+use crate::operation::{OperationFields, OperationId, OperationValue};
 
 /// The current value of a document fiew field as well as the id of the operation it came from.
 #[derive(Clone, Debug, PartialEq)]
@@ -95,8 +95,8 @@ impl Default for DocumentViewFields {
     }
 }
 
-impl From<VerifiedOperation> for DocumentViewFields {
-    fn from(operation: VerifiedOperation) -> Self {
+impl<T: AsOperation + WithOperationId> From<T> for DocumentViewFields {
+    fn from(operation: T) -> Self {
         let mut document_view_fields = DocumentViewFields::new();
 
         if let Some(fields) = operation.fields() {
@@ -114,9 +114,10 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::{DocumentViewFields, DocumentViewValue};
-    use crate::operation::traits::{AsOperation, AsVerifiedOperation};
-    use crate::operation::{OperationId, OperationValue, VerifiedOperation};
-    use crate::test_utils::fixtures::{random_operation_id, verified_operation};
+    use crate::operation::traits::{AsOperation, WithOperationId};
+    use crate::operation::{OperationId, OperationValue};
+    use crate::test_utils::db::PublishedOperation;
+    use crate::test_utils::fixtures::{published_operation, random_operation_id};
 
     #[rstest]
     fn construct_fields(#[from(random_operation_id)] value_id: OperationId) {
@@ -152,19 +153,19 @@ mod tests {
     }
 
     #[rstest]
-    fn from_meta_operation(verified_operation: VerifiedOperation) {
-        let document_view_fields = DocumentViewFields::from(verified_operation.clone());
-        let operation_fields = verified_operation.fields().unwrap();
+    fn from_published_operation(#[from(published_operation)] operation: PublishedOperation) {
+        let document_view_fields = DocumentViewFields::from(operation.clone());
+        let operation_fields = operation.fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
 
     #[rstest]
-    fn new_from_operation_fields(verified_operation: VerifiedOperation) {
+    fn new_from_operation_fields(#[from(published_operation)] operation: PublishedOperation) {
         let document_view_fields = DocumentViewFields::new_from_operation_fields(
-            verified_operation.id(),
-            &verified_operation.fields().unwrap(),
+            operation.id(),
+            &operation.fields().unwrap(),
         );
-        let operation_fields = verified_operation.fields().unwrap();
+        let operation_fields = operation.fields().unwrap();
         assert_eq!(document_view_fields.len(), operation_fields.len());
     }
 }

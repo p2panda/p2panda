@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Changed
+
+- Remove `VerifiedOperation` [#465](https://github.com/p2panda/p2panda/pull/465) `rs`
+
 ## [0.6.0] 🥞
 
 ### Changed

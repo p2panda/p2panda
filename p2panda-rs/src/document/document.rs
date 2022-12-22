@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::fmt::Display;
+use std::convert::TryFrom;
+use std::fmt::{Debug, Display};
 
 use crate::document::error::DocumentBuilderError;
 use crate::document::materialization::{build_graph, reduce};
 use crate::document::{DocumentId, DocumentView, DocumentViewId};
 use crate::identity::PublicKey;
-use crate::operation::traits::{AsOperation, AsVerifiedOperation};
-use crate::operation::{OperationId, VerifiedOperation};
+use crate::operation::traits::{AsOperation, WithOperationId, WithPublicKey};
+use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::Human;
 
@@ -26,7 +27,7 @@ pub struct DocumentMeta {
     edited: IsEdited,
 
     /// List of operations this document consists of.
-    operations: Vec<VerifiedOperation>,
+    operations: Vec<(OperationId, Operation, PublicKey)>,
 }
 
 /// A replicatable data type designed to handle concurrent updates in a way where all replicas
@@ -72,7 +73,7 @@ impl Document {
     }
 
     /// Get the operations contained in this document.
-    pub fn operations(&self) -> &Vec<VerifiedOperation> {
+    pub fn operations(&self) -> &Vec<(OperationId, Operation, PublicKey)> {
         &self.meta.operations
     }
 
@@ -100,59 +101,43 @@ impl Human for Document {
     }
 }
 
-/// A struct for building [documents][`Document`] from a collection of [operations with
-/// metadata][`crate::operation::VerifiedOperation`].
-///
-/// ## Example
-///
-/// ```
-/// # extern crate p2panda_rs;
-/// # #[cfg(test)]
-/// # mod tests {
-/// # use rstest::rstest;
-/// # use p2panda_rs::document::DocumentBuilder;
-/// # use p2panda_rs::operation::VerifiedOperation;
-/// # use p2panda_rs::test_utils::meta_operation;
-/// #
-/// # #[rstest]
-/// # fn main(#[from(meta_operation)] operation: VerifiedOperation) -> () {
-/// // You need a `Vec<VerifiedOperation>` that includes the `CREATE` operation
-/// let operations: Vec<VerifiedOperation> = vec![operation];
-///
-/// // Then you can make a `Document` from it
-/// let document = DocumentBuilder::new(operations).build();
-/// assert!(document.is_ok());
-/// # }
-/// # }
-/// ```
-#[derive(Debug, Clone)]
-pub struct DocumentBuilder {
-    /// All the operations present in this document.
-    operations: Vec<VerifiedOperation>,
+impl<T> TryFrom<Vec<&T>> for Document
+where
+    T: AsOperation + WithOperationId + WithPublicKey,
+{
+    type Error = DocumentBuilderError;
+
+    fn try_from(operations: Vec<&T>) -> Result<Self, Self::Error> {
+        let document_builder: DocumentBuilder = operations.into();
+        document_builder.build()
+    }
 }
+
+impl<T> TryFrom<&Vec<T>> for Document
+where
+    T: AsOperation + WithOperationId + WithPublicKey,
+{
+    type Error = DocumentBuilderError;
+
+    fn try_from(operations: &Vec<T>) -> Result<Self, Self::Error> {
+        let document_builder: DocumentBuilder = operations.into();
+        document_builder.build()
+    }
+}
+
+/// A struct for building [documents][`Document`] from a collection of operations.
+#[derive(Debug, Clone)]
+pub struct DocumentBuilder(Vec<(OperationId, Operation, PublicKey)>);
 
 impl DocumentBuilder {
     /// Instantiate a new `DocumentBuilder` from a collection of operations.
-    pub fn new<O: AsVerifiedOperation>(operations: Vec<O>) -> DocumentBuilder {
-        let operations = operations
-            .iter()
-            .map(|operation| VerifiedOperation {
-                id: operation.id().to_owned(),
-                version: operation.version(),
-                action: operation.action(),
-                schema_id: operation.schema_id(),
-                previous: operation.previous(),
-                fields: operation.fields(),
-                public_key: operation.public_key().to_owned(),
-            })
-            .collect();
-
-        Self { operations }
+    pub fn new(operations: Vec<(OperationId, Operation, PublicKey)>) -> Self {
+        Self(operations)
     }
 
     /// Get all operations for this document.
-    pub fn operations(&self) -> Vec<VerifiedOperation> {
-        self.operations.clone()
+    pub fn operations(&self) -> Vec<(OperationId, Operation, PublicKey)> {
+        self.0.clone()
     }
 
     /// Validates all contained operations and builds the document.
@@ -183,40 +168,41 @@ impl DocumentBuilder {
         document_view_id: Option<DocumentViewId>,
     ) -> Result<Document, DocumentBuilderError> {
         // Find CREATE operation
-        let mut collect_create_operation: Vec<VerifiedOperation> = self
+        let mut collect_create_operation: Vec<(OperationId, Operation, PublicKey)> = self
             .operations()
             .into_iter()
-            .filter(|op| op.is_create())
+            .filter(|(_, operation, _)| operation.is_create())
             .collect();
 
         // Check we have only one CREATE operation in the document
-        let create_operation = match collect_create_operation.len() {
-            0 => Err(DocumentBuilderError::NoCreateOperation),
-            1 => Ok(collect_create_operation.pop().unwrap()),
-            _ => Err(DocumentBuilderError::MoreThanOneCreateOperation),
-        }?;
+        let (create_operation_id, create_operation, create_operation_public_key) =
+            match collect_create_operation.len() {
+                0 => Err(DocumentBuilderError::NoCreateOperation),
+                1 => Ok(collect_create_operation.pop().unwrap()),
+                _ => Err(DocumentBuilderError::MoreThanOneCreateOperation),
+            }?;
 
         // Get the document schema
         let schema = create_operation.schema_id();
 
         // Get the document author (or rather, the public key of the author who created this
         // document)
-        let author = create_operation.public_key().to_owned();
+        let author = create_operation_public_key;
 
         // Check all operations match the document schema
         let schema_error = self
             .operations()
             .iter()
-            .any(|operation| operation.schema_id() != schema);
+            .any(|(_, operation, _)| operation.schema_id() != schema);
 
         if schema_error {
             return Err(DocumentBuilderError::OperationSchemaNotMatching);
         }
 
-        let document_id = DocumentId::new(&create_operation.id().clone());
+        let document_id = DocumentId::new(&create_operation_id);
 
         // Build the graph.
-        let mut graph = build_graph(&self.operations)?;
+        let mut graph = build_graph(&self.0)?;
 
         // If a specific document view was requested then trim the graph to that point.
         if let Some(id) = document_view_id {
@@ -230,7 +216,7 @@ impl DocumentBuilder {
         let graph_tips: Vec<OperationId> = sorted_graph_data
             .current_graph_tips()
             .iter()
-            .map(|operation| operation.id().to_owned())
+            .map(|(id, _, _)| id.to_owned())
             .collect();
 
         // Reduce the sorted operations into a single key value map
@@ -265,32 +251,85 @@ impl DocumentBuilder {
     }
 }
 
+impl<T> From<Vec<&T>> for DocumentBuilder
+where
+    T: AsOperation + WithOperationId + WithPublicKey,
+{
+    fn from(operations: Vec<&T>) -> Self {
+        let operations = operations
+            .iter()
+            .map(|operation| {
+                (
+                    operation.id().to_owned(),
+                    Operation {
+                        version: operation.version(),
+                        action: operation.action(),
+                        schema_id: operation.schema_id(),
+                        previous: operation.previous(),
+                        fields: operation.fields(),
+                    },
+                    operation.public_key().to_owned(),
+                )
+            })
+            .collect();
+
+        Self(operations)
+    }
+}
+
+impl<T> From<&Vec<T>> for DocumentBuilder
+where
+    T: AsOperation + WithOperationId + WithPublicKey,
+{
+    fn from(operations: &Vec<T>) -> Self {
+        let operations = operations
+            .iter()
+            .map(|operation| {
+                (
+                    operation.id().to_owned(),
+                    Operation {
+                        version: operation.version(),
+                        action: operation.action(),
+                        schema_id: operation.schema_id(),
+                        previous: operation.previous(),
+                        fields: operation.fields(),
+                    },
+                    operation.public_key().to_owned(),
+                )
+            })
+            .collect();
+
+        Self(operations)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::convert::TryInto;
+
     use rstest::rstest;
 
-    use crate::document::{DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue};
+    use crate::document::{
+        Document, DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue,
+    };
     use crate::entry::traits::AsEncodedEntry;
     use crate::identity::KeyPair;
-    use crate::operation::traits::AsVerifiedOperation;
-    use crate::operation::{
-        OperationAction, OperationBuilder, OperationId, OperationValue, VerifiedOperation,
-    };
+    use crate::operation::traits::WithOperationId;
+    use crate::operation::{OperationAction, OperationBuilder, OperationId, OperationValue};
     use crate::schema::{FieldType, Schema, SchemaId};
     use crate::test_utils::constants::{self, PRIVATE_KEY};
     use crate::test_utils::db::test_db::send_to_store;
-    use crate::test_utils::db::MemoryStore;
+    use crate::test_utils::db::{MemoryStore, PublishedOperation};
     use crate::test_utils::fixtures::{
-        operation_fields, random_document_view_id, schema, verified_operation,
+        operation_fields, published_operation, random_document_view_id, random_operation_id, schema,
     };
     use crate::Human;
 
     use super::DocumentBuilder;
 
     #[rstest]
-    fn string_representation(#[from(verified_operation)] operation: VerifiedOperation) {
-        let builder = DocumentBuilder::new(vec![operation]);
-        let document = builder.build().unwrap();
+    fn string_representation(#[from(published_operation)] operation: PublishedOperation) {
+        let document: Document = vec![&operation].try_into().unwrap();
 
         assert_eq!(
             document.to_string(),
@@ -418,15 +457,14 @@ mod tests {
             .await
             .unwrap();
 
-        let operations: Vec<VerifiedOperation> = store
-            .operations
-            .lock()
-            .unwrap()
+        let operations = store.operations.lock().unwrap();
+
+        let operations: Vec<&PublishedOperation> = operations
             .values()
-            .map(|(_, operation)| operation.to_owned())
+            .map(|(_, operation)| operation)
             .collect();
 
-        let document = DocumentBuilder::new(operations.clone()).build();
+        let document: Result<Document, _> = operations.clone().try_into();
 
         assert!(document.is_ok());
 
@@ -436,7 +474,7 @@ mod tests {
         let operation_order: Vec<OperationId> = document
             .operations()
             .iter()
-            .map(|op| op.id().to_owned())
+            .map(|(id, _, _)| id.to_owned())
             .collect();
 
         let mut exp_result = DocumentViewFields::new();
@@ -472,24 +510,24 @@ mod tests {
 
         // Multiple replicas receiving operations in different orders should resolve to same value.
 
-        let replica_1 = DocumentBuilder::new(vec![
-            operations[4].clone(),
-            operations[3].clone(),
-            operations[2].clone(),
-            operations[1].clone(),
-            operations[0].clone(),
-        ])
-        .build()
+        let replica_1: Document = vec![
+            operations[4],
+            operations[3],
+            operations[2],
+            operations[1],
+            operations[0],
+        ]
+        .try_into()
         .unwrap();
 
-        let replica_2 = DocumentBuilder::new(vec![
-            operations[2].clone(),
-            operations[1].clone(),
-            operations[0].clone(),
-            operations[4].clone(),
-            operations[3].clone(),
-        ])
-        .build()
+        let replica_2: Document = vec![
+            operations[2],
+            operations[1],
+            operations[0],
+            operations[4],
+            operations[3],
+        ]
+        .try_into()
         .unwrap();
 
         assert_eq!(
@@ -517,19 +555,17 @@ mod tests {
 
     #[rstest]
     fn must_have_create_operation(
-        #[from(verified_operation)]
+        #[from(published_operation)]
         #[with(
             Some(operation_fields(constants::test_fields())),
             constants::schema(),
             Some(random_document_view_id())
         )]
-        update_operation: VerifiedOperation,
+        update_operation: PublishedOperation,
     ) {
+        let document: Result<Document, _> = vec![&update_operation].try_into();
         assert_eq!(
-            DocumentBuilder::new(vec![update_operation])
-                .build()
-                .unwrap_err()
-                .to_string(),
+            document.unwrap_err().to_string(),
             "every document must contain one create operation".to_string()
         );
     }
@@ -537,22 +573,21 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn incorrect_previous_operations(
-        #[from(verified_operation)]
+        #[from(published_operation)]
         #[with(Some(operation_fields(constants::test_fields())), constants::schema())]
-        create_operation: VerifiedOperation,
-        #[from(verified_operation)]
+        create_operation: PublishedOperation,
+        #[from(published_operation)]
         #[with(
             Some(operation_fields(constants::test_fields())),
             constants::schema(),
             Some(random_document_view_id())
         )]
-        update_operation: VerifiedOperation,
+        update_operation: PublishedOperation,
     ) {
+        let document: Result<Document, _> = vec![&create_operation, &update_operation].try_into();
+
         assert_eq!(
-            DocumentBuilder::new(vec![create_operation, update_operation.clone()])
-                .build()
-                .unwrap_err()
-                .to_string(),
+            document.unwrap_err().to_string(),
             format!(
                 "operation {} cannot be connected to the document graph",
                 update_operation.id()
@@ -563,14 +598,14 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn operation_schemas_not_matching() {
-        let create_operation = verified_operation(
+        let create_operation = published_operation(
             Some(operation_fields(constants::test_fields())),
             constants::schema(),
             None,
             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
         );
 
-        let update_operation = verified_operation(
+        let update_operation = published_operation(
             Some(operation_fields(vec![
                 ("name", "is_cute".into()),
                 ("type", "bool".into()),
@@ -582,11 +617,10 @@ mod tests {
             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
         );
 
+        let document: Result<Document, _> = vec![&create_operation, &update_operation].try_into();
+
         assert_eq!(
-            DocumentBuilder::new(vec![create_operation, update_operation])
-                .build()
-                .unwrap_err()
-                .to_string(),
+            document.unwrap_err().to_string(),
             "all operations in a document must follow the same schema".to_string()
         );
     }
@@ -594,19 +628,19 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn is_deleted(
-        #[from(verified_operation)]
+        #[from(published_operation)]
         #[with(Some(operation_fields(constants::test_fields())), constants::schema())]
-        create_operation: VerifiedOperation,
+        create_operation: PublishedOperation,
     ) {
-        let delete_operation = verified_operation(
+        let delete_operation = published_operation(
             None,
             constants::schema(),
             Some(DocumentViewId::new(&[create_operation.id().to_owned()])),
             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
         );
 
-        let document = DocumentBuilder::new(vec![create_operation, delete_operation])
-            .build()
+        let document: Document = vec![&create_operation, &delete_operation]
+            .try_into()
             .unwrap();
 
         assert!(document.is_deleted());
@@ -615,12 +649,13 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn more_than_one_create(#[from(verified_operation)] create_operation: VerifiedOperation) {
+    async fn more_than_one_create(
+        #[from(published_operation)] create_operation: PublishedOperation,
+    ) {
+        let document: Result<Document, _> = vec![&create_operation, &create_operation].try_into();
+
         assert_eq!(
-            DocumentBuilder::new(vec![create_operation.clone(), create_operation])
-                .build()
-                .unwrap_err()
-                .to_string(),
+            document.unwrap_err().to_string(),
             "multiple CREATE operations found".to_string()
         );
     }
@@ -630,6 +665,8 @@ mod tests {
     async fn builds_specific_document_view(
         #[with(vec![("name".to_string(), FieldType::String)])] schema: Schema,
     ) {
+        let mut operations = Vec::new();
+
         let panda = KeyPair::new().public_key().to_owned();
         let penguin = KeyPair::new().public_key().to_owned();
 
@@ -638,19 +675,14 @@ mod tests {
         //
         // DOCUMENT: [panda_1]
 
-        let panda_operation_1 = OperationBuilder::new(schema.id())
+        let operation_1_id = random_operation_id();
+        let operation = OperationBuilder::new(schema.id())
             .action(OperationAction::Create)
             .fields(&[("name", OperationValue::String("Panda Cafe".to_string()))])
             .build()
             .unwrap();
 
-        let panda_operation_1 = VerifiedOperation::new(
-            &panda,
-            &panda_operation_1,
-            &"0020aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-                .parse()
-                .unwrap(),
-        );
+        operations.push((operation_1_id.clone(), operation, panda));
 
         // Panda publishes an UPDATE operation.
         // It contains the id of the previous operation in it's `previous` array
@@ -658,20 +690,15 @@ mod tests {
         // DOCUMENT: [panda_1]<--[panda_2]
         //
 
-        let panda_operation_2 = OperationBuilder::new(schema.id())
+        let operation_2_id = random_operation_id();
+        let operation = OperationBuilder::new(schema.id())
             .action(OperationAction::Update)
             .fields(&[("name", OperationValue::String("Panda Cafe!".to_string()))])
-            .previous(&DocumentViewId::new(&[panda_operation_1.id().to_owned()]))
+            .previous(&DocumentViewId::new(&[operation_1_id.clone()]))
             .build()
             .unwrap();
 
-        let panda_operation_2 = VerifiedOperation::new(
-            &panda,
-            &panda_operation_2,
-            &"0020bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-                .parse()
-                .unwrap(),
-        );
+        operations.push((operation_2_id.clone(), operation, panda));
 
         // Penguin publishes an update operation which creates a new branch in the graph.
         // This is because they didn't know about Panda's second operation.
@@ -679,36 +706,24 @@ mod tests {
         // DOCUMENT: [panda_1]<--[penguin_1]
         //                    \----[panda_2]
 
-        let penguin_operation_1 = OperationBuilder::new(schema.id())
+        let operation_3_id = random_operation_id();
+        let operation = OperationBuilder::new(schema.id())
             .action(OperationAction::Update)
             .fields(&[(
                 "name",
                 OperationValue::String("Penguin Cafe!!!".to_string()),
             )])
-            .previous(&DocumentViewId::new(&[panda_operation_2.id().to_owned()]))
+            .previous(&DocumentViewId::new(&[operation_2_id.clone()]))
             .build()
             .unwrap();
 
-        let penguin_operation_1 = VerifiedOperation::new(
-            &penguin,
-            &penguin_operation_1,
-            &"0020cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-                .parse()
-                .unwrap(),
-        );
+        operations.push((operation_3_id.clone(), operation, penguin));
 
-        let operations = vec![
-            panda_operation_1.clone(),
-            panda_operation_2.clone(),
-            penguin_operation_1.clone(),
-        ];
         let document_builder = DocumentBuilder::new(operations);
 
         assert_eq!(
             document_builder
-                .build_to_view_id(Some(DocumentViewId::new(&[panda_operation_1
-                    .id()
-                    .to_owned()])))
+                .build_to_view_id(Some(DocumentViewId::new(&[operation_1_id])))
                 .unwrap()
                 .view()
                 .unwrap()
@@ -720,9 +735,7 @@ mod tests {
 
         assert_eq!(
             document_builder
-                .build_to_view_id(Some(DocumentViewId::new(&[panda_operation_2
-                    .id()
-                    .to_owned()])))
+                .build_to_view_id(Some(DocumentViewId::new(&[operation_2_id.clone()])))
                 .unwrap()
                 .view()
                 .unwrap()
@@ -734,9 +747,7 @@ mod tests {
 
         assert_eq!(
             document_builder
-                .build_to_view_id(Some(DocumentViewId::new(&[penguin_operation_1
-                    .id()
-                    .to_owned()])))
+                .build_to_view_id(Some(DocumentViewId::new(&[operation_3_id.clone()])))
                 .unwrap()
                 .view()
                 .unwrap()
@@ -748,10 +759,7 @@ mod tests {
 
         assert_eq!(
             document_builder
-                .build_to_view_id(Some(DocumentViewId::new(&[
-                    panda_operation_2.id().to_owned(),
-                    penguin_operation_1.id().to_owned()
-                ])))
+                .build_to_view_id(Some(DocumentViewId::new(&[operation_2_id, operation_3_id])))
                 .unwrap()
                 .view()
                 .unwrap()

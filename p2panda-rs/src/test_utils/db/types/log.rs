@@ -31,7 +31,7 @@ impl AsStorageLog for StorageLog {
         log_id: &LogId,
     ) -> Self {
         StorageLog {
-            public_key: public_key.clone(),
+            public_key: *public_key,
             log_id: *log_id,
             document: document.clone(),
             schema: schema.clone(),
@@ -39,7 +39,7 @@ impl AsStorageLog for StorageLog {
     }
 
     fn public_key(&self) -> PublicKey {
-        self.public_key.clone()
+        self.public_key
     }
 
     fn schema_id(&self) -> SchemaId {
