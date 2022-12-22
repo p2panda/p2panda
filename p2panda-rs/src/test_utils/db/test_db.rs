@@ -306,8 +306,10 @@ mod tests {
 
     use crate::entry::traits::{AsEncodedEntry, AsEntry};
     use crate::entry::{LogId, SeqNum};
+    use crate::schema::Schema;
     use crate::storage_provider::traits::DocumentStore;
-    use crate::test_utils::constants::{SCHEMA_ID, SKIPLINK_SEQ_NUMS};
+    use crate::test_utils::constants::SKIPLINK_SEQ_NUMS;
+    use crate::test_utils::fixtures::schema;
 
     use super::{test_db, TestDatabase};
 
@@ -365,6 +367,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn correct_test_values(
+        schema: Schema,
         #[from(test_db)]
         #[with(10, 4, 2)]
         #[future]
@@ -377,11 +380,11 @@ mod tests {
         assert_eq!(db.store.operations.lock().unwrap().len(), 80);
         assert_eq!(
             db.store
-                .get_documents_by_schema(&SCHEMA_ID.parse().unwrap())
+                .get_documents_by_schema(schema.id())
                 .await
                 .unwrap()
                 .len(),
-            0
+            8
         );
     }
 }
