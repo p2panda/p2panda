@@ -3,12 +3,13 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
+use crate::document::DocumentId;
 use crate::entry::LogId;
 use crate::hash::Hash;
 use crate::identity::PublicKey;
 use crate::operation::OperationId;
 use crate::schema::SchemaId;
+use crate::storage_provider::traits::DocumentStore;
 use crate::test_utils::db::{PublishedOperation, StorageEntry};
 
 type PublickeyLogId = String;
@@ -27,10 +28,6 @@ pub struct MemoryStore {
 
     /// Stored operations
     pub operations: Arc<Mutex<HashMap<OperationId, PublishedOperation>>>,
-
-    /// Stored documents
-    pub documents: Arc<Mutex<HashMap<DocumentId, Document>>>,
-
-    /// Materialised and stored document views
-    pub document_views: Arc<Mutex<HashMap<DocumentViewId, (SchemaId, DocumentView)>>>,
 }
+
+impl DocumentStore for MemoryStore {}

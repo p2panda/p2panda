@@ -306,7 +306,8 @@ mod tests {
 
     use crate::entry::traits::{AsEncodedEntry, AsEntry};
     use crate::entry::{LogId, SeqNum};
-    use crate::test_utils::constants::SKIPLINK_SEQ_NUMS;
+    use crate::storage_provider::traits::DocumentStore;
+    use crate::test_utils::constants::{SCHEMA_ID, SKIPLINK_SEQ_NUMS};
 
     use super::{test_db, TestDatabase};
 
@@ -374,7 +375,13 @@ mod tests {
         assert_eq!(db.test_data.documents.len(), 8);
         assert_eq!(db.store.entries.lock().unwrap().len(), 80);
         assert_eq!(db.store.operations.lock().unwrap().len(), 80);
-        assert_eq!(db.store.documents.lock().unwrap().len(), 0);
-        assert_eq!(db.store.document_views.lock().unwrap().len(), 0);
+        assert_eq!(
+            db.store
+                .get_documents_by_schema(&SCHEMA_ID.parse().unwrap())
+                .await
+                .unwrap()
+                .len(),
+            0
+        );
     }
 }

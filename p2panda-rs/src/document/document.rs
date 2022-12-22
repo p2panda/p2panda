@@ -7,13 +7,11 @@ use crate::document::error::DocumentBuilderError;
 use crate::document::materialization::{build_graph, reduce};
 use crate::document::{DocumentId, DocumentView, DocumentViewId};
 use crate::identity::PublicKey;
-use crate::operation::traits::{AsOperation, WithOperationId, WithPublicKey};
+use crate::operation::traits::{AsOperation, WithPublicKey};
 use crate::operation::OperationValue;
 use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
-use crate::Human;
-
-use super::DocumentViewValue;
+use crate::{Human, WithId};
 
 /// Flag to indicate if document was edited by at least one author.
 pub type IsEdited = bool;
@@ -114,7 +112,7 @@ impl Human for Document {
 
 impl<T> TryFrom<Vec<&T>> for Document
 where
-    T: AsOperation + WithOperationId + WithPublicKey,
+    T: AsOperation + WithId<OperationId> + WithPublicKey,
 {
     type Error = DocumentBuilderError;
 
@@ -126,7 +124,7 @@ where
 
 impl<T> TryFrom<&Vec<T>> for Document
 where
-    T: AsOperation + WithOperationId + WithPublicKey,
+    T: AsOperation + WithId<OperationId> + WithPublicKey,
 {
     type Error = DocumentBuilderError;
 
@@ -264,7 +262,7 @@ impl DocumentBuilder {
 
 impl<T> From<Vec<&T>> for DocumentBuilder
 where
-    T: AsOperation + WithOperationId + WithPublicKey,
+    T: AsOperation + WithId<OperationId> + WithPublicKey,
 {
     fn from(operations: Vec<&T>) -> Self {
         let operations = operations
@@ -290,7 +288,7 @@ where
 
 impl<T> From<&Vec<T>> for DocumentBuilder
 where
-    T: AsOperation + WithOperationId + WithPublicKey,
+    T: AsOperation + WithId<OperationId> + WithPublicKey,
 {
     fn from(operations: &Vec<T>) -> Self {
         let operations = operations
@@ -316,7 +314,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryInto;
+    use std::convert::{TryFrom, TryInto};
 
     use rstest::rstest;
 
@@ -325,7 +323,6 @@ mod tests {
     };
     use crate::entry::traits::AsEncodedEntry;
     use crate::identity::KeyPair;
-    use crate::operation::traits::WithOperationId;
     use crate::operation::{OperationAction, OperationBuilder, OperationId, OperationValue};
     use crate::schema::{FieldType, Schema, SchemaId};
     use crate::test_utils::constants::{self, PRIVATE_KEY};
@@ -334,7 +331,7 @@ mod tests {
     use crate::test_utils::fixtures::{
         operation_fields, published_operation, random_document_view_id, random_operation_id, schema,
     };
-    use crate::Human;
+    use crate::{WithId, Human};
 
     use super::DocumentBuilder;
 
@@ -470,12 +467,9 @@ mod tests {
 
         let operations = store.operations.lock().unwrap();
 
-        let operations: Vec<&PublishedOperation> = operations
-            .values()
-            .map(|(_, operation)| operation)
-            .collect();
+        let operations = operations.values().collect::<Vec<&PublishedOperation>>();
 
-        let document: Result<Document, _> = operations.clone().try_into();
+        let document = Document::try_from(operations.clone());
 
         assert!(document.is_ok());
 
@@ -601,7 +595,7 @@ mod tests {
             document.unwrap_err().to_string(),
             format!(
                 "operation {} cannot be connected to the document graph",
-                update_operation.id()
+                WithId::<OperationId>::id(&update_operation).clone()
             )
         );
     }
@@ -624,7 +618,7 @@ mod tests {
             Schema::get_system(SchemaId::SchemaFieldDefinition(1))
                 .unwrap()
                 .to_owned(),
-            Some(create_operation.id().to_owned().into()),
+            Some(WithId::<OperationId>::id(&create_operation).clone().into()),
             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
         );
 
@@ -646,7 +640,10 @@ mod tests {
         let delete_operation = published_operation(
             None,
             constants::schema(),
-            Some(DocumentViewId::new(&[create_operation.id().to_owned()])),
+            Some(DocumentViewId::new(&[WithId::<OperationId>::id(
+                &create_operation,
+            )
+            .clone()])),
             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
         );
 
