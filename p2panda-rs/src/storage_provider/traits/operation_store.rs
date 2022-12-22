@@ -4,9 +4,11 @@ use async_trait::async_trait;
 
 use crate::document::DocumentId;
 use crate::identity::PublicKey;
-use crate::operation::traits::{AsOperation, WithOperationId, WithPublicKey};
+use crate::operation::traits::{AsOperation, WithPublicKey};
 use crate::operation::{Operation, OperationId};
+use crate::schema::SchemaId;
 use crate::storage_provider::error::OperationStorageError;
+use crate::WithId;
 
 /// Trait which handles all storage actions relating to `Operation`s.
 ///
@@ -14,9 +16,8 @@ use crate::storage_provider::error::OperationStorageError;
 /// the required methods for inserting and querying operations from storage.
 #[async_trait]
 pub trait OperationStore {
-
     /// An associated type representing an operation as it passes in and out of storage.
-    type Operation: AsOperation + WithOperationId + WithPublicKey;
+    type Operation: AsOperation + WithId<OperationId> + WithId<DocumentId> + WithPublicKey + Sync;
 
     /// Insert an operation into the db.
     ///
@@ -56,5 +57,15 @@ pub trait OperationStore {
     async fn get_operations_by_document_id(
         &self,
         id: &DocumentId,
+    ) -> Result<Vec<Self::Operation>, OperationStorageError>;
+
+    /// Get all operations which follow a certain schema.
+    ///
+    /// Returns a result containing a vector of operations. If no schema
+    /// was found then an empty vector is returned. Errors if a fatal storage
+    /// error occured.
+    async fn get_operations_by_schema_id(
+        &self,
+        id: &SchemaId,
     ) -> Result<Vec<Self::Operation>, OperationStorageError>;
 }

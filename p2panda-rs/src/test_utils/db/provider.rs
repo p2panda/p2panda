@@ -26,7 +26,7 @@ pub struct MemoryStore {
     pub entries: Arc<Mutex<HashMap<Hash, StorageEntry>>>,
 
     /// Stored operations
-    pub operations: Arc<Mutex<HashMap<OperationId, (DocumentId, PublishedOperation)>>>,
+    pub operations: Arc<Mutex<HashMap<OperationId, PublishedOperation>>>,
 
     /// Stored documents
     pub documents: Arc<Mutex<HashMap<DocumentId, Document>>>,

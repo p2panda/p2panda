@@ -5,11 +5,13 @@ use log::debug;
 
 use crate::document::DocumentId;
 use crate::identity::PublicKey;
-use crate::operation::traits::{AsOperation, WithOperationId};
+use crate::operation::traits::AsOperation;
 use crate::operation::{Operation, OperationId};
+use crate::schema::SchemaId;
 use crate::storage_provider::error::OperationStorageError;
 use crate::storage_provider::traits::OperationStore;
 use crate::test_utils::db::{MemoryStore, PublishedOperation};
+use crate::WithId;
 
 #[async_trait]
 impl OperationStore for MemoryStore {
@@ -30,16 +32,19 @@ impl OperationStore for MemoryStore {
 
         let mut operations = self.operations.lock().unwrap();
 
-        let is_duplicate_id = operations
-            .values()
-            .any(|(_document_id, published_operation)| published_operation.0 == *id);
+        let is_duplicate_id = operations.values().any(|operation| operation.0 == *id);
 
         if is_duplicate_id {
             return Err(OperationStorageError::InsertionError(id.clone()));
         }
 
-        let operation = PublishedOperation(id.clone(), operation.clone(), *public_key);
-        operations.insert(id.clone(), (document_id.clone(), operation));
+        let operation = PublishedOperation(
+            id.clone(),
+            operation.clone(),
+            *public_key,
+            document_id.clone(),
+        );
+        operations.insert(id.clone(), operation);
 
         Ok(())
     }
@@ -53,7 +58,7 @@ impl OperationStore for MemoryStore {
         id: &OperationId,
     ) -> Result<Option<PublishedOperation>, OperationStorageError> {
         let operations = self.operations.lock().unwrap();
-        Ok(operations.get(id).map(|(_, operation)| operation.clone()))
+        Ok(operations.get(id).cloned())
     }
 
     /// Get the id of the document an operation is contained within.
@@ -67,8 +72,9 @@ impl OperationStore for MemoryStore {
         let operations = self.operations.lock().unwrap();
         Ok(operations
             .values()
-            .find(|(_document_id, published_operation)| published_operation.id() == id)
-            .map(|(document_id, _operation)| document_id.clone()))
+            .find(|operation| WithId::<OperationId>::id(*operation) == id)
+            .map(WithId::<DocumentId>::id)
+            .cloned())
     }
 
     /// Get all operations which are part of a specific document.
@@ -83,8 +89,25 @@ impl OperationStore for MemoryStore {
         let operations = self.operations.lock().unwrap();
         Ok(operations
             .values()
-            .filter(|(document_id, _verified_operation)| document_id == id)
-            .map(|(_, operation)| operation.clone())
+            .filter(|operation| WithId::<DocumentId>::id(*operation) == id)
+            .map(Clone::clone)
+            .collect())
+    }
+
+    /// Get all operations which follow a certain schema.
+    ///
+    /// Returns a result containing a vector of operations. If no schema
+    /// was found then an empty vector is returned. Errors if a fatal storage
+    /// error occured.
+    async fn get_operations_by_schema_id(
+        &self,
+        id: &SchemaId,
+    ) -> Result<Vec<PublishedOperation>, OperationStorageError> {
+        let operations = self.operations.lock().unwrap();
+        Ok(operations
+            .values()
+            .filter(|operation| &operation.schema_id() == id)
+            .map(Clone::clone)
             .collect())
     }
 }
@@ -97,7 +120,7 @@ mod tests {
     use crate::entry::traits::AsEncodedEntry;
     use crate::entry::LogId;
     use crate::identity::{KeyPair, PublicKey};
-    use crate::operation::traits::{AsOperation, WithOperationId, WithPublicKey};
+    use crate::operation::traits::{AsOperation, WithPublicKey};
     use crate::operation::{Operation, OperationId};
     use crate::storage_provider::traits::EntryStore;
     use crate::test_utils::constants;
@@ -106,6 +129,7 @@ mod tests {
         create_operation, delete_operation, document_id, key_pair, operation_id, public_key,
         random_operation_id, random_previous_operations, update_operation,
     };
+    use crate::WithId;
 
     use super::OperationStore;
 
@@ -144,7 +168,10 @@ mod tests {
 
         assert_eq!(returned_operation.public_key(), &public_key);
         assert_eq!(returned_operation.fields(), operation.fields());
-        assert_eq!(returned_operation.id(), &operation_id);
+        assert_eq!(
+            WithId::<OperationId>::id(&returned_operation),
+            &operation_id
+        );
     }
 
     #[rstest]
