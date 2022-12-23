@@ -331,7 +331,7 @@ mod tests {
     use crate::test_utils::fixtures::{
         operation_fields, published_operation, random_document_view_id, random_operation_id, schema,
     };
-    use crate::{WithId, Human};
+    use crate::{Human, WithId};
 
     use super::DocumentBuilder;
 

@@ -111,8 +111,8 @@ pub trait Human {
 }
 
 /// Trait used by p2panda structs which contain at least one id.
-/// 
-/// A single struct may have several id's, common use cases will be `WithId<OperationId>`, 
+///
+/// A single struct may have several id's, common use cases will be `WithId<OperationId>`,
 /// `WithId<DocumentId>` and `WithId<SchemaId>`.
 pub trait WithId<T> {
     /// Returns the identifier for this operation.

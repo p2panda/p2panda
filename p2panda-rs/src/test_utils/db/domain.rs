@@ -1251,10 +1251,7 @@ mod tests {
         .await;
 
         // try and get the MAX_SEQ_NUM entry again (it shouldn't be there)
-        let entry_at_max_seq_num = store
-            .get_entry(&encoded_entry.hash())
-            .await
-            .unwrap();
+        let entry_at_max_seq_num = store.get_entry(&encoded_entry.hash()).await.unwrap();
 
         // We expect the entry we published not to have been stored in the db
         assert!(entry_at_max_seq_num.is_none());

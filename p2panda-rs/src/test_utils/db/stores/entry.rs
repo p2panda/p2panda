@@ -19,7 +19,7 @@ use crate::test_utils::db::{MemoryStore, StorageEntry};
 #[async_trait]
 impl EntryStore for MemoryStore {
     type Entry = StorageEntry;
-    
+
     /// Insert an entry into storage.
     async fn insert_entry(
         &self,
@@ -41,10 +41,7 @@ impl EntryStore for MemoryStore {
     }
 
     /// Get an entry by it's hash id.
-    async fn get_entry(
-        &self,
-        hash: &Hash,
-    ) -> Result<Option<StorageEntry>, EntryStorageError> {
+    async fn get_entry(&self, hash: &Hash) -> Result<Option<StorageEntry>, EntryStorageError> {
         let entries = self.entries.lock().unwrap();
 
         Ok(entries.get(hash).cloned())
@@ -127,7 +124,11 @@ impl EntryStore for MemoryStore {
 
         let entries: Vec<StorageEntry> = entries
             .iter()
-            .filter(|(_, entry)| schema_logs.iter().any(|(_, log_id, _, _)| log_id == entry.log_id()))
+            .filter(|(_, entry)| {
+                schema_logs
+                    .iter()
+                    .any(|(_, log_id, _, _)| log_id == entry.log_id())
+            })
             .map(|(_, entry)| entry.to_owned())
             .collect();
 

@@ -24,7 +24,7 @@ pub trait LogStore {
     ) -> Result<bool, LogStorageError>;
 
     /// Get the log id for a public key and document id.
-    /// 
+    ///
     /// Returns an option containing the id or none if no log exists for the requested
     /// public key and document id.
     async fn get_log_id(
