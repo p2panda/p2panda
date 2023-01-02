@@ -18,6 +18,7 @@ pub type IsEdited = bool;
 /// Flag to indicate if document was deleted by at least one author.
 pub type IsDeleted = bool;
 
+/// Metadata attached to a document as well as all of it's operations.
 #[derive(Debug, Clone, Default)]
 pub struct DocumentMeta {
     /// Flag indicating if document was deleted.
@@ -36,6 +37,35 @@ pub struct DocumentMeta {
 /// `Document`s contain a fixed set of sorted operations along with their resolved document view
 /// and metadata. Documents are constructed by passing an unsorted collection of operations to
 /// the `DocumentBuilder`.
+
+/// High-level datatype representing data published to the p2panda network as key-value pairs. 
+/// 
+/// Documents are multi-writer and have automatic conflict resolution strategies which produce deterministic 
+/// state for any two replicas. The underlying structure which make this possible is a directed acyclic graph 
+/// of `Operation`'s. To arrive at the current state of a document the graph is topologically sorted,
+/// with any branches being ordered according to the conflicting operations `OperationId`. When each
+/// operation's change is applied in order then we have a LWW (last write wins) resolution strategy.
+/// 
+/// All documents have an accomapanying `Schema` which describes the shape of the data they will contain. Every
+/// operation should have been validated aginst this schema before being included in the graph.
+/// 
+/// Documents are constructed through the `DocumentBuilder` struct like so:
+/// 
+/// ## Example
+/// 
+/// @TODO
+/// 
+/// A useful characteristic of documents is the ability to view state from any point in the past (as long as the
+/// operations have been retained, see below for details on this). Every state a document has passed through can
+/// be identified by a `DocumentViewId` which is the id's of the current graph tip operations. This id can be 
+/// used to request a view onto any state from the documents past.
+/// 
+/// Notes on CRDTs and scope:
+/// 
+/// Documents offer a relatively limited and opinionated approach to conflict resolution, we don't intend to 
+/// offer the advanced features many modern CRDT's provide. However with good data design and exploiting 
+/// per-field updates, there are many suitable use cases. If other conflict resolution strategies are needed, 
+/// there is much scope for integrating battle tested solutions in the future. 
 #[derive(Debug, Clone)]
 pub struct Document {
     id: DocumentId,
