@@ -47,7 +47,7 @@
 //! // as the id of the operation which last updated this field.
 //! assert_eq!(
 //!     document.view().unwrap().get("name"),
-//!     Some(&DocumentViewValue::new(&operation_id, &operation_alue))
+//!     Some(&DocumentViewValue::new(&operation_id, &operation_value))
 //! );
 //! # }
 //! # Ok(())
