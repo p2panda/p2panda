@@ -40,10 +40,10 @@
 //!     .build()
 //!     .unwrap();
 //!
-//! // Build a document from a single operation, we include it's id and the public key of the 
+//! // Build a document from a single operation, we include it's id and the public key of the
 //! // author who published it.
 //! let document = DocumentBuilder::new(vec![(operation_id, operation, public_key)]).build()?;
-//! // The document view value contains the value we expect for the "name" field as well 
+//! // The document view value contains the value we expect for the "name" field as well
 //! // as the id of the operation which last updated this field.
 //! assert_eq!(
 //!     document.view().unwrap().get("name"),
@@ -107,8 +107,8 @@
 //!
 //! // Build the document to it's latest view.
 //! let document = document_builder.build().unwrap();
-//! 
-//! // The document view value contains the value we expect for the "name" field as well 
+//!
+//! // The document view value contains the value we expect for the "name" field as well
 //! // as the id of the operation which last updated this field.
 //! assert_eq!(
 //!     document.view().unwrap().get("name"),
@@ -119,7 +119,7 @@
 //! let document_view_id_1 = DocumentViewId::new(&[operation_id_1.clone()]);
 //! // Build the document again but to this earlier state.
 //! let document = document_builder.build_to_view_id(Some(document_view_id_1)).unwrap();
-//! 
+//!
 //! assert_eq!(
 //!     document.view().unwrap().get("name"),
 //!     Some(&DocumentViewValue::new(&operation_id_1, &operation_1_value))
