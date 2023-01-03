@@ -23,7 +23,7 @@
 //! # #[cfg(feature = "test-utils")]
 //! # {
 //! # use p2panda_rs::operation::{OperationBuilder, OperationAction, OperationValue};
-//! # use p2panda_rs::document::DocumentBuilder;
+//! # use p2panda_rs::document::{DocumentBuilder, DocumentViewValue};
 //! # use p2panda_rs::identity::KeyPair;
 //! # use p2panda_rs::schema::SchemaId;
 //! # use p2panda_rs::test_utils::fixtures::{random_operation_id, random_document_view_id};
@@ -42,7 +42,7 @@
 //!
 //! // Build a document from a single operation, we include it's id and the public key of the
 //! // author who published it.
-//! let document = DocumentBuilder::new(vec![(operation_id, operation, public_key)]).build()?;
+//! let document = DocumentBuilder::new(vec![(operation_id.clone(), operation, public_key)]).build()?;
 //! // The document view value contains the value we expect for the "name" field as well
 //! // as the id of the operation which last updated this field.
 //! assert_eq!(
