@@ -12,6 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - Remove `VerifiedOperation` [#465](https://github.com/p2panda/p2panda/pull/465) `rs`
+- Better docs for `Document` [#470](https://github.com/p2panda/p2panda/pull/470) `rs`
 
 ## [0.6.0] 🥞
 
