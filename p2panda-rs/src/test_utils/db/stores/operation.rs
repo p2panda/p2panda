@@ -119,15 +119,16 @@ mod tests {
     use crate::document::DocumentId;
     use crate::entry::traits::AsEncodedEntry;
     use crate::entry::LogId;
-    use crate::identity::{KeyPair, PublicKey};
+    use crate::identity::PublicKey;
     use crate::operation::traits::{AsOperation, WithPublicKey};
     use crate::operation::{Operation, OperationId};
     use crate::storage_provider::traits::EntryStore;
     use crate::test_utils::constants;
-    use crate::test_utils::db::test_db::TestDatabase;
+    use crate::test_utils::db::test_db::{populate_store, PopulateDatabaseConfig};
+    use crate::test_utils::db::MemoryStore;
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, document_id, key_pair, operation_id, public_key,
-        random_operation_id, random_previous_operations, test_db, update_operation,
+        create_operation, delete_operation, document_id, operation_id, public_key,
+        random_operation_id, random_previous_operations, test_db_config, update_operation,
     };
     use crate::WithId;
 
@@ -145,26 +146,17 @@ mod tests {
         #[from(public_key)] public_key: PublicKey,
         operation_id: OperationId,
         document_id: DocumentId,
-        #[from(test_db)]
-        #[future]
-        db: TestDatabase,
     ) {
-        let db = db.await;
+        let store = MemoryStore::default();
 
         // Insert the doggo operation into the db, returns Ok(true) when succesful.
-        let result = db
-            .store
+        let result = store
             .insert_operation(&operation_id, &public_key, &operation, &document_id)
             .await;
         assert!(result.is_ok());
 
         // Request the previously inserted operation by it's id.
-        let returned_operation = db
-            .store
-            .get_operation(&operation_id)
-            .await
-            .unwrap()
-            .unwrap();
+        let returned_operation = store.get_operation(&operation_id).await.unwrap().unwrap();
 
         assert_eq!(returned_operation.public_key(), &public_key);
         assert_eq!(returned_operation.fields(), operation.fields());
@@ -181,20 +173,16 @@ mod tests {
         public_key: PublicKey,
         operation_id: OperationId,
         document_id: DocumentId,
-        #[from(test_db)]
-        #[future]
-        db: TestDatabase,
     ) {
-        let db = db.await;
+        let store = MemoryStore::default();
 
-        assert!(db
-            .store
+        assert!(store
             .insert_operation(&operation_id, &public_key, &operation, &document_id)
             .await
             .is_ok());
 
         assert_eq!(
-            db.store.insert_operation(&operation_id, &public_key, &operation, &document_id).await.unwrap_err().to_string(),
+            store.insert_operation(&operation_id, &public_key, &operation, &document_id).await.unwrap_err().to_string(),
             format!("Error occured when inserting an operation with id OperationId(Hash(\"{}\")) into storage", operation_id.as_str())
         )
     }
@@ -208,20 +196,16 @@ mod tests {
         #[from(random_operation_id)] update_operation_id: OperationId,
         public_key: PublicKey,
         document_id: DocumentId,
-        #[from(test_db)]
-        #[future]
-        db: TestDatabase,
     ) {
-        let db = db.await;
+        let store = MemoryStore::default();
 
-        assert!(db
-            .store
+        assert!(store
             .get_document_id_by_operation_id(&create_operation_id)
             .await
             .unwrap()
             .is_none());
 
-        db.store
+        store
             .insert_operation(
                 &create_operation_id,
                 &public_key,
@@ -232,7 +216,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            db.store
+            store
                 .get_document_id_by_operation_id(&create_operation_id)
                 .await
                 .unwrap()
@@ -240,7 +224,7 @@ mod tests {
             document_id.clone()
         );
 
-        db.store
+        store
             .insert_operation(
                 &update_operation_id,
                 &public_key,
@@ -251,7 +235,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            db.store
+            store
                 .get_document_id_by_operation_id(&update_operation_id)
                 .await
                 .unwrap()
@@ -263,32 +247,28 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn get_operations_by_document_id(
-        key_pair: KeyPair,
-        #[from(test_db)]
+        #[from(test_db_config)]
         #[with(5, 1, 1)]
-        #[future]
-        db: TestDatabase,
+        config: PopulateDatabaseConfig,
     ) {
-        let db = db.await;
+        let store = MemoryStore::default();
+        let (key_pairs, _) = populate_store(&store, &config).await;
 
-        let public_key = key_pair.public_key();
+        let public_key = key_pairs[0].public_key();
 
-        let latest_entry = db
-            .store
+        let latest_entry = store
             .get_latest_entry(&public_key, &LogId::default())
             .await
             .unwrap()
             .unwrap();
 
-        let document_id = db
-            .store
+        let document_id = store
             .get_document_id_by_operation_id(&latest_entry.hash().into())
             .await
             .unwrap()
             .unwrap();
 
-        let operations_by_document_id = db
-            .store
+        let operations_by_document_id = store
             .get_operations_by_document_id(&document_id)
             .await
             .unwrap();

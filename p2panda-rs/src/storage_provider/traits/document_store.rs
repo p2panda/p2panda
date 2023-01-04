@@ -70,21 +70,24 @@ mod tests {
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{DocumentStore, OperationStore};
     use crate::test_utils::constants::{self, test_fields};
-    use crate::test_utils::db::test_db::TestDatabase;
-    use crate::test_utils::fixtures::{test_db, random_document_id, random_operation_id, schema_id};
+    use crate::test_utils::db::test_db::{populate_store, PopulateDatabaseConfig};
+    use crate::test_utils::db::MemoryStore;
+    use crate::test_utils::fixtures::{
+        random_document_id, random_operation_id, schema_id, test_db_config,
+    };
 
     #[rstest]
     #[tokio::test]
     async fn gets_one_document(
-        #[from(test_db)]
+        #[from(test_db_config)]
         #[with(1, 1, 1)]
-        #[future]
-        db: TestDatabase,
+        config: PopulateDatabaseConfig,
     ) {
-        let db = db.await;
-        let document_id = db.test_data.documents[0].clone();
+        let store = MemoryStore::default();
+        let (_, documents) = populate_store(&store, &config).await;
+        let document_id = documents[0].clone();
 
-        let document = db.store.get_document(&document_id).await.unwrap().unwrap();
+        let document = store.get_document(&document_id).await.unwrap().unwrap();
 
         for (key, value) in test_fields() {
             assert!(document.get(key).is_some());
@@ -96,13 +99,13 @@ mod tests {
     #[tokio::test]
     async fn document_does_not_exist(
         random_document_id: DocumentId,
-        #[from(test_db)]
+        #[from(test_db_config)]
         #[with(1, 1, 1)]
-        #[future]
-        db: TestDatabase,
+        config: PopulateDatabaseConfig,
     ) {
-        let db = db.await;
-        let document = db.store.get_document(&random_document_id).await.unwrap();
+        let store = MemoryStore::default();
+        populate_store(&store, &config).await;
+        let document = store.get_document(&random_document_id).await.unwrap();
 
         assert!(document.is_none());
     }
@@ -112,14 +115,15 @@ mod tests {
     async fn updates_a_document(
         schema_id: SchemaId,
         #[from(random_operation_id)] operation_id: OperationId,
-        #[from(test_db)]
+        #[from(test_db_config)]
         #[with(1, 1, 1)]
-        #[future]
-        db: TestDatabase,
+        config: PopulateDatabaseConfig,
     ) {
-        let db = db.await;
-        let public_key = db.test_data.key_pairs[0].public_key();
-        let document_id = db.test_data.documents[0].clone();
+        let store = MemoryStore::default();
+        let (key_pairs, documents) = populate_store(&store, &config).await;
+
+        let public_key = key_pairs[0].public_key();
+        let document_id = documents[0].clone();
         let create_operation_id: OperationId = document_id.as_str().parse().unwrap();
 
         let field_to_update = ("age", OperationValue::Integer(29));
@@ -130,13 +134,12 @@ mod tests {
             .build()
             .unwrap();
 
-        let _ = db
-            .store
+        let _ = store
             .insert_operation(&operation_id, &public_key, &update_operation, &document_id)
             .await
             .is_ok();
 
-        let document = db.store.get_document(&document_id).await.unwrap().unwrap();
+        let document = store.get_document(&document_id).await.unwrap().unwrap();
 
         assert!(document.get(field_to_update.0).is_some());
         assert_eq!(document.get(field_to_update.0).unwrap(), &field_to_update.1);
@@ -145,20 +148,19 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn gets_documents_by_schema(
-        #[from(test_db)]
+        #[from(test_db_config)]
         #[with(10, 2, 1, false, constants::schema())]
-        #[future]
-        db: TestDatabase,
+        config: PopulateDatabaseConfig,
     ) {
-        let db = db.await;
-        let schema_id = SchemaId::from_str(constants::SCHEMA_ID).unwrap();
+        let store = MemoryStore::default();
+        populate_store(&store, &config).await;
 
-        let schema_documents = db.store.get_documents_by_schema(&schema_id).await.unwrap();
+        let schema_id = SchemaId::from_str(constants::SCHEMA_ID).unwrap();
+        let schema_documents = store.get_documents_by_schema(&schema_id).await.unwrap();
 
         assert_eq!(schema_documents.len(), 2);
 
-        let schema_documents = db
-            .store
+        let schema_documents = store
             .get_documents_by_schema(&SchemaId::SchemaDefinition(1))
             .await
             .unwrap();

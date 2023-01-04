@@ -174,9 +174,9 @@ mod tests {
     use crate::identity::KeyPair;
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{EntryStore, LogStore};
-    use crate::test_utils::db::test_db::TestDatabase;
+    use crate::test_utils::db::test_db::{populate_store, PopulateDatabaseConfig};
     use crate::test_utils::db::MemoryStore;
-    use crate::test_utils::fixtures::{test_db, encoded_entry, key_pair, schema_id};
+    use crate::test_utils::fixtures::{encoded_entry, key_pair, schema_id, test_db_config};
 
     #[rstest]
     #[tokio::test]
@@ -278,13 +278,13 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn get_entry(
-        #[from(test_db)]
+        #[from(test_db_config)]
         #[with(3, 1, 1)]
-        #[future]
-        db: TestDatabase,
+        config: PopulateDatabaseConfig,
     ) {
-        let db = db.await;
-        let entries = db.store.entries.lock().unwrap().clone();
+        let store = MemoryStore::default();
+        populate_store(&store, &config).await;
+        let entries = store.entries.lock().unwrap().clone();
 
         let entry_one = entries
             .values()
@@ -303,27 +303,15 @@ mod tests {
 
         assert_eq!(
             *entry_one,
-            db.store
-                .get_entry(&entry_one.hash())
-                .await
-                .unwrap()
-                .unwrap()
+            store.get_entry(&entry_one.hash()).await.unwrap().unwrap()
         );
         assert_eq!(
             *entry_two,
-            db.store
-                .get_entry(&entry_two.hash())
-                .await
-                .unwrap()
-                .unwrap()
+            store.get_entry(&entry_two.hash()).await.unwrap().unwrap()
         );
         assert_eq!(
             *entry_three,
-            db.store
-                .get_entry(&entry_three.hash())
-                .await
-                .unwrap()
-                .unwrap()
+            store.get_entry(&entry_three.hash()).await.unwrap().unwrap()
         );
     }
 
@@ -331,32 +319,29 @@ mod tests {
     #[tokio::test]
     async fn get_n_entries(
         key_pair: KeyPair,
-        #[from(test_db)]
+        #[from(test_db_config)]
         #[with(16, 1, 1)]
-        #[future]
-        db: TestDatabase,
+        config: PopulateDatabaseConfig,
     ) {
-        let db = db.await;
+        let store = MemoryStore::default();
+        populate_store(&store, &config).await;
 
         let public_key = key_pair.public_key();
         let log_id = LogId::default();
 
-        let five_entries = db
-            .store
+        let five_entries = store
             .get_paginated_log_entries(&public_key, &log_id, &SeqNum::new(1).unwrap(), 5)
             .await
             .unwrap();
         assert_eq!(five_entries.len(), 5);
 
-        let end_of_log_reached = db
-            .store
+        let end_of_log_reached = store
             .get_paginated_log_entries(&public_key, &log_id, &SeqNum::new(1).unwrap(), 1000)
             .await
             .unwrap();
         assert_eq!(end_of_log_reached.len(), 16);
 
-        let first_entry_not_found = db
-            .store
+        let first_entry_not_found = store
             .get_paginated_log_entries(&public_key, &log_id, &SeqNum::new(10000).unwrap(), 1)
             .await
             .unwrap();
@@ -366,19 +351,17 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn get_cert_pool(
-        key_pair: KeyPair,
-        #[from(test_db)]
-        #[with(17, 1, 1)]
-        #[future]
-        db: TestDatabase,
+        #[from(test_db_config)]
+        #[with(16, 1, 1)]
+        config: PopulateDatabaseConfig,
     ) {
-        let db = db.await;
+        let store = MemoryStore::default();
+        let (key_pairs, _) = populate_store(&store, &config).await;
 
-        let public_key = key_pair.public_key();
+        let public_key = key_pairs[0].public_key();
         let log_id = LogId::default();
 
-        let cert_pool = db
-            .store
+        let cert_pool = store
             .get_certificate_pool(&public_key, &log_id, &SeqNum::new(16).unwrap())
             .await
             .unwrap();

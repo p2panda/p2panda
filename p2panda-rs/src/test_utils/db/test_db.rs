@@ -14,7 +14,7 @@ use crate::schema::Schema;
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 use crate::storage_provider::utils::Result;
 use crate::test_utils::constants;
-use crate::test_utils::db::{EntryArgsResponse, MemoryStore};
+use crate::test_utils::db::EntryArgsResponse;
 
 use super::domain::{next_args, publish};
 
@@ -55,42 +55,6 @@ impl Default for PopulateDatabaseConfig {
             update_operation_fields: constants::test_fields(),
         }
     }
-}
-
-/// Container for `MemoryStore` with access to the document ids and key_pairs present in the
-/// pre-populated database.
-#[derive(Default, Debug)]
-pub struct TestDatabase {
-    /// The store.
-    pub store: MemoryStore,
-
-    /// Test data collected during store population.
-    pub test_data: TestData,
-}
-
-impl TestDatabase {
-    /// Instantiate a new test store.
-    pub fn new(store: &MemoryStore, test_data: TestData) -> Self {
-        Self {
-            store: store.clone(),
-            test_data,
-        }
-    }
-}
-
-/// Data collected when populating a `TestData` base in order to easily check values which
-/// would be otherwise hard or impossible to get through the store methods.
-///
-/// Note: if new entries are published to this node, keypairs and any newly created
-/// documents will not be added to these lists.
-#[derive(Default, Debug)]
-pub struct TestData {
-    /// KeyPairs which were used to pre-populate this store.
-    pub key_pairs: Vec<KeyPair>,
-
-    /// The id of all documents which were inserted into the store when it was
-    /// pre-populated with values.
-    pub documents: Vec<DocumentId>,
 }
 
 /// Helper for creating many key_pairs.
@@ -223,20 +187,21 @@ mod tests {
     use crate::schema::Schema;
     use crate::storage_provider::traits::DocumentStore;
     use crate::test_utils::constants::SKIPLINK_SEQ_NUMS;
-    use crate::test_utils::fixtures::{schema, test_db};
-
-    use super::TestDatabase;
+    use crate::test_utils::db::test_db::{populate_store, PopulateDatabaseConfig};
+    use crate::test_utils::db::MemoryStore;
+    use crate::test_utils::fixtures::{schema, test_db_config};
 
     #[rstest]
     #[tokio::test]
     async fn correct_next_args(
-        #[from(test_db)]
+        #[from(test_db_config)]
         #[with(17, 1, 1)]
-        #[future]
-        db: TestDatabase,
+        config: PopulateDatabaseConfig,
     ) {
-        let db = db.await;
-        let entries = db.store.entries.lock().unwrap().clone();
+        let store = MemoryStore::default();
+        populate_store(&store, &config).await;
+
+        let entries = store.entries.lock().unwrap().clone();
         for seq_num in 1..17 {
             let entry = entries
                 .values()
@@ -282,18 +247,19 @@ mod tests {
     #[tokio::test]
     async fn correct_test_values(
         schema: Schema,
-        #[from(test_db)]
+        #[from(test_db_config)]
         #[with(10, 4, 2)]
-        #[future]
-        db: TestDatabase,
+        config: PopulateDatabaseConfig,
     ) {
-        let db = db.await;
-        assert_eq!(db.test_data.key_pairs.len(), 2);
-        assert_eq!(db.test_data.documents.len(), 8);
-        assert_eq!(db.store.entries.lock().unwrap().len(), 80);
-        assert_eq!(db.store.operations.lock().unwrap().len(), 80);
+        let store = MemoryStore::default();
+        let (key_pairs, documents) = populate_store(&store, &config).await;
+
+        assert_eq!(key_pairs.len(), 2);
+        assert_eq!(documents.len(), 8);
+        assert_eq!(store.entries.lock().unwrap().len(), 80);
+        assert_eq!(store.operations.lock().unwrap().len(), 80);
         assert_eq!(
-            db.store
+            store
                 .get_documents_by_schema(schema.id())
                 .await
                 .unwrap()
