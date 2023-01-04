@@ -70,18 +70,18 @@ mod tests {
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{DocumentStore, OperationStore};
     use crate::test_utils::constants::{self, test_fields};
-    use crate::test_utils::db::test_db::{populate_store, PopulateDatabaseConfig};
-    use crate::test_utils::db::MemoryStore;
+    use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig};
+    use crate::test_utils::memory_store::MemoryStore;
     use crate::test_utils::fixtures::{
-        random_document_id, random_operation_id, schema_id, test_db_config,
+        random_document_id, random_operation_id, schema_id, populate_store_config,
     };
 
     #[rstest]
     #[tokio::test]
     async fn gets_one_document(
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(1, 1, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let (_, documents) = populate_store(&store, &config).await;
@@ -99,9 +99,9 @@ mod tests {
     #[tokio::test]
     async fn document_does_not_exist(
         random_document_id: DocumentId,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(1, 1, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         populate_store(&store, &config).await;
@@ -115,9 +115,9 @@ mod tests {
     async fn updates_a_document(
         schema_id: SchemaId,
         #[from(random_operation_id)] operation_id: OperationId,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(1, 1, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let (key_pairs, documents) = populate_store(&store, &config).await;
@@ -148,9 +148,9 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn gets_documents_by_schema(
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(10, 2, 1, false, constants::schema())]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         populate_store(&store, &config).await;

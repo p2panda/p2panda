@@ -13,7 +13,7 @@ use crate::operation::EncodedOperation;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::EntryStorageError;
 use crate::storage_provider::traits::EntryStore;
-use crate::test_utils::db::{MemoryStore, StorageEntry};
+use crate::test_utils::memory_store::{MemoryStore, StorageEntry};
 
 /// Implement `EntryStore` trait on `MemoryStore`
 #[async_trait]
@@ -174,9 +174,9 @@ mod tests {
     use crate::identity::KeyPair;
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{EntryStore, LogStore};
-    use crate::test_utils::db::test_db::{populate_store, PopulateDatabaseConfig};
-    use crate::test_utils::db::MemoryStore;
-    use crate::test_utils::fixtures::{encoded_entry, key_pair, schema_id, test_db_config};
+    use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig};
+    use crate::test_utils::memory_store::MemoryStore;
+    use crate::test_utils::fixtures::{encoded_entry, key_pair, schema_id, populate_store_config};
 
     #[rstest]
     #[tokio::test]
@@ -278,9 +278,9 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn get_entry(
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(3, 1, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         populate_store(&store, &config).await;
@@ -319,9 +319,9 @@ mod tests {
     #[tokio::test]
     async fn get_n_entries(
         key_pair: KeyPair,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(16, 1, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         populate_store(&store, &config).await;
@@ -351,9 +351,9 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn get_cert_pool(
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(16, 1, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let (key_pairs, _) = populate_store(&store, &config).await;

@@ -326,8 +326,8 @@ mod tests {
     use crate::operation::{OperationAction, OperationBuilder, OperationId, OperationValue};
     use crate::schema::{FieldType, Schema, SchemaId};
     use crate::test_utils::constants::{self, PRIVATE_KEY};
-    use crate::test_utils::db::test_db::send_to_store;
-    use crate::test_utils::db::{MemoryStore, PublishedOperation};
+    use crate::test_utils::memory_store::helpers::send_to_store;
+    use crate::test_utils::memory_store::{MemoryStore, PublishedOperation};
     use crate::test_utils::fixtures::{
         operation_fields, published_operation, random_document_view_id, random_operation_id, schema,
     };

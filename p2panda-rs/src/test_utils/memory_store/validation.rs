@@ -238,9 +238,9 @@ mod tests {
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::test_utils::constants::PRIVATE_KEY;
-    use crate::test_utils::db::test_db::{populate_store, PopulateDatabaseConfig};
-    use crate::test_utils::db::MemoryStore;
-    use crate::test_utils::fixtures::{key_pair, random_document_id, test_db_config};
+    use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig};
+    use crate::test_utils::memory_store::MemoryStore;
+    use crate::test_utils::fixtures::{key_pair, random_document_id, populate_store_config};
 
     use super::{
         ensure_document_not_deleted, get_expected_skiplink, increment_log_id, increment_seq_num,
@@ -316,9 +316,9 @@ mod tests {
         #[case] key_pair: KeyPair,
         #[case] claimed_log_id: LogId,
         #[case] document_id: Option<DocumentId>,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(2, 2, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let (_, documents) = populate_store(&store, &config).await;
@@ -350,9 +350,9 @@ mod tests {
         #[case] key_pair: KeyPair,
         #[case] log_id: LogId,
         #[case] seq_num: SeqNum,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(7, 1, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let _ = populate_store(&store, &config).await;
@@ -381,9 +381,9 @@ mod tests {
         key_pair: KeyPair,
         #[case] seq_num: SeqNum,
         #[case] expected_seq_num: SeqNum,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(10, 1, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let _ = populate_store(&store, &config).await;
@@ -402,9 +402,9 @@ mod tests {
     #[should_panic(expected = "Document is deleted")]
     #[tokio::test]
     async fn identifies_deleted_document(
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(3, 1, 1, true)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let (_, documents) = populate_store(&store, &config).await;
@@ -418,9 +418,9 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn identifies_not_deleted_document(
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(3, 1, 1, false)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let (_, documents) = populate_store(&store, &config).await;

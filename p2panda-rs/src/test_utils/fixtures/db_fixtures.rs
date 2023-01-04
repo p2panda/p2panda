@@ -5,12 +5,12 @@ use rstest::fixture;
 use crate::operation::OperationValue;
 use crate::schema::Schema;
 use crate::test_utils::constants;
-use crate::test_utils::db::test_db::PopulateDatabaseConfig;
+use crate::test_utils::memory_store::helpers::PopulateStoreConfig;
 use crate::test_utils::fixtures::schema;
 
-/// Fixture for passing `PopulateDatabaseConfig` into tests.
+/// Fixture for passing `PopulateStoreConfig` into tests.
 #[fixture]
-pub fn test_db_config(
+pub fn populate_store_config(
     // Number of entries per log/document
     #[default(0)] no_of_entries: usize,
     // Number of logs for each public key
@@ -31,8 +31,8 @@ pub fn test_db_config(
         &'static str,
         OperationValue,
     )>,
-) -> PopulateDatabaseConfig {
-    PopulateDatabaseConfig {
+) -> PopulateStoreConfig {
+    PopulateStoreConfig {
         no_of_entries,
         no_of_logs,
         no_of_public_keys,

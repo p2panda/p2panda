@@ -19,11 +19,11 @@ use crate::operation::{EncodedOperation, OperationAction};
 use crate::schema::Schema;
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 use crate::storage_provider::utils::Result;
-use crate::test_utils::db::validation::{
+use crate::test_utils::memory_store::validation::{
     ensure_document_not_deleted, get_expected_skiplink, increment_seq_num, is_next_seq_num,
     next_log_id, verify_document_log_id,
 };
-use crate::test_utils::db::EntryArgsResponse;
+use crate::test_utils::memory_store::EntryArgsResponse;
 use crate::Human;
 
 use super::validation::get_checked_document_id_for_view_id;
@@ -377,13 +377,13 @@ mod tests {
     use crate::schema::{FieldType, Schema};
     use crate::storage_provider::traits::{EntryStore, EntryWithOperation};
     use crate::test_utils::constants::{test_fields, PRIVATE_KEY};
-    use crate::test_utils::db::domain::EntryArgsResponse;
-    use crate::test_utils::db::test_db::{populate_store, send_to_store, PopulateDatabaseConfig};
-    use crate::test_utils::db::validation::get_checked_document_id_for_view_id;
-    use crate::test_utils::db::{MemoryStore, StorageEntry};
+    use crate::test_utils::memory_store::domain::EntryArgsResponse;
+    use crate::test_utils::memory_store::helpers::{populate_store, send_to_store, PopulateStoreConfig};
+    use crate::test_utils::memory_store::validation::get_checked_document_id_for_view_id;
+    use crate::test_utils::memory_store::{MemoryStore, StorageEntry};
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, key_pair, operation, public_key,
-        random_document_view_id, random_hash, schema, test_db_config, update_operation,
+        random_document_view_id, random_hash, schema, populate_store_config, update_operation,
     };
 
     use super::{next_args, publish};
@@ -505,9 +505,9 @@ mod tests {
         schema: Schema,
         #[case] entries_to_remove: &[LogIdAndSeqNum],
         #[case] entry_to_publish: LogIdAndSeqNum,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(8, 1, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let (key_pairs, _) = populate_store(&store, &config).await;
@@ -570,9 +570,9 @@ mod tests {
         // The previous operations described by their log id and seq number (log_id, seq_num)
         #[case] previous: &[LogIdAndSeqNum],
         #[case] key_pair: KeyPair,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(8, 2, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let (key_pairs, documents) = populate_store(&store, &config).await;
@@ -667,9 +667,9 @@ mod tests {
         #[case] operations_to_remove: &[LogIdAndSeqNum],
         #[case] document_view_id: &[LogIdAndSeqNum],
         #[case] key_pair: KeyPair,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(8, 2, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let (key_pairs, _) = populate_store(&store, &config).await;
@@ -739,11 +739,11 @@ mod tests {
     ) {
         let store = MemoryStore::default();
         // Populate the db with the number of entries defined in the test params.
-        let config = PopulateDatabaseConfig {
+        let config = PopulateStoreConfig {
             no_of_entries,
             no_of_logs: 1,
             no_of_public_keys: 1,
-            ..PopulateDatabaseConfig::default()
+            ..PopulateStoreConfig::default()
         };
         let (key_pairs, _) = populate_store(&store, &config).await;
 
@@ -805,9 +805,9 @@ mod tests {
     #[tokio::test]
     async fn gets_next_args_other_cases(
         public_key: PublicKey,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(7, 1, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let (_, documents) = populate_store(&store, &config).await;
@@ -867,9 +867,9 @@ mod tests {
         schema: Schema,
         #[case] log_id: LogId,
         #[case] key_pair: KeyPair,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(2, 1, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let (_, documents) = populate_store(&store, &config).await;
@@ -937,9 +937,9 @@ mod tests {
         #[case] log_id: LogId,
         #[case] key_pair: KeyPair,
         operation: Operation,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(1, 2, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let _ = populate_store(&store, &config).await;
@@ -980,9 +980,9 @@ mod tests {
     async fn publish_to_deleted_documents(
         schema: Schema,
         #[case] key_pair: KeyPair,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(2, 1, 1, true)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let (_, documents) = populate_store(&store, &config).await;
@@ -1036,9 +1036,9 @@ mod tests {
     #[tokio::test]
     async fn next_args_deleted_documents(
         #[case] key_pair: KeyPair,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(3, 1, 1, true)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let (_, documents) = populate_store(&store, &config).await;
@@ -1128,9 +1128,9 @@ mod tests {
     #[tokio::test]
     async fn next_args_max_seq_num_reached(
         key_pair: KeyPair,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(2, 1, 1, false)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let _ = populate_store(&store, &config).await;
@@ -1172,9 +1172,9 @@ mod tests {
     async fn publish_max_seq_num_reached(
         schema: Schema,
         key_pair: KeyPair,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(2, 1, 1, false)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let _ = populate_store(&store, &config).await;

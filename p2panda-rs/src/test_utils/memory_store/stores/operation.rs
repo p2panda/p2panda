@@ -10,7 +10,7 @@ use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::storage_provider::error::OperationStorageError;
 use crate::storage_provider::traits::OperationStore;
-use crate::test_utils::db::{MemoryStore, PublishedOperation};
+use crate::test_utils::memory_store::{MemoryStore, PublishedOperation};
 use crate::WithId;
 
 #[async_trait]
@@ -124,11 +124,11 @@ mod tests {
     use crate::operation::{Operation, OperationId};
     use crate::storage_provider::traits::EntryStore;
     use crate::test_utils::constants;
-    use crate::test_utils::db::test_db::{populate_store, PopulateDatabaseConfig};
-    use crate::test_utils::db::MemoryStore;
+    use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig};
+    use crate::test_utils::memory_store::MemoryStore;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, document_id, operation_id, public_key,
-        random_operation_id, random_previous_operations, test_db_config, update_operation,
+        random_operation_id, random_previous_operations, populate_store_config, update_operation,
     };
     use crate::WithId;
 
@@ -247,9 +247,9 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn get_operations_by_document_id(
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(5, 1, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let (key_pairs, _) = populate_store(&store, &config).await;

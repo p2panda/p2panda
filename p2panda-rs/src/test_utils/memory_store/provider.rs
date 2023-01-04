@@ -10,7 +10,7 @@ use crate::identity::PublicKey;
 use crate::operation::OperationId;
 use crate::schema::SchemaId;
 use crate::storage_provider::traits::DocumentStore;
-use crate::test_utils::db::{PublishedOperation, StorageEntry};
+use crate::test_utils::memory_store::{PublishedOperation, StorageEntry};
 
 type PublickeyLogId = String;
 type Log = (PublicKey, LogId, SchemaId, DocumentId);

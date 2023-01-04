@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Helper methods for preparing test databases.
+//! Helper methods for working with a storage provider when testing.
 
 use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::encode::{encode_entry, sign_entry};
@@ -14,13 +14,13 @@ use crate::schema::Schema;
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 use crate::storage_provider::utils::Result;
 use crate::test_utils::constants;
-use crate::test_utils::db::EntryArgsResponse;
+use crate::test_utils::memory_store::EntryArgsResponse;
 
 use super::domain::{next_args, publish};
 
-/// Configuration used in test database population.
+/// Configuration used when populating the store for testing.
 #[derive(Debug)]
-pub struct PopulateDatabaseConfig {
+pub struct PopulateStoreConfig {
     /// Number of entries per log/document.
     pub no_of_entries: usize,
 
@@ -43,7 +43,7 @@ pub struct PopulateDatabaseConfig {
     pub update_operation_fields: Vec<(&'static str, OperationValue)>,
 }
 
-impl Default for PopulateDatabaseConfig {
+impl Default for PopulateStoreConfig {
     fn default() -> Self {
         Self {
             no_of_entries: 0,
@@ -61,7 +61,7 @@ impl Default for PopulateDatabaseConfig {
 ///
 /// If there is only one key_pair in the list it will always be the default testing
 /// key pair.
-pub fn test_key_pairs(no_of_public_keys: usize) -> Vec<KeyPair> {
+pub fn many_key_pairs(no_of_public_keys: usize) -> Vec<KeyPair> {
     let mut key_pairs = Vec::new();
     match no_of_public_keys {
         0 => (),
@@ -76,16 +76,16 @@ pub fn test_key_pairs(no_of_public_keys: usize) -> Vec<KeyPair> {
     key_pairs
 }
 
-/// Helper method for populating a `TestDatabase` with configurable data.
+/// Helper method for populating the store with test data.
 ///
-/// Passed parameters define what the db should contain. The first entry in each log contains a
-/// valid CREATE operation following entries contain duplicate UPDATE operations. If the
-/// with_delete flag is set to true the last entry in all logs contain be a DELETE operation.
+/// Passed parameters define what the store should contain. The first entry in each log contains a
+/// valid CREATE operation following entries contain UPDATE operations. If the with_delete flag is set 
+/// to true the last entry in all logs contain be a DELETE operation.
 pub async fn populate_store<S: EntryStore + LogStore + OperationStore>(
     store: &S,
-    config: &PopulateDatabaseConfig,
+    config: &PopulateStoreConfig,
 ) -> (Vec<KeyPair>, Vec<DocumentId>) {
-    let key_pairs = test_key_pairs(config.no_of_public_keys);
+    let key_pairs = many_key_pairs(config.no_of_public_keys);
     let mut documents: Vec<DocumentId> = Vec::new();
     for key_pair in &key_pairs {
         for _log_id in 0..config.no_of_logs {
@@ -187,16 +187,16 @@ mod tests {
     use crate::schema::Schema;
     use crate::storage_provider::traits::DocumentStore;
     use crate::test_utils::constants::SKIPLINK_SEQ_NUMS;
-    use crate::test_utils::db::test_db::{populate_store, PopulateDatabaseConfig};
-    use crate::test_utils::db::MemoryStore;
-    use crate::test_utils::fixtures::{schema, test_db_config};
+    use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig};
+    use crate::test_utils::memory_store::MemoryStore;
+    use crate::test_utils::fixtures::{schema, populate_store_config};
 
     #[rstest]
     #[tokio::test]
     async fn correct_next_args(
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(17, 1, 1)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         populate_store(&store, &config).await;
@@ -247,9 +247,9 @@ mod tests {
     #[tokio::test]
     async fn correct_test_values(
         schema: Schema,
-        #[from(test_db_config)]
+        #[from(populate_store_config)]
         #[with(10, 4, 2)]
-        config: PopulateDatabaseConfig,
+        config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
         let (key_pairs, documents) = populate_store(&store, &config).await;
