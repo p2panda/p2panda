@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Structs and methods for interacting with the `StorageProvider` traits.
+//! Structs and methods for interacting with a storage provider.
 //!
 //! - `MemoryStore` implementation of all storage provider traits
 //! - `domain` and `validation` methods for publishing and validating entries and operations
