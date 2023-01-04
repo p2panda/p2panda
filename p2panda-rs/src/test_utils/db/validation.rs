@@ -238,9 +238,9 @@ mod tests {
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::test_utils::constants::PRIVATE_KEY;
-    use crate::test_utils::db::test_db::{populate_store, test_db_config, PopulateDatabaseConfig};
+    use crate::test_utils::db::test_db::{populate_store, PopulateDatabaseConfig};
     use crate::test_utils::db::MemoryStore;
-    use crate::test_utils::fixtures::{key_pair, random_document_id};
+    use crate::test_utils::fixtures::{key_pair, random_document_id, test_db_config};
 
     use super::{
         ensure_document_not_deleted, get_expected_skiplink, increment_log_id, increment_seq_num,

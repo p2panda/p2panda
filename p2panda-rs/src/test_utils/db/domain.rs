@@ -378,14 +378,12 @@ mod tests {
     use crate::storage_provider::traits::{EntryStore, EntryWithOperation};
     use crate::test_utils::constants::{test_fields, PRIVATE_KEY};
     use crate::test_utils::db::domain::EntryArgsResponse;
-    use crate::test_utils::db::test_db::{
-        populate_store, send_to_store, test_db_config, PopulateDatabaseConfig,
-    };
+    use crate::test_utils::db::test_db::{populate_store, send_to_store, PopulateDatabaseConfig};
     use crate::test_utils::db::validation::get_checked_document_id_for_view_id;
     use crate::test_utils::db::{MemoryStore, StorageEntry};
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, key_pair, operation, public_key,
-        random_document_view_id, random_hash, schema, update_operation,
+        random_document_view_id, random_hash, schema, test_db_config, update_operation,
     };
 
     use super::{next_args, publish};

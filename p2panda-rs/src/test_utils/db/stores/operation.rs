@@ -124,10 +124,10 @@ mod tests {
     use crate::operation::{Operation, OperationId};
     use crate::storage_provider::traits::EntryStore;
     use crate::test_utils::constants;
-    use crate::test_utils::db::test_db::{test_db, TestDatabase};
+    use crate::test_utils::db::test_db::TestDatabase;
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, document_id, key_pair, operation_id, public_key,
-        random_operation_id, random_previous_operations, update_operation,
+        random_operation_id, random_previous_operations, test_db, update_operation,
     };
     use crate::WithId;
 

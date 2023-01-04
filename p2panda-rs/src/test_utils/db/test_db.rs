@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Helper methods for preparing test databases.
-use rstest::fixture;
 
 use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::encode::{encode_entry, sign_entry};
@@ -16,7 +15,6 @@ use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 use crate::storage_provider::utils::Result;
 use crate::test_utils::constants;
 use crate::test_utils::db::{EntryArgsResponse, MemoryStore};
-use crate::test_utils::fixtures::schema;
 
 use super::domain::{next_args, publish};
 
@@ -59,41 +57,6 @@ impl Default for PopulateDatabaseConfig {
     }
 }
 
-/// Fixture for passing in `PopulateDatabaseConfig` into tests.
-#[fixture]
-pub fn test_db_config(
-    // Number of entries per log/document
-    #[default(0)] no_of_entries: usize,
-    // Number of logs for each public key
-    #[default(0)] no_of_logs: usize,
-    // Number of public keys, each with logs populated as defined above
-    #[default(0)] no_of_public_keys: usize,
-    // A boolean flag for whether all logs should contain a delete operation
-    #[default(false)] with_delete: bool,
-    // The schema used for all operations in the db
-    #[from(schema)] schema: Schema,
-    // The fields used for every CREATE operation
-    #[default(constants::test_fields())] create_operation_fields: Vec<(
-        &'static str,
-        OperationValue,
-    )>,
-    // The fields used for every UPDATE operation
-    #[default(constants::test_fields())] update_operation_fields: Vec<(
-        &'static str,
-        OperationValue,
-    )>,
-) -> PopulateDatabaseConfig {
-    PopulateDatabaseConfig {
-        no_of_entries,
-        no_of_logs,
-        no_of_public_keys,
-        with_delete,
-        schema,
-        create_operation_fields,
-        update_operation_fields,
-    }
-}
-
 /// Container for `MemoryStore` with access to the document ids and key_pairs present in the
 /// pre-populated database.
 #[derive(Default, Debug)]
@@ -128,55 +91,6 @@ pub struct TestData {
     /// The id of all documents which were inserted into the store when it was
     /// pre-populated with values.
     pub documents: Vec<DocumentId>,
-}
-
-/// Fixture for constructing a storage provider instance backed by a pre-populated database.
-///
-/// Passed parameters define what the database should contain. The first entry in each log contains
-/// a valid CREATE operation following entries contain UPDATE operations. If the with_delete
-///  flag is set to true the last entry in all logs contain be a DELETE operation.
-#[fixture]
-pub async fn test_db(
-    // Number of entries per log/document
-    #[default(0)] no_of_entries: usize,
-    // Number of logs for each public key
-    #[default(0)] no_of_logs: usize,
-    // Number of public keys, each with logs populated as defined above
-    #[default(0)] no_of_public_keys: usize,
-    // A boolean flag for wether all logs should contain a delete operation
-    #[default(false)] with_delete: bool,
-    // The schema used for all operations in the db
-    #[from(schema)] schema: Schema,
-    // The fields used for every CREATE operation
-    #[default(constants::test_fields())] create_operation_fields: Vec<(
-        &'static str,
-        OperationValue,
-    )>,
-    // The fields used for every UPDATE operation
-    #[default(constants::test_fields())] update_operation_fields: Vec<(
-        &'static str,
-        OperationValue,
-    )>,
-) -> TestDatabase {
-    let config = PopulateDatabaseConfig {
-        no_of_entries,
-        no_of_logs,
-        no_of_public_keys,
-        with_delete,
-        schema,
-        create_operation_fields,
-        update_operation_fields,
-    };
-
-    let store = MemoryStore::default();
-    let (key_pairs, documents) = populate_store(&store, &config).await;
-    TestDatabase::new(
-        &store,
-        TestData {
-            key_pairs,
-            documents,
-        },
-    )
 }
 
 /// Helper for creating many key_pairs.
@@ -309,9 +223,9 @@ mod tests {
     use crate::schema::Schema;
     use crate::storage_provider::traits::DocumentStore;
     use crate::test_utils::constants::SKIPLINK_SEQ_NUMS;
-    use crate::test_utils::fixtures::schema;
+    use crate::test_utils::fixtures::{schema, test_db};
 
-    use super::{test_db, TestDatabase};
+    use super::TestDatabase;
 
     #[rstest]
     #[tokio::test]

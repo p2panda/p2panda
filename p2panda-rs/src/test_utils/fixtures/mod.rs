@@ -13,6 +13,7 @@ mod identity_fixtures;
 mod operation_fixtures;
 mod schema_fixtures;
 mod version_fixtures;
+mod db_fixtures;
 
 // These modules need to be named with the verbose `_fixtures` suffix, otherwise `rstest` will get
 // confused by methods with similar names.
@@ -23,3 +24,4 @@ pub use identity_fixtures::*;
 pub use operation_fixtures::*;
 pub use schema_fixtures::*;
 pub use version_fixtures::*;
+pub use db_fixtures::*;

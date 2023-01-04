@@ -70,8 +70,8 @@ mod tests {
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{DocumentStore, OperationStore};
     use crate::test_utils::constants::{self, test_fields};
-    use crate::test_utils::db::test_db::{test_db, TestDatabase};
-    use crate::test_utils::fixtures::{random_document_id, random_operation_id, schema_id};
+    use crate::test_utils::db::test_db::TestDatabase;
+    use crate::test_utils::fixtures::{test_db, random_document_id, random_operation_id, schema_id};
 
     #[rstest]
     #[tokio::test]
