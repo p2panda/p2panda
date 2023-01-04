@@ -70,11 +70,11 @@ mod tests {
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{DocumentStore, OperationStore};
     use crate::test_utils::constants::{self, test_fields};
+    use crate::test_utils::fixtures::{
+        populate_store_config, random_document_id, random_operation_id, schema_id,
+    };
     use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig};
     use crate::test_utils::memory_store::MemoryStore;
-    use crate::test_utils::fixtures::{
-        random_document_id, random_operation_id, schema_id, populate_store_config,
-    };
 
     #[rstest]
     #[tokio::test]

@@ -16,10 +16,10 @@ use crate::operation::{
 };
 use crate::schema::{Schema, SchemaId};
 use crate::test_utils::constants::{test_fields, HASH, SCHEMA_ID};
-use crate::test_utils::memory_store::PublishedOperation;
 use crate::test_utils::fixtures::{
     document_view_id, key_pair, random_document_id, random_hash, schema, schema_fields, schema_id,
 };
+use crate::test_utils::memory_store::PublishedOperation;
 
 /// Returns constant testing operation id.
 #[fixture]

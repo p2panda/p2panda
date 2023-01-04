@@ -79,8 +79,8 @@ mod tests {
     use crate::identity::KeyPair;
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::LogStore;
-    use crate::test_utils::memory_store::MemoryStore;
     use crate::test_utils::fixtures::{document_id, key_pair, schema_id};
+    use crate::test_utils::memory_store::MemoryStore;
 
     #[rstest]
     #[tokio::test]

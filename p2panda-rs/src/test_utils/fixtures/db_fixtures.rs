@@ -5,8 +5,8 @@ use rstest::fixture;
 use crate::operation::OperationValue;
 use crate::schema::Schema;
 use crate::test_utils::constants;
-use crate::test_utils::memory_store::helpers::PopulateStoreConfig;
 use crate::test_utils::fixtures::schema;
+use crate::test_utils::memory_store::helpers::PopulateStoreConfig;
 
 /// Fixture for passing `PopulateStoreConfig` into tests.
 #[fixture]

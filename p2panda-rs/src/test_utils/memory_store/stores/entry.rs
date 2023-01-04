@@ -174,9 +174,9 @@ mod tests {
     use crate::identity::KeyPair;
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{EntryStore, LogStore};
+    use crate::test_utils::fixtures::{encoded_entry, key_pair, populate_store_config, schema_id};
     use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig};
     use crate::test_utils::memory_store::MemoryStore;
-    use crate::test_utils::fixtures::{encoded_entry, key_pair, schema_id, populate_store_config};
 
     #[rstest]
     #[tokio::test]

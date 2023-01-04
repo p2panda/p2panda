@@ -117,8 +117,8 @@ mod tests {
     use crate::document::{DocumentViewFields, DocumentViewValue};
     use crate::operation::traits::AsOperation;
     use crate::operation::{OperationId, OperationValue};
-    use crate::test_utils::memory_store::PublishedOperation;
     use crate::test_utils::fixtures::{published_operation, random_operation_id};
+    use crate::test_utils::memory_store::PublishedOperation;
     use crate::WithId;
 
     #[rstest]

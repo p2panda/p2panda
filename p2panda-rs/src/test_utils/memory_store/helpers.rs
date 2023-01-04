@@ -79,7 +79,7 @@ pub fn many_key_pairs(no_of_public_keys: usize) -> Vec<KeyPair> {
 /// Helper method for populating the store with test data.
 ///
 /// Passed parameters define what the store should contain. The first entry in each log contains a
-/// valid CREATE operation following entries contain UPDATE operations. If the with_delete flag is set 
+/// valid CREATE operation following entries contain UPDATE operations. If the with_delete flag is set
 /// to true the last entry in all logs contain be a DELETE operation.
 pub async fn populate_store<S: EntryStore + LogStore + OperationStore>(
     store: &S,
@@ -187,9 +187,9 @@ mod tests {
     use crate::schema::Schema;
     use crate::storage_provider::traits::DocumentStore;
     use crate::test_utils::constants::SKIPLINK_SEQ_NUMS;
+    use crate::test_utils::fixtures::{populate_store_config, schema};
     use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig};
     use crate::test_utils::memory_store::MemoryStore;
-    use crate::test_utils::fixtures::{schema, populate_store_config};
 
     #[rstest]
     #[tokio::test]
