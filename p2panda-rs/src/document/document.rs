@@ -40,8 +40,8 @@ pub struct DocumentMeta {
 /// with any branches being ordered according to the conflicting operations [`OperationId`]. Each operation's
 /// mutation is applied in order which results in a LWW (last write wins) resolution strategy.
 ///
-/// All documents have an accomapanying `Schema` which describes the shape of the data they will contain. Every
-/// operation should have been validated aginst this schema before being included in the graph.
+/// All documents have an accompanying `Schema` which describes the shape of the data they will contain. Every
+/// operation should have been validated against this schema before being included in the graph.
 ///
 /// Documents are constructed through the [`DocumentBuilder`] or by conversion from vectors of a type implementing
 /// the [`AsOperation`], [`WithOperationId`] and [`WithPublicKey`].
