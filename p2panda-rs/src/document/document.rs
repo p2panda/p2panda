@@ -44,7 +44,7 @@ pub struct Document {
     fields: Option<DocumentViewFields>,
 
     /// The id of the schema this document follows.
-    schema: SchemaId,
+    schema_id: SchemaId,
 
     /// The id of the current view of this document.
     view_id: DocumentViewId,
@@ -84,8 +84,8 @@ impl Document {
     }
 
     /// Get the document schema.
-    pub fn schema(&self) -> &SchemaId {
-        &self.schema
+    pub fn schema_id(&self) -> &SchemaId {
+        &self.schema_id
     }
 
     /// The current document view for this document. Returns None if this document
@@ -206,7 +206,7 @@ impl DocumentBuilder {
             }?;
 
         // Get the document schema
-        let schema = create_operation.schema_id();
+        let schema_id = create_operation.schema_id();
 
         // Get the document author (or rather, the public key of the author who created this
         // document)
@@ -216,7 +216,7 @@ impl DocumentBuilder {
         let schema_error = self
             .operations()
             .iter()
-            .any(|(_, operation, _)| operation.schema_id() != schema);
+            .any(|(_, operation, _)| operation.schema_id() != schema_id);
 
         if schema_error {
             return Err(DocumentBuilderError::OperationSchemaNotMatching);
@@ -251,7 +251,7 @@ impl DocumentBuilder {
         Ok(Document {
             id: document_id,
             view_id: document_view_id,
-            schema,
+            schema_id,
             author,
             fields,
             edited: is_edited,
@@ -499,7 +499,7 @@ mod tests {
         assert!(document.is_edited());
         assert!(!document.is_deleted());
         assert_eq!(document.author(), &panda.public_key());
-        assert_eq!(document.schema(), schema.id());
+        assert_eq!(document.schema_id(), schema.id());
         assert_eq!(document.view_id().graph_tips(), expected_graph_tips);
         assert_eq!(document.id(), &document_id);
 
@@ -531,7 +531,7 @@ mod tests {
         assert!(replica_1.is_edited());
         assert!(!replica_1.is_deleted());
         assert_eq!(replica_1.author(), &panda.public_key());
-        assert_eq!(replica_1.schema(), schema.id());
+        assert_eq!(replica_1.schema_id(), schema.id());
         assert_eq!(replica_1.view_id().graph_tips(), expected_graph_tips);
         assert_eq!(replica_1.id(), &document_id);
 

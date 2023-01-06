@@ -61,7 +61,7 @@ impl DocumentStore for MemoryStore {
             .insert(document.id().to_owned(), document.to_owned());
 
         if !document.is_deleted() {
-            self.insert_document_view(&document.view().unwrap(), document.schema())
+            self.insert_document_view(&document.view().unwrap(), document.schema_id())
                 .await?;
         }
 
@@ -86,7 +86,7 @@ impl DocumentStore for MemoryStore {
             .get(id)
             .map(|document| document.to_owned())
         {
-            Some(document) => Ok(document.view().map(|view| view.to_owned())),
+            Some(document) => Ok(document.view()),
             None => Ok(None),
         }
     }
@@ -104,7 +104,7 @@ impl DocumentStore for MemoryStore {
             .lock()
             .unwrap()
             .iter()
-            .filter(|(_, document)| document.schema() == schema_id)
+            .filter(|(_, document)| document.schema_id() == schema_id)
             .filter_map(|(_, document)| document.view())
             .collect();
 
