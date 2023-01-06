@@ -15,7 +15,7 @@ use crate::storage_provider::error::EntryStorageError;
 ///
 /// This trait should be implemented on the root storage provider struct. It's definitions make up
 /// the required methods for inserting and querying entries from storage.
-/// 
+///
 /// Where a method takes several parameters it is assumed that passed values are have the expected relationship
 /// and any required validation has already been performed.
 #[async_trait]
