@@ -372,7 +372,9 @@ mod tests {
             .sorted();
 
         for (operation_id, _, _) in ordered_operations {
-            let document = document_builder.build_to_view_id(Some(operation_id.into())).unwrap();
+            let document = document_builder
+                .build_to_view_id(Some(operation_id.into()))
+                .unwrap();
             let result = db.store.insert_document(&document).await;
             assert!(result.is_ok());
 
