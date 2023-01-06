@@ -61,7 +61,7 @@ impl DocumentStore for MemoryStore {
             .insert(document.id().to_owned(), document.to_owned());
 
         if !document.is_deleted() {
-            self.insert_document_view(document.view().unwrap(), document.schema())
+            self.insert_document_view(&document.view().unwrap(), document.schema())
                 .await?;
         }
 
@@ -105,7 +105,7 @@ impl DocumentStore for MemoryStore {
             .unwrap()
             .iter()
             .filter(|(_, document)| document.schema() == schema_id)
-            .filter_map(|(_, document)| document.view().cloned())
+            .filter_map(|(_, document)| document.view())
             .collect();
 
         Ok(documents)
@@ -118,6 +118,7 @@ mod tests {
 
     use rstest::rstest;
 
+    use crate::document::materialization::build_graph;
     use crate::document::{
         Document, DocumentBuilder, DocumentView, DocumentViewFields, DocumentViewId,
     };
@@ -363,17 +364,15 @@ mod tests {
             .await
             .unwrap();
 
-        let document = Document::try_from(&operations).unwrap();
+        let document_builder = DocumentBuilder::from(&operations);
+        let ordered_operations = build_graph(&document_builder.operations())
+            .unwrap()
+            .sort()
+            .unwrap()
+            .sorted();
 
-        let mut current_operations = Vec::new();
-
-        for operation in document.operations() {
-            // For each operation in the db we insert a document, cumulatively adding the next operation
-            // each time. this should perform an "INSERT" first in the documents table, followed by 9 "UPDATES".
-            current_operations.push(operation.clone());
-            let document = DocumentBuilder::new(current_operations.clone())
-                .build()
-                .unwrap();
+        for (operation_id, _, _) in ordered_operations {
+            let document = document_builder.build_to_view_id(Some(operation_id.into())).unwrap();
             let result = db.store.insert_document(&document).await;
             assert!(result.is_ok());
 
