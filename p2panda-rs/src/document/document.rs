@@ -19,6 +19,7 @@ pub type IsEdited = bool;
 /// Flag to indicate if document was deleted by at least one author.
 pub type IsDeleted = bool;
 
+/// Metadata attached to a document as well as all of it's operations.
 #[derive(Debug, Clone, Default)]
 pub struct DocumentMeta {
     /// Flag indicating if document was deleted.
@@ -31,12 +32,21 @@ pub struct DocumentMeta {
     operations: Vec<(OperationId, Operation, PublicKey)>,
 }
 
-/// A replicatable data type designed to handle concurrent updates in a way where all replicas
-/// eventually resolve to the same deterministic value.
+/// High-level datatype representing data published to the p2panda network as key-value pairs.
 ///
-/// `Document`s contain a fixed set of sorted operations along with their resolved document view
-/// and metadata. Documents are constructed by passing an unsorted collection of operations to
-/// the `DocumentBuilder`.
+/// Documents are multi-writer and have automatic conflict resolution strategies which produce deterministic
+/// state for any two replicas. The underlying structure which make this possible is a directed acyclic graph
+/// of [`Operation`]'s. To arrive at the current state of a document the graph is topologically sorted,
+/// with any branches being ordered according to the conflicting operations [`OperationId`]. Each operation's
+/// mutation is applied in order which results in a LWW (last write wins) resolution strategy.
+///
+/// All documents have an accomapanying `Schema` which describes the shape of the data they will contain. Every
+/// operation should have been validated aginst this schema before being included in the graph.
+///
+/// Documents are constructed through the [`DocumentBuilder`] or by conversion from vectors of a type implementing
+/// the [`AsOperation`], [`WithOperationId`] and [`WithPublicKey`].
+///
+/// See module docs for example uses.
 #[derive(Debug, Clone)]
 pub struct Document {
     id: DocumentId,
