@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Traits describing the minimum required API which should be implemented by any
-//! persistent storage layer handling data for a p2panda peer.
+//! Traits describing the interfaces which should be implemented by any storage
+//! layer intended to be used by a p2panda peer. With these traits implemented
+//! one can store and query `Entries` and `Operations` and query `Logs` and
+//! `Documents`.
 //!
 //! The primary data types which require persisting are `Entry` and `Operation`. These
 //! are the immutable objects which peers publish and replicate. Their storage methods  
