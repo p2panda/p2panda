@@ -13,7 +13,20 @@ use crate::WithId;
 
 use super::OperationStore;
 
-/// Storage traits for documents and document views.
+/// Interface for querying `Documents` from the store.
+/// 
+/// `Documents` are the high level data types most applications will concern themselves with. They
+/// are mutated by peers publishing operations which contain changes to one or many of the documents
+/// key-value pairs. 
+/// 
+/// We call the process of turning a bunch of operations into a document materialisation. The interface
+/// outlined in these traits offers a simple API for querying documents by their id or schema. As each
+/// node implementation may approach materialising documents in different ways, it is expected that the
+/// storage API for documents will be expanded to suit their needs.
+/// 
+/// The default methods implemented here naively rebuild documents on demand and are only intended to 
+/// offer convenient access likely in testing environments. It is expected that they will be overwritten
+/// with something more performant.
 #[async_trait]
 pub trait DocumentStore: OperationStore {
     async fn get_document(
