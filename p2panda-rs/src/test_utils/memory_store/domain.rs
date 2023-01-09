@@ -374,7 +374,7 @@ mod tests {
         Operation, OperationAction, OperationBuilder, OperationId, OperationValue,
     };
     use crate::schema::{FieldType, Schema};
-    use crate::storage_provider::traits::{EntryStore, EntryWithOperation};
+    use crate::storage_provider::traits::EntryStore;
     use crate::test_utils::constants::{test_fields, PRIVATE_KEY};
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, key_pair, operation, populate_store_config, public_key,

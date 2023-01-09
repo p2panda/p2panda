@@ -21,11 +21,9 @@
 mod document_store;
 mod entry_store;
 mod log_store;
-mod models;
 mod operation_store;
 
 pub use document_store::DocumentStore;
 pub use entry_store::EntryStore;
 pub use log_store::LogStore;
-pub use models::EntryWithOperation;
 pub use operation_store::OperationStore;
