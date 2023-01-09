@@ -170,7 +170,7 @@ mod tests {
 
     use crate::entry::decode::decode_entry;
     use crate::entry::traits::{AsEncodedEntry, AsEntry};
-    use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
+    use crate::entry::{EncodedEntry, LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{EntryStore, LogStore};
@@ -199,11 +199,9 @@ mod tests {
         assert!(entry_at_seq_num.is_ok());
 
         let entry_at_seq_num = entry_at_seq_num.unwrap().unwrap();
-        let fetched_entry: Entry = entry_at_seq_num.clone().into();
-        let fetched_encoded_entry: EncodedEntry = entry_at_seq_num.into();
 
-        assert_eq!(fetched_entry, entry);
-        assert_eq!(fetched_encoded_entry, encoded_entry);
+        assert_eq!(entry_at_seq_num.seq_num(), entry.seq_num());
+        assert_eq!(entry_at_seq_num.hash(), encoded_entry.hash());
     }
 
     #[rstest]
@@ -234,8 +232,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        let fetched_entry: EncodedEntry = fetched_entry.into();
-        assert_eq!(fetched_entry, encoded_entry);
+        assert_eq!(fetched_entry.hash(), encoded_entry.hash());
     }
 
     #[rstest]

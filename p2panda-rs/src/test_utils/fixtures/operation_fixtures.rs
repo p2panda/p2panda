@@ -4,7 +4,8 @@ use rstest::fixture;
 
 use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::encode::{encode_entry, sign_entry};
-use crate::entry::{LogId, SeqNum};
+use crate::entry::{Entry, LogId, SeqNum};
+use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::encode::{encode_operation, encode_plain_operation};
 use crate::operation::plain::PlainOperation;
@@ -174,8 +175,8 @@ pub fn published_operation(
     let (operation, id) = validate_operation_with_entry(
         &entry,
         &entry_encoded,
-        None,
-        None,
+        None::<(&Entry, &Hash)>,
+        None::<(&Entry, &Hash)>,
         &operation_plain,
         &operation_encoded,
         &schema,

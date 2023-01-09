@@ -11,7 +11,8 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 use p2panda_rs::document::DocumentViewId;
 use p2panda_rs::entry::decode::decode_entry;
 use p2panda_rs::entry::encode::encode_entry;
-use p2panda_rs::entry::{EncodedEntry, EntryBuilder};
+use p2panda_rs::entry::{EncodedEntry, Entry, EntryBuilder};
+use p2panda_rs::hash::Hash;
 use p2panda_rs::identity::KeyPair;
 use p2panda_rs::operation::decode::decode_operation;
 use p2panda_rs::operation::encode::encode_operation;
@@ -51,8 +52,8 @@ fn run_decode(encoded_entry: &EncodedEntry, encoded_operation: &EncodedOperation
     validate_operation_with_entry(
         &entry,
         encoded_entry,
-        None,
-        None,
+        None::<(&Entry, &Hash)>,
+        None::<(&Entry, &Hash)>,
         &plain_operation,
         encoded_operation,
         schema,

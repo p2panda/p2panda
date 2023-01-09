@@ -2,9 +2,8 @@
 
 //! Collection of low-level validation methods for operations.
 use crate::document::DocumentViewId;
-use crate::entry::traits::AsEncodedEntry;
+use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::validate::{validate_log_integrity, validate_payload};
-use crate::entry::{EncodedEntry, Entry};
 use crate::hash::Hash;
 use crate::operation::error::ValidateOperationError;
 use crate::operation::plain::{PlainFields, PlainOperation};
@@ -83,10 +82,10 @@ use crate::Human;
 /// ```
 #[allow(clippy::too_many_arguments)]
 pub fn validate_operation_with_entry(
-    entry: &Entry,
-    entry_encoded: &EncodedEntry,
-    skiplink: Option<(&Entry, &Hash)>,
-    backlink: Option<(&Entry, &Hash)>,
+    entry: &impl AsEntry,
+    entry_encoded: &impl AsEncodedEntry,
+    skiplink: Option<(&impl AsEntry, &Hash)>,
+    backlink: Option<(&impl AsEntry, &Hash)>,
     plain_operation: &PlainOperation,
     operation_encoded: &EncodedOperation,
     schema: &Schema,
@@ -111,8 +110,8 @@ pub fn validate_operation_with_entry(
 /// This method checks against:
 ///
 /// 1. Correct operation format (#OP2)
-pub fn validate_operation_format<O: Actionable + Schematic>(
-    operation: &O,
+pub fn validate_operation_format(
+    operation: &(impl Actionable + Schematic),
 ) -> Result<(), ValidateOperationError> {
     match operation.action() {
         OperationAction::Create => {
@@ -139,8 +138,8 @@ pub fn validate_operation_format<O: Actionable + Schematic>(
 /// 2. Correct canonic operation field values, like document view ids of pinned relations (no
 ///    duplicates, sorted) (#OP3)
 /// 3. Schema matches the given operation fields (#OP4)
-pub fn validate_operation<O: Actionable + Schematic>(
-    operation: &O,
+pub fn validate_operation(
+    operation: &(impl Actionable + Schematic),
     schema: &Schema,
 ) -> Result<Operation, ValidateOperationError> {
     let previous = operation.previous();

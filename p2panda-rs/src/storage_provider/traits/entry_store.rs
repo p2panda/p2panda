@@ -21,7 +21,7 @@ use crate::storage_provider::error::EntryStorageError;
 #[async_trait]
 pub trait EntryStore {
     /// An associated type representing an entry retrieved from storage.
-    type Entry: AsEntry + AsEncodedEntry + Into<P2pandaEntry>;
+    type Entry: AsEntry + AsEncodedEntry;
 
     /// Insert an entry in it's encoded and decoded form into the store and optionally it's operation.
     ///

@@ -7,6 +7,8 @@ use crate::entry::{LogId, SeqNum, Signature};
 use crate::hash::Hash;
 use crate::identity::PublicKey;
 
+use super::SIGNATURE_SIZE;
+
 /// Trait representing an "entry-like" struct.
 pub trait AsEntry {
     /// Returns public key of entry.
@@ -62,6 +64,16 @@ pub trait AsEncodedEntry {
 
     /// Returns payload size (number of bytes) of total encoded entry.
     fn size(&self) -> u64;
+
+    /// Returns only those bytes of a signed entry that don't contain the signature.
+    ///
+    /// Encoded entries contains both a signature as well as the bytes that were signed. In order
+    /// to verify the signature you need access to only the bytes that were used during signing.
+    fn unsigned_bytes(&self) -> Vec<u8> {
+        let bytes = self.into_bytes();
+        let signature_offset = bytes.len() - SIGNATURE_SIZE;
+        bytes[..signature_offset].into()
+    }
 
     /// Returns the entry bytes encoded as a hex string.
     #[allow(clippy::wrong_self_convention)]

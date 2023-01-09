@@ -9,8 +9,7 @@ use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 use crate::document::DocumentViewId;
 use crate::entry::decode::decode_entry;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
-use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
-use crate::hash::Hash;
+use crate::entry::{EncodedEntry, LogId, SeqNum};
 use crate::identity::PublicKey;
 use crate::operation::plain::PlainOperation;
 use crate::operation::traits::AsOperation;
@@ -243,14 +242,14 @@ pub async fn publish<S: EntryStore + LogStore + OperationStore>(
         None => None,
     };
 
-    let skiplink_params: Option<(Entry, Hash)> = skiplink.map(|entry| {
+    let skiplink_params = skiplink.map(|entry| {
         let hash = entry.hash();
-        (entry.into(), hash)
+        (entry, hash)
     });
 
-    let backlink_params: Option<(Entry, Hash)> = backlink.map(|entry| {
+    let backlink_params = backlink.map(|entry| {
         let hash = entry.hash();
-        (entry.into(), hash)
+        (entry, hash)
     });
 
     // Perform validation of the entry and it's operation.
@@ -537,7 +536,7 @@ mod tests {
         let result = publish(
             &store,
             &schema,
-            &next_entry.clone().into(),
+            &next_entry.encoded_entry,
             &decode_operation(operation).unwrap(),
             operation,
         )
@@ -1021,7 +1020,7 @@ mod tests {
         let result = publish(
             &store,
             &schema,
-            &encoded_entry.clone(),
+            &encoded_entry,
             &decode_operation(&encoded_operation).unwrap(),
             &encoded_operation,
         )

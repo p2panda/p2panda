@@ -16,7 +16,7 @@ use bamboo_rs_core_ed25519_yasmf::decode;
 use crate::entry::error::DecodeEntryError;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::validate::{validate_links, validate_signature};
-use crate::entry::{EncodedEntry, Entry};
+use crate::entry::Entry;
 
 /// Method to decode an entry.
 ///
@@ -36,7 +36,7 @@ use crate::entry::{EncodedEntry, Entry};
 ///
 /// Check out the `decode_operation_with_entry` method in the `operation` module if you're
 /// interested in full verification of both entries and operations.
-pub fn decode_entry(entry_encoded: &EncodedEntry) -> Result<Entry, DecodeEntryError> {
+pub fn decode_entry(entry_encoded: &impl AsEncodedEntry) -> Result<Entry, DecodeEntryError> {
     let bytes = entry_encoded.into_bytes();
 
     // Decode the bamboo entry as per specification (#E2)
