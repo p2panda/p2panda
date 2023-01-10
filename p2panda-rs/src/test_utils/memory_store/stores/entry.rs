@@ -20,7 +20,8 @@ use crate::test_utils::memory_store::{MemoryStore, StorageEntry};
 impl EntryStore for MemoryStore {
     type Entry = StorageEntry;
 
-    /// Insert an entry into storage.
+    /// Insert an `Entry` to the store in it's encoded and decoded form. Optionally also store it's encoded
+    /// operation.
     async fn insert_entry(
         &self,
         entry: &Entry,
@@ -40,14 +41,14 @@ impl EntryStore for MemoryStore {
         Ok(())
     }
 
-    /// Get an entry by it's hash id.
+    /// Get an `Entry` by it's `Hash`.
     async fn get_entry(&self, hash: &Hash) -> Result<Option<StorageEntry>, EntryStorageError> {
         let entries = self.entries.lock().unwrap();
 
         Ok(entries.get(hash).cloned())
     }
 
-    /// Returns entry at sequence position within a log.
+    /// Get an `Entry` at sequence position within a `PublicKey`'s log.
     async fn get_entry_at_seq_num(
         &self,
         public_key: &PublicKey,
@@ -65,7 +66,7 @@ impl EntryStore for MemoryStore {
         Ok(entry.cloned())
     }
 
-    /// Returns the latest Bamboo entry of a log.
+    /// Get the latest `Entry` of `PublicKey`'s log.
     async fn get_latest_entry(
         &self,
         public_key: &PublicKey,
@@ -81,7 +82,7 @@ impl EntryStore for MemoryStore {
         Ok(latest_entry.map(|(_, entry)| entry).cloned())
     }
 
-    /// Returns the given range of log entries.
+    /// Get all `Entries` of a log from a specified sequence number up to passed max number of `Entries`.
     async fn get_paginated_log_entries(
         &self,
         public_key: &PublicKey,
@@ -108,7 +109,7 @@ impl EntryStore for MemoryStore {
         Ok(entries)
     }
 
-    /// Return vector of all entries of a given schema
+    /// Get all `Entries` for the passed `SchemaId`.
     async fn get_entries_by_schema(
         &self,
         schema: &SchemaId,
@@ -135,6 +136,7 @@ impl EntryStore for MemoryStore {
         Ok(entries)
     }
 
+    /// Get all `Entries` which make up the certificate pool for the given `Entry`.
     async fn get_certificate_pool(
         &self,
         public_key: &PublicKey,
@@ -217,8 +219,6 @@ mod tests {
             .await
             .unwrap()
             .is_none());
-
-        // Insert an entry into the store.
 
         // Insert an entry into the store.
         assert!(store

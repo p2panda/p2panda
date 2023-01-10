@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Structs and methods for interacting with a storage provider.
+//! Structs and methods for validating, publishing, storing and retrieving p2panda data.
 //!
 //! - `MemoryStore` implementation of all storage provider traits
-//! - `domain` and `validation` methods for publishing and validating entries and operations
+//! - `domain` and `validation` modules for publishing and validating entries and operations
 //! - helpers for populating a store with test data
 pub mod domain;
 pub mod helpers;

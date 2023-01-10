@@ -14,6 +14,7 @@ use crate::test_utils::memory_store::MemoryStore;
 /// Implement the `LogStore` trait on MemoryStore
 #[async_trait]
 impl LogStore for MemoryStore {
+    /// Insert a log into the store.
     async fn insert_log(
         &self,
         log_id: &LogId,
@@ -36,7 +37,7 @@ impl LogStore for MemoryStore {
         Ok(true)
     }
 
-    /// Get a log from storage
+    /// Get the `LogId` for a `PublicKey` and `DocumentId`.
     async fn get_log_id(
         &self,
         public_key: &PublicKey,
@@ -52,6 +53,7 @@ impl LogStore for MemoryStore {
         Ok(log_id.cloned())
     }
 
+    /// Get the latest used `LogId` for a `PublicKey`.
     async fn latest_log_id(
         &self,
         public_key: &PublicKey,

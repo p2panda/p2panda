@@ -17,6 +17,7 @@ use crate::WithId;
 impl OperationStore for MemoryStore {
     type Operation = PublishedOperation;
 
+    /// Insert an `Operation` into the store.
     async fn insert_operation(
         &self,
         id: &OperationId,
@@ -49,10 +50,7 @@ impl OperationStore for MemoryStore {
         Ok(())
     }
 
-    /// Get an operation identified by it's OperationId.
-    ///
-    /// Returns a type implementing `AsVerifiedOperation` which includes `PublicKey`, `DocumentId` and
-    /// `OperationId` metadata.
+    /// Get an `Operation` identified by it's `OperationId`, returns `None` if no `Operation` was found.
     async fn get_operation(
         &self,
         id: &OperationId,
@@ -61,10 +59,7 @@ impl OperationStore for MemoryStore {
         Ok(operations.get(id).cloned())
     }
 
-    /// Get the id of the document an operation is contained within.
-    ///
-    /// If no document was found, then this method returns a result wrapping
-    /// a None variant.
+    /// Get the `DocumentId` for an `Operation`.
     async fn get_document_id_by_operation_id(
         &self,
         id: &OperationId,
@@ -77,11 +72,7 @@ impl OperationStore for MemoryStore {
             .cloned())
     }
 
-    /// Get all operations which are part of a specific document.
-    ///
-    /// Returns a result containing a vector of operations. If no document
-    /// was found then an empty vector is returned. Errors if a fatal storage
-    /// error occured.
+    /// Get all `Operations` for a single `Document`.
     async fn get_operations_by_document_id(
         &self,
         id: &DocumentId,
@@ -94,11 +85,7 @@ impl OperationStore for MemoryStore {
             .collect())
     }
 
-    /// Get all operations which follow a certain schema.
-    ///
-    /// Returns a result containing a vector of operations. If no schema
-    /// was found then an empty vector is returned. Errors if a fatal storage
-    /// error occured.
+    /// Get all `Operations` for a certain `Schema`.
     async fn get_operations_by_schema_id(
         &self,
         id: &SchemaId,

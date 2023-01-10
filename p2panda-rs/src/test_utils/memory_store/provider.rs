@@ -15,7 +15,7 @@ use crate::test_utils::memory_store::{PublishedOperation, StorageEntry};
 type PublickeyLogId = String;
 type Log = (PublicKey, LogId, SchemaId, DocumentId);
 
-/// An in-memory implementation of p2panda storage provider.
+/// An in-memory implementation of p2panda storage traits.
 ///
 /// Primarily used in testing environments.
 #[derive(Default, Debug, Clone)]
