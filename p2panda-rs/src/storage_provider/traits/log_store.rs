@@ -8,13 +8,18 @@ use crate::identity::PublicKey;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::LogStorageError;
 
-/// Trait which defines storage actions relating to logs.
+/// Storage interface for inserting and querying `Entries`.
 ///
-/// This trait should be implemented on the root storage provider struct. It's definitions
-/// make up the required methods for inserting and querying logs from storage.
+/// Logs are derived from the `Entries` which arrive at and are stored on a node. These methods 
+/// should be used to store new logs when so needed and then to perform queries on the stored data.
+/// 
+/// Each log, as well as all `Entries` and `Operations` it contains, is associated with exactly one 
+/// `PublicKey`, `SchemaId` and `DocumentId`.
 #[async_trait]
 pub trait LogStore {
-    /// Insert a log into storage.
+    /// Insert a log into the store.
+    /// 
+    /// 
     async fn insert_log(
         &self,
         log_id: &LogId,
@@ -23,19 +28,18 @@ pub trait LogStore {
         document: &DocumentId,
     ) -> Result<bool, LogStorageError>;
 
-    /// Get the log id for a public key and document id.
+    /// Get the log id for a `PublicKey` and `DocumentId`.
     ///
-    /// Returns an option containing the id or none if no log exists for the requested
-    /// public key and document id.
+    /// Returns a `LogId` or `None` if no log exists with the passed `PublicKey` and `DocumentId`.
     async fn get_log_id(
         &self,
         public_key: &PublicKey,
         document_id: &DocumentId,
     ) -> Result<Option<LogId>, LogStorageError>;
 
-    /// Determines the latest used log id for a public key.
+    /// Determines the latest used `LogId` for a `PublicKey`.
     ///
-    /// Returns None when no log has been used yet.
+    /// Returns a `LogId` or `None` if the passed `PublicKey` has not published any entry yet.
     async fn latest_log_id(&self, public_key: &PublicKey)
         -> Result<Option<LogId>, LogStorageError>;
 }
