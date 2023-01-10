@@ -19,7 +19,7 @@ use crate::storage_provider::error::LogStorageError;
 pub trait LogStore {
     /// Insert a log into the store.
     /// 
-    /// 
+    /// Returns an error if a fatal storage error occurred.
     async fn insert_log(
         &self,
         log_id: &LogId,
@@ -28,7 +28,7 @@ pub trait LogStore {
         document: &DocumentId,
     ) -> Result<bool, LogStorageError>;
 
-    /// Get the log id for a `PublicKey` and `DocumentId`.
+    /// Get the `LogId` for a `PublicKey` and `DocumentId`.
     ///
     /// Returns a `LogId` or `None` if no log exists with the passed `PublicKey` and `DocumentId`.
     async fn get_log_id(
@@ -37,7 +37,7 @@ pub trait LogStore {
         document_id: &DocumentId,
     ) -> Result<Option<LogId>, LogStorageError>;
 
-    /// Determines the latest used `LogId` for a `PublicKey`.
+    /// Get the latest used `LogId` for a `PublicKey`.
     ///
     /// Returns a `LogId` or `None` if the passed `PublicKey` has not published any entry yet.
     async fn latest_log_id(&self, public_key: &PublicKey)
