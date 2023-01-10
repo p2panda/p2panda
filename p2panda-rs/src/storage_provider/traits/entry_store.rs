@@ -11,19 +11,24 @@ use crate::operation::EncodedOperation;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::EntryStorageError;
 
-/// Trait which handles all storage actions relating to entries.
+/// Storage interface for storing and querying `Entries`.
 ///
-/// This trait should be implemented on the root storage provider struct. It's definitions make up
-/// the required methods for inserting and querying entries from storage.
+/// `Entries` are a core data type of p2panda, they form an append-only bamboo log structure and carry
+/// an `Operation` as their deletable payload.
 ///
-/// Where a method takes several parameters it is assumed that passed values are have the expected relationship
-/// and any required validation has already been performed.
+/// Where a method takes several parameters it is assumed that passed values have the expected relationship
+/// and any required validation has already been performed (see `validation` and `domain` modules).
 #[async_trait]
 pub trait EntryStore {
-    /// An associated type representing an entry retrieved from storage.
+    /// Associated type representing an entry retrieved from storage.
     type Entry: AsEntry + AsEncodedEntry;
 
-    /// Insert an entry in it's encoded and decoded form into the store and optionally it's operation.
+    /// Insert an entry to the store in it's encoded and decoded form. Optionally also store it's encoded
+    /// operation.
+    ///
+    /// Entries are decoded on arrival to a node and their decoded values would be persisted using this
+    /// method. We also expect the encoded form to be persisted to avoid encoding values once again when
+    /// replicating entries to other peers.
     ///
     /// Returns an error if a fatal storage error occured.
     async fn insert_entry(
@@ -46,9 +51,13 @@ pub trait EntryStore {
     ) -> Result<Option<Self::Entry>, EntryStorageError>;
 
     /// Get an entry by it's hash.
+    ///
+    /// Returns a result containing an entry wrapped in an option. If no entry could
+    /// be found for this hash then None is returned. Errors when a fatal storage error 
+    /// occurs.
     async fn get_entry(&self, hash: &Hash) -> Result<Option<Self::Entry>, EntryStorageError>;
 
-    /// Get the latest Bamboo entry of public key's log.
+    /// Get the latest entry of public key's log.
     ///
     /// Returns a result containing an entry wrapped in an option. If no log was
     /// could be found at this public key - log location then None is returned.
@@ -59,11 +68,10 @@ pub trait EntryStore {
         log_id: &LogId,
     ) -> Result<Option<Self::Entry>, EntryStorageError>;
 
-    /// Get a vector of all entries of a given schema.
+    /// Get all entries of a given schema.
     ///
-    /// Returns a result containing vector of entries wrapped in an option.
-    /// If no schema with this id could be found then None is returned.
-    /// Errors when a fatal storage error occurs.
+    /// Returns a result containing a vector of entries or None if no schema with this id could be found
+    /// or if a schema was found but no entries. Errors when a fatal storage error occurs.
     async fn get_entries_by_schema(
         &self,
         schema: &SchemaId,
@@ -83,9 +91,8 @@ pub trait EntryStore {
 
     /// Get all entries which make up the certificate pool for the given entry.
     ///
-    /// Returns a result containing vector of entries wrapped in an option. If no entry
-    /// could be found at this public key - log - seq number location then an error is
-    /// returned.
+    /// Returns a result containing vector of entries or None if no entry could be found at 
+    /// this public key - log - seq number location. Errors when a fatal storage error occurs.
     async fn get_certificate_pool(
         &self,
         author_id: &PublicKey,
