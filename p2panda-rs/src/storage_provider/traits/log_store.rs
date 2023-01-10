@@ -10,15 +10,15 @@ use crate::storage_provider::error::LogStorageError;
 
 /// Storage interface for inserting and querying `Entries`.
 ///
-/// Logs are derived from the `Entries` which arrive at and are stored on a node. These methods 
+/// Logs are derived from the `Entries` which arrive at and are stored on a node. These methods
 /// should be used to store new logs when so needed and then to perform queries on the stored data.
-/// 
-/// Each log, as well as all `Entries` and `Operations` it contains, is associated with exactly one 
+///
+/// Each log, as well as all `Entries` and `Operations` it contains, is associated with exactly one
 /// `PublicKey`, `SchemaId` and `DocumentId`.
 #[async_trait]
 pub trait LogStore {
     /// Insert a log into the store.
-    /// 
+    ///
     /// Returns an error if a fatal storage error occurred.
     async fn insert_log(
         &self,

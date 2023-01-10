@@ -68,7 +68,7 @@ pub trait OperationStore {
 
     /// Get all `Operations` for a certain `Schema`.
     ///
-    /// Returns a result containing a vector of `Operations`. If no schema was found then an empty vector 
+    /// Returns a result containing a vector of `Operations`. If no schema was found then an empty vector
     /// is returned. Errors if a fatal storage error ocurred.
     async fn get_operations_by_schema_id(
         &self,

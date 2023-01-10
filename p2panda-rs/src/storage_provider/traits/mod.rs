@@ -16,7 +16,7 @@
 //! well as any historic views which need to be retained, can be seen as a caching
 //! layer on top of the persisted, immutable operations. The default implementations
 //! offered here build documents new on each query and are only offered as an easy
-//! out-of-the-box option. Efficient storage and querying of documents should be 
+//! out-of-the-box option. Efficient storage and querying of documents should be
 //! considered by implementers of these traits.
 mod document_store;
 mod entry_store;

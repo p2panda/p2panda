@@ -40,7 +40,7 @@ pub trait EntryStore {
 
     /// Get an `Entry` at sequence position within a `PublicKey`'s log.
     ///
-    /// Returns a result containing an `Entry` or if no `Entry` could be found at this `PublicKey`, 
+    /// Returns a result containing an `Entry` or if no `Entry` could be found at this `PublicKey`,
     /// `LogId`, `SeqNum` location then `None` is returned. Errors when a fatal storage error occurs.
     async fn get_entry_at_seq_num(
         &self,
@@ -52,7 +52,7 @@ pub trait EntryStore {
     /// Get an `Entry` by it's `Hash`.
     ///
     /// Returns a result containing an `Entry` wrapped in an option. If no `Entry` could
-    /// be found for this hash then None is returned. Errors when a fatal storage error 
+    /// be found for this hash then None is returned. Errors when a fatal storage error
     /// occurs.
     async fn get_entry(&self, hash: &Hash) -> Result<Option<Self::Entry>, EntryStorageError>;
 
@@ -90,7 +90,7 @@ pub trait EntryStore {
 
     /// Get all `Entries` which make up the certificate pool for the given `Entry`.
     ///
-    /// Returns a result containing vector of `Entries` or None if no `Entry` could be found at 
+    /// Returns a result containing vector of `Entries` or None if no `Entry` could be found at
     /// this `PublicKey` - `LogId` - `SeqNum` location. Errors when a fatal storage error occurs.
     async fn get_certificate_pool(
         &self,
