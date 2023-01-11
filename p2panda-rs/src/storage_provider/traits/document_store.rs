@@ -5,7 +5,7 @@ use std::convert::TryInto;
 
 use async_trait::async_trait;
 
-use crate::document::{Document, DocumentId};
+use crate::document::{Document, DocumentId, DocumentViewId, DocumentBuilder};
 use crate::operation::traits::AsOperation;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::DocumentStorageError;
@@ -40,6 +40,27 @@ pub trait DocumentStore: OperationStore {
         }
 
         Ok(Some({ &operations }.try_into()?))
+    }
+
+    async fn get_document_by_view_id(
+        &self,
+        id: &DocumentViewId,
+    ) -> Result<Option<Document>, DocumentStorageError> {
+        let operation_id = id.iter().next().unwrap();
+        let document_id = match self.get_document_id_by_operation_id(operation_id).await? {
+            Some(id) => id,
+            None => return Ok(None),
+        };
+        
+        let operations = self.get_operations_by_document_id(&document_id).await?;
+
+        if operations.is_empty() {
+            return Ok(None);
+        }
+
+        let document_builder: DocumentBuilder = (&operations).into();
+
+        Ok(Some(document_builder.build_to_view_id(Some(id.clone()))?))
     }
 
     async fn get_documents_by_schema(
