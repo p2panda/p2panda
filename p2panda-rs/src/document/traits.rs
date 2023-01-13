@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Interfaces for interactions for document-like structs.
+
 use crate::document::{DocumentId, DocumentView, DocumentViewFields, DocumentViewId};
 use crate::identity::PublicKey;
 use crate::operation::OperationValue;
