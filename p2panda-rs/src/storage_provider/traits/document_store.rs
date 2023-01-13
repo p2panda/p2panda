@@ -5,7 +5,7 @@ use std::convert::TryInto;
 
 use async_trait::async_trait;
 
-use crate::document::{Document, DocumentId, DocumentViewId, DocumentBuilder};
+use crate::document::{Document, DocumentBuilder, DocumentId, DocumentViewId};
 use crate::operation::traits::AsOperation;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::DocumentStorageError;
@@ -51,7 +51,7 @@ pub trait DocumentStore: OperationStore {
             Some(id) => id,
             None => return Ok(None),
         };
-        
+
         let operations = self.get_operations_by_document_id(&document_id).await?;
 
         if operations.is_empty() {
