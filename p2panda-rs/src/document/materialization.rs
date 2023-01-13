@@ -10,7 +10,7 @@ use crate::operation::traits::AsOperation;
 use crate::operation::{Operation, OperationId};
 
 /// Construct a graph from a list of operations.
-pub(crate) fn build_graph(
+pub fn build_graph(
     operations: &[(OperationId, Operation, PublicKey)],
 ) -> Result<Graph<OperationId, (OperationId, Operation, PublicKey)>, DocumentBuilderError> {
     let mut graph = Graph::new();
@@ -41,7 +41,7 @@ pub(crate) fn build_graph(
 /// flags. If the document contains a DELETE operation, then no view is returned and the `deleted`
 /// flag is set to true. If the document contains one or more UPDATE operations, then the reduced
 /// view is returned and the `edited` flag is set to true.
-pub(crate) fn reduce(
+pub fn reduce(
     ordered_operations: &[(OperationId, Operation, PublicKey)],
 ) -> (Option<DocumentViewFields>, IsEdited, IsDeleted) {
     let mut is_edited = false;
