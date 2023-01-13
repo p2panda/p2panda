@@ -5,11 +5,10 @@ use std::fmt::{Debug, Display};
 
 use crate::document::error::DocumentBuilderError;
 use crate::document::materialization::{build_graph, reduce};
-use crate::document::{DocumentId, DocumentView, DocumentViewId};
+use crate::document::{DocumentId, DocumentView, DocumentViewFields, DocumentViewId};
 use crate::identity::PublicKey;
 use crate::operation::traits::{AsOperation, WithPublicKey};
-use crate::operation::OperationValue;
-use crate::operation::{Operation, OperationId};
+use crate::operation::{Operation, OperationId, OperationValue};
 use crate::schema::SchemaId;
 use crate::{Human, WithId};
 
@@ -18,19 +17,6 @@ pub type IsEdited = bool;
 
 /// Flag to indicate if document was deleted by at least one author.
 pub type IsDeleted = bool;
-
-/// Metadata attached to a document as well as all of it's operations.
-#[derive(Debug, Clone, Default)]
-pub struct DocumentMeta {
-    /// Flag indicating if document was deleted.
-    deleted: IsDeleted,
-
-    /// Flag indicating if document was edited.
-    edited: IsEdited,
-
-    /// List of operations this document consists of.
-    operations: Vec<(OperationId, Operation, PublicKey)>,
-}
 
 /// High-level datatype representing data published to the p2panda network as key-value pairs.
 ///
@@ -49,12 +35,26 @@ pub struct DocumentMeta {
 /// See module docs for example uses.
 #[derive(Debug, Clone)]
 pub struct Document {
+    /// The id for this document.
     id: DocumentId,
+
+    /// The data this document contains as key-value pairs.
+    fields: Option<DocumentViewFields>,
+
+    /// The id of the schema this document follows.
+    schema_id: SchemaId,
+
+    /// The id of the current view of this document.
     view_id: DocumentViewId,
+
+    /// The public key of the author who created this document.
     author: PublicKey,
-    schema: SchemaId,
-    view: Option<DocumentView>,
-    meta: DocumentMeta,
+
+    /// Flag indicating if document was deleted.
+    deleted: IsDeleted,
+
+    /// Flag indicating if document was edited.
+    edited: IsEdited,
 }
 
 impl Document {
@@ -65,8 +65,8 @@ impl Document {
 
     /// Get the value for a field on this document.
     pub fn get(&self, key: &str) -> Option<&OperationValue> {
-        if let Some(view) = self.view() {
-            return view.get(key).map(|view_value| view_value.value());
+        if let Some(fields) = self.fields() {
+            return fields.get(key).map(|view_value| view_value.value());
         }
         None
     }
@@ -82,28 +82,30 @@ impl Document {
     }
 
     /// Get the document schema.
-    pub fn schema(&self) -> &SchemaId {
-        &self.schema
+    pub fn schema_id(&self) -> &SchemaId {
+        &self.schema_id
     }
 
-    /// Get the view of this document.
-    pub fn view(&self) -> Option<&DocumentView> {
-        self.view.as_ref()
+    /// The current document view for this document. Returns None if this document
+    /// has been deleted.
+    pub fn view(&self) -> Option<DocumentView> {
+        self.fields()
+            .map(|fields| DocumentView::new(self.view_id(), fields))
     }
 
-    /// Get the operations contained in this document.
-    pub fn operations(&self) -> &Vec<(OperationId, Operation, PublicKey)> {
-        &self.meta.operations
+    /// Get the fields of this document.
+    pub fn fields(&self) -> Option<&DocumentViewFields> {
+        self.fields.as_ref()
     }
 
     /// Returns true if this document has applied an UPDATE operation.
     pub fn is_edited(&self) -> IsEdited {
-        self.meta.edited
+        self.edited
     }
 
     /// Returns true if this document has processed a DELETE operation.
     pub fn is_deleted(&self) -> IsDeleted {
-        self.meta.deleted
+        self.deleted
     }
 }
 
@@ -202,7 +204,7 @@ impl DocumentBuilder {
             }?;
 
         // Get the document schema
-        let schema = create_operation.schema_id();
+        let schema_id = create_operation.schema_id();
 
         // Get the document author (or rather, the public key of the author who created this
         // document)
@@ -212,7 +214,7 @@ impl DocumentBuilder {
         let schema_error = self
             .operations()
             .iter()
-            .any(|(_, operation, _)| operation.schema_id() != schema);
+            .any(|(_, operation, _)| operation.schema_id() != schema_id);
 
         if schema_error {
             return Err(DocumentBuilderError::OperationSchemaNotMatching);
@@ -239,33 +241,19 @@ impl DocumentBuilder {
             .collect();
 
         // Reduce the sorted operations into a single key value map
-        let (view, is_edited, is_deleted) = reduce(&sorted_graph_data.sorted()[..]);
-
-        // Construct document meta data
-        let meta = DocumentMeta {
-            edited: is_edited,
-            deleted: is_deleted,
-            operations: sorted_graph_data.sorted(),
-        };
+        let (fields, is_edited, is_deleted) = reduce(&sorted_graph_data.sorted()[..]);
 
         // Construct the document view id
         let document_view_id = DocumentViewId::new(&graph_tips);
 
-        // Construct the document view, from the reduced values and the document view id
-        let document_view = if is_deleted {
-            None
-        } else {
-            // Unwrap as documents which aren't deleted will have a view
-            Some(DocumentView::new(&document_view_id, &view.unwrap()))
-        };
-
         Ok(Document {
             id: document_id,
             view_id: document_view_id,
-            schema,
+            schema_id,
             author,
-            view: document_view,
-            meta,
+            fields,
+            edited: is_edited,
+            deleted: is_deleted,
         })
     }
 }
@@ -486,12 +474,6 @@ mod tests {
         // Document should resolve to expected value
         let document = document.unwrap();
 
-        let operation_order: Vec<OperationId> = document
-            .operations()
-            .iter()
-            .map(|(id, _, _)| id.to_owned())
-            .collect();
-
         let mut exp_result = DocumentViewFields::new();
         exp_result.insert(
             "name",
@@ -503,28 +485,19 @@ mod tests {
 
         let document_id = DocumentId::new(&panda_entry_1.hash().into());
         let expected_graph_tips: Vec<OperationId> = vec![penguin_entry_3.hash().into()];
-        let expected_op_order: Vec<OperationId> = vec![
-            panda_entry_1.clone(),
-            panda_entry_2,
-            penguin_entry_1,
-            penguin_entry_2,
-            penguin_entry_3,
-        ]
-        .iter()
-        .map(|entry| entry.hash().into())
-        .collect();
 
-        assert_eq!(document.view().unwrap().get("name"), exp_result.get("name"));
+        assert_eq!(
+            document.fields().unwrap().get("name"),
+            exp_result.get("name")
+        );
         assert!(document.is_edited());
         assert!(!document.is_deleted());
         assert_eq!(document.author(), &panda.public_key());
-        assert_eq!(document.schema(), schema.id());
-        assert_eq!(operation_order, expected_op_order);
+        assert_eq!(document.schema_id(), schema.id());
         assert_eq!(document.view_id().graph_tips(), expected_graph_tips);
         assert_eq!(document.id(), &document_id);
 
         // Multiple replicas receiving operations in different orders should resolve to same value.
-
         let replica_1: Document = vec![
             operations[4],
             operations[3],
@@ -546,20 +519,19 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            replica_1.view().unwrap().get("name"),
+            replica_1.fields().unwrap().get("name"),
             exp_result.get("name")
         );
         assert!(replica_1.is_edited());
         assert!(!replica_1.is_deleted());
         assert_eq!(replica_1.author(), &panda.public_key());
-        assert_eq!(replica_1.schema(), schema.id());
-        assert_eq!(operation_order, expected_op_order);
+        assert_eq!(replica_1.schema_id(), schema.id());
         assert_eq!(replica_1.view_id().graph_tips(), expected_graph_tips);
         assert_eq!(replica_1.id(), &document_id);
 
         assert_eq!(
-            replica_1.view().unwrap().get("name"),
-            replica_2.view().unwrap().get("name")
+            replica_1.fields().unwrap().get("name"),
+            replica_2.fields().unwrap().get("name")
         );
         assert_eq!(replica_1.id(), replica_2.id());
         assert_eq!(
@@ -662,7 +634,7 @@ mod tests {
             .unwrap();
 
         assert!(document.is_deleted());
-        assert!(document.view().is_none());
+        assert!(document.fields().is_none());
     }
 
     #[rstest]
@@ -680,9 +652,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn builds_specific_document_view(
-        #[with(vec![("name".to_string(), FieldType::String)])] schema: Schema,
-    ) {
+    async fn fields(#[with(vec![("name".to_string(), FieldType::String)])] schema: Schema) {
         let mut operations = Vec::new();
 
         let panda = KeyPair::new().public_key().to_owned();
@@ -743,7 +713,7 @@ mod tests {
             document_builder
                 .build_to_view_id(Some(DocumentViewId::new(&[operation_1_id])))
                 .unwrap()
-                .view()
+                .fields()
                 .unwrap()
                 .get("name")
                 .unwrap()
@@ -755,7 +725,7 @@ mod tests {
             document_builder
                 .build_to_view_id(Some(DocumentViewId::new(&[operation_2_id.clone()])))
                 .unwrap()
-                .view()
+                .fields()
                 .unwrap()
                 .get("name")
                 .unwrap()
@@ -767,7 +737,7 @@ mod tests {
             document_builder
                 .build_to_view_id(Some(DocumentViewId::new(&[operation_3_id.clone()])))
                 .unwrap()
-                .view()
+                .fields()
                 .unwrap()
                 .get("name")
                 .unwrap()
@@ -779,7 +749,7 @@ mod tests {
             document_builder
                 .build_to_view_id(Some(DocumentViewId::new(&[operation_2_id, operation_3_id])))
                 .unwrap()
-                .view()
+                .fields()
                 .unwrap()
                 .get("name")
                 .unwrap()
