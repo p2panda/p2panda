@@ -5,14 +5,12 @@ use std::fmt::{Debug, Display};
 
 use crate::document::error::DocumentBuilderError;
 use crate::document::materialization::{build_graph, reduce};
-use crate::document::{DocumentId, DocumentViewFields, DocumentViewId};
+use crate::document::{DocumentId, DocumentViewFields, DocumentViewId, DocumentView};
 use crate::identity::PublicKey;
 use crate::operation::traits::{AsOperation, WithOperationId, WithPublicKey};
 use crate::operation::{Operation, OperationId, OperationValue};
 use crate::schema::SchemaId;
 use crate::Human;
-
-use super::DocumentView;
 
 /// Flag to indicate if document was edited by at least one author.
 pub type IsEdited = bool;
