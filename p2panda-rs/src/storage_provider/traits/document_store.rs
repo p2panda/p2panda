@@ -100,6 +100,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::DocumentId;
+    use crate::document::traits::AsDocument;
     use crate::operation::{OperationAction, OperationBuilder, OperationId, OperationValue};
     use crate::schema::SchemaId;
     use crate::storage_provider::traits::{DocumentStore, OperationStore};

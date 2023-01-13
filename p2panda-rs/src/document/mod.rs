@@ -136,6 +136,7 @@ mod document_view;
 mod document_view_fields;
 mod document_view_hash;
 mod document_view_id;
+pub mod traits;
 pub mod error;
 pub mod materialization;
 

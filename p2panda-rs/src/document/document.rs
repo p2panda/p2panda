@@ -5,10 +5,11 @@ use std::fmt::{Debug, Display};
 
 use crate::document::error::DocumentBuilderError;
 use crate::document::materialization::{build_graph, reduce};
-use crate::document::{DocumentId, DocumentView, DocumentViewFields, DocumentViewId};
+use crate::document::{DocumentId, DocumentViewFields, DocumentViewId};
+use crate::document::traits::AsDocument;
 use crate::identity::PublicKey;
 use crate::operation::traits::{AsOperation, WithPublicKey};
-use crate::operation::{Operation, OperationId, OperationValue};
+use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::{Human, WithId};
 
@@ -57,54 +58,39 @@ pub struct Document {
     edited: IsEdited,
 }
 
-impl Document {
+impl AsDocument for Document {
     /// Get the document id.
-    pub fn id(&self) -> &DocumentId {
+    fn id(&self) -> &DocumentId {
         &self.id
     }
 
-    /// Get the value for a field on this document.
-    pub fn get(&self, key: &str) -> Option<&OperationValue> {
-        if let Some(fields) = self.fields() {
-            return fields.get(key).map(|view_value| view_value.value());
-        }
-        None
-    }
-
     /// Get the document view id.
-    pub fn view_id(&self) -> &DocumentViewId {
+    fn view_id(&self) -> &DocumentViewId {
         &self.view_id
     }
 
     /// Get the document author's public key.
-    pub fn author(&self) -> &PublicKey {
+    fn author(&self) -> &PublicKey {
         &self.author
     }
 
     /// Get the document schema.
-    pub fn schema_id(&self) -> &SchemaId {
+    fn schema_id(&self) -> &SchemaId {
         &self.schema_id
     }
 
-    /// The current document view for this document. Returns None if this document
-    /// has been deleted.
-    pub fn view(&self) -> Option<DocumentView> {
-        self.fields()
-            .map(|fields| DocumentView::new(self.view_id(), fields))
-    }
-
     /// Get the fields of this document.
-    pub fn fields(&self) -> Option<&DocumentViewFields> {
+    fn fields(&self) -> Option<&DocumentViewFields> {
         self.fields.as_ref()
     }
 
     /// Returns true if this document has applied an UPDATE operation.
-    pub fn is_edited(&self) -> IsEdited {
+    fn is_edited(&self) -> IsEdited {
         self.edited
     }
 
     /// Returns true if this document has processed a DELETE operation.
-    pub fn is_deleted(&self) -> IsDeleted {
+    fn is_deleted(&self) -> IsDeleted {
         self.deleted
     }
 }
@@ -316,6 +302,7 @@ mod tests {
 
     use rstest::rstest;
 
+    use crate::document::traits::AsDocument;
     use crate::document::{
         Document, DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue,
     };
