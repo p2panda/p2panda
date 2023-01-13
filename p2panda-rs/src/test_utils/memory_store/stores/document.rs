@@ -3,13 +3,13 @@ use std::convert::TryInto;
 
 use async_trait::async_trait;
 
-use crate::WithId;
-use crate::document::{Document, DocumentId, DocumentViewId, DocumentBuilder};
+use crate::document::{Document, DocumentBuilder, DocumentId, DocumentViewId};
 use crate::operation::traits::AsOperation;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::DocumentStorageError;
 use crate::storage_provider::traits::{DocumentStore, OperationStore};
 use crate::test_utils::memory_store::MemoryStore;
+use crate::WithId;
 
 #[async_trait]
 impl DocumentStore for MemoryStore {
