@@ -5,7 +5,7 @@ use std::fmt::{Debug, Display};
 
 use crate::document::error::DocumentBuilderError;
 use crate::document::materialization::{build_graph, reduce};
-use crate::document::{DocumentId, DocumentViewFields, DocumentViewId, DocumentView};
+use crate::document::{DocumentId, DocumentView, DocumentViewFields, DocumentViewId};
 use crate::identity::PublicKey;
 use crate::operation::traits::{AsOperation, WithOperationId, WithPublicKey};
 use crate::operation::{Operation, OperationId, OperationValue};
