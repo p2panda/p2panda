@@ -24,6 +24,7 @@
 //! # {
 //! # use p2panda_rs::operation::{OperationBuilder, OperationAction, OperationValue};
 //! # use p2panda_rs::document::{DocumentBuilder, DocumentViewValue};
+//! # use p2panda_rs::document::traits::AsDocument;
 //! # use p2panda_rs::identity::KeyPair;
 //! # use p2panda_rs::schema::SchemaId;
 //! # use p2panda_rs::test_utils::fixtures::{random_operation_id, random_document_view_id};
@@ -73,6 +74,7 @@
 //! # {
 //! # use p2panda_rs::operation::{OperationBuilder, OperationAction, OperationValue};
 //! # use p2panda_rs::document::{DocumentBuilder, DocumentViewId, DocumentViewValue};
+//! # use p2panda_rs::document::traits::AsDocument;
 //! # use p2panda_rs::identity::KeyPair;
 //! # use p2panda_rs::schema::SchemaId;
 //! # use p2panda_rs::test_utils::fixtures::{random_operation_id, random_document_view_id};
