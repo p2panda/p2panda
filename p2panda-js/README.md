@@ -192,6 +192,7 @@ console.log(keyPair.publicKey());
 - [`Rust`](https://www.rust-lang.org/learn/get-started)
 - [`wasm-bindgen`](https://rustwasm.github.io/wasm-bindgen/reference/cli.html)
 - [`wasm-opt`](https://github.com/WebAssembly/binaryen/discussions/3797)
+- `wasm32-unknown-unknown` compilation target for `rustup`
 
 In order to develop with the current code base `p2panda-js` needs to be
 compiled from the [`p2panda-rs`] code using `wasm-bindgen`. This requires a
