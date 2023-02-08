@@ -61,7 +61,7 @@
 )]
 // This must be imported here at the root of the crate in order for the `rstest` fixture macros to
 // work as expected.
-#![allow(clippy::single_component_path_imports)]
+#![allow(clippy::single_component_path_imports, clippy::uninlined_format_args)]
 #[cfg(any(feature = "test-utils", test))]
 use rstest_reuse;
 
