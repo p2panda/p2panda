@@ -12,7 +12,7 @@
 //! operation should have been validated aginst this schema before being included in the graph.
 //!
 //! Documents are constructed through the [`DocumentBuilder`] or by conversion from vectors of a type implementing
-//! the [`AsOperation`], [`WithOperationId`] and [`WithPublicKey`].
+//! the [`AsOperation`], [`WithId<OperationId>`] and [`WithPublicKey`].
 //!
 //! ## Example
 //!
