@@ -11,7 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Changed
 
-- Storage traits refactoring [#469](https://github.com/p2panda/p2panda/pull/469) `rs`
+- Updates to storage traits, including breaking API changes [#469](https://github.com/p2panda/p2panda/pull/469) `rs`
 - Remove `VerifiedOperation` [#465](https://github.com/p2panda/p2panda/pull/465) `rs`
 - Better docs for `Document` [#470](https://github.com/p2panda/p2panda/pull/470) `rs`
 - Remove `DocumentMeta` [#472](https://github.com/p2panda/p2panda/pull/472) `rs`
