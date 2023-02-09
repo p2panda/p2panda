@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use lipmaa_link::get_lipmaa_links_back_to;
 use log::debug;
 
+use crate::document::DocumentId;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::hash::Hash;
@@ -11,13 +12,16 @@ use crate::identity::PublicKey;
 use crate::operation::EncodedOperation;
 use crate::schema::SchemaId;
 use crate::storage_provider::error::EntryStorageError;
-use crate::storage_provider::traits::{AsStorageLog, EntryStore};
-use crate::test_utils::db::{MemoryStore, StorageEntry, StorageLog};
+use crate::storage_provider::traits::EntryStore;
+use crate::test_utils::memory_store::{MemoryStore, StorageEntry};
 
 /// Implement `EntryStore` trait on `MemoryStore`
 #[async_trait]
-impl EntryStore<StorageEntry> for MemoryStore {
-    /// Insert an entry into storage.
+impl EntryStore for MemoryStore {
+    type Entry = StorageEntry;
+
+    /// Insert an `Entry` to the store in it's encoded and decoded form. Optionally also store it's encoded
+    /// operation.
     async fn insert_entry(
         &self,
         entry: &Entry,
@@ -37,17 +41,14 @@ impl EntryStore<StorageEntry> for MemoryStore {
         Ok(())
     }
 
-    /// Get an entry by it's hash id.
-    async fn get_entry_by_hash(
-        &self,
-        hash: &Hash,
-    ) -> Result<Option<StorageEntry>, EntryStorageError> {
+    /// Get an `Entry` by it's `Hash`.
+    async fn get_entry(&self, hash: &Hash) -> Result<Option<StorageEntry>, EntryStorageError> {
         let entries = self.entries.lock().unwrap();
 
         Ok(entries.get(hash).cloned())
     }
 
-    /// Returns entry at sequence position within a log.
+    /// Get an `Entry` at sequence position within a `PublicKey`'s log.
     async fn get_entry_at_seq_num(
         &self,
         public_key: &PublicKey,
@@ -65,7 +66,7 @@ impl EntryStore<StorageEntry> for MemoryStore {
         Ok(entry.cloned())
     }
 
-    /// Returns the latest Bamboo entry of a log.
+    /// Get the latest `Entry` of `PublicKey`'s log.
     async fn get_latest_entry(
         &self,
         public_key: &PublicKey,
@@ -81,7 +82,7 @@ impl EntryStore<StorageEntry> for MemoryStore {
         Ok(latest_entry.map(|(_, entry)| entry).cloned())
     }
 
-    /// Returns the given range of log entries.
+    /// Get all `Entries` of a log from a specified sequence number up to passed max number of `Entries`.
     async fn get_paginated_log_entries(
         &self,
         public_key: &PublicKey,
@@ -108,7 +109,7 @@ impl EntryStore<StorageEntry> for MemoryStore {
         Ok(entries)
     }
 
-    /// Return vector of all entries of a given schema
+    /// Get all `Entries` for the passed `SchemaId`.
     async fn get_entries_by_schema(
         &self,
         schema: &SchemaId,
@@ -116,21 +117,26 @@ impl EntryStore<StorageEntry> for MemoryStore {
         let entries = self.entries.lock().unwrap();
         let logs = self.logs.lock().unwrap();
 
-        let schema_logs: Vec<&StorageLog> = logs
+        let schema_logs: Vec<&(PublicKey, LogId, SchemaId, DocumentId)> = logs
             .iter()
-            .filter(|(_, log)| log.schema_id() == *schema)
+            .filter(|(_, (_, _, schema_id, _))| schema_id == schema)
             .map(|(_, log)| log)
             .collect();
 
         let entries: Vec<StorageEntry> = entries
             .iter()
-            .filter(|(_, entry)| schema_logs.iter().any(|log| &log.id() == entry.log_id()))
+            .filter(|(_, entry)| {
+                schema_logs
+                    .iter()
+                    .any(|(_, log_id, _, _)| log_id == entry.log_id())
+            })
             .map(|(_, entry)| entry.to_owned())
             .collect();
 
         Ok(entries)
     }
 
+    /// Get all `Entries` which make up the certificate pool for the given `Entry`.
     async fn get_certificate_pool(
         &self,
         public_key: &PublicKey,
@@ -166,13 +172,13 @@ mod tests {
 
     use crate::entry::decode::decode_entry;
     use crate::entry::traits::{AsEncodedEntry, AsEntry};
-    use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
+    use crate::entry::{EncodedEntry, LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::schema::SchemaId;
-    use crate::storage_provider::traits::{AsStorageLog, EntryStore, LogStore};
-    use crate::test_utils::db::test_db::{test_db, TestDatabase};
-    use crate::test_utils::db::{MemoryStore, StorageLog};
-    use crate::test_utils::fixtures::{encoded_entry, key_pair, schema_id};
+    use crate::storage_provider::traits::{EntryStore, LogStore};
+    use crate::test_utils::fixtures::{encoded_entry, key_pair, populate_store_config, schema_id};
+    use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig};
+    use crate::test_utils::memory_store::MemoryStore;
 
     #[rstest]
     #[tokio::test]
@@ -195,11 +201,9 @@ mod tests {
         assert!(entry_at_seq_num.is_ok());
 
         let entry_at_seq_num = entry_at_seq_num.unwrap().unwrap();
-        let fetched_entry: Entry = entry_at_seq_num.clone().into();
-        let fetched_encoded_entry: EncodedEntry = entry_at_seq_num.into();
 
-        assert_eq!(fetched_entry, entry);
-        assert_eq!(fetched_encoded_entry, encoded_entry);
+        assert_eq!(entry_at_seq_num.seq_num(), entry.seq_num());
+        assert_eq!(entry_at_seq_num.hash(), encoded_entry.hash());
     }
 
     #[rstest]
@@ -217,8 +221,6 @@ mod tests {
             .is_none());
 
         // Insert an entry into the store.
-
-        // Insert an entry into the store.
         assert!(store
             .insert_entry(&entry, &encoded_entry, None)
             .await
@@ -230,8 +232,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        let fetched_entry: EncodedEntry = fetched_entry.into();
-        assert_eq!(fetched_entry, encoded_entry);
+        assert_eq!(fetched_entry.hash(), encoded_entry.hash());
     }
 
     #[rstest]
@@ -256,12 +257,12 @@ mod tests {
 
         // Insert a log for this entry into the store.
         store
-            .insert_log(StorageLog::new(
+            .insert_log(
+                entry.log_id(),
                 entry.public_key(),
                 &schema_id,
                 &encoded_entry.hash().into(),
-                entry.log_id(),
-            ))
+            )
             .await
             .unwrap();
 
@@ -273,14 +274,14 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn get_entry_by_hash(
-        #[from(test_db)]
+    async fn get_entry(
+        #[from(populate_store_config)]
         #[with(3, 1, 1)]
-        #[future]
-        db: TestDatabase,
+        config: PopulateStoreConfig,
     ) {
-        let db = db.await;
-        let entries = db.store.entries.lock().unwrap().clone();
+        let store = MemoryStore::default();
+        populate_store(&store, &config).await;
+        let entries = store.entries.lock().unwrap().clone();
 
         let entry_one = entries
             .values()
@@ -299,27 +300,15 @@ mod tests {
 
         assert_eq!(
             *entry_one,
-            db.store
-                .get_entry_by_hash(&entry_one.hash())
-                .await
-                .unwrap()
-                .unwrap()
+            store.get_entry(&entry_one.hash()).await.unwrap().unwrap()
         );
         assert_eq!(
             *entry_two,
-            db.store
-                .get_entry_by_hash(&entry_two.hash())
-                .await
-                .unwrap()
-                .unwrap()
+            store.get_entry(&entry_two.hash()).await.unwrap().unwrap()
         );
         assert_eq!(
             *entry_three,
-            db.store
-                .get_entry_by_hash(&entry_three.hash())
-                .await
-                .unwrap()
-                .unwrap()
+            store.get_entry(&entry_three.hash()).await.unwrap().unwrap()
         );
     }
 
@@ -327,32 +316,29 @@ mod tests {
     #[tokio::test]
     async fn get_n_entries(
         key_pair: KeyPair,
-        #[from(test_db)]
+        #[from(populate_store_config)]
         #[with(16, 1, 1)]
-        #[future]
-        db: TestDatabase,
+        config: PopulateStoreConfig,
     ) {
-        let db = db.await;
+        let store = MemoryStore::default();
+        populate_store(&store, &config).await;
 
         let public_key = key_pair.public_key();
         let log_id = LogId::default();
 
-        let five_entries = db
-            .store
+        let five_entries = store
             .get_paginated_log_entries(&public_key, &log_id, &SeqNum::new(1).unwrap(), 5)
             .await
             .unwrap();
         assert_eq!(five_entries.len(), 5);
 
-        let end_of_log_reached = db
-            .store
+        let end_of_log_reached = store
             .get_paginated_log_entries(&public_key, &log_id, &SeqNum::new(1).unwrap(), 1000)
             .await
             .unwrap();
         assert_eq!(end_of_log_reached.len(), 16);
 
-        let first_entry_not_found = db
-            .store
+        let first_entry_not_found = store
             .get_paginated_log_entries(&public_key, &log_id, &SeqNum::new(10000).unwrap(), 1)
             .await
             .unwrap();
@@ -362,19 +348,17 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn get_cert_pool(
-        key_pair: KeyPair,
-        #[from(test_db)]
-        #[with(17, 1, 1)]
-        #[future]
-        db: TestDatabase,
+        #[from(populate_store_config)]
+        #[with(16, 1, 1)]
+        config: PopulateStoreConfig,
     ) {
-        let db = db.await;
+        let store = MemoryStore::default();
+        let (key_pairs, _) = populate_store(&store, &config).await;
 
-        let public_key = key_pair.public_key();
+        let public_key = key_pairs[0].public_key();
         let log_id = LogId::default();
 
-        let cert_pool = db
-            .store
+        let cert_pool = store
             .get_certificate_pool(&public_key, &log_id, &SeqNum::new(16).unwrap())
             .await
             .unwrap();

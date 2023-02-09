@@ -5,8 +5,8 @@
 //! You will not find methods here to check the encoding of Bamboo entries, as this is handled
 //! inside the external bamboo-rs crate.
 use crate::entry::error::ValidateEntryError;
-use crate::entry::traits::AsEntry;
-use crate::entry::{EncodedEntry, Entry, Signature};
+use crate::entry::traits::{AsEncodedEntry, AsEntry};
+use crate::entry::{Entry, Signature};
 use crate::hash::Hash;
 use crate::identity::{KeyPair, PublicKey};
 use crate::operation::EncodedOperation;
@@ -46,9 +46,9 @@ pub fn validate_links(entry: &Entry) -> Result<(), ValidateEntryError> {
 /// This method requires knowledge about other entries. Use this together with your storage
 /// provider implementation.
 pub fn validate_log_integrity(
-    entry: &Entry,
-    skiplink: Option<(&Entry, &Hash)>,
-    backlink: Option<(&Entry, &Hash)>,
+    entry: &impl AsEntry,
+    skiplink: Option<(&impl AsEntry, &Hash)>,
+    backlink: Option<(&impl AsEntry, &Hash)>,
 ) -> Result<(), ValidateEntryError> {
     if let Some((link, link_hash)) = skiplink {
         // Is the claimed link entry part of the same log?
@@ -103,7 +103,7 @@ pub fn validate_log_integrity(
 pub fn validate_signature(
     public_key: &PublicKey,
     signature: &Signature,
-    encoded_entry: &EncodedEntry,
+    encoded_entry: &impl AsEncodedEntry,
 ) -> Result<(), ValidateEntryError> {
     KeyPair::verify(
         public_key,
@@ -116,7 +116,7 @@ pub fn validate_signature(
 
 /// Checks if the claimed payload hash and size matches the actual data (#E6).
 pub fn validate_payload(
-    entry: &Entry,
+    entry: &impl AsEntry,
     payload: &EncodedOperation,
 ) -> Result<(), ValidateEntryError> {
     if entry.payload_hash() != &payload.hash() {
@@ -137,6 +137,7 @@ mod tests {
     use crate::entry::encode::encode_entry;
     use crate::entry::traits::{AsEncodedEntry, AsEntry};
     use crate::entry::{EncodedEntry, Entry, EntryBuilder, SeqNum, Signature};
+    use crate::hash::Hash;
     use crate::identity::KeyPair;
     use crate::operation::EncodedOperation;
     use crate::test_utils::fixtures::{
@@ -230,15 +231,22 @@ mod tests {
             .unwrap();
 
         // Validate correct log integrity
-        assert!(validate_log_integrity(&entry_1, None, None).is_ok());
         assert!(
-            validate_log_integrity(&entry_2, None, Some((&entry_1, &encoded_entry_1.hash())),)
+            validate_log_integrity(&entry_1, None::<(&Entry, &Hash)>, None::<(&Entry, &Hash)>)
                 .is_ok()
         );
-        assert!(
-            validate_log_integrity(&entry_3, None, Some((&entry_2, &encoded_entry_2.hash())),)
-                .is_ok()
-        );
+        assert!(validate_log_integrity(
+            &entry_2,
+            None::<(&Entry, &Hash)>,
+            Some((&entry_1, &encoded_entry_1.hash())),
+        )
+        .is_ok());
+        assert!(validate_log_integrity(
+            &entry_3,
+            None::<(&Entry, &Hash)>,
+            Some((&entry_2, &encoded_entry_2.hash())),
+        )
+        .is_ok());
         assert!(validate_log_integrity(
             &entry_4,
             Some((&entry_1, &encoded_entry_1.hash())),
@@ -247,10 +255,12 @@ mod tests {
         .is_ok());
 
         // Validate invalid log integrity
-        assert!(
-            validate_log_integrity(&entry_2, None, Some((&entry_3, &encoded_entry_3.hash())),)
-                .is_err()
-        );
+        assert!(validate_log_integrity(
+            &entry_2,
+            None::<(&Entry, &Hash)>,
+            Some((&entry_3, &encoded_entry_3.hash())),
+        )
+        .is_err());
         assert!(validate_log_integrity(
             &entry_4,
             Some((&entry_3, &encoded_entry_3.hash())),

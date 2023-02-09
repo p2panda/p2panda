@@ -5,12 +5,13 @@ use std::fmt::{Debug, Display};
 
 use crate::document::error::DocumentBuilderError;
 use crate::document::materialization::{build_graph, reduce};
-use crate::document::{DocumentId, DocumentView, DocumentViewFields, DocumentViewId};
+use crate::document::traits::AsDocument;
+use crate::document::{DocumentId, DocumentViewFields, DocumentViewId};
 use crate::identity::PublicKey;
-use crate::operation::traits::{AsOperation, WithOperationId, WithPublicKey};
-use crate::operation::{Operation, OperationId, OperationValue};
+use crate::operation::traits::{AsOperation, WithPublicKey};
+use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
-use crate::Human;
+use crate::{Human, WithId};
 
 /// Flag to indicate if document was edited by at least one author.
 pub type IsEdited = bool;
@@ -26,11 +27,11 @@ pub type IsDeleted = bool;
 /// with any branches being ordered according to the conflicting operations [`OperationId`]. Each operation's
 /// mutation is applied in order which results in a LWW (last write wins) resolution strategy.
 ///
-/// All documents have an accomapanying `Schema` which describes the shape of the data they will contain. Every
-/// operation should have been validated aginst this schema before being included in the graph.
+/// All documents have an accompanying `Schema` which describes the shape of the data they will contain. Every
+/// operation should have been validated against this schema before being included in the graph.
 ///
 /// Documents are constructed through the [`DocumentBuilder`] or by conversion from vectors of a type implementing
-/// the [`AsOperation`], [`WithOperationId`] and [`WithPublicKey`].
+/// the [`AsOperation`], [`WithId<OperationId>`] and [`WithPublicKey`].
 ///
 /// See module docs for example uses.
 #[derive(Debug, Clone)]
@@ -57,54 +58,39 @@ pub struct Document {
     edited: IsEdited,
 }
 
-impl Document {
+impl AsDocument for Document {
     /// Get the document id.
-    pub fn id(&self) -> &DocumentId {
+    fn id(&self) -> &DocumentId {
         &self.id
     }
 
-    /// Get the value for a field on this document.
-    pub fn get(&self, key: &str) -> Option<&OperationValue> {
-        if let Some(fields) = self.fields() {
-            return fields.get(key).map(|view_value| view_value.value());
-        }
-        None
-    }
-
     /// Get the document view id.
-    pub fn view_id(&self) -> &DocumentViewId {
+    fn view_id(&self) -> &DocumentViewId {
         &self.view_id
     }
 
     /// Get the document author's public key.
-    pub fn author(&self) -> &PublicKey {
+    fn author(&self) -> &PublicKey {
         &self.author
     }
 
     /// Get the document schema.
-    pub fn schema_id(&self) -> &SchemaId {
+    fn schema_id(&self) -> &SchemaId {
         &self.schema_id
     }
 
-    /// The current document view for this document. Returns None if this document
-    /// has been deleted.
-    pub fn view(&self) -> Option<DocumentView> {
-        self.fields()
-            .map(|fields| DocumentView::new(self.view_id(), fields))
-    }
-
     /// Get the fields of this document.
-    pub fn fields(&self) -> Option<&DocumentViewFields> {
+    fn fields(&self) -> Option<&DocumentViewFields> {
         self.fields.as_ref()
     }
 
     /// Returns true if this document has applied an UPDATE operation.
-    pub fn is_edited(&self) -> IsEdited {
+    fn is_edited(&self) -> IsEdited {
         self.edited
     }
 
     /// Returns true if this document has processed a DELETE operation.
-    pub fn is_deleted(&self) -> IsDeleted {
+    fn is_deleted(&self) -> IsDeleted {
         self.deleted
     }
 }
@@ -124,7 +110,7 @@ impl Human for Document {
 
 impl<T> TryFrom<Vec<&T>> for Document
 where
-    T: AsOperation + WithOperationId + WithPublicKey,
+    T: AsOperation + WithId<OperationId> + WithPublicKey,
 {
     type Error = DocumentBuilderError;
 
@@ -136,7 +122,7 @@ where
 
 impl<T> TryFrom<&Vec<T>> for Document
 where
-    T: AsOperation + WithOperationId + WithPublicKey,
+    T: AsOperation + WithId<OperationId> + WithPublicKey,
 {
     type Error = DocumentBuilderError;
 
@@ -260,7 +246,7 @@ impl DocumentBuilder {
 
 impl<T> From<Vec<&T>> for DocumentBuilder
 where
-    T: AsOperation + WithOperationId + WithPublicKey,
+    T: AsOperation + WithId<OperationId> + WithPublicKey,
 {
     fn from(operations: Vec<&T>) -> Self {
         let operations = operations
@@ -286,7 +272,7 @@ where
 
 impl<T> From<&Vec<T>> for DocumentBuilder
 where
-    T: AsOperation + WithOperationId + WithPublicKey,
+    T: AsOperation + WithId<OperationId> + WithPublicKey,
 {
     fn from(operations: &Vec<T>) -> Self {
         let operations = operations
@@ -312,25 +298,25 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryInto;
+    use std::convert::{TryFrom, TryInto};
 
     use rstest::rstest;
 
+    use crate::document::traits::AsDocument;
     use crate::document::{
         Document, DocumentId, DocumentViewFields, DocumentViewId, DocumentViewValue,
     };
     use crate::entry::traits::AsEncodedEntry;
     use crate::identity::KeyPair;
-    use crate::operation::traits::WithOperationId;
     use crate::operation::{OperationAction, OperationBuilder, OperationId, OperationValue};
     use crate::schema::{FieldType, Schema, SchemaId};
     use crate::test_utils::constants::{self, PRIVATE_KEY};
-    use crate::test_utils::db::test_db::send_to_store;
-    use crate::test_utils::db::{MemoryStore, PublishedOperation};
     use crate::test_utils::fixtures::{
         operation_fields, published_operation, random_document_view_id, random_operation_id, schema,
     };
-    use crate::Human;
+    use crate::test_utils::memory_store::helpers::send_to_store;
+    use crate::test_utils::memory_store::{MemoryStore, PublishedOperation};
+    use crate::{Human, WithId};
 
     use super::DocumentBuilder;
 
@@ -466,12 +452,9 @@ mod tests {
 
         let operations = store.operations.lock().unwrap();
 
-        let operations: Vec<&PublishedOperation> = operations
-            .values()
-            .map(|(_, operation)| operation)
-            .collect();
+        let operations = operations.values().collect::<Vec<&PublishedOperation>>();
 
-        let document: Result<Document, _> = operations.clone().try_into();
+        let document = Document::try_from(operations.clone());
 
         assert!(document.is_ok());
 
@@ -581,7 +564,7 @@ mod tests {
             document.unwrap_err().to_string(),
             format!(
                 "operation {} cannot be connected to the document graph",
-                update_operation.id()
+                WithId::<OperationId>::id(&update_operation).clone()
             )
         );
     }
@@ -604,7 +587,7 @@ mod tests {
             Schema::get_system(SchemaId::SchemaFieldDefinition(1))
                 .unwrap()
                 .to_owned(),
-            Some(create_operation.id().to_owned().into()),
+            Some(WithId::<OperationId>::id(&create_operation).clone().into()),
             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
         );
 
@@ -626,7 +609,10 @@ mod tests {
         let delete_operation = published_operation(
             None,
             constants::schema(),
-            Some(DocumentViewId::new(&[create_operation.id().to_owned()])),
+            Some(DocumentViewId::new(&[WithId::<OperationId>::id(
+                &create_operation,
+            )
+            .clone()])),
             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
         );
 

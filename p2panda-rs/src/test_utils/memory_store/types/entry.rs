@@ -6,7 +6,6 @@ use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::PublicKey;
 use crate::operation::EncodedOperation;
-use crate::storage_provider::traits::EntryWithOperation;
 
 /// A struct which represents an entry and operation pair in storage as a concatenated string.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -31,10 +30,8 @@ impl StorageEntry {
             payload: operation.cloned(),
         }
     }
-}
 
-impl EntryWithOperation for StorageEntry {
-    fn payload(&self) -> Option<&EncodedOperation> {
+    pub fn payload(&self) -> Option<&EncodedOperation> {
         self.payload.as_ref()
     }
 }

@@ -2,55 +2,54 @@
 
 use async_trait::async_trait;
 
-use crate::document::{Document, DocumentId, DocumentView, DocumentViewId};
+use crate::document::traits::AsDocument;
+use crate::document::{DocumentId, DocumentViewId};
 use crate::schema::SchemaId;
 use crate::storage_provider::error::DocumentStorageError;
+use crate::storage_provider::traits::OperationStore;
 
-/// Storage traits for documents and document views.
+/// Interface for querying `Documents` from the store.
+///
+/// `Documents` are the high level data types most applications will concern themselves with. They
+/// are mutated by peers publishing operations which contain changes to one or many of the documents
+/// key-value pairs.
+///
+/// We call the process of turning a bunch of operations into a document materialisation. The interface
+/// outlined in these traits offers a simple API for querying documents by their id or schema. As each
+/// node implementation may approach materialising documents in different ways, it is expected that the
+/// storage API for documents will be expanded to suit their needs.
 #[async_trait]
-pub trait DocumentStore {
-    /// Insert document view into storage.
-    ///
-    /// returns an error when a fatal storage error occurs.
-    async fn insert_document_view(
-        &self,
-        document_view: &DocumentView,
-        schema_id: &SchemaId,
-    ) -> Result<(), DocumentStorageError>;
+pub trait DocumentStore: OperationStore {
+    /// Associated type representing an `Entry` retrieved from storage.
+    type Document: AsDocument;
 
-    /// Get a document view from storage by it's `DocumentViewId`.
+    /// Get a document by it's `DocumentId`.
     ///
-    /// Returns a DocumentView or `None` if no view was found with this id. Returns
-    /// an error if a fatal storage error occured.
-    async fn get_document_view_by_id(
-        &self,
-        id: &DocumentViewId,
-    ) -> Result<Option<DocumentView>, DocumentStorageError>;
-
-    /// Insert a document into storage.
-    ///
-    /// Inserts a document into storage and should retain a pointer to it's most recent
-    /// document view. Returns an error if a fatal storage error occured.
-    async fn insert_document(&self, document: &Document) -> Result<(), DocumentStorageError>;
-
-    /// Get the lates document view for a document identified by it's `DocumentId`.
-    ///
-    /// Returns a type implementing `AsDocumentView` wrapped in an `Option`, returns
-    /// `None` if no view was found with this document. Returns an error if a fatal storage error
-    /// occured.
-    ///
-    /// Note: if no view for this document was found, it might have been deleted.
-    async fn get_document_by_id(
+    /// Returns a result containing a document if one is found. Errors when a fatal storage
+    /// error occurs.
+    async fn get_document(
         &self,
         id: &DocumentId,
-    ) -> Result<Option<DocumentView>, DocumentStorageError>;
+    ) -> Result<Option<Self::Document>, DocumentStorageError>;
 
-    /// Get the most recent view for all documents which follow the passed schema.
+    /// Get a document by it's `DocumentViewId`.
     ///
-    /// Returns a vector of `DocumentView`, or an empty vector if none were found. Returns
-    /// an error when a fatal storage error occured.  
+    /// This returns the document materialised to the state identified by the passed `DocumentViewId`.
+    ///
+    /// Returns a result containing a document if one is found. Errors when a fatal storage
+    /// error occurs.
+    async fn get_document_by_view_id(
+        &self,
+        id: &DocumentViewId,
+    ) -> Result<Option<Self::Document>, DocumentStorageError>;
+
+    /// Get all documents which contain data published under the passed schema.
+    ///
+    /// Returns a result containing a collection of documents, can be emply if no documents were
+    /// published under the passed schema or if the schema itself was not found. Errors when a fatal storage
+    /// error occurs.
     async fn get_documents_by_schema(
         &self,
         schema_id: &SchemaId,
-    ) -> Result<Vec<DocumentView>, DocumentStorageError>;
+    ) -> Result<Vec<Self::Document>, DocumentStorageError>;
 }

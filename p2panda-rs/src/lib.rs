@@ -110,6 +110,15 @@ pub trait Human {
     fn display(&self) -> String;
 }
 
+/// Trait used by p2panda structs which contain at least one id.
+///
+/// A single struct may have several id's, common use cases will be `WithId<OperationId>`,
+/// `WithId<DocumentId>` and `WithId<SchemaId>`.
+pub trait WithId<T> {
+    /// Returns the identifier for this operation.
+    fn id(&self) -> &T;
+}
+
 /// Init pretty_env_logger before the test suite runs to handle logging outputs.
 ///
 /// We output log information using the `log` crate. In itself this doesn't print

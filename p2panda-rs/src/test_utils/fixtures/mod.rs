@@ -6,6 +6,7 @@
 //! values. See examples for more details.
 //!
 //! Implemented using the [`rstest`](https://github.com/la10736/rstest) library.
+mod db_fixtures;
 mod document_fixtures;
 mod entry_fixtures;
 mod hash_fixtures;
@@ -16,6 +17,7 @@ mod version_fixtures;
 
 // These modules need to be named with the verbose `_fixtures` suffix, otherwise `rstest` will get
 // confused by methods with similar names.
+pub use db_fixtures::*;
 pub use document_fixtures::*;
 pub use entry_fixtures::*;
 pub use hash_fixtures::*;

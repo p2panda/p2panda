@@ -5,31 +5,41 @@ use async_trait::async_trait;
 use crate::document::DocumentId;
 use crate::entry::LogId;
 use crate::identity::PublicKey;
+use crate::schema::SchemaId;
 use crate::storage_provider::error::LogStorageError;
-use crate::storage_provider::traits::AsStorageLog;
 
-/// Trait which handles all storage actions relating to `StorageLog`s.
+/// Storage interface for inserting and querying `Entries`.
 ///
-/// This trait should be implemented on the root storage provider struct. It's definitions
-/// make up the required methods for inserting and querying logs from storage.
+/// Logs are derived from the `Entries` which arrive at and are stored on a node. These methods
+/// should be used to store new logs when so needed and then to perform queries on the stored data.
+///
+/// Each log, as well as all `Entries` and `Operations` it contains, is associated with exactly one
+/// `PublicKey`, `SchemaId` and `DocumentId`.
 #[async_trait]
-pub trait LogStore<StorageLog: AsStorageLog> {
-    /// Insert a log into storage.
-    async fn insert_log(&self, value: StorageLog) -> Result<bool, LogStorageError>;
+pub trait LogStore {
+    /// Insert a log into the store.
+    ///
+    /// Returns an error if a fatal storage error occurred.
+    async fn insert_log(
+        &self,
+        log_id: &LogId,
+        public_key: &PublicKey,
+        schema: &SchemaId,
+        document: &DocumentId,
+    ) -> Result<bool, LogStorageError>;
 
-    /// Get a log from storage
-    async fn get(
+    /// Get the `LogId` for a `PublicKey` and `DocumentId`.
+    ///
+    /// Returns a `LogId` or `None` if no log exists with the passed `PublicKey` and `DocumentId`.
+    async fn get_log_id(
         &self,
         public_key: &PublicKey,
         document_id: &DocumentId,
     ) -> Result<Option<LogId>, LogStorageError>;
 
-    /// Determines the next unused log id for a public key.
-    async fn next_log_id(&self, public_key: &PublicKey) -> Result<LogId, LogStorageError>;
-
-    /// Determines the latest used log id for a public key.
+    /// Get the latest used `LogId` for a `PublicKey`.
     ///
-    /// Returns None when no log has been used yet.
+    /// Returns a `LogId` or `None` if the passed `PublicKey` has not published any entry yet.
     async fn latest_log_id(&self, public_key: &PublicKey)
         -> Result<Option<LogId>, LogStorageError>;
 }

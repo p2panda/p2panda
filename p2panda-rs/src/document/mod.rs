@@ -12,7 +12,7 @@
 //! operation should have been validated aginst this schema before being included in the graph.
 //!
 //! Documents are constructed through the [`DocumentBuilder`] or by conversion from vectors of a type implementing
-//! the [`AsOperation`], [`WithOperationId`] and [`WithPublicKey`].
+//! the [`AsOperation`], [`WithId<OperationId>`] and [`WithPublicKey`].
 //!
 //! ## Example
 //!
@@ -24,6 +24,7 @@
 //! # {
 //! # use p2panda_rs::operation::{OperationBuilder, OperationAction, OperationValue};
 //! # use p2panda_rs::document::{DocumentBuilder, DocumentViewValue};
+//! # use p2panda_rs::document::traits::AsDocument;
 //! # use p2panda_rs::identity::KeyPair;
 //! # use p2panda_rs::schema::SchemaId;
 //! # use p2panda_rs::test_utils::fixtures::{random_operation_id, random_document_view_id};
@@ -73,6 +74,7 @@
 //! # {
 //! # use p2panda_rs::operation::{OperationBuilder, OperationAction, OperationValue};
 //! # use p2panda_rs::document::{DocumentBuilder, DocumentViewId, DocumentViewValue};
+//! # use p2panda_rs::document::traits::AsDocument;
 //! # use p2panda_rs::identity::KeyPair;
 //! # use p2panda_rs::schema::SchemaId;
 //! # use p2panda_rs::test_utils::fixtures::{random_operation_id, random_document_view_id};
@@ -138,6 +140,7 @@ mod document_view_hash;
 mod document_view_id;
 pub mod error;
 pub mod materialization;
+pub mod traits;
 
 pub use document::{Document, DocumentBuilder, IsDeleted, IsEdited};
 pub use document_id::DocumentId;

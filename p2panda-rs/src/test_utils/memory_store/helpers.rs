@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Helper methods for preparing test databases.
-use rstest::fixture;
+//! Helper methods for working with a storage provider when testing.
 
 use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::encode::{encode_entry, sign_entry};
@@ -12,17 +11,16 @@ use crate::operation::encode::encode_operation;
 use crate::operation::traits::Actionable;
 use crate::operation::{Operation, OperationAction, OperationBuilder, OperationValue};
 use crate::schema::Schema;
-use crate::storage_provider::traits::StorageProvider;
+use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 use crate::storage_provider::utils::Result;
 use crate::test_utils::constants;
-use crate::test_utils::db::{EntryArgsResponse, MemoryStore};
-use crate::test_utils::fixtures::schema;
+use crate::test_utils::memory_store::EntryArgsResponse;
 
 use super::domain::{next_args, publish};
 
-/// Configuration used in test database population.
+/// Configuration used when populating the store for testing.
 #[derive(Debug)]
-pub struct PopulateDatabaseConfig {
+pub struct PopulateStoreConfig {
     /// Number of entries per log/document.
     pub no_of_entries: usize,
 
@@ -45,7 +43,7 @@ pub struct PopulateDatabaseConfig {
     pub update_operation_fields: Vec<(&'static str, OperationValue)>,
 }
 
-impl Default for PopulateDatabaseConfig {
+impl Default for PopulateStoreConfig {
     fn default() -> Self {
         Self {
             no_of_entries: 0,
@@ -59,131 +57,11 @@ impl Default for PopulateDatabaseConfig {
     }
 }
 
-/// Fixture for passing in `PopulateDatabaseConfig` into tests.
-#[fixture]
-pub fn test_db_config(
-    // Number of entries per log/document
-    #[default(0)] no_of_entries: usize,
-    // Number of logs for each public key
-    #[default(0)] no_of_logs: usize,
-    // Number of public keys, each with logs populated as defined above
-    #[default(0)] no_of_public_keys: usize,
-    // A boolean flag for whether all logs should contain a delete operation
-    #[default(false)] with_delete: bool,
-    // The schema used for all operations in the db
-    #[from(schema)] schema: Schema,
-    // The fields used for every CREATE operation
-    #[default(constants::test_fields())] create_operation_fields: Vec<(
-        &'static str,
-        OperationValue,
-    )>,
-    // The fields used for every UPDATE operation
-    #[default(constants::test_fields())] update_operation_fields: Vec<(
-        &'static str,
-        OperationValue,
-    )>,
-) -> PopulateDatabaseConfig {
-    PopulateDatabaseConfig {
-        no_of_entries,
-        no_of_logs,
-        no_of_public_keys,
-        with_delete,
-        schema,
-        create_operation_fields,
-        update_operation_fields,
-    }
-}
-
-/// Container for `MemoryStore` with access to the document ids and key_pairs present in the
-/// pre-populated database.
-#[derive(Default, Debug)]
-pub struct TestDatabase {
-    /// The store.
-    pub store: MemoryStore,
-
-    /// Test data collected during store population.
-    pub test_data: TestData,
-}
-
-impl TestDatabase {
-    /// Instantiate a new test store.
-    pub fn new(store: &MemoryStore, test_data: TestData) -> Self {
-        Self {
-            store: store.clone(),
-            test_data,
-        }
-    }
-}
-
-/// Data collected when populating a `TestData` base in order to easily check values which
-/// would be otherwise hard or impossible to get through the store methods.
-///
-/// Note: if new entries are published to this node, keypairs and any newly created
-/// documents will not be added to these lists.
-#[derive(Default, Debug)]
-pub struct TestData {
-    /// KeyPairs which were used to pre-populate this store.
-    pub key_pairs: Vec<KeyPair>,
-
-    /// The id of all documents which were inserted into the store when it was
-    /// pre-populated with values.
-    pub documents: Vec<DocumentId>,
-}
-
-/// Fixture for constructing a storage provider instance backed by a pre-populated database.
-///
-/// Passed parameters define what the database should contain. The first entry in each log contains
-/// a valid CREATE operation following entries contain UPDATE operations. If the with_delete
-///  flag is set to true the last entry in all logs contain be a DELETE operation.
-#[fixture]
-pub async fn test_db(
-    // Number of entries per log/document
-    #[default(0)] no_of_entries: usize,
-    // Number of logs for each public key
-    #[default(0)] no_of_logs: usize,
-    // Number of public keys, each with logs populated as defined above
-    #[default(0)] no_of_public_keys: usize,
-    // A boolean flag for wether all logs should contain a delete operation
-    #[default(false)] with_delete: bool,
-    // The schema used for all operations in the db
-    #[from(schema)] schema: Schema,
-    // The fields used for every CREATE operation
-    #[default(constants::test_fields())] create_operation_fields: Vec<(
-        &'static str,
-        OperationValue,
-    )>,
-    // The fields used for every UPDATE operation
-    #[default(constants::test_fields())] update_operation_fields: Vec<(
-        &'static str,
-        OperationValue,
-    )>,
-) -> TestDatabase {
-    let config = PopulateDatabaseConfig {
-        no_of_entries,
-        no_of_logs,
-        no_of_public_keys,
-        with_delete,
-        schema,
-        create_operation_fields,
-        update_operation_fields,
-    };
-
-    let store = MemoryStore::default();
-    let (key_pairs, documents) = populate_store(&store, &config).await;
-    TestDatabase::new(
-        &store,
-        TestData {
-            key_pairs,
-            documents,
-        },
-    )
-}
-
 /// Helper for creating many key_pairs.
 ///
 /// If there is only one key_pair in the list it will always be the default testing
 /// key pair.
-pub fn test_key_pairs(no_of_public_keys: usize) -> Vec<KeyPair> {
+pub fn many_key_pairs(no_of_public_keys: usize) -> Vec<KeyPair> {
     let mut key_pairs = Vec::new();
     match no_of_public_keys {
         0 => (),
@@ -198,16 +76,16 @@ pub fn test_key_pairs(no_of_public_keys: usize) -> Vec<KeyPair> {
     key_pairs
 }
 
-/// Helper method for populating a `TestDatabase` with configurable data.
+/// Helper method for populating the store with test data.
 ///
-/// Passed parameters define what the db should contain. The first entry in each log contains a
-/// valid CREATE operation following entries contain duplicate UPDATE operations. If the
-/// with_delete flag is set to true the last entry in all logs contain be a DELETE operation.
-pub async fn populate_store<S: StorageProvider>(
+/// Passed parameters define what the store should contain. The first entry in each log contains a
+/// valid CREATE operation following entries contain UPDATE operations. If the with_delete flag is set
+/// to true the last entry in all logs contain be a DELETE operation.
+pub async fn populate_store<S: EntryStore + LogStore + OperationStore>(
     store: &S,
-    config: &PopulateDatabaseConfig,
+    config: &PopulateStoreConfig,
 ) -> (Vec<KeyPair>, Vec<DocumentId>) {
-    let key_pairs = test_key_pairs(config.no_of_public_keys);
+    let key_pairs = many_key_pairs(config.no_of_public_keys);
     let mut documents: Vec<DocumentId> = Vec::new();
     for key_pair in &key_pairs {
         for _log_id in 0..config.no_of_logs {
@@ -259,7 +137,7 @@ pub async fn populate_store<S: StorageProvider>(
 }
 
 /// Helper method for publishing an operation encoded on an entry to a store.
-pub async fn send_to_store<S: StorageProvider>(
+pub async fn send_to_store<S: EntryStore + LogStore + OperationStore>(
     store: &S,
     operation: &Operation,
     schema: &Schema,
@@ -306,20 +184,24 @@ mod tests {
 
     use crate::entry::traits::{AsEncodedEntry, AsEntry};
     use crate::entry::{LogId, SeqNum};
+    use crate::schema::Schema;
+    use crate::storage_provider::traits::DocumentStore;
     use crate::test_utils::constants::SKIPLINK_SEQ_NUMS;
-
-    use super::{test_db, TestDatabase};
+    use crate::test_utils::fixtures::{populate_store_config, schema};
+    use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig};
+    use crate::test_utils::memory_store::MemoryStore;
 
     #[rstest]
     #[tokio::test]
     async fn correct_next_args(
-        #[from(test_db)]
+        #[from(populate_store_config)]
         #[with(17, 1, 1)]
-        #[future]
-        db: TestDatabase,
+        config: PopulateStoreConfig,
     ) {
-        let db = db.await;
-        let entries = db.store.entries.lock().unwrap().clone();
+        let store = MemoryStore::default();
+        populate_store(&store, &config).await;
+
+        let entries = store.entries.lock().unwrap().clone();
         for seq_num in 1..17 {
             let entry = entries
                 .values()
@@ -364,17 +246,25 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn correct_test_values(
-        #[from(test_db)]
+        schema: Schema,
+        #[from(populate_store_config)]
         #[with(10, 4, 2)]
-        #[future]
-        db: TestDatabase,
+        config: PopulateStoreConfig,
     ) {
-        let db = db.await;
-        assert_eq!(db.test_data.key_pairs.len(), 2);
-        assert_eq!(db.test_data.documents.len(), 8);
-        assert_eq!(db.store.entries.lock().unwrap().len(), 80);
-        assert_eq!(db.store.operations.lock().unwrap().len(), 80);
-        assert_eq!(db.store.documents.lock().unwrap().len(), 0);
-        assert_eq!(db.store.document_views.lock().unwrap().len(), 0);
+        let store = MemoryStore::default();
+        let (key_pairs, documents) = populate_store(&store, &config).await;
+
+        assert_eq!(key_pairs.len(), 2);
+        assert_eq!(documents.len(), 8);
+        assert_eq!(store.entries.lock().unwrap().len(), 80);
+        assert_eq!(store.operations.lock().unwrap().len(), 80);
+        assert_eq!(
+            store
+                .get_documents_by_schema(schema.id())
+                .await
+                .unwrap()
+                .len(),
+            8
+        );
     }
 }

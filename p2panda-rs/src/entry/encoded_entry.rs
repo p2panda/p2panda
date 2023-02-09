@@ -9,8 +9,6 @@ use serde::{Deserialize, Serialize};
 use crate::entry::traits::AsEncodedEntry;
 use crate::hash::Hash;
 use crate::serde::{deserialize_hex, serialize_hex};
-#[cfg(any(feature = "storage-provider", test))]
-use crate::storage_provider::traits::EntryWithOperation;
 
 /// Size of p2panda entries' signatures.
 pub const SIGNATURE_SIZE: usize = ED25519_SIGNATURE_SIZE;
@@ -36,16 +34,6 @@ impl EncodedEntry {
     pub fn from_bytes(bytes: &[u8]) -> Self {
         Self(bytes.to_owned())
     }
-
-    /// Returns only those bytes of a signed entry that don't contain the signature.
-    ///
-    /// Encoded entries contains both a signature as well as the bytes that were signed. In order
-    /// to verify the signature you need access to only the bytes that were used during signing.
-    pub fn unsigned_bytes(&self) -> Vec<u8> {
-        let bytes = self.into_bytes();
-        let signature_offset = bytes.len() - SIGNATURE_SIZE;
-        bytes[..signature_offset].into()
-    }
 }
 
 impl AsEncodedEntry for EncodedEntry {
@@ -68,13 +56,6 @@ impl AsEncodedEntry for EncodedEntry {
 impl Display for EncodedEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", hex::encode(&self.0))
-    }
-}
-
-#[cfg(any(feature = "storage-provider", test))]
-impl<T: EntryWithOperation> From<T> for EncodedEntry {
-    fn from(entry: T) -> Self {
-        EncodedEntry(entry.into_bytes())
     }
 }
 

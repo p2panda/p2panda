@@ -5,6 +5,6 @@
 //! It includes fixtures and templates which can be injected into tests, mock node and client
 //! implementations.
 pub mod constants;
-pub mod db;
 pub mod fixtures;
+pub mod memory_store;
 pub mod templates;

@@ -2,12 +2,14 @@
 
 use rstest::fixture;
 
-use crate::document::DocumentViewId;
+use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::encode::{encode_entry, sign_entry};
-use crate::entry::{LogId, SeqNum};
+use crate::entry::{Entry, LogId, SeqNum};
+use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::encode::{encode_operation, encode_plain_operation};
 use crate::operation::plain::PlainOperation;
+use crate::operation::traits::AsOperation;
 use crate::operation::validate::validate_operation_with_entry;
 use crate::operation::{
     EncodedOperation, Operation, OperationAction, OperationFields, OperationId, OperationValue,
@@ -15,10 +17,10 @@ use crate::operation::{
 };
 use crate::schema::{Schema, SchemaId};
 use crate::test_utils::constants::{test_fields, HASH, SCHEMA_ID};
-use crate::test_utils::db::PublishedOperation;
 use crate::test_utils::fixtures::{
-    document_view_id, key_pair, random_hash, schema, schema_fields, schema_id,
+    document_view_id, key_pair, random_document_id, random_hash, schema, schema_fields, schema_id,
 };
+use crate::test_utils::memory_store::PublishedOperation;
 
 /// Returns constant testing operation id.
 #[fixture]
@@ -173,15 +175,21 @@ pub fn published_operation(
     let (operation, id) = validate_operation_with_entry(
         &entry,
         &entry_encoded,
-        None,
-        None,
+        None::<(&Entry, &Hash)>,
+        None::<(&Entry, &Hash)>,
         &operation_plain,
         &operation_encoded,
         &schema,
     )
     .unwrap();
 
-    PublishedOperation(id, operation, key_pair.public_key())
+    let document_id = if operation.is_create() {
+        DocumentId::new(&id)
+    } else {
+        random_document_id()
+    };
+
+    PublishedOperation(id, operation, key_pair.public_key(), document_id)
 }
 
 /// Generates verified operation instance with a constant schema.

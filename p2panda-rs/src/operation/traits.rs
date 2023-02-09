@@ -4,7 +4,7 @@
 use crate::document::DocumentViewId;
 use crate::identity::PublicKey;
 use crate::operation::plain::PlainFields;
-use crate::operation::{OperationAction, OperationFields, OperationId, OperationVersion};
+use crate::operation::{OperationAction, OperationFields, OperationVersion};
 use crate::schema::SchemaId;
 
 /// Trait representing a struct encapsulating data which has been signed by an author.
@@ -13,14 +13,6 @@ use crate::schema::SchemaId;
 pub trait WithPublicKey {
     /// Returns the public key of the author of this entry or operation.
     fn public_key(&self) -> &PublicKey;
-}
-
-/// Trait representing the id of an "operation-like" struct.
-///
-/// Returns an operation's id which is derived from the hash of the entry it was published with.
-pub trait WithOperationId {
-    /// Returns the identifier for this operation.
-    fn id(&self) -> &OperationId;
 }
 
 /// Trait representing an "operation-like" struct.
