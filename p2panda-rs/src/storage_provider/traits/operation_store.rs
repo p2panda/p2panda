@@ -13,7 +13,8 @@ use crate::WithId;
 /// Storage interface for storing and querying `Operations`.
 ///
 /// `Operations` are a core data type of p2panda, every `Operation` is associated with one `Document``
-/// and one `PublicKey`, they form a mutation graph used to build current or historic `Document` state.
+/// and one `PublicKey`, they form a graph which can be used to build current or historic `Document` 
+/// state.
 ///
 /// `Operations` are decoded and validated against their claimed schema when arriving at a node and
 /// their decoded values are stored and queried with this interface.
