@@ -13,11 +13,17 @@ use crate::storage_provider::traits::{DocumentStore, OperationStore};
 use crate::test_utils::memory_store::MemoryStore;
 use crate::WithId;
 
+/// This implementation of the DocumentStore trait does not use a caching layer to persist
+/// document state. Each document is materialised from it's contained operations on each query.
+/// This means that any document state can be queried as long as it's operations are persisted in
+/// the store without requiring a preparatory materialisation step. It also means this
+/// implementation is very inefficient and is only recommended for use in test environments.
 #[async_trait]
 impl DocumentStore for MemoryStore {
     /// Associated type representing an `Entry` retrieved from storage.
     type Document = Document;
 
+    /// Get a document by it's document id.
     async fn get_document(
         &self,
         id: &DocumentId,
@@ -31,6 +37,8 @@ impl DocumentStore for MemoryStore {
         Ok(Some({ &operations }.try_into()?))
     }
 
+    /// Get a document by it's document view id, returned document has been materialised to the
+    /// state specified by the passed document view id.
     async fn get_document_by_view_id(
         &self,
         id: &DocumentViewId,
@@ -52,6 +60,7 @@ impl DocumentStore for MemoryStore {
         Ok(Some(document_builder.build_to_view_id(Some(id.clone()))?))
     }
 
+    /// Get all documents which contain data following the schema specified by the passed schema id. 
     async fn get_documents_by_schema(
         &self,
         schema_id: &SchemaId,
