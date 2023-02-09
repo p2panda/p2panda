@@ -60,7 +60,7 @@ impl DocumentStore for MemoryStore {
         Ok(Some(document_builder.build_to_view_id(Some(id.clone()))?))
     }
 
-    /// Get all documents which contain data following the schema specified by the passed schema id. 
+    /// Get all documents which contain data following the schema specified by the passed schema id.
     async fn get_documents_by_schema(
         &self,
         schema_id: &SchemaId,

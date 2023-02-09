@@ -33,7 +33,7 @@ pub trait DocumentStore: OperationStore {
     ) -> Result<Option<Self::Document>, DocumentStorageError>;
 
     /// Get a document by it's `DocumentViewId`.
-    /// 
+    ///
     /// This returns the document materialised to the state identified by the passed `DocumentViewId`.
     ///
     /// Returns a result containing a document if one is found. Errors when a fatal storage
