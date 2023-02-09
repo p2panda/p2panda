@@ -6,8 +6,7 @@ use crate::document::traits::AsDocument;
 use crate::document::{DocumentId, DocumentViewId};
 use crate::schema::SchemaId;
 use crate::storage_provider::error::DocumentStorageError;
-
-use super::OperationStore;
+use crate::storage_provider::traits::OperationStore;
 
 /// Interface for querying `Documents` from the store.
 ///

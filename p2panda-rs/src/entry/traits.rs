@@ -3,11 +3,10 @@
 //! Interfaces for interactions for entry-like structs.
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 
+use crate::entry::SIGNATURE_SIZE;
 use crate::entry::{LogId, SeqNum, Signature};
 use crate::hash::Hash;
 use crate::identity::PublicKey;
-
-use super::SIGNATURE_SIZE;
 
 /// Trait representing an "entry-like" struct.
 pub trait AsEntry {
