@@ -23,16 +23,31 @@ pub trait DocumentStore: OperationStore {
     /// Associated type representing an `Entry` retrieved from storage.
     type Document: AsDocument;
 
+    /// Get a document by it's `DocumentId`.
+    ///
+    /// Returns a result containing a document if one is found. Errors when a fatal storage
+    /// error occurs.
     async fn get_document(
         &self,
         id: &DocumentId,
     ) -> Result<Option<Self::Document>, DocumentStorageError>;
 
+    /// Get a document by it's `DocumentViewId`.
+    /// 
+    /// This returns the document materialised to the state identified by the passed `DocumentViewId`.
+    ///
+    /// Returns a result containing a document if one is found. Errors when a fatal storage
+    /// error occurs.
     async fn get_document_by_view_id(
         &self,
         id: &DocumentViewId,
     ) -> Result<Option<Self::Document>, DocumentStorageError>;
 
+    /// Get all documents which contain data published under the passed schema.
+    ///
+    /// Returns a result containing a collection of documents, can be emply if no documents were
+    /// published under the passed schema or if the schema itself was not found. Errors when a fatal storage
+    /// error occurs.
     async fn get_documents_by_schema(
         &self,
         schema_id: &SchemaId,
