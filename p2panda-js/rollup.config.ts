@@ -2,6 +2,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import url from 'url';
 
 import pluginAlias from '@rollup/plugin-alias';
 import pluginCommonJS from '@rollup/plugin-commonjs';
@@ -172,7 +173,6 @@ function getPlugins({ mode }: Config): Plugin[] {
         entries: [{ find: '../wasm/node', replacement: './wasm/index.cjs' }],
       }),
     );
-
     // 2. Since this folder doesn't exist in the final build we copy it manually
     // over
     result.push(pluginCopyWasm());
@@ -226,9 +226,13 @@ function config({ format, mode }: Config): RollupOptions[] {
             './wasm/index.cjs',
             // rollup falsly claims that this external dependency is missing,
             // we ignore it here:
-            path.resolve('src', 'wasm', 'index.cjs'),
+            url.fileURLToPath(new URL('src/wasm/index.cjs', import.meta.url)),
           ]
         : [],
+    // Do not transform external, relative references to absolute paths. This
+    // default has been changed in rollup v3 but we wan't to keep the old
+    // configuration.
+    makeAbsoluteExternalsRelative: true,
   });
 
   // Generate TypeScript definition file for each build
