@@ -226,7 +226,7 @@ function config({ format, mode }: Config): RollupOptions[] {
             './wasm/index.cjs',
             // rollup falsly claims that this external dependency is missing,
             // we ignore it here:
-            path.resolve(__dirname, 'src', 'wasm', 'index.cjs'),
+            path.resolve('src', 'wasm', 'index.cjs'),
           ]
         : [],
   });
