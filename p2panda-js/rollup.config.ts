@@ -6,11 +6,11 @@ import url from 'url';
 
 import pluginAlias from '@rollup/plugin-alias';
 import pluginCommonJS from '@rollup/plugin-commonjs';
-import pluginDefine from 'rollup-plugin-define';
 import pluginDts from 'rollup-plugin-dts';
+import pluginReplace from '@rollup/plugin-replace';
+import pluginTerser from '@rollup/plugin-terser';
 import pluginTypeScript from '@rollup/plugin-typescript';
 import { wasm as pluginWasm } from '@rollup/plugin-wasm';
-import { terser as pluginTerser } from 'rollup-plugin-terser';
 
 import type {
   RollupOptions,
@@ -146,10 +146,11 @@ function getPlugins({ mode }: Config): Plugin[] {
   // These compiled versions are optimized for different environments (NodeJS
   // for speed, web for size).
   result.push(
-    pluginDefine({
-      replacements: {
+    pluginReplace({
+      values: {
         BUILD_TARGET_WEB: JSON.stringify(mode !== 'node'),
       },
+      preventAssignment: true,
     }),
   );
 
