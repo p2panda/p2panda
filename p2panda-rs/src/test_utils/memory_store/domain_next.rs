@@ -8,6 +8,7 @@ use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::decode::decode_entry;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::{EncodedEntry, LogId, SeqNum};
+use crate::hash::Hash;
 use crate::identity::PublicKey;
 use crate::operation::plain::PlainOperation;
 use crate::operation::traits::AsOperation;
@@ -15,11 +16,18 @@ use crate::operation::validate::validate_operation_with_entry;
 use crate::operation::{EncodedOperation, OperationAction};
 use crate::schema::Schema;
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
-use crate::Human;
+use crate::storage_provider::utils::Result;
 use crate::test_utils::memory_store::validation_next::{
     ensure_document_not_deleted, get_expected_skiplink, increment_seq_num, is_next_seq_num,
     next_log_id, verify_log_id,
 };
+use crate::Human;
+
+/// An entries' backlink returned by next_args.
+type Backlink = Hash;
+
+/// An entries' skiplink returned by next_args.
+type Skiplink = Hash;
 
 /// Retrieve arguments required for constructing the next entry in a bamboo log for a specific
 /// public key and document.
@@ -58,15 +66,7 @@ pub async fn next_args<S: EntryStore + OperationStore + LogStore>(
     store: &S,
     public_key: &PublicKey,
     document_view_id: Option<&DocumentViewId>,
-) -> Result<NextArguments> {
-    // Init the next args with base default values.
-    let mut next_args = NextArguments {
-        backlink: None,
-        skiplink: None,
-        seq_num: SeqNum::default().into(),
-        log_id: LogId::default().into(),
-    };
-
+) -> Result<(Option<Backlink>, Option<Skiplink>, SeqNum, LogId)> {
     ////////////////////////
     // HANDLE CREATE CASE //
     ////////////////////////
@@ -75,8 +75,7 @@ pub async fn next_args<S: EntryStore + OperationStore + LogStore>(
     // and we return the args for the next free log by this public_key.
     if document_view_id.is_none() {
         let log_id = next_log_id(store, public_key).await?;
-        next_args.log_id = log_id.into();
-        return Ok(next_args);
+        return Ok((None, None, SeqNum::default(), LogId::default()));
     }
 
     ///////////////////////////
@@ -105,7 +104,7 @@ pub async fn next_args<S: EntryStore + OperationStore + LogStore>(
         // If it wasn't found, we just calculate the next log id safely and return the next args.
         None => {
             let next_log_id = next_log_id(store, public_key).await?;
-            next_args.log_id = next_log_id.into()
+            Ok((None, None, SeqNum::default(), next_log_id))
         }
         // If one was found, we need to get the backlink and skiplink, and safely increment the seq
         // num.
@@ -141,14 +140,12 @@ pub async fn next_args<S: EntryStore + OperationStore + LogStore>(
             }
             .map(|entry| entry.hash());
 
-            next_args.backlink = latest_entry.map(|entry| entry.hash().into());
-            next_args.skiplink = skiplink.map(|hash| hash.into());
-            next_args.seq_num = seq_num.into();
-            next_args.log_id = log_id.into();
-        }
-    };
+            let backlink = latest_entry.map(|entry| entry.hash().into());
+            let skiplink = skiplink.map(|hash| hash.into());
 
-    Ok(next_args)
+            Ok((backlink, skiplink, seq_num, log_id))
+        }
+    }
 }
 
 /// Persist an entry and operation to storage after performing validation of claimed values against
@@ -205,7 +202,7 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
     encoded_entry: &EncodedEntry,
     plain_operation: &PlainOperation,
     encoded_operation: &EncodedOperation,
-) -> Result<NextArguments> {
+) -> Result<(Option<Backlink>, Option<Skiplink>, SeqNum, LogId)> {
     //////////////////
     // DECODE ENTRY //
     //////////////////
@@ -299,6 +296,7 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
             log_id.as_u64()
         )
     })?;
+
     let backlink = Some(encoded_entry.hash());
 
     // Check if skiplink is required and return hash if so
@@ -308,13 +306,6 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
         None
     }
     .map(|entry| entry.hash());
-
-    let next_args = NextArguments {
-        log_id: (*log_id).into(),
-        seq_num: next_seq_num.into(),
-        backlink: backlink.map(|hash| hash.into()),
-        skiplink: skiplink.map(|hash| hash.into()),
-    };
 
     ///////////////
     // STORE LOG //
@@ -341,7 +332,7 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
         .insert_operation(&operation_id, public_key, &operation, &document_id)
         .await?;
 
-    Ok(next_args)
+    Ok((backlink, skiplink, next_seq_num, log_id))
 }
 
 /// Attempt to identify the document id for view id contained in a `next_args` request.
@@ -354,7 +345,7 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
 pub async fn get_checked_document_id_for_view_id<S: EntryStore + OperationStore + LogStore>(
     store: &S,
     view_id: &DocumentViewId,
-) -> AnyhowResult<DocumentId> {
+) -> Result<DocumentId> {
     let mut found_document_ids: HashSet<DocumentId> = HashSet::new();
     for operation in view_id.iter() {
         // If any operation can't be found return an error at this point already.
