@@ -13,4 +13,4 @@ mod types;
 pub mod validation;
 
 pub use provider::MemoryStore;
-pub use types::{EntryArgsResponse, PublishEntryResponse, PublishedOperation, StorageEntry};
+pub use types::{PublishedOperation, StorageEntry};
