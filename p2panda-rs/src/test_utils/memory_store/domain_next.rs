@@ -939,13 +939,15 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn gets_next_args_other_cases(
-        public_key: PublicKey,
         #[from(populate_store_config)]
         #[with(7, 1, 1)]
         config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
-        let (_, documents) = populate_store(&store, &config).await;
+        let (key_pairs, documents) = populate_store(&store, &config).await;
+
+        // The public key of the author who published the entries.
+        let public_key = key_pairs[0].public_key();
 
         // Get with no DocumentViewId given.
         let (backlink, skiplink, seq_num, log_id) =
@@ -954,7 +956,7 @@ mod tests {
         assert_eq!(backlink, None);
         assert_eq!(skiplink, None);
         assert_eq!(seq_num, SeqNum::new(1).unwrap());
-        assert_eq!(log_id, LogId::default());
+        assert_eq!(log_id, LogId::new(1));
 
         // Get with non-existent DocumentViewId given.
         let result = next_args(&store, &public_key, Some(&random_document_view_id())).await;
