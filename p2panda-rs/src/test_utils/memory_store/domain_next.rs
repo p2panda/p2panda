@@ -121,7 +121,7 @@ pub async fn next_args<S: EntryStore + OperationStore + LogStore>(
     // and we return the args for the next free log by this public_key.
     if document_view_id.is_none() {
         let log_id = next_log_id(store, public_key).await?;
-        return Ok((None, None, SeqNum::default(), LogId::default()));
+        return Ok((None, None, SeqNum::default(), log_id));
     }
 
     ///////////////////////////
