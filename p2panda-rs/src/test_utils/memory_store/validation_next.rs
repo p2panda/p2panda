@@ -4,9 +4,30 @@ use crate::document::DocumentId;
 use crate::entry::{LogId, SeqNum};
 use crate::identity::PublicKey;
 use crate::operation::traits::AsOperation;
-use crate::storage_provider::utils::Result;
+use crate::storage_provider::error::{LogStorageError, EntryStorageError, OperationStorageError};
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 use crate::Human;
+
+
+/// Error type used in the validation module.
+#[derive(thiserror::Error, Debug)]
+pub enum ValidationError {
+    /// Helper error type used in validation module.
+    #[error("{0}")]
+    Custom(String),
+
+    /// Error coming from the log store.
+    #[error(transparent)]
+    LogStoreError(#[from] LogStorageError),
+
+    /// Error coming from the entry store.
+    #[error(transparent)]
+    EntryStoreError(#[from] EntryStorageError),
+
+    /// Error coming from the operation store.
+    #[error(transparent)]
+    OperationStoreError(#[from] OperationStorageError),
+}
 
 /// Verify that a claimed seq num is the next sequence number following the latest.
 ///
@@ -15,7 +36,7 @@ use crate::Human;
 ///     - if `latest_seq_num` is `Some` by incrementing that
 ///     - if `latest_seq_num` is `None` by setting it to 1
 /// - ensures the claimed sequence number is equal to the expected one.
-pub fn is_next_seq_num(latest_seq_num: Option<&SeqNum>, claimed_seq_num: &SeqNum) -> Result<()> {
+pub fn is_next_seq_num(latest_seq_num: Option<&SeqNum>, claimed_seq_num: &SeqNum) -> Result<(), ValidationError> {
     let expected_seq_num = match latest_seq_num {
         Some(seq_num) => {
             let mut seq_num = seq_num.to_owned();
@@ -49,7 +70,7 @@ pub async fn verify_log_id<S: LogStore>(
     public_key: &PublicKey,
     claimed_log_id: &LogId,
     document_id: &DocumentId,
-) -> Result<()> {
+) -> Result<(), ValidationError> {
     // Check if there is a log id registered for this document and public key already in the store.
     match store.get_log_id(public_key, document_id).await? {
         Some(expected_log_id) => {
@@ -94,7 +115,7 @@ pub async fn get_expected_skiplink<S: EntryStore>(
     public_key: &PublicKey,
     log_id: &LogId,
     seq_num: &SeqNum,
-) -> Result<S::Entry> {
+) -> Result<S::Entry, ValidationError> {
     ensure!(
         !seq_num.is_first(),
         anyhow!("Entry with seq num 1 can not have skiplink")
@@ -126,7 +147,7 @@ pub async fn get_expected_skiplink<S: EntryStore>(
 pub async fn ensure_document_not_deleted<S: OperationStore>(
     store: &S,
     document_id: &DocumentId,
-) -> Result<()> {
+) -> Result<(), ValidationError> {
     // Retrieve the document view for this document, if none is found, then it is deleted.
     let operations = store.get_operations_by_document_id(document_id).await?;
     ensure!(
@@ -141,7 +162,7 @@ pub async fn ensure_document_not_deleted<S: OperationStore>(
 /// Takes the following steps:
 /// - retrieve the latest log id for the given public key
 /// - safely increment it by 1
-pub async fn next_log_id<S: LogStore>(store: &S, public_key: &PublicKey) -> Result<LogId> {
+pub async fn next_log_id<S: LogStore>(store: &S, public_key: &PublicKey) -> Result<LogId, ValidationError> {
     let latest_log_id = store.latest_log_id(public_key).await?;
 
     match latest_log_id {
@@ -151,7 +172,7 @@ pub async fn next_log_id<S: LogStore>(store: &S, public_key: &PublicKey) -> Resu
 }
 
 /// Safely increment a sequence number by one.
-pub fn increment_seq_num(seq_num: &mut SeqNum) -> Result<SeqNum> {
+pub fn increment_seq_num(seq_num: &mut SeqNum) -> Result<SeqNum, ValidationError> {
     match seq_num.next() {
         Some(next_seq_num) => Ok(next_seq_num),
         None => Err(anyhow!("Max sequence number reached")),
@@ -159,7 +180,7 @@ pub fn increment_seq_num(seq_num: &mut SeqNum) -> Result<SeqNum> {
 }
 
 /// Safely increment a log id by one.
-pub fn increment_log_id(log_id: &mut LogId) -> Result<LogId> {
+pub fn increment_log_id(log_id: &mut LogId) -> Result<LogId, ValidationError> {
     match log_id.next() {
         Some(next_log_id) => Ok(next_log_id),
         None => Err(anyhow!("Max log id reached")),

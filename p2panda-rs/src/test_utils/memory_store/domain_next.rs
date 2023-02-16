@@ -15,13 +15,37 @@ use crate::operation::traits::AsOperation;
 use crate::operation::validate::validate_operation_with_entry;
 use crate::operation::{EncodedOperation, OperationAction};
 use crate::schema::Schema;
+use crate::storage_provider::error::{LogStorageError, EntryStorageError, OperationStorageError};
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
-use crate::storage_provider::utils::Result;
 use crate::test_utils::memory_store::validation_next::{
     ensure_document_not_deleted, get_expected_skiplink, increment_seq_num, is_next_seq_num,
-    next_log_id, verify_log_id,
+    next_log_id, verify_log_id, ValidationError,
 };
 use crate::Human;
+
+/// Error type used in the domain module.
+#[derive(thiserror::Error, Debug)]
+pub enum DomainError {
+    /// Helper error type used in validation module.
+    #[error("{0}")]
+    Custom(String),
+
+    /// Validation errors.
+    #[error(transparent)]
+    ValidationError(#[from] ValidationError),
+
+    /// Error coming from the log store.
+    #[error(transparent)]
+    LogStoreError(#[from] LogStorageError),
+
+    /// Error coming from the entry store.
+    #[error(transparent)]
+    EntryStoreError(#[from] EntryStorageError),
+
+    /// Error coming from the operation store.
+    #[error(transparent)]
+    OperationStoreError(#[from] OperationStorageError),
+}
 
 /// An entries' backlink returned by next_args.
 type Backlink = Hash;
@@ -66,7 +90,7 @@ pub async fn next_args<S: EntryStore + OperationStore + LogStore>(
     store: &S,
     public_key: &PublicKey,
     document_view_id: Option<&DocumentViewId>,
-) -> Result<(Option<Backlink>, Option<Skiplink>, SeqNum, LogId)> {
+) -> Result<(Option<Backlink>, Option<Skiplink>, SeqNum, LogId), DomainError> {
     ////////////////////////
     // HANDLE CREATE CASE //
     ////////////////////////
@@ -202,7 +226,7 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
     encoded_entry: &EncodedEntry,
     plain_operation: &PlainOperation,
     encoded_operation: &EncodedOperation,
-) -> Result<(Option<Backlink>, Option<Skiplink>, SeqNum, LogId)> {
+) -> Result<(Option<Backlink>, Option<Skiplink>, SeqNum, LogId), DomainError> {
     //////////////////
     // DECODE ENTRY //
     //////////////////
@@ -332,7 +356,7 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
         .insert_operation(&operation_id, public_key, &operation, &document_id)
         .await?;
 
-    Ok((backlink, skiplink, next_seq_num, log_id))
+    Ok((backlink, skiplink, next_seq_num, log_id.to_owned()))
 }
 
 /// Attempt to identify the document id for view id contained in a `next_args` request.
@@ -345,7 +369,7 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
 pub async fn get_checked_document_id_for_view_id<S: EntryStore + OperationStore + LogStore>(
     store: &S,
     view_id: &DocumentViewId,
-) -> Result<DocumentId> {
+) -> Result<DocumentId, DomainError> {
     let mut found_document_ids: HashSet<DocumentId> = HashSet::new();
     for operation in view_id.iter() {
         // If any operation can't be found return an error at this point already.
