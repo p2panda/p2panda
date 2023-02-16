@@ -427,15 +427,15 @@ mod tests {
     use crate::test_utils::constants::{test_fields, PRIVATE_KEY};
     use crate::test_utils::fixtures::populate_store_config;
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, key_pair, operation, public_key,
-        random_document_view_id, random_hash, schema, update_operation,
+        create_operation, delete_operation, key_pair, operation, random_document_view_id,
+        random_hash, schema, update_operation,
     };
     use crate::test_utils::memory_store::helpers::{
         populate_store, send_to_store, PopulateStoreConfig,
     };
     use crate::test_utils::memory_store::{MemoryStore, StorageEntry};
 
-    use super::{get_checked_document_id_for_view_id, next_args, publish, Backlink};
+    use super::{get_checked_document_id_for_view_id, next_args, publish};
 
     type LogIdAndSeqNum = (u64, u64);
 
@@ -848,35 +848,42 @@ mod tests {
     }
 
     type SeqNumU64 = u64;
-    type U64Backlink = Option<u64>;
-    type U64Skiplink = Option<u64>;
+    type LogIdU64 = u64;
+    type Backlink = Option<u64>;
+    type Skiplink = Option<u64>;
 
     #[rstest]
-    #[case(0, None, (1, None, None))]
-    #[case(1, Some(1), (2, Some(1), None))]
-    #[case(2, Some(2), (3, Some(2), None))]
-    #[case(3, Some(3), (4, Some(3), Some(1)))]
-    #[case(4, Some(4), (5, Some(4), None))]
-    #[case(5, Some(5), (6, Some(5), None))]
-    #[case(6, Some(6), (7, Some(6), None))]
-    #[case(7, Some(7), (8, Some(7), Some(4)))]
-    #[case(2, Some(1), (3, Some(2), None))]
-    #[case(3, Some(1), (4, Some(3), Some(1)))]
-    #[case(4, Some(1), (5, Some(4), None))]
-    #[case(5, Some(1), (6, Some(5), None))]
-    #[case(6, Some(1), (7, Some(6), None))]
-    #[case(7, Some(1), (8, Some(7), Some(4)))]
+    #[case(0, 0, None, (1, 0, None, None))]
+    #[case(1, 1, Some((1, 0)), (2, 0, Some(1), None))]
+    #[case(2, 1, Some((2, 0)), (3, 0, Some(2), None))]
+    #[case(3, 1, Some((3, 0)), (4, 0, Some(3), Some(1)))]
+    #[case(4, 1, Some((4, 0)), (5, 0, Some(4), None))]
+    #[case(5, 1, Some((5, 0)), (6, 0, Some(5), None))]
+    #[case(6, 1, Some((6, 0)), (7, 0, Some(6), None))]
+    #[case(7, 1, Some((7, 0)), (8, 0, Some(7), Some(4)))]
+    #[case(2, 1, Some((1, 0)), (3, 0, Some(2), None))]
+    #[case(3, 1, Some((1, 0)), (4, 0, Some(3), Some(1)))]
+    #[case(4, 1, Some((1, 0)), (5, 0, Some(4), None))]
+    #[case(5, 1, Some((1, 0)), (6, 0, Some(5), None))]
+    #[case(6, 1, Some((1, 0)), (7, 0, Some(6), None))]
+    #[case(7, 1, Some((1, 0)), (8, 0, Some(7), Some(4)))]
+    #[case(1, 2, None, (1, 2, None, None))]
+    #[case(1, 10, None, (1, 10, None, None))]
+    #[case(1, 100, None, (1, 100, None, None))]
+    #[case(1, 100, Some((1, 9)), (2, 9, Some(1), None))]
+    #[case(1, 100, Some((1, 99)), (2, 99, Some(1), None))]
     #[tokio::test]
     async fn next_args_with_expected_results(
         #[case] no_of_entries: usize,
-        #[case] document_view_id: Option<SeqNumU64>,
-        #[case] expected_next_args: (SeqNumU64, U64Backlink, U64Skiplink),
+        #[case] no_of_logs: usize,
+        #[case] document_view_id: Option<(SeqNumU64, LogIdU64)>,
+        #[case] expected_next_args: (SeqNumU64, LogIdU64, Backlink, Skiplink),
     ) {
         let store = MemoryStore::default();
         // Populate the db with the number of entries defined in the test params.
         let config = PopulateStoreConfig {
             no_of_entries,
-            no_of_logs: 1,
+            no_of_logs,
             no_of_public_keys: 1,
             ..PopulateStoreConfig::default()
         };
@@ -885,22 +892,24 @@ mod tests {
         // The public key of the author who published the entries.
         let public_key = key_pairs[0].public_key();
 
-        // Construct the passed document view id (specified by a single sequence number)
-        let document_view_id: Option<DocumentViewId> = document_view_id.map(|seq_num| {
+        // Construct the passed document view id (specified by sequence number and log id)
+        let document_view_id: Option<DocumentViewId> = document_view_id.map(|(seq_num, log_id)| {
             store
                 .entries
                 .lock()
                 .unwrap()
                 .values()
-                .find(|entry| entry.seq_num().as_u64() == seq_num)
+                .find(|entry| {
+                    entry.seq_num().as_u64() == seq_num && entry.log_id().as_u64() == log_id
+                })
                 .map(|entry| DocumentViewId::new(&[entry.hash().into()]))
                 .unwrap()
         });
 
         // Construct the expected next args
         let expected_seq_num = SeqNum::new(expected_next_args.0).unwrap();
-        let expected_log_id = LogId::default();
-        let expected_backlink = match expected_next_args.1 {
+        let expected_log_id = LogId::new(expected_next_args.1);
+        let expected_backlink = match expected_next_args.2 {
             Some(backlink) => store
                 .get_entry_at_seq_num(
                     &public_key,
@@ -912,7 +921,7 @@ mod tests {
                 .map(|entry| entry.hash()),
             None => None,
         };
-        let expected_skiplink = match expected_next_args.2 {
+        let expected_skiplink = match expected_next_args.3 {
             Some(skiplink) => store
                 .get_entry_at_seq_num(
                     &public_key,
@@ -1285,7 +1294,7 @@ mod tests {
 
             assert!(result.is_ok());
 
-            let (_, _, next_seq_num, next_log_id) = result.unwrap();
+            let (_, _, next_seq_num, _) = result.unwrap();
             let mut previous_seq_num = seq_num;
 
             assert_eq!(next_seq_num, previous_seq_num.next().unwrap());
