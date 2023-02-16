@@ -27,19 +27,19 @@ use crate::test_utils::memory_store::validation::{
 /// Error type used in the domain module.
 #[derive(thiserror::Error, Debug)]
 pub enum DomainError {
-    /// Helper error type used in validation module.
-    #[error("{0}")]
-    Custom(String),
-
+    /// The maximum u64 sequence number has been reached for the public key and log id combination.
     #[error("Max sequence number reached for public key {0} log {1}")]
     MaxSeqNumReached(String, u64),
 
+    /// Tried to update or delete a deleted document.
     #[error("You are trying to update or delete a document which has been deleted")]
     DeletedDocument,
 
+    /// An operation in the `previous` field was not found in the store.
     #[error("Operation {0} not found, could not determine document id")]
     PreviousNotFound(OperationId),
 
+    /// A document view id was provided which contained operations from different documents.
     #[error("Operations in passed document view id originate from different documents")]
     InvalidDocumentViewId,
 

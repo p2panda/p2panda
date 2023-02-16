@@ -10,35 +10,40 @@ use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 /// Error type used in the validation module.
 #[derive(thiserror::Error, Debug)]
 pub enum ValidationError {
-    /// Helper error type used in validation module.
-    #[error("{0}")]
-    Custom(String),
 
+    /// The claimed sequence number didn't match the expected.
     #[error("Entry's claimed seq num of {0} does not match expected seq num of {1} for given public key and log")]
     SeqNumDoesNotMatch(u64, u64),
 
+    /// The expected skiplink entry wasn't found in the store.
     #[error("Expected skiplink entry not found in store: public key {0}, log id {1}, seq num {2}")]
     ExpectedSkiplinkNotFound(String, u64, u64),
 
+    /// The claimed log id didn't match the expected next for a given public key.
     #[error(
         "Entry's claimed log id of {0} does not match expected next log id of {1} for given public key"
     )]
     LogIdDoesNotMatchNext(u64, u64),
 
+    /// The claimed log id didn't match the expected for a given public key and document id.
     #[error(
         "Entry's claimed log id of {0} does not match existing log id of {1} for given public key and document id"
     )]
     LogIdDoesNotMatchExisting(u64, u64),
 
+    /// Entry with seq num 1 contained a skiplink.
     #[error("Entry with seq num 1 can not have skiplink")]
     FirstEntryWithSkiplink,
 
+    /// This document is deleted.
     #[error("Document is deleted")]
     DocumentDeleted,
 
+    /// Max u64 sequence number reached.
     #[error("Max sequence number reached")]
     MaxSeqNum,
 
+    /// Max u64 log id reached.
     #[error("Max log id reached")]
     MaxLogId,
 
