@@ -23,7 +23,6 @@ use crate::test_utils::memory_store::validation::{
     ensure_document_not_deleted, get_expected_skiplink, increment_seq_num, is_next_seq_num,
     next_log_id, verify_log_id, ValidationError,
 };
-use crate::Human;
 
 /// Error type used in the domain module.
 #[derive(thiserror::Error, Debug)]
