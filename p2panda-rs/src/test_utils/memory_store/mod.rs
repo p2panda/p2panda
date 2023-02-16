@@ -7,13 +7,10 @@
 //! - helpers for populating a store with test data
 pub mod domain;
 pub mod helpers;
-pub mod helpers_next;
 mod provider;
 mod stores;
 mod types;
-mod domain_next;
 pub mod validation;
-pub mod validation_next;
 
 pub use provider::MemoryStore;
 pub use types::{EntryArgsResponse, PublishEntryResponse, PublishedOperation, StorageEntry};

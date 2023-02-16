@@ -1,49 +1,97 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Methods to validate data coming through the p2panda API.
-//!
-//! Currently these implementations are used for testing purposes but might be factored out into
-//! actual, reusable components of this crate.
+use std::collections::HashSet;
+
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 
-use crate::document::DocumentViewId;
+use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::decode::decode_entry;
+use crate::entry::error::DecodeEntryError;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::{EncodedEntry, LogId, SeqNum};
+use crate::hash::Hash;
 use crate::identity::PublicKey;
+use crate::operation::error::ValidateOperationError;
 use crate::operation::plain::PlainOperation;
 use crate::operation::traits::AsOperation;
 use crate::operation::validate::validate_operation_with_entry;
-use crate::operation::{EncodedOperation, OperationAction};
+use crate::operation::{EncodedOperation, OperationAction, OperationId};
 use crate::schema::Schema;
+use crate::storage_provider::error::{EntryStorageError, LogStorageError, OperationStorageError};
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
-use crate::storage_provider::utils::Result;
 use crate::test_utils::memory_store::validation::{
     ensure_document_not_deleted, get_expected_skiplink, increment_seq_num, is_next_seq_num,
-    next_log_id, verify_document_log_id,
+    next_log_id, verify_log_id, ValidationError,
 };
-use crate::test_utils::memory_store::EntryArgsResponse;
 use crate::Human;
 
-use super::validation::get_checked_document_id_for_view_id;
+/// Error type used in the domain module.
+#[derive(thiserror::Error, Debug)]
+pub enum DomainError {
+    /// Helper error type used in validation module.
+    #[error("{0}")]
+    Custom(String),
+
+    #[error("Max sequence number reached for public key {0} log {1}")]
+    MaxSeqNumReached(String, u64),
+
+    #[error("You are trying to update or delete a document which has been deleted")]
+    DeletedDocument,
+
+    #[error("Operation {0} not found, could not determine document id")]
+    PreviousNotFound(OperationId),
+
+    #[error("Operations in passed document view id originate from different documents")]
+    InvalidDocumentViewId,
+
+    /// Validation errors.
+    #[error(transparent)]
+    ValidationError(#[from] ValidationError),
+
+    /// Error coming from the log store.
+    #[error(transparent)]
+    LogStoreError(#[from] LogStorageError),
+
+    /// Error coming from the entry store.
+    #[error(transparent)]
+    EntryStoreError(#[from] EntryStorageError),
+
+    /// Error coming from the operation store.
+    #[error(transparent)]
+    OperationStoreError(#[from] OperationStorageError),
+
+    /// Error occurring when decoding entries.
+    #[error(transparent)]
+    DecodeEntryError(#[from] DecodeEntryError),
+
+    /// Error occurring when validating operations.
+    #[error(transparent)]
+    ValidateOperationError(#[from] ValidateOperationError),
+}
+
+/// An entries' backlink returned by next_args.
+type Backlink = Hash;
+
+/// An entries' skiplink returned by next_args.
+type Skiplink = Hash;
 
 /// Retrieve arguments required for constructing the next entry in a bamboo log for a specific
 /// public key and document.
 ///
-/// We accept a `DocumentViewId` rather than a `DocumentId` as an argument and then identify
-/// the document id based on operations already existing in the store. Doing this means a document
-/// can be updated without knowing the document id itself.
+/// We accept a `DocumentViewId` rather than a `DocumentId` as an argument and then identify the
+/// document id based on operations already existing in the store. Doing this means a document can
+/// be updated without knowing the document id itself.
 ///
-/// This method is intended to be used behind a public API and so we assume all passed values
-/// are in themselves valid.
+/// This method is intended to be used behind a public API and so we assume all passed values are
+/// in themselves valid.
 ///
 /// The steps and validation checks this method performs are:
 ///
 /// Check if a document view id was passed
 ///
-/// - if it wasn't we are creating a new document, safely increment the latest log id for the
-///     passed public key and return args immediately
-/// - if it was continue knowing we are updating an existing document
+/// - if it wasn't, we are creating a new document, safely increment the latest log id for the
+/// passed public key and return args immediately
+/// - if it was, continue knowing we are updating an existing document
 ///
 /// Determine the document id we are concerned with
 ///
@@ -54,35 +102,26 @@ use super::validation::get_checked_document_id_for_view_id;
 /// Determine next arguments
 ///
 /// - get the log id for this public key and document id, or if none is found safely increment this
-///     public keys latest log id
+/// public keys latest log id
 /// - get the backlink entry (latest entry for this public key and log)
-/// - get the skiplink for this public_key, log and next seq num
+/// - get the skiplink for this public key, log and next seq num
 /// - get the latest seq num for this public key and log and safely increment
 ///
-/// Finally, return next arguments
-pub async fn next_args<S: EntryStore + LogStore + OperationStore>(
+/// Finally, return next arguments.
+pub async fn next_args<S: EntryStore + OperationStore + LogStore>(
     store: &S,
     public_key: &PublicKey,
     document_view_id: Option<&DocumentViewId>,
-) -> Result<EntryArgsResponse> {
-    // Init the next args with base default values.
-    let mut next_args = EntryArgsResponse {
-        backlink: None,
-        skiplink: None,
-        seq_num: SeqNum::default(),
-        log_id: LogId::default(),
-    };
-
+) -> Result<(Option<Backlink>, Option<Skiplink>, SeqNum, LogId), DomainError> {
     ////////////////////////
     // HANDLE CREATE CASE //
     ////////////////////////
 
     // If no document_view_id is passed then this is a request for publishing a CREATE operation
-    // and we return the args for the next free log by this public key.
+    // and we return the args for the next free log by this public_key.
     if document_view_id.is_none() {
         let log_id = next_log_id(store, public_key).await?;
-        next_args.log_id = log_id;
-        return Ok(next_args);
+        return Ok((None, None, SeqNum::default(), log_id));
     }
 
     ///////////////////////////
@@ -103,7 +142,7 @@ pub async fn next_args<S: EntryStore + LogStore + OperationStore>(
     // DETERMINE NEXT ARGS //
     /////////////////////////
 
-    // Retrieve the log_id for the found document_id and public key.
+    // Retrieve the log_id for the found document_id and public_key.
     let log_id = store.get_log_id(public_key, &document_id).await?;
 
     // Check if an existing log id was found for this public key and document.
@@ -111,30 +150,27 @@ pub async fn next_args<S: EntryStore + LogStore + OperationStore>(
         // If it wasn't found, we just calculate the next log id safely and return the next args.
         None => {
             let next_log_id = next_log_id(store, public_key).await?;
-            next_args.log_id = next_log_id
+            Ok((None, None, SeqNum::default(), next_log_id))
         }
-        // If one was found, we need to get the backlink and skiplink, and safely increment the seq num.
+        // If one was found, we need to get the backlink and skiplink, and safely increment the seq
+        // num.
         Some(log_id) => {
             // Get the latest entry in this log.
             let latest_entry = store.get_latest_entry(public_key, &log_id).await?;
 
-            // Determine the next sequence number by incrementing one from the latest entry seq num.
+            // Determine the next sequence number by incrementing one from the latest entry seq
+            // num.
             //
             // If the latest entry is None, then we must be at seq num 1.
             let seq_num = match latest_entry {
                 Some(ref latest_entry) => {
                     let mut latest_seq_num = latest_entry.seq_num().to_owned();
-                    increment_seq_num(&mut latest_seq_num)
+                    increment_seq_num(&mut latest_seq_num).map_err(|_| {
+                        DomainError::MaxSeqNumReached(public_key.to_string(), log_id.as_u64())
+                    })
                 }
                 None => Ok(SeqNum::default()),
-            }
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Max sequence number reached for {} log {}",
-                    public_key.display(),
-                    log_id.as_u64()
-                )
-            });
+            }?;
 
             // Check if skiplink is required and if it is get the entry and return its hash.
             let skiplink = if is_lipmaa_required(seq_num.as_u64()) {
@@ -145,14 +181,12 @@ pub async fn next_args<S: EntryStore + LogStore + OperationStore>(
             }
             .map(|entry| entry.hash());
 
-            next_args.backlink = latest_entry.map(|entry| entry.hash());
-            next_args.skiplink = skiplink;
-            next_args.seq_num = seq_num;
-            next_args.log_id = log_id;
-        }
-    };
+            let backlink = latest_entry.map(|entry| entry.hash().into());
+            let skiplink = skiplink.map(|hash| hash.into());
 
-    Ok(next_args)
+            Ok((backlink, skiplink, seq_num, log_id))
+        }
+    }
 }
 
 /// Persist an entry and operation to storage after performing validation of claimed values against
@@ -161,8 +195,8 @@ pub async fn next_args<S: EntryStore + LogStore + OperationStore>(
 /// Returns the arguments required for constructing the next entry in a bamboo log for the
 /// specified public key and document.
 ///
-/// This method is intended to be used behind a public API and so we assume all passed values
-/// are in themselves valid.
+/// This method is intended to be used behind a public API and so we assume all passed values are
+/// in themselves valid.
 ///
 /// # Steps and Validation Performed
 ///
@@ -174,18 +208,14 @@ pub async fn next_args<S: EntryStore + LogStore + OperationStore>(
 /// entries:
 ///
 /// - Verify the claimed sequence number against the expected next sequence number for the public key
-///     and log.
+/// and log.
 /// - Get the expected backlink from storage.
 /// - Get the expected skiplink from storage.
 /// - Verify the bamboo entry (requires the expected backlink and skiplink to do this).
 ///
-/// ## Ensure single node per public key
-///
-/// - @TODO
-///
 /// ## Validate operation against it's claimed schema:
 ///
-/// - @TODO
+/// - verify the content of an operation against it's stated schema.
 ///
 /// ## Determine document id
 ///
@@ -205,13 +235,15 @@ pub async fn next_args<S: EntryStore + LogStore + OperationStore>(
 /// - Store the operation.
 ///
 /// ## Compute and return next entry arguments
-pub async fn publish<S: EntryStore + LogStore + OperationStore>(
+///
+/// - Done!
+pub async fn publish<S: EntryStore + OperationStore + LogStore>(
     store: &S,
     schema: &Schema,
     encoded_entry: &EncodedEntry,
     plain_operation: &PlainOperation,
     encoded_operation: &EncodedOperation,
-) -> Result<EntryArgsResponse> {
+) -> Result<(Option<Backlink>, Option<Skiplink>, SeqNum, LogId), DomainError> {
     //////////////////
     // DECODE ENTRY //
     //////////////////
@@ -225,9 +257,7 @@ pub async fn publish<S: EntryStore + LogStore + OperationStore>(
     // VALIDATE ENTRY AND OPERATION //
     //////////////////////////////////
 
-    // TODO: Check this validation flow is still correct.
-
-    // Verify that the claimed seq num matches the expected seq num for this public key and log.
+    // Verify that the claimed seq num matches the expected seq num for this public_key and log.
     let latest_entry = store.get_latest_entry(public_key, log_id).await?;
     let latest_seq_num = latest_entry.as_ref().map(|entry| entry.seq_num());
     is_next_seq_num(latest_seq_num, seq_num)?;
@@ -263,16 +293,9 @@ pub async fn publish<S: EntryStore + LogStore + OperationStore>(
         schema,
     )?;
 
-    ///////////////////////////////////
-    // ENSURE SINGLE NODE PER AUTHOR //
-    ///////////////////////////////////
-
-    // @TODO: Missing a step here where we check if the public key has published to this node before, and also
-    // if we know of any other nodes they have published to. Not sure how to do this yet.
-
-    //////////////////////////
+    ///////////////////////////
     // DETERMINE DOCUMENT ID //
-    //////////////////////////
+    ///////////////////////////
 
     let document_id = match operation.action() {
         OperationAction::Create => {
@@ -290,27 +313,14 @@ pub async fn publish<S: EntryStore + LogStore + OperationStore>(
             // Ensure the document isn't deleted.
             ensure_document_not_deleted(store, &document_id)
                 .await
-                .map_err(|_| {
-                    "You are trying to update or delete a document which has been deleted"
-                })?;
+                .map_err(|_| DomainError::DeletedDocument)?;
 
             document_id
         }
     };
 
-    // Verify the claimed log id against the expected one for this document id and public key.
-    verify_document_log_id(store, public_key, log_id, &document_id).await?;
-
-    ///////////////
-    // STORE LOG //
-    ///////////////
-
-    // If this is the first entry in a new log we insert it here.
-    if entry.seq_num().is_first() {
-        store
-            .insert_log(log_id, public_key, &operation.schema_id(), &document_id)
-            .await?;
-    }
+    // Verify the claimed log id against the expected one for this document id and public_key.
+    verify_log_id(store, public_key, log_id, &document_id).await?;
 
     /////////////////////////////////////
     // DETERMINE NEXT ENTRY ARG VALUES //
@@ -318,13 +328,9 @@ pub async fn publish<S: EntryStore + LogStore + OperationStore>(
 
     // If we have reached MAX_SEQ_NUM here for the next args then we will error and _not_ store the
     // entry which is being processed in this request.
-    let next_seq_num = increment_seq_num(&mut seq_num.clone()).map_err(|_| {
-        format!(
-            "Max sequence number reached for {} log {}",
-            public_key.display(),
-            log_id.as_u64()
-        )
-    })?;
+    let next_seq_num = increment_seq_num(&mut seq_num.clone())
+        .map_err(|_| DomainError::MaxSeqNumReached(public_key.to_string(), log_id.as_u64()))?;
+
     let backlink = Some(encoded_entry.hash());
 
     // Check if skiplink is required and return hash if so
@@ -335,12 +341,16 @@ pub async fn publish<S: EntryStore + LogStore + OperationStore>(
     }
     .map(|entry| entry.hash());
 
-    let next_args = EntryArgsResponse {
-        log_id: log_id.to_owned(),
-        seq_num: next_seq_num,
-        backlink,
-        skiplink,
-    };
+    ///////////////
+    // STORE LOG //
+    ///////////////
+
+    // If the entries' seq num is 1 we insert a new log here.
+    if entry.seq_num().is_first() {
+        store
+            .insert_log(log_id, public_key, &operation.schema_id(), &document_id)
+            .await?;
+    }
 
     ///////////////////////////////
     // STORE ENTRY AND OPERATION //
@@ -350,12 +360,51 @@ pub async fn publish<S: EntryStore + LogStore + OperationStore>(
     store
         .insert_entry(&entry, encoded_entry, Some(encoded_operation))
         .await?;
+
     // Insert the operation into the store.
     store
         .insert_operation(&operation_id, public_key, &operation, &document_id)
         .await?;
 
-    Ok(next_args)
+    Ok((backlink, skiplink, next_seq_num, log_id.to_owned()))
+}
+
+/// Attempt to identify the document id for view id contained in a `next_args` request.
+///
+/// This will fail if:
+///
+/// - any of the operations contained in the view id _don't_ exist in the store
+/// - any of the operations contained in the view id return a different document id than any of the
+/// others
+pub async fn get_checked_document_id_for_view_id<S: EntryStore + OperationStore + LogStore>(
+    store: &S,
+    view_id: &DocumentViewId,
+) -> Result<DocumentId, DomainError> {
+    let mut found_document_ids: HashSet<DocumentId> = HashSet::new();
+    for operation in view_id.iter() {
+        // Retrieve a document id for every operation in this view id.
+        //
+        // If any operation doesn't return a document id (meaning it wasn't in the store) then
+        // error now already.
+        let document_id = store.get_document_id_by_operation_id(operation).await?;
+
+        if document_id.is_none() {
+            return Err(DomainError::PreviousNotFound(operation.to_owned()));
+        }
+
+        found_document_ids.insert(document_id.unwrap());
+    }
+
+    // We can unwrap here as there must be at least one document view else the error above would
+    // have been triggered.
+    let mut found_document_ids_iter = found_document_ids.iter();
+    let document_id = found_document_ids_iter.next().unwrap();
+
+    if found_document_ids_iter.next().is_some() {
+        return Err(DomainError::InvalidDocumentViewId);
+    }
+
+    Ok(document_id.to_owned())
 }
 
 #[cfg(test)]
@@ -374,20 +423,19 @@ mod tests {
         Operation, OperationAction, OperationBuilder, OperationId, OperationValue,
     };
     use crate::schema::{FieldType, Schema};
-    use crate::storage_provider::traits::EntryStore;
+    use crate::storage_provider::traits::{EntryStore, LogStore};
     use crate::test_utils::constants::{test_fields, PRIVATE_KEY};
+    use crate::test_utils::fixtures::populate_store_config;
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, key_pair, operation, populate_store_config, public_key,
+        create_operation, delete_operation, key_pair, operation, public_key,
         random_document_view_id, random_hash, schema, update_operation,
     };
-    use crate::test_utils::memory_store::domain::EntryArgsResponse;
     use crate::test_utils::memory_store::helpers::{
         populate_store, send_to_store, PopulateStoreConfig,
     };
-    use crate::test_utils::memory_store::validation::get_checked_document_id_for_view_id;
     use crate::test_utils::memory_store::{MemoryStore, StorageEntry};
 
-    use super::{next_args, publish};
+    use super::{get_checked_document_id_for_view_id, next_args, publish, Backlink};
 
     type LogIdAndSeqNum = (u64, u64);
 
@@ -443,7 +491,8 @@ mod tests {
             .unwrap();
         let operation_one_id: OperationId = entry.hash().into();
 
-        // Store another entry and operation, from a different public_key, which perform an update on the earlier operation.
+        // Store another entry and operation, from a different public key, which perform an update on
+        // the earlier operation.
         let update_operation = OperationBuilder::new(schema.id())
             .action(OperationAction::Update)
             .previous(&operation_one_id.clone().into())
@@ -474,7 +523,7 @@ mod tests {
     #[rstest]
     #[case::ok(&[(0, 8)], (0, 8))]
     #[should_panic(
-        expected = "Expected skiplink target not found in store: <PublicKey 53fc96>, log id 0, seq num 4"
+        expected = "Expected skiplink entry not found in store: public key 2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96, log id 0, seq num 4"
     )]
     #[case::skiplink_missing(&[(0, 4), (0, 8)], (0, 8))]
     #[should_panic(
@@ -494,7 +543,7 @@ mod tests {
     )]
     #[case::seq_num_occupied_(&[], (0, 7))]
     #[should_panic(
-        expected = "Expected skiplink target not found in store: <PublicKey 53fc96>, log id 0, seq num 4"
+        expected = "Expected skiplink entry not found in store: public key 2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96, log id 0, seq num 4"
     )]
     #[case::next_args_skiplink_missing(&[(0, 4), (0, 7), (0, 8)], (0, 7))]
     #[should_panic(
@@ -532,37 +581,77 @@ mod tests {
         remove_entries(&store, &public_key, entries_to_remove);
 
         // Publish the latest entry again and see what happens.
-        let operation = next_entry.payload().unwrap();
+        let operation = next_entry.payload.unwrap();
         let result = publish(
             &store,
             &schema,
             &next_entry.encoded_entry,
-            &decode_operation(operation).unwrap(),
-            operation,
+            &decode_operation(&operation).unwrap(),
+            &operation,
         )
         .await;
 
         // Unwrap here causing a panic, we check the errors match what we expect.
-        result.unwrap();
+        result.map_err(|err| err.to_string()).unwrap();
     }
 
     #[rstest]
-    #[case::ok_single_writer(&[], &[(0, 8)], KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
-    // Weird case where all previous operations are on the same branch, but still valid.
-    #[case::ok_many_previous_operations(&[], &[(0, 8), (0, 7), (0, 6)], KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
-    #[case::ok_multi_writer(&[], &[(0, 8)], KeyPair::new())]
-    #[should_panic(expected = "<Operation 534d03> not found, could not determine document id")]
-    #[case::previous_operation_missing(&[(0, 8)], &[(0, 8)], KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
-    #[should_panic(expected = "<Operation af5ecf> not found, could not determine document id")]
-    #[case::one_of_some_previous_operations_missing(&[(0, 7)], &[(0, 7), (0, 8)], KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
-    #[should_panic(expected = "<Operation 534d03> not found, could not determine document id")]
-    #[case::one_of_some_previous_operations_missing(&[(0, 8)], &[(0, 7), (0, 8)], KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
-    #[should_panic(expected = "<Operation 534d03> not found, could not determine document id")]
-    #[case::missing_previous_operation_multi_writer(&[(0, 8)], &[(0, 8)], KeyPair::new())]
-    #[should_panic(
-        expected = "Invalid document view id: operations in passed document view id originate from different documents"
+    #[case::ok_single_writer(
+        &[],
+        &[(0, 8)],
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
     )]
-    #[case::previous_operations_invalid_multiple_document_id(&[], &[(0, 8), (1, 8)], KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
+    // Weird case where all previous operations are on the same branch, but still valid.
+    #[case::ok_many_previous(
+        &[],
+        &[(0, 8), (0, 7), (0, 6)],
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
+    )]
+    #[case::ok_multi_writer(
+        &[],
+        &[(0, 8)],
+        KeyPair::new()
+    )]
+    #[should_panic(
+        expected = "Operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found, could not determine document id"
+    )]
+    #[case::previous_operation_missing(
+        &[(0, 8)],
+        &[(0, 8)],
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
+    )]
+    #[should_panic(
+        expected = "Operation 00201971f1257645a2f6d3465f8713991d269709f81a5c6c458168b9461d68af5ecf not found, could not determine document id"
+    )]
+    #[case::one_of_some_previous_missing(
+        &[(0, 7)],
+        &[(0, 7), (0, 8)],
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
+    )]
+    #[should_panic(
+        expected = "Operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found, could not determine document id"
+    )]
+    #[case::one_of_some_previous_missing(
+        &[(0, 8)],
+        &[(0, 7), (0, 8)],
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
+    )]
+    #[should_panic(
+        expected = "Operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found, could not determine document id"
+    )]
+    #[case::missing_previous_operation_multi_writer(
+        &[(0, 8)],
+        &[(0, 8)],
+        KeyPair::new()
+    )]
+    #[should_panic(
+        expected = "Operations in passed document view id originate from different documents"
+    )]
+    #[case::previous_invalid_multiple_document_id(
+        &[],
+        &[(0, 8), (1, 8)],
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
+    )]
     #[tokio::test]
     async fn publish_with_missing_operations(
         schema: Schema,
@@ -578,7 +667,7 @@ mod tests {
         let store = MemoryStore::default();
         let (key_pairs, documents) = populate_store(&store, &config).await;
 
-        let existing_public_key = key_pairs[0].public_key();
+        let existing_author = key_pairs[0].public_key();
 
         // Get the document id.
         let document = documents.first().map(|id| id.as_str().parse().unwrap());
@@ -595,7 +684,7 @@ mod tests {
                     .find(|entry| {
                         entry.seq_num().as_u64() == *seq_num
                             && entry.log_id().as_u64() == *log_id
-                            && entry.public_key() == &existing_public_key
+                            && *entry.public_key() == existing_author
                     })
                     .map(|entry| entry.hash().into())
             })
@@ -612,25 +701,26 @@ mod tests {
             .build()
             .unwrap();
 
-        // The existing_public_key who will publish the next entry.
-        let public_key_to_publish = key_pair.public_key();
-        let next_args = next_args(&store, &public_key_to_publish, document.as_ref())
-            .await
-            .unwrap();
+        // The next args for a author who will publish the next entry based on
+        // the passed key pair for this test run.
+        let (backlink, skiplink, seq_num, log_id) =
+            next_args(&store, &key_pair.public_key(), document.as_ref())
+                .await
+                .unwrap();
 
         let encoded_operation = encode_operation(&next_operation).unwrap();
         let encoded_entry = sign_and_encode_entry(
-            &next_args.log_id,
-            &next_args.seq_num,
-            next_args.skiplink.as_ref(),
-            next_args.backlink.as_ref(),
+            &log_id,
+            &seq_num,
+            skiplink.map(Hash::from).as_ref(),
+            backlink.map(Hash::from).as_ref(),
             &encoded_operation,
             &key_pair,
         )
         .unwrap();
 
         // Remove some entries from the db.
-        remove_operations(&store, &existing_public_key, operations_to_remove);
+        remove_operations(&store, &existing_author, operations_to_remove);
 
         // Publish the entry and operation.
         let result = publish(
@@ -643,26 +733,70 @@ mod tests {
         .await;
 
         // Unwrap here causing a panic, we check the errors match what we expect.
-        result.unwrap();
+        result.map_err(|err| err.to_string()).unwrap();
     }
 
     #[rstest]
-    #[case::ok_single_writer(&[], &[(0, 8)], KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
-    #[case::ok_many_previous_operations(&[], &[(0, 8), (0, 7), (0, 6)], KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
-    #[case::ok_not_the_most_recent_document_view_id(&[], &[(0, 1)], KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
-    #[case::ok_multi_writer(&[], &[(0, 8)], KeyPair::new())]
-    #[should_panic(expected = "<Operation 534d03> not found, could not determine document id")]
-    #[case::previous_operation_missing(&[(0, 8)], &[(0, 8)], KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
-    #[should_panic(expected = "<Operation af5ecf> not found, could not determine document id")]
-    #[case::one_of_some_previous_operations_missing(&[(0, 7)], &[(0, 7), (0, 8)], KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
-    #[should_panic(expected = "<Operation 534d03> not found, could not determine document id")]
-    #[case::one_of_some_previous_operations_missing(&[(0, 8)], &[(0, 7), (0, 8)], KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
-    #[should_panic(expected = "<Operation 534d03> not found, could not determine document id")]
-    #[case::missing_previous_operation_multi_writer(&[(0, 8)], &[(0, 8)], KeyPair::new())]
-    #[should_panic(
-        expected = "Invalid document view id: operations in passed document view id originate from different documents"
+    #[case::ok_single_writer(
+        &[],
+        &[(0, 8)],
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
     )]
-    #[case::previous_operations_invalid_multiple_document_id(&[], &[(0, 8), (1, 8)], KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
+    #[case::ok_many_previous(
+        &[],
+        &[(0, 8), (0, 7), (0, 6)],
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
+    )]
+    #[case::ok_not_the_most_recent_document_view_id(
+        &[],
+        &[(0, 1)],
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
+    )]
+    #[case::ok_multi_writer(
+        &[],
+        &[(0, 8)],
+        KeyPair::new()
+    )]
+    #[should_panic(
+        expected = "Operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found, could not determine document id"
+    )]
+    #[case::previous_operation_missing(
+        &[(0, 8)],
+        &[(0, 8)],
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
+    )]
+    #[should_panic(
+        expected = "Operation 00201971f1257645a2f6d3465f8713991d269709f81a5c6c458168b9461d68af5ecf not found, could not determine document id"
+    )]
+    #[case::one_of_some_previous_missing(
+        &[(0, 7)],
+        &[(0, 7), (0, 8)],
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
+    )]
+    #[should_panic(
+        expected = "Operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found, could not determine document id"
+    )]
+    #[case::one_of_some_previous_missing(
+        &[(0, 8)],
+        &[(0, 7), (0, 8)],
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
+    )]
+    #[should_panic(
+        expected = "Operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found, could not determine document id"
+    )]
+    #[case::missing_previous_operation_multi_writer(
+        &[(0, 8)],
+        &[(0, 8)],
+        KeyPair::new()
+    )]
+    #[should_panic(
+        expected = "Operations in passed document view id originate from different documents"
+    )]
+    #[case::previous_invalid_multiple_document_id(
+        &[],
+        &[(0, 8), (1, 8)],
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
+    )]
     #[tokio::test]
     async fn next_args_with_missing_operations(
         #[case] operations_to_remove: &[LogIdAndSeqNum],
@@ -690,7 +824,7 @@ mod tests {
                     .find(|entry| {
                         entry.seq_num().as_u64() == *seq_num
                             && entry.log_id().as_u64() == *log_id
-                            && entry.public_key() == &public_key_with_removed_operations
+                            && *entry.public_key() == public_key_with_removed_operations
                     })
                     .map(|entry| entry.hash().into())
             })
@@ -710,12 +844,12 @@ mod tests {
         let result = next_args(&store, &public_key_making_request, Some(&document_view_id)).await;
 
         // Unwrap here causing a panic, we check the errors match what we expect.
-        result.unwrap();
+        result.map_err(|err| err.to_string()).unwrap();
     }
 
     type SeqNumU64 = u64;
-    type Backlink = Option<u64>;
-    type Skiplink = Option<u64>;
+    type U64Backlink = Option<u64>;
+    type U64Skiplink = Option<u64>;
 
     #[rstest]
     #[case(0, None, (1, None, None))]
@@ -736,7 +870,7 @@ mod tests {
     async fn next_args_with_expected_results(
         #[case] no_of_entries: usize,
         #[case] document_view_id: Option<SeqNumU64>,
-        #[case] expected_next_args: (SeqNumU64, Backlink, Skiplink),
+        #[case] expected_next_args: (SeqNumU64, U64Backlink, U64Skiplink),
     ) {
         let store = MemoryStore::default();
         // Populate the db with the number of entries defined in the test params.
@@ -748,7 +882,7 @@ mod tests {
         };
         let (key_pairs, _) = populate_store(&store, &config).await;
 
-        // The public key who published the entries.
+        // The public key of the author who published the entries.
         let public_key = key_pairs[0].public_key();
 
         // Construct the passed document view id (specified by a single sequence number)
@@ -790,41 +924,40 @@ mod tests {
                 .map(|entry| entry.hash()),
             None => None,
         };
-        let expected_next_args = EntryArgsResponse {
-            log_id: expected_log_id,
-            seq_num: expected_seq_num,
-            backlink: expected_backlink,
-            skiplink: expected_skiplink,
-        };
 
-        // Request next args for the public key and docuent view.
-        let result = next_args(&store, &public_key, document_view_id.as_ref()).await;
-        assert_eq!(result.unwrap(), expected_next_args);
+        // Request next args for the public key and document view.
+        let (backlink, skiplink, seq_num, log_id) =
+            next_args(&store, &public_key, document_view_id.as_ref())
+                .await
+                .unwrap();
+
+        assert_eq!(backlink, expected_backlink);
+        assert_eq!(skiplink, expected_skiplink);
+        assert_eq!(seq_num, expected_seq_num);
+        assert_eq!(log_id, expected_log_id);
     }
 
     #[rstest]
     #[tokio::test]
     async fn gets_next_args_other_cases(
-        public_key: PublicKey,
         #[from(populate_store_config)]
         #[with(7, 1, 1)]
         config: PopulateStoreConfig,
     ) {
         let store = MemoryStore::default();
-        let (_, documents) = populate_store(&store, &config).await;
+        let (key_pairs, documents) = populate_store(&store, &config).await;
+
+        // The public key of the author who published the entries.
+        let public_key = key_pairs[0].public_key();
 
         // Get with no DocumentViewId given.
-        let result = next_args(&store, &public_key, None).await;
-        assert!(result.is_ok());
-        assert_eq!(
-            EntryArgsResponse {
-                backlink: None,
-                skiplink: None,
-                log_id: LogId::new(1),
-                seq_num: SeqNum::default(),
-            },
-            result.unwrap()
-        );
+        let (backlink, skiplink, seq_num, log_id) =
+            next_args(&store, &public_key, None).await.unwrap();
+
+        assert_eq!(backlink, None);
+        assert_eq!(skiplink, None);
+        assert_eq!(seq_num, SeqNum::new(1).unwrap());
+        assert_eq!(log_id, LogId::new(1));
 
         // Get with non-existent DocumentViewId given.
         let result = next_args(&store, &public_key, Some(&random_document_view_id())).await;
@@ -844,13 +977,16 @@ mod tests {
         let result = next_args(&store, &public_key, Some(&document_view_id)).await;
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Expected skiplink target not found in store: <PublicKey 53fc96>, log id 0, seq num 4"
+            "Expected skiplink entry not found in store: public key 2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96, log id 0, seq num 4"
         );
     }
 
     #[rstest]
-    #[case::owner_publishes_update_to_correct_log(LogId::new(0), KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
-    #[case::new_public_key_updates_to_new_log(LogId::new(0), KeyPair::new())]
+    #[case::owner_publishes_update_to_correct_log(
+        LogId::new(0),
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())
+    ]
+    #[case::new_author_updates_to_new_log(LogId::new(0), KeyPair::new())]
     #[should_panic(
         expected = "Entry's claimed log id of 1 does not match existing log id of 0 for given public key and document"
     )]
@@ -862,7 +998,7 @@ mod tests {
     #[should_panic(
         expected = "Entry's claimed log id of 1 does not match expected next log id of 0 for given public key"
     )]
-    #[case::new_public_key_updates_to_wrong_new_log(LogId::new(1), KeyPair::new())]
+    #[case::new_author_updates_to_wrong_new_log(LogId::new(1), KeyPair::new())]
     #[tokio::test]
     async fn publish_update_log_tests(
         schema: Schema,
@@ -877,7 +1013,7 @@ mod tests {
 
         let document_id = documents.first().unwrap();
         let document_view_id: DocumentViewId = document_id.as_str().parse().unwrap();
-        let public_key_performing_update = key_pair.public_key();
+        let author_performing_update = key_pair.public_key();
 
         let update_operation = OperationBuilder::new(schema.id())
             .action(OperationAction::Update)
@@ -887,7 +1023,7 @@ mod tests {
             .unwrap();
 
         let latest_entry = store
-            .get_latest_entry(&public_key_performing_update, &log_id)
+            .get_latest_entry(&author_performing_update, &log_id)
             .await
             .unwrap();
 
@@ -914,24 +1050,43 @@ mod tests {
         )
         .await;
 
-        result.unwrap();
+        // The test will panic here when there is an error
+        result.map_err(|err| err.to_string()).unwrap();
+
+        // For non error cases we test that there is a log for the updated document.
+        let log = store
+            .get_log_id(&author_performing_update, document_id)
+            .await
+            .unwrap();
+
+        assert!(log.is_some());
+        assert_eq!(log.unwrap(), LogId::new(0));
     }
 
     #[rstest]
-    #[case::owner_publishes_to_correct_log(LogId::new(2), KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
-    #[case::new_public_key_publishes_to_new_log(LogId::new(0), KeyPair::new())]
+    #[case::owner_publishes_to_correct_log(
+        LogId::new(2),
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())
+    ]
+    #[case::new_author_publishes_to_new_log(LogId::new(0), KeyPair::new())]
     #[should_panic(
         expected = "Entry's claimed seq num of 1 does not match expected seq num of 2 for given public key and log"
     )]
-    #[case::owner_publishes_to_wrong_and_taken_log(LogId::new(1), KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
+    #[case::owner_publishes_to_wrong_and_taken_log(
+        LogId::new(1),
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())
+    ]
     #[should_panic(
         expected = "Entry's claimed log id of 3 does not match expected next log id of 2 for given public key"
     )]
-    #[case::owner_publishes_to_wrong_but_free_log(LogId::new(3), KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
+    #[case::owner_publishes_to_wrong_but_free_log(
+        LogId::new(3),
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())
+    ]
     #[should_panic(
         expected = "Entry's claimed log id of 1 does not match expected next log id of 0 for given public key"
     )]
-    #[case::new_public_key_publishes_to_wrong_new_log(LogId::new(1), KeyPair::new())]
+    #[case::new_author_publishes_to_wrong_new_log(LogId::new(1), KeyPair::new())]
     #[tokio::test]
     async fn publish_create_log_tests(
         schema: Schema,
@@ -945,6 +1100,7 @@ mod tests {
         let store = MemoryStore::default();
         let _ = populate_store(&store, &config).await;
 
+        // Construct and publish a new entry with the passed log id.
         let encoded_operation = encode_operation(&operation).unwrap();
         let encoded_entry = sign_and_encode_entry(
             &log_id,
@@ -956,16 +1112,29 @@ mod tests {
         )
         .unwrap();
 
-        let result = publish(
+        // This will error (and panic as we unwrap) if the claimed log id is incorrect.
+        // We test the error string is correct.
+        let _result = publish(
             &store,
             &schema,
             &encoded_entry,
             &decode_operation(&encoded_operation).unwrap(),
             &encoded_operation,
         )
-        .await;
+        .await
+        .map_err(|err| err.to_string())
+        .unwrap();
 
-        result.unwrap();
+        // If it didn't error the request succeeded, we check a new log was stored.
+        let public_key = key_pair.public_key();
+        let document_id = encoded_entry.hash().into();
+
+        let retrieved_log_id = store
+            .get_log_id(&public_key, &document_id)
+            .await
+            .expect("Retrieve log id for document");
+
+        assert_eq!(log_id, retrieved_log_id.unwrap())
     }
 
     #[rstest]
@@ -990,7 +1159,7 @@ mod tests {
 
         let document_id = documents.first().unwrap();
         let document_view_id: DocumentViewId = document_id.as_str().parse().unwrap();
-        let public_key_performing_update = key_pair.public_key();
+        let author_performing_update = key_pair.public_key();
 
         let delete_operation = OperationBuilder::new(schema.id())
             .action(OperationAction::Delete)
@@ -999,7 +1168,7 @@ mod tests {
             .unwrap();
 
         let latest_entry = store
-            .get_latest_entry(&public_key_performing_update, &LogId::default())
+            .get_latest_entry(&author_performing_update, &LogId::default())
             .await
             .unwrap();
 
@@ -1020,13 +1189,13 @@ mod tests {
         let result = publish(
             &store,
             &schema,
-            &encoded_entry,
+            &encoded_entry.clone(),
             &decode_operation(&encoded_operation).unwrap(),
             &encoded_operation,
         )
         .await;
 
-        result.unwrap();
+        result.map_err(|err| err.to_string()).unwrap();
     }
 
     #[rstest]
@@ -1050,7 +1219,7 @@ mod tests {
 
         let result = next_args(&store, &public_key, Some(&document_view_id)).await;
 
-        result.unwrap();
+        result.map_err(|err| err.to_string()).unwrap();
     }
 
     #[rstest]
@@ -1069,9 +1238,10 @@ mod tests {
             let document_view_id: Option<DocumentViewId> =
                 document_id.clone().map(|id| id.as_str().parse().unwrap());
 
-            let next_entry_args = next_args(&store, &public_key, document_view_id.as_ref())
-                .await
-                .unwrap();
+            let (backlink, skiplink, seq_num, log_id) =
+                next_args(&store, &public_key, document_view_id.as_ref())
+                    .await
+                    .unwrap();
 
             let schema_id = schema.id().to_owned();
             let operation = if index == 0 {
@@ -1080,21 +1250,21 @@ mod tests {
                     schema_id,
                 )
             } else if index == (num_of_entries - 1) {
-                delete_operation(next_entry_args.backlink.clone().unwrap().into(), schema_id)
+                delete_operation(backlink.clone().unwrap().into(), schema_id)
             } else {
                 update_operation(
                     vec![("name", OperationValue::String("🐼".to_string()))],
-                    next_entry_args.backlink.clone().unwrap().into(),
+                    backlink.clone().unwrap().into(),
                     schema_id,
                 )
             };
 
             let encoded_operation = encode_operation(&operation).unwrap();
             let encoded_entry = sign_and_encode_entry(
-                &next_entry_args.log_id,
-                &next_entry_args.seq_num,
-                next_entry_args.skiplink.map(Hash::from).as_ref(),
-                next_entry_args.backlink.map(Hash::from).as_ref(),
+                &log_id,
+                &seq_num,
+                skiplink.map(Hash::from).as_ref(),
+                backlink.map(Hash::from).as_ref(),
                 &encoded_operation,
                 &key_pair,
             )
@@ -1115,17 +1285,18 @@ mod tests {
 
             assert!(result.is_ok());
 
-            let next_args = result.unwrap();
+            let (_, _, next_seq_num, next_log_id) = result.unwrap();
+            let mut previous_seq_num = seq_num;
 
-            assert_eq!(
-                next_args.seq_num,
-                next_entry_args.seq_num.clone().next().unwrap()
-            );
+            assert_eq!(next_seq_num, previous_seq_num.next().unwrap());
+            assert_eq!(log_id, LogId::default());
         }
     }
 
     #[rstest]
-    #[should_panic(expected = "Max sequence number reached for <PublicKey 53fc96> log 0")]
+    #[should_panic(
+        expected = "Max sequence number reached for public key 2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96 log 0"
+    )]
     #[tokio::test]
     async fn next_args_max_seq_num_reached(
         key_pair: KeyPair,
@@ -1149,12 +1320,12 @@ mod tests {
             &SeqNum::new(u64::MAX).unwrap(),
             Some(&random_hash()),
             Some(&random_hash()),
-            entry_two.payload().unwrap(),
+            entry_two.payload.as_ref().unwrap(),
             &key_pair,
         )
         .unwrap();
 
-        let entry = StorageEntry::new(&encoded_entry, entry_two.payload());
+        let entry = StorageEntry::new(&encoded_entry, entry_two.payload.as_ref());
 
         store
             .entries
@@ -1164,11 +1335,13 @@ mod tests {
 
         let result = next_args(&store, &public_key, Some(&entry_two.hash().into())).await;
 
-        result.unwrap();
+        result.map_err(|err| err.to_string()).unwrap();
     }
 
     #[rstest]
-    #[should_panic(expected = "Max sequence number reached for <PublicKey 53fc96> log 0")]
+    #[should_panic(
+        expected = "Max sequence number reached for public key 2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96 log 0"
+    )]
     #[tokio::test]
     async fn publish_max_seq_num_reached(
         schema: Schema,
@@ -1197,12 +1370,12 @@ mod tests {
             &SeqNum::new(18446744073709551611).unwrap(),
             Some(&random_hash()),
             Some(&random_hash()),
-            entry_two.payload().unwrap(),
+            entry_two.payload.as_ref().unwrap(),
             &key_pair,
         )
         .unwrap();
 
-        let skiplink = StorageEntry::new(&encoded_entry, entry_two.payload());
+        let skiplink = StorageEntry::new(&encoded_entry, entry_two.payload.as_ref());
         store
             .entries
             .lock()
@@ -1215,12 +1388,12 @@ mod tests {
             &SeqNum::new(u64::MAX - 1).unwrap(),
             None,
             Some(&random_hash()),
-            entry_two.payload().unwrap(),
+            entry_two.payload.as_ref().unwrap(),
             &key_pair,
         )
         .unwrap();
 
-        let backlink = StorageEntry::new(&encoded_entry, entry_two.payload());
+        let backlink = StorageEntry::new(&encoded_entry, entry_two.payload.as_ref());
         store
             .entries
             .lock()
@@ -1233,13 +1406,13 @@ mod tests {
             &SeqNum::new(u64::MAX).unwrap(),
             Some(&skiplink.hash()),
             Some(&backlink.hash()),
-            entry_two.payload().unwrap(),
+            entry_two.payload.as_ref().unwrap(),
             &key_pair,
         )
         .unwrap();
 
         // Publish the MAX_SEQ_NUM entry
-        let operation = entry_two.payload().unwrap();
+        let operation = &entry_two.payload.unwrap();
         let result = publish(
             &store,
             &schema,
@@ -1254,6 +1427,6 @@ mod tests {
 
         // We expect the entry we published not to have been stored in the db
         assert!(entry_at_max_seq_num.is_none());
-        result.unwrap();
+        result.map_err(|err| err.to_string()).unwrap();
     }
 }

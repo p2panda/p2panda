@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Methods for validating entries and operations against expected and stored values.
-use std::collections::HashSet;
-
-use crate::document::{DocumentId, DocumentViewId};
+use crate::document::DocumentId;
 use crate::entry::{LogId, SeqNum};
 use crate::identity::PublicKey;
 use crate::operation::traits::AsOperation;
@@ -17,6 +14,34 @@ pub enum ValidationError {
     /// Helper error type used in validation module.
     #[error("{0}")]
     Custom(String),
+
+    #[error("Entry's claimed seq num of {0} does not match expected seq num of {1} for given public key and log")]
+    SeqNumDoesNotMatch(u64, u64),
+
+    #[error("Expected skiplink entry not found in store: public key {0}, log id {1}, seq num {2}")]
+    ExpectedSkiplinkNotFound(String, u64, u64),
+
+    #[error(
+        "Entry's claimed log id of {0} does not match expected next log id of {1} for given public key"
+    )]
+    LogIdDoesNotMatchNext(u64, u64),
+
+    #[error(
+        "Entry's claimed log id of {0} does not match existing log id of {1} for given public key and document id"
+    )]
+    LogIdDoesNotMatchExisting(u64, u64),
+
+    #[error("Entry with seq num 1 can not have skiplink")]
+    FirstEntryWithSkiplink,
+
+    #[error("Document is deleted")]
+    DocumentDeleted,
+
+    #[error("Max sequence number reached")]
+    MaxSeqNum,
+
+    #[error("Max log id reached")]
+    MaxLogId,
 
     /// Error coming from the log store.
     #[error(transparent)]
@@ -51,10 +76,12 @@ pub fn is_next_seq_num(
     }?;
 
     if expected_seq_num != *claimed_seq_num {
-        return Err(ValidationError::Custom(format!("Entry's claimed seq num of {} does not match expected seq num of {} for given public key and log",
-        claimed_seq_num.as_u64(),
-        expected_seq_num.as_u64())));
-    };
+        return Err(ValidationError::SeqNumDoesNotMatch(
+            claimed_seq_num.as_u64(),
+            expected_seq_num.as_u64(),
+        ));
+    }
+
     Ok(())
 }
 
@@ -67,7 +94,7 @@ pub fn is_next_seq_num(
 /// - Retrieve the stored log id for the document id
 ///   - If found, ensure it matches the claimed log id
 ///   - If not found retrieve the next available log id for this public key and ensure that matches
-pub async fn verify_document_log_id<S: LogStore>(
+pub async fn verify_log_id<S: LogStore>(
     store: &S,
     public_key: &PublicKey,
     claimed_log_id: &LogId,
@@ -76,13 +103,12 @@ pub async fn verify_document_log_id<S: LogStore>(
     // Check if there is a log id registered for this document and public key already in the store.
     match store.get_log_id(public_key, document_id).await? {
         Some(expected_log_id) => {
-            // If there is, check it matches the log id encoded in the entry
-            if *claimed_log_id != expected_log_id {
-                return Err(ValidationError::Custom(format!(
-                    "Entry's claimed log id of {} does not match existing log id of {} for given public key and document",
+            // If there is, check it matches the log id encoded in the entry.
+            if (expected_log_id != *claimed_log_id) {
+                return Err(ValidationError::LogIdDoesNotMatchExisting(
                     claimed_log_id.as_u64(),
-                    expected_log_id.as_u64()
-                )));
+                    expected_log_id.as_u64(),
+                ));
             }
         }
         None => {
@@ -90,21 +116,21 @@ pub async fn verify_document_log_id<S: LogStore>(
             // the entry.
             let expected_log_id = next_log_id(store, public_key).await?;
 
-            if *claimed_log_id != expected_log_id {
-                return Err(ValidationError::Custom(format!(
-                    "Entry's claimed log id of {} does not match expected next log id of {} for given public key",
+            if (expected_log_id != *claimed_log_id) {
+                return Err(ValidationError::LogIdDoesNotMatchNext(
                     claimed_log_id.as_u64(),
-                    expected_log_id.as_u64()
-                )));
+                    expected_log_id.as_u64(),
+                ));
             }
         }
     };
+
     Ok(())
 }
 
 /// Get the entry that _should_ be the skiplink target for the given public key, log id and seq num.
 ///
-/// This method determines the expected skiplink given a public key, log id and sequence number. It
+/// This method determines the expected skiplink given an public key, log id and sequence number. It
 /// _does not_ verify that this matches the skiplink encoded on any entry.
 ///
 /// An error is returned if:
@@ -117,10 +143,8 @@ pub async fn get_expected_skiplink<S: EntryStore>(
     seq_num: &SeqNum,
 ) -> Result<S::Entry, ValidationError> {
     if seq_num.is_first() {
-        return Err(ValidationError::Custom(
-            "Entry with seq num 1 can not have skiplink".to_string(),
-        ));
-    };
+        return Err(ValidationError::FirstEntryWithSkiplink);
+    }
 
     // Unwrap because method always returns `Some` for seq num > 1
     let skiplink_seq_num = seq_num.skiplink_seq_num().unwrap();
@@ -131,12 +155,11 @@ pub async fn get_expected_skiplink<S: EntryStore>(
 
     match skiplink_entry {
         Some(entry) => Ok(entry),
-        None => Err(ValidationError::Custom(format!(
-            "Expected skiplink target not found in store: {}, log id {}, seq num {}",
-            public_key.display(),
+        None => Err(ValidationError::ExpectedSkiplinkNotFound(
+            public_key.to_string(),
             log_id.as_u64(),
             skiplink_seq_num.as_u64(),
-        ))),
+        )),
     }
 }
 
@@ -152,12 +175,12 @@ pub async fn ensure_document_not_deleted<S: OperationStore>(
     // Retrieve the document view for this document, if none is found, then it is deleted.
     let operations = store.get_operations_by_document_id(document_id).await?;
     if operations.iter().any(|operation| operation.is_delete()) {
-        return Err(ValidationError::Custom("Document is deleted".to_string()));
-    };
+        return Err(ValidationError::DocumentDeleted);
+    }
     Ok(())
 }
 
-/// Retrieve the next log id for a given public key.
+/// Retrieve the next log id for a given public_key.
 ///
 /// Takes the following steps:
 /// - retrieve the latest log id for the given public key
@@ -178,9 +201,7 @@ pub async fn next_log_id<S: LogStore>(
 pub fn increment_seq_num(seq_num: &mut SeqNum) -> Result<SeqNum, ValidationError> {
     match seq_num.next() {
         Some(next_seq_num) => Ok(next_seq_num),
-        None => Err(ValidationError::Custom(
-            "Max sequence number reached".to_string(),
-        )),
+        None => Err(ValidationError::MaxSeqNum),
     }
 }
 
@@ -188,45 +209,8 @@ pub fn increment_seq_num(seq_num: &mut SeqNum) -> Result<SeqNum, ValidationError
 pub fn increment_log_id(log_id: &mut LogId) -> Result<LogId, ValidationError> {
     match log_id.next() {
         Some(next_log_id) => Ok(next_log_id),
-        None => Err(ValidationError::Custom("Max log id reached".to_string())),
+        None => Err(ValidationError::MaxLogId),
     }
-}
-
-/// Attempt to identify the document id for view id contained in a `next_args` request.
-///
-/// This will fail if:
-///
-/// - any of the operations contained in the view id _don't_ exist in the store
-/// - any of the operations contained in the view id return a different document id than any of the others
-pub async fn get_checked_document_id_for_view_id<S: OperationStore>(
-    store: &S,
-    view_id: &DocumentViewId,
-) -> Result<DocumentId, ValidationError> {
-    let mut found_document_ids: HashSet<DocumentId> = HashSet::new();
-    for operation in view_id.iter() {
-        // If any operation can't be found return an error at this point already.
-        let document_id = store.get_document_id_by_operation_id(operation).await?;
-
-        if document_id.is_none() {
-            return Err(ValidationError::Custom(format!(
-                "{} not found, could not determine document id",
-                operation.display()
-            )));
-        }
-
-        found_document_ids.insert(document_id.unwrap());
-    }
-
-    // We can unwrap here as there must be at least one document view else the error above would
-    // have been triggered.
-    let mut found_document_ids_iter = found_document_ids.iter();
-    let document_id = found_document_ids_iter.next().unwrap();
-
-    if found_document_ids_iter.next().is_some() {
-        return Err(ValidationError::Custom("Invalid document view id: operations in passed document view id originate from different documents".to_string()));
-    };
-
-    Ok(document_id.to_owned())
 }
 
 #[cfg(test)]
@@ -238,22 +222,24 @@ mod tests {
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::test_utils::constants::PRIVATE_KEY;
-    use crate::test_utils::fixtures::{key_pair, populate_store_config, random_document_id};
+    use crate::test_utils::fixtures::populate_store_config;
+    use crate::test_utils::fixtures::{key_pair, random_document_id};
     use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig};
     use crate::test_utils::memory_store::MemoryStore;
 
     use super::{
         ensure_document_not_deleted, get_expected_skiplink, increment_log_id, increment_seq_num,
-        is_next_seq_num, verify_document_log_id,
+        is_next_seq_num, verify_log_id,
     };
-
     #[rstest]
     #[case(LogId::new(0), LogId::new(1))]
     #[should_panic(expected = "Max log id reached")]
     #[case(LogId::new(u64::MAX), LogId::new(1))]
     fn increments_log_id(#[case] log_id: LogId, #[case] expected_next_log_id: LogId) {
         let mut log_id = log_id;
-        let next_log_id = increment_log_id(&mut log_id).unwrap();
+        let next_log_id = increment_log_id(&mut log_id)
+            .map_err(|err| err.to_string())
+            .unwrap();
         assert_eq!(next_log_id, expected_next_log_id)
     }
 
@@ -263,7 +249,9 @@ mod tests {
     #[case(SeqNum::new(u64::MAX).unwrap(), SeqNum::new(1).unwrap())]
     fn increments_seq_num(#[case] seq_num: SeqNum, #[case] expected_next_seq_num: SeqNum) {
         let mut seq_num = seq_num;
-        let next_seq_num = increment_seq_num(&mut seq_num).unwrap();
+        let next_seq_num = increment_seq_num(&mut seq_num)
+            .map_err(|err| err.to_string())
+            .unwrap();
         assert_eq!(next_seq_num, expected_next_seq_num)
     }
 
@@ -284,7 +272,9 @@ mod tests {
     )]
     #[case::no_seq_num(None, SeqNum::new(3).unwrap())]
     fn verifies_seq_num(#[case] latest_seq_num: Option<SeqNum>, #[case] claimed_seq_num: SeqNum) {
-        is_next_seq_num(latest_seq_num.as_ref(), &claimed_seq_num).unwrap();
+        is_next_seq_num(latest_seq_num.as_ref(), &claimed_seq_num)
+            .map_err(|err| err.to_string())
+            .unwrap();
     }
 
     #[rstest]
@@ -326,22 +316,28 @@ mod tests {
         // Unwrap the passed document id or select the first valid one from the database.
         let document_id = document_id.unwrap_or_else(|| documents.first().unwrap().to_owned());
 
-        let public_key = key_pair.public_key();
-
-        verify_document_log_id(&store, &public_key, &claimed_log_id, &document_id)
-            .await
-            .unwrap();
+        verify_log_id(
+            &store,
+            &key_pair.public_key(),
+            &claimed_log_id,
+            &document_id,
+        )
+        .await
+        .map_err(|err| err.to_string())
+        .unwrap();
     }
 
     #[rstest]
     #[case::expected_skiplink_is_in_store_and_is_same_as_backlink(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::default(), SeqNum::new(4).unwrap())]
     #[should_panic(
-        expected = "Expected skiplink target not found in store: <PublicKey 53fc96>, log id 0, seq num 19"
+        expected = "Expected skiplink entry not found in store: public key 2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96, log id 0, seq num 19"
     )]
     #[case::skiplink_not_in_store(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::default(), SeqNum::new(20).unwrap())]
-    #[should_panic(expected = "Expected skiplink target not found in store")]
+    #[should_panic(expected = "Expected skiplink entry not found in store")]
     #[case::public_key_does_not_exist(KeyPair::new(), LogId::default(), SeqNum::new(5).unwrap())]
-    #[should_panic(expected = "<PublicKey 53fc96>, log id 4, seq num 6")]
+    #[should_panic(
+        expected = "public key 2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96, log id 4, seq num 6"
+    )]
     #[case::log_id_is_wrong(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(4), SeqNum::new(7).unwrap())]
     #[should_panic(expected = "Entry with seq num 1 can not have skiplink")]
     #[case::seq_num_is_one(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(0), SeqNum::new(1).unwrap())]
@@ -357,10 +353,9 @@ mod tests {
         let store = MemoryStore::default();
         let _ = populate_store(&store, &config).await;
 
-        let public_key = key_pair.public_key();
-
-        get_expected_skiplink(&store, &public_key, &log_id, &seq_num)
+        get_expected_skiplink(&store, &key_pair.public_key(), &log_id, &seq_num)
             .await
+            .map_err(|err| err.to_string())
             .unwrap();
     }
 
@@ -388,11 +383,10 @@ mod tests {
         let store = MemoryStore::default();
         let _ = populate_store(&store, &config).await;
 
-        let public_key = key_pair.public_key();
-
         let skiplink_entry =
-            get_expected_skiplink(&store, &public_key, &LogId::default(), &seq_num)
+            get_expected_skiplink(&store, &key_pair.public_key(), &LogId::default(), &seq_num)
                 .await
+                .map_err(|err| err.to_string())
                 .unwrap();
 
         assert_eq!(skiplink_entry.seq_num(), &expected_seq_num)
@@ -412,6 +406,7 @@ mod tests {
         let document_id = documents.first().unwrap();
         ensure_document_not_deleted(&store, document_id)
             .await
+            .map_err(|err| err.to_string())
             .unwrap();
     }
 
