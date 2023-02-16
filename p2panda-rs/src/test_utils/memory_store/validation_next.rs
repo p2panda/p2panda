@@ -4,6 +4,7 @@ use crate::document::DocumentId;
 use crate::entry::{LogId, SeqNum};
 use crate::identity::PublicKey;
 use crate::operation::traits::AsOperation;
+use crate::storage_provider::utils::Result;
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 use crate::Human;
 
