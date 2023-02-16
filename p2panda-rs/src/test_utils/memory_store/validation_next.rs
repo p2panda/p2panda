@@ -222,8 +222,9 @@ mod tests {
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::test_utils::constants::PRIVATE_KEY;
-    use crate::test_utils::fixtures::{key_pair, populate_store_config, random_document_id};
-    use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig};
+    use crate::test_utils::fixtures::{key_pair, random_document_id};
+    use crate::test_utils::fixtures::db_fixtures_next::populate_store_config;
+    use crate::test_utils::memory_store::helpers_next::{populate_store, PopulateStoreConfig};
     use crate::test_utils::memory_store::MemoryStore;
 
     use super::{

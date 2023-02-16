@@ -425,11 +425,12 @@ mod tests {
     use crate::schema::{FieldType, Schema};
     use crate::storage_provider::traits::{EntryStore, LogStore};
     use crate::test_utils::constants::{test_fields, PRIVATE_KEY};
+    use crate::test_utils::fixtures::db_fixtures_next::populate_store_config;
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, key_pair, operation, populate_store_config, public_key,
+        create_operation, delete_operation, key_pair, operation, public_key,
         random_document_view_id, random_hash, schema, update_operation,
     };
-    use crate::test_utils::memory_store::helpers::{
+    use crate::test_utils::memory_store::helpers_next::{
         populate_store, send_to_store, PopulateStoreConfig,
     };
     use crate::test_utils::memory_store::{MemoryStore, StorageEntry};

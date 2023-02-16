@@ -7,6 +7,7 @@
 //! - helpers for populating a store with test data
 pub mod domain;
 pub mod helpers;
+pub mod helpers_next;
 mod provider;
 mod stores;
 mod types;

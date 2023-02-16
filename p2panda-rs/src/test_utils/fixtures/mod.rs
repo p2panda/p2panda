@@ -7,6 +7,7 @@
 //!
 //! Implemented using the [`rstest`](https://github.com/la10736/rstest) library.
 mod db_fixtures;
+pub mod db_fixtures_next;
 mod document_fixtures;
 mod entry_fixtures;
 mod hash_fixtures;
