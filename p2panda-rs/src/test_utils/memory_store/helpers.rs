@@ -194,15 +194,14 @@ mod tests {
 
     use crate::document::DocumentViewId;
     use crate::entry::traits::{AsEncodedEntry, AsEntry};
-    use crate::entry::{EncodedEntry, LogId, SeqNum};
+    use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
-    use crate::operation::{EncodedOperation, Operation};
+    use crate::operation::Operation;
     use crate::schema::Schema;
     use crate::storage_provider::traits::DocumentStore;
     use crate::test_utils::constants::{test_fields, SKIPLINK_SEQ_NUMS};
     use crate::test_utils::fixtures::{
-        key_pair, operation, operation_fields, populate_store_config, random_key_pair, schema,
-        update_operation,
+        key_pair, operation, populate_store_config, random_key_pair, schema, update_operation,
     };
     use crate::test_utils::memory_store::helpers::{
         populate_store, send_to_store, PopulateStoreConfig,

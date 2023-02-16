@@ -6,7 +6,6 @@ use crate::identity::PublicKey;
 use crate::operation::traits::AsOperation;
 use crate::storage_provider::error::{EntryStorageError, LogStorageError, OperationStorageError};
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
-use crate::Human;
 
 /// Error type used in the validation module.
 #[derive(thiserror::Error, Debug)]
@@ -104,7 +103,7 @@ pub async fn verify_log_id<S: LogStore>(
     match store.get_log_id(public_key, document_id).await? {
         Some(expected_log_id) => {
             // If there is, check it matches the log id encoded in the entry.
-            if (expected_log_id != *claimed_log_id) {
+            if expected_log_id != *claimed_log_id {
                 return Err(ValidationError::LogIdDoesNotMatchExisting(
                     claimed_log_id.as_u64(),
                     expected_log_id.as_u64(),
@@ -116,7 +115,7 @@ pub async fn verify_log_id<S: LogStore>(
             // the entry.
             let expected_log_id = next_log_id(store, public_key).await?;
 
-            if (expected_log_id != *claimed_log_id) {
+            if expected_log_id != *claimed_log_id {
                 return Err(ValidationError::LogIdDoesNotMatchNext(
                     claimed_log_id.as_u64(),
                     expected_log_id.as_u64(),
