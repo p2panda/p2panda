@@ -21,46 +21,11 @@ use crate::operation::{EncodedOperation, OperationAction};
 use crate::schema::Schema;
 use crate::storage_provider::error::{EntryStorageError, LogStorageError, OperationStorageError};
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
+use crate::test_utils::memory_store::errors::DomainError;
 use crate::test_utils::memory_store::validation::{
     ensure_document_not_deleted, get_checked_document_id_for_view_id, get_expected_skiplink,
-    increment_seq_num, is_next_seq_num, next_log_id, verify_log_id, ValidationError,
+    increment_seq_num, is_next_seq_num, next_log_id, verify_log_id,
 };
-
-/// Error type used in the domain module.
-#[derive(thiserror::Error, Debug)]
-pub enum DomainError {
-    /// The maximum u64 sequence number has been reached for the public key and log id combination.
-    #[error("Max sequence number reached for public key {0} log {1}")]
-    MaxSeqNumReached(String, u64),
-
-    /// Tried to update or delete a deleted document.
-    #[error("You are trying to update or delete a document which has been deleted")]
-    DeletedDocument,
-
-    /// Validation errors.
-    #[error(transparent)]
-    ValidationError(#[from] ValidationError),
-
-    /// Error coming from the log store.
-    #[error(transparent)]
-    LogStoreError(#[from] LogStorageError),
-
-    /// Error coming from the entry store.
-    #[error(transparent)]
-    EntryStoreError(#[from] EntryStorageError),
-
-    /// Error coming from the operation store.
-    #[error(transparent)]
-    OperationStoreError(#[from] OperationStorageError),
-
-    /// Error occurring when decoding entries.
-    #[error(transparent)]
-    DecodeEntryError(#[from] DecodeEntryError),
-
-    /// Error occurring when validating operations.
-    #[error(transparent)]
-    ValidateOperationError(#[from] ValidateOperationError),
-}
 
 /// An entries' backlink returned by next_args.
 type Backlink = Hash;
