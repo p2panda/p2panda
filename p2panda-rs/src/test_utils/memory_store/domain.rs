@@ -8,18 +8,15 @@ use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 
 use crate::document::DocumentViewId;
 use crate::entry::decode::decode_entry;
-use crate::entry::error::DecodeEntryError;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::{EncodedEntry, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::identity::PublicKey;
-use crate::operation::error::ValidateOperationError;
 use crate::operation::plain::PlainOperation;
 use crate::operation::traits::AsOperation;
 use crate::operation::validate::validate_operation_with_entry;
 use crate::operation::{EncodedOperation, OperationAction};
 use crate::schema::Schema;
-use crate::storage_provider::error::{EntryStorageError, LogStorageError, OperationStorageError};
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 use crate::test_utils::memory_store::errors::DomainError;
 use crate::test_utils::memory_store::validation::{
