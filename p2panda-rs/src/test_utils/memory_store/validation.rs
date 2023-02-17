@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Methods for validating entries and operations against expected and stored values.
 use std::collections::HashSet;
 
 use crate::document::{DocumentId, DocumentViewId};

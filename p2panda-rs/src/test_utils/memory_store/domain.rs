@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Methods to validate data coming through the p2panda API.
+//!
+//! Currently these implementations are used for testing purposes but might be factored out into
+//! actual, reusable components of this crate.
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 
 use crate::document::DocumentViewId;
