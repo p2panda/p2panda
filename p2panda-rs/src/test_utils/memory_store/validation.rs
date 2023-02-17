@@ -5,8 +5,8 @@ use std::collections::HashSet;
 use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::{LogId, SeqNum};
 use crate::identity::PublicKey;
-use crate::operation::OperationId;
 use crate::operation::traits::AsOperation;
+use crate::operation::OperationId;
 use crate::storage_provider::error::{EntryStorageError, LogStorageError, OperationStorageError};
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 
