@@ -10,7 +10,6 @@ use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 /// Error type used in the validation module.
 #[derive(thiserror::Error, Debug)]
 pub enum ValidationError {
-
     /// The claimed sequence number didn't match the expected.
     #[error("Entry's claimed seq num of {0} does not match expected seq num of {1} for given public key and log")]
     SeqNumDoesNotMatch(u64, u64),
