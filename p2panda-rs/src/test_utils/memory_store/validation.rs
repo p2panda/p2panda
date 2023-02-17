@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::document::DocumentId;
+use std::collections::HashSet;
+
+use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::{LogId, SeqNum};
 use crate::identity::PublicKey;
+use crate::operation::OperationId;
 use crate::operation::traits::AsOperation;
 use crate::storage_provider::error::{EntryStorageError, LogStorageError, OperationStorageError};
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
@@ -45,6 +48,14 @@ pub enum ValidationError {
     /// Max u64 log id reached.
     #[error("Max log id reached")]
     MaxLogId,
+
+    /// An operation in the `previous` field was not found in the store.
+    #[error("Operation {0} not found, could not determine document id")]
+    PreviousNotFound(OperationId),
+
+    /// A document view id was provided which contained operations from different documents.
+    #[error("Operations in passed document view id originate from different documents")]
+    InvalidDocumentViewId,
 
     /// Error coming from the log store.
     #[error(transparent)]
@@ -214,6 +225,44 @@ pub fn increment_log_id(log_id: &mut LogId) -> Result<LogId, ValidationError> {
         Some(next_log_id) => Ok(next_log_id),
         None => Err(ValidationError::MaxLogId),
     }
+}
+
+/// Attempt to identify the document id for view id contained in a `next_args` request.
+///
+/// This will fail if:
+///
+/// - any of the operations contained in the view id _don't_ exist in the store
+/// - any of the operations contained in the view id return a different document id than any of the
+/// others
+pub async fn get_checked_document_id_for_view_id<S: EntryStore + OperationStore + LogStore>(
+    store: &S,
+    view_id: &DocumentViewId,
+) -> Result<DocumentId, ValidationError> {
+    let mut found_document_ids: HashSet<DocumentId> = HashSet::new();
+    for operation in view_id.iter() {
+        // Retrieve a document id for every operation in this view id.
+        //
+        // If any operation doesn't return a document id (meaning it wasn't in the store) then
+        // error now already.
+        let document_id = store.get_document_id_by_operation_id(operation).await?;
+
+        if document_id.is_none() {
+            return Err(ValidationError::PreviousNotFound(operation.to_owned()));
+        }
+
+        found_document_ids.insert(document_id.unwrap());
+    }
+
+    // We can unwrap here as there must be at least one document view else the error above would
+    // have been triggered.
+    let mut found_document_ids_iter = found_document_ids.iter();
+    let document_id = found_document_ids_iter.next().unwrap();
+
+    if found_document_ids_iter.next().is_some() {
+        return Err(ValidationError::InvalidDocumentViewId);
+    }
+
+    Ok(document_id.to_owned())
 }
 
 #[cfg(test)]

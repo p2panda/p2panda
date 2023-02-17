@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::HashSet;
-
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 
-use crate::document::{DocumentId, DocumentViewId};
+use crate::document::DocumentViewId;
 use crate::entry::decode::decode_entry;
 use crate::entry::error::DecodeEntryError;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
@@ -15,13 +13,13 @@ use crate::operation::error::ValidateOperationError;
 use crate::operation::plain::PlainOperation;
 use crate::operation::traits::AsOperation;
 use crate::operation::validate::validate_operation_with_entry;
-use crate::operation::{EncodedOperation, OperationAction, OperationId};
+use crate::operation::{EncodedOperation, OperationAction};
 use crate::schema::Schema;
 use crate::storage_provider::error::{EntryStorageError, LogStorageError, OperationStorageError};
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 use crate::test_utils::memory_store::validation::{
-    ensure_document_not_deleted, get_expected_skiplink, increment_seq_num, is_next_seq_num,
-    next_log_id, verify_log_id, ValidationError,
+    ensure_document_not_deleted, get_checked_document_id_for_view_id, get_expected_skiplink,
+    increment_seq_num, is_next_seq_num, next_log_id, verify_log_id, ValidationError,
 };
 
 /// Error type used in the domain module.
@@ -34,14 +32,6 @@ pub enum DomainError {
     /// Tried to update or delete a deleted document.
     #[error("You are trying to update or delete a document which has been deleted")]
     DeletedDocument,
-
-    /// An operation in the `previous` field was not found in the store.
-    #[error("Operation {0} not found, could not determine document id")]
-    PreviousNotFound(OperationId),
-
-    /// A document view id was provided which contained operations from different documents.
-    #[error("Operations in passed document view id originate from different documents")]
-    InvalidDocumentViewId,
 
     /// Validation errors.
     #[error(transparent)]
@@ -366,44 +356,6 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
         .await?;
 
     Ok((backlink, skiplink, next_seq_num, log_id.to_owned()))
-}
-
-/// Attempt to identify the document id for view id contained in a `next_args` request.
-///
-/// This will fail if:
-///
-/// - any of the operations contained in the view id _don't_ exist in the store
-/// - any of the operations contained in the view id return a different document id than any of the
-/// others
-pub async fn get_checked_document_id_for_view_id<S: EntryStore + OperationStore + LogStore>(
-    store: &S,
-    view_id: &DocumentViewId,
-) -> Result<DocumentId, DomainError> {
-    let mut found_document_ids: HashSet<DocumentId> = HashSet::new();
-    for operation in view_id.iter() {
-        // Retrieve a document id for every operation in this view id.
-        //
-        // If any operation doesn't return a document id (meaning it wasn't in the store) then
-        // error now already.
-        let document_id = store.get_document_id_by_operation_id(operation).await?;
-
-        if document_id.is_none() {
-            return Err(DomainError::PreviousNotFound(operation.to_owned()));
-        }
-
-        found_document_ids.insert(document_id.unwrap());
-    }
-
-    // We can unwrap here as there must be at least one document view else the error above would
-    // have been triggered.
-    let mut found_document_ids_iter = found_document_ids.iter();
-    let document_id = found_document_ids_iter.next().unwrap();
-
-    if found_document_ids_iter.next().is_some() {
-        return Err(DomainError::InvalidDocumentViewId);
-    }
-
-    Ok(document_id.to_owned())
 }
 
 #[cfg(test)]
