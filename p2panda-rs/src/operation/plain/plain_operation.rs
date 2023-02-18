@@ -243,7 +243,7 @@ mod tests {
         assert!(cbor.is_ok());
 
         // Deserialize into a plain operation, we unwrap here to cause a panic and then test for
-        // expected error stings. 
+        // expected error stings.
         deserialize_into::<PlainOperation>(&serialize_value(cbor)).unwrap();
     }
 }
