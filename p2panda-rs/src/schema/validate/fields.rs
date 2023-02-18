@@ -325,7 +325,7 @@ mod tests {
     use crate::document::DocumentViewId;
     use crate::operation::plain::{PlainFields, PlainValue};
     use crate::operation::{OperationFields, OperationValue};
-    use crate::schema::{FieldType, Schema, SchemaId};
+    use crate::schema::{FieldType, Schema, SchemaId, SchemaName};
     use crate::test_utils::constants::{HASH, SCHEMA_ID};
     use crate::test_utils::fixtures::document_view_id;
     use crate::test_utils::fixtures::schema_id;
@@ -470,10 +470,11 @@ mod tests {
         #[from(document_view_id)] schema_view_id: DocumentViewId,
         #[case] schema_fields: Vec<(&str, FieldType)>,
         #[case] fields: Vec<(&str, PlainValue)>,
-    ) {
+    ) {    
         // Construct a schema
+        let schema_name = SchemaName::new("zoo").expect("Valid schema name");
         let schema = Schema::new(
-            &SchemaId::Application("zoo".to_owned(), schema_view_id),
+            &SchemaId::Application(schema_name, schema_view_id),
             "Some schema description",
             schema_fields,
         )
@@ -545,8 +546,9 @@ mod tests {
         #[case] expected: &str,
     ) {
         // Construct a schema
+        let schema_name = SchemaName::new("zoo").expect("Valid schema name");
         let schema = Schema::new(
-            &SchemaId::Application("zoo".to_owned(), schema_view_id),
+            &SchemaId::Application(schema_name.to_owned(), schema_view_id),
             "Some schema description",
             schema_fields,
         )
@@ -597,8 +599,9 @@ mod tests {
         #[case] fields: Vec<(&str, PlainValue)>,
     ) {
         // Construct a schema
+                let schema_name = SchemaName::new("zoo").expect("Valid schema name");
         let schema = Schema::new(
-            &SchemaId::Application("zoo".to_owned(), schema_view_id),
+            &SchemaId::Application(schema_name, schema_view_id),
             "Some schema description",
             schema_fields,
         )
@@ -671,8 +674,9 @@ mod tests {
         #[case] expected: &str,
     ) {
         // Construct a schema
+        let schema_name = SchemaName::new("zoo").expect("Valid schema name");
         let schema = Schema::new(
-            &SchemaId::Application("zoo".to_owned(), schema_view_id),
+            &SchemaId::Application(schema_name, schema_view_id),
             "Some schema description",
             schema_fields,
         )
@@ -698,8 +702,9 @@ mod tests {
     #[rstest]
     fn conversion_to_operation_fields(#[from(document_view_id)] schema_view_id: DocumentViewId) {
         // Construct a schema
+        let schema_name = SchemaName::new("polar").expect("Valid schema name");
         let schema = Schema::new(
-            &SchemaId::Application("polar".to_owned(), schema_view_id),
+            &SchemaId::Application(schema_name, schema_view_id),
             "Some schema description",
             vec![
                 ("icecream", FieldType::String),

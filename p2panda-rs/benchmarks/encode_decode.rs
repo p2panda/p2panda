@@ -18,7 +18,7 @@ use p2panda_rs::operation::decode::decode_operation;
 use p2panda_rs::operation::encode::encode_operation;
 use p2panda_rs::operation::validate::validate_operation_with_entry;
 use p2panda_rs::operation::{EncodedOperation, OperationBuilder};
-use p2panda_rs::schema::{FieldType, Schema, SchemaId};
+use p2panda_rs::schema::{FieldType, Schema, SchemaId, SchemaName};
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
@@ -87,7 +87,9 @@ fn criterion_benchmark(c: &mut Criterion) {
             .parse()
             .unwrap(),
     ]);
-    let schema_id = SchemaId::Application("benchmark".to_string(), schema_view_id);
+
+    let schema_name = SchemaName::new("benchmark").expect("Schema name is valid");
+    let schema_id = SchemaId::Application(schema_name, schema_view_id);
     let schema = Schema::new(
         &schema_id,
         "Payload for measuring performance of encoding, decoding and validation",

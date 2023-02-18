@@ -7,6 +7,14 @@ use crate::schema::SchemaId;
 
 /// Custom errors related to `SchemaId`.
 #[derive(Error, Debug)]
+pub enum SchemaNameError {
+    /// Encountered a malformed schema id.
+    #[error("Schema name contains too many or invalid characters")]
+    MalformedSchemaName,
+}
+
+/// Custom errors related to `SchemaId`.
+#[derive(Error, Debug)]
 pub enum SchemaIdError {
     /// Encountered a malformed schema id.
     #[error("malformed schema id `{0}`: {1}")]
@@ -47,6 +55,10 @@ pub enum SchemaError {
     /// Schemas must have valid schema ids.
     #[error(transparent)]
     SchemaIdError(#[from] SchemaIdError),
+
+    /// Schemas must have valid schema names.
+    #[error(transparent)]
+    SchemaNameError(#[from] SchemaNameError),
 }
 
 /// Custom error types for field types.

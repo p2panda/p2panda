@@ -80,7 +80,7 @@ pub fn schema() -> Schema {
 mod tests {
     use crate::hash::Hash;
     use crate::operation::OperationId;
-    use crate::schema::SchemaId;
+    use crate::schema::{SchemaId, SchemaName};
 
     use super::*;
 
@@ -93,7 +93,8 @@ mod tests {
     #[test]
     fn default_schema() {
         let venue_schema_hash: OperationId = Hash::new_from_bytes(&[3, 2, 1]).into();
-        let schema = SchemaId::new_application("venue", &venue_schema_hash.into());
+        let venue_schema_name = SchemaName::new("venue").expect("Valid schema name");
+        let schema = SchemaId::new_application(&venue_schema_name, &venue_schema_hash.into());
         assert_eq!(schema.to_string(), SCHEMA_ID)
     }
 }

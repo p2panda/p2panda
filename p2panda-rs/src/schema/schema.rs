@@ -9,6 +9,7 @@ use crate::schema::error::{SchemaError, SchemaIdError};
 use crate::schema::system::{
     get_schema_definition, get_schema_field_definition, SchemaFieldView, SchemaView,
 };
+use crate::schema::SchemaName;
 use crate::schema::{FieldType, SchemaId, SchemaVersion};
 use crate::Human;
 
@@ -131,8 +132,10 @@ impl Schema {
             fields_map.insert(field.name().to_string(), field.field_type().to_owned());
         }
 
+        let name = SchemaName::new(schema.name())?;
+
         Ok(Schema {
-            id: SchemaId::new_application(schema.name(), schema.view_id()),
+            id: SchemaId::new_application(&name, schema.view_id()),
             description: schema.description().to_owned(),
             fields: fields_map,
         })
@@ -265,7 +268,7 @@ impl Schema {
     }
 
     /// Access the schema name.
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> SchemaName {
         self.id.name()
     }
 
@@ -303,7 +306,7 @@ mod tests {
     use crate::document::{DocumentView, DocumentViewFields, DocumentViewValue};
     use crate::operation::{OperationId, OperationValue, PinnedRelationList};
     use crate::schema::system::{SchemaFieldView, SchemaView};
-    use crate::schema::{FieldType, Schema, SchemaId, SchemaVersion};
+    use crate::schema::{FieldType, Schema, SchemaId, SchemaName, SchemaVersion};
     use crate::test_utils::fixtures::{document_view_id, random_operation_id};
     use crate::Human;
 
@@ -367,8 +370,9 @@ mod tests {
 
     #[rstest]
     fn string_representation(#[from(document_view_id)] schema_view_id: DocumentViewId) {
+        let schema_name = SchemaName::new("venue").expect("Valid schema name");
         let schema = Schema::new(
-            &SchemaId::Application("venue".into(), schema_view_id),
+            &SchemaId::Application(schema_name, schema_view_id),
             "Some description",
             vec![("number", FieldType::Integer)],
         )
@@ -388,8 +392,9 @@ mod tests {
 
     #[rstest]
     fn short_representation(#[from(document_view_id)] schema_view_id: DocumentViewId) {
+        let schema_name = SchemaName::new("venue").expect("Valid schema name");
         let schema = Schema::new(
-            &SchemaId::Application("venue".into(), schema_view_id),
+            &SchemaId::Application(schema_name, schema_view_id),
             "Some description",
             vec![("number", FieldType::Integer)],
         )
@@ -415,8 +420,9 @@ mod tests {
         #[from(document_view_id)] schema_view_id: DocumentViewId,
         #[case] fields: Vec<(&str, FieldType)>,
     ) {
+        let schema_name = SchemaName::new("venue").expect("Valid schema name");
         let result = Schema::new(
-            &SchemaId::Application("venue".to_owned(), schema_view_id),
+            &SchemaId::Application(schema_name, schema_view_id),
             "description",
             fields,
         );
@@ -453,10 +459,8 @@ mod tests {
 
     #[rstest]
     fn test_error_application_schema(document_view_id: DocumentViewId) {
-        let schema = Schema::get_system(SchemaId::Application(
-            "events".to_string(),
-            document_view_id,
-        ));
+        let schema_name = SchemaName::new("events").expect("Valid schema name");
+        let schema = Schema::get_system(SchemaId::Application(schema_name, document_view_id));
         assert!(schema.is_err())
     }
 
@@ -512,15 +516,16 @@ mod tests {
         let schema = result.unwrap();
 
         // Test getters
+        let schema_name = SchemaName::new("venue_name").expect("Valid schema name");
         let expected_view_id =
             "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
                 .parse::<DocumentViewId>()
                 .unwrap();
         assert_eq!(
             schema.id(),
-            &SchemaId::new_application("venue_name", &expected_view_id)
+            &SchemaId::new_application(&schema_name, &expected_view_id)
         );
-        assert_eq!(schema.name(), "venue_name");
+        assert_eq!(schema.name(), schema_name);
         assert_eq!(
             schema.version(),
             SchemaVersion::Application(expected_view_id)
@@ -532,10 +537,11 @@ mod tests {
     #[rstest]
     fn hash_id(#[from(document_view_id)] application_schema_view_id: DocumentViewId) {
         // Validate application schema format
+        let schema_name = SchemaName::new("event").expect("Valid schema name");
         let mut schema_fields = BTreeMap::new();
         schema_fields.insert("is_real".to_string(), FieldType::Boolean);
         let application_schema = Schema {
-            id: SchemaId::Application("event".to_string(), application_schema_view_id),
+            id: SchemaId::Application(schema_name, application_schema_view_id),
             description: "test".to_string(),
             fields: schema_fields.clone(),
         };

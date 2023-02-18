@@ -145,10 +145,10 @@ mod tests {
     use crate::document::DocumentViewId;
     use crate::operation::traits::{Actionable, Schematic};
     use crate::operation::{Operation, OperationAction, OperationId, OperationVersion};
-    use crate::schema::SchemaId;
+    use crate::schema::{SchemaId, SchemaName};
     use crate::serde::{deserialize_into, serialize_from, serialize_value};
     use crate::test_utils::fixtures::{
-        document_view_id, operation_with_schema, random_operation_id,
+        document_view_id, operation_with_schema, random_operation_id, schema_name
     };
 
     use super::PlainOperation;
@@ -164,17 +164,17 @@ mod tests {
     }
 
     #[rstest]
-    fn serialize(document_view_id: DocumentViewId) {
+    fn serialize(document_view_id: DocumentViewId, #[with("mushrooms")] schema_name: SchemaName) {
         assert_eq!(
             serialize_from(PlainOperation(
                 OperationVersion::V1,
                 OperationAction::Create,
-                SchemaId::Application("mushrooms".into(), document_view_id.clone()),
+                SchemaId::Application(schema_name.clone(), document_view_id.clone()),
                 None,
                 Some(vec![("name", "Hericium coralloides".into())].into())
             )),
             serialize_value(cbor!(
-                [1, 0, format!("mushrooms_{}", document_view_id), {
+                [1, 0, format!("{schema_name}_{document_view_id}"), {
                     "name" => "Hericium coralloides"
                 }]
             ))
@@ -182,10 +182,10 @@ mod tests {
     }
 
     #[rstest]
-    fn deserialize(document_view_id: DocumentViewId, random_operation_id: OperationId) {
+    fn deserialize(document_view_id: DocumentViewId, random_operation_id: OperationId, #[with("mushrooms")] schema_name: SchemaName) {
         assert_eq!(
             deserialize_into::<PlainOperation>(&serialize_value(cbor!(
-                [1, 1, format!("mushrooms_{}", document_view_id), [random_operation_id.to_string()], {
+                [1, 1, format!("{schema_name}_{document_view_id}"), [random_operation_id.to_string()], {
                     "name" => "Lycoperdon echinatum"
                 }]
             )))
@@ -193,7 +193,7 @@ mod tests {
             PlainOperation(
                 OperationVersion::V1,
                 OperationAction::Update,
-                SchemaId::Application("mushrooms".into(), document_view_id),
+                SchemaId::Application(schema_name, document_view_id),
                 Some(DocumentViewId::from(random_operation_id)),
                 Some(vec![("name", "Lycoperdon echinatum".into())].into())
             )
