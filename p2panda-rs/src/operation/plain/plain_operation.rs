@@ -242,10 +242,10 @@ mod tests {
     #[case::panda_face_emojis_not_allowed(
         "🐼" // We can only dream ;-p
     )]
-    fn deserialize_operation_with_invalid_name_in_schema_id(#[case] cbor: &str) {
+    fn deserialize_operation_with_invalid_name_in_schema_id(#[case] schema_name: &str) {
         // Encode operation as cbor using the passed name combined with a valid hash to make a
         // schema id.
-        let operation_cbor = cbor!([1, 1, format!("{cbor}_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"), [{ "type" => "int" }]]);
+        let operation_cbor = cbor!([1, 1, format!("{schema_name}_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"), [{ "type" => "int" }]]);
 
         // Check the cbor is valid.
         assert!(operation_cbor.is_ok());
