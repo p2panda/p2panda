@@ -216,28 +216,6 @@ mod tests {
     #[case::hash_too_small(cbor!([1, 1, "schema_field_definition_v1", ["0020"]]))]
     #[should_panic(expected = "invalid type: map, expected array")]
     #[case::fields_wrong_type(cbor!([1, 1, "schema_field_definition_v1", { "type" => "int" }]))]
-    #[should_panic(
-        expected = "malformed schema id `Really Wrong Schema Name?!`: doesn't contain an underscore"
-    )]
-    #[case::really_wrong_schema_name(cbor!([1, 1, "Really Wrong Schema Name?!", [{ "type" => "int" }]]))]
-    #[should_panic(
-        expected = "encountered invalid hash while parsing application schema id: invalid hash length 2 bytes, expected 34 bytes"
-    )]
-    #[case::schema_id_short_hash(cbor!([1, 1, "this_hash_looks_wrong_0020", [{ "type" => "int" }]]))]
-    #[should_panic(expected = "name contains too many or invalid characters")]
-    #[case::schema_name_has_space(cbor!([1, 1, "i_should_not_have_a space_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b", [{ "type" => "int" }]]))]
-    #[should_panic(
-        expected = "encountered invalid hash while parsing application schema id: invalid hash length 35 bytes, expected 34 bytes"
-    )]
-    #[case::schema_id_hash_too_long(cbor!([1, 1, "long_hash_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b88", [{ "type" => "int" }]]))]
-    #[should_panic(expected = "name contains too many or invalid characters")]
-    #[case::schema_name_ends_with_underscore(cbor!([1, 1, "schema_name_ends_with_underscore___0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b", [{ "type" => "int" }]]))]
-    #[should_panic(expected = "name contains too many or invalid characters")]
-    #[case::schema_name_invalid_char(cbor!([1, 1, "$_$_$_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b", [{ "type" => "int" }]]))]
-    #[should_panic(expected = "name contains too many or invalid characters")]
-    #[case::schema_name_too_long(cbor!([1, 1, "really_really_really_really_really_really_really_really_long_name_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b", [{ "type" => "int" }]]))]
-    #[should_panic(expected = "name contains too many or invalid characters")]
-    #[case::panda_face_emojis_not_allowed(cbor!([1, 1, "🐼_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b", [{ "type" => "int" }]]))] // We can only dream ;-p
     fn deserialize_invalid_operations(#[case] cbor: Result<Value, Error>) {
         // Check the cbor is valid.
         assert!(cbor.is_ok());
@@ -245,5 +223,35 @@ mod tests {
         // Deserialize into a plain operation, we unwrap here to cause a panic and then test for
         // expected error stings.
         deserialize_into::<PlainOperation>(&serialize_value(cbor)).unwrap();
+    }
+
+    #[rstest]
+    #[should_panic(
+        expected = "malformed schema id `Really Wrong Schema Name?!`: doesn't contain an underscore"
+    )]
+    #[case::really_wrong_schema_name("Really Wrong Schema Name?!")]
+    #[should_panic(expected = "name contains too many or invalid characters")]
+    #[case::schema_name_ends_with_underscore("schema_name_ends_with_underscore_")]
+    #[should_panic(expected = "name contains too many or invalid characters")]
+    #[case::schema_name_invalid_char("$_$_$")]
+    #[should_panic(expected = "name contains too many or invalid characters")]
+    #[case::schema_name_too_long(
+        "really_really_really_really_really_really_really_really_long_name"
+    )]
+    #[should_panic(expected = "name contains too many or invalid characters")]
+    #[case::panda_face_emojis_not_allowed(
+        "🐼" // We can only dream ;-p
+    )]
+    fn deserialize_operation_with_invalid_name_in_schema_id(#[case] cbor: &str) {
+        // Encode operation as cbor using the passed name combined with a valid hash to make a
+        // schema id.
+        let operation_cbor = cbor!([1, 1, format!("{cbor}_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"), [{ "type" => "int" }]]);
+
+        // Check the cbor is valid.
+        assert!(operation_cbor.is_ok());
+
+        // Deserialize into a plain operation, we unwrap here to cause a panic and then test for
+        // expected error stings.
+        deserialize_into::<PlainOperation>(&serialize_value(operation_cbor)).unwrap();
     }
 }
