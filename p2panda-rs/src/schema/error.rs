@@ -5,13 +5,15 @@ use thiserror::Error;
 
 use crate::schema::SchemaId;
 
-/// Custom errors related to `SchemaId`.
-#[derive(Error, Debug)]
+/// Custom errors related to `SchemaName`.
+#[derive(Clone, Error, Debug)]
 pub enum SchemaNameError {
     /// Encountered a malformed schema id.
     #[error("Schema name contains too many or invalid characters")]
     MalformedSchemaName,
 }
+
+impl Copy for SchemaNameError {}
 
 /// Custom errors related to `SchemaId`.
 #[derive(Error, Debug)]

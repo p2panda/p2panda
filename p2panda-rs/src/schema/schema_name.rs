@@ -14,6 +14,7 @@ use crate::schema::error::SchemaNameError;
 pub struct SchemaName(String);
 
 impl SchemaName {
+    /// Construct and validate new schema name from a string.
     pub fn new(name: &str) -> Result<Self, SchemaNameError> {
         let name = Self(name.to_owned());
         name.validate()?;
