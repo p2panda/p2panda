@@ -26,10 +26,11 @@
 //! # use p2panda_rs::document::{DocumentBuilder, DocumentViewValue};
 //! # use p2panda_rs::document::traits::AsDocument;
 //! # use p2panda_rs::identity::KeyPair;
-//! # use p2panda_rs::schema::SchemaId;
+//! # use p2panda_rs::schema::{SchemaId, SchemaName};
 //! # use p2panda_rs::test_utils::fixtures::{random_operation_id, random_document_view_id};
 //! #
-//! # let schema_id = SchemaId::Application("cafe".to_string(), random_document_view_id());
+//! # let schema_name = SchemaName::new("profile")?;
+//! # let schema_id = SchemaId::Application(&schema_name, random_document_view_id());
 //! # let public_key = KeyPair::new().public_key().to_owned();
 //! # let operation_id = random_operation_id();
 //! #
