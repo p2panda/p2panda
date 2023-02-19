@@ -148,7 +148,7 @@ mod tests {
     use crate::schema::{SchemaId, SchemaName};
     use crate::serde::{deserialize_into, serialize_from, serialize_value};
     use crate::test_utils::fixtures::{
-        document_view_id, operation_with_schema, random_operation_id, schema_name
+        document_view_id, operation_with_schema, random_operation_id, schema_name,
     };
 
     use super::PlainOperation;
@@ -182,7 +182,11 @@ mod tests {
     }
 
     #[rstest]
-    fn deserialize(document_view_id: DocumentViewId, random_operation_id: OperationId, #[with("mushrooms")] schema_name: SchemaName) {
+    fn deserialize(
+        document_view_id: DocumentViewId,
+        random_operation_id: OperationId,
+        #[with("mushrooms")] schema_name: SchemaName,
+    ) {
         assert_eq!(
             deserialize_into::<PlainOperation>(&serialize_value(cbor!(
                 [1, 1, format!("{schema_name}_{document_view_id}"), [random_operation_id.to_string()], {

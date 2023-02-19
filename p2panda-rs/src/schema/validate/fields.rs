@@ -470,7 +470,7 @@ mod tests {
         #[from(document_view_id)] schema_view_id: DocumentViewId,
         #[case] schema_fields: Vec<(&str, FieldType)>,
         #[case] fields: Vec<(&str, PlainValue)>,
-    ) {    
+    ) {
         // Construct a schema
         let schema_name = SchemaName::new("zoo").expect("Valid schema name");
         let schema = Schema::new(
@@ -599,7 +599,7 @@ mod tests {
         #[case] fields: Vec<(&str, PlainValue)>,
     ) {
         // Construct a schema
-                let schema_name = SchemaName::new("zoo").expect("Valid schema name");
+        let schema_name = SchemaName::new("zoo").expect("Valid schema name");
         let schema = Schema::new(
             &SchemaId::Application(schema_name, schema_view_id),
             "Some schema description",

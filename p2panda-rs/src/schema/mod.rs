@@ -5,8 +5,8 @@ pub mod error;
 mod field_types;
 #[allow(clippy::module_inception)]
 mod schema;
-mod schema_name;
 mod schema_id;
+mod schema_name;
 pub mod system;
 pub mod validate;
 
