@@ -9,6 +9,7 @@ use regex::Regex;
 
 use crate::schema::error::SchemaNameError;
 
+/// A human readable schema name.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SchemaName(String);
 
@@ -19,7 +20,7 @@ impl SchemaName {
         Ok(name)
     }
 
-    /// Checks "name" field of operations with "schema_definition_v1" schema id.
+    /// Validate that this schema name string follows the specification requirements.
     ///
     /// 1. It must be at most 64 characters long
     /// 2. It begins with a letter
