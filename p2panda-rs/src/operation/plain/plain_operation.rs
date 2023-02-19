@@ -226,9 +226,7 @@ mod tests {
     }
 
     #[rstest]
-    #[should_panic(
-        expected = "malformed schema id `Really Wrong Schema Name?!`: doesn't contain an underscore"
-    )]
+    #[should_panic(expected = " name contains too many or invalid characters")]
     #[case::really_wrong_schema_name("Really Wrong Schema Name?!")]
     #[should_panic(expected = "name contains too many or invalid characters")]
     #[case::schema_name_ends_with_underscore("schema_name_ends_with_underscore_")]
