@@ -18,8 +18,8 @@ use crate::operation::validate::validate_operation_with_entry;
 use crate::operation::{EncodedOperation, OperationAction};
 use crate::schema::Schema;
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
-use crate::test_utils::memory_store::errors::DomainError;
-use crate::test_utils::memory_store::validation::{
+use crate::api::DomainError;
+use crate::api::validation::{
     ensure_document_not_deleted, get_checked_document_id_for_view_id, get_expected_skiplink,
     increment_seq_num, is_next_seq_num, next_log_id, verify_log_id,
 };
@@ -351,8 +351,8 @@ mod tests {
         populate_store, send_to_store, PopulateStoreConfig,
     };
     use crate::test_utils::memory_store::{MemoryStore, StorageEntry};
-
-    use super::{get_checked_document_id_for_view_id, next_args, publish};
+    use crate::api::{next_args, publish};
+    use crate::api::validation::get_checked_document_id_for_view_id;
 
     type LogIdAndSeqNum = (u64, u64);
 

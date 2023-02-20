@@ -8,7 +8,7 @@ use crate::entry::{LogId, SeqNum};
 use crate::identity::PublicKey;
 use crate::operation::traits::AsOperation;
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
-use crate::test_utils::memory_store::errors::ValidationError;
+use crate::api::ValidationError;
 
 /// Verify that a claimed seq num is the next sequence number following the latest.
 ///

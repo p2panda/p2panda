@@ -15,8 +15,7 @@ use crate::schema::Schema;
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 use crate::storage_provider::utils::Result;
 use crate::test_utils::constants;
-
-use super::domain::{next_args, publish};
+use crate::api::{next_args, publish};
 
 /// A skiplink hash.
 type Skiplink = Hash;
