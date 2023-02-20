@@ -101,8 +101,8 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
     // Verify the claimed log id against the expected one for this document id and public_key.
     verify_log_id(store, entry.public_key(), entry.log_id(), &document_id).await?;
 
-    // If we have reached MAX_SEQ_NUM here for the next args then we will error and _not_ store the
-    // entry which is being processed in this request.
+    // If we have reached MAX_SEQ_NUM here for the next args then we will error and _not_ store
+    // the entry which is being processed in this request.
     let next_seq_num = increment_seq_num(&mut entry.seq_num().clone()).map_err(|_| {
         DomainError::MaxSeqNumReached(entry.public_key().to_string(), entry.log_id().as_u64())
     })?;
@@ -165,11 +165,7 @@ async fn validate_entry_and_operation<S: EntryStore + OperationStore + LogStore>
     let latest_seq_num = latest_entry.as_ref().map(|entry| entry.seq_num());
     is_next_seq_num(latest_seq_num, entry.seq_num())?;
 
-    // The backlink for this entry is the latest entry from this public key's log.
-    let backlink = latest_entry;
-
-    // If a skiplink is claimed, get the expected skiplink from the database, errors
-    // if it can't be found.
+    // If a skiplink is claimed, get the expected skiplink from the database, errors if it can't be found.
     let skiplink = match entry.skiplink() {
         Some(_) => Some(
             get_expected_skiplink(store, entry.public_key(), entry.log_id(), entry.seq_num())
@@ -184,7 +180,8 @@ async fn validate_entry_and_operation<S: EntryStore + OperationStore + LogStore>
         (entry.clone(), hash)
     });
 
-    let backlink_params = backlink.as_ref().map(|entry| {
+    // The backlink for this entry is the latest entry from this public key's log.
+    let backlink_params = latest_entry.as_ref().map(|entry| {
         let hash = entry.hash();
         (entry.clone(), hash)
     });
