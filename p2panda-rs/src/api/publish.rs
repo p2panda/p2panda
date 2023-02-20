@@ -7,14 +7,16 @@ use crate::api::validation::{
     increment_seq_num, is_next_seq_num, verify_log_id,
 };
 use crate::api::DomainError;
+use crate::document::DocumentId;
 use crate::entry::decode::decode_entry;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::{EncodedEntry, LogId, SeqNum};
 use crate::hash::Hash;
+use crate::identity::PublicKey;
 use crate::operation::plain::PlainOperation;
 use crate::operation::traits::AsOperation;
 use crate::operation::validate::validate_operation_with_entry;
-use crate::operation::{EncodedOperation, OperationAction};
+use crate::operation::{EncodedOperation, Operation, OperationAction, OperationId};
 use crate::schema::Schema;
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 
@@ -79,102 +81,35 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
     plain_operation: &PlainOperation,
     encoded_operation: &EncodedOperation,
 ) -> Result<(Option<Backlink>, Option<Skiplink>, SeqNum, LogId), DomainError> {
-    //////////////////
-    // DECODE ENTRY //
-    //////////////////
-
+    // Decode the entry.
     let entry = decode_entry(encoded_entry)?;
-    let public_key = entry.public_key();
-    let log_id = entry.log_id();
-    let seq_num = entry.seq_num();
 
-    //////////////////////////////////
-    // VALIDATE ENTRY AND OPERATION //
-    //////////////////////////////////
-
-    // Verify that the claimed seq num matches the expected seq num for this public_key and log.
-    let latest_entry = store.get_latest_entry(public_key, log_id).await?;
-    let latest_seq_num = latest_entry.as_ref().map(|entry| entry.seq_num());
-    is_next_seq_num(latest_seq_num, seq_num)?;
-
-    // The backlink for this entry is the latest entry from this public key's log.
-    let backlink = latest_entry;
-
-    // If a skiplink is claimed, get the expected skiplink from the database, errors
-    // if it can't be found.
-    let skiplink = match entry.skiplink() {
-        Some(_) => Some(get_expected_skiplink(store, public_key, log_id, seq_num).await?),
-        None => None,
-    };
-
-    let skiplink_params = skiplink.map(|entry| {
-        let hash = entry.hash();
-        (entry, hash)
-    });
-
-    let backlink_params = backlink.map(|entry| {
-        let hash = entry.hash();
-        (entry, hash)
-    });
-
-    // Perform validation of the entry and it's operation.
-    let (operation, operation_id) = validate_operation_with_entry(
+    // Validate the entry and operation.
+    let (operation, operation_id) = validate_entry_and_operation(
+        store,
+        schema,
         &entry,
         encoded_entry,
-        skiplink_params.as_ref().map(|(entry, hash)| (entry, hash)),
-        backlink_params.as_ref().map(|(entry, hash)| (entry, hash)),
         plain_operation,
         encoded_operation,
-        schema,
-    )?;
+    )
+    .await?;
 
-    ///////////////////////////
-    // DETERMINE DOCUMENT ID //
-    ///////////////////////////
-
-    let document_id = match operation.action() {
-        OperationAction::Create => {
-            // Derive the document id for this new document.
-            encoded_entry.hash().into()
-        }
-        _ => {
-            // We can unwrap previous operations here as we know all UPDATE and DELETE operations contain them.
-            let previous = operation.previous().unwrap();
-
-            // Get the document_id for the document_view_id contained in previous operations.
-            // This performs several validation steps (check method doc string).
-            let document_id = get_checked_document_id_for_view_id(store, &previous).await?;
-
-            // Ensure the document isn't deleted.
-            ensure_document_not_deleted(store, &document_id)
-                .await
-                .map_err(|_| DomainError::DeletedDocument)?;
-
-            document_id
-        }
-    };
+    // Determine the document id.
+    let document_id = determine_document_id(store, &operation, &operation_id).await?;
 
     // Verify the claimed log id against the expected one for this document id and public_key.
-    verify_log_id(store, public_key, log_id, &document_id).await?;
-
-    /////////////////////////////////////
-    // DETERMINE NEXT ENTRY ARG VALUES //
-    /////////////////////////////////////
+    verify_log_id(store, entry.public_key(), entry.log_id(), &document_id).await?;
 
     // If we have reached MAX_SEQ_NUM here for the next args then we will error and _not_ store the
     // entry which is being processed in this request.
-    let next_seq_num = increment_seq_num(&mut seq_num.clone())
-        .map_err(|_| DomainError::MaxSeqNumReached(public_key.to_string(), log_id.as_u64()))?;
+    let next_seq_num = increment_seq_num(&mut entry.seq_num().clone()).map_err(|_| {
+        DomainError::MaxSeqNumReached(entry.public_key().to_string(), entry.log_id().as_u64())
+    })?;
 
-    let backlink = Some(encoded_entry.hash());
-
-    // Check if skiplink is required and return hash if so
-    let skiplink = if is_lipmaa_required(next_seq_num.as_u64()) {
-        Some(get_expected_skiplink(store, public_key, log_id, &next_seq_num).await?)
-    } else {
-        None
-    }
-    .map(|entry| entry.hash());
+    // Get the skiplink for the following entry to be used in next args
+    let skiplink =
+        get_skiplink_for_entry(store, &next_seq_num, entry.log_id(), entry.public_key()).await?;
 
     ///////////////
     // STORE LOG //
@@ -183,7 +118,12 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
     // If the entries' seq num is 1 we insert a new log here.
     if entry.seq_num().is_first() {
         store
-            .insert_log(log_id, public_key, &operation.schema_id(), &document_id)
+            .insert_log(
+                entry.log_id(),
+                entry.public_key(),
+                &operation.schema_id(),
+                &document_id,
+            )
             .await?;
     }
 
@@ -198,10 +138,114 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
 
     // Insert the operation into the store.
     store
-        .insert_operation(&operation_id, public_key, &operation, &document_id)
+        .insert_operation(&operation_id, entry.public_key(), &operation, &document_id)
         .await?;
 
-    Ok((backlink, skiplink, next_seq_num, log_id.to_owned()))
+    // Construct and return next args.
+    Ok((
+        Some(encoded_entry.hash()),
+        skiplink,
+        next_seq_num,
+        entry.log_id().to_owned(),
+    ))
+}
+
+async fn validate_entry_and_operation<S: EntryStore + OperationStore + LogStore>(
+    store: &S,
+    schema: &Schema,
+    entry: &impl AsEntry,
+    encoded_entry: &impl AsEncodedEntry,
+    plain_operation: &PlainOperation,
+    encoded_operation: &EncodedOperation,
+) -> Result<(Operation, OperationId), DomainError> {
+    // Verify that the claimed seq num matches the expected seq num for this public_key and log.
+    let latest_entry = store
+        .get_latest_entry(entry.public_key(), entry.log_id())
+        .await?;
+    let latest_seq_num = latest_entry.as_ref().map(|entry| entry.seq_num());
+    is_next_seq_num(latest_seq_num, entry.seq_num())?;
+
+    // The backlink for this entry is the latest entry from this public key's log.
+    let backlink = latest_entry;
+
+    // If a skiplink is claimed, get the expected skiplink from the database, errors
+    // if it can't be found.
+    let skiplink = match entry.skiplink() {
+        Some(_) => Some(
+            get_expected_skiplink(store, entry.public_key(), entry.log_id(), entry.seq_num())
+                .await?,
+        ),
+        None => None,
+    };
+
+    // Construct params as `validate_operation_with_entry` expects.
+    let skiplink_params = skiplink.as_ref().map(|entry| {
+        let hash = entry.hash();
+        (entry.clone(), hash)
+    });
+
+    let backlink_params = backlink.as_ref().map(|entry| {
+        let hash = entry.hash();
+        (entry.clone(), hash)
+    });
+
+    // Perform validation of the entry and it's operation.
+    let (operation, operation_id) = validate_operation_with_entry(
+        entry,
+        encoded_entry,
+        skiplink_params.as_ref().map(|(entry, hash)| (entry, hash)),
+        backlink_params.as_ref().map(|(entry, hash)| (entry, hash)),
+        plain_operation,
+        encoded_operation,
+        schema,
+    )?;
+
+    Ok((operation, operation_id))
+}
+
+async fn determine_document_id<S: EntryStore + OperationStore + LogStore>(
+    store: &S,
+    operation: &Operation,
+    operation_id: &OperationId,
+) -> Result<DocumentId, DomainError> {
+    match operation.action() {
+        OperationAction::Create => {
+            // Derive the document id for this new document.
+            Ok(DocumentId::new(operation_id))
+        }
+        _ => {
+            // We can unwrap previous operations here as we know all UPDATE and DELETE operations contain them.
+            let previous = operation.previous().unwrap();
+
+            // Get the document_id for the document_view_id contained in previous operations.
+            // This performs several validation steps (check method doc string).
+            let document_id = get_checked_document_id_for_view_id(store, &previous).await?;
+
+            // Ensure the document isn't deleted.
+            ensure_document_not_deleted(store, &document_id)
+                .await
+                .map_err(|_| DomainError::DeletedDocument)?;
+
+            Ok(document_id)
+        }
+    }
+}
+
+async fn get_skiplink_for_entry<S: EntryStore + OperationStore + LogStore>(
+    store: &S,
+    seq_num: &SeqNum,
+    log_id: &LogId,
+    public_key: &PublicKey,
+) -> Result<Option<Skiplink>, DomainError> {
+    // Check if skiplink is required and return hash if so
+    let skiplink = if is_lipmaa_required(seq_num.as_u64()) {
+        Some(get_expected_skiplink(store, public_key, log_id, seq_num).await?)
+    } else {
+        None
+    }
+    .map(|entry| entry.hash());
+
+    Ok(skiplink)
 }
 
 #[cfg(test)]
