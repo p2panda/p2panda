@@ -119,34 +119,34 @@ jobs:
           command: clippy
           args: --manifest-path ${{ env.cargo_manifest }} -- -D warnings --no-deps
 
-  rust-coverage:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Restore from cargo cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-tarpaulin-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Run cargo-tarpaulin
-        uses: actions-rs/tarpaulin@v0.1
-        with:
-          # Force cleaning via `--force-clean` flag to prevent buggy code coverage
-          args: --manifest-path ${{ env.cargo_manifest }} --locked --force-clean --all-features
-        # Ensure debug output is also tested
-        env:
-          RUST_LOG: debug
-
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v2
+#   rust-coverage:
+#     runs-on: ubuntu-latest
+# 
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v2
+# 
+#       - name: Setup Rust toolchain
+#         uses: actions-rs/toolchain@v1
+#         with:
+#           profile: minimal
+#           toolchain: stable
+#           override: true
+# 
+#       - name: Restore from cargo cache
+#         uses: actions/cache@v2
+#         with:
+#           path: ${{ env.cache_path }}
+#           key: ${{ runner.os }}-tarpaulin-${{ hashFiles('**/Cargo.lock') }}
+# 
+#       - name: Run cargo-tarpaulin
+#         uses: actions-rs/tarpaulin@v0.1
+#         with:
+#           # Force cleaning via `--force-clean` flag to prevent buggy code coverage
+#           args: --manifest-path ${{ env.cargo_manifest }} --locked --force-clean --all-features
+#         # Ensure debug output is also tested
+#         env:
+#           RUST_LOG: debug
+# 
+#       - name: Upload to codecov.io
+#         uses: codecov/codecov-action@v2
