@@ -30,7 +30,7 @@
 //! # use p2panda_rs::test_utils::fixtures::{random_operation_id, random_document_view_id};
 //! #
 //! # let schema_name = SchemaName::new("cafe")?;
-//! # let schema_id = SchemaId::Application(&schema_name, random_document_view_id());
+//! # let schema_id = SchemaId::Application(schema_name, random_document_view_id());
 //! # let public_key = KeyPair::new().public_key().to_owned();
 //! # let operation_id = random_operation_id();
 //! #
@@ -81,7 +81,7 @@
 //! # use p2panda_rs::test_utils::fixtures::{random_operation_id, random_document_view_id};
 //! #
 //! # let schema_name = SchemaName::new("cafe")?;
-//! # let schema_id = SchemaId::Application(&schema_name, random_document_view_id());
+//! # let schema_id = SchemaId::Application(schema_name, random_document_view_id());
 //! # let public_key = KeyPair::new().public_key().to_owned();
 //! # let operation_id_1 = random_operation_id();
 //! # let operation_id_2 = random_operation_id();
