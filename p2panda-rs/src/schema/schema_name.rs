@@ -9,7 +9,7 @@ use regex::Regex;
 
 use crate::schema::error::SchemaNameError;
 
-/// A human readable schema name.
+/// A human readable schema name, used in the construction of `SchemaId`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SchemaName(String);
 
