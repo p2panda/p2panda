@@ -58,23 +58,12 @@ pub async fn next_args<S: EntryStore + OperationStore + LogStore>(
     public_key: &PublicKey,
     document_view_id: Option<&DocumentViewId>,
 ) -> Result<(Option<Backlink>, Option<Skiplink>, SeqNum, LogId), DomainError> {
-    ////////////////////////
-    // HANDLE CREATE CASE //
-    ////////////////////////
-
     // If no document_view_id is passed then this is a request for publishing a CREATE operation
     // and we return the args for the next free log by this public_key.
-    if document_view_id.is_none() {
-        let log_id = next_log_id(store, public_key).await?;
-        return Ok((None, None, SeqNum::default(), log_id));
-    }
-
-    ///////////////////////////
-    // DETERMINE DOCUMENT ID //
-    ///////////////////////////
-
-    // We can unwrap here as we know document_view_id is some.
-    let document_view_id = document_view_id.unwrap();
+    let document_view_id = match document_view_id {
+        Some(id) => id,
+        None => return calculate_next_args_new_log(store, public_key).await,
+    };
 
     // Get the document_id for this document_view_id. This performs several validation steps (check
     // method doc string).
@@ -83,55 +72,66 @@ pub async fn next_args<S: EntryStore + OperationStore + LogStore>(
     // Check the document is not deleted.
     ensure_document_not_deleted(store, &document_id).await?;
 
-    /////////////////////////
-    // DETERMINE NEXT ARGS //
-    /////////////////////////
-
     // Retrieve the log_id for the found document_id and public_key.
     let log_id = store.get_log_id(public_key, &document_id).await?;
 
     // Check if an existing log id was found for this public key and document.
     match log_id {
         // If it wasn't found, we just calculate the next log id safely and return the next args.
-        None => {
-            let next_log_id = next_log_id(store, public_key).await?;
-            Ok((None, None, SeqNum::default(), next_log_id))
-        }
+        None => calculate_next_args_new_log(store, public_key).await,
         // If one was found, we need to get the backlink and skiplink, and safely increment the seq
         // num.
-        Some(log_id) => {
-            // Get the latest entry in this log.
-            let latest_entry = store.get_latest_entry(public_key, &log_id).await?;
-
-            // Determine the next sequence number by incrementing one from the latest entry seq
-            // num.
-            //
-            // If the latest entry is None, then we must be at seq num 1.
-            let seq_num = match latest_entry {
-                Some(ref latest_entry) => {
-                    let mut latest_seq_num = latest_entry.seq_num().to_owned();
-                    increment_seq_num(&mut latest_seq_num).map_err(|_| {
-                        DomainError::MaxSeqNumReached(public_key.to_string(), log_id.as_u64())
-                    })
-                }
-                None => Ok(SeqNum::default()),
-            }?;
-
-            // Check if skiplink is required and if it is get the entry and return its hash.
-            let skiplink = if is_lipmaa_required(seq_num.as_u64()) {
-                // Determine skiplink ("lipmaa"-link) entry in this log.
-                Some(get_expected_skiplink(store, public_key, &log_id, &seq_num).await?)
-            } else {
-                None
-            }
-            .map(|entry| entry.hash());
-
-            let backlink = latest_entry.map(|entry| entry.hash().into());
-            let skiplink = skiplink.map(|hash| hash.into());
-
-            Ok((backlink, skiplink, seq_num, log_id))
-        }
+        Some(log_id) => calculate_next_args_existing_log(store, &log_id, public_key).await
     }
+}
+
+/// Calculate the next args for a new log for the given public key.
+async fn calculate_next_args_new_log<S: LogStore>(
+    store: &S,
+    public_key: &PublicKey,
+) -> Result<(Option<Backlink>, Option<Skiplink>, SeqNum, LogId), DomainError> {
+    // Get the next log id for this author
+    let next_log_id = next_log_id(store, public_key).await?;
+
+    // Construct the next args for this new log
+    Ok((None, None, SeqNum::default(), next_log_id))
+}
+
+/// Calculate the next args for an existing log for the given author and log id.
+async fn calculate_next_args_existing_log<S: EntryStore + OperationStore + LogStore>(
+    store: &S,
+    log_id: &LogId,
+    public_key: &PublicKey,
+) -> Result<(Option<Backlink>, Option<Skiplink>, SeqNum, LogId), DomainError> {
+    // Get the latest entry in this log.
+    let latest_entry = store.get_latest_entry(public_key, &log_id).await?;
+
+    // Determine the next sequence number by incrementing one from the latest entry seq
+    // num.
+    //
+    // If the latest entry is None, then we must be at seq num 1.
+    let seq_num = match latest_entry {
+        Some(ref latest_entry) => {
+            let mut latest_seq_num = latest_entry.seq_num().to_owned();
+            increment_seq_num(&mut latest_seq_num)
+                .map_err(|_| DomainError::MaxSeqNumReached(public_key.to_string(), log_id.as_u64()))
+        }
+        None => Ok(SeqNum::default()),
+    }?;
+
+    // Check if skiplink is required and if it is get the entry and return its hash.
+    let skiplink = if is_lipmaa_required(seq_num.as_u64()) {
+        // Determine skiplink ("lipmaa"-link) entry in this seq number.
+        Some(get_expected_skiplink(store, public_key, &log_id, &seq_num).await?)
+    } else {
+        None
+    }
+    .map(|entry| entry.hash());
+
+    // Get the latest entry hash.
+    let backlink = latest_entry.map(|entry| entry.hash());
+
+    Ok((backlink, skiplink, seq_num, log_id.clone()))
 }
 
 #[cfg(test)]
