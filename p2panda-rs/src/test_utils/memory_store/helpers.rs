@@ -2,12 +2,13 @@
 
 //! Helper methods for working with a storage provider when testing.
 
+use crate::api::{next_args, publish};
 use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::encode::{encode_entry, sign_entry};
-use crate::entry::traits::AsEncodedEntry;
+use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::{EncodedEntry, LogId, SeqNum};
 use crate::hash::Hash;
-use crate::identity::KeyPair;
+use crate::identity::{KeyPair, PublicKey};
 use crate::operation::encode::encode_operation;
 use crate::operation::traits::Actionable;
 use crate::operation::{Operation, OperationAction, OperationBuilder, OperationValue};
@@ -15,7 +16,8 @@ use crate::schema::Schema;
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 use crate::storage_provider::utils::Result;
 use crate::test_utils::constants;
-use crate::api::{next_args, publish};
+
+use super::MemoryStore;
 
 /// A skiplink hash.
 type Skiplink = Hash;
@@ -185,6 +187,40 @@ pub async fn send_to_store<S: EntryStore + LogStore + OperationStore>(
     .await?;
 
     Ok((encoded_entry, (backlink, skiplink, seq_num, log_id)))
+}
+
+
+type LogIdAndSeqNum = (u64, u64);
+
+/// Helper method for removing entries from a MemoryStore by PublicKey & LogIdAndSeqNum.
+pub fn remove_entries(
+    store: &MemoryStore,
+    public_key: &PublicKey,
+    entries_to_remove: &[LogIdAndSeqNum],
+) {
+    store.entries.lock().unwrap().retain(|_, entry| {
+        !entries_to_remove.contains(&(entry.log_id().as_u64(), entry.seq_num().as_u64()))
+            && entry.public_key() == public_key
+    });
+}
+
+/// Helper method for removing operations from a MemoryStore by PublicKey & LogIdAndSeqNum.
+pub fn remove_operations(
+    store: &MemoryStore,
+    public_key: &PublicKey,
+    operations_to_remove: &[LogIdAndSeqNum],
+) {
+    for (hash, entry) in store.entries.lock().unwrap().iter() {
+        if operations_to_remove.contains(&(entry.log_id().as_u64(), entry.seq_num().as_u64()))
+            && entry.public_key() == public_key
+        {
+            store
+                .operations
+                .lock()
+                .unwrap()
+                .remove(&hash.clone().into());
+        }
+    }
 }
 
 #[cfg(test)]

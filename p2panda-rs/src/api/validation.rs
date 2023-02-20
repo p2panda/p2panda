@@ -209,20 +209,72 @@ pub async fn get_checked_document_id_for_view_id<S: EntryStore + OperationStore 
 mod tests {
     use rstest::rstest;
 
-    use crate::document::DocumentId;
-    use crate::entry::traits::AsEntry;
+    use crate::document::{DocumentId, DocumentViewId};
+    use crate::entry::traits::{AsEntry, AsEncodedEntry};
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
-    use crate::test_utils::constants::PRIVATE_KEY;
-    use crate::test_utils::fixtures::populate_store_config;
-    use crate::test_utils::fixtures::{key_pair, random_document_id};
-    use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig};
+    use crate::operation::{Operation, OperationAction, OperationBuilder, OperationId};
+    use crate::schema::Schema;
+    use crate::test_utils::constants::{PRIVATE_KEY, test_fields};
+    use crate::test_utils::fixtures::{populate_store_config, random_document_view_id, key_pair, random_document_id, schema, operation};
+    use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig, send_to_store};
     use crate::test_utils::memory_store::MemoryStore;
 
     use super::{
         ensure_document_not_deleted, get_expected_skiplink, increment_log_id, increment_seq_num,
-        is_next_seq_num, verify_log_id,
+        is_next_seq_num, verify_log_id, get_checked_document_id_for_view_id
     };
+
+    #[rstest]
+    #[tokio::test]
+    async fn errors_when_passed_non_existent_view_id(
+        #[from(random_document_view_id)] document_view_id: DocumentViewId,
+    ) {
+        let store = MemoryStore::default();
+        let result = get_checked_document_id_for_view_id(&store, &document_view_id).await;
+        assert!(result.is_err());
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn gets_document_id_for_view(schema: Schema, operation: Operation) {
+        let store = MemoryStore::default();
+
+        // Store one entry and operation in the store.
+        let (entry, _) = send_to_store(&store, &operation, &schema, &KeyPair::new())
+            .await
+            .unwrap();
+        let operation_one_id: OperationId = entry.hash().into();
+
+        // Store another entry and operation, from a different public key, which perform an update on
+        // the earlier operation.
+        let update_operation = OperationBuilder::new(schema.id())
+            .action(OperationAction::Update)
+            .previous(&operation_one_id.clone().into())
+            .fields(&test_fields())
+            .build()
+            .unwrap();
+
+        let (entry, _) = send_to_store(&store, &update_operation, &schema, &KeyPair::new())
+            .await
+            .unwrap();
+        let operation_two_id: OperationId = entry.hash().into();
+
+        // Get the document id for the passed view id.
+        let result = get_checked_document_id_for_view_id(
+            &store,
+            &DocumentViewId::new(&[operation_one_id.clone(), operation_two_id]),
+        )
+        .await;
+
+        // Result should be ok.
+        assert!(result.is_ok());
+
+        // The returned document id should match the expected one.
+        let document_id = result.unwrap();
+        assert_eq!(document_id, DocumentId::new(&operation_one_id))
+    }
+
     #[rstest]
     #[case(LogId::new(0), LogId::new(1))]
     #[should_panic(expected = "Max log id reached")]

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-mod domain;
+mod publish;
+mod next_args;
 mod errors;
 pub mod validation;
 
-pub use domain::{next_args, publish};
+pub use next_args::next_args;
+pub use publish::publish;
 pub use errors::{DomainError, ValidationError};
