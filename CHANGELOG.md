@@ -12,6 +12,8 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - Introduce `SchemaName` struct [#481](https://github.com/p2panda/p2panda/pull/481) `rs`
+- Add schema name tests when deserializing plain operations [#480](https://github.com/p2panda/p2panda/pull/480) `rs`
+- Introduce typed errors in `domain` and `validation` modules [#478](https://github.com/p2panda/p2panda/pull/478) `rs`
 - Refactor storage API: Rename methods, remove `StorageProvider` and document "caching" layers [#469](https://github.com/p2panda/p2panda/pull/469) `rs`
 - Remove `VerifiedOperation` [#465](https://github.com/p2panda/p2panda/pull/465) `rs`
 - Better docs for `Document` [#470](https://github.com/p2panda/p2panda/pull/470) `rs`

@@ -140,6 +140,7 @@ impl From<&Operation> for PlainOperation {
 #[cfg(test)]
 mod tests {
     use ciborium::cbor;
+    use ciborium::value::{Error, Value};
     use rstest::rstest;
 
     use crate::document::DocumentViewId;
@@ -204,28 +205,55 @@ mod tests {
         );
     }
 
-    #[test]
-    fn deserialize_invalid_operations() {
-        assert!(deserialize_into::<PlainOperation>(&serialize_value(cbor!([]))).is_err());
-        assert!(deserialize_into::<PlainOperation>(&serialize_value(cbor!([1]))).is_err());
-        assert!(deserialize_into::<PlainOperation>(&serialize_value(cbor!([1, 1]))).is_err());
-        assert!(deserialize_into::<PlainOperation>(&serialize_value(cbor!("Test"))).is_err());
-        assert!(deserialize_into::<PlainOperation>(&serialize_value(cbor!([
-            1,
-            0,
-            "schema_field_definition_v1"
-        ])))
-        .is_err());
-        assert!(deserialize_into::<PlainOperation>(&serialize_value(cbor!([
-            1,
-            1,
-            "schema_field_definition_v1",
-            ["0020"]
-        ])))
-        .is_err());
-        assert!(deserialize_into::<PlainOperation>(&serialize_value(
-            cbor!([1, 1, "schema_field_definition_v1", { "type" => "int" }])
-        ))
-        .is_err());
+    #[rstest]
+    #[should_panic(expected = "missing version field in operation format")]
+    #[case::no_fields(cbor!([]))]
+    #[should_panic(expected = "missing action field in operation format")]
+    #[case::only_version(cbor!([1]))]
+    #[should_panic(expected = "missing schema id field in operation format")]
+    #[case::only_version_and_action(cbor!([1, 1]))]
+    #[should_panic(expected = "invalid type: string, expected integer")]
+    #[case::incorrect_type(cbor!(["Test"]))]
+    #[should_panic(expected = "missing fields for this operation action")]
+    #[case::missing_fields(cbor!([1, 0, "schema_field_definition_v1"]))]
+    #[should_panic(expected = "invalid hash length 2 bytes, expected 34 bytes")]
+    #[case::hash_too_small(cbor!([1, 1, "schema_field_definition_v1", ["0020"]]))]
+    #[should_panic(expected = "invalid type: map, expected array")]
+    #[case::fields_wrong_type(cbor!([1, 1, "schema_field_definition_v1", { "type" => "int" }]))]
+    fn deserialize_invalid_operations(#[case] cbor: Result<Value, Error>) {
+        // Check the cbor is valid.
+        assert!(cbor.is_ok());
+
+        // Deserialize into a plain operation, we unwrap here to cause a panic and then test for
+        // expected error stings.
+        deserialize_into::<PlainOperation>(&serialize_value(cbor)).unwrap();
+    }
+
+    #[rstest]
+    #[should_panic(expected = " name contains too many or invalid characters")]
+    #[case::really_wrong_schema_name("Really Wrong Schema Name?!")]
+    #[should_panic(expected = "name contains too many or invalid characters")]
+    #[case::schema_name_ends_with_underscore("schema_name_ends_with_underscore_")]
+    #[should_panic(expected = "name contains too many or invalid characters")]
+    #[case::schema_name_invalid_char("$_$_$")]
+    #[should_panic(expected = "name contains too many or invalid characters")]
+    #[case::schema_name_too_long(
+        "really_really_really_really_really_really_really_really_long_name"
+    )]
+    #[should_panic(expected = "name contains too many or invalid characters")]
+    #[case::panda_face_emojis_not_allowed(
+        "🐼" // We can only dream ;-p
+    )]
+    fn deserialize_operation_with_invalid_name_in_schema_id(#[case] schema_name: &str) {
+        // Encode operation as cbor using the passed name combined with a valid hash to make a
+        // schema id.
+        let operation_cbor = cbor!([1, 1, format!("{schema_name}_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"), [{ "type" => "int" }]]);
+
+        // Check the cbor is valid.
+        assert!(operation_cbor.is_ok());
+
+        // Deserialize into a plain operation, we unwrap here to cause a panic and then test for
+        // expected error stings.
+        deserialize_into::<PlainOperation>(&serialize_value(operation_cbor)).unwrap();
     }
 }

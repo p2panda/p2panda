@@ -5,7 +5,8 @@
 use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::encode::{encode_entry, sign_entry};
 use crate::entry::traits::AsEncodedEntry;
-use crate::entry::EncodedEntry;
+use crate::entry::{EncodedEntry, LogId, SeqNum};
+use crate::hash::Hash;
 use crate::identity::KeyPair;
 use crate::operation::encode::encode_operation;
 use crate::operation::traits::Actionable;
@@ -14,9 +15,17 @@ use crate::schema::Schema;
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 use crate::storage_provider::utils::Result;
 use crate::test_utils::constants;
-use crate::test_utils::memory_store::EntryArgsResponse;
 
 use super::domain::{next_args, publish};
+
+/// A skiplink hash.
+type Skiplink = Hash;
+
+/// A backlink hash.
+type Backlink = Hash;
+
+/// The next args returned from `publish` and `next_args`.
+type NextArgs = (Option<Backlink>, Option<Skiplink>, SeqNum, LogId);
 
 /// Configuration used when populating the store for testing.
 #[derive(Debug)]
@@ -118,13 +127,13 @@ pub async fn populate_store<S: EntryStore + LogStore + OperationStore>(
                 };
 
                 // Publish the operation encoded on an entry to storage.
-                let (entry_encoded, publish_entry_response) =
+                let (entry_encoded, (backlink, _, _, _)) =
                     send_to_store(store, &operation, &config.schema, key_pair)
                         .await
                         .expect("Send to store");
 
                 // Set the previous based on the backlink
-                previous = publish_entry_response.backlink.map(DocumentViewId::from);
+                previous = backlink.map(DocumentViewId::from);
 
                 // Push this document id to the test data.
                 if index == 0 {
@@ -142,22 +151,23 @@ pub async fn send_to_store<S: EntryStore + LogStore + OperationStore>(
     operation: &Operation,
     schema: &Schema,
     key_pair: &KeyPair,
-) -> Result<(EncodedEntry, EntryArgsResponse)> {
+) -> Result<(EncodedEntry, NextArgs)> {
     // Get public key from the key pair.
     let public_key = key_pair.public_key();
 
     // Get the next args.
-    let next_args = next_args(store, &public_key, operation.previous()).await?;
+    let (backlink, skiplink, seq_num, log_id) =
+        next_args(store, &public_key, operation.previous()).await?;
 
     // Encode the operation.
     let encoded_operation = encode_operation(operation)?;
 
     // Construct and sign the entry.
     let entry = sign_entry(
-        &next_args.log_id,
-        &next_args.seq_num,
-        next_args.skiplink.as_ref(),
-        next_args.backlink.as_ref(),
+        &log_id,
+        &seq_num,
+        skiplink.as_ref(),
+        backlink.as_ref(),
         &encoded_operation,
         key_pair,
     )?;
@@ -166,7 +176,7 @@ pub async fn send_to_store<S: EntryStore + LogStore + OperationStore>(
     let encoded_entry = encode_entry(&entry)?;
 
     // Publish the entry and get the next entry args.
-    let publish_entry_response = publish(
+    let (backlink, skiplink, seq_num, log_id) = publish(
         store,
         schema,
         &encoded_entry,
@@ -175,20 +185,27 @@ pub async fn send_to_store<S: EntryStore + LogStore + OperationStore>(
     )
     .await?;
 
-    Ok((encoded_entry, publish_entry_response))
+    Ok((encoded_entry, (backlink, skiplink, seq_num, log_id)))
 }
 
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
 
+    use crate::document::DocumentViewId;
     use crate::entry::traits::{AsEncodedEntry, AsEntry};
     use crate::entry::{LogId, SeqNum};
+    use crate::identity::KeyPair;
+    use crate::operation::Operation;
     use crate::schema::Schema;
     use crate::storage_provider::traits::DocumentStore;
-    use crate::test_utils::constants::SKIPLINK_SEQ_NUMS;
-    use crate::test_utils::fixtures::{populate_store_config, schema};
-    use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig};
+    use crate::test_utils::constants::{test_fields, SKIPLINK_SEQ_NUMS};
+    use crate::test_utils::fixtures::{
+        key_pair, operation, populate_store_config, random_key_pair, schema, update_operation,
+    };
+    use crate::test_utils::memory_store::helpers::{
+        populate_store, send_to_store, PopulateStoreConfig,
+    };
     use crate::test_utils::memory_store::MemoryStore;
 
     #[rstest]
@@ -266,5 +283,70 @@ mod tests {
                 .len(),
             8
         );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn sends_to_node(
+        operation: Operation,
+        schema: Schema,
+        key_pair: KeyPair,
+        #[from(random_key_pair)] another_key_pair: KeyPair,
+    ) {
+        let store = MemoryStore::default();
+
+        // Publish first entry and operation.
+        let (encoded_entry, (backlink, skiplink, seq_num, log_id)) =
+            send_to_store(&store, &operation, &schema, &key_pair)
+                .await
+                .unwrap();
+
+        assert_eq!(seq_num, SeqNum::new(2).unwrap());
+        assert_eq!(log_id, LogId::new(0));
+        assert!(backlink.is_some());
+        assert_eq!(backlink.clone().unwrap(), encoded_entry.hash());
+        assert!(skiplink.is_none());
+
+        let update = update_operation(
+            test_fields(),
+            backlink.map(DocumentViewId::from).unwrap(),
+            schema.id().clone(),
+        );
+
+        // Publish second entry and an update operation.
+        let (encoded_entry, (backlink, skiplink, seq_num, log_id)) =
+            send_to_store(&store, &update, &schema, &key_pair)
+                .await
+                .unwrap();
+
+        assert_eq!(seq_num, SeqNum::new(3).unwrap());
+        assert_eq!(log_id, LogId::new(0));
+        assert!(backlink.is_some());
+        assert_eq!(backlink.unwrap(), encoded_entry.hash());
+        assert!(skiplink.is_none());
+
+        // Publish an entry and operation to a new log.
+        let (encoded_entry, (backlink, skiplink, seq_num, log_id)) =
+            send_to_store(&store, &operation, &schema, &key_pair)
+                .await
+                .unwrap();
+
+        assert_eq!(seq_num, SeqNum::new(2).unwrap());
+        assert_eq!(log_id, LogId::new(1));
+        assert!(backlink.is_some());
+        assert_eq!(backlink.clone().unwrap(), encoded_entry.hash());
+        assert!(skiplink.is_none());
+
+        // Publish an entry and operation with a new key pair.
+        let (encoded_entry, (backlink, skiplink, seq_num, log_id)) =
+            send_to_store(&store, &operation, &schema, &another_key_pair)
+                .await
+                .unwrap();
+
+        assert_eq!(seq_num, SeqNum::new(2).unwrap());
+        assert_eq!(log_id, LogId::new(0));
+        assert!(backlink.is_some());
+        assert_eq!(backlink.clone().unwrap(), encoded_entry.hash());
+        assert!(skiplink.is_none());
     }
 }

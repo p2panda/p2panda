@@ -6,6 +6,7 @@
 //! - `domain` and `validation` modules for publishing and validating entries and operations
 //! - helpers for populating a store with test data
 pub mod domain;
+pub mod errors;
 pub mod helpers;
 mod provider;
 mod stores;
@@ -13,4 +14,4 @@ mod types;
 pub mod validation;
 
 pub use provider::MemoryStore;
-pub use types::{EntryArgsResponse, PublishEntryResponse, PublishedOperation, StorageEntry};
+pub use types::{PublishedOperation, StorageEntry};
