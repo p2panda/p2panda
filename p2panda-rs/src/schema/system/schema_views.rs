@@ -403,7 +403,10 @@ mod tests {
         );
         invalid_field.insert(
             "penguin",
-            DocumentViewValue::new(&operation_id, &OperationValue::String("penguin".to_string())),
+            DocumentViewValue::new(
+                &operation_id,
+                &OperationValue::String("penguin".to_string()),
+            ),
         );
 
         let document_view = DocumentView::new(&document_view_id, &invalid_field);
