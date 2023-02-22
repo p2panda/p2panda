@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use once_cell::sync::Lazy;
 
 use crate::schema::error::SchemaIdError;
-use crate::schema::{FieldType, Schema, SchemaId};
+use crate::schema::{FieldType, Schema, SchemaId, SchemaDescription};
 
 const DESCRIPTION: &str = "Publish data schemas for your application.";
 
@@ -20,9 +20,12 @@ pub static SCHEMA_DEFINITION_V1: Lazy<Schema> = Lazy::new(|| {
         FieldType::PinnedRelationList(SchemaId::SchemaFieldDefinition(1)),
     );
 
+    // We can unwrap here as we know the schema definition is valid.
+    let description = SchemaDescription::new(DESCRIPTION).unwrap();
+
     Schema {
         id: SchemaId::SchemaDefinition(1),
-        description: DESCRIPTION.to_owned(),
+        description,
         fields,
     }
 });

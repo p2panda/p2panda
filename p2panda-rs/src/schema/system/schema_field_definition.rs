@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use once_cell::sync::Lazy;
 
 use crate::schema::error::SchemaIdError;
-use crate::schema::{FieldType, Schema, SchemaId};
+use crate::schema::{FieldType, Schema, SchemaId, SchemaDescription};
 
 const DESCRIPTION: &str = "Define fields for application data schemas.";
 
@@ -15,9 +15,12 @@ pub static SCHEMA_FIELD_DEFINITION_V1: Lazy<Schema> = Lazy::new(|| {
     fields.insert("name".to_string(), FieldType::String);
     fields.insert("type".to_string(), FieldType::String);
 
+    // We can unwrap here as we know the schema definition is valid.
+    let description = SchemaDescription::new(DESCRIPTION).unwrap();
+
     Schema {
         id: SchemaId::SchemaFieldDefinition(1),
-        description: DESCRIPTION.to_owned(),
+        description,
         fields,
     }
 });

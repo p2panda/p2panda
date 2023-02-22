@@ -13,6 +13,8 @@ use crate::schema::SchemaName;
 use crate::schema::{FieldType, SchemaId, SchemaVersion};
 use crate::Human;
 
+use super::SchemaDescription;
+
 /// The key of a schema field
 pub type FieldName = String;
 
@@ -46,7 +48,7 @@ pub struct Schema {
     pub(crate) id: SchemaId,
 
     /// Describes the schema's intended use.
-    pub(crate) description: String,
+    pub(crate) description: SchemaDescription,
 
     /// Maps all of the schema's field names to their respective types.
     pub(crate) fields: BTreeMap<FieldName, FieldType>,
@@ -92,10 +94,12 @@ impl Schema {
             field_map.insert(field_name.to_string(), field_type.to_owned());
         }
 
+        let description = SchemaDescription::new(description)?;
+
         if let SchemaId::Application(_, _) = id {
             let schema = Self {
                 id: id.to_owned(),
-                description: description.to_owned(),
+                description,
                 fields: field_map,
             };
 
@@ -133,10 +137,11 @@ impl Schema {
         }
 
         let name = SchemaName::new(schema.name())?;
+        let description = SchemaDescription::new(schema.description())?;
 
         Ok(Schema {
             id: SchemaId::new_application(&name, schema.view_id()),
-            description: schema.description().to_owned(),
+            description,
             fields: fields_map,
         })
     }
@@ -273,7 +278,7 @@ impl Schema {
     }
 
     /// Access the schema description.
-    pub fn description(&self) -> &str {
+    pub fn description(&self) -> &SchemaDescription {
         &self.description
     }
 
@@ -306,7 +311,9 @@ mod tests {
     use crate::document::{DocumentView, DocumentViewFields, DocumentViewValue};
     use crate::operation::{OperationId, OperationValue, PinnedRelationList};
     use crate::schema::system::{SchemaFieldView, SchemaView};
-    use crate::schema::{FieldType, Schema, SchemaId, SchemaName, SchemaVersion};
+    use crate::schema::{
+        FieldType, Schema, SchemaDescription, SchemaId, SchemaName, SchemaVersion,
+    };
     use crate::test_utils::fixtures::{document_view_id, random_operation_id};
     use crate::Human;
 
@@ -530,7 +537,7 @@ mod tests {
             schema.version(),
             SchemaVersion::Application(expected_view_id)
         );
-        assert_eq!(schema.description(), "Describes a venue");
+        assert_eq!(schema.description().to_string(), "Describes a venue");
         assert_eq!(schema.fields().len(), 2);
     }
 
@@ -538,11 +545,13 @@ mod tests {
     fn hash_id(#[from(document_view_id)] application_schema_view_id: DocumentViewId) {
         // Validate application schema format
         let schema_name = SchemaName::new("event").expect("Valid schema name");
+        let description = SchemaDescription::new("test").expect("Valid schema description");
+
         let mut schema_fields = BTreeMap::new();
         schema_fields.insert("is_real".to_string(), FieldType::Boolean);
         let application_schema = Schema {
             id: SchemaId::Application(schema_name, application_schema_view_id),
-            description: "test".to_string(),
+            description: description.clone(),
             fields: schema_fields.clone(),
         };
         let application_schema_hash_id = application_schema.hash_id();
@@ -554,7 +563,7 @@ mod tests {
         // Validate system schema format
         let system_schema = Schema {
             id: SchemaId::SchemaDefinition(1),
-            description: "test".to_string(),
+            description,
             fields: schema_fields,
         };
         let system_schema_hash_id = system_schema.hash_id();

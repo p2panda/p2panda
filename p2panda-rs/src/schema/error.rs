@@ -71,6 +71,10 @@ pub enum SchemaError {
     /// Schemas must have valid schema names.
     #[error(transparent)]
     SchemaNameError(#[from] SchemaNameError),
+
+    /// Schemas must have valid schema descriptions.
+    #[error(transparent)]
+    SchemaDescriptionError(#[from] SchemaDescriptionError),
 }
 
 /// Custom error types for field types.
