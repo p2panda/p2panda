@@ -7,6 +7,7 @@ mod field_types;
 mod schema;
 mod schema_id;
 mod schema_name;
+mod schema_description;
 pub mod system;
 pub mod validate;
 
@@ -14,4 +15,5 @@ pub use field_types::FieldType;
 pub use schema::{FieldName, Schema};
 pub use schema_id::{SchemaId, SchemaVersion};
 pub use schema_name::SchemaName;
+pub use schema_description::SchemaDescription;
 pub use system::SYSTEM_SCHEMAS;

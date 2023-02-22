@@ -8,7 +8,7 @@ use crate::schema::SchemaName;
 ///
 /// 1. It consists of unicode characters
 /// 2. ... and must be at most 256 characters long
-fn validate_description(value: &str) -> bool {
+pub fn validate_description(value: &str) -> bool {
     value.chars().count() <= 256
 }
 

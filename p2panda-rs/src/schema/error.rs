@@ -8,12 +8,22 @@ use crate::schema::SchemaId;
 /// Custom errors related to `SchemaName`.
 #[derive(Clone, Error, Debug)]
 pub enum SchemaNameError {
-    /// Encountered a malformed schema id.
+    /// Encountered a malformed schema name.
     #[error("Schema name contains too many or invalid characters")]
     MalformedSchemaName,
 }
 
 impl Copy for SchemaNameError {}
+
+/// Custom errors related to `SchemaDescription`.
+#[derive(Clone, Error, Debug)]
+pub enum SchemaDescriptionError {
+    /// Encountered a too long schema description.
+    #[error("Schema description contains more than 256 characters")]
+    TooLongSchemaDescription,
+}
+
+impl Copy for SchemaDescriptionError {}
 
 /// Custom errors related to `SchemaId`.
 #[derive(Error, Debug)]
