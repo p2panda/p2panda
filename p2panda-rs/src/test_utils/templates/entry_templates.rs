@@ -50,6 +50,4 @@ use rstest_reuse::template;
         $crate::test_utils::constants::PRIVATE_KEY
     )
 ))]
-fn many_valid_entries(#[case] entry: Entry) {}
-
-pub use many_valid_entries;
+pub fn many_valid_entries(#[case] entry: Entry) {}

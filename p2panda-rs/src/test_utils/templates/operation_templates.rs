@@ -59,7 +59,7 @@ use rstest_reuse::template;
         ])
     ),
 ))]
-fn many_valid_operations(#[case] operation: Operation) {}
+pub fn many_valid_operations(#[case] operation: Operation) {}
 
 /// This template contains various types of valid verified operations with entries.
 #[template]
@@ -89,7 +89,7 @@ fn many_valid_operations(#[case] operation: Operation) {}
         $crate::test_utils::constants::PRIVATE_KEY
     )
 ))]
-fn many_published_operations(#[case] operation: PublishedOperation) {}
+pub fn many_published_operations(#[case] operation: PublishedOperation) {}
 
 /// This template contains examples of all structs which implement the `AsOperation` trait.
 #[template]
@@ -134,8 +134,4 @@ fn many_published_operations(#[case] operation: PublishedOperation) {}
         $crate::test_utils::constants::PRIVATE_KEY
     )
 ))]
-fn implements_as_operation(#[case] operation: impl AsOperation) {}
-
-pub use implements_as_operation;
-pub use many_published_operations;
-pub use many_valid_operations;
+pub fn implements_as_operation(#[case] operation: impl AsOperation) {}
