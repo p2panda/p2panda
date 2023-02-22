@@ -93,7 +93,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let schema = Schema::new(
         &schema_id,
         "Payload for measuring performance of encoding, decoding and validation",
-        vec![("payload", FieldType::String)],
+        &vec![("payload", FieldType::String)],
     )
     .unwrap();
 
