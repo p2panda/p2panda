@@ -29,19 +29,19 @@ impl Copy for SchemaDescriptionError {}
 #[derive(Clone, Error, Debug)]
 pub enum SchemaFieldError {
     /// Encountered an invalid name in a schema field key.
-    #[error("Schema field key has an invalid name")]
+    #[error("Schema field found with invalid name")]
     MalformedSchemaFieldName,
 
-    /// Maximum number of schema fields has been reached no more can be added.
-    #[error("Maximum number of schema fields (1024) reached")]
-    MaxSchemaFieldsReached,
+    /// Maximum number of schema fields (1024) has been exceeded.
+    #[error("Schema fields contains more than 1024 fields")]
+    TooManyFields,
 
     /// Schema fields length must be at least 1.
-    #[error("Schema fields length must be at least 1")]
+    #[error("Schema fields must contain at least one entry")]
     ZeroFields,
 
     /// Schema fields cannot contain duplicate fields.
-    #[error("Schema fields instantiated with duplicate fields")]
+    #[error("Schema fields cannot contain duplicate field names")]
     DuplicateFields,
 }
 

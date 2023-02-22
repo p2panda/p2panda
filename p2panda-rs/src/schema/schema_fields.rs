@@ -7,7 +7,7 @@ use super::error::SchemaFieldError;
 use super::validate::validate_field_name;
 use super::FieldType;
 
-/// The fields of a schema.
+/// The fields definitions of a [`Schema`].
 #[derive(Clone, Debug, PartialEq, Default, Eq)]
 pub struct SchemaFields(BTreeMap<String, FieldType>);
 
@@ -80,8 +80,8 @@ impl SchemaFields {
             }
         }
 
-        if !self.0.len() < 1024 {
-            return Err(SchemaFieldError::MaxSchemaFieldsReached);
+        if self.0.len() > 1024 {
+            return Err(SchemaFieldError::TooManyFields);
         }
 
         if self.is_empty() {
@@ -93,4 +93,46 @@ impl SchemaFields {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use rstest::rstest;
+
+    use crate::schema::FieldType;
+
+    use super::SchemaFields;
+
+    #[rstest]
+    #[case(vec![("message", FieldType::String)])]
+    #[should_panic(expected = "Schema fields cannot contain duplicate field names")]
+    #[case(vec![("message", FieldType::String), ("message", FieldType::String)])]
+    #[should_panic(expected = "Schema fields must contain at least one entry")]
+    #[case(vec![])]
+    #[should_panic(expected = "Schema field found with invalid name")]
+    #[case(vec![("123", FieldType::String)])]
+    #[should_panic(expected = "Schema field found with invalid name")]
+    #[case(vec![("$$$", FieldType::String)])]
+    #[should_panic(expected = "Schema field found with invalid name")]
+    #[case(vec![("why      spaces", FieldType::String)])]
+    #[should_panic(expected = "Schema field found with invalid name")]
+    #[case(vec![("a_really_really_really_really_really_really_really_really_really_really_really_really_really_really_really_long_name", FieldType::String)])]
+    fn validates_fields(#[case] fields: Vec<(&str, FieldType)>) {
+        SchemaFields::new(&fields)
+            .map_err(|err| err.to_string())
+            .unwrap();
+    }
+
+    #[test]
+    fn validates_when_too_many_fields() {
+        let keys: Vec<String> = (0..2000_u32).map(|key| format!("field_{key}")).collect();
+        let fields: Vec<(&str, FieldType)> = keys
+            .iter()
+            .map(|key| (key.as_str(), FieldType::String))
+            .collect();
+
+        let result = SchemaFields::new(&fields);
+
+        assert_eq!(
+            &result.unwrap_err().to_string(),
+            "Schema fields contains more than 1024 fields"
+        );
+    }
+}
