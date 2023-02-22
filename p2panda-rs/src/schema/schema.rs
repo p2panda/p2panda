@@ -36,10 +36,6 @@ pub type FieldName = String;
 /// [`Schema::new`] is only available for testing. This method of constructing a schema doesn't
 /// validate that the given schema id matches the provided schema's published description and field
 /// definitions.
-// @TODO: For all methods creating a `Schema` instance or related to that we need to check that the
-// names, field names and descriptions match the specification. Currently we only do this when
-// looking at operations (see `schema::validate` methods).
-// Related issue: https://github.com/p2panda/p2panda/issues/426
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Schema {
     /// The application schema id for this schema.
@@ -108,8 +104,6 @@ impl Schema {
         fields: Vec<SchemaFieldView>,
     ) -> Result<Schema, SchemaError> {
         // Validate that the passed `SchemaFields` are the correct ones for this `Schema`.
-        // TODO: This validation needs to be stricter so as to catch fields containing duplicate
-        // _correct_ entries passing.
         for schema_field in schema.fields().iter() {
             match fields
                 .iter()
