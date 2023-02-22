@@ -19,13 +19,13 @@ impl SchemaDescription {
         Ok(description)
     }
 
-/// Perform validation on the description string.
-///
-/// 1. It consists of unicode characters
-/// 2. ... and must be at most 256 characters long
-pub fn validate(&self) -> Result<(), SchemaDescriptionError> {
+    /// Perform validation on the description string.
+    ///
+    /// 1. It consists of unicode characters
+    /// 2. ... and must be at most 256 characters long
+    pub fn validate(&self) -> Result<(), SchemaDescriptionError> {
         if !validate_description(&self.0) {
-            return Err(SchemaDescriptionError::TooLongSchemaDescription)
+            return Err(SchemaDescriptionError::TooLongSchemaDescription);
         }
         Ok(())
     }

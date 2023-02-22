@@ -78,6 +78,9 @@ pub fn schema(
     #[default(schema_id(SCHEMA_ID))] schema_id: SchemaId,
     #[default("Test schema")] description: &str,
 ) -> Schema {
-    let fields: Vec<(&str, FieldType)> = fields.iter().map(|(name, field_type)| (name.as_str(), field_type.to_owned())).collect();
+    let fields: Vec<(&str, FieldType)> = fields
+        .iter()
+        .map(|(name, field_type)| (name.as_str(), field_type.to_owned()))
+        .collect();
     Schema::new(&schema_id, description, &fields).unwrap()
 }

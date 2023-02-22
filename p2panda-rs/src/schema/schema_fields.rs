@@ -18,7 +18,7 @@ impl SchemaFields {
         let mut keys: Vec<&str> = fields.iter().map(|(key, _)| *key).collect();
         keys.dedup();
 
-        if !(keys.len() == fields.len()) {
+        if keys.len() != fields.len() {
             return Err(SchemaFieldError::DuplicateFields);
         }
 
@@ -84,7 +84,7 @@ impl SchemaFields {
             return Err(SchemaFieldError::MaxSchemaFieldsReached);
         }
 
-        if self.0.len() == 0 {
+        if self.is_empty() {
             return Err(SchemaFieldError::ZeroFields);
         }
 
