@@ -1,8 +1,25 @@
 // SPDX-License-Identifier: AGPL-&3.0-or-later
 
+use once_cell::sync::Lazy;
+use regex::Regex;
+
 use crate::operation::plain::{PlainFields, PlainValue};
 use crate::schema::validate::error::SchemaDefinitionError;
-use crate::schema::SchemaName;
+
+/// Checks "name" field of operations with "schema_definition_v1" schema id.
+///
+/// 1. It must be at most 64 characters long
+/// 2. It begins with a letter
+/// 3. It uses only alphanumeric characters, digits and the underscore character
+/// 4. It doesn't end with an underscore
+pub fn validate_name(value: &str) -> bool {
+    static NAME_REGEX: Lazy<Regex> = Lazy::new(|| {
+        // Unwrap as we checked the regular expression for correctness
+        Regex::new("^[A-Za-z]{1}[A-Za-z0-9_]{0,62}[A-Za-z0-9]{1}$").unwrap()
+    });
+
+    NAME_REGEX.is_match(value)
+}
 
 /// Checks "description" field of operations with "schema_definition_v1" schema id.
 ///
@@ -34,10 +51,13 @@ pub fn validate_schema_definition_v1_fields(
     let schema_name = fields.get("name");
 
     match schema_name {
-        Some(PlainValue::StringOrRelation(value)) => match SchemaName::new(value) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(SchemaDefinitionError::NameInvalid),
-        },
+        Some(PlainValue::StringOrRelation(value)) => {
+            if validate_name(value) {
+                Ok(())
+            } else {
+                Err(SchemaDefinitionError::NameInvalid)
+            }
+        }
         _ => Ok(()),
     }?;
 
@@ -80,7 +100,9 @@ mod test {
     use crate::test_utils::constants::HASH;
     use crate::test_utils::fixtures::random_document_view_id;
 
-    use super::{validate_description, validate_fields, validate_schema_definition_v1_fields};
+    use super::{
+        validate_description, validate_fields, validate_name, validate_schema_definition_v1_fields,
+    };
 
     #[rstest]
     #[case(vec![
@@ -134,5 +156,37 @@ mod test {
     )]
     fn check_description(#[case] description_str: &str) {
         assert!(validate_description(description_str));
+    }
+
+    #[rstest]
+    #[case("venues_with_garden")]
+    #[case("animals_in_zoo_with_many_friends")]
+    #[case("robot_3000_building_specification")]
+    #[case("mushrooms_in_2054")]
+    #[case("ILikeCamels")]
+    #[case("AndDromedars")]
+    #[case("And_Their_Special_Variants")]
+    #[should_panic]
+    #[case("where_did_we_end_up_again_")]
+    #[should_panic]
+    #[case("c0_1_2_1_a_b_4_____")]
+    #[should_panic]
+    #[case("")]
+    #[should_panic]
+    #[case("icecrüëmm")]
+    #[should_panic]
+    #[case("サービス！サービス！")]
+    #[should_panic]
+    #[case("schema_names_for_people_who_cant_decide_which_schema_name_to_pick")]
+    #[should_panic]
+    #[case("25_kangaroos")]
+    #[should_panic]
+    #[case("_and_how_did_it_all_began")]
+    #[should_panic]
+    #[case("???????")]
+    #[should_panic]
+    #[case("specification-says-no")]
+    fn check_name_field(#[case] name_str: &str) {
+        assert!(validate_name(name_str));
     }
 }

@@ -4,10 +4,8 @@ use std::fmt;
 use std::fmt::Display;
 use std::str::FromStr;
 
-use once_cell::sync::Lazy;
-use regex::Regex;
-
 use crate::schema::error::SchemaNameError;
+use crate::schema::validate::validate_name;
 
 /// A human readable schema name, used in the construction of `SchemaId`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -28,12 +26,7 @@ impl SchemaName {
     /// 3. It uses only alphanumeric characters, digits and the underscore character
     /// 4. It doesn't end with an underscore
     pub fn validate(&self) -> Result<(), SchemaNameError> {
-        static NAME_REGEX: Lazy<Regex> = Lazy::new(|| {
-            // Unwrap as we checked the regular expression for correctness
-            Regex::new("^[A-Za-z]{1}[A-Za-z0-9_]{0,62}[A-Za-z0-9]{1}$").unwrap()
-        });
-
-        if !NAME_REGEX.is_match(&self.0) {
+        if !validate_name(&self.0) {
             return Err(SchemaNameError::MalformedSchemaName);
         }
         Ok(())
