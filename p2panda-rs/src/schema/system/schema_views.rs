@@ -52,6 +52,10 @@ impl TryFrom<DocumentView> for SchemaView {
     type Error = SystemSchemaError;
 
     fn try_from(document_view: DocumentView) -> Result<Self, Self::Error> {
+        if document_view.len() != 3 {
+            return Err(SystemSchemaError::AdditionalFields);
+        };
+
         let name = match document_view.get("name") {
             Some(document_view_value) => {
                 if let OperationValue::String(value) = document_view_value.value() {
@@ -140,6 +144,10 @@ impl TryFrom<DocumentView> for SchemaFieldView {
     type Error = SystemSchemaError;
 
     fn try_from(document_view: DocumentView) -> Result<Self, Self::Error> {
+        if document_view.len() != 2 {
+            return Err(SystemSchemaError::AdditionalFields);
+        };
+
         let name = match document_view.get("name") {
             Some(document_view_value) => {
                 if let OperationValue::String(value) = document_view_value.value() {
@@ -369,6 +377,41 @@ mod tests {
 
         let document_view = DocumentView::new(&document_view_id, &invalid_field);
         let field_view = SchemaFieldView::try_from(document_view);
+        assert!(field_view.is_err());
+    }
+
+    #[rstest]
+    fn too_many_fields(
+        #[from(random_operation_id)] operation_id: OperationId,
+        document_view_id: DocumentViewId,
+    ) {
+        let mut invalid_field = DocumentViewFields::new();
+        invalid_field.insert(
+            "name",
+            DocumentViewValue::new(
+                &operation_id,
+                &OperationValue::String("address".to_string()),
+            ),
+        );
+        invalid_field.insert(
+            "type",
+            DocumentViewValue::new(&operation_id, &OperationValue::String("hash".to_string())),
+        );
+        invalid_field.insert(
+            "monkey",
+            DocumentViewValue::new(&operation_id, &OperationValue::String("monkey".to_string())),
+        );
+        invalid_field.insert(
+            "penguin",
+            DocumentViewValue::new(&operation_id, &OperationValue::String("penguin".to_string())),
+        );
+
+        let document_view = DocumentView::new(&document_view_id, &invalid_field);
+        let field_view = SchemaFieldView::try_from(document_view);
+        assert!(field_view.is_err());
+
+        let document_view = DocumentView::new(&document_view_id, &invalid_field);
+        let field_view = SchemaView::try_from(document_view);
         assert!(field_view.is_err());
     }
 }
