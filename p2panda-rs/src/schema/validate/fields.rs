@@ -40,7 +40,7 @@ pub fn validate_all_fields(
     // Iterate through both field lists at the same time. Both `Schema` and `PlainFields` uses a
     // `BTreeMap` internally which gives us the guarantee that all fields are sorted. Through this
     // ordering we can compare them easily.
-    for schema_field in schema.fields() {
+    for schema_field in schema.fields().iter() {
         match plain_fields.next() {
             Some((plain_name, plain_value)) => {
                 let (validated_name, validated_value) =
@@ -476,7 +476,7 @@ mod tests {
         let schema = Schema::new(
             &SchemaId::Application(schema_name, schema_view_id),
             "Some schema description",
-            schema_fields,
+            &schema_fields,
         )
         .unwrap();
 
@@ -550,7 +550,7 @@ mod tests {
         let schema = Schema::new(
             &SchemaId::Application(schema_name.to_owned(), schema_view_id),
             "Some schema description",
-            schema_fields,
+            &schema_fields,
         )
         .unwrap();
 
@@ -603,7 +603,7 @@ mod tests {
         let schema = Schema::new(
             &SchemaId::Application(schema_name, schema_view_id),
             "Some schema description",
-            schema_fields,
+            &schema_fields,
         )
         .unwrap();
 
@@ -678,7 +678,7 @@ mod tests {
         let schema = Schema::new(
             &SchemaId::Application(schema_name, schema_view_id),
             "Some schema description",
-            schema_fields,
+            &schema_fields,
         )
         .unwrap();
 
@@ -706,7 +706,7 @@ mod tests {
         let schema = Schema::new(
             &SchemaId::Application(schema_name, schema_view_id),
             "Some schema description",
-            vec![
+            &[
                 ("icecream", FieldType::String),
                 ("degree", FieldType::Float),
             ],

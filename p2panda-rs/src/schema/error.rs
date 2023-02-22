@@ -25,6 +25,28 @@ pub enum SchemaDescriptionError {
 
 impl Copy for SchemaDescriptionError {}
 
+/// Custom errors related to `SchemaFields`.
+#[derive(Clone, Error, Debug)]
+pub enum SchemaFieldError {
+    /// Encountered an invalid name in a schema field key.
+    #[error("Schema field key has an invalid name")]
+    MalformedSchemaFieldName,
+
+    /// Maximum number of schema fields has been reached no more can be added.
+    #[error("Maximum number of schema fields (1024) reached")]
+    MaxSchemaFieldsReached,
+
+    /// Schema fields length must be at least 1.
+    #[error("Schema fields length must be at least 1")]
+    ZeroFields,
+
+    /// Schema fields cannot contain duplicate fields.
+    #[error("Schema fields instantiated with duplicate fields")]
+    DuplicateFields,
+}
+
+impl Copy for SchemaFieldError {}
+
 /// Custom errors related to `SchemaId`.
 #[derive(Error, Debug)]
 pub enum SchemaIdError {
@@ -75,6 +97,10 @@ pub enum SchemaError {
     /// Schemas must have valid schema descriptions.
     #[error(transparent)]
     SchemaDescriptionError(#[from] SchemaDescriptionError),
+
+    /// Schemas must have valid schema fields.
+    #[error(transparent)]
+    SchemaFieldsError(#[from] SchemaFieldError),
 }
 
 /// Custom error types for field types.
