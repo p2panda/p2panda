@@ -113,14 +113,17 @@ async fn calculate_next_args_existing_log<S: EntryStore + OperationStore + LogSt
     // Determine the next sequence number by incrementing one from the latest entry seq
     // num.
     //
-    // If the latest entry is None, then we must be at seq num 1.
+    // If the latest entry is None then we error here as this method only expects to handle
+    // existing logs.
     let seq_num = match latest_entry {
         Some(ref latest_entry) => {
             let mut latest_seq_num = latest_entry.seq_num().to_owned();
             increment_seq_num(&mut latest_seq_num)
                 .map_err(|_| DomainError::MaxSeqNumReached(public_key.to_string(), log_id.as_u64()))
         }
-        None => Ok(SeqNum::default()),
+        None => Err(DomainError::ExpectedLogIdNotFound(
+            log_id.as_u64().to_owned(),
+        )),
     }?;
 
     // Check if skiplink is required and if it is get the entry and return its hash.
@@ -143,6 +146,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::api::next_args;
+    use crate::api::next_args::{calculate_next_args_existing_log, calculate_next_args_new_log};
     use crate::document::DocumentViewId;
     use crate::entry::encode::sign_and_encode_entry;
     use crate::entry::traits::{AsEncodedEntry, AsEntry};
@@ -151,14 +155,61 @@ mod tests {
     use crate::operation::OperationId;
     use crate::storage_provider::traits::EntryStore;
     use crate::test_utils::constants::PRIVATE_KEY;
-    use crate::test_utils::fixtures::populate_store_config;
-    use crate::test_utils::fixtures::{key_pair, random_document_view_id, random_hash};
+    use crate::test_utils::fixtures::{
+        key_pair, populate_store_config, random_document_view_id, random_hash,
+    };
     use crate::test_utils::memory_store::helpers::{
         populate_store, remove_entries, remove_operations, PopulateStoreConfig,
     };
     use crate::test_utils::memory_store::{MemoryStore, StorageEntry};
 
     type LogIdAndSeqNum = (u64, u64);
+
+    #[rstest]
+    #[tokio::test]
+    async fn calculates_next_args(
+        #[from(populate_store_config)]
+        #[with(8, 1, 1)]
+        config: PopulateStoreConfig,
+    ) {
+        let store = MemoryStore::default();
+        let (key_pairs, _) = populate_store(&store, &config).await;
+
+        let public_key = key_pairs[0].public_key();
+
+        // Calculate next args for a new log of the existing public key.
+        let (backlink, skiplink, seq_num, log_id) =
+            calculate_next_args_new_log(&store, &public_key)
+                .await
+                .unwrap();
+
+        assert_eq!(backlink, None);
+        assert_eq!(skiplink, None);
+        assert_eq!(seq_num, SeqNum::default());
+        assert_eq!(log_id, LogId::new(1));
+
+        // Calculate next args for an existing log and public key.
+        let (backlink, skiplink, seq_num, log_id) =
+            calculate_next_args_existing_log(&store, &LogId::new(0), &public_key)
+                .await
+                .unwrap();
+
+        // Get expected backlink from the store.
+        let entries = store.entries.lock().unwrap();
+        let (expected_backlink_hash, _) = entries
+            .iter()
+            .find(|(_, entry)| entry.seq_num() == &SeqNum::new(8).unwrap())
+            .unwrap();
+
+        assert_eq!(backlink, Some(expected_backlink_hash.to_owned()));
+        assert_eq!(skiplink, None);
+        assert_eq!(seq_num, SeqNum::new(9).unwrap());
+        assert_eq!(log_id, LogId::new(0));
+
+        // Should error because this method doesn't handle next args for a new log.
+        let result = calculate_next_args_existing_log(&store, &LogId::new(0), &public_key).await;
+        assert!(result.is_err())
+    }
 
     #[rstest]
     #[case::ok_single_writer(
