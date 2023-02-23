@@ -12,22 +12,23 @@ use super::FieldType;
 pub struct SchemaFields(BTreeMap<String, FieldType>);
 
 impl SchemaFields {
-    /// Creates a new schema fields instance to add data to.
+    /// Creates a new schema fields instance from a vector of key values.
     pub fn new(fields: &[(&str, FieldType)]) -> Result<Self, SchemaFieldError> {
         // Check for duplicate field keys in the passed array.
         let mut keys: Vec<&str> = fields.iter().map(|(key, _)| *key).collect();
         keys.dedup();
-
         if keys.len() != fields.len() {
             return Err(SchemaFieldError::DuplicateFields);
         }
 
+        // Construct schema fields map.
         let mut schema_fields = BTreeMap::new();
         for (key, value) in fields {
             schema_fields.insert(key.to_string(), value.to_owned());
         }
-
         let schema_fields = Self(schema_fields);
+
+        // Validate the schema fields.
         schema_fields.validate()?;
         Ok(schema_fields)
     }
@@ -74,16 +75,19 @@ impl SchemaFields {
     /// Note: The underlying datatype BTreeMap cannot contain duplicate fields and orders fields
     /// by their key. This already fulfils two requirements for SchemaFields.
     pub fn validate(&self) -> Result<(), SchemaFieldError> {
+        // Validate schema field names.
         for name in self.keys() {
             if !validate_field_name(&name) {
                 return Err(SchemaFieldError::MalformedSchemaFieldName);
             }
         }
 
+        // Check there are no more than 1024 fields.
         if self.0.len() > 1024 {
             return Err(SchemaFieldError::TooManyFields);
         }
 
+        // Verify there is at least one field.
         if self.is_empty() {
             return Err(SchemaFieldError::ZeroFields);
         }
