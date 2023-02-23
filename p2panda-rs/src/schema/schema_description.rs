@@ -7,12 +7,13 @@ use std::str::FromStr;
 use crate::schema::error::SchemaDescriptionError;
 use crate::schema::validate::validate_description;
 
-/// A human readable schema name, used in the construction of `SchemaId`.
+/// The description of a schema which adheres to specification requirements. Used in the
+/// construction of `Schema`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SchemaDescription(String);
 
 impl SchemaDescription {
-    /// Construct and validate new schema name from a string.
+    /// Construct and validate new schema description from a string.
     pub fn new(description: &str) -> Result<Self, SchemaDescriptionError> {
         let description = Self(description.to_owned());
         description.validate()?;
@@ -66,7 +67,7 @@ mod test {
            head. Like most marsupials, female kangaroos have a pouch called a marsupium
            in which joeys complete postnatal development."
     )]
-    fn check_name_field(#[case] description_str: &str) {
+    fn validates_descriptions(#[case] description_str: &str) {
         assert!(SchemaDescription::new(description_str).is_ok());
     }
 }
