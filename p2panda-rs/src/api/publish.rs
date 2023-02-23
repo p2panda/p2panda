@@ -35,7 +35,7 @@ type Skiplink = Hash;
 /// This method is intended to be used behind a public API and so we assume all passed values are
 /// in themselves valid.
 ///
-/// # Steps and Validation Performed
+/// # Validation Steps Performed
 ///
 /// Following is a list of the steps and validation checks that this method performs.
 ///
@@ -150,6 +150,10 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
     ))
 }
 
+/// Wrapper for `operation::validate::validate_operation_with_entry` which makes use of methods
+/// provided by `storage_traits` in order to fetch values from the store which are required for
+/// performing the following validation steps. See
+/// `operation::validate::validate_operation_with_entry` for detailed explanation of the steps taken.
 async fn validate_entry_and_operation<S: EntryStore + OperationStore + LogStore>(
     store: &S,
     schema: &Schema,
@@ -200,6 +204,9 @@ async fn validate_entry_and_operation<S: EntryStore + OperationStore + LogStore>
     Ok((operation, operation_id))
 }
 
+/// Determine the document id for the passed operation. If this is a create operation then we use
+/// the provided operation id to derive a new document id. In all other cases we retrieve and
+/// validate the document id by look at the operations contained in the `previous` field.  
 async fn determine_document_id<S: EntryStore + OperationStore + LogStore>(
     store: &S,
     operation: &Operation,
@@ -228,6 +235,7 @@ async fn determine_document_id<S: EntryStore + OperationStore + LogStore>(
     }
 }
 
+/// Retrieve the expected skiplink for the entry identified by public key, log id and sequence number.
 async fn get_skiplink_for_entry<S: EntryStore + OperationStore + LogStore>(
     store: &S,
     seq_num: &SeqNum,

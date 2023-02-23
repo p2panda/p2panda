@@ -30,21 +30,21 @@ type Skiplink = Hash;
 /// This method is intended to be used behind a public API and so we assume all passed values are
 /// in themselves valid.
 ///
-/// The steps and validation checks this method performs are:
+/// # Validation Steps Performed
 ///
-/// Check if a document view id was passed
+/// ## Check if a document view id was passed
 ///
 /// - if it wasn't, we are creating a new document, safely increment the latest log id for the
 /// passed public key and return args immediately
 /// - if it was, continue knowing we are updating an existing document
 ///
-/// Determine the document id we are concerned with
+/// ## Determine the document id we are concerned with
 ///
 /// - verify that all operations in the passed document view id exist in the database
 /// - verify that all operations in the passed document view id are from the same document
 /// - ensure the document is not deleted
 ///
-/// Determine next arguments
+/// ## Determine next arguments
 ///
 /// - get the log id for this public key and document id, or if none is found safely increment this
 /// public keys latest log id
@@ -70,6 +70,10 @@ pub async fn next_args<S: EntryStore + OperationStore + LogStore>(
     let document_id = get_checked_document_id_for_view_id(store, document_view_id).await?;
 
     // Check the document is not deleted.
+    //
+    // NOTE: We perform this extra "not deleted" check as we are interfacing directly with the
+    // 'OperationStore' in these validation methods, which is a lower level api than the
+    // `DocumentStore`, where delete documents are not exposed.
     ensure_document_not_deleted(store, &document_id).await?;
 
     // Retrieve the log_id for the found document_id and public_key.
