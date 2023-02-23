@@ -273,19 +273,179 @@ mod tests {
         Operation, OperationAction, OperationBuilder, OperationId, OperationValue,
     };
     use crate::schema::{FieldType, Schema};
-    use crate::storage_provider::traits::{EntryStore, LogStore};
+    use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
     use crate::test_utils::constants::{test_fields, PRIVATE_KEY};
-    use crate::test_utils::fixtures::populate_store_config;
     use crate::test_utils::fixtures::{
-        create_operation, delete_operation, key_pair, operation, random_hash, schema,
-        update_operation,
+        create_operation, delete_operation, key_pair, operation, populate_store_config,
+        random_document_view_id, random_hash, random_operation_id, schema, update_operation,
     };
     use crate::test_utils::memory_store::helpers::{
         populate_store, remove_entries, remove_operations, PopulateStoreConfig,
     };
     use crate::test_utils::memory_store::{MemoryStore, StorageEntry};
+    use crate::WithId;
+
+    use super::{determine_document_id, get_skiplink_for_entry, validate_entry_and_operation};
 
     type LogIdAndSeqNum = (u64, u64);
+
+    #[rstest]
+    #[tokio::test]
+    async fn determines_document_id(
+        random_operation_id: OperationId,
+        #[with(test_fields(), random_document_view_id())] update_operation: Operation,
+        #[from(populate_store_config)]
+        #[with(4, 1, 1)]
+        config: PopulateStoreConfig,
+    ) {
+        let store = MemoryStore::default();
+        let (key_pairs, document_ids) = populate_store(&store, &config).await;
+        let document_id = document_ids.get(0).unwrap();
+        let public_key = key_pairs[0].public_key();
+
+        // Get first entry and operation.
+        let entry_one = store
+            .get_entry_at_seq_num(&public_key, &LogId::new(0), &SeqNum::new(1).unwrap())
+            .await
+            .unwrap()
+            .unwrap();
+
+        let operation_one = store
+            .get_operation(&entry_one.hash().into())
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Get forth entry and operation.
+        let entry_four = store
+            .get_entry_at_seq_num(&public_key, &LogId::new(0), &SeqNum::new(4).unwrap())
+            .await
+            .unwrap()
+            .unwrap();
+
+        let operation_four = store
+            .get_operation(&entry_four.hash().into())
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Use the first operation to determine document id.
+        let id = determine_document_id(&store, &operation_one, operation_one.id())
+            .await
+            .unwrap();
+        assert_eq!(document_id, &id);
+
+        // Use the forth operation to determine document id.
+        let id = determine_document_id(&store, &operation_four, operation_four.id())
+            .await
+            .unwrap();
+        assert_eq!(document_id, &id);
+
+        // Use a random operation to determine document id (should error).
+        let result = determine_document_id(&store, &update_operation, &random_operation_id).await;
+        assert!(result.is_err())
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn determines_document_id_deleted_document(
+        #[from(populate_store_config)]
+        #[with(4, 1, 1, true)]
+        config: PopulateStoreConfig,
+    ) {
+        let store = MemoryStore::default();
+        let (key_pairs, _) = populate_store(&store, &config).await;
+        let public_key = key_pairs[0].public_key();
+
+        // Get first entry and operation.
+        let entry_one = store
+            .get_entry_at_seq_num(&public_key, &LogId::new(0), &SeqNum::new(1).unwrap())
+            .await
+            .unwrap()
+            .unwrap();
+
+        let operation_one = store
+            .get_operation(&entry_one.hash().into())
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Get forth entry and operation.
+        let entry_four = store
+            .get_entry_at_seq_num(&public_key, &LogId::new(0), &SeqNum::new(4).unwrap())
+            .await
+            .unwrap()
+            .unwrap();
+
+        let operation_four = store
+            .get_operation(&entry_four.hash().into())
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Use the first operation to determine document id, should error as this document is deleted.
+        let result = determine_document_id(&store, &operation_one, operation_one.id()).await;
+        assert!(result.is_err());
+
+        // Use the forth operation to determine document id, should error as this document is deleted.
+        let result = determine_document_id(&store, &operation_four, operation_four.id()).await;
+        assert!(result.is_err());
+    }
+    #[rstest]
+    #[tokio::test]
+    async fn gets_skiplink_for_entry(
+        #[from(populate_store_config)]
+        #[with(4, 1, 1)]
+        config: PopulateStoreConfig,
+    ) {
+        let store = MemoryStore::default();
+        let (key_pairs, _) = populate_store(&store, &config).await;
+
+        let public_key = key_pairs[0].public_key();
+
+        // Request skiplink hash for entry at seq num 1 which should be None
+        let skiplink = get_skiplink_for_entry(
+            &store,
+            &SeqNum::new(1).unwrap(),
+            &LogId::new(0),
+            &public_key,
+        )
+        .await
+        .unwrap();
+        assert!(skiplink.is_none());
+
+        // Request skiplink hash for entry at seq num 4 which should be Some(<hash_of_entry_seq_num_1>)
+        let skiplink = get_skiplink_for_entry(
+            &store,
+            &SeqNum::new(4).unwrap(),
+            &LogId::new(0),
+            &public_key,
+        )
+        .await
+        .unwrap();
+
+        // Get the entry at seq number 1 (which is the expected skiplink)
+        let entry_one_hash = store
+            .get_entry_at_seq_num(&public_key, &LogId::new(0), &SeqNum::new(1).unwrap())
+            .await
+            .unwrap()
+            .map(|entry| entry.hash());
+
+        assert!(skiplink.is_some());
+        assert_eq!(skiplink, entry_one_hash);
+
+        // Request skiplink hash for entry at seq num 40 which should error (as this sequence
+        // number requires a skiplink but it doesn't exist in the store)
+        let skiplink = get_skiplink_for_entry(
+            &store,
+            &SeqNum::new(40).unwrap(),
+            &LogId::new(0),
+            &public_key,
+        )
+        .await;
+
+        assert!(skiplink.is_err());
+    }
 
     #[rstest]
     #[case::ok(&[(0, 8)], (0, 8))]
@@ -310,15 +470,11 @@ mod tests {
     )]
     #[case::seq_num_occupied_(&[], (0, 7))]
     #[should_panic(
-        expected = "Expected skiplink entry not found in store: public key 2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96, log id 0, seq num 4"
-    )]
-    #[case::next_args_skiplink_missing(&[(0, 4), (0, 7), (0, 8)], (0, 7))]
-    #[should_panic(
         expected = "Entry's claimed seq num of 8 does not match expected seq num of 1 for given public key and log"
     )]
     #[case::no_entries_yet(&[(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 8)], (0, 8))]
     #[tokio::test]
-    async fn publish_with_missing_entries(
+    async fn validate_against_entries_in_store(
         schema: Schema,
         #[case] entries_to_remove: &[LogIdAndSeqNum],
         #[case] entry_to_publish: LogIdAndSeqNum,
@@ -333,7 +489,7 @@ mod tests {
         let public_key = key_pairs[0].public_key();
 
         // Get the latest entry from the db.
-        let next_entry = store
+        let entry = store
             .get_entry_at_seq_num(
                 &public_key,
                 &LogId::new(entry_to_publish.0),
@@ -343,23 +499,67 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        // Remove some entries and operations from the database.
+        // Remove some entries and their operations from the database.
         remove_operations(&store, &public_key, entries_to_remove);
         remove_entries(&store, &public_key, entries_to_remove);
 
-        // Publish the latest entry again and see what happens.
-        let operation = next_entry.payload.unwrap();
-        let result = publish(
+        // Validate the entry and operation.
+        let operation = entry.payload().unwrap();
+        let plain_operation = decode_operation(&operation).unwrap();
+        validate_entry_and_operation(&store, &schema, &entry, &entry, &plain_operation, operation)
+            // Unwrap here causing a panic, we check the errors match what we expect.
+            .await
+            .map_err(|err| err.to_string())
+            .unwrap();
+    }
+
+    #[rstest]
+    #[should_panic(
+        expected = "Expected skiplink entry not found in store: public key 2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96, log id 0, seq num 4"
+    )]
+    #[case::next_args_skiplink_missing(&[(0, 4), (0, 7), (0, 8)], (0, 7))]
+    #[tokio::test]
+    async fn next_args_skiplink_missing(
+        schema: Schema,
+        #[case] entries_to_remove: &[LogIdAndSeqNum],
+        #[case] entry_to_publish: LogIdAndSeqNum,
+        #[from(populate_store_config)]
+        #[with(8, 1, 1)]
+        config: PopulateStoreConfig,
+    ) {
+        let store = MemoryStore::default();
+        let (key_pairs, _) = populate_store(&store, &config).await;
+
+        // The public key who has published to the db.
+        let public_key = key_pairs[0].public_key();
+
+        // Get the latest entry from the db.
+        let entry = store
+            .get_entry_at_seq_num(
+                &public_key,
+                &LogId::new(entry_to_publish.0),
+                &SeqNum::new(entry_to_publish.1).unwrap(),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Remove some entries and their operations from the database.
+        remove_operations(&store, &public_key, entries_to_remove);
+        remove_entries(&store, &public_key, entries_to_remove);
+
+        // Publish the entry and see what happens.
+        let operation = entry.payload.unwrap();
+        publish(
             &store,
             &schema,
-            &next_entry.encoded_entry,
+            &entry.encoded_entry,
             &decode_operation(&operation).unwrap(),
             &operation,
         )
-        .await;
-
-        // Unwrap here causing a panic, we check the errors match what we expect.
-        result.map_err(|err| err.to_string()).unwrap();
+        .await
+        .map_err(|err| err.to_string())
+        .unwrap();
     }
 
     #[rstest]
@@ -420,7 +620,7 @@ mod tests {
         KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
     )]
     #[tokio::test]
-    async fn publish_with_missing_operations(
+    async fn validates_against_operations_in_store(
         schema: Schema,
         // The operations to be removed from the db
         #[case] operations_to_remove: &[LogIdAndSeqNum],
@@ -461,7 +661,7 @@ mod tests {
         let document_view_id = DocumentViewId::new(&previous);
 
         // Compose the next operation.
-        let next_operation = OperationBuilder::new(schema.id())
+        let operation = OperationBuilder::new(schema.id())
             .action(OperationAction::Update)
             .previous(&document_view_id)
             .fields(&test_fields())
@@ -475,7 +675,7 @@ mod tests {
                 .await
                 .unwrap();
 
-        let encoded_operation = encode_operation(&next_operation).unwrap();
+        let encoded_operation = encode_operation(&operation).unwrap();
         let encoded_entry = sign_and_encode_entry(
             &log_id,
             &seq_num,
@@ -486,7 +686,7 @@ mod tests {
         )
         .unwrap();
 
-        // Remove some entries from the db.
+        // Remove some operations from the db.
         remove_operations(&store, &existing_author, operations_to_remove);
 
         // Publish the entry and operation.
@@ -522,7 +722,7 @@ mod tests {
     )]
     #[case::new_author_updates_to_wrong_new_log(LogId::new(1), KeyPair::new())]
     #[tokio::test]
-    async fn publish_update_log_tests(
+    async fn new_author_updates_existing_document(
         schema: Schema,
         #[case] log_id: LogId,
         #[case] key_pair: KeyPair,
@@ -610,7 +810,7 @@ mod tests {
     )]
     #[case::new_author_publishes_to_wrong_new_log(LogId::new(1), KeyPair::new())]
     #[tokio::test]
-    async fn publish_create_log_tests(
+    async fn creating_new_document_inserts_log_correctly(
         schema: Schema,
         #[case] log_id: LogId,
         #[case] key_pair: KeyPair,
@@ -623,6 +823,7 @@ mod tests {
         let _ = populate_store(&store, &config).await;
 
         // Construct and publish a new entry with the passed log id.
+        // The contained operation is a CREATE.
         let encoded_operation = encode_operation(&operation).unwrap();
         let encoded_entry = sign_and_encode_entry(
             &log_id,
@@ -669,7 +870,7 @@ mod tests {
     )]
     #[case(KeyPair::new())]
     #[tokio::test]
-    async fn publish_to_deleted_documents(
+    async fn validates_that_document_is_deleted(
         schema: Schema,
         #[case] key_pair: KeyPair,
         #[from(populate_store_config)]
@@ -796,7 +997,7 @@ mod tests {
         expected = "Max sequence number reached for public key 2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96 log 0"
     )]
     #[tokio::test]
-    async fn publish_max_seq_num_reached(
+    async fn validates_max_seq_num_reached(
         schema: Schema,
         key_pair: KeyPair,
         #[from(populate_store_config)]

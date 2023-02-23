@@ -195,19 +195,19 @@ mod tests {
                 .unwrap();
 
         // Get expected backlink from the store.
-        let entries = store.entries.lock().unwrap();
-        let (expected_backlink_hash, _) = entries
-            .iter()
-            .find(|(_, entry)| entry.seq_num() == &SeqNum::new(8).unwrap())
+        let expected_backlink = store
+            .get_entry_at_seq_num(&public_key, &LogId::new(0), &SeqNum::new(8).unwrap())
+            .await
+            .unwrap()
             .unwrap();
 
-        assert_eq!(backlink, Some(expected_backlink_hash.to_owned()));
+        assert_eq!(backlink, Some(expected_backlink.hash()));
         assert_eq!(skiplink, None);
         assert_eq!(seq_num, SeqNum::new(9).unwrap());
         assert_eq!(log_id, LogId::new(0));
 
         // Should error because this method doesn't handle next args for a new log.
-        let result = calculate_next_args_existing_log(&store, &LogId::new(0), &public_key).await;
+        let result = calculate_next_args_existing_log(&store, &LogId::new(1), &public_key).await;
         assert!(result.is_err())
     }
 
