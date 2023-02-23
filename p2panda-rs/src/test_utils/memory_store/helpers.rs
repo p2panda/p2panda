@@ -189,7 +189,6 @@ pub async fn send_to_store<S: EntryStore + LogStore + OperationStore>(
     Ok((encoded_entry, (backlink, skiplink, seq_num, log_id)))
 }
 
-
 type LogIdAndSeqNum = (u64, u64);
 
 /// Helper method for removing entries from a MemoryStore by PublicKey & LogIdAndSeqNum.

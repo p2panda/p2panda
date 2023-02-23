@@ -3,12 +3,12 @@
 //! Methods for validating entries and operations against expected and stored values.
 use std::collections::HashSet;
 
+use crate::api::ValidationError;
 use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::{LogId, SeqNum};
 use crate::identity::PublicKey;
 use crate::operation::traits::AsOperation;
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
-use crate::api::ValidationError;
 
 /// Verify that a claimed seq num is the next sequence number following the latest.
 ///
@@ -210,19 +210,24 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::{DocumentId, DocumentViewId};
-    use crate::entry::traits::{AsEntry, AsEncodedEntry};
+    use crate::entry::traits::{AsEncodedEntry, AsEntry};
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::operation::{Operation, OperationAction, OperationBuilder, OperationId};
     use crate::schema::Schema;
-    use crate::test_utils::constants::{PRIVATE_KEY, test_fields};
-    use crate::test_utils::fixtures::{populate_store_config, random_document_view_id, key_pair, random_document_id, schema, operation};
-    use crate::test_utils::memory_store::helpers::{populate_store, PopulateStoreConfig, send_to_store};
+    use crate::test_utils::constants::{test_fields, PRIVATE_KEY};
+    use crate::test_utils::fixtures::{
+        key_pair, operation, populate_store_config, random_document_id, random_document_view_id,
+        schema,
+    };
+    use crate::test_utils::memory_store::helpers::{
+        populate_store, send_to_store, PopulateStoreConfig,
+    };
     use crate::test_utils::memory_store::MemoryStore;
 
     use super::{
-        ensure_document_not_deleted, get_expected_skiplink, increment_log_id, increment_seq_num,
-        is_next_seq_num, verify_log_id, get_checked_document_id_for_view_id
+        ensure_document_not_deleted, get_checked_document_id_for_view_id, get_expected_skiplink,
+        increment_log_id, increment_seq_num, is_next_seq_num, verify_log_id,
     };
 
     #[rstest]

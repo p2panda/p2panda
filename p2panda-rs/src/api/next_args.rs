@@ -85,7 +85,7 @@ pub async fn next_args<S: EntryStore + OperationStore + LogStore>(
         None => calculate_next_args_new_log(store, public_key).await,
         // If one was found, we need to get the backlink and skiplink, and safely increment the seq
         // num.
-        Some(log_id) => calculate_next_args_existing_log(store, &log_id, public_key).await
+        Some(log_id) => calculate_next_args_existing_log(store, &log_id, public_key).await,
     }
 }
 
