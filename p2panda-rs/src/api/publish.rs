@@ -206,16 +206,17 @@ async fn validate_entry_and_operation<S: EntryStore + OperationStore + LogStore>
 
 /// Determine the document id for the passed operation. If this is a create operation then we use
 /// the provided operation id to derive a new document id. In all other cases we retrieve and
-/// validate the document id by look at the operations contained in the `previous` field.  
+/// validate the document id by look at the operations contained in the `previous` field. Returns
+/// an error if the document in question is deleted.
 async fn determine_document_id<S: EntryStore + OperationStore + LogStore>(
     store: &S,
-    operation: &Operation,
+    operation: &impl AsOperation,
     operation_id: &OperationId,
 ) -> Result<DocumentId, DomainError> {
-    match operation.action() {
+    let document_id = match operation.action() {
         OperationAction::Create => {
             // Derive the document id for this new document.
-            Ok(DocumentId::new(operation_id))
+            Ok::<DocumentId, DomainError>(DocumentId::new(operation_id))
         }
         _ => {
             // We can unwrap previous operations here as we know all UPDATE and DELETE operations contain them.
@@ -225,14 +226,16 @@ async fn determine_document_id<S: EntryStore + OperationStore + LogStore>(
             // This performs several validation steps (check method doc string).
             let document_id = get_checked_document_id_for_view_id(store, &previous).await?;
 
-            // Ensure the document isn't deleted.
-            ensure_document_not_deleted(store, &document_id)
-                .await
-                .map_err(|_| DomainError::DeletedDocument)?;
-
             Ok(document_id)
         }
-    }
+    }?;
+
+    // Ensure the document isn't deleted.
+    ensure_document_not_deleted(store, &document_id)
+        .await
+        .map_err(|_| DomainError::DeletedDocument)?;
+
+    Ok(document_id)
 }
 
 /// Retrieve the expected skiplink for the entry identified by public key, log id and sequence number.
