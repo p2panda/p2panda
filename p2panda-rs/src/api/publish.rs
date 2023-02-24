@@ -208,7 +208,7 @@ async fn validate_entry_and_operation<S: EntryStore + OperationStore + LogStore>
 /// the provided operation id to derive a new document id. In all other cases we retrieve and
 /// validate the document id by look at the operations contained in the `previous` field. Returns
 /// an error if the document in question is deleted.
-async fn determine_document_id<S: EntryStore + OperationStore + LogStore>(
+async fn determine_document_id<S: OperationStore>(
     store: &S,
     operation: &impl AsOperation,
     operation_id: &OperationId,
@@ -239,7 +239,7 @@ async fn determine_document_id<S: EntryStore + OperationStore + LogStore>(
 }
 
 /// Retrieve the expected skiplink for the entry identified by public key, log id and sequence number.
-async fn get_skiplink_for_entry<S: EntryStore + OperationStore + LogStore>(
+async fn get_skiplink_for_entry<S: EntryStore>(
     store: &S,
     seq_num: &SeqNum,
     log_id: &LogId,

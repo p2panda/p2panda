@@ -174,7 +174,7 @@ pub fn increment_log_id(log_id: &mut LogId) -> Result<LogId, ValidationError> {
 /// - any of the operations contained in the view id _don't_ exist in the store
 /// - any of the operations contained in the view id return a different document id than any of the
 /// others
-pub async fn get_checked_document_id_for_view_id<S: EntryStore + OperationStore + LogStore>(
+pub async fn get_checked_document_id_for_view_id<S: OperationStore>(
     store: &S,
     view_id: &DocumentViewId,
 ) -> Result<DocumentId, ValidationError> {

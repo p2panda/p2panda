@@ -102,7 +102,7 @@ async fn calculate_next_args_new_log<S: LogStore>(
 }
 
 /// Calculate the next args for an existing log for the given author and log id.
-async fn calculate_next_args_existing_log<S: EntryStore + OperationStore + LogStore>(
+async fn calculate_next_args_existing_log<S: EntryStore>(
     store: &S,
     log_id: &LogId,
     public_key: &PublicKey,
