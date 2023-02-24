@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
-
+use crate::api::helpers::get_skiplink_for_entry;
 use crate::api::validation::{
-    ensure_document_not_deleted, get_checked_document_id_for_view_id, get_expected_skiplink,
-    increment_seq_num, next_log_id,
+    ensure_document_not_deleted, get_checked_document_id_for_view_id, increment_seq_num,
+    next_log_id,
 };
 use crate::api::DomainError;
 use crate::document::DocumentViewId;
@@ -127,13 +126,7 @@ async fn calculate_next_args_existing_log<S: EntryStore>(
     }?;
 
     // Check if skiplink is required and if it is get the entry and return its hash.
-    let skiplink = if is_lipmaa_required(seq_num.as_u64()) {
-        // Determine skiplink ("lipmaa"-link) entry in this seq number.
-        Some(get_expected_skiplink(store, public_key, &log_id, &seq_num).await?)
-    } else {
-        None
-    }
-    .map(|entry| entry.hash());
+    let skiplink = get_skiplink_for_entry(store, &seq_num, &log_id, public_key).await?;
 
     // Get the latest entry hash.
     let backlink = latest_entry.map(|entry| entry.hash());
