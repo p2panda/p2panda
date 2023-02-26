@@ -729,7 +729,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn can_update(
+    async fn apply_commit(
         #[from(published_operation)]
         #[with(Some(operation_fields(constants::test_fields())), constants::schema())]
         create_operation: PublishedOperation,
@@ -766,18 +766,84 @@ mod tests {
         assert_eq!(document.view_id(), &create_view_id);
         assert_eq!(document.get("age").unwrap(), &OperationValue::Integer(28));
 
-        // Update the document with an UPDATE operation.
+        // Apply a commit with an UPDATE operation.
         document.commit(&update_operation).unwrap();
 
         assert_eq!(document.is_edited(), true);
         assert_eq!(document.view_id(), &update_view_id);
         assert_eq!(document.get("age").unwrap(), &OperationValue::Integer(21));
 
-        // Update the document with a DELETE operation.
+        // Apply a commit with a DELETE operation.
         document.commit(&delete_operation).unwrap();
 
         assert_eq!(document.is_deleted(), true);
         assert_eq!(document.view_id(), &delete_view_id);
         assert_eq!(document.fields(), None);
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn validate_commit_operation(
+        #[from(published_operation)]
+        #[with(Some(operation_fields(constants::test_fields())), constants::schema())]
+        create_operation: PublishedOperation,
+    ) {
+        // Create the initial document from a single CREATE operation.
+        let mut document: Document = vec![&create_operation].try_into().unwrap();
+
+        // Committing a CREATE operation should fail.
+        assert!(document.commit(&create_operation).is_err());
+
+        let create_view_id =
+            DocumentViewId::new(&[WithId::<OperationId>::id(&create_operation).clone()]);
+
+        let update_with_incorrect_schema_id = published_operation(
+            Some(operation_fields(vec![("age", OperationValue::Integer(21))])),
+            schema(
+                vec![("age".into(), FieldType::Integer)],
+                SchemaId::new_application("my_wrong_schema", &random_document_view_id()),
+                "Schema with a wrong id",
+            ),
+            Some(create_view_id.clone()),
+            KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
+        );
+
+        // Apply a commit with an UPDATE operation containing the wrong schema id.
+        assert!(document.commit(&update_with_incorrect_schema_id).is_err());
+
+        let update_not_referring_to_current_view = published_operation(
+            Some(operation_fields(vec![("age", OperationValue::Integer(21))])),
+            constants::schema(),
+            Some(random_document_view_id()),
+            KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
+        );
+
+        // Apply a commit with an UPDATE operation not pointing to the current view.
+        assert!(document
+            .commit(&update_not_referring_to_current_view)
+            .is_err());
+
+        // Now we apply a correct delete operation.
+        let delete_operation = published_operation(
+            None,
+            constants::schema(),
+            Some(create_view_id.clone()),
+            KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
+        );
+
+        assert!(document.commit(&delete_operation).is_ok());
+
+        let delete_view_id =
+            DocumentViewId::new(&[WithId::<OperationId>::id(&delete_operation).clone()]);
+
+        let update_on_a_deleted_document = published_operation(
+            Some(operation_fields(vec![("age", OperationValue::Integer(21))])),
+            constants::schema(),
+            Some(delete_view_id.to_owned()),
+            KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
+        );
+
+        // Apply a commit with an UPDATE operation on a deleted document.
+        assert!(document.commit(&update_on_a_deleted_document).is_err());
     }
 }
