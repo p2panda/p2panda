@@ -26,7 +26,7 @@ use crate::{Human, WithId};
 ///
 /// Documents are constructed through the [`DocumentBuilder`] or by conversion from vectors of a type implementing
 /// the [`AsOperation`], [`WithId<OperationId>`] and [`WithPublicKey`].
-/// 
+///
 /// To efficiently commit more operations to an already constructed document use the `commit`
 /// method. Any operations committed in this way must refer to the documents current view id in
 /// their `previous` field.
