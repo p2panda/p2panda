@@ -61,12 +61,13 @@ pub trait AsDocument {
     where
         O: AsOperation + WithId<OperationId>,
     {
+        // Validate operation passed to commit.
         if operation.is_create() {
             return Err(DocumentError::InvalidOperationType);
         }
 
         if &operation.schema_id() != self.schema_id() {
-            return Err(DocumentError::InvalidSchemaId(operation.id().to_owned()))
+            return Err(DocumentError::InvalidSchemaId(operation.id().to_owned()));
         }
 
         // Unwrap as all other operation types contain `previous`.
@@ -83,20 +84,35 @@ pub trait AsDocument {
         }
 
         let next_fields = match operation.fields() {
-            Some(fields) => match self.fields().cloned() {
-                Some(mut document_fields) => {
-                    for (name, value) in fields.iter() {
-                        let document_field_value = DocumentViewValue::new(operation.id(), value);
-                        document_fields.insert(name, document_field_value);
-                    }
-                    Some(document_fields)
+            // If the operation contains fields it's an UPDATE and so we want to apply the changes
+            // to the designated fields.
+            Some(fields) => {
+                // Get the current document fields, we can unwrap as we checked for deleted
+                // documents above.
+                let mut document_fields = self.fields().unwrap().to_owned();
+
+                // For every field in the UPDATE operation update the relevant field in the
+                // current document fields.
+                for (name, value) in fields.iter() {
+                    let document_field_value = DocumentViewValue::new(operation.id(), value);
+
+                    // We know all the fields are correct for this document as we checked the
+                    // schema id above.
+                    document_fields.insert(name, document_field_value);
                 }
-                None => None,
-            },
+
+                // Return the updated fields.
+                Some(document_fields)
+            }
+            // If the operation doesn't contain fields this must be a DELETE so we return None as we want to remove the
+            // current document's fields.
             None => None,
         };
 
+        // Construct the new document view id.
         let document_view_id = DocumentViewId::new(&[operation.id().to_owned()]);
+
+        // Update the documents' view, edited/deleted state and view id.
         self.update_view(&document_view_id, next_fields.as_ref());
 
         Ok(())
