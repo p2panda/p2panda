@@ -29,7 +29,6 @@ pub trait AsDocument {
     /// Get the fields of this document.
     fn fields(&self) -> Option<&DocumentViewFields>;
 
-
     /// Update the view of this document.
     fn update_view(&mut self, id: &DocumentViewId, view: Option<&DocumentViewFields>);
 
