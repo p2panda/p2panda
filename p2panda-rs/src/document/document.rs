@@ -3,7 +3,7 @@
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display};
 
-use crate::document::error::DocumentBuilderError;
+use crate::document::error::{DocumentBuilderError, DocumentError};
 use crate::document::materialization::{build_graph, reduce};
 use crate::document::traits::AsDocument;
 use crate::document::{DocumentId, DocumentViewFields, DocumentViewId};
@@ -12,6 +12,8 @@ use crate::operation::traits::{AsOperation, WithPublicKey};
 use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::{Human, WithId};
+
+use super::DocumentViewValue;
 
 /// Flag to indicate if document was edited by at least one author.
 pub type IsEdited = bool;
@@ -92,6 +94,61 @@ impl AsDocument for Document {
     /// Returns true if this document has processed a DELETE operation.
     fn is_deleted(&self) -> IsDeleted {
         self.deleted
+    }
+}
+
+impl Document {
+    /// Update a documents current view with a single operation.
+    ///
+    /// For the update to be successful the passed operation must refer to this documents' current
+    /// view id in it's previous field and must update a field which exists on this document.
+    pub fn update<O>(&mut self, operation: &O) -> Result<(), DocumentError>
+    where
+        O: AsOperation + WithId<OperationId>,
+    {
+        if operation.is_create() {
+            return Err(DocumentError::InvalidOperationType);
+        }
+
+        // Unwrap as all other operation types contain `previous`.
+        let previous = operation.previous().unwrap();
+
+        if self.view_id() != &previous {
+            return Err(DocumentError::PreviousDoesNotMatch(
+                operation.id().to_owned(),
+            ));
+        }
+
+        if self.is_deleted() {
+            return Err(DocumentError::UpdateOnDeleted);
+        }
+
+        let next_fields = match operation.fields() {
+            Some(fields) => {
+                // Unwrap as we know documents which aren't deleted have fields.
+                let mut document_fields = self.fields().unwrap().to_owned();
+                for (name, value) in fields.iter() {
+                    let document_field_value = DocumentViewValue::new(operation.id(), value);
+                    match document_fields.insert(name, document_field_value) {
+                        Some(_) => (),
+                        None => return Err(DocumentError::InvalidUpdate),
+                    };
+                }
+                self.edited = true;
+                Some(document_fields)
+            }
+            None => {
+                self.deleted = true;
+                None
+            }
+        };
+
+        let document_view_id = DocumentViewId::new(&[operation.id().to_owned()]);
+
+        self.view_id = document_view_id;
+        self.fields = next_fields;
+
+        Ok(())
     }
 }
 
@@ -743,5 +800,59 @@ mod tests {
                 .value(),
             &OperationValue::String("Penguin Cafe!!!".to_string())
         );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn can_update(
+        #[from(published_operation)]
+        #[with(Some(operation_fields(constants::test_fields())), constants::schema())]
+        create_operation: PublishedOperation,
+    ) {
+        // Construct operations we will use to update an existing document.
+
+        let create_view_id =
+            DocumentViewId::new(&[WithId::<OperationId>::id(&create_operation).clone()]);
+
+        let update_operation = published_operation(
+            Some(operation_fields(vec![("age", OperationValue::Integer(21))])),
+            constants::schema(),
+            Some(create_view_id.clone()),
+            KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
+        );
+
+        let update_view_id =
+            DocumentViewId::new(&[WithId::<OperationId>::id(&update_operation).clone()]);
+
+        let delete_operation = published_operation(
+            None,
+            constants::schema(),
+            Some(update_view_id.clone()),
+            KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
+        );
+
+        let delete_view_id =
+            DocumentViewId::new(&[WithId::<OperationId>::id(&delete_operation).clone()]);
+
+        // Create the initial document from a single CREATE operation.
+        let mut document: Document = vec![&create_operation].try_into().unwrap();
+
+        assert_eq!(document.is_edited(), false);
+        assert_eq!(document.view_id(), &create_view_id);
+        assert_eq!(document.get("age").unwrap(), &OperationValue::Integer(28));
+
+        // Update the document with an UPDATE operation.
+        document.update(&update_operation).unwrap();
+
+        assert_eq!(document.is_edited(), true);
+        assert_eq!(document.view_id(), &update_view_id);
+        assert_eq!(document.get("age").unwrap(), &OperationValue::Integer(21));
+
+        // Update the document with a DELETE operation.
+        document.update(&delete_operation).unwrap();
+
+        assert_eq!(document.is_deleted(), true);
+        assert_eq!(document.view_id(), &delete_view_id);
+        assert_eq!(document.fields(), None);
     }
 }

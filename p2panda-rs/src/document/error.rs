@@ -41,6 +41,22 @@ pub enum DocumentBuilderError {
 /// Error types for methods of `Document` struct.
 #[derive(Error, Debug)]
 pub enum DocumentError {
+    /// Operation passed to update does not refer to this documents current view.
+    #[error("operation {0} does not update the documents current view")]
+    PreviousDoesNotMatch(OperationId),
+
+    /// Invalid operation type used to update document.
+    #[error("CREATE operation used to update document")]
+    InvalidOperationType,
+
+    /// Cannot update a deleted document.
+    #[error("Cannot update a deleted document")]
+    UpdateOnDeleted,
+
+    /// Only fields existing on the document can be updated.
+    #[error("Attempted to update a non-existent field")]
+    InvalidUpdate,
+
     /// Handle errors from validating CBOR schemas.
     #[error(transparent)]
     DocumentViewError(#[from] DocumentViewError),
