@@ -57,7 +57,7 @@ pub trait AsDocument {
     ///
     /// For the update to be successful the passed operation must refer to this documents' current
     /// view id in it's previous field and must update a field which exists on this document.
-    fn update<O>(&mut self, operation: &O) -> Result<(), DocumentError>
+    fn commit<O>(&mut self, operation: &O) -> Result<(), DocumentError>
     where
         O: AsOperation + WithId<OperationId>,
     {

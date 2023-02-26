@@ -795,14 +795,14 @@ mod tests {
         assert_eq!(document.get("age").unwrap(), &OperationValue::Integer(28));
 
         // Update the document with an UPDATE operation.
-        document.update(&update_operation).unwrap();
+        document.commit(&update_operation).unwrap();
 
         assert_eq!(document.is_edited(), true);
         assert_eq!(document.view_id(), &update_view_id);
         assert_eq!(document.get("age").unwrap(), &OperationValue::Integer(21));
 
         // Update the document with a DELETE operation.
-        document.update(&delete_operation).unwrap();
+        document.commit(&delete_operation).unwrap();
 
         assert_eq!(document.is_deleted(), true);
         assert_eq!(document.view_id(), &delete_view_id);
