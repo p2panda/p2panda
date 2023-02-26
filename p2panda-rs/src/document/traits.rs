@@ -65,6 +65,10 @@ pub trait AsDocument {
             return Err(DocumentError::InvalidOperationType);
         }
 
+        if &operation.schema_id() != self.schema_id() {
+            return Err(DocumentError::InvalidSchemaId(operation.id().to_owned()))
+        }
+
         // Unwrap as all other operation types contain `previous`.
         let previous = operation.previous().unwrap();
 
@@ -83,10 +87,7 @@ pub trait AsDocument {
                 Some(mut document_fields) => {
                     for (name, value) in fields.iter() {
                         let document_field_value = DocumentViewValue::new(operation.id(), value);
-                        match document_fields.insert(name, document_field_value) {
-                            Some(_) => (),
-                            None => return Err(DocumentError::InvalidUpdate),
-                        };
+                        document_fields.insert(name, document_field_value);
                     }
                     Some(document_fields)
                 }
