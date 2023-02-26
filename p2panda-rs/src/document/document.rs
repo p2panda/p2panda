@@ -13,12 +13,6 @@ use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::{Human, WithId};
 
-/// Flag to indicate if document was edited by at least one author.
-pub type IsEdited = bool;
-
-/// Flag to indicate if document was deleted by at least one author.
-pub type IsDeleted = bool;
-
 /// High-level datatype representing data published to the p2panda network as key-value pairs.
 ///
 /// Documents are multi-writer and have automatic conflict resolution strategies which produce deterministic
@@ -50,12 +44,6 @@ pub struct Document {
 
     /// The public key of the author who created this document.
     author: PublicKey,
-
-    /// Flag indicating if document was deleted.
-    deleted: IsDeleted,
-
-    /// Flag indicating if document was edited.
-    edited: IsEdited,
 }
 
 impl AsDocument for Document {
@@ -84,24 +72,10 @@ impl AsDocument for Document {
         self.fields.as_ref()
     }
 
-    /// Returns true if this document has applied an UPDATE operation.
-    fn is_edited(&self) -> IsEdited {
-        self.edited
-    }
-
-    /// Returns true if this document has processed a DELETE operation.
-    fn is_deleted(&self) -> IsDeleted {
-        self.deleted
-    }
-
     /// Update the current view of this document.
     fn update_view(&mut self, id: &DocumentViewId, view: Option<&DocumentViewFields>) {
         self.view_id = id.to_owned();
         self.fields = view.cloned();
-        match view {
-            Some(_) => self.edited = true,
-            None => self.deleted = true,
-        }
     }
 }
 
@@ -237,7 +211,7 @@ impl DocumentBuilder {
             .collect();
 
         // Reduce the sorted operations into a single key value map
-        let (fields, is_edited, is_deleted) = reduce(&sorted_graph_data.sorted()[..]);
+        let fields = reduce(&sorted_graph_data.sorted()[..]);
 
         // Construct the document view id
         let document_view_id = DocumentViewId::new(&graph_tips);
@@ -248,8 +222,6 @@ impl DocumentBuilder {
             schema_id,
             author,
             fields,
-            edited: is_edited,
-            deleted: is_deleted,
         })
     }
 }

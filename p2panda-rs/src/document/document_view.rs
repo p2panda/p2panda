@@ -107,13 +107,11 @@ mod tests {
         operation_fields: OperationFields,
     ) {
         // Reduce a single CREATE `Operation`
-        let (view, is_edited, is_deleted) = reduce(&[(id.clone(), create_operation, public_key)]);
+        let view = reduce(&[(id.clone(), create_operation, public_key)]);
 
         let document_view = DocumentView::new(&document_view_id, &view.unwrap());
 
         assert!(!document_view.is_empty());
-        assert!(!is_edited);
-        assert!(!is_deleted);
         assert_eq!(document_view.len(), 8);
         assert_eq!(document_view.keys(), operation_fields.keys());
         for key in operation_fields.keys() {
@@ -143,7 +141,7 @@ mod tests {
             (random_operation_id(), create_operation, public_key),
             (update_id.clone(), update_operation, public_key),
         ];
-        let (view, is_edited, is_deleted) = reduce(&operations);
+        let view = reduce(&operations);
 
         let document_view = DocumentView::new(&document_view_id, &view.unwrap());
 
@@ -163,8 +161,6 @@ mod tests {
             document_view.get("is_admin").unwrap(),
             &DocumentViewValue::new(&update_id, &OperationValue::Boolean(true))
         );
-        assert!(is_edited);
-        assert!(!is_deleted);
     }
 
     #[rstest]
@@ -177,7 +173,7 @@ mod tests {
             .unwrap();
 
         let document_view_id = DocumentViewId::new(&[id_1.clone(), id_2.clone()]);
-        let (view, _, _) = reduce(&[(id_1.clone(), create_operation, public_key)]);
+        let view = reduce(&[(id_1.clone(), create_operation, public_key)]);
         let document_view = DocumentView::new(&document_view_id, &view.unwrap());
 
         assert_eq!(format!("{id_1}_{id_2}"), document_view.to_string());

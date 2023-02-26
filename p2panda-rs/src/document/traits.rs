@@ -29,14 +29,24 @@ pub trait AsDocument {
     /// Get the fields of this document.
     fn fields(&self) -> Option<&DocumentViewFields>;
 
-    /// Returns true if this document has applied an UPDATE operation.
-    fn is_edited(&self) -> bool;
-
-    /// Returns true if this document has processed a DELETE operation.
-    fn is_deleted(&self) -> bool;
 
     /// Update the view of this document.
     fn update_view(&mut self, id: &DocumentViewId, view: Option<&DocumentViewFields>);
+
+    /// Returns true if this document has applied an UPDATE operation.
+    fn is_edited(&self) -> bool {
+        match self.fields() {
+            Some(fields) => fields.iter().any(|(_, document_view_value)| {
+                &DocumentId::new(document_view_value.id()) != self.id()
+            }),
+            None => true,
+        }
+    }
+
+    /// Returns true if this document has processed a DELETE operation.
+    fn is_deleted(&self) -> bool {
+        self.fields().is_none()
+    }
 
     /// The current document view for this document. Returns None if this document
     /// has been deleted.
