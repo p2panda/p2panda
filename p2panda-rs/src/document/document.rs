@@ -3,7 +3,7 @@
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display};
 
-use crate::document::error::{DocumentBuilderError, DocumentError};
+use crate::document::error::DocumentBuilderError;
 use crate::document::materialization::{build_graph, reduce};
 use crate::document::traits::AsDocument;
 use crate::document::{DocumentId, DocumentViewFields, DocumentViewId};
@@ -12,8 +12,6 @@ use crate::operation::traits::{AsOperation, WithPublicKey};
 use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::{Human, WithId};
-
-use super::DocumentViewValue;
 
 /// Flag to indicate if document was edited by at least one author.
 pub type IsEdited = bool;
@@ -95,60 +93,15 @@ impl AsDocument for Document {
     fn is_deleted(&self) -> IsDeleted {
         self.deleted
     }
-}
 
-impl Document {
-    /// Update a documents current view with a single operation.
-    ///
-    /// For the update to be successful the passed operation must refer to this documents' current
-    /// view id in it's previous field and must update a field which exists on this document.
-    pub fn update<O>(&mut self, operation: &O) -> Result<(), DocumentError>
-    where
-        O: AsOperation + WithId<OperationId>,
-    {
-        if operation.is_create() {
-            return Err(DocumentError::InvalidOperationType);
+    /// Update the current view of this document.
+    fn update_view(&mut self, id: &DocumentViewId, view: Option<&DocumentViewFields>) {
+        self.view_id = id.to_owned();
+        self.fields = view.cloned();
+        match view {
+            Some(_) => self.edited = true,
+            None => self.deleted = true,
         }
-
-        // Unwrap as all other operation types contain `previous`.
-        let previous = operation.previous().unwrap();
-
-        if self.view_id() != &previous {
-            return Err(DocumentError::PreviousDoesNotMatch(
-                operation.id().to_owned(),
-            ));
-        }
-
-        if self.is_deleted() {
-            return Err(DocumentError::UpdateOnDeleted);
-        }
-
-        let next_fields = match operation.fields() {
-            Some(fields) => {
-                // Unwrap as we know documents which aren't deleted have fields.
-                let mut document_fields = self.fields().unwrap().to_owned();
-                for (name, value) in fields.iter() {
-                    let document_field_value = DocumentViewValue::new(operation.id(), value);
-                    match document_fields.insert(name, document_field_value) {
-                        Some(_) => (),
-                        None => return Err(DocumentError::InvalidUpdate),
-                    };
-                }
-                self.edited = true;
-                Some(document_fields)
-            }
-            None => {
-                self.deleted = true;
-                None
-            }
-        };
-
-        let document_view_id = DocumentViewId::new(&[operation.id().to_owned()]);
-
-        self.view_id = document_view_id;
-        self.fields = next_fields;
-
-        Ok(())
     }
 }
 
