@@ -35,7 +35,7 @@ pub trait AsDocument {
     /// Returns true if this document has processed a DELETE operation.
     fn is_deleted(&self) -> bool;
 
-    /// Update the view of this document. 
+    /// Update the view of this document.
     fn update_view(&mut self, id: &DocumentViewId, view: Option<&DocumentViewFields>);
 
     /// The current document view for this document. Returns None if this document
@@ -79,22 +79,19 @@ pub trait AsDocument {
         }
 
         let next_fields = match operation.fields() {
-            Some(fields) => {
-                match self.fields().cloned() {
-                    Some(mut document_fields) => {
-                        for (name, value) in fields.iter() {
-                            let document_field_value =
-                                DocumentViewValue::new(operation.id(), value);
-                            match document_fields.insert(name, document_field_value) {
-                                Some(_) => (),
-                                None => return Err(DocumentError::InvalidUpdate),
-                            };
-                        }
-                        Some(document_fields)
+            Some(fields) => match self.fields().cloned() {
+                Some(mut document_fields) => {
+                    for (name, value) in fields.iter() {
+                        let document_field_value = DocumentViewValue::new(operation.id(), value);
+                        match document_fields.insert(name, document_field_value) {
+                            Some(_) => (),
+                            None => return Err(DocumentError::InvalidUpdate),
+                        };
                     }
-                    None => None,
+                    Some(document_fields)
                 }
-            }
+                None => None,
+            },
             None => None,
         };
 
