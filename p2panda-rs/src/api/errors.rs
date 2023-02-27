@@ -76,6 +76,10 @@ pub enum DomainError {
     #[error("You are trying to update or delete a document which has been deleted")]
     DeletedDocument,
 
+    /// Expected log id not found when calculating next args.
+    #[error("Expected log id {0} not found when calculating next args")]
+    ExpectedLogIdNotFound(u64),
+
     /// Validation errors.
     #[error(transparent)]
     ValidationError(#[from] ValidationError),
