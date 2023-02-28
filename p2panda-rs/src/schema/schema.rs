@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::BTreeMap;
 use std::fmt::Display;
 
 use crate::document::{DocumentViewHash, DocumentViewId};
@@ -9,7 +8,9 @@ use crate::schema::error::{SchemaError, SchemaIdError};
 use crate::schema::system::{
     get_schema_definition, get_schema_field_definition, SchemaFieldView, SchemaView,
 };
+use crate::schema::SchemaName;
 use crate::schema::{FieldType, SchemaId, SchemaVersion};
+use crate::schema::{SchemaDescription, SchemaFields};
 use crate::Human;
 
 /// The key of a schema field
@@ -35,20 +36,16 @@ pub type FieldName = String;
 /// [`Schema::new`] is only available for testing. This method of constructing a schema doesn't
 /// validate that the given schema id matches the provided schema's published description and field
 /// definitions.
-// @TODO: For all methods creating a `Schema` instance or related to that we need to check that the
-// names, field names and descriptions match the specification. Currently we only do this when
-// looking at operations (see `schema::validate` methods).
-// Related issue: https://github.com/p2panda/p2panda/issues/426
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Schema {
     /// The application schema id for this schema.
     pub(crate) id: SchemaId,
 
     /// Describes the schema's intended use.
-    pub(crate) description: String,
+    pub(crate) description: SchemaDescription,
 
     /// Maps all of the schema's field names to their respective types.
-    pub(crate) fields: BTreeMap<FieldName, FieldType>,
+    pub(crate) fields: SchemaFields,
 }
 
 impl Schema {
@@ -83,19 +80,16 @@ impl Schema {
     pub fn new(
         id: &SchemaId,
         description: &str,
-        fields: Vec<(impl ToString, FieldType)>,
+        fields: &[(&str, FieldType)],
     ) -> Result<Self, SchemaError> {
-        let mut field_map: BTreeMap<String, FieldType> = BTreeMap::new();
-
-        for (field_name, field_type) in fields {
-            field_map.insert(field_name.to_string(), field_type.to_owned());
-        }
+        let description = SchemaDescription::new(description)?;
+        let schema_fields = SchemaFields::new(fields)?;
 
         if let SchemaId::Application(_, _) = id {
             let schema = Self {
                 id: id.to_owned(),
-                description: description.to_owned(),
-                fields: field_map,
+                description,
+                fields: schema_fields,
             };
 
             Ok(schema)
@@ -125,16 +119,20 @@ impl Schema {
             return Err(SchemaError::InvalidFields);
         }
 
-        // Construct a key-value map of fields
-        let mut fields_map = BTreeMap::new();
-        for field in fields {
-            fields_map.insert(field.name().to_string(), field.field_type().to_owned());
-        }
+        // Construct the schema name, description and fields.
+        let fields: Vec<(&str, FieldType)> = fields
+            .iter()
+            .map(|view| (view.name(), view.field_type().to_owned()))
+            .collect();
+
+        let name = SchemaName::new(schema.name())?;
+        let description = SchemaDescription::new(schema.description())?;
+        let schema_fields = SchemaFields::new(&fields)?;
 
         Ok(Schema {
-            id: SchemaId::new_application(schema.name(), schema.view_id()),
-            description: schema.description().to_owned(),
-            fields: fields_map,
+            id: SchemaId::new_application(&name, schema.view_id()),
+            description,
+            fields: schema_fields,
         })
     }
 
@@ -265,17 +263,17 @@ impl Schema {
     }
 
     /// Access the schema name.
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> SchemaName {
         self.id.name()
     }
 
     /// Access the schema description.
-    pub fn description(&self) -> &str {
+    pub fn description(&self) -> &SchemaDescription {
         &self.description
     }
 
     /// Access the schema fields.
-    pub fn fields(&self) -> &BTreeMap<FieldName, FieldType> {
+    pub fn fields(&self) -> &SchemaFields {
         &self.fields
     }
 }
@@ -294,7 +292,6 @@ impl Human for Schema {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
     use std::convert::TryInto;
 
     use rstest::rstest;
@@ -303,7 +300,9 @@ mod tests {
     use crate::document::{DocumentView, DocumentViewFields, DocumentViewValue};
     use crate::operation::{OperationId, OperationValue, PinnedRelationList};
     use crate::schema::system::{SchemaFieldView, SchemaView};
-    use crate::schema::{FieldType, Schema, SchemaId, SchemaVersion};
+    use crate::schema::{
+        FieldType, Schema, SchemaDescription, SchemaFields, SchemaId, SchemaName, SchemaVersion,
+    };
     use crate::test_utils::fixtures::{document_view_id, random_operation_id};
     use crate::Human;
 
@@ -367,10 +366,11 @@ mod tests {
 
     #[rstest]
     fn string_representation(#[from(document_view_id)] schema_view_id: DocumentViewId) {
+        let schema_name = SchemaName::new("venue").expect("Valid schema name");
         let schema = Schema::new(
-            &SchemaId::Application("venue".into(), schema_view_id),
+            &SchemaId::Application(schema_name, schema_view_id),
             "Some description",
-            vec![("number", FieldType::Integer)],
+            &[("number", FieldType::Integer)],
         )
         .unwrap();
 
@@ -388,10 +388,11 @@ mod tests {
 
     #[rstest]
     fn short_representation(#[from(document_view_id)] schema_view_id: DocumentViewId) {
+        let schema_name = SchemaName::new("venue").expect("Valid schema name");
         let schema = Schema::new(
-            &SchemaId::Application("venue".into(), schema_view_id),
+            &SchemaId::Application(schema_name, schema_view_id),
             "Some description",
-            vec![("number", FieldType::Integer)],
+            &[("number", FieldType::Integer)],
         )
         .unwrap();
         assert_eq!(schema.display(), "<Schema venue 496543>");
@@ -408,17 +409,30 @@ mod tests {
     }
 
     #[rstest]
-    #[case(vec![("message", FieldType::String)])]
-    // @TODO: This should error but requires validation of schema instances.
-    #[case(vec![])]
+    #[case("My schema", vec![("message", FieldType::String)])]
+    #[should_panic]
+    #[case("My schema", vec![])]
+    #[should_panic]
+    #[case("My schema", vec![("message", FieldType::String), ("message", FieldType::String)])]
+    #[should_panic]
+    #[case("In common use the term is used to describe the largest species from this
+        family, the red kangaroo, as well as the antilopine kangaroo, eastern grey
+        kangaroo, and western grey kangaroo! Kangaroos have large, powerful hind legs,
+        large feet adapted for leaping, a long muscular tail for balance, and a small
+        head. Like most marsupials, female kangaroos have a pouch called a marsupium
+        in which joeys complete postnatal development.", 
+        vec![("message", FieldType::String)]
+    )]
     fn new_schema(
         #[from(document_view_id)] schema_view_id: DocumentViewId,
+        #[case] description: &str,
         #[case] fields: Vec<(&str, FieldType)>,
     ) {
+        let schema_name = SchemaName::new("venue").expect("Valid schema name");
         let result = Schema::new(
-            &SchemaId::Application("venue".to_owned(), schema_view_id),
-            "description",
-            fields,
+            &SchemaId::Application(schema_name, schema_view_id),
+            description,
+            &fields,
         );
         assert!(result.is_ok());
     }
@@ -428,7 +442,7 @@ mod tests {
         let result = Schema::new(
             &SchemaId::SchemaDefinition(1),
             "description",
-            vec![("wrong", FieldType::Integer)],
+            &[("wrong", FieldType::Integer)],
         );
         assert_eq!(
             format!("{}", result.unwrap_err()),
@@ -453,10 +467,8 @@ mod tests {
 
     #[rstest]
     fn test_error_application_schema(document_view_id: DocumentViewId) {
-        let schema = Schema::get_system(SchemaId::Application(
-            "events".to_string(),
-            document_view_id,
-        ));
+        let schema_name = SchemaName::new("events").expect("Valid schema name");
+        let schema = Schema::get_system(SchemaId::Application(schema_name, document_view_id));
         assert!(schema.is_err())
     }
 
@@ -512,31 +524,35 @@ mod tests {
         let schema = result.unwrap();
 
         // Test getters
+        let schema_name = SchemaName::new("venue_name").expect("Valid schema name");
         let expected_view_id =
             "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"
                 .parse::<DocumentViewId>()
                 .unwrap();
         assert_eq!(
             schema.id(),
-            &SchemaId::new_application("venue_name", &expected_view_id)
+            &SchemaId::new_application(&schema_name, &expected_view_id)
         );
-        assert_eq!(schema.name(), "venue_name");
+        assert_eq!(schema.name(), schema_name);
         assert_eq!(
             schema.version(),
             SchemaVersion::Application(expected_view_id)
         );
-        assert_eq!(schema.description(), "Describes a venue");
+        assert_eq!(schema.description().to_string(), "Describes a venue");
         assert_eq!(schema.fields().len(), 2);
     }
 
     #[rstest]
     fn hash_id(#[from(document_view_id)] application_schema_view_id: DocumentViewId) {
         // Validate application schema format
-        let mut schema_fields = BTreeMap::new();
-        schema_fields.insert("is_real".to_string(), FieldType::Boolean);
+        let schema_name = SchemaName::new("event").expect("Valid schema name");
+        let description = SchemaDescription::new("test").expect("Valid schema description");
+        let schema_fields =
+            SchemaFields::new(&[("is_real", FieldType::Boolean)]).expect("Valid schema fields");
+
         let application_schema = Schema {
-            id: SchemaId::Application("event".to_string(), application_schema_view_id),
-            description: "test".to_string(),
+            id: SchemaId::Application(schema_name, application_schema_view_id),
+            description: description.clone(),
             fields: schema_fields.clone(),
         };
         let application_schema_hash_id = application_schema.hash_id();
@@ -548,7 +564,7 @@ mod tests {
         // Validate system schema format
         let system_schema = Schema {
             id: SchemaId::SchemaDefinition(1),
-            description: "test".to_string(),
+            description,
             fields: schema_fields,
         };
         let system_schema_hash_id = system_schema.hash_id();

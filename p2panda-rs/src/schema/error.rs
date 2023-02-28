@@ -5,6 +5,44 @@ use thiserror::Error;
 
 use crate::schema::SchemaId;
 
+/// Custom errors related to `SchemaName`.
+#[derive(Clone, Error, Debug)]
+pub enum SchemaNameError {
+    /// Encountered a malformed schema name.
+    #[error("Schema name contains too many or invalid characters")]
+    MalformedSchemaName,
+}
+
+impl Copy for SchemaNameError {}
+
+/// Custom errors related to `SchemaDescription`.
+#[derive(Clone, Error, Debug)]
+pub enum SchemaDescriptionError {
+    /// Encountered a too long schema description.
+    #[error("Schema description contains more than 256 characters")]
+    TooLongSchemaDescription,
+}
+
+/// Custom errors related to `SchemaFields`.
+#[derive(Clone, Error, Debug)]
+pub enum SchemaFieldError {
+    /// Encountered an invalid name in a schema field key.
+    #[error("Schema field found with invalid name")]
+    MalformedSchemaFieldName,
+
+    /// Maximum number of schema fields (1024) has been exceeded.
+    #[error("Schema fields contains more than 1024 fields")]
+    TooManyFields,
+
+    /// Schema fields length must be at least 1.
+    #[error("Schema fields must contain at least one entry")]
+    ZeroFields,
+
+    /// Schema fields cannot contain duplicate fields.
+    #[error("Schema fields cannot contain duplicate field names")]
+    DuplicateFields,
+}
+
 /// Custom errors related to `SchemaId`.
 #[derive(Error, Debug)]
 pub enum SchemaIdError {
@@ -47,6 +85,18 @@ pub enum SchemaError {
     /// Schemas must have valid schema ids.
     #[error(transparent)]
     SchemaIdError(#[from] SchemaIdError),
+
+    /// Schemas must have valid schema names.
+    #[error(transparent)]
+    SchemaNameError(#[from] SchemaNameError),
+
+    /// Schemas must have valid schema descriptions.
+    #[error(transparent)]
+    SchemaDescriptionError(#[from] SchemaDescriptionError),
+
+    /// Schemas must have valid schema fields.
+    #[error(transparent)]
+    SchemaFieldsError(#[from] SchemaFieldError),
 }
 
 /// Custom error types for field types.

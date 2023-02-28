@@ -306,7 +306,7 @@ mod tests {
         #[case] schema_fields: Vec<(&str, FieldType)>,
         #[case] cbor: Result<Value, Error>,
     ) {
-        let schema = Schema::new(&schema_id, "Some schema description", schema_fields)
+        let schema = Schema::new(&schema_id, "Some schema description", &schema_fields)
             .expect("Could not create schema");
 
         let plain_operation = cbor_to_plain(cbor.expect("Invalid CBOR value"));
@@ -356,7 +356,7 @@ mod tests {
         #[case] raw_operation: Result<Value, Error>,
         #[case] expected: &str,
     ) {
-        let schema = Schema::new(&schema_id, "Some schema description", schema_fields)
+        let schema = Schema::new(&schema_id, "Some schema description", &schema_fields)
             .expect("Could not create schema");
 
         let plain_operation = cbor_to_plain(raw_operation.expect("Invalid CBOR value"));

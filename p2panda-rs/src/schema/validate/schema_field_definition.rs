@@ -14,7 +14,7 @@ use crate::schema::SchemaId;
 /// 1. It must be at most 64 characters long
 /// 2. It begins with a letter
 /// 3. It uses only alphanumeric characters, digits and the underscore character
-fn validate_name(value: &str) -> bool {
+pub fn validate_field_name(value: &str) -> bool {
     static NAME_REGEX: Lazy<Regex> = Lazy::new(|| {
         // Unwrap as we checked the regular expression for correctness
         Regex::new("^[A-Za-z]{1}[A-Za-z0-9_]{0,63}$").unwrap()
@@ -106,7 +106,7 @@ pub fn validate_schema_field_definition_v1_fields(
 
     match field_name {
         Some(PlainValue::StringOrRelation(value)) => {
-            if validate_name(value) {
+            if validate_field_name(value) {
                 Ok(())
             } else {
                 Err(SchemaFieldDefinitionError::NameInvalid)
@@ -138,7 +138,7 @@ mod test {
 
     use crate::operation::plain::PlainFields;
 
-    use super::{validate_name, validate_schema_field_definition_v1_fields, validate_type};
+    use super::{validate_field_name, validate_schema_field_definition_v1_fields, validate_type};
 
     #[rstest]
     #[case(vec![
@@ -192,7 +192,7 @@ mod test {
     #[should_panic]
     #[case("specification-says-no")]
     fn check_name_field(#[case] name_str: &str) {
-        assert!(validate_name(name_str));
+        assert!(validate_field_name(name_str));
     }
 
     #[rstest]

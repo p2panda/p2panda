@@ -11,7 +11,7 @@ use yasmf_hash::MAX_YAMF_HASH_SIZE;
 use crate::document::DocumentViewId;
 use crate::operation::OperationId;
 use crate::schema::error::SchemaIdError;
-use crate::schema::validate::validate_name;
+use crate::schema::SchemaName;
 use crate::Human;
 
 /// Spelling of _schema definition_ schema
@@ -37,7 +37,7 @@ pub enum SchemaVersion {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum SchemaId {
     /// An application schema.
-    Application(String, DocumentViewId),
+    Application(SchemaName, DocumentViewId),
 
     /// A schema definition.
     SchemaDefinition(u8),
@@ -82,16 +82,19 @@ impl SchemaId {
     }
 
     /// Returns a `SchemaId` given an application schema's name and view id.
-    pub fn new_application(name: &str, view_id: &DocumentViewId) -> Self {
-        Self::Application(name.to_string(), view_id.clone())
+    pub fn new_application(name: &SchemaName, view_id: &DocumentViewId) -> Self {
+        Self::Application(name.to_owned(), view_id.clone())
     }
 
     /// Access the schema name.
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> SchemaName {
         match self {
-            SchemaId::Application(name, _) => name,
-            SchemaId::SchemaDefinition(_) => SCHEMA_DEFINITION_NAME,
-            SchemaId::SchemaFieldDefinition(_) => SCHEMA_FIELD_DEFINITION_NAME,
+            SchemaId::Application(name, _) => name.to_owned(),
+            // We unwrap here as we know system schema names are valid names.
+            SchemaId::SchemaDefinition(_) => SchemaName::new(SCHEMA_DEFINITION_NAME).unwrap(),
+            SchemaId::SchemaFieldDefinition(_) => {
+                SchemaName::new(SCHEMA_FIELD_DEFINITION_NAME).unwrap()
+            }
         }
     }
 
@@ -156,15 +159,16 @@ impl SchemaId {
             ));
         }
 
-        if !validate_name(remainder) {
-            return Err(SchemaIdError::MalformedSchemaId(
+        let name = match remainder.parse() {
+            Ok(name) => Ok(name),
+            Err(_) => Err(SchemaIdError::MalformedSchemaId(
                 id_str.to_string(),
                 "name contains too many or invalid characters".to_string(),
-            ));
-        }
+            )),
+        }?;
 
         Ok(SchemaId::Application(
-            remainder.to_string(),
+            name,
             DocumentViewId::from_untrusted(operation_ids)?,
         ))
     }
@@ -248,6 +252,7 @@ impl<'de> Deserialize<'de> for SchemaId {
 mod test {
     use rstest::rstest;
 
+    use crate::schema::SchemaName;
     use crate::test_utils::constants::SCHEMA_ID;
     use crate::test_utils::fixtures::schema_id;
     use crate::Human;
@@ -273,7 +278,7 @@ mod test {
 
     #[rstest]
     #[case(
-        SchemaId::new_application("venue", &"0020ce6f2c08e56836d6c3eb4080d6cc948dba138cba328c28059f45ebe459901771".parse().unwrap()
+        SchemaId::new_application(&SchemaName::new("venue").unwrap(), &"0020ce6f2c08e56836d6c3eb4080d6cc948dba138cba328c28059f45ebe459901771".parse().unwrap()
         ),
         "venue_0020ce6f2c08e56836d6c3eb4080d6cc948dba138cba328c28059f45ebe459901771"
     )]

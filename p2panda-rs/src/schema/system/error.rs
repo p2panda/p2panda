@@ -15,6 +15,10 @@ pub enum SystemSchemaError {
     #[error("missing field \"{0}\"")]
     MissingField(String),
 
+    /// Additional field found.
+    #[error("additional field found")]
+    AdditionalFields,
+
     /// Invalid field type found.
     #[error("invalid field type")]
     InvalidFieldType(#[from] crate::schema::error::FieldTypeError),

@@ -50,7 +50,7 @@ pub fn latest_fixture() -> Fixture {
     let schema = Schema::new(
         &schema_id,
         schema_description,
-        vec![
+        &[
             ("name", FieldType::String),
             ("description", FieldType::String),
         ],

@@ -3,9 +3,15 @@
 use rstest::fixture;
 
 use crate::operation::OperationValue;
-use crate::schema::{FieldName, FieldType, Schema, SchemaId};
+use crate::schema::{FieldName, FieldType, Schema, SchemaId, SchemaName};
 use crate::test_utils::constants::{self, SCHEMA_ID};
 use crate::test_utils::fixtures::operation_value;
+
+/// Returns constant schema id.
+#[fixture]
+pub fn schema_name(#[default("venue")] schema_name_str: &str) -> SchemaName {
+    SchemaName::new(schema_name_str).expect("Valid schema name")
+}
 
 /// Returns constant schema id.
 #[fixture]
@@ -72,5 +78,9 @@ pub fn schema(
     #[default(schema_id(SCHEMA_ID))] schema_id: SchemaId,
     #[default("Test schema")] description: &str,
 ) -> Schema {
-    Schema::new(&schema_id, description, fields).unwrap()
+    let fields: Vec<(&str, FieldType)> = fields
+        .iter()
+        .map(|(name, field_type)| (name.as_str(), field_type.to_owned()))
+        .collect();
+    Schema::new(&schema_id, description, &fields).unwrap()
 }

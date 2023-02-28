@@ -5,11 +5,17 @@ pub mod error;
 mod field_types;
 #[allow(clippy::module_inception)]
 mod schema;
+mod schema_description;
+mod schema_fields;
 mod schema_id;
+mod schema_name;
 pub mod system;
 pub mod validate;
 
 pub use field_types::FieldType;
 pub use schema::{FieldName, Schema};
+pub use schema_description::SchemaDescription;
+pub use schema_fields::SchemaFields;
 pub use schema_id::{SchemaId, SchemaVersion};
+pub use schema_name::SchemaName;
 pub use system::SYSTEM_SCHEMAS;

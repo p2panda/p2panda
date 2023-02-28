@@ -1,28 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::BTreeMap;
-
 use once_cell::sync::Lazy;
 
 use crate::schema::error::SchemaIdError;
-use crate::schema::{FieldType, Schema, SchemaId};
+use crate::schema::{FieldType, Schema, SchemaDescription, SchemaFields, SchemaId};
 
 const DESCRIPTION: &str = "Publish data schemas for your application.";
 
 pub static SCHEMA_DEFINITION_V1: Lazy<Schema> = Lazy::new(|| {
-    let mut fields = BTreeMap::new();
+    let fields = SchemaFields::new(&[
+        ("name", FieldType::String),
+        ("description", FieldType::String),
+        (
+            "fields",
+            FieldType::PinnedRelationList(SchemaId::SchemaFieldDefinition(1)),
+        ),
+    ])
+    // Unwrap as we know the fields are valid.
+    .unwrap();
 
-    fields.insert("name".to_string(), FieldType::String);
-    fields.insert("description".to_string(), FieldType::String);
-
-    fields.insert(
-        "fields".to_string(),
-        FieldType::PinnedRelationList(SchemaId::SchemaFieldDefinition(1)),
-    );
+    // We can unwrap here as we know the schema definition is valid.
+    let description = SchemaDescription::new(DESCRIPTION).unwrap();
 
     Schema {
         id: SchemaId::SchemaDefinition(1),
-        description: DESCRIPTION.to_owned(),
+        description,
         fields,
     }
 });

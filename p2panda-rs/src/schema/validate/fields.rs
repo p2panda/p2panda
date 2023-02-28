@@ -40,7 +40,7 @@ pub fn validate_all_fields(
     // Iterate through both field lists at the same time. Both `Schema` and `PlainFields` uses a
     // `BTreeMap` internally which gives us the guarantee that all fields are sorted. Through this
     // ordering we can compare them easily.
-    for schema_field in schema.fields() {
+    for schema_field in schema.fields().iter() {
         match plain_fields.next() {
             Some((plain_name, plain_value)) => {
                 let (validated_name, validated_value) =
@@ -325,7 +325,7 @@ mod tests {
     use crate::document::DocumentViewId;
     use crate::operation::plain::{PlainFields, PlainValue};
     use crate::operation::{OperationFields, OperationValue};
-    use crate::schema::{FieldType, Schema, SchemaId};
+    use crate::schema::{FieldType, Schema, SchemaId, SchemaName};
     use crate::test_utils::constants::{HASH, SCHEMA_ID};
     use crate::test_utils::fixtures::document_view_id;
     use crate::test_utils::fixtures::schema_id;
@@ -472,10 +472,11 @@ mod tests {
         #[case] fields: Vec<(&str, PlainValue)>,
     ) {
         // Construct a schema
+        let schema_name = SchemaName::new("zoo").expect("Valid schema name");
         let schema = Schema::new(
-            &SchemaId::Application("zoo".to_owned(), schema_view_id),
+            &SchemaId::Application(schema_name, schema_view_id),
             "Some schema description",
-            schema_fields,
+            &schema_fields,
         )
         .unwrap();
 
@@ -545,10 +546,11 @@ mod tests {
         #[case] expected: &str,
     ) {
         // Construct a schema
+        let schema_name = SchemaName::new("zoo").expect("Valid schema name");
         let schema = Schema::new(
-            &SchemaId::Application("zoo".to_owned(), schema_view_id),
+            &SchemaId::Application(schema_name.to_owned(), schema_view_id),
             "Some schema description",
-            schema_fields,
+            &schema_fields,
         )
         .unwrap();
 
@@ -597,10 +599,11 @@ mod tests {
         #[case] fields: Vec<(&str, PlainValue)>,
     ) {
         // Construct a schema
+        let schema_name = SchemaName::new("zoo").expect("Valid schema name");
         let schema = Schema::new(
-            &SchemaId::Application("zoo".to_owned(), schema_view_id),
+            &SchemaId::Application(schema_name, schema_view_id),
             "Some schema description",
-            schema_fields,
+            &schema_fields,
         )
         .unwrap();
 
@@ -671,10 +674,11 @@ mod tests {
         #[case] expected: &str,
     ) {
         // Construct a schema
+        let schema_name = SchemaName::new("zoo").expect("Valid schema name");
         let schema = Schema::new(
-            &SchemaId::Application("zoo".to_owned(), schema_view_id),
+            &SchemaId::Application(schema_name, schema_view_id),
             "Some schema description",
-            schema_fields,
+            &schema_fields,
         )
         .unwrap();
 
@@ -698,10 +702,11 @@ mod tests {
     #[rstest]
     fn conversion_to_operation_fields(#[from(document_view_id)] schema_view_id: DocumentViewId) {
         // Construct a schema
+        let schema_name = SchemaName::new("polar").expect("Valid schema name");
         let schema = Schema::new(
-            &SchemaId::Application("polar".to_owned(), schema_view_id),
+            &SchemaId::Application(schema_name, schema_view_id),
             "Some schema description",
-            vec![
+            &[
                 ("icecream", FieldType::String),
                 ("degree", FieldType::Float),
             ],

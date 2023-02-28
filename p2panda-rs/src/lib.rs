@@ -22,9 +22,11 @@
 //! # use p2panda_rs::identity::KeyPair;
 //! # use p2panda_rs::operation::{OperationBuilder, OperationId};
 //! # use p2panda_rs::operation::encode::encode_operation;
-//! # use p2panda_rs::schema::SchemaId;
+//! # use p2panda_rs::schema::{SchemaId, SchemaName};
+//! #
+//! # let schema_name = SchemaName::new("profile")?;
 //! # let view_id = OperationId::from(Hash::new_from_bytes(&[1, 2, 3]));
-//! # let profile_schema_id = SchemaId::new_application("profile", &view_id.into());
+//! # let profile_schema_id = SchemaId::new_application(&schema_name, &view_id.into());
 //! // Generate new Ed25519 key pair
 //! let key_pair = KeyPair::new();
 //!
@@ -48,7 +50,6 @@
 //! # }
 //! ```
 #![warn(
-    missing_copy_implementations,
     missing_debug_implementations,
     rustdoc::missing_doc_code_examples,
     missing_docs,
