@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use crate::schema::error::SchemaDescriptionError;
 use crate::schema::validate::validate_description;
+use crate::Validate;
 
 /// The description of a schema which adheres to specification requirements. Used in the
 /// construction of `Schema`.
@@ -19,12 +20,16 @@ impl SchemaDescription {
         description.validate()?;
         Ok(description)
     }
+}
+
+impl Validate for SchemaDescription {
+    type Error = SchemaDescriptionError;
 
     /// Perform validation on the description string.
     ///
     /// 1. It consists of unicode characters
     /// 2. ... and must be at most 256 characters long
-    pub fn validate(&self) -> Result<(), SchemaDescriptionError> {
+    fn validate(&self) -> Result<(), Self::Error> {
         if !validate_description(&self.0) {
             return Err(SchemaDescriptionError::TooLongSchemaDescription);
         }

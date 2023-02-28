@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use crate::schema::error::SchemaNameError;
 use crate::schema::validate::validate_name;
+use crate::Validate;
 
 /// A human readable schema name, used in the construction of `SchemaId`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -18,6 +19,10 @@ impl SchemaName {
         name.validate()?;
         Ok(name)
     }
+}
+
+impl Validate for SchemaName {
+    type Error = SchemaNameError;
 
     /// Validate that this schema name string follows the specification requirements.
     ///
@@ -25,7 +30,7 @@ impl SchemaName {
     /// 2. It begins with a letter
     /// 3. It uses only alphanumeric characters, digits and the underscore character
     /// 4. It doesn't end with an underscore
-    pub fn validate(&self) -> Result<(), SchemaNameError> {
+    fn validate(&self) -> Result<(), Self::Error> {
         if !validate_name(&self.0) {
             return Err(SchemaNameError::MalformedSchemaName);
         }

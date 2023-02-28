@@ -3,6 +3,8 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
+use crate::Validate;
+
 use super::error::SchemaFieldError;
 use super::validate::validate_field_name;
 use super::FieldType;
@@ -61,6 +63,10 @@ impl SchemaFields {
     pub fn iter(&self) -> Iter<String, FieldType> {
         self.0.iter()
     }
+}
+
+impl Validate for SchemaFields {
+    type Error = SchemaFieldError;
 
     /// Performs the following validation steps:
     ///
@@ -74,7 +80,7 @@ impl SchemaFields {
     ///
     /// Note: The underlying datatype BTreeMap cannot contain duplicate fields and orders fields
     /// by their key. This already fulfils two requirements for SchemaFields.
-    pub fn validate(&self) -> Result<(), SchemaFieldError> {
+    fn validate(&self) -> Result<(), Self::Error> {
         // Validate schema field names.
         for name in self.keys() {
             if !validate_field_name(&name) {
