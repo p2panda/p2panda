@@ -3,11 +3,10 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
+use crate::schema::error::SchemaFieldError;
+use crate::schema::validate::validate_field_name;
+use crate::schema::FieldType;
 use crate::Validate;
-
-use super::error::SchemaFieldError;
-use super::validate::validate_field_name;
-use super::FieldType;
 
 /// The fields definitions of a [`Schema`].
 #[derive(Clone, Debug, PartialEq, Default, Eq)]
