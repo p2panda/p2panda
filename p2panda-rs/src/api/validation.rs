@@ -8,6 +8,7 @@ use crate::document::{DocumentId, DocumentViewId};
 use crate::entry::{LogId, SeqNum};
 use crate::identity::PublicKey;
 use crate::operation::traits::AsOperation;
+use crate::schema::SchemaId;
 use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
 
 /// Verify that a claimed seq num is the next sequence number following the latest.
@@ -187,7 +188,9 @@ pub async fn get_checked_document_id_for_view_id<S: OperationStore>(
         let document_id = store.get_document_id_by_operation_id(operation).await?;
 
         if document_id.is_none() {
-            return Err(ValidationError::PreviousNotFound(operation.to_owned()));
+            return Err(ValidationError::PreviousOperationNotFound(
+                operation.to_owned(),
+            ));
         }
 
         found_document_ids.insert(document_id.unwrap());
@@ -205,16 +208,43 @@ pub async fn get_checked_document_id_for_view_id<S: OperationStore>(
     Ok(document_id.to_owned())
 }
 
+/// Validate an operations' claimed schema against the operations contained in it's previous field.
+pub async fn validate_claimed_schema_id<S: OperationStore>(
+    store: &S,
+    claimed_schema_id: &SchemaId,
+    previous: &DocumentViewId,
+) -> Result<(), ValidationError> {
+    for id in previous.iter() {
+        // Get the operation from the store for each operation id in `previous`.
+        let operation = match store.get_operation(id).await? {
+            Some(operation) => operation,
+            None => return Err(ValidationError::PreviousOperationNotFound(id.to_owned())),
+        };
+
+        // Compare the claimed schema id with the expected one.
+        if &operation.schema_id() != claimed_schema_id {
+            return Err(ValidationError::InvalidClaimedSchema(
+                id.to_owned(),
+                claimed_schema_id.to_owned(),
+                operation.schema_id(),
+            ));
+        };
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
 
+    use crate::api::validation::validate_claimed_schema_id;
     use crate::document::{DocumentId, DocumentViewId};
     use crate::entry::traits::{AsEncodedEntry, AsEntry};
     use crate::entry::{LogId, SeqNum};
     use crate::identity::KeyPair;
     use crate::operation::{Operation, OperationAction, OperationBuilder, OperationId};
-    use crate::schema::Schema;
+    use crate::schema::{Schema, SchemaId, SchemaName};
     use crate::test_utils::constants::{test_fields, PRIVATE_KEY};
     use crate::test_utils::fixtures::{
         key_pair, operation, populate_store_config, random_document_id, random_document_view_id,
@@ -473,5 +503,32 @@ mod tests {
         assert!(ensure_document_not_deleted(&store, document_id)
             .await
             .is_ok());
+    }
+
+    #[rstest]
+    #[should_panic(
+        expected = "Operation 00206a28f82fc8d27671b31948117af7501a5a0de709b0cf9bc3586b67abe67ac29a claims incorrect schema my_wrong_schema_"
+    )]
+    #[tokio::test]
+    async fn validates_incorrect_schema_id(
+        #[from(populate_store_config)]
+        #[with(1, 1, 1, false)]
+        config: PopulateStoreConfig,
+    ) {
+        let store = MemoryStore::default();
+        let (_, document_ids) = populate_store(&store, &config).await;
+
+        let document_id = document_ids.get(0).unwrap().to_owned();
+
+        let create_view_id: DocumentViewId = document_id.as_str().parse().unwrap();
+
+        // Create a different schema from the one the already published operation contains.
+        let schema_name = SchemaName::new("my_wrong_schema").expect("Valid schema name");
+        let schema_id = SchemaId::new_application(&schema_name, &random_document_view_id());
+
+        // Validating should catch the different schemas.
+        let result = validate_claimed_schema_id(&store, &schema_id, &create_view_id).await;
+
+        result.map_err(|err| err.to_string()).unwrap();
     }
 }

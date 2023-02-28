@@ -3,7 +3,7 @@
 use crate::api::helpers::get_skiplink_for_entry;
 use crate::api::validation::{
     ensure_document_not_deleted, get_checked_document_id_for_view_id, get_expected_skiplink,
-    increment_seq_num, is_next_seq_num, verify_log_id,
+    increment_seq_num, is_next_seq_num, validate_claimed_schema_id, verify_log_id,
 };
 use crate::api::DomainError;
 use crate::document::DocumentId;
@@ -220,6 +220,10 @@ async fn determine_document_id<S: OperationStore>(
             // We can unwrap previous operations here as we know all UPDATE and DELETE operations contain them.
             let previous = operation.previous().unwrap();
 
+            // Validate claimed schema for this operation matches the expected found in the
+            // previous operations.
+            validate_claimed_schema_id(store, &operation.schema_id(), &previous).await?;
+
             // Get the document_id for the document_view_id contained in previous operations.
             // This performs several validation steps (check method doc string).
             let document_id = get_checked_document_id_for_view_id(store, &previous).await?;
@@ -252,7 +256,7 @@ mod tests {
     use crate::operation::{
         Operation, OperationAction, OperationBuilder, OperationId, OperationValue,
     };
-    use crate::schema::{FieldType, Schema};
+    use crate::schema::{FieldType, Schema, SchemaId, SchemaName};
     use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
     use crate::test_utils::constants::{test_fields, PRIVATE_KEY};
     use crate::test_utils::fixtures::{
@@ -260,7 +264,7 @@ mod tests {
         random_document_view_id, random_hash, random_operation_id, schema, update_operation,
     };
     use crate::test_utils::memory_store::helpers::{
-        populate_store, remove_entries, remove_operations, PopulateStoreConfig,
+        populate_store, remove_entries, remove_operations, send_to_store, PopulateStoreConfig,
     };
     use crate::test_utils::memory_store::{MemoryStore, StorageEntry};
     use crate::WithId;
@@ -505,7 +509,7 @@ mod tests {
         KeyPair::new()
     )]
     #[should_panic(
-        expected = "Operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found, could not determine document id"
+        expected = "Previous operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found in store"
     )]
     #[case::previous_operation_missing(
         &[(0, 8)],
@@ -513,7 +517,7 @@ mod tests {
         KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
     )]
     #[should_panic(
-        expected = "Operation 00201971f1257645a2f6d3465f8713991d269709f81a5c6c458168b9461d68af5ecf not found, could not determine document id"
+        expected = "Previous operation 00201971f1257645a2f6d3465f8713991d269709f81a5c6c458168b9461d68af5ecf not found in store"
     )]
     #[case::one_of_some_previous_missing(
         &[(0, 7)],
@@ -521,7 +525,7 @@ mod tests {
         KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
     )]
     #[should_panic(
-        expected = "Operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found, could not determine document id"
+        expected = "Previous operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found in store"
     )]
     #[case::one_of_some_previous_missing(
         &[(0, 8)],
@@ -529,7 +533,7 @@ mod tests {
         KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
     )]
     #[should_panic(
-        expected = "Operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found, could not determine document id"
+        expected = "Previous operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found in store"
     )]
     #[case::missing_previous_operation_multi_writer(
         &[(0, 8)],
@@ -1006,6 +1010,48 @@ mod tests {
 
         // We expect the entry we published not to have been stored in the db
         assert!(entry_at_max_seq_num.is_none());
+        result.map_err(|err| err.to_string()).unwrap();
+    }
+
+    #[rstest]
+    #[should_panic(
+        expected = "Operation 00206a28f82fc8d27671b31948117af7501a5a0de709b0cf9bc3586b67abe67ac29a claims incorrect schema my_wrong_schema_name_"
+    )]
+    #[tokio::test]
+    async fn validates_incorrect_schema_id_in_previous_operation(
+        #[from(populate_store_config)]
+        #[with(1, 1, 1, false)]
+        config: PopulateStoreConfig,
+    ) {
+        let store = MemoryStore::default();
+        let (key_pairs, document_ids) = populate_store(&store, &config).await;
+
+        let document_id = document_ids.get(0).unwrap().to_owned();
+        let key_pair = key_pairs.get(0).unwrap().to_owned();
+
+        let create_view_id: DocumentViewId = document_id.as_str().parse().unwrap();
+
+        // A different schema from the operation already published to the store.
+        let schema_name = SchemaName::new("my_wrong_schema_name").expect("Valid schema name");
+        let schema_id = SchemaId::new_application(&schema_name, &random_document_view_id());
+        let schema = schema(
+            vec![("age".into(), FieldType::Integer)],
+            schema_id.clone(),
+            "Schema with different id",
+        );
+
+        // Create an operation correctly following the incorrect schema.
+        let update_with_different_schema_id = update_operation(
+            vec![("age", OperationValue::Integer(21))],
+            create_view_id,
+            schema_id,
+        );
+
+        // If we publish this operation it should fail as it's claimed schema is different from
+        // the one it points to in it's previous operations.
+        let result =
+            send_to_store(&store, &update_with_different_schema_id, &schema, &key_pair).await;
+
         result.map_err(|err| err.to_string()).unwrap();
     }
 }

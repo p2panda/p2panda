@@ -226,7 +226,7 @@ mod tests {
         KeyPair::new()
     )]
     #[should_panic(
-        expected = "Operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found, could not determine document id"
+        expected = "Previous operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found in store"
     )]
     #[case::previous_operation_missing(
         &[(0, 8)],
@@ -234,7 +234,7 @@ mod tests {
         KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
     )]
     #[should_panic(
-        expected = "Operation 00201971f1257645a2f6d3465f8713991d269709f81a5c6c458168b9461d68af5ecf not found, could not determine document id"
+        expected = "Previous operation 00201971f1257645a2f6d3465f8713991d269709f81a5c6c458168b9461d68af5ecf not found in store"
     )]
     #[case::one_of_some_previous_missing(
         &[(0, 7)],
@@ -242,7 +242,7 @@ mod tests {
         KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
     )]
     #[should_panic(
-        expected = "Operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found, could not determine document id"
+        expected = "Previous operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found in store"
     )]
     #[case::one_of_some_previous_missing(
         &[(0, 8)],
@@ -250,7 +250,7 @@ mod tests {
         KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
     )]
     #[should_panic(
-        expected = "Operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found, could not determine document id"
+        expected = "Previous operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found in store"
     )]
     #[case::missing_previous_operation_multi_writer(
         &[(0, 8)],
@@ -443,7 +443,7 @@ mod tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("could not determine document id") // This is a partial string match, preceded by "<Operation xxxxx> not found,"
+                .contains("not found in store") // This is a partial string match, preceded by "Previous operation <XXXXXX...>"
         );
 
         // Here we are missing the skiplink.

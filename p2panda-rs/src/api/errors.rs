@@ -3,6 +3,7 @@
 use crate::entry::error::DecodeEntryError;
 use crate::operation::error::ValidateOperationError;
 use crate::operation::OperationId;
+use crate::schema::SchemaId;
 use crate::storage_provider::error::{EntryStorageError, LogStorageError, OperationStorageError};
 
 /// Error type used in the validation module.
@@ -32,6 +33,10 @@ pub enum ValidationError {
     #[error("Entry with seq num 1 can not have skiplink")]
     FirstEntryWithSkiplink,
 
+    /// Claimed schema does not match the documents expected schema.
+    #[error("Operation {0} claims incorrect schema {1} for document with schema {2}")]
+    InvalidClaimedSchema(OperationId, SchemaId, SchemaId),
+
     /// This document is deleted.
     #[error("Document is deleted")]
     DocumentDeleted,
@@ -45,8 +50,8 @@ pub enum ValidationError {
     MaxLogId,
 
     /// An operation in the `previous` field was not found in the store.
-    #[error("Operation {0} not found, could not determine document id")]
-    PreviousNotFound(OperationId),
+    #[error("Previous operation {0} not found in store")]
+    PreviousOperationNotFound(OperationId),
 
     /// A document view id was provided which contained operations from different documents.
     #[error("Operations in passed document view id originate from different documents")]
