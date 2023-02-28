@@ -295,7 +295,7 @@ mod tests {
     use crate::entry::traits::AsEncodedEntry;
     use crate::identity::KeyPair;
     use crate::operation::{OperationAction, OperationBuilder, OperationId, OperationValue};
-    use crate::schema::{FieldType, Schema, SchemaId};
+    use crate::schema::{FieldType, Schema, SchemaId, SchemaName};
     use crate::test_utils::constants::{self, PRIVATE_KEY};
     use crate::test_utils::fixtures::{
         operation_fields, published_operation, random_document_view_id, random_operation_id, schema,
@@ -801,11 +801,12 @@ mod tests {
         let create_view_id =
             DocumentViewId::new(&[WithId::<OperationId>::id(&create_operation).clone()]);
 
+        let schema_name = SchemaName::new("my_wrong_schema").expect("Valid schema name");
         let update_with_incorrect_schema_id = published_operation(
             Some(operation_fields(vec![("age", OperationValue::Integer(21))])),
             schema(
                 vec![("age".into(), FieldType::Integer)],
-                SchemaId::new_application("my_wrong_schema", &random_document_view_id()),
+                SchemaId::new_application(&schema_name, &random_document_view_id()),
                 "Schema with a wrong id",
             ),
             Some(create_view_id.clone()),
