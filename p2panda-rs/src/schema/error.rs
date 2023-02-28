@@ -23,8 +23,6 @@ pub enum SchemaDescriptionError {
     TooLongSchemaDescription,
 }
 
-impl Copy for SchemaDescriptionError {}
-
 /// Custom errors related to `SchemaFields`.
 #[derive(Clone, Error, Debug)]
 pub enum SchemaFieldError {
@@ -44,8 +42,6 @@ pub enum SchemaFieldError {
     #[error("Schema fields cannot contain duplicate field names")]
     DuplicateFields,
 }
-
-impl Copy for SchemaFieldError {}
 
 /// Custom errors related to `SchemaId`.
 #[derive(Error, Debug)]

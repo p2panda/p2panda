@@ -50,7 +50,6 @@
 //! # }
 //! ```
 #![warn(
-    missing_copy_implementations,
     missing_debug_implementations,
     rustdoc::missing_doc_code_examples,
     missing_docs,
