@@ -3,7 +3,7 @@
 //! Methods to reduce a list of operations into a single view.
 
 use crate::document::error::DocumentBuilderError;
-use crate::document::{DocumentViewFields, DocumentViewValue, IsDeleted, IsEdited};
+use crate::document::{DocumentViewFields, DocumentViewValue};
 use crate::graph::Graph;
 use crate::identity::PublicKey;
 use crate::operation::traits::AsOperation;
@@ -37,24 +37,16 @@ pub fn build_graph(
 
 /// Reduce a list of operations into a single view.
 ///
-/// Returns the reduced fields of a document view along with the `edited` and `deleted` boolean
-/// flags. If the document contains a DELETE operation, then no view is returned and the `deleted`
-/// flag is set to true. If the document contains one or more UPDATE operations, then the reduced
-/// view is returned and the `edited` flag is set to true.
+/// Returns the reduced fields of a document view wrapped in an Option. If the passed operations
+/// contain a DELETE then the returned fields will be None.
 pub fn reduce(
     ordered_operations: &[(OperationId, Operation, PublicKey)],
-) -> (Option<DocumentViewFields>, IsEdited, IsDeleted) {
-    let mut is_edited = false;
-
+) -> Option<DocumentViewFields> {
     let mut document_view_fields = DocumentViewFields::new();
 
     for (id, operation, _public_key) in ordered_operations {
         if operation.is_delete() {
-            return (None, true, true);
-        }
-
-        if operation.is_update() {
-            is_edited = true
+            return None;
         }
 
         if let Some(fields) = operation.fields() {
@@ -65,7 +57,7 @@ pub fn reduce(
         }
     }
 
-    (Some(document_view_fields), is_edited, false)
+    Some(document_view_fields)
 }
 
 #[cfg(test)]
@@ -91,31 +83,24 @@ mod tests {
     ) {
         let mut operations = Vec::new();
         operations.push((random_operation_id(), create_operation, public_key));
-        let (reduced_create, is_edited, is_deleted) = reduce(&operations);
+        let reduced_create = reduce(&operations);
 
         assert_eq!(
             *reduced_create.unwrap().get("username").unwrap().value(),
             OperationValue::String("bubu".to_string())
         );
-        assert!(!is_edited);
-        assert!(!is_deleted);
 
         operations.push((random_operation_id(), update_operation, public_key));
-        let (reduced_update, is_edited, is_deleted) = reduce(&operations);
+        let reduced_update = reduce(&operations);
 
         assert_eq!(
             *reduced_update.unwrap().get("username").unwrap().value(),
             OperationValue::String("Yahooo!".to_string())
         );
-        assert!(is_edited);
-        assert!(!is_deleted);
 
         operations.push((random_operation_id(), delete_operation, public_key));
-        let (reduced_delete, is_edited, is_deleted) = reduce(&operations);
+        let reduced_delete = reduce(&operations);
 
-        // The value remains the same, but the deleted flag is true now.
         assert!(reduced_delete.is_none());
-        assert!(is_edited);
-        assert!(is_deleted);
     }
 }

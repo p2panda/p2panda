@@ -41,6 +41,22 @@ pub enum DocumentBuilderError {
 /// Error types for methods of `Document` struct.
 #[derive(Error, Debug)]
 pub enum DocumentError {
+    /// Operation passed to commit does not refer to this documents current view.
+    #[error("operation {0} does not update the documents current view")]
+    PreviousDoesNotMatch(OperationId),
+
+    /// Operation passed to commit has incorrect operation type.
+    #[error("CREATE operation used to update document")]
+    InvalidOperationType,
+
+    /// Operation passed to commit does not the same schema as the document.
+    #[error("Operation {0} does not match the documents schema")]
+    InvalidSchemaId(OperationId),
+
+    /// Cannot perform a commit on a deleted document.
+    #[error("Cannot perform a commit on a deleted document")]
+    UpdateOnDeleted,
+
     /// Handle errors from validating CBOR schemas.
     #[error(transparent)]
     DocumentViewError(#[from] DocumentViewError),
