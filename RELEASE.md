@@ -33,7 +33,7 @@ _This is an example for publising version `1.2.0`._
 10. Bump the package version in `Cargo.toml` by hand.
 11. Change the examples in the `README.md` which import `p2panda-js` by version to use the latest version
 12. Commit the version changes with a commit message `1.2.0`.
-13. Run `git tag v1.2.0` and push including your tags using `pit push origin
+13. Run `git tag v1.2.0` and push including your tags using `git push origin
     main --tags`.
 
 ## Publishing releases
