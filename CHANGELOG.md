@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Changed
 
+- Validate an operation's schema id matches the target document's in `publish` [#486](https://github.com/p2panda/p2panda/pull/486) `rs` 
 - Introduce `SchemaName`, `SchemaDescription` and `SchemaFields` structs [#481](https://github.com/p2panda/p2panda/pull/481) `rs`
 - Add `commit` method to `Document` for applying operations incrementally [#485](https://github.com/p2panda/p2panda/pull/485) `rs`
 - Introduce `api` module which publicly exports `publish` and `next_args` [#483](https://github.com/p2panda/p2panda/pull/483) `rs`
