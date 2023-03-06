@@ -9,15 +9,17 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+## [0.7.0]
+
 ### Changed
 
-- Validate an operation's schema id matches the target document's in `publish` [#486](https://github.com/p2panda/p2panda/pull/486) `rs` 
+- Validate an operation's schema id matches the target document's in `publish` [#486](https://github.com/p2panda/p2panda/pull/486) `rs`
 - Introduce `SchemaName`, `SchemaDescription` and `SchemaFields` structs [#481](https://github.com/p2panda/p2panda/pull/481) `rs`
-- Add `commit` method to `Document` for applying operations incrementally [#485](https://github.com/p2panda/p2panda/pull/485) `rs`
+- Add `commit` method to `Document` for applying operations incrementally [#485](https://github.com/p2panda/p2panda/pull/485) `rs` 🥞
 - Introduce `api` module which publicly exports `publish` and `next_args` [#483](https://github.com/p2panda/p2panda/pull/483) `rs`
 - Add schema name tests when deserializing plain operations [#480](https://github.com/p2panda/p2panda/pull/480) `rs`
 - Introduce typed errors in `domain` and `validation` modules [#478](https://github.com/p2panda/p2panda/pull/478) `rs`
-- Refactor storage API: Rename methods, remove `StorageProvider` and document "caching" layers [#469](https://github.com/p2panda/p2panda/pull/469) `rs`
+- Refactor storage API: Rename methods, remove `StorageProvider` and document "caching" layers [#469](https://github.com/p2panda/p2panda/pull/469) `rs` 🥞
 - Remove `VerifiedOperation` [#465](https://github.com/p2panda/p2panda/pull/465) `rs`
 - Better docs for `Document` [#470](https://github.com/p2panda/p2panda/pull/470) `rs`
 - Remove `DocumentMeta` [#472](https://github.com/p2panda/p2panda/pull/472) `rs`
@@ -267,7 +269,8 @@ Released on 2021-01-18: :package: `p2panda-js` and 2021-01-28: :package: `p2pand
 - JavaScript library export with WebAssembly running in browsers and NodeJS. [#21](https://github.com/p2panda/p2panda/pull/21) `js`
 - Ed25519 key pair generation. [#4](https://github.com/p2panda/p2panda/pull/4) `rs`
 
-[unreleased]: https://github.com/p2panda/p2panda/compare/v0.6.0...HEAD
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/p2panda/p2panda/releases/tag/v0.7.0
 [0.6.0]: https://github.com/p2panda/p2panda/releases/tag/v0.6.0
 [0.5.0]: https://github.com/p2panda/p2panda/releases/tag/v0.5.0
 [0.4.0]: https://github.com/p2panda/p2panda/releases/tag/v0.4.0
