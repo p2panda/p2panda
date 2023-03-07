@@ -11,6 +11,8 @@ Highlights are marked with a pancake 🥞
 
 ## [0.7.0]
 
+Released on 2023-03-07: :package: `p2panda-js` and :package: `p2panda-rs`
+
 ### Changed
 
 - Validate an operation's schema id matches the target document's in `publish` [#486](https://github.com/p2panda/p2panda/pull/486) `rs`
@@ -26,6 +28,8 @@ Highlights are marked with a pancake 🥞
 - Update dependencies for Rust and TypeScript [#476](https://github.com/p2panda/p2panda/pull/476) `rs` `js`
 
 ## [0.6.0] 🥞
+
+Released on 2022-09-07: :package: `p2panda-js` and :package: `p2panda-rs`
 
 ### Changed
 
