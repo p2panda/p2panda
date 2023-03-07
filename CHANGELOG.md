@@ -11,7 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ## [0.7.0]
 
-Released on 2023-03-07: :package: `p2panda-js` and :package: `p2panda-rs`
+Released on 2023-03-06: :package: `p2panda-js` and :package: `p2panda-rs`
 
 ### Changed
 
