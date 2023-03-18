@@ -11,7 +11,7 @@ use crate::schema::validate::validate_name;
 use crate::Validate;
 
 /// A human readable schema name, used in the construction of `SchemaId`.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SchemaName(String);
 
 impl SchemaName {
