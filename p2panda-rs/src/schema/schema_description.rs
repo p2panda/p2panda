@@ -68,10 +68,10 @@ impl<'de> Deserialize<'de> for SchemaDescription {
         D: serde::Deserializer<'de>,
     {
         // Deserialize into string
-        let name: &str = Deserialize::deserialize(deserializer)?;
+        let name: String = Deserialize::deserialize(deserializer)?;
 
         // Check format
-        let schema_name = SchemaDescription::new(name).map_err(|err| {
+        let schema_name = SchemaDescription::new(&name).map_err(|err| {
             serde::de::Error::custom(format!("invalid schema description, {}", err))
         })?;
 
