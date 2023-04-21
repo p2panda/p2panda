@@ -301,6 +301,14 @@ mod tests {
             },
         ]),
     )]
+    #[case(
+        vec![("my_list_of_stuff", FieldType::RelationList(schema_id.clone()))],
+        cbor!([1, 0, SCHEMA_ID, { "my_list_of_stuff" => [] } ]),
+    )]
+    #[case(
+        vec![("my_list_of_stuff", FieldType::PinnedRelationList(schema_id.clone()))],
+        cbor!([1, 0, SCHEMA_ID, { "my_list_of_stuff" => [] } ]),
+    )]
     fn valid_operations(
         #[from(schema_id)] schema_id: SchemaId,
         #[case] schema_fields: Vec<(&str, FieldType)>,
@@ -310,7 +318,7 @@ mod tests {
             .expect("Could not create schema");
 
         let plain_operation = cbor_to_plain(cbor.expect("Invalid CBOR value"));
-        assert!(validate_operation(&plain_operation, &schema).is_ok());
+        validate_operation(&plain_operation, &schema).unwrap();
     }
 
     #[rstest]

@@ -398,6 +398,10 @@ mod tests {
         PlainValue::PinnedRelationList(vec![vec![HASH.to_owned()]]),
         FieldType::PinnedRelationList(schema_id(SCHEMA_ID))
     )]
+    #[case(
+        PlainValue::PinnedRelationList(vec![]),
+        FieldType::PinnedRelationList(schema_id(SCHEMA_ID))
+    )]
     fn correct_field_values(#[case] plain_value: PlainValue, #[case] schema_field_type: FieldType) {
         assert!(validate_field_value(&plain_value, &schema_field_type).is_ok());
     }
@@ -464,6 +468,22 @@ mod tests {
             ("c", PlainValue::Boolean(false)),
             ("b", PlainValue::StringOrRelation("Panda-San!".into())),
             ("a", PlainValue::Integer(6)),
+        ],
+    )]
+    #[case(
+        vec![
+            ("a", FieldType::PinnedRelationList(schema_id(SCHEMA_ID))),
+        ],
+        vec![
+            ("a", PlainValue::PinnedRelationList(vec![])),
+        ],
+    )]
+    #[case(
+        vec![
+            ("a", FieldType::PinnedRelationList(schema_id(SCHEMA_ID))),
+        ],
+        vec![
+            ("a", PlainValue::PinnedRelationOrRelationList(vec![])),
         ],
     )]
     fn correct_all_fields(
