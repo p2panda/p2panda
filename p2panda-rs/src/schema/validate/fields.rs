@@ -400,6 +400,10 @@ mod tests {
         FieldType::RelationList(schema_id(SCHEMA_ID))
     )]
     #[case(
+        PlainValue::AmbiguousRelation(vec![]),
+        FieldType::RelationList(schema_id(SCHEMA_ID))
+    )]
+    #[case(
         PlainValue::PinnedRelationList(vec![vec![HASH.to_owned()]]),
         FieldType::PinnedRelationList(schema_id(SCHEMA_ID))
     )]

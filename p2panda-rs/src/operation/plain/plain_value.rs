@@ -14,6 +14,10 @@ use crate::document::{DocumentId, DocumentViewId};
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 #[serde(untagged)]
 pub enum PlainValue {
+    /// List of strings which can either be a pinned relation (list of operation ids) a relation
+    /// list (list of document ids) or an empty pinned relation list.
+    AmbiguousRelation(Vec<String>),
+
     /// Boolean value.
     Boolean(bool),
 
@@ -26,10 +30,6 @@ pub enum PlainValue {
     /// String value which can be either a text or relation (document id).
     StringOrRelation(String),
 
-    /// List of strings which can either be a pinned relation (list of operation ids) a relation
-    /// list (list of document ids) or an empty pinned relation list.
-    AmbiguousRelation(Vec<String>),
-
     /// List of a list of strings which is a pinned relation list.
     PinnedRelationList(Vec<Vec<String>>),
 }
@@ -40,11 +40,11 @@ impl PlainValue {
     /// This is useful for composing error messages or debug logs.
     pub fn field_type(&self) -> &str {
         match self {
+            PlainValue::AmbiguousRelation(_) => "str[]",
             PlainValue::Boolean(_) => "bool",
             PlainValue::Integer(_) => "int",
             PlainValue::Float(_) => "float",
             PlainValue::StringOrRelation(_) => "str",
-            PlainValue::AmbiguousRelation(_) => "str[]",
             PlainValue::PinnedRelationList(_) => "str[][]",
         }
     }
