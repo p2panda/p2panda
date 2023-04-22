@@ -223,7 +223,7 @@ fn validate_field_value(
             }
         }
         FieldType::RelationList(_) => {
-            if let PlainValue::PinnedRelationOrRelationList(document_ids_str) = plain_value {
+            if let PlainValue::AmbiguousRelation(document_ids_str) = plain_value {
                 // Convert list of strings to list of document ids aka a relation list
                 let relation_list: RelationList =
                     document_ids_str
@@ -245,7 +245,7 @@ fn validate_field_value(
             }
         }
         FieldType::PinnedRelation(_) => {
-            if let PlainValue::PinnedRelationOrRelationList(operation_ids_str) = plain_value {
+            if let PlainValue::AmbiguousRelation(operation_ids_str) = plain_value {
                 // Convert list of strings to list of operation ids aka a document view id, this
                 // checks if list of operation ids is sorted and without any duplicates
                 let document_view_id: DocumentViewId = operation_ids_str
@@ -266,35 +266,40 @@ fn validate_field_value(
             }
         }
         FieldType::PinnedRelationList(_) => {
-            if let PlainValue::PinnedRelationList(document_view_ids_vec) = plain_value {
-                let document_view_ids: Result<Vec<DocumentViewId>, ValidationError> =
-                    document_view_ids_vec
-                        .iter()
-                        .map(|operation_ids_str| {
-                            // Convert list of strings to list of operation ids aka a document view
-                            // id, this checks if list of operation ids is sorted and without any
-                            // duplicates
-                            let document_view_id: DocumentViewId = operation_ids_str
-                                .as_slice()
-                                .try_into()
-                                .map_err(|err: DocumentViewIdError| {
-                                    ValidationError::InvalidDocumentViewId(err.to_string())
-                                })?;
+            match plain_value {
+                PlainValue::PinnedRelationList(document_view_ids_vec) => {
+                    let document_view_ids: Result<Vec<DocumentViewId>, ValidationError> =
+                        document_view_ids_vec
+                            .iter()
+                            .map(|operation_ids_str| {
+                                // Convert list of strings to list of operation ids aka a document view
+                                // id, this checks if list of operation ids is sorted and without any
+                                // duplicates
+                                let document_view_id: DocumentViewId = operation_ids_str
+                                    .as_slice()
+                                    .try_into()
+                                    .map_err(|err: DocumentViewIdError| {
+                                        ValidationError::InvalidDocumentViewId(err.to_string())
+                                    })?;
 
-                            Ok(document_view_id)
-                        })
-                        .collect();
+                                Ok(document_view_id)
+                            })
+                            .collect();
 
-                // Note that we do NOT check for duplicates and ordering of the document view ids
-                // as this information is semantic
-                Ok(OperationValue::PinnedRelationList(PinnedRelationList::new(
-                    document_view_ids?,
-                )))
-            } else {
-                Err(ValidationError::InvalidType(
+                    // Note that we do NOT check for duplicates and ordering of the document view ids
+                    // as this information is semantic
+                    Ok(OperationValue::PinnedRelationList(PinnedRelationList::new(
+                        document_view_ids?,
+                    )))
+                }
+                // If an ambiguous relation is present, then this must be an empty pinned relation list.
+                PlainValue::AmbiguousRelation(_) => Ok(OperationValue::PinnedRelationList(
+                    PinnedRelationList::new(vec![]),
+                )),
+                _ => Err(ValidationError::InvalidType(
                     plain_value.field_type().to_owned(),
                     schema_field_type.to_string(),
-                ))
+                )),
             }
         }
     }
@@ -387,11 +392,11 @@ mod tests {
         FieldType::Relation(schema_id(SCHEMA_ID))
     )]
     #[case(
-        PlainValue::PinnedRelationOrRelationList(vec![HASH.to_owned()]),
+        PlainValue::AmbiguousRelation(vec![HASH.to_owned()]),
         FieldType::PinnedRelation(schema_id(SCHEMA_ID))
     )]
     #[case(
-        PlainValue::PinnedRelationOrRelationList(vec![HASH.to_owned()]),
+        PlainValue::AmbiguousRelation(vec![HASH.to_owned()]),
         FieldType::RelationList(schema_id(SCHEMA_ID))
     )]
     #[case(
@@ -455,7 +460,7 @@ mod tests {
         vec![
             ("message", PlainValue::StringOrRelation("Hello, Mr. Handa!".into())),
             ("age", PlainValue::Integer(41)),
-            ("fans", PlainValue::PinnedRelationOrRelationList(vec![HASH.to_owned()])),
+            ("fans", PlainValue::AmbiguousRelation(vec![HASH.to_owned()])),
         ],
     )]
     #[case(
@@ -483,7 +488,7 @@ mod tests {
             ("a", FieldType::PinnedRelationList(schema_id(SCHEMA_ID))),
         ],
         vec![
-            ("a", PlainValue::PinnedRelationOrRelationList(vec![])),
+            ("a", PlainValue::AmbiguousRelation(vec![])),
         ],
     )]
     fn correct_all_fields(
@@ -519,7 +524,7 @@ mod tests {
             ("message", FieldType::String),
         ],
         vec![
-            ("fans", PlainValue::PinnedRelationOrRelationList(vec![HASH.to_owned()])),
+            ("fans", PlainValue::AmbiguousRelation(vec![HASH.to_owned()])),
             ("message", PlainValue::StringOrRelation("Hello, Mr. Handa!".into())),
         ],
         "field 'fans' does not match schema: expected field name 'message'"
@@ -763,7 +768,7 @@ mod tests {
     #[case::unknown_fields(
         SchemaId::SchemaDefinition(1),
         vec![
-            ("fans", PlainValue::PinnedRelationOrRelationList(vec![HASH.to_owned()])),
+            ("fans", PlainValue::AmbiguousRelation(vec![HASH.to_owned()])),
         ],
         "field 'fans' does not match schema: expected field name 'description'"
     )]
