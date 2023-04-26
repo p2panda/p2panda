@@ -26,9 +26,9 @@ pub enum PlainValue {
     /// String value which can be either a text or relation (document id).
     StringOrRelation(String),
 
-    /// List of strings which can either be a pinned relation (list of operation ids) or a relation
-    /// list (list of document ids).
-    PinnedRelationOrRelationList(Vec<String>),
+    /// List of strings which can either be a pinned relation (list of operation ids) a relation
+    /// list (list of document ids) or an empty pinned relation list.
+    AmbiguousRelation(Vec<String>),
 
     /// List of a list of strings which is a pinned relation list.
     PinnedRelationList(Vec<Vec<String>>),
@@ -44,7 +44,7 @@ impl PlainValue {
             PlainValue::Integer(_) => "int",
             PlainValue::Float(_) => "float",
             PlainValue::StringOrRelation(_) => "str",
-            PlainValue::PinnedRelationOrRelationList(_) => "str[]",
+            PlainValue::AmbiguousRelation(_) => "str[]",
             PlainValue::PinnedRelationList(_) => "str[][]",
         }
     }
@@ -88,7 +88,7 @@ impl From<DocumentId> for PlainValue {
 
 impl From<Vec<DocumentId>> for PlainValue {
     fn from(value: Vec<DocumentId>) -> Self {
-        PlainValue::PinnedRelationOrRelationList(
+        PlainValue::AmbiguousRelation(
             value
                 .iter()
                 .map(|document_id| document_id.to_string())
@@ -99,7 +99,7 @@ impl From<Vec<DocumentId>> for PlainValue {
 
 impl From<DocumentViewId> for PlainValue {
     fn from(value: DocumentViewId) -> Self {
-        PlainValue::PinnedRelationOrRelationList(
+        PlainValue::AmbiguousRelation(
             value
                 .iter()
                 .map(|operation_id| operation_id.to_string())
@@ -145,7 +145,7 @@ mod tests {
         );
         assert_eq!(
             "str[]",
-            PlainValue::PinnedRelationOrRelationList(vec!["test".into()]).field_type()
+            PlainValue::AmbiguousRelation(vec!["test".into()]).field_type()
         );
     }
 
@@ -166,11 +166,11 @@ mod tests {
             document_id.clone().into()
         );
         assert_eq!(
-            PlainValue::PinnedRelationOrRelationList(vec![document_id.to_string()]),
+            PlainValue::AmbiguousRelation(vec![document_id.to_string()]),
             vec![document_id].into()
         );
         assert_eq!(
-            PlainValue::PinnedRelationOrRelationList(vec![document_view_id.to_string()]),
+            PlainValue::AmbiguousRelation(vec![document_view_id.to_string()]),
             document_view_id.clone().into()
         );
         assert_eq!(
@@ -192,7 +192,7 @@ mod tests {
         );
 
         assert_eq!(
-            serialize_from(PlainValue::PinnedRelationOrRelationList(vec![
+            serialize_from(PlainValue::AmbiguousRelation(vec![
                 "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4".into()
             ])),
             serialize_value(cbor!([

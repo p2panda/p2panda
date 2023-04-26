@@ -63,9 +63,9 @@ pub fn operation_fields(
 ) -> OperationFields {
     let mut operation_fields = OperationFields::new();
     for (key, value) in fields_vec.iter() {
-        if operation_fields.insert(key, value.to_owned()).is_err() {
-            // Ignore duplicates error
-        }
+        operation_fields
+            .insert(key, value.to_owned())
+            .expect("Can insert operation field")
     }
     operation_fields
 }
