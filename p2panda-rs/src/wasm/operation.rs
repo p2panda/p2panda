@@ -39,11 +39,11 @@ fn operation_to_js_value(operation_value: &OperationValue) -> Result<JsValue, Js
 /// Helper method to convert from `PlainValue` to `JsValue`.
 fn plain_to_js_value(plain_value: &PlainValue) -> Result<JsValue, JsValue> {
     match plain_value {
-        PlainValue::AmbiguousRelation(value) => Ok(jserr!(serialize_to_js(value))),
         PlainValue::Boolean(value) => Ok(JsValue::from_bool(value.to_owned())),
         PlainValue::Integer(value) => Ok(JsValue::from(value.to_owned())),
         PlainValue::Float(value) => Ok(JsValue::from_f64(value.to_owned())),
         PlainValue::StringOrRelation(value) => Ok(JsValue::from_str(value)),
+        PlainValue::AmbiguousRelation(value) => Ok(jserr!(serialize_to_js(value))),
         PlainValue::PinnedRelationList(value) => Ok(jserr!(serialize_to_js(value))),
     }
 }
