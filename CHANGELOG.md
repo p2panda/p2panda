@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Fixed
+
+- Handle parsing empty pinned relation lists from `PlainOperation` [#489](https://github.com/p2panda/p2panda/pull/489) `rs`
+
 ## [0.7.0]
 
 Released on 2023-03-06: :package: `p2panda-js` and :package: `p2panda-rs`
