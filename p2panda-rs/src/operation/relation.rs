@@ -322,6 +322,9 @@ mod tests {
         let pinned_relation_list =
             PinnedRelationList::new(vec![operation_id_1.into(), operation_id_2.into()]);
         assert!(pinned_relation_list.validate().is_ok());
+
+        let pinned_relation_list = PinnedRelationList::new(vec![]);
+        assert!(pinned_relation_list.validate().is_ok());
     }
 
     #[rstest]
@@ -487,6 +490,9 @@ mod tests {
             bytes,
             serialize_value(cbor!([[hash_str_1, hash_str_2], [hash_str_3]]))
         );
+
+        let bytes = serialize_from(PinnedRelationList::new(vec![]));
+        assert_eq!(bytes, serialize_value(cbor!([])));
     }
 
     #[test]
@@ -510,6 +516,10 @@ mod tests {
             ]),
             pinned_relation_list
         );
+
+        let pinned_relation_list: PinnedRelationList =
+            deserialize_into(&serialize_value(cbor!([]))).unwrap();
+        assert_eq!(PinnedRelationList::new(vec![]), pinned_relation_list);
 
         // Invalid hash
         let invalid_hash =
