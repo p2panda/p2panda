@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+- Implement serde for `SchemaName` and `SchemaDescription` [#487](https://github.com/p2panda/p2panda/pull/487) `rs`
+
 ### Fixed
 
 - Handle parsing empty pinned relation lists from `PlainOperation` [#489](https://github.com/p2panda/p2panda/pull/489) `rs`

@@ -4,6 +4,8 @@ use std::fmt;
 use std::fmt::Display;
 use std::str::FromStr;
 
+use serde::{Deserialize, Serialize, Serializer};
+
 use crate::schema::error::SchemaDescriptionError;
 use crate::schema::validate::validate_description;
 use crate::Validate;
@@ -48,6 +50,32 @@ impl FromStr for SchemaDescription {
 impl Display for SchemaDescription {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl Serialize for SchemaDescription {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for SchemaDescription {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Deserialize into string
+        let name: String = Deserialize::deserialize(deserializer)?;
+
+        // Check format
+        let schema_name = SchemaDescription::new(&name).map_err(|err| {
+            serde::de::Error::custom(format!("invalid schema description, {}", err))
+        })?;
+
+        Ok(schema_name)
     }
 }
 
