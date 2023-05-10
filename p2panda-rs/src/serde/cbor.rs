@@ -2,7 +2,8 @@
 
 use ciborium::ser::into_writer;
 use ciborium::value::Value;
-use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 /// Helper method for tests to encode values generated with the `cbor!` macro into bytes.
 pub fn serialize_value(value: Result<Value, ciborium::value::Error>) -> Vec<u8> {
@@ -24,7 +25,7 @@ where
 /// Helper method to deserialize from CBOR bytes into any struct.
 pub fn deserialize_into<'de, T>(cbor_bytes: &[u8]) -> Result<T, ciborium::de::Error<std::io::Error>>
 where
-    T: Deserialize<'de> + Sized,
+    T: DeserializeOwned + Sized,
 {
     ciborium::de::from_reader(cbor_bytes)
 }
