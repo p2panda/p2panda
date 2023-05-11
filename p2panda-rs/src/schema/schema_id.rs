@@ -34,7 +34,7 @@ pub enum SchemaVersion {
 /// [`Document`][`crate::document::Document`].
 ///
 /// Every schema id has a name and version.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SchemaId {
     /// An application schema.
     Application(SchemaName, DocumentViewId),
