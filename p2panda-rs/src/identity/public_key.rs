@@ -100,7 +100,8 @@ impl<'de> Deserialize<'de> for PublicKey {
 impl Serialize for PublicKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer {
+        S: serde::Serializer,
+    {
         let public_key_string = self.to_string();
         serializer.serialize_str(&public_key_string)
     }
@@ -158,14 +159,16 @@ mod tests {
     use ed25519_dalek::{PublicKey as Ed25519PublicKey, PUBLIC_KEY_LENGTH};
 
     use crate::identity::error::PublicKeyError;
+    use crate::serde::{deserialize_into, serialize_from, serialize_value};
     use crate::Human;
-    use crate::serde::{serialize_from, serialize_value, deserialize_into};
 
     use super::PublicKey;
 
     #[test]
     fn serialize() {
-        let public_key = PublicKey::new("7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982").unwrap();
+        let public_key =
+            PublicKey::new("7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982")
+                .unwrap();
         assert_eq!(
             serialize_from(public_key.clone()),
             serialize_value(cbor!(public_key))
@@ -174,12 +177,13 @@ mod tests {
 
     #[test]
     fn deserialize() {
-        let public_key = PublicKey::new("7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982").unwrap();
+        let public_key =
+            PublicKey::new("7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982")
+                .unwrap();
         assert_eq!(
             deserialize_into::<PublicKey>(&serialize_value(cbor!(public_key.clone()))).unwrap(),
             public_key
         );
-
     }
 
     #[test]
