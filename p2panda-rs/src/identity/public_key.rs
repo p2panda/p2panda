@@ -11,7 +11,7 @@ use crate::identity::error::PublicKeyError;
 use crate::Human;
 
 /// Authors are hex encoded Ed25519 public key strings.
-#[derive(Clone, Debug, Serialize, Copy)]
+#[derive(Clone, Debug, Copy, Serialize)]
 pub struct PublicKey(Ed25519PublicKey);
 
 impl PublicKey {
@@ -97,6 +97,15 @@ impl<'de> Deserialize<'de> for PublicKey {
     }
 }
 
+// impl Serialize for PublicKey {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer {
+//         let public_key_string = self.to_string();
+//         serializer.serialize_str(&public_key_string)
+//     }
+// }
+
 /// Convert ed25519_dalek `PublicKey` to `PublicKey` instance.
 impl From<&Ed25519PublicKey> for PublicKey {
     fn from(public_key: &Ed25519PublicKey) -> Self {
@@ -145,12 +154,33 @@ impl Eq for PublicKey {}
 
 #[cfg(test)]
 mod tests {
+    use ciborium::cbor;
     use ed25519_dalek::{PublicKey as Ed25519PublicKey, PUBLIC_KEY_LENGTH};
 
     use crate::identity::error::PublicKeyError;
     use crate::Human;
+    use crate::serde::{serialize_from, serialize_value, deserialize_into};
 
     use super::PublicKey;
+
+    #[test]
+    fn serialize() {
+        let public_key = PublicKey::new("7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982").unwrap();
+        assert_eq!(
+            serialize_from(public_key.clone()),
+            serialize_value(cbor!(public_key))
+        );
+    }
+
+    #[test]
+    fn deserialize() {
+        let public_key = PublicKey::new("7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982").unwrap();
+        assert_eq!(
+            deserialize_into::<PublicKey>(&serialize_value(cbor!(public_key.clone()))).unwrap(),
+            public_key
+        );
+
+    }
 
     #[test]
     fn validate() {
