@@ -11,7 +11,7 @@ use crate::identity::error::PublicKeyError;
 use crate::Human;
 
 /// Authors are hex encoded Ed25519 public key strings.
-#[derive(Clone, Debug, Copy, Serialize)]
+#[derive(Clone, Debug, Copy)]
 pub struct PublicKey(Ed25519PublicKey);
 
 impl PublicKey {
@@ -97,14 +97,14 @@ impl<'de> Deserialize<'de> for PublicKey {
     }
 }
 
-// impl Serialize for PublicKey {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: serde::Serializer {
-//         let public_key_string = self.to_string();
-//         serializer.serialize_str(&public_key_string)
-//     }
-// }
+impl Serialize for PublicKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+        let public_key_string = self.to_string();
+        serializer.serialize_str(&public_key_string)
+    }
+}
 
 /// Convert ed25519_dalek `PublicKey` to `PublicKey` instance.
 impl From<&Ed25519PublicKey> for PublicKey {
