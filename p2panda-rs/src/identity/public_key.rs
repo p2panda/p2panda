@@ -5,13 +5,13 @@ use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
 use ed25519_dalek::{PublicKey as Ed25519PublicKey, PUBLIC_KEY_LENGTH};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::identity::error::PublicKeyError;
 use crate::Human;
 
 /// Authors are hex encoded Ed25519 public key strings.
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, Serialize, Deserialize)]
 pub struct PublicKey(Ed25519PublicKey);
 
 impl PublicKey {
@@ -80,30 +80,6 @@ impl Human for PublicKey {
     fn display(&self) -> String {
         let offset = PUBLIC_KEY_LENGTH * 2 - 6;
         format!("<PublicKey {}>", &self.to_string()[offset..])
-    }
-}
-
-impl<'de> Deserialize<'de> for PublicKey {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Deserialize into public key string
-        let public_key: String = Deserialize::deserialize(deserializer)?;
-
-        // Check format
-        PublicKey::new(&public_key)
-            .map_err(|err| serde::de::Error::custom(format!("invalid public key {}", err)))
-    }
-}
-
-impl Serialize for PublicKey {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let public_key_string = self.to_string();
-        serializer.serialize_str(&public_key_string)
     }
 }
 
@@ -181,7 +157,7 @@ mod tests {
             PublicKey::new("7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982")
                 .unwrap();
         assert_eq!(
-            deserialize_into::<PublicKey>(&serialize_value(cbor!(public_key.clone()))).unwrap(),
+            deserialize_into::<PublicKey>(&serialize_value(cbor!(public_key))).unwrap(),
             public_key
         );
     }
