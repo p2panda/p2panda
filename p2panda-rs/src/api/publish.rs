@@ -97,7 +97,14 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
     let document_id = determine_document_id(store, &operation, &operation_id).await?;
 
     // Verify the claimed log id against the expected one for this document id and public_key.
-    verify_log_id(store, entry.public_key(), entry.log_id(), entry.seq_num(), &document_id).await?;
+    verify_log_id(
+        store,
+        entry.public_key(),
+        entry.log_id(),
+        entry.seq_num(),
+        &document_id,
+    )
+    .await?;
 
     // If we have reached MAX_SEQ_NUM here for the next args then we will error and _not_ store
     // the entry which is being processed in this request.

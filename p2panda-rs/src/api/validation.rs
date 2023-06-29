@@ -374,11 +374,17 @@ mod tests {
         SeqNum::default(),
         None
     )]
-    #[should_panic(expected = "Entry's claimed log id of 3 does not match existing log id of 0 for given public key and document id")]
+    #[should_panic(
+        expected = "Entry's claimed log id of 3 does not match existing log id of 0 for given public key and document id"
+    )]
     #[case::update_with_incorrect_log(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(3), SeqNum::new(3).unwrap(), None)]
-    #[should_panic(expected = "Expected log not found in store for: public key 2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96, document id")]
+    #[should_panic(
+        expected = "Expected log not found in store for: public key 2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96, document id"
+    )]
     #[case::update_document_log_missing(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(3), SeqNum::new(3).unwrap(), Some(random_document_id()))]
-    #[should_panic(expected = "Entry's claimed log id of 3 does not match existing log id of 0 for given public key and document id")]
+    #[should_panic(
+        expected = "Entry's claimed log id of 3 does not match existing log id of 0 for given public key and document id"
+    )]
     #[case::create_new_log_existing_document(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(3), SeqNum::default(), None)]
     #[should_panic(expected = "Entry's claimed log id of 0 is already in use for given public key")]
     #[case::create_with_duplicate_log_id(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(0), SeqNum::default(), Some(random_document_id()))]
