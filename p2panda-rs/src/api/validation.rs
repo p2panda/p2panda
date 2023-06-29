@@ -46,18 +46,38 @@ pub fn is_next_seq_num(
 /// and where it is a new log.
 ///
 /// The following steps are taken:
-/// - Retrieve the stored log id for the document id
-///   - If found, ensure it matches the claimed log id
-///   - If not found retrieve the next available log id for this public key and ensure that matches
-pub async fn verify_log_id<S: LogStore>(
+/// - If the entry is seq num 1 then check if the claimed log is free.
+/// - For all other sequence numbers we expect the log to already be registered and associated
+///   with the correct document id.
+pub async fn verify_log_id<S: LogStore + EntryStore>(
     store: &S,
     public_key: &PublicKey,
     claimed_log_id: &LogId,
+    seq_num: &SeqNum,
     document_id: &DocumentId,
 ) -> Result<(), ValidationError> {
-    // Check if there is a log id registered for this document and public key already in the store.
-    match store.get_log_id(public_key, document_id).await? {
-        Some(expected_log_id) => {
+    let document_log_id = store.get_log_id(public_key, document_id).await?;
+
+    match (seq_num.as_u64(), document_log_id) {
+        (1, None) => {
+            // Check log id is free
+            if store
+                .get_entry_at_seq_num(public_key, claimed_log_id, &SeqNum::default())
+                .await?
+                .is_some()
+            {
+                return Err(ValidationError::LogIdDuplicate(claimed_log_id.as_u64()));
+            };
+        }
+        (_, None) => {
+            // Error, there should be a log registered
+            return Err(ValidationError::ExpectedDocumentLogNotFound(
+                public_key.to_owned(),
+                document_id.to_owned(),
+            ));
+        }
+        (_, Some(expected_log_id)) => {
+            // Check log id matches claimed
             // If there is, check it matches the log id encoded in the entry.
             if expected_log_id != *claimed_log_id {
                 return Err(ValidationError::LogIdDoesNotMatchExisting(
@@ -66,19 +86,7 @@ pub async fn verify_log_id<S: LogStore>(
                 ));
             }
         }
-        None => {
-            // If there isn't, check that the next log id for this public key matches the one encoded in
-            // the entry.
-            let expected_log_id = next_log_id(store, public_key).await?;
-
-            if expected_log_id != *claimed_log_id {
-                return Err(ValidationError::LogIdDoesNotMatchNext(
-                    claimed_log_id.as_u64(),
-                    expected_log_id.as_u64(),
-                ));
-            }
-        }
-    };
+    }
 
     Ok(())
 }
@@ -357,33 +365,28 @@ mod tests {
     }
 
     #[rstest]
-    #[case::existing_document(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::default(), None)]
-    #[case::new_document(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(2), Some(random_document_id()))]
-    #[case::existing_document_new_public_key(KeyPair::new(), LogId::new(0), None)]
-    #[should_panic(
-        expected = "Entry's claimed log id of 1 does not match existing log id of 0 for given public key and document"
+    #[case::update_existing_log(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::default(), SeqNum::new(3).unwrap(), None)]
+    #[case::new_document_free_log(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(2), SeqNum::default(), Some(random_document_id()))]
+    #[case::new_document_free_log_not_next(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(100), SeqNum::default(), Some(random_document_id()))]
+    #[case::existing_document_new_public_key(
+        KeyPair::new(),
+        LogId::new(0),
+        SeqNum::default(),
+        None
     )]
-    #[case::already_occupied_log_id_for_existing_document(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(1), None)]
-    #[should_panic(
-        expected = "Entry's claimed log id of 2 does not match existing log id of 0 for given public key and document"
-    )]
-    #[case::new_log_id_for_existing_document(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(2), None)]
-    #[should_panic(
-        expected = "Entry's claimed log id of 1 does not match expected next log id of 0 for given public key"
-    )]
-    #[case::new_public_key_not_next_log_id(KeyPair::new(), LogId::new(1), None)]
-    #[should_panic(
-        expected = "Entry's claimed log id of 0 does not match expected next log id of 2 for given public key"
-    )]
-    #[case::new_document_occupied_log_id(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(0), Some(random_document_id()))]
-    #[should_panic(
-        expected = "Entry's claimed log id of 3 does not match expected next log id of 2 for given public key"
-    )]
-    #[case::new_document_not_next_log_id(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(3), Some(random_document_id()))]
+    #[should_panic(expected = "Entry's claimed log id of 3 does not match existing log id of 0 for given public key and document id")]
+    #[case::update_with_incorrect_log(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(3), SeqNum::new(3).unwrap(), None)]
+    #[should_panic(expected = "Expected log not found in store for: public key 2f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc96, document id")]
+    #[case::update_document_log_missing(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(3), SeqNum::new(3).unwrap(), Some(random_document_id()))]
+    #[should_panic(expected = "Entry's claimed log id of 3 does not match existing log id of 0 for given public key and document id")]
+    #[case::create_new_log_existing_document(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(3), SeqNum::default(), None)]
+    #[should_panic(expected = "Entry's claimed log id of 0 is already in use for given public key")]
+    #[case::create_with_duplicate_log_id(KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(), LogId::new(0), SeqNum::default(), Some(random_document_id()))]
     #[tokio::test]
     async fn verifies_log_id(
         #[case] key_pair: KeyPair,
         #[case] claimed_log_id: LogId,
+        #[case] seq_num: SeqNum,
         #[case] document_id: Option<DocumentId>,
         #[from(populate_store_config)]
         #[with(2, 2, 1)]
@@ -399,6 +402,7 @@ mod tests {
             &store,
             &key_pair.public_key(),
             &claimed_log_id,
+            &seq_num,
             &document_id,
         )
         .await
