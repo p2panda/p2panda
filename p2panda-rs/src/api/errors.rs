@@ -30,9 +30,7 @@ pub enum ValidationError {
     ExpectedDocumentLogNotFound(PublicKey, DocumentId),
 
     /// Claimed log id is already in use.
-    #[error(
-        "Entry's claimed log id of {0} is already in use for given public key"
-    )]
+    #[error("Entry's claimed log id of {0} is already in use for given public key")]
     LogIdDuplicate(u64),
 
     /// Entry with seq num 1 contained a skiplink.
