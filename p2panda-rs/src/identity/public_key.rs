@@ -8,11 +8,10 @@ use ed25519_dalek::{PublicKey as Ed25519PublicKey, PUBLIC_KEY_LENGTH};
 use serde::{Deserialize, Serialize};
 
 use crate::identity::error::PublicKeyError;
-use crate::serde::{deserialize_hex, serialize_hex};
 use crate::Human;
 
 /// Authors are hex encoded Ed25519 public key strings.
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, Serialize, Deserialize)]
 pub struct PublicKey(Ed25519PublicKey);
 
 impl PublicKey {
@@ -63,29 +62,6 @@ impl PublicKey {
 impl Display for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", hex::encode(self.to_bytes()))
-    }
-}
-
-impl Serialize for PublicKey {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serialize_hex(&self.to_bytes(), serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for PublicKey {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bytes = deserialize_hex(deserializer)?;
-        let ed25519_public_key = Ed25519PublicKey::from_bytes(&bytes).map_err(|err| {
-            serde::de::Error::custom(format!("invalid public key bytes, {}", err))
-        })?;
-        let public_key = Self(ed25519_public_key);
-        Ok(public_key)
     }
 }
 
@@ -171,7 +147,7 @@ mod tests {
                 .unwrap();
         assert_eq!(
             serialize_from(public_key.clone()),
-            serialize_value(cbor!(public_key.to_bytes()))
+            serialize_value(cbor!(public_key))
         );
     }
 
