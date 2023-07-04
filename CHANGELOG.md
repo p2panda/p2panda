@@ -14,7 +14,10 @@ Highlights are marked with a pancake 🥞
 - Implement serde for `SchemaName` and `SchemaDescription` [#487](https://github.com/p2panda/p2panda/pull/487) `rs`
 - Implement `Ord` for `SchemaId` [#492](https://github.com/p2panda/p2panda/pull/492) `rs`
 
-### Cha
+### Changed
+
+- Serialize `PublicKey` as bytes [#495](https://github.com/p2panda/p2panda/pull/495) `rs`
+- Remove next log id requirement in `publish` validation [#502](https://github.com/p2panda/p2panda/pull/502) `rs`
 
 ### Fixed
 
