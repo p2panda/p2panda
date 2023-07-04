@@ -17,6 +17,7 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - Serialize `PublicKey` as bytes [#495](https://github.com/p2panda/p2panda/pull/495) `rs`
+- Remove next log id requirement in `publish` validation [#498](https://github.com/p2panda/p2panda/pull/498) `rs`
 
 ### Fixed
 
