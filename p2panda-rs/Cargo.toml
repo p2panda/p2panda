@@ -23,21 +23,8 @@ all-features = true
 crate-type = ["cdylib", "rlib"]
 
 [features]
-test-utils = [
-  "storage-provider",
-  "dep:rstest",
-  "dep:rstest_reuse",
-  "dep:varu64",
-  "dep:tokio",
-  "dep:async-trait",
-]
-secret-group = [
-  "dep:openmls",
-  "dep:openmls_memory_keystore",
-  "dep:openmls_rust_crypto",
-  "dep:openmls_traits",
-  "dep:tls_codec",
-]
+test-utils = ["storage-provider", "dep:rstest", "dep:rstest_reuse", "dep:varu64", "dep:tokio", "dep:async-trait"]
+secret-group = ["dep:openmls", "dep:openmls_memory_keystore", "dep:openmls_rust_crypto", "dep:openmls_traits", "dep:tls_codec"]
 storage-provider = ["dep:async-trait"]
 
 [dependencies]
@@ -59,6 +46,7 @@ regex = "1.7.1"
 rstest = { version = "0.16.0", optional = true }
 rstest_reuse = { version = "0.5.0", optional = true }
 serde = { version = "1.0.152", features = ["derive"] }
+serde_bytes = "0.11.12"
 thiserror = "1.0.39"
 tls_codec = { version = "0.2.0", features = ["derive", "serde_serialize"], optional = true }
 tokio = { version = "1.25.0", features = ["rt", "macros", "rt-multi-thread"], optional = true }

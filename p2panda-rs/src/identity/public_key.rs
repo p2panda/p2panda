@@ -157,6 +157,7 @@ impl Eq for PublicKey {}
 mod tests {
     use ciborium::cbor;
     use ed25519_dalek::{PublicKey as Ed25519PublicKey, PUBLIC_KEY_LENGTH};
+    use serde_bytes::Bytes;
 
     use crate::identity::error::PublicKeyError;
     use crate::serde::{deserialize_into, serialize_from, serialize_value};
@@ -171,7 +172,7 @@ mod tests {
                 .unwrap();
         assert_eq!(
             serialize_from(public_key.clone()),
-            serialize_value(cbor!(public_key.to_bytes()))
+            serialize_value(cbor!(Bytes::new(&public_key.to_bytes())))
         );
     }
 
