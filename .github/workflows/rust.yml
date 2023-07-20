@@ -140,3 +140,4 @@ jobs:
         uses: codecov/codecov-action@v3
         with:
           files: coverage.lcov
+          token: ${{ secrets.CODECOV_TOKEN }}

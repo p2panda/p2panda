@@ -39,6 +39,8 @@ jobs:
 
       - if: matrix.node == 18
         uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   js-build:
     runs-on: ubuntu-latest
