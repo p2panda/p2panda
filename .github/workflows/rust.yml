@@ -4,9 +4,6 @@ on: push
 
 env:
   CARGO_TERM_COLOR: always
-  cache_path: |
-    p2panda-rs/target
-    ~/.cargo
   cargo_manifest: p2panda-rs/Cargo.toml
 
 jobs:
@@ -15,138 +12,130 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Restore from cargo cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-test-${{ hashFiles('**/Cargo.lock') }}
+        uses: moonrepo/setup-rust@v0
 
       - name: Run tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --manifest-path ${{ env.cargo_manifest }} --all-features
         # Ensure debug output is also tested
         env:
           RUST_LOG: debug
+        run: |
+          cargo test \
+            --manifest-path ${{ env.cargo_manifest }} \
+            --all-features
+
+  wasm-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Rust toolchain
+        uses: moonrepo/setup-rust@v0
+        with:
+          bins: wasm-bindgen-cli,wasm-pack
+          targets: wasm32-unknown-unknown
+
+      - name: Run wasm tests
+        run: |
+          wasm-pack test \
+            --headless \
+            --chrome \
+            --firefox \
+            p2panda-rs
 
   rust-check:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Restore from cargo cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-check-${{ hashFiles('**/Cargo.lock') }}
+        uses: moonrepo/setup-rust@v0
 
       - name: Check project and dependencies
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --manifest-path ${{ env.cargo_manifest }}
+        run: |
+          cargo check \
+            --manifest-path ${{ env.cargo_manifest }}
 
   rust-fmt:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: moonrepo/setup-rust@v0
         with:
-          profile: minimal
-          toolchain: stable
           components: rustfmt
-          override: true
-
-      - name: Restore from cargo cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-fmt-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Check formatting
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --manifest-path ${{ env.cargo_manifest }} -- --check
+        run: |
+          cargo fmt \
+            --manifest-path ${{ env.cargo_manifest }} \
+            -- --check
 
   rust-clippy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: moonrepo/setup-rust@v0
         with:
-          profile: minimal
-          toolchain: stable
           components: clippy
-          override: true
-
-      - name: Restore from cargo cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-clippy-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Check code with clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --manifest-path ${{ env.cargo_manifest }} -- -D warnings --no-deps
+        run: |
+          cargo clippy \
+            --manifest-path ${{ env.cargo_manifest }} \
+            -- -D warnings --no-deps
 
-#   rust-coverage:
-#     runs-on: ubuntu-latest
-# 
-#     steps:
-#       - name: Checkout repository
-#         uses: actions/checkout@v2
-# 
-#       - name: Setup Rust toolchain
-#         uses: actions-rs/toolchain@v1
-#         with:
-#           profile: minimal
-#           toolchain: stable
-#           override: true
-# 
-#       - name: Restore from cargo cache
-#         uses: actions/cache@v2
-#         with:
-#           path: ${{ env.cache_path }}
-#           key: ${{ runner.os }}-tarpaulin-${{ hashFiles('**/Cargo.lock') }}
-# 
-#       - name: Run cargo-tarpaulin
-#         uses: actions-rs/tarpaulin@v0.1
-#         with:
-#           # Force cleaning via `--force-clean` flag to prevent buggy code coverage
-#           args: --manifest-path ${{ env.cargo_manifest }} --locked --force-clean --all-features
-#         # Ensure debug output is also tested
-#         env:
-#           RUST_LOG: debug
-# 
-#       - name: Upload to codecov.io
-#         uses: codecov/codecov-action@v2
+  rust-coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install Protocol Buffers compiler
+        run: sudo apt-get install protobuf-compiler
+
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Rust toolchain
+        uses: moonrepo/setup-rust@v0
+        with:
+          bins: grcov
+          components: llvm-tools-preview
+
+      - name: Run compiler for source based coverage
+        env:
+          CARGO_INCREMENTAL: 0
+          RUSTFLAGS: '-Cinstrument-coverage'
+          LLVM_PROFILE_FILE: 'cargo-test-%p-%m.profraw'
+        run: |
+          cargo test \
+            --manifest-path ${{ env.cargo_manifest }}
+
+      - name: Run grcov to generate .lcov file
+        run: |
+          grcov . \
+            --binary-path ./p2panda-rs/target/debug/deps/ \
+            -s . \
+            -t lcov \
+            --branch \
+            --ignore-not-existing \
+            --ignore '../*' \
+            --ignore "/*" \
+            -o coverage.lcov
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v3
+        with:
+          files: coverage.lcov
