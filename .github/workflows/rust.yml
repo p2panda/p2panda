@@ -126,7 +126,7 @@ jobs:
       - name: Run grcov to generate .lcov file
         run: |
           grcov . \
-            --binary-path ./target/debug/deps/ \
+            --binary-path ./p2panda-rs/target/debug/deps/ \
             -s . \
             -t lcov \
             --branch \
