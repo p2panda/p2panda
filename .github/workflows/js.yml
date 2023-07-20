@@ -27,7 +27,7 @@ jobs:
         uses: moonrepo/setup-rust@v0
         with:
           bins: wasm-bindgen-cli
-          target: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown
 
       - name: Install dependencies
         run: npm ci
@@ -57,7 +57,7 @@ jobs:
         uses: moonrepo/setup-rust@v0
         with:
           bins: wasm-bindgen-cli
-          target: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown
 
       - name: Install wasm-opt
         uses: giantswarm/install-binary-action@v1
@@ -93,7 +93,7 @@ jobs:
         uses: moonrepo/setup-rust@v0
         with:
           bins: wasm-bindgen-cli
-          target: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown
 
       - name: Install dependencies
         run: npm ci

@@ -37,7 +37,7 @@ jobs:
         uses: moonrepo/setup-rust@v0
         with:
           bins: wasm-bindgen-cli,wasm-pack
-          target: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown
 
       - name: Run wasm tests
         run: |
