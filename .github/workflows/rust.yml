@@ -121,7 +121,8 @@ jobs:
           LLVM_PROFILE_FILE: 'cargo-test-%p-%m.profraw'
         run: |
           cargo test \
-            --manifest-path ${{ env.cargo_manifest }}
+            --manifest-path ${{ env.cargo_manifest }} \
+            --all-features
 
       - name: Run grcov to generate .lcov file
         run: |
