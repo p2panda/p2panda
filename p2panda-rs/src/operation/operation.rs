@@ -57,12 +57,12 @@ impl OperationBuilder {
     }
 
     /// Set operation fields.
-    pub fn fields(mut self, fields: &[(&str, OperationValue)]) -> Self {
+    pub fn fields(mut self, fields: &[(impl ToString, OperationValue)]) -> Self {
         let mut operation_fields = OperationFields::new();
 
         for (field_name, field_value) in fields {
             if operation_fields
-                .insert(field_name, field_value.to_owned())
+                .insert(&field_name.to_string(), field_value.to_owned())
                 .is_err()
             {
                 // Silently fail here as the underlying data type already takes care of duplicates

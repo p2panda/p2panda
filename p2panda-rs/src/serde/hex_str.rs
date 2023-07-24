@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use serde::{Deserialize, Serialize};
+use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
 /// encoding (JSON, GraphQL), otherwise it serializes the bytes directly (CBOR).
@@ -11,7 +12,7 @@ where
     if serializer.is_human_readable() {
         hex::serde::serialize(value, serializer)
     } else {
-        value.serialize(serializer)
+        SerdeBytes::new(value).serialize(serializer)
     }
 }
 
@@ -24,8 +25,8 @@ where
     if deserializer.is_human_readable() {
         hex::serde::deserialize(deserializer)
     } else {
-        let bytes: Vec<u8> = Deserialize::deserialize(deserializer)?;
-        Ok(bytes)
+        let bytes = <SerdeByteBuf>::deserialize(deserializer)?;
+        Ok(bytes.to_vec())
     }
 }
 
@@ -48,12 +49,12 @@ mod tests {
         // For CBOR the bytes just get serialized straight away as it is not a human readable
         // encoding
         ciborium::ser::into_writer(&test, &mut bytes).unwrap();
-        assert_eq!(vec![131, 1, 2, 3], bytes);
+        assert_eq!(vec![67, 1, 2, 3], bytes);
     }
 
     #[test]
     fn deserialize() {
-        let bytes: Vec<u8> = vec![131, 1, 2, 3];
+        let bytes: Vec<u8> = vec![67, 1, 2, 3];
 
         // For CBOR the bytes just get deserialized straight away as an array as it is not a human
         // readable encoding

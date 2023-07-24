@@ -3,10 +3,6 @@ name: p2panda-js
 on: push
 
 env:
-  cache_path: |
-    p2panda-rs/target
-    ~/.cargo
-    ~/.npm
   working_directory: p2panda-js
 
 jobs:
@@ -15,37 +11,23 @@ jobs:
 
     strategy:
       matrix:
-        node: [16, 17, 18]
+        node: [18, 19, 20]
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup node ${{ matrix.node }}
         # This action handles node dependency caching for us
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: "${{ matrix.node }}"
 
-      - name: Restore from cargo and npm cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ env.cache_path }}
-          # Note that this caching action does NOT cache node dependencies.
-          # This is done by "actions/setup-node" instead. Here we're caching
-          # Rust and npm artifacts.
-          key: ${{ runner.os }}-test-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}
-
       - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: moonrepo/setup-rust@v0
         with:
-          profile: minimal
-          toolchain: stable
-          target: wasm32-unknown-unknown
-          override: true
-
-      - name: Install wasm-bindgen
-        uses: jetli/wasm-bindgen-action@v0.1.0
+          bins: wasm-bindgen-cli
+          targets: wasm32-unknown-unknown
 
       - name: Install dependencies
         run: npm ci
@@ -55,44 +37,35 @@ jobs:
         run: npm run test --coverage
         working-directory: ${{ env.working_directory }}
 
-      - if: matrix.node == 16
-        uses: codecov/codecov-action@v2
+      - if: matrix.node == 18
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   js-build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup node
         # This action also handles dependency caching for us
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version-file: ${{ env.working_directory}}/.nvmrc
 
-      - name: Restore from cargo and npm cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ env.cache_path }}
-          key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json') }}
-
       - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: moonrepo/setup-rust@v0
         with:
-          profile: minimal
-          toolchain: stable
-          target: wasm32-unknown-unknown
-          override: true
-
-      - name: Install wasm-bindgen
-        uses: jetli/wasm-bindgen-action@v0.1.0
+          bins: wasm-bindgen-cli
+          targets: wasm32-unknown-unknown
 
       - name: Install wasm-opt
         uses: giantswarm/install-binary-action@v1
         with:
           binary: "wasm-opt"
-          version: "109"
+          version: "114"
           download_url: "https://github.com/WebAssembly/binaryen/releases/download/version_${version}/binaryen-version_${version}-x86_64-linux.tar.gz"
           tarball_binary_path: "*/bin/${binary}"
           smoke_test: "${binary} --version"
@@ -110,33 +83,19 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup node
         # This action also handles dependency caching for us
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version-file: ${{ env.working_directory}}/.nvmrc
 
-      - name: Restore from cargo and npm cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ env.cache_path }}
-          # Note that this caching action does NOT cache node dependencies.
-          # This is done by "actions/setup-node" instead. Here we're caching
-          # Rust and npm artifacts.
-          key: ${{ runner.os }}-test-${{ matrix.node }}-${{ hashFiles('**/package-lock.json') }}
-
       - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: moonrepo/setup-rust@v0
         with:
-          profile: minimal
-          toolchain: stable
-          target: wasm32-unknown-unknown
-          override: true
-
-      - name: Install wasm-bindgen
-        uses: jetli/wasm-bindgen-action@v0.1.0
+          bins: wasm-bindgen-cli
+          targets: wasm32-unknown-unknown
 
       - name: Install dependencies
         run: npm ci
