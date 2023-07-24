@@ -97,7 +97,14 @@ pub async fn publish<S: EntryStore + OperationStore + LogStore>(
     let document_id = determine_document_id(store, &operation, &operation_id).await?;
 
     // Verify the claimed log id against the expected one for this document id and public_key.
-    verify_log_id(store, entry.public_key(), entry.log_id(), &document_id).await?;
+    verify_log_id(
+        store,
+        entry.public_key(),
+        entry.log_id(),
+        entry.seq_num(),
+        &document_id,
+    )
+    .await?;
 
     // If we have reached MAX_SEQ_NUM here for the next args then we will error and _not_ store
     // the entry which is being processed in this request.
@@ -646,10 +653,6 @@ mod tests {
         expected = "Entry's claimed log id of 2 does not match existing log id of 0 for given public key and document"
     )]
     #[case::owner_updates_to_wrong_but_free_log(LogId::new(2), KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())]
-    #[should_panic(
-        expected = "Entry's claimed log id of 1 does not match expected next log id of 0 for given public key"
-    )]
-    #[case::new_author_updates_to_wrong_new_log(LogId::new(1), KeyPair::new())]
     #[tokio::test]
     async fn new_author_updates_existing_document(
         schema: Schema,
@@ -715,29 +718,23 @@ mod tests {
     }
 
     #[rstest]
-    #[case::owner_publishes_to_correct_log(
+    #[case::owner_publishes_to_next_log(
         LogId::new(2),
         KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())
     ]
-    #[case::new_author_publishes_to_new_log(LogId::new(0), KeyPair::new())]
+    #[case::owner_publishes_to_not_next_log(
+        LogId::new(100),
+        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())
+    ]
+    #[case::new_author_publishes_to_next_log(LogId::new(0), KeyPair::new())]
+    #[case::new_author_publishes_to_not_next_log(LogId::new(10), KeyPair::new())]
     #[should_panic(
         expected = "Entry's claimed seq num of 1 does not match expected seq num of 2 for given public key and log"
     )]
-    #[case::owner_publishes_to_wrong_and_taken_log(
+    #[case::owner_publishes_to_occupied_log(
         LogId::new(1),
         KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())
     ]
-    #[should_panic(
-        expected = "Entry's claimed log id of 3 does not match expected next log id of 2 for given public key"
-    )]
-    #[case::owner_publishes_to_wrong_but_free_log(
-        LogId::new(3),
-        KeyPair::from_private_key_str(PRIVATE_KEY).unwrap())
-    ]
-    #[should_panic(
-        expected = "Entry's claimed log id of 1 does not match expected next log id of 0 for given public key"
-    )]
-    #[case::new_author_publishes_to_wrong_new_log(LogId::new(1), KeyPair::new())]
     #[tokio::test]
     async fn creating_new_document_inserts_log_correctly(
         schema: Schema,

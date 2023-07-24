@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::document::DocumentId;
 use crate::entry::error::DecodeEntryError;
+use crate::identity::PublicKey;
 use crate::operation::error::ValidateOperationError;
 use crate::operation::OperationId;
 use crate::schema::SchemaId;
@@ -17,17 +19,19 @@ pub enum ValidationError {
     #[error("Expected skiplink entry not found in store: public key {0}, log id {1}, seq num {2}")]
     ExpectedSkiplinkNotFound(String, u64, u64),
 
-    /// The claimed log id didn't match the expected next for a given public key.
-    #[error(
-        "Entry's claimed log id of {0} does not match expected next log id of {1} for given public key"
-    )]
-    LogIdDoesNotMatchNext(u64, u64),
-
     /// The claimed log id didn't match the expected for a given public key and document id.
     #[error(
         "Entry's claimed log id of {0} does not match existing log id of {1} for given public key and document id"
     )]
     LogIdDoesNotMatchExisting(u64, u64),
+
+    /// The expected log for given public key and document id not found.
+    #[error("Expected log not found in store for: public key {0}, document id {1}")]
+    ExpectedDocumentLogNotFound(PublicKey, DocumentId),
+
+    /// Claimed log id is already in use.
+    #[error("Entry's claimed log id of {0} is already in use for given public key")]
+    LogIdDuplicate(u64),
 
     /// Entry with seq num 1 contained a skiplink.
     #[error("Entry with seq num 1 can not have skiplink")]
