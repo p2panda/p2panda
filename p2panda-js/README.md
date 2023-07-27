@@ -142,7 +142,7 @@ Or use the "slim" version if you want to provide the ".wasm" file manually:
   import { initWebAssembly, KeyPair } from 'https://cdn.jsdelivr.net/npm/p2panda-js@0.7.1/lib/esm-slim/index.min.js';
 
   // Pass external .wasm file manually for smaller file sizes
-  const wasmFile = 'https://cdn.jsdelivr.net/npm/p2panda-js@0.7.0/lib/p2panda.wasm';
+  const wasmFile = 'https://cdn.jsdelivr.net/npm/p2panda-js@0.7.1/lib/p2panda.wasm';
   initWebAssembly(wasmFile).then(() => {
     const keyPair = new KeyPair();
     console.log(keyPair.publicKey());
