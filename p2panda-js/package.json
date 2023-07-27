@@ -1,6 +1,6 @@
 {
   "name": "p2panda-js",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "All the things a panda needs",
   "type": "module",
   "main": "./lib/umd/index.js",
