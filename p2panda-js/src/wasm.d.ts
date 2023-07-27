@@ -1,11 +1,28 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
-* Returns hash of an hexadecimal encoded value.
-* @param {string} value
+* Returns a signed Bamboo entry.
+* @param {bigint} log_id
+* @param {bigint} seq_num
+* @param {string | undefined} skiplink_hash
+* @param {string | undefined} backlink_hash
+* @param {string} payload
+* @param {KeyPair} key_pair
 * @returns {string}
 */
-export function generateHash(value: string): string;
+export function signAndEncodeEntry(log_id: bigint, seq_num: bigint, skiplink_hash: string | undefined, backlink_hash: string | undefined, payload: string, key_pair: KeyPair): string;
+/**
+* Decodes an hexadecimal string into an `Entry`.
+* @param {string} encoded_entry
+* @returns {any}
+*/
+export function decodeEntry(encoded_entry: string): any;
+/**
+* Sets a [`panic hook`] for better error messages in NodeJS or web browser.
+*
+* [`panic hook`]: https://crates.io/crates/console_error_panic_hook
+*/
+export function setWasmPanicHook(): void;
 /**
 * Creates, validates and encodes an operation as hexadecimal string.
 * @param {bigint} action
@@ -24,6 +41,12 @@ export function encodeOperation(action: bigint, schema_id: string, previous: any
 */
 export function decodeOperation(encoded_operation: string): any;
 /**
+* Returns hash of an hexadecimal encoded value.
+* @param {string} value
+* @returns {string}
+*/
+export function generateHash(value: string): string;
+/**
 * Verify the integrity of a signed operation.
 * @param {string} public_key
 * @param {string} byte_string
@@ -31,29 +54,6 @@ export function decodeOperation(encoded_operation: string): any;
 * @returns {any}
 */
 export function verifySignature(public_key: string, byte_string: string, signature: string): any;
-/**
-* Sets a [`panic hook`] for better error messages in NodeJS or web browser.
-*
-* [`panic hook`]: https://crates.io/crates/console_error_panic_hook
-*/
-export function setWasmPanicHook(): void;
-/**
-* Returns a signed Bamboo entry.
-* @param {bigint} log_id
-* @param {bigint} seq_num
-* @param {string | undefined} skiplink_hash
-* @param {string | undefined} backlink_hash
-* @param {string} payload
-* @param {KeyPair} key_pair
-* @returns {string}
-*/
-export function signAndEncodeEntry(log_id: bigint, seq_num: bigint, skiplink_hash: string | undefined, backlink_hash: string | undefined, payload: string, key_pair: KeyPair): string;
-/**
-* Decodes an hexadecimal string into an `Entry`.
-* @param {string} encoded_entry
-* @returns {any}
-*/
-export function decodeEntry(encoded_entry: string): any;
 /**
 * Ed25519 key pair for authors to sign Bamboo entries with.
 */
