@@ -312,6 +312,8 @@ fn validate_system_schema_fields(
 ) -> Result<(), ValidationError> {
     match schema.id() {
         SchemaId::Application(_, _) => Ok(()),
+        SchemaId::Blob(_) => todo!(),
+        SchemaId::BlobPiece(_) => todo!(),
         SchemaId::SchemaDefinition(_) => {
             validate_schema_definition_v1_fields(fields)?;
             Ok(())
@@ -320,7 +322,6 @@ fn validate_system_schema_fields(
             validate_schema_field_definition_v1_fields(fields)?;
             Ok(())
         }
-        SchemaId::BlobPiece(_) => todo!(),
     }
 }
 
