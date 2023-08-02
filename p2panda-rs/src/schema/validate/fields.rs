@@ -320,6 +320,7 @@ fn validate_system_schema_fields(
             validate_schema_field_definition_v1_fields(fields)?;
             Ok(())
         }
+        SchemaId::BlobPiece(_) => todo!(),
     }
 }
 

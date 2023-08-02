@@ -20,6 +20,9 @@ pub(super) const SCHEMA_DEFINITION_NAME: &str = "schema_definition";
 /// Spelling of _schema field definition_ schema
 pub(super) const SCHEMA_FIELD_DEFINITION_NAME: &str = "schema_field_definition";
 
+/// Spelling of _blob piece_ schema
+pub(super) const BLOB_PIECE_NAME: &str = "blob_piece";
+
 /// Represent a schema's version.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SchemaVersion {
@@ -44,6 +47,9 @@ pub enum SchemaId {
 
     /// A schema definition field.
     SchemaFieldDefinition(u8),
+
+    /// A blob piece.
+    BlobPiece(u8),
 }
 
 impl SchemaId {
@@ -91,6 +97,7 @@ impl SchemaId {
         match self {
             SchemaId::Application(name, _) => name.to_owned(),
             // We unwrap here as we know system schema names are valid names.
+            SchemaId::BlobPiece(_) => SchemaName::new(BLOB_PIECE_NAME).unwrap(),
             SchemaId::SchemaDefinition(_) => SchemaName::new(SCHEMA_DEFINITION_NAME).unwrap(),
             SchemaId::SchemaFieldDefinition(_) => {
                 SchemaName::new(SCHEMA_FIELD_DEFINITION_NAME).unwrap()
@@ -102,6 +109,7 @@ impl SchemaId {
     pub fn version(&self) -> SchemaVersion {
         match self {
             SchemaId::Application(_, view_id) => SchemaVersion::Application(view_id.clone()),
+            SchemaId::BlobPiece(version) => SchemaVersion::System(*version),
             SchemaId::SchemaDefinition(version) => SchemaVersion::System(*version),
             SchemaId::SchemaFieldDefinition(version) => SchemaVersion::System(*version),
         }
@@ -186,8 +194,11 @@ impl Display for SchemaId {
 
                 Ok(())
             }
+            SchemaId::BlobPiece(version) => {
+                write!(f, "{}_v{}", SCHEMA_FIELD_DEFINITION_NAME, version)
+            }
             SchemaId::SchemaDefinition(version) => {
-                write!(f, "{}_v{}", SCHEMA_DEFINITION_NAME, version)
+                write!(f, "{}_v{}", BLOB_PIECE_NAME, version)
             }
             SchemaId::SchemaFieldDefinition(version) => {
                 write!(f, "{}_v{}", SCHEMA_FIELD_DEFINITION_NAME, version)
@@ -284,6 +295,7 @@ mod test {
     )]
     #[case(SchemaId::SchemaDefinition(1), "schema_definition_v1")]
     #[case(SchemaId::SchemaFieldDefinition(1), "schema_field_definition_v1")]
+    #[case(SchemaId::BlobPiece(1), "blob_piece_v1")]
     fn deserialize(#[case] schema_id: SchemaId, #[case] expected_schema_id_string: &str) {
         let parsed_app_schema: SchemaId = expected_schema_id_string.parse().unwrap();
         assert_eq!(schema_id, parsed_app_schema);
