@@ -6,7 +6,7 @@ use crate::document::{DocumentViewHash, DocumentViewId};
 use crate::operation::{Operation, OperationBuilder};
 use crate::schema::error::{SchemaError, SchemaIdError};
 use crate::schema::system::{
-    get_schema_definition, get_schema_field_definition, SchemaFieldView, SchemaView,
+    get_schema_definition, get_schema_field_definition, get_blob, get_blob_piece, SchemaFieldView, SchemaView,
 };
 use crate::schema::SchemaName;
 use crate::schema::{FieldType, SchemaId, SchemaVersion};
@@ -229,6 +229,8 @@ impl Schema {
         match schema_id {
             SchemaId::SchemaDefinition(version) => get_schema_definition(version),
             SchemaId::SchemaFieldDefinition(version) => get_schema_field_definition(version),
+            SchemaId::Blob(version) => get_blob(version),
+            SchemaId::BlobPiece(version) => get_blob_piece(version),
             _ => Err(SchemaIdError::UnknownSystemSchema(schema_id.to_string())),
         }
     }

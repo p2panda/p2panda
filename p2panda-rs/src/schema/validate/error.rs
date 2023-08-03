@@ -41,6 +41,14 @@ pub enum ValidationError {
     /// Error from validating system schema: `schema_field_definition_v1`.
     #[error("invalid 'schema_field_definition_v1' operation: {0}")]
     InvalidSchemaFieldDefinition(#[from] SchemaFieldDefinitionError),
+
+    /// Error from validating system schema: `blob_v1`.
+    #[error("invalid 'blob_v1' operation: {0}")]
+    InvalidBlob(#[from] BlobError),
+
+    /// Error from validating system schema: `blob_piece_v1`.
+    #[error("invalid 'blob_piece_v1' operation: {0}")]
+    InvalidBlobPiece(#[from] BlobPieceError),
 }
 
 /// Custom error types for validating operations against `schema_field_definition_v1` schema.
@@ -71,4 +79,30 @@ pub enum SchemaDefinitionError {
     /// "fields" is not correctly formatted as per specification.
     #[error("'fields' field in schema field definitions is wrongly formatted")]
     FieldsInvalid,
+}
+
+/// Custom error types for validating operations against `blob_v1` schema.
+#[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
+pub enum BlobError {
+    /// "length" is greater than the maximum allowed as per specification.
+    #[error("'length' field in blob is over maximum allowed length")]
+    LengthInvalid,
+
+    /// "mime_type" is not correctly formatted as per specification.
+    #[error("'mime_type' field in blob is wrongly formatted")]
+    MimeTypeInvalid,
+
+    /// "pieces" is not correctly formatted as per specification.
+    #[error("'pieces' field in blob is wrongly formatted")]
+    PiecesInvalid,
+}
+
+/// Custom error types for validating operations against `blob_piece_v1` schema.
+#[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
+pub enum BlobPieceError {
+    /// "data" is greater than the maximum allowed as per specification.
+    #[error("'data' field in blob is over maximum allowed length")]
+    DataInvalid,
 }

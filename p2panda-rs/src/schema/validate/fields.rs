@@ -12,7 +12,8 @@ use crate::operation::{
 };
 use crate::schema::validate::error::ValidationError;
 use crate::schema::validate::{
-    validate_schema_definition_v1_fields, validate_schema_field_definition_v1_fields,
+    validate_blob_piece_v1_fields, validate_blob_v1_fields, validate_schema_definition_v1_fields,
+    validate_schema_field_definition_v1_fields,
 };
 use crate::schema::{FieldName, FieldType, Schema, SchemaId};
 
@@ -312,8 +313,14 @@ fn validate_system_schema_fields(
 ) -> Result<(), ValidationError> {
     match schema.id() {
         SchemaId::Application(_, _) => Ok(()),
-        SchemaId::Blob(_) => todo!(),
-        SchemaId::BlobPiece(_) => todo!(),
+        SchemaId::Blob(_) => {
+            validate_blob_v1_fields(fields)?;
+            Ok(())
+        }
+        SchemaId::BlobPiece(_) => {
+            validate_blob_piece_v1_fields(fields)?;
+            Ok(())
+        }
         SchemaId::SchemaDefinition(_) => {
             validate_schema_definition_v1_fields(fields)?;
             Ok(())
@@ -804,6 +811,36 @@ mod tests {
         ],
         "invalid 'schema_field_definition_v1' operation: 'type' field in schema field definitions is wrongly formatted"
     )]
+    #[case::invalid_blob_length(
+        SchemaId::Blob(1),
+        vec![
+            ("length", 99999999.into()),
+            ("mime_type", "image/png".into()),
+            ("pieces", PlainValue::PinnedRelationList(vec![vec![HASH.to_owned()]])),
+         ],
+         "invalid 'blob_v1' operation: 'length' field in blob is over maximum allowed length"
+    )]
+    #[case::invalid_blob_mime_type(
+        SchemaId::Blob(1),
+        vec![
+            ("length", 100.into()),
+            ("mime_type", "wrong/mime/type/format".into()),
+            ("pieces", PlainValue::PinnedRelationList(vec![vec![HASH.to_owned()]])),
+         ],
+         "invalid 'blob_v1' operation: 'mime_type' field in blob is wrongly formatted"
+    )]
+    #[case::invalid_blob_piece_data(
+        SchemaId::BlobPiece(1),
+        vec![
+            ("data", "aGVsbG8gbXkgbmFtZSBpcyBzYW1oZWxsbyBteSBuYW1lIGlzIHNhbWhlbGxvIG15IG5hbW \
+                      UgaXMgc2FtaGVsbG8gbXkgbmFtZSBpcyBzYW1oZWxsbyBteSBuYW1lIGlzIHNhbWhlbGxv \
+                      G15IG5hbWUgaXMgc2FtaGVsbG8gbXkgbmFtZSBpcyBzYW1oZWxsbyBteSBuYW1lIGlzIHN \
+                      hbWhlbGxvIG15IG5hbWUgaXMgc2FtaGVsbG8gbXkgbmFtZSBpcyBzYW1oZWxsbyBteSBuY \
+                      W1lIGlzIHNhbWhlbGxvIG15IG5hbWUgaXMgc2FtaGVsbG8gbXkgbmFtZSBpcyBzYW1oZWx \
+                      sbyBteSBuYW1lIGlzIHNhbWhlbGxvIG15IG5hbWUgaXMgc2FtaGVsbG8gbXkgbmFtZS".into()),
+        ],
+        "invalid 'blob_piece_v1' operation: 'data' field in blob is over maximum allowed length"
+    )]
     fn wrong_system_schema_operations(
         #[case] schema_id: SchemaId,
         #[case] fields: Vec<(&str, PlainValue)>,
@@ -844,6 +881,20 @@ mod tests {
             ("name", "is_cute".into()),
             ("type", "bool".into()),
         ],
+    )]
+    #[case(
+        SchemaId::Blob(1),
+        vec![
+            ("length", 1.into()),
+            ("mime_type", "image/png".into()),
+            ("pieces", PlainValue::PinnedRelationList(vec![vec![HASH.to_owned()]])),
+         ]
+    )]
+    #[case(
+        SchemaId::BlobPiece(1),
+        vec![
+            ("data", "aGVsbG8gbXkgbmFtZSBpcyBzYW0=".into()),
+        ]
     )]
     fn correct_system_schema_operations(
         #[case] schema_id: SchemaId,
