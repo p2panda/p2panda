@@ -5,7 +5,7 @@ use once_cell::sync::Lazy;
 use crate::schema::error::SchemaIdError;
 use crate::schema::{FieldType, Schema, SchemaDescription, SchemaFields, SchemaId};
 
-const DESCRIPTION: &str = "Representation of the (partial) binary data of a file.";
+const DESCRIPTION: &str = "Definition of a blob file.";
 
 pub static BLOB_V1: Lazy<Schema> = Lazy::new(|| {
     let fields = SchemaFields::new(&[
