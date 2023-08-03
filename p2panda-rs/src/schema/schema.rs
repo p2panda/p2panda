@@ -6,7 +6,8 @@ use crate::document::{DocumentViewHash, DocumentViewId};
 use crate::operation::{Operation, OperationBuilder};
 use crate::schema::error::{SchemaError, SchemaIdError};
 use crate::schema::system::{
-    get_schema_definition, get_schema_field_definition, get_blob, get_blob_piece, SchemaFieldView, SchemaView,
+    get_blob, get_blob_piece, get_schema_definition, get_schema_field_definition, SchemaFieldView,
+    SchemaView,
 };
 use crate::schema::SchemaName;
 use crate::schema::{FieldType, SchemaId, SchemaVersion};
