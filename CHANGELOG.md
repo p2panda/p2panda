@@ -17,6 +17,7 @@ Released on 2023-07-27: :package: `p2panda-js` and :package: `p2panda-rs`
 
 - Implement serde for `SchemaName` and `SchemaDescription` [#487](https://github.com/p2panda/p2panda/pull/487) `rs`
 - Implement `Ord` for `SchemaId` [#492](https://github.com/p2panda/p2panda/pull/492) `rs`
+- Introduce `blob_v1` and `blob_piece_v1` system schema [#507](https://github.com/p2panda/p2panda/pull/507) `rs`
 
 ### Changed
 
