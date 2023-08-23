@@ -6,16 +6,6 @@ use regex::Regex;
 use crate::operation::plain::{PlainFields, PlainValue};
 use crate::schema::validate::error::BlobError;
 
-/// @TODO: Do we want a max and what should it be?
-const MAX_BLOB_LENGTH: i64 = 100000; // 1GB
-
-/// Checks "length" field of operations with "blob_v1" schema id.
-///
-/// 1. It must be less than `MAX_BLOB_LENGTH`
-pub fn validate_length(value: &i64) -> bool {
-    *value <= MAX_BLOB_LENGTH
-}
-
 /// Checks "mime_type" field of operations with "blob_v1" schema id.
 ///
 /// 1. It matches expected mime type format
@@ -37,19 +27,7 @@ pub fn validate_mime_type(value: &str) -> bool {
 /// this should be handled by other validation methods. This method is only checking the
 /// special requirements of this particular system schema.
 pub fn validate_blob_v1_fields(fields: &PlainFields) -> Result<(), BlobError> {
-    // Check "length" field
-    let blob_length = fields.get("length");
-
-    match blob_length {
-        Some(PlainValue::Integer(value)) => {
-            if validate_length(value) {
-                Ok(())
-            } else {
-                Err(BlobError::LengthInvalid)
-            }
-        }
-        _ => Ok(()),
-    }?;
+    // `pieces` and `length` fields don't have any special requirements.
 
     // Check "mime_type" field
     let blob_mime_type = fields.get("mime_type");
@@ -65,8 +43,6 @@ pub fn validate_blob_v1_fields(fields: &PlainFields) -> Result<(), BlobError> {
         _ => Ok(()),
     }?;
 
-    // We don't have anything to validate on the pieces field.
-
     Ok(())
 }
 
@@ -77,7 +53,7 @@ mod test {
     use crate::operation::plain::PlainFields;
     use crate::test_utils::fixtures::random_document_view_id;
 
-    use super::{validate_blob_v1_fields, validate_length, validate_mime_type};
+    use super::{validate_blob_v1_fields, validate_mime_type};
 
     #[rstest]
     #[case(vec![
@@ -138,14 +114,5 @@ mod test {
     #[case("thismimetypealsohasonelongelement/one.element.too.long")]
     fn check_mime_type_field(#[case] name_str: &str) {
         assert!(validate_mime_type(name_str));
-    }
-
-    #[rstest]
-    #[case(100)]
-    #[case(100000)]
-    #[should_panic]
-    #[case(100001)]
-    fn check_length_field(#[case] length_int: i64) {
-        assert!(validate_length(&length_int));
     }
 }
