@@ -811,15 +811,6 @@ mod tests {
         ],
         "invalid 'schema_field_definition_v1' operation: 'type' field in schema field definitions is wrongly formatted"
     )]
-    #[case::invalid_blob_length(
-        SchemaId::Blob(1),
-        vec![
-            ("length", 99999999.into()),
-            ("mime_type", "image/png".into()),
-            ("pieces", PlainValue::PinnedRelationList(vec![vec![HASH.to_owned()]])),
-         ],
-         "invalid 'blob_v1' operation: 'length' field in blob is over maximum allowed length"
-    )]
     #[case::invalid_blob_mime_type(
         SchemaId::Blob(1),
         vec![

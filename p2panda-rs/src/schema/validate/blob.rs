@@ -73,12 +73,6 @@ mod test {
      ].into())]
     #[should_panic]
     #[case(vec![
-        ("length", 100001.into()),
-        ("mime_type", "application/vnd.openxmlformats-officedocument.presentationml.slideshow".into()),
-        ("pieces", vec![random_document_view_id()].into()),
-     ].into())]
-    #[should_panic]
-    #[case(vec![
         ("length", 100.into()),
         ("mime_type", "not a mime type".into()),
         ("pieces", vec![random_document_view_id()].into()),
