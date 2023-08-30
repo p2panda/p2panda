@@ -140,7 +140,7 @@ GNU Affero General Public License v3.0 [`AGPL-3.0-or-later`](LICENSE)
 
 *This project has received funding from the European Union’s Horizon 2020
 research and innovation programme within the framework of the NGI-POINTER
-Project funded under grant agreement No 871528*
+Project funded under grant agreement No 871528 and NGI-ASSURE No 957073*
 
 [`p2panda`]: https://p2panda.org
 [`p2panda-rs`]: https://github.com/p2panda/p2panda/tree/main/p2panda-rs
