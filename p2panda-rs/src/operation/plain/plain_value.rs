@@ -27,11 +27,11 @@ pub enum PlainValue {
     /// Float value.
     Float(f64),
 
-    /// Byte string.
+    /// Byte string which can be bytes, a string, or an empty relation/pinned relation list.
     ByteString(ByteBuf),
 
-    /// List of strings which can either be a pinned relation (list of operation ids) a relation
-    /// list (list of document ids) or an empty pinned relation list.
+    /// List of strings which can either be a pinned relation (list of operation ids) or a relation
+    /// list (list of document ids).
     AmbiguousRelation(Vec<String>),
 
     /// List of a list of strings which is a pinned relation list.
@@ -260,7 +260,7 @@ mod tests {
         );
         assert_eq!(
             deserialize_into::<PlainValue>(&serialize_value(cbor!([]))).unwrap(),
-            PlainValue::AmbiguousRelation(vec![])
+            PlainValue::ByteString(ByteBuf::from([]))
         );
     }
 
