@@ -236,10 +236,10 @@ fn validate_field_value(
             }
         }
         FieldType::RelationList(_) => {
-            if let PlainValue::AmbiguousRelation(document_ids_str) = plain_value {
-                // Convert list of strings to list of document ids aka a relation list
-                let relation_list: RelationList =
-                    document_ids_str
+            match plain_value {
+                PlainValue::AmbiguousRelation(document_ids_str) => {
+                    // Convert list of strings to list of document ids aka a relation list
+                    let relation_list: RelationList = document_ids_str
                         .as_slice()
                         .try_into()
                         .map_err(|err: RelationListError| {
@@ -247,14 +247,28 @@ fn validate_field_value(
                             ValidationError::InvalidValue(err.to_string())
                         })?;
 
-                // Note that we do NOT check for duplicates and ordering here as this information
-                // is semantic!
-                Ok(OperationValue::RelationList(relation_list))
-            } else {
-                Err(ValidationError::InvalidType(
+                    // Note that we do NOT check for duplicates and ordering here as this information
+                    // is semantic!
+                    Ok(OperationValue::RelationList(relation_list))
+                }
+                PlainValue::ByteString(byte_string) => {
+                    // The only case where a byte_string is expected is when this value represents
+                    // an empty relation list, so we validate here that this is indeed an empty
+                    // vec of bytes.
+
+                    if !byte_string.is_empty() {
+                        Err(ValidationError::InvalidType(
+                            plain_value.field_type().to_owned(),
+                            schema_field_type.to_string(),
+                        ))
+                    } else {
+                        Ok(OperationValue::RelationList(RelationList::new(vec![])))
+                    }
+                }
+                _ => Err(ValidationError::InvalidType(
                     plain_value.field_type().to_owned(),
                     schema_field_type.to_string(),
-                ))
+                )),
             }
         }
         FieldType::PinnedRelation(_) => {
@@ -305,10 +319,20 @@ fn validate_field_value(
                         document_view_ids?,
                     )))
                 }
-                // If an ambiguous relation is present, then this must be an empty pinned relation list.
-                PlainValue::AmbiguousRelation(_) => Ok(OperationValue::PinnedRelationList(
-                    PinnedRelationList::new(vec![]),
-                )),
+                PlainValue::ByteString(byte_string) => {
+                    // The only case where a byte_string is expected is when this value represents
+                    // an empty relation list, so we validate here that this is indeed an empty
+                    // vec of bytes.
+
+                    if !byte_string.is_empty() {
+                        Err(ValidationError::InvalidType(
+                            plain_value.field_type().to_owned(),
+                            schema_field_type.to_string(),
+                        ))
+                    } else {
+                        Ok(OperationValue::RelationList(RelationList::new(vec![])))
+                    }
+                }
                 _ => Err(ValidationError::InvalidType(
                     plain_value.field_type().to_owned(),
                     schema_field_type.to_string(),
