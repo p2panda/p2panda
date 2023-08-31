@@ -531,7 +531,7 @@ mod tests {
             ("a", FieldType::PinnedRelationList(schema_id(SCHEMA_ID))),
         ],
         vec![
-            ("a", PlainValue::AmbiguousRelation(vec![])),
+            ("a", PlainValue::ByteString(ByteBuf::from([]))),
         ],
     )]
     fn correct_all_fields(
