@@ -9,6 +9,9 @@ pub enum OperationValue {
     /// Boolean value.
     Boolean(bool),
 
+    /// Bytes value.
+    Bytes(Vec<u8>),
+
     /// Signed integer value.
     Integer(i64),
 
@@ -36,6 +39,7 @@ impl OperationValue {
     pub fn field_type(&self) -> &str {
         match self {
             OperationValue::Boolean(_) => "bool",
+            OperationValue::Bytes(_) => "bytes",
             OperationValue::Integer(_) => "int",
             OperationValue::Float(_) => "float",
             OperationValue::String(_) => "str",

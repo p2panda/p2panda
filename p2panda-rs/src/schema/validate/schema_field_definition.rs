@@ -105,8 +105,9 @@ pub fn validate_schema_field_definition_v1_fields(
     let field_name = fields.get("name");
 
     match field_name {
-        Some(PlainValue::StringOrRelation(value)) => {
-            if validate_field_name(value) {
+        Some(value) => {
+            let string_value = value.try_into_string_from_utf8()?;
+            if validate_field_name(&string_value) {
                 Ok(())
             } else {
                 Err(SchemaFieldDefinitionError::NameInvalid)
@@ -119,8 +120,9 @@ pub fn validate_schema_field_definition_v1_fields(
     let field_type = fields.get("type");
 
     match field_type {
-        Some(PlainValue::StringOrRelation(value)) => {
-            if validate_type(value) {
+        Some(value) => {
+            let string_value = value.try_into_string_from_utf8()?;
+            if validate_type(&string_value) {
                 Ok(())
             } else {
                 Err(SchemaFieldDefinitionError::TypeInvalid)

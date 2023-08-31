@@ -26,6 +26,9 @@ pub enum FieldType {
     /// Defines a boolean field.
     Boolean,
 
+    /// Defines a bytes field.
+    Bytes,
+
     /// Defines an integer number field.
     Integer,
 
@@ -58,6 +61,7 @@ impl Display for FieldType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let field_type_str = match self {
             FieldType::Boolean => "bool".to_string(),
+            FieldType::Bytes => "bytes".to_string(),
             FieldType::Integer => "int".to_string(),
             FieldType::Float => "float".to_string(),
             FieldType::String => "str".to_string(),

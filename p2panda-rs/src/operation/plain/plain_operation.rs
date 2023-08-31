@@ -142,6 +142,7 @@ mod tests {
     use ciborium::cbor;
     use ciborium::value::{Error, Value};
     use rstest::rstest;
+    use serde_bytes::ByteBuf;
 
     use crate::document::DocumentViewId;
     use crate::operation::traits::{Actionable, Schematic};
@@ -176,7 +177,7 @@ mod tests {
             )),
             serialize_value(cbor!(
                 [1, 0, format!("{schema_name}_{document_view_id}"), {
-                    "name" => "Hericium coralloides"
+                    "name" => ByteBuf::from("Hericium coralloides".as_bytes())
                 }]
             ))
         );
@@ -191,7 +192,7 @@ mod tests {
         assert_eq!(
             deserialize_into::<PlainOperation>(&serialize_value(cbor!(
                 [1, 1, format!("{schema_name}_{document_view_id}"), [random_operation_id.to_string()], {
-                    "name" => "Lycoperdon echinatum"
+                    "name" => ByteBuf::from("Lycoperdon echinatum".as_bytes())
                 }]
             )))
             .unwrap(),

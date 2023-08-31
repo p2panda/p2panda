@@ -51,8 +51,9 @@ pub fn validate_schema_definition_v1_fields(
     let schema_name = fields.get("name");
 
     match schema_name {
-        Some(PlainValue::StringOrRelation(value)) => {
-            if validate_name(value) {
+        Some(value) => {
+            let string_value = value.try_into_string_from_utf8()?;
+            if validate_name(&string_value) {
                 Ok(())
             } else {
                 Err(SchemaDefinitionError::NameInvalid)
@@ -65,8 +66,9 @@ pub fn validate_schema_definition_v1_fields(
     let schema_description = fields.get("description");
 
     match schema_description {
-        Some(PlainValue::StringOrRelation(value)) => {
-            if validate_description(value) {
+        Some(value) => {
+            let string_value = value.try_into_string_from_utf8()?;
+            if validate_description(&string_value) {
                 Ok(())
             } else {
                 Err(SchemaDefinitionError::DescriptionInvalid)

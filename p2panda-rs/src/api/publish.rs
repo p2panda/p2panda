@@ -516,7 +516,7 @@ mod tests {
         KeyPair::new()
     )]
     #[should_panic(
-        expected = "Previous operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found in store"
+        expected = "Previous operation 00200ad2c0913c7fe176d27bebbcdcff32f669f974f7e7890ff490994a7230da1324 not found in store"
     )]
     #[case::previous_operation_missing(
         &[(0, 8)],
@@ -524,7 +524,7 @@ mod tests {
         KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
     )]
     #[should_panic(
-        expected = "Previous operation 00201971f1257645a2f6d3465f8713991d269709f81a5c6c458168b9461d68af5ecf not found in store"
+        expected = "Previous operation 0020da4d4f5674c00785f170bb61c45bc52db317221774b108962e837f4ba453e03b not found in store"
     )]
     #[case::one_of_some_previous_missing(
         &[(0, 7)],
@@ -532,7 +532,7 @@ mod tests {
         KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
     )]
     #[should_panic(
-        expected = "Previous operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found in store"
+        expected = "Previous operation 00200ad2c0913c7fe176d27bebbcdcff32f669f974f7e7890ff490994a7230da1324 not found in store"
     )]
     #[case::one_of_some_previous_missing(
         &[(0, 8)],
@@ -540,7 +540,7 @@ mod tests {
         KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
     )]
     #[should_panic(
-        expected = "Previous operation 00209038901221ce1002f023461f1530adf632081d9fcd2da1082c7c91fdcb534d03 not found in store"
+        expected = "Previous operation 00200ad2c0913c7fe176d27bebbcdcff32f669f974f7e7890ff490994a7230da1324 not found in store"
     )]
     #[case::missing_previous_operation_multi_writer(
         &[(0, 8)],
@@ -1012,7 +1012,7 @@ mod tests {
 
     #[rstest]
     #[should_panic(
-        expected = "Operation 00206a28f82fc8d27671b31948117af7501a5a0de709b0cf9bc3586b67abe67ac29a claims incorrect schema my_wrong_schema_name_"
+        expected = "Operation 0020466363beb0777826a16164310c6fc7e6d8015bbe246a977b11ef8ee8a1559aa5 claims incorrect schema my_wrong_schema_name_"
     )]
     #[tokio::test]
     async fn validates_incorrect_schema_id_in_previous_operation(

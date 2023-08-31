@@ -261,6 +261,7 @@ mod tests {
     use ciborium::value::{Error, Value};
     use rstest::rstest;
     use rstest_reuse::apply;
+    use serde_bytes::ByteBuf;
 
     use crate::document::{DocumentId, DocumentViewId};
     use crate::operation::decode::decode_operation;

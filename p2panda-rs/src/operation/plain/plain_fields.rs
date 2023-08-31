@@ -7,6 +7,7 @@ use std::fmt;
 
 use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
+use serde_bytes::ByteBuf;
 
 use crate::operation::error::FieldsError;
 use crate::operation::plain::PlainValue;
@@ -129,9 +130,12 @@ impl From<&OperationFields> for PlainFields {
         for (name, value) in fields.iter() {
             let raw_value = match value {
                 OperationValue::Boolean(bool) => PlainValue::Boolean(*bool),
+                OperationValue::Bytes(bytes) => {
+                    PlainValue::ByteString(ByteBuf::from(bytes.to_owned()))
+                }
                 OperationValue::Integer(int) => PlainValue::Integer(*int),
                 OperationValue::Float(float) => PlainValue::Float(*float),
-                OperationValue::String(str) => PlainValue::StringOrRelation(str.to_owned()),
+                OperationValue::String(str) => PlainValue::ByteString(ByteBuf::from(str.to_owned())),
                 OperationValue::Relation(relation) => relation.document_id().to_owned().into(),
                 OperationValue::RelationList(list) => list.document_ids().to_vec().into(),
                 OperationValue::PinnedRelation(relation) => relation.view_id().to_owned().into(),
@@ -153,6 +157,7 @@ impl From<&OperationFields> for PlainFields {
 mod tests {
     use ciborium::cbor;
     use rstest::rstest;
+    use serde_bytes::ByteBuf;
 
     use crate::operation::plain::PlainValue;
     use crate::operation::OperationFields;
@@ -191,7 +196,7 @@ mod tests {
             ("it_works", PlainValue::Boolean(true)),
             (
                 "it_works",
-                PlainValue::StringOrRelation("... and ignores duplicates".into()),
+                PlainValue::ByteString(ByteBuf::from("... and ignores duplicates")),
             ),
         ]);
         assert_eq!(fields.len(), 1);
@@ -206,7 +211,7 @@ mod tests {
             .insert("it_works", PlainValue::Boolean(true))
             .unwrap();
         fields
-            .insert("message", PlainValue::StringOrRelation("mjau".into()))
+            .insert("message", PlainValue::ByteString(ByteBuf::from("mjau")))
             .unwrap();
 
         // This field was inserted last but will be ordered first
@@ -221,7 +226,7 @@ mod tests {
             serialize_value(cbor!({
                 "a_first_field" => 5,
                 "it_works" => true,
-                "message" => "mjau",
+                "message" => ByteBuf::from("mjau".as_bytes()),
             }))
         );
     }

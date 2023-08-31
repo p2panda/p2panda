@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use serde::{Deserialize, Serialize};
+use serde_bytes::ByteBuf;
 
-use crate::document::{DocumentId, DocumentViewId};
+use crate::{
+    document::{DocumentId, DocumentViewId},
+    operation::error::PlainValueError,
+};
 
 /// Operation field values which have not been checked against a schema yet.
 ///
@@ -23,8 +27,8 @@ pub enum PlainValue {
     /// Float value.
     Float(f64),
 
-    /// String value which can be either a text or relation (document id).
-    StringOrRelation(String),
+    /// Byte string.
+    ByteString(ByteBuf),
 
     /// List of strings which can either be a pinned relation (list of operation ids) a relation
     /// list (list of document ids) or an empty pinned relation list.
@@ -41,11 +45,23 @@ impl PlainValue {
     pub fn field_type(&self) -> &str {
         match self {
             PlainValue::Boolean(_) => "bool",
+            PlainValue::ByteString(_) => "byte_string",
             PlainValue::Integer(_) => "int",
             PlainValue::Float(_) => "float",
-            PlainValue::StringOrRelation(_) => "str",
             PlainValue::AmbiguousRelation(_) => "str[]",
             PlainValue::PinnedRelationList(_) => "str[][]",
+        }
+    }
+
+    pub fn try_into_string_from_utf8(&self) -> Result<String, PlainValueError> {
+        let result = match &self {
+            PlainValue::ByteString(bytes) => String::from_utf8(bytes.to_vec()).ok(),
+            _ => None,
+        };
+
+        match result {
+            Some(str_value) => Ok(str_value),
+            None => Err(PlainValueError::BytesNotUtf8),
         }
     }
 }
@@ -70,19 +86,19 @@ impl From<i64> for PlainValue {
 
 impl From<String> for PlainValue {
     fn from(value: String) -> Self {
-        PlainValue::StringOrRelation(value)
+        PlainValue::ByteString(ByteBuf::from(value.as_bytes()))
     }
 }
 
 impl From<&str> for PlainValue {
     fn from(value: &str) -> Self {
-        PlainValue::StringOrRelation(value.to_string())
+        PlainValue::ByteString(ByteBuf::from(value.as_bytes()))
     }
 }
 
 impl From<DocumentId> for PlainValue {
     fn from(value: DocumentId) -> Self {
-        PlainValue::StringOrRelation(value.to_string())
+        PlainValue::ByteString(ByteBuf::from(value.to_string()))
     }
 }
 
@@ -128,6 +144,7 @@ impl From<Vec<DocumentViewId>> for PlainValue {
 mod tests {
     use ciborium::cbor;
     use rstest::rstest;
+    use serde_bytes::ByteBuf;
 
     use crate::document::{DocumentId, DocumentViewId};
     use crate::serde::{deserialize_into, serialize_from, serialize_value};
@@ -140,12 +157,12 @@ mod tests {
         assert_eq!("int", PlainValue::Integer(5).field_type());
         assert_eq!("bool", PlainValue::Boolean(false).field_type());
         assert_eq!(
-            "str",
-            PlainValue::StringOrRelation("test".into()).field_type()
+            "byte_string",
+            PlainValue::ByteString(ByteBuf::from("test")).field_type()
         );
         assert_eq!(
             "str[]",
-            PlainValue::AmbiguousRelation(vec!["test".into()]).field_type()
+            PlainValue::AmbiguousRelation(vec!["test".to_string()]).field_type()
         );
     }
 
@@ -156,13 +173,13 @@ mod tests {
         assert_eq!(PlainValue::Float(1.5), 1.5.into());
         assert_eq!(PlainValue::Integer(3), 3.into());
         assert_eq!(
-            PlainValue::StringOrRelation("hellö".to_string()),
+            PlainValue::ByteString(ByteBuf::from("hellö")),
             "hellö".into()
         );
 
         // Relation types
         assert_eq!(
-            PlainValue::StringOrRelation(document_id.to_string()),
+            PlainValue::ByteString(ByteBuf::from(document_id.to_string())),
             document_id.clone().into()
         );
         assert_eq!(
@@ -187,13 +204,8 @@ mod tests {
         );
 
         assert_eq!(
-            serialize_from(PlainValue::StringOrRelation("Piep".into())),
-            serialize_value(cbor!("Piep"))
-        );
-
-        assert_eq!(
             serialize_from(PlainValue::AmbiguousRelation(vec![
-                "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4".into()
+                "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4".to_string()
             ])),
             serialize_value(cbor!([
                 "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4"
@@ -202,11 +214,26 @@ mod tests {
 
         assert_eq!(
             serialize_from(PlainValue::PinnedRelationList(vec![vec![
-                "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4".into()
+                "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4".to_string()
             ]])),
             serialize_value(cbor!([[
                 "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4"
             ]]))
+        );
+
+        assert_eq!(
+            serialize_from(PlainValue::ByteString(ByteBuf::from(vec![0, 1, 2, 3]))),
+            serialize_value(cbor!(ByteBuf::from(vec![0, 1, 2, 3])))
+        );
+
+        assert_eq!(
+            serialize_from(PlainValue::ByteString(ByteBuf::from("Piep"))),
+            serialize_value(cbor!(ByteBuf::from("Piep")))
+        );
+
+        assert_eq!(
+            serialize_from(PlainValue::AmbiguousRelation(vec![])),
+            serialize_value(cbor!([]))
         );
     }
 
@@ -221,8 +248,19 @@ mod tests {
             PlainValue::Float(12.0)
         );
         assert_eq!(
+            deserialize_into::<PlainValue>(&serialize_value(cbor!(ByteBuf::from(vec![
+                0, 1, 2, 3
+            ]))))
+            .unwrap(),
+            PlainValue::ByteString(ByteBuf::from(vec![0, 1, 2, 3]))
+        );
+        assert_eq!(
             deserialize_into::<PlainValue>(&serialize_value(cbor!("Piep"))).unwrap(),
-            PlainValue::StringOrRelation("Piep".into())
+            PlainValue::ByteString(ByteBuf::from("Piep"))
+        );
+        assert_eq!(
+            deserialize_into::<PlainValue>(&serialize_value(cbor!([]))).unwrap(),
+            PlainValue::AmbiguousRelation(vec![])
         );
     }
 

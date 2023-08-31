@@ -2,6 +2,7 @@
 
 //! Error types for encoding, decoding and validating operations with schemas and regarding data
 //! types like operation fields, relations or plain operations.
+
 use thiserror::Error;
 
 /// Errors from `OperationBuilder` struct.
@@ -94,6 +95,14 @@ pub enum OperationIdError {
     /// Handle errors from `Hash` struct.
     #[error(transparent)]
     HashError(#[from] crate::hash::error::HashError),
+}
+
+/// Errors from `PlainValue` enum.
+#[derive(Error, Debug)]
+pub enum PlainValueError {
+    /// Error resulting from failure to parsing a byte string into a String.
+    #[error("attempted to parse non-utf8 bytes into string")]
+    BytesNotUtf8,
 }
 
 /// Errors from `Relation` struct.
