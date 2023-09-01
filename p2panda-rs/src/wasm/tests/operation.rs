@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use js_sys::{Array, Uint8Array, JSON};
+use js_sys::{Array, JSON};
 use serde_bytes::ByteBuf;
 use serde_wasm_bindgen::to_value;
 use wasm_bindgen::JsValue;
@@ -35,7 +35,7 @@ fn add_operation_fields() {
         .insert("is_panda", "bool", JsValue::from_bool(true))
         .unwrap();
 
-    fields.insert("data", "bytes", bytes.clone()).unwrap();
+    fields.insert("data", "bytes", bytes);
 
     fields
         .insert("height_cm", "float", JsValue::from_f64(167.8))
@@ -52,7 +52,9 @@ fn add_operation_fields() {
     // Make sure they have been added successfully
     assert_eq!(fields.get("name").unwrap(), "Panda");
     assert_eq!(fields.get("is_panda").unwrap(), true);
-    assert_eq!(fields.get("data").unwrap(), bytes);
+
+    let value_bytes: ByteBuf = deserialize_from_js(fields.get("data").unwrap()).unwrap();
+    assert_eq!(value_bytes.to_vec(), vec![0, 1, 2, 3]);
     assert_eq!(fields.get("height_cm").unwrap(), 167.8);
 
     // Note: A `==` comparison of two "equal" objects will still result in `false` in JavaScript,
@@ -217,6 +219,7 @@ fn encodes_operations() {
 fn decode_operations() {
     // Prepare operation
     let mut fields = crate::operation::OperationFields::new();
+    fields.insert("data", [0, 1, 2, 3].as_ref().into()).unwrap();
     fields.insert("username", "dolphin".into()).unwrap();
     let operation = operation_with_schema(Some(fields), Some(random_document_view_id()));
     let operation_encoded = crate::operation::encode::encode_operation(&operation).unwrap();
@@ -228,9 +231,14 @@ fn decode_operations() {
     assert_eq!(plain_operation.action, 1);
 
     let plain_fields = plain_operation.fields.unwrap();
-    assert_eq!(plain_fields.len(), 1);
+    assert_eq!(plain_fields.len(), 2);
+
+    let value_bytes: ByteBuf = deserialize_from_js(plain_fields.get("data").unwrap()).unwrap();
+    assert_eq!(value_bytes.to_vec(), vec![0, 1, 2, 3]);
+
+    let value_bytes: ByteBuf = deserialize_from_js(plain_fields.get("username").unwrap()).unwrap();
     assert_eq!(
-        plain_fields.get("username").unwrap(),
-        JsValue::from_str("dolphin")
+        value_bytes.to_vec(),
+        vec![100, 111, 108, 112, 104, 105, 110]
     );
 }

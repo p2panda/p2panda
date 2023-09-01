@@ -14,7 +14,9 @@ use wasm_bindgen::JsValue;
 /// support of large number types. With this serializer all i64 and u64 numbers get serialized as
 /// BigInt instances.
 pub fn serialize_to_js<T: Serialize + ?Sized>(value: &T) -> Result<JsValue, Error> {
-    let serializer = Serializer::new().serialize_large_number_types_as_bigints(true);
+    let serializer = Serializer::new()
+        .serialize_large_number_types_as_bigints(true)
+        .serialize_bytes_as_arrays(true);
     let output = value.serialize(&serializer)?;
     Ok(output)
 }

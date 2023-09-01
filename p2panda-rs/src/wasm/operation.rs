@@ -6,6 +6,7 @@ use std::str::FromStr;
 #[cfg(test)]
 use serde::Deserialize;
 use serde::Serialize;
+use serde_bytes::ByteBuf;
 use serde_wasm_bindgen::to_value;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
@@ -27,7 +28,7 @@ use crate::Validate;
 fn operation_to_js_value(operation_value: &OperationValue) -> Result<JsValue, JsValue> {
     match operation_value {
         OperationValue::Boolean(value) => Ok(JsValue::from_bool(value.to_owned())),
-        OperationValue::Bytes(value) => Ok(jserr!(to_value(value))),
+        OperationValue::Bytes(value) => Ok(jserr!(serialize_to_js(value))),
         OperationValue::Integer(value) => Ok(JsValue::from(value.to_owned())),
         OperationValue::Float(value) => Ok(JsValue::from_f64(value.to_owned())),
         OperationValue::String(value) => Ok(JsValue::from_str(value)),
@@ -44,7 +45,7 @@ fn plain_to_js_value(plain_value: &PlainValue) -> Result<JsValue, JsValue> {
         PlainValue::Boolean(value) => Ok(JsValue::from_bool(value.to_owned())),
         PlainValue::Integer(value) => Ok(JsValue::from(value.to_owned())),
         PlainValue::Float(value) => Ok(JsValue::from_f64(value.to_owned())),
-        PlainValue::ByteString(value) => Ok(jserr!(to_value(value))),
+        PlainValue::ByteString(value) => Ok(jserr!(serialize_to_js(value))),
         PlainValue::AmbiguousRelation(value) => Ok(jserr!(serialize_to_js(value))),
         PlainValue::PinnedRelationList(value) => Ok(jserr!(serialize_to_js(value))),
     }
