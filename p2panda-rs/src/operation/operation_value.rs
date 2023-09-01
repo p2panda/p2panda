@@ -81,6 +81,12 @@ impl From<&str> for OperationValue {
     }
 }
 
+impl From<&[u8]> for OperationValue {
+    fn from(value: &[u8]) -> Self {
+        OperationValue::Bytes(value.to_owned())
+    }
+}
+
 impl From<DocumentId> for OperationValue {
     fn from(value: DocumentId) -> Self {
         OperationValue::Relation(Relation::new(value))
