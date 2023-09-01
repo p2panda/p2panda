@@ -24,19 +24,21 @@ describe('OperationFields', () => {
     fields.insert('b', 'int', 123);
     fields.insert('c', 'float', 12.3);
     fields.insert('d', 'bool', true);
-    fields.insert('e', 'relation', hash1);
-    fields.insert('f', 'pinned_relation', [hash2, hash3]);
-    fields.insert('g', 'relation_list', [hash4]);
-    fields.insert('h', 'pinned_relation_list', [[hash5], [hash6, hash7]]);
+    fields.insert('e', 'bool', [0, 1, 2, 3]);
+    fields.insert('f', 'relation', hash1);
+    fields.insert('g', 'pinned_relation', [hash2, hash3]);
+    fields.insert('h', 'relation_list', [hash4]);
+    fields.insert('i', 'pinned_relation_list', [[hash5], [hash6, hash7]]);
 
     expect(fields.get('a')).toBe('Hello, World!');
     expect(fields.get('b')).toEqual(BigInt(123));
     expect(fields.get('c')).toEqual(12.3);
     expect(fields.get('d')).toEqual(true);
-    expect(fields.get('e')).toEqual(hash1);
-    expect(fields.get('f')).toEqual([hash2, hash3]);
-    expect(fields.get('g')).toEqual([hash4]);
-    expect(fields.get('h')).toEqual([[hash5], [hash6, hash7]]);
+    expect(fields.get('e')).toEqual([0, 1, 2, 3]);
+    expect(fields.get('f')).toEqual(hash1);
+    expect(fields.get('g')).toEqual([hash2, hash3]);
+    expect(fields.get('h')).toEqual([hash4]);
+    expect(fields.get('i')).toEqual([[hash5], [hash6, hash7]]);
   });
 
   it('sorts and de-duplicates document view ids for us', () => {

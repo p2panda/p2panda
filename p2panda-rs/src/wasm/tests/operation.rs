@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use js_sys::{Array, JSON};
+use js_sys::{Array, Uint8Array, JSON};
+use serde_bytes::ByteBuf;
+use serde_wasm_bindgen::to_value;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 
@@ -22,6 +24,8 @@ fn add_operation_fields() {
     let list = Array::new();
     list.push(&relation);
 
+    let bytes = to_value(&[0, 1, 2, 3]).unwrap();
+
     // Add a couple of valid fields
     fields
         .insert("name", "str", JsValue::from_str("Panda"))
@@ -30,6 +34,8 @@ fn add_operation_fields() {
     fields
         .insert("is_panda", "bool", JsValue::from_bool(true))
         .unwrap();
+
+    fields.insert("data", "bytes", bytes.clone()).unwrap();
 
     fields
         .insert("height_cm", "float", JsValue::from_f64(167.8))
@@ -46,6 +52,7 @@ fn add_operation_fields() {
     // Make sure they have been added successfully
     assert_eq!(fields.get("name").unwrap(), "Panda");
     assert_eq!(fields.get("is_panda").unwrap(), true);
+    assert_eq!(fields.get("data").unwrap(), bytes);
     assert_eq!(fields.get("height_cm").unwrap(), 167.8);
 
     // Note: A `==` comparison of two "equal" objects will still result in `false` in JavaScript,
@@ -60,7 +67,7 @@ fn add_operation_fields() {
     );
 
     // Check if number of fields is correct
-    assert_eq!(fields.len(), 5);
+    assert_eq!(fields.len(), 6);
 }
 
 #[wasm_bindgen_test]
@@ -138,6 +145,8 @@ fn encodes_operations() {
     let relation =
         JsValue::from_str("00205d23607adf6490033cc319cd2b193b2674243f7dd56912432978684ed4fbf12e");
 
+    let bytes = to_value(&[0, 1, 2, 3]).unwrap();
+
     // Create a couple of operation fields
     fields
         .insert("name", "str", JsValue::from_str("Panda"))
@@ -146,6 +155,8 @@ fn encodes_operations() {
     fields
         .insert("is_panda", "bool", JsValue::from_bool(true))
         .unwrap();
+
+    fields.insert("data", "bytes", bytes).unwrap();
 
     fields.insert("age", "int", JsValue::from_str("5")).unwrap();
 
