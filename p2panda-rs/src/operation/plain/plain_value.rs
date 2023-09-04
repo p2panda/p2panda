@@ -28,7 +28,7 @@ pub enum PlainValue {
     Float(f64),
 
     /// Byte string which can be bytes, a string, or an empty relation/pinned relation list.
-    ByteString(ByteBuf),
+    Bytes(ByteBuf),
 
     /// List of strings which can either be a pinned relation (list of operation ids) or a relation
     /// list (list of document ids).
@@ -45,7 +45,7 @@ impl PlainValue {
     pub fn field_type(&self) -> &str {
         match self {
             PlainValue::Boolean(_) => "bool",
-            PlainValue::ByteString(_) => "byte_string",
+            PlainValue::Bytes(_) => "byte_string",
             PlainValue::Integer(_) => "int",
             PlainValue::Float(_) => "float",
             PlainValue::AmbiguousRelation(_) => "str[]",
@@ -58,7 +58,7 @@ impl PlainValue {
     /// Only succeeds if the value if bytes _and_ the bytes are valid utf8.
     pub fn try_into_string_from_utf8_bytes(&self) -> Result<String, PlainValueError> {
         let result = match &self {
-            PlainValue::ByteString(bytes) => String::from_utf8(bytes.to_vec()).ok(),
+            PlainValue::Bytes(bytes) => String::from_utf8(bytes.to_vec()).ok(),
             _ => None,
         };
 
@@ -89,19 +89,19 @@ impl From<i64> for PlainValue {
 
 impl From<String> for PlainValue {
     fn from(value: String) -> Self {
-        PlainValue::ByteString(ByteBuf::from(value.as_bytes()))
+        PlainValue::Bytes(ByteBuf::from(value.as_bytes()))
     }
 }
 
 impl From<&str> for PlainValue {
     fn from(value: &str) -> Self {
-        PlainValue::ByteString(ByteBuf::from(value.as_bytes()))
+        PlainValue::Bytes(ByteBuf::from(value.as_bytes()))
     }
 }
 
 impl From<DocumentId> for PlainValue {
     fn from(value: DocumentId) -> Self {
-        PlainValue::ByteString(ByteBuf::from(value.to_string()))
+        PlainValue::Bytes(ByteBuf::from(value.to_string()))
     }
 }
 
@@ -161,7 +161,7 @@ mod tests {
         assert_eq!("bool", PlainValue::Boolean(false).field_type());
         assert_eq!(
             "byte_string",
-            PlainValue::ByteString(ByteBuf::from("test")).field_type()
+            PlainValue::Bytes(ByteBuf::from("test")).field_type()
         );
         assert_eq!(
             "str[]",
@@ -175,14 +175,11 @@ mod tests {
         assert_eq!(PlainValue::Boolean(true), true.into());
         assert_eq!(PlainValue::Float(1.5), 1.5.into());
         assert_eq!(PlainValue::Integer(3), 3.into());
-        assert_eq!(
-            PlainValue::ByteString(ByteBuf::from("hellö")),
-            "hellö".into()
-        );
+        assert_eq!(PlainValue::Bytes(ByteBuf::from("hellö")), "hellö".into());
 
         // Relation types
         assert_eq!(
-            PlainValue::ByteString(ByteBuf::from(document_id.to_string())),
+            PlainValue::Bytes(ByteBuf::from(document_id.to_string())),
             document_id.clone().into()
         );
         assert_eq!(
@@ -225,12 +222,12 @@ mod tests {
         );
 
         assert_eq!(
-            serialize_from(PlainValue::ByteString(ByteBuf::from(vec![0, 1, 2, 3]))),
+            serialize_from(PlainValue::Bytes(ByteBuf::from(vec![0, 1, 2, 3]))),
             serialize_value(cbor!(ByteBuf::from(vec![0, 1, 2, 3])))
         );
 
         assert_eq!(
-            serialize_from(PlainValue::ByteString(ByteBuf::from("Piep"))),
+            serialize_from(PlainValue::Bytes(ByteBuf::from("Piep"))),
             serialize_value(cbor!(ByteBuf::from("Piep")))
         );
 
@@ -255,15 +252,15 @@ mod tests {
                 0, 1, 2, 3
             ]))))
             .unwrap(),
-            PlainValue::ByteString(ByteBuf::from(vec![0, 1, 2, 3]))
+            PlainValue::Bytes(ByteBuf::from(vec![0, 1, 2, 3]))
         );
         assert_eq!(
             deserialize_into::<PlainValue>(&serialize_value(cbor!("Piep"))).unwrap(),
-            PlainValue::ByteString(ByteBuf::from("Piep"))
+            PlainValue::Bytes(ByteBuf::from("Piep"))
         );
         assert_eq!(
             deserialize_into::<PlainValue>(&serialize_value(cbor!([]))).unwrap(),
-            PlainValue::ByteString(ByteBuf::from([]))
+            PlainValue::Bytes(ByteBuf::from([]))
         );
     }
 

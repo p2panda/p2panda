@@ -178,7 +178,7 @@ fn validate_field_value(
             }
         }
         FieldType::Bytes => {
-            if let PlainValue::ByteString(bytes) = plain_value {
+            if let PlainValue::Bytes(bytes) = plain_value {
                 Ok(OperationValue::Bytes(bytes.to_vec()))
             } else {
                 Err(ValidationError::InvalidType(
@@ -208,7 +208,7 @@ fn validate_field_value(
             }
         }
         FieldType::String => {
-            if let PlainValue::ByteString(_) = plain_value {
+            if let PlainValue::Bytes(_) = plain_value {
                 let string_value = plain_value.try_into_string_from_utf8_bytes()?;
                 Ok(OperationValue::String(string_value.to_owned()))
             } else {
@@ -219,7 +219,7 @@ fn validate_field_value(
             }
         }
         FieldType::Relation(_) => {
-            if let PlainValue::ByteString(_) = plain_value {
+            if let PlainValue::Bytes(_) = plain_value {
                 // Convert byte string to document id, check for correctness
                 let string_value = plain_value.try_into_string_from_utf8_bytes()?;
                 let document_id: DocumentId =
@@ -251,7 +251,7 @@ fn validate_field_value(
                     // is semantic!
                     Ok(OperationValue::RelationList(relation_list))
                 }
-                PlainValue::ByteString(byte_string) => {
+                PlainValue::Bytes(byte_string) => {
                     // The only case where a byte_string is expected is when this value represents
                     // an empty relation list, so we validate here that this is indeed an empty
                     // vec of bytes.
@@ -319,7 +319,7 @@ fn validate_field_value(
                         document_view_ids?,
                     )))
                 }
-                PlainValue::ByteString(byte_string) => {
+                PlainValue::Bytes(byte_string) => {
                     // The only case where a byte_string is expected is when this value represents
                     // an empty relation list, so we validate here that this is indeed an empty
                     // vec of bytes.
@@ -384,7 +384,7 @@ mod tests {
         assert!(validate_field(
             (
                 &"cutest_animal_in_zoo".to_owned(),
-                &PlainValue::ByteString(ByteBuf::from("Panda")),
+                &PlainValue::Bytes(ByteBuf::from("Panda")),
             ),
             (&"cutest_animal_in_zoo".to_owned(), &FieldType::String)
         )
@@ -394,7 +394,7 @@ mod tests {
         assert!(validate_field(
             (
                 &"most_boring_animal_in_zoo".to_owned(),
-                &PlainValue::ByteString(ByteBuf::from("Llama")),
+                &PlainValue::Bytes(ByteBuf::from("Llama")),
             ),
             (&"cutest_animal_in_zoo".to_owned(), &FieldType::String)
         )
@@ -404,7 +404,7 @@ mod tests {
         assert!(validate_field(
             (
                 &"most_boring_animal_in_zoo".to_owned(),
-                &PlainValue::ByteString(ByteBuf::from("Llama")),
+                &PlainValue::Bytes(ByteBuf::from("Llama")),
             ),
             (
                 &"most_boring_animal_in_zoo".to_owned(),
@@ -421,12 +421,12 @@ mod tests {
     }
 
     #[rstest]
-    #[case(PlainValue::ByteString(ByteBuf::from("Handa")), FieldType::String)]
+    #[case(PlainValue::Bytes(ByteBuf::from("Handa")), FieldType::String)]
     #[case(PlainValue::Integer(512), FieldType::Integer)]
     #[case(PlainValue::Float(1024.32), FieldType::Float)]
     #[case(PlainValue::Boolean(true), FieldType::Boolean)]
     #[case(
-        PlainValue::ByteString(ByteBuf::from(HASH)),
+        PlainValue::Bytes(ByteBuf::from(HASH)),
         FieldType::Relation(schema_id(SCHEMA_ID))
     )]
     #[case(
@@ -456,7 +456,7 @@ mod tests {
 
     #[rstest]
     #[case(
-        PlainValue::ByteString(ByteBuf::from("The Zookeeper")),
+        PlainValue::Bytes(ByteBuf::from("The Zookeeper")),
         FieldType::Integer,
         "invalid field type 'byte_string', expected 'int'"
     )]
@@ -476,7 +476,7 @@ mod tests {
         "invalid field type 'float', expected 'int'"
     )]
     #[case(
-        PlainValue::ByteString(ByteBuf::from(HASH)),
+        PlainValue::Bytes(ByteBuf::from(HASH)),
         FieldType::RelationList(schema_id(SCHEMA_ID)),
         "invalid field type 'byte_string', expected 'relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)'",
     )]
@@ -501,7 +501,7 @@ mod tests {
             ("fans", FieldType::RelationList(schema_id(SCHEMA_ID))),
         ],
         vec![
-            ("message", PlainValue::ByteString(ByteBuf::from("Hello, Mr. Handa!"))),
+            ("message", PlainValue::Bytes(ByteBuf::from("Hello, Mr. Handa!"))),
             ("age", PlainValue::Integer(41)),
             ("fans", PlainValue::AmbiguousRelation(vec![HASH.to_owned()])),
         ],
@@ -514,7 +514,7 @@ mod tests {
         ],
         vec![
             ("c", PlainValue::Boolean(false)),
-            ("b", PlainValue::ByteString(ByteBuf::from("Panda-San!"))),
+            ("b", PlainValue::Bytes(ByteBuf::from("Panda-San!"))),
             ("a", PlainValue::Integer(6)),
         ],
     )]
@@ -531,7 +531,7 @@ mod tests {
             ("a", FieldType::PinnedRelationList(schema_id(SCHEMA_ID))),
         ],
         vec![
-            ("a", PlainValue::ByteString(ByteBuf::from([]))),
+            ("a", PlainValue::Bytes(ByteBuf::from([]))),
         ],
     )]
     fn correct_all_fields(
@@ -568,7 +568,7 @@ mod tests {
         ],
         vec![
             ("fans", PlainValue::AmbiguousRelation(vec![HASH.to_owned()])),
-            ("message", PlainValue::ByteString(ByteBuf::from("Hello, Mr. Handa!"))),
+            ("message", PlainValue::Bytes(ByteBuf::from("Hello, Mr. Handa!"))),
         ],
         "field 'fans' does not match schema: expected field name 'message'"
     )]
@@ -579,7 +579,7 @@ mod tests {
             ("message", FieldType::String),
         ],
         vec![
-            ("message", PlainValue::ByteString(ByteBuf::from("Panda-San!"))),
+            ("message", PlainValue::Bytes(ByteBuf::from("Panda-San!"))),
         ],
         "field 'message' does not match schema: expected field name 'age'"
     )]
@@ -592,8 +592,8 @@ mod tests {
         ],
         vec![
             ("is_boring", PlainValue::Boolean(false)),
-            ("cuteness_level", PlainValue::ByteString(ByteBuf::from("Very high! I promise!"))),
-            ("name", PlainValue::ByteString(ByteBuf::from("The really not boring Llama!!!"))),
+            ("cuteness_level", PlainValue::Bytes(ByteBuf::from("Very high! I promise!"))),
+            ("name", PlainValue::Bytes(ByteBuf::from("The really not boring Llama!!!"))),
         ],
         "field 'cuteness_level' does not match schema: invalid field type 'byte_string', expected 'float'"
     )]
@@ -647,7 +647,7 @@ mod tests {
             ("is_cute", FieldType::Boolean),
         ],
         vec![
-            ("message", PlainValue::ByteString(ByteBuf::from("Hello, Mr. Handa!"))),
+            ("message", PlainValue::Bytes(ByteBuf::from("Hello, Mr. Handa!"))),
         ],
     )]
     #[case(
@@ -658,7 +658,7 @@ mod tests {
         ],
         vec![
             ("age", PlainValue::Integer(41)),
-            ("message", PlainValue::ByteString(ByteBuf::from("Hello, Mr. Handa!"))),
+            ("message", PlainValue::Bytes(ByteBuf::from("Hello, Mr. Handa!"))),
         ],
     )]
     fn correct_only_given_fields(
@@ -696,7 +696,7 @@ mod tests {
             ("is_cute", FieldType::Boolean),
         ],
         vec![
-            ("spam", PlainValue::ByteString(ByteBuf::from("PANDA IS THE CUTEST!"))),
+            ("spam", PlainValue::Bytes(ByteBuf::from("PANDA IS THE CUTEST!"))),
         ],
         "unexpected fields found: 'spam'",
     )]
@@ -709,8 +709,8 @@ mod tests {
         vec![
             ("is_cute", PlainValue::Boolean(false)),
             ("age", PlainValue::Integer(41)),
-            ("message", PlainValue::ByteString(ByteBuf::from("Hello, Mr. Handa!"))),
-            ("response", PlainValue::ByteString(ByteBuf::from("Good bye!"))),
+            ("message", PlainValue::Bytes(ByteBuf::from("Hello, Mr. Handa!"))),
+            ("response", PlainValue::Bytes(ByteBuf::from("Good bye!"))),
         ],
         "unexpected fields found: 'message', 'response'",
     )]
@@ -784,7 +784,7 @@ mod tests {
         // Construct plain fields
         let mut plain_fields = PlainFields::new();
         plain_fields
-            .insert("icecream", PlainValue::ByteString(ByteBuf::from("Almond")))
+            .insert("icecream", PlainValue::Bytes(ByteBuf::from("Almond")))
             .unwrap();
         plain_fields
             .insert("degree", PlainValue::Float(6.12))
