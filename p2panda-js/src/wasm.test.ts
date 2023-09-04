@@ -12,7 +12,12 @@ import {
 
 const TEST_HASH =
   '0020ddc99aca776df0ca9d1b5871ba39d4edacc752a0a3426b12c3958971b6c847ac';
-const TEST_SCHEMA_ID = `test_${TEST_HASH}`;
+export const TEST_SCHEMA_ID = `test_${TEST_HASH}`;
+
+export function stringToBytes(str: string): number[] {
+  const utf8EncodeText = new TextEncoder();
+  return Array.from(utf8EncodeText.encode(str));
+}
 
 describe('WebAssembly interface', () => {
   describe('KeyPair', () => {
@@ -47,6 +52,7 @@ describe('WebAssembly interface', () => {
       fields.insert('description', 'str', 'Hello, Panda');
       fields.insert('temperature', 'int', '32');
       fields.insert('isCute', 'bool', true);
+      fields.insert('data', 'bytes', [0, 1, 2, 3]);
       fields.insert('degree', 'float', 12.322);
       fields.insert('username', 'relation', TEST_HASH);
       fields.insert('locations', 'relation_list', [TEST_HASH]);
@@ -63,6 +69,7 @@ describe('WebAssembly interface', () => {
       expect(fields.get('description')).toBe('Hello, Panda');
       expect(fields.get('temperature')).toEqual(BigInt(32));
       expect(fields.get('isCute')).toBe(true);
+      expect(fields.get('data')).toEqual([0, 1, 2, 3]);
       expect(fields.get('degree')).toBe(12.322);
       expect(fields.get('username')).toEqual(TEST_HASH);
       expect(fields.get('locations')).toEqual([TEST_HASH]);
@@ -180,7 +187,9 @@ describe('WebAssembly interface', () => {
       // Create operation with fields
       const fields = new OperationFields();
       fields.insert('description', 'str', 'Hello, Panda');
-      expect(fields.get('description')).toBe('Hello, Panda');
+      fields.insert('age', 'int', '12');
+      // expect(fields.get('description')).toBe('Hello, Panda');
+      expect(fields.get('age')).toEqual(BigInt(12));
 
       const operationEncoded = encodeOperation(
         BigInt(0),
@@ -196,7 +205,12 @@ describe('WebAssembly interface', () => {
 
       // Test operation fields map
       const operationFields = plainOperation.fields;
-      expect(operationFields.get('description')).toBe('Hello, Panda');
+
+      /// String values get decoded as bytes
+      expect(operationFields.get('description')).toEqual(
+        stringToBytes('Hello, Panda'),
+      );
+      expect(operationFields.get('age')).toEqual(BigInt(12));
     });
 
     it('encodes and decodes large integers correctly', () => {

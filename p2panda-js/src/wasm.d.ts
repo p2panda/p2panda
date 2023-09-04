@@ -105,6 +105,7 @@ export class OperationFields {
 * - "float" (Number)
 * - "int" (Number)
 * - "str" (String)
+* - "bytes" (Bytes)
 * - "relation" (hex-encoded document id)
 * - "relation_list" (array of hex-encoded document ids)
 * - "pinned_relation" (document view id, represented as an array

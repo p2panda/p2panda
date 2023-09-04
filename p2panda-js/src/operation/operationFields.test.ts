@@ -24,7 +24,7 @@ describe('OperationFields', () => {
     fields.insert('b', 'int', 123);
     fields.insert('c', 'float', 12.3);
     fields.insert('d', 'bool', true);
-    fields.insert('e', 'bool', [0, 1, 2, 3]);
+    fields.insert('e', 'bytes', [0, 1, 2, 3]);
     fields.insert('f', 'relation', hash1);
     fields.insert('g', 'pinned_relation', [hash2, hash3]);
     fields.insert('h', 'relation_list', [hash4]);

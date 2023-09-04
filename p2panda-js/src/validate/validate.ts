@@ -3,7 +3,7 @@
 type Validation = {
   [key: string]: {
     /** Value needs to be of this type, default is 'string' */
-    type?: 'object' | 'bigint' | 'string' | 'boolean' | 'number';
+    type?: 'object' | 'bigint' | 'string' | 'boolean' | 'bytes' | 'number';
 
     /** Value needs to have exact given length */
     length?: number;

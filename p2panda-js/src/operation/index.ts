@@ -20,7 +20,13 @@ export type OperationMeta = {
 /**
  * Possible operation values.
  */
-export type OperationValue = string | bigint | boolean | string[] | string[][];
+export type OperationValue =
+  | string
+  | bigint
+  | boolean
+  | number[]
+  | string[]
+  | string[][];
 
 /**
  * "Easy operation values" to populate the operation with basic data types.

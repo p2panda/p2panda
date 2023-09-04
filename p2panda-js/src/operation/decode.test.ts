@@ -1,31 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import { TEST_SCHEMA_ID, stringToBytes } from '../wasm.test';
 import { decodeOperation } from './';
 
 describe('decodeOperation', () => {
   it('decodes an encoded operation', () => {
     const encodedOperation =
-      '850101784e6d757368726f6f6d735f3030323062636265366238626430636532' +
-      '3831346230353531643538376165653362643132346365633733616463376530' +
-      '6362303533653731373966336433343765663082784430303230383933666463' +
-      '3763303235623532346237313235646132373466656432326538343561336264' +
-      '6435383563633831376462643935656134383037623636393632784430303230' +
-      '3939323465383664623562363730343839386263393534663538616163353666' +
-      '6166393535356637623764376361393033663335656135643563313636336237' +
-      'a1646e616d6570416d616e697461206361657361726561';
+      '8401007849746573745f3030323064646339396163613737366466306361396431623538373162613339643465646163633735326130613334323662313263333935383937316236633834376163a2636167650c6b6465736372697074696f6e4c48656c6c6f2c2050616e6461';
 
     const result = decodeOperation(encodedOperation);
 
-    expect(result.action).toBe('update');
+    expect(result.action).toBe('create');
     expect(result.version).toBe(1);
-    expect(result.schemaId).toBe(
-      'mushrooms_0020bcbe6b8bd0ce2814b0551d587aee3bd124cec73adc7e0cb053e7179f3d347ef0',
+    expect(result.schemaId).toBe(TEST_SCHEMA_ID);
+    expect(result.previous).toBeUndefined;
+    expect(result.fields?.get('description')).toEqual(
+      stringToBytes('Hello, Panda'),
     );
-    expect(result.previous).toEqual([
-      '0020893fdc7c025b524b7125da274fed22e845a3bdd585cc817dbd95ea4807b66962',
-      '00209924e86db5b6704898bc954f58aac56faf9555f7b7d7ca903f35ea5d5c1663b7',
-    ]);
-    expect(result.fields?.get('name')).toBe('Amanita caesarea');
+    expect(result.fields?.get('age')).toEqual(BigInt(12));
   });
 
   it('throws when decoding an invalid operation', () => {
