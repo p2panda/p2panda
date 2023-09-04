@@ -44,6 +44,7 @@ pub enum ValidationError {
     #[error("invalid 'schema_field_definition_v1' operation: {0}")]
     InvalidSchemaFieldDefinition(#[from] SchemaFieldDefinitionError),
 
+    /// Error from conversion of PlainValues.
     #[error(transparent)]
     NotStringValue(#[from] PlainValueError),
 }
@@ -60,6 +61,7 @@ pub enum SchemaFieldDefinitionError {
     #[error("'type' field in schema field definitions is wrongly formatted")]
     TypeInvalid,
 
+    /// Error from conversion of PlainValues.
     #[error(transparent)]
     NotStringValue(#[from] PlainValueError),
 }
@@ -80,6 +82,7 @@ pub enum SchemaDefinitionError {
     #[error("'fields' field in schema field definitions is wrongly formatted")]
     FieldsInvalid,
 
+    /// Error from conversion of PlainValues.
     #[error(transparent)]
     NotStringValue(#[from] PlainValueError),
 }

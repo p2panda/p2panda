@@ -7,7 +7,6 @@ use std::slice::Iter;
 use std::str::FromStr;
 
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_bytes::ByteBuf;
 
 use crate::document::error::DocumentViewIdError;
 use crate::hash::Hash;

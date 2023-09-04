@@ -15,7 +15,6 @@ use crate::schema::validate::{
     validate_schema_definition_v1_fields, validate_schema_field_definition_v1_fields,
 };
 use crate::schema::{FieldName, FieldType, Schema, SchemaId};
-use crate::serde::deserialize_into;
 
 /// Checks if all fields of the schema match with the operation fields.
 ///
