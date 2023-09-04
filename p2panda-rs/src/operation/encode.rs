@@ -79,6 +79,7 @@ mod tests {
                                 "0020995d53f460293c5686c42037b72787ed28668ad8b6d18e9d5f02c5d3301161f0"
                             ]
                         ],
+                        "data" => ByteBuf::from([0, 1, 2, 3]),
                         "height" => 3.5,
                         "is_admin" => false,
                         "my_friends" => [

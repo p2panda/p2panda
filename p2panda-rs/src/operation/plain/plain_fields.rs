@@ -189,7 +189,7 @@ mod tests {
     #[rstest]
     fn from_operation_fields(operation_fields: OperationFields) {
         let fields = PlainFields::from(&operation_fields);
-        assert_eq!(fields.len(), 8);
+        assert_eq!(fields.len(), 9);
     }
 
     #[test]

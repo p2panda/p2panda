@@ -64,6 +64,7 @@ pub fn test_fields() -> Vec<(&'static str, OperationValue)> {
             OperationValue::Relation(Relation::new(document_id_1)),
         ),
         ("username", OperationValue::String("bubu".to_owned())),
+        ("data", OperationValue::Bytes(vec![0, 1, 2, 3])),
     ]
     .to_vec()
 }

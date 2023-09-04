@@ -112,7 +112,7 @@ mod tests {
         let document_view = DocumentView::new(&document_view_id, &view.unwrap());
 
         assert!(!document_view.is_empty());
-        assert_eq!(document_view.len(), 8);
+        assert_eq!(document_view.len(), 9);
         assert_eq!(document_view.keys(), operation_fields.keys());
         for key in operation_fields.keys() {
             assert_eq!(
