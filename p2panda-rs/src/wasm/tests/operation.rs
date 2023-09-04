@@ -35,7 +35,7 @@ fn add_operation_fields() {
         .insert("is_panda", "bool", JsValue::from_bool(true))
         .unwrap();
 
-    fields.insert("data", "bytes", bytes);
+    fields.insert("data", "bytes", bytes).unwrap();
 
     fields
         .insert("height_cm", "float", JsValue::from_f64(167.8))

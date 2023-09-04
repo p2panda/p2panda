@@ -6,8 +6,6 @@ use std::str::FromStr;
 #[cfg(test)]
 use serde::Deserialize;
 use serde::Serialize;
-use serde_bytes::ByteBuf;
-use serde_wasm_bindgen::to_value;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
