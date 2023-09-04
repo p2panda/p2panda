@@ -250,12 +250,12 @@ fn validate_field_value(
                     // is semantic!
                     Ok(OperationValue::RelationList(relation_list))
                 }
-                PlainValue::Bytes(byte_string) => {
-                    // The only case where a byte_string is expected is when this value represents
+                PlainValue::Bytes(bytes) => {
+                    // The only case where a bytes is expected is when this value represents
                     // an empty relation list, so we validate here that this is indeed an empty
                     // vec of bytes.
 
-                    if !byte_string.is_empty() {
+                    if !bytes.is_empty() {
                         Err(ValidationError::InvalidType(
                             plain_value.field_type().to_owned(),
                             schema_field_type.to_string(),
@@ -318,12 +318,12 @@ fn validate_field_value(
                         document_view_ids?,
                     )))
                 }
-                PlainValue::Bytes(byte_string) => {
-                    // The only case where a byte_string is expected is when this value represents
+                PlainValue::Bytes(bytes) => {
+                    // The only case where a bytes is expected is when this value represents
                     // an empty relation list, so we validate here that this is indeed an empty
                     // vec of bytes.
 
-                    if !byte_string.is_empty() {
+                    if !bytes.is_empty() {
                         Err(ValidationError::InvalidType(
                             plain_value.field_type().to_owned(),
                             schema_field_type.to_string(),
@@ -457,7 +457,7 @@ mod tests {
     #[case(
         PlainValue::Bytes(ByteBuf::from("The Zookeeper")),
         FieldType::Integer,
-        "invalid field type 'byte_string', expected 'int'"
+        "invalid field type 'bytes', expected 'int'"
     )]
     #[case(
         PlainValue::Integer(13),
@@ -477,7 +477,7 @@ mod tests {
     #[case(
         PlainValue::Bytes(ByteBuf::from(HASH)),
         FieldType::RelationList(schema_id(SCHEMA_ID)),
-        "invalid field type 'byte_string', expected 'relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)'",
+        "invalid field type 'bytes', expected 'relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)'",
     )]
     fn wrong_field_values(
         #[case] plain_value: PlainValue,
@@ -594,7 +594,7 @@ mod tests {
             ("cuteness_level", PlainValue::Bytes(ByteBuf::from("Very high! I promise!"))),
             ("name", PlainValue::Bytes(ByteBuf::from("The really not boring Llama!!!"))),
         ],
-        "field 'cuteness_level' does not match schema: invalid field type 'byte_string', expected 'float'"
+        "field 'cuteness_level' does not match schema: invalid field type 'bytes', expected 'float'"
     )]
     // Wrong field name
     #[case(
@@ -821,7 +821,7 @@ mod tests {
             ("description", "A short description".into()),
             ("fields", "This is not a pinned relation list".into()),
         ],
-        "field 'fields' does not match schema: invalid field type 'byte_string', expected 'pinned_relation_list(schema_field_definition_v1)'"
+        "field 'fields' does not match schema: invalid field type 'bytes', expected 'pinned_relation_list(schema_field_definition_v1)'"
     )]
     #[case::invalid_name(
         SchemaId::SchemaDefinition(1),
