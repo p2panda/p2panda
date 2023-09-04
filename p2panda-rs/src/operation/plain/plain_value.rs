@@ -45,7 +45,7 @@ impl PlainValue {
     pub fn field_type(&self) -> &str {
         match self {
             PlainValue::Boolean(_) => "bool",
-            PlainValue::Bytes(_) => "byte_string",
+            PlainValue::Bytes(_) => "bytes",
             PlainValue::Integer(_) => "int",
             PlainValue::Float(_) => "float",
             PlainValue::AmbiguousRelation(_) => "str[]",
@@ -160,7 +160,7 @@ mod tests {
         assert_eq!("int", PlainValue::Integer(5).field_type());
         assert_eq!("bool", PlainValue::Boolean(false).field_type());
         assert_eq!(
-            "byte_string",
+            "bytes",
             PlainValue::Bytes(ByteBuf::from("test")).field_type()
         );
         assert_eq!(
