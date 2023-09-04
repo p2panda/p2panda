@@ -52,7 +52,7 @@ pub fn validate_schema_definition_v1_fields(
 
     match schema_name {
         Some(value) => {
-            let string_value = value.try_into_string_from_utf8()?;
+            let string_value = value.try_into_string_from_utf8_bytes()?;
             if validate_name(&string_value) {
                 Ok(())
             } else {
@@ -67,7 +67,7 @@ pub fn validate_schema_definition_v1_fields(
 
     match schema_description {
         Some(value) => {
-            let string_value = value.try_into_string_from_utf8()?;
+            let string_value = value.try_into_string_from_utf8_bytes()?;
             if validate_description(&string_value) {
                 Ok(())
             } else {

@@ -106,7 +106,7 @@ pub fn validate_schema_field_definition_v1_fields(
 
     match field_name {
         Some(value) => {
-            let string_value = value.try_into_string_from_utf8()?;
+            let string_value = value.try_into_string_from_utf8_bytes()?;
             if validate_field_name(&string_value) {
                 Ok(())
             } else {
@@ -121,7 +121,7 @@ pub fn validate_schema_field_definition_v1_fields(
 
     match field_type {
         Some(value) => {
-            let string_value = value.try_into_string_from_utf8()?;
+            let string_value = value.try_into_string_from_utf8_bytes()?;
             if validate_type(&string_value) {
                 Ok(())
             } else {

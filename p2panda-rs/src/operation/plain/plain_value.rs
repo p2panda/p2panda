@@ -53,7 +53,7 @@ impl PlainValue {
         }
     }
 
-    pub fn try_into_string_from_utf8(&self) -> Result<String, PlainValueError> {
+    pub fn try_into_string_from_utf8_bytes(&self) -> Result<String, PlainValueError> {
         let result = match &self {
             PlainValue::ByteString(bytes) => String::from_utf8(bytes.to_vec()).ok(),
             _ => None,

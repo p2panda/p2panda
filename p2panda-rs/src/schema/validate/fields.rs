@@ -209,7 +209,7 @@ fn validate_field_value(
         }
         FieldType::String => {
             if let PlainValue::ByteString(_) = plain_value {
-                let string_value = plain_value.try_into_string_from_utf8()?;
+                let string_value = plain_value.try_into_string_from_utf8_bytes()?;
                 Ok(OperationValue::String(string_value.to_owned()))
             } else {
                 Err(ValidationError::InvalidType(
@@ -221,7 +221,7 @@ fn validate_field_value(
         FieldType::Relation(_) => {
             if let PlainValue::ByteString(_) = plain_value {
                 // Convert byte string to document id, check for correctness
-                let string_value = plain_value.try_into_string_from_utf8()?;
+                let string_value = plain_value.try_into_string_from_utf8_bytes()?;
                 let document_id: DocumentId =
                     string_value.parse().map_err(|err: DocumentIdError| {
                         ValidationError::InvalidValue(err.to_string())
