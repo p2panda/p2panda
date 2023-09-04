@@ -23,9 +23,9 @@ fn verifies_data() {
     assert_eq!(wasm_public_key, public_key);
 
     let bytes = b"test";
-    let bytes = String::from_utf8(bytes.to_vec()).unwrap();
+    let byte_string: String = String::from_utf8(bytes.to_vec()).unwrap();
 
-    let wasm_signature_string = wasm_key_pair.sign(bytes.clone());
+    let wasm_signature_string = wasm_key_pair.sign(byte_string.clone());
     let signature_string = hex::encode(key_pair.sign(bytes));
 
     // Signatures should match.
@@ -34,14 +34,14 @@ fn verifies_data() {
     assert_eq!(
         verify_signature(
             wasm_public_key.clone(),
-            bytes.clone(),
+            byte_string.clone(),
             wasm_signature_string.clone()
         )
         .unwrap(),
         JsValue::TRUE
     );
     assert_eq!(
-        verify_signature(public_key, bytes.clone(), signature_string).unwrap(),
+        verify_signature(public_key, byte_string.clone(), signature_string).unwrap(),
         JsValue::TRUE
     );
 
@@ -65,7 +65,7 @@ fn verifies_data() {
     assert_eq!(
         verify_signature(
             wrong_public_key_string,
-            bytes.clone(),
+            byte_string.clone(),
             wasm_signature_string
         )
         .unwrap(),
@@ -73,10 +73,10 @@ fn verifies_data() {
     );
 
     // Passing wrong signature should return false.
-    let wrong_signature = KeyPair::new().sign(bytes.clone());
+    let wrong_signature = KeyPair::new().sign(byte_string.clone());
 
     assert_eq!(
-        verify_signature(wasm_public_key, bytes, wrong_signature).unwrap(),
+        verify_signature(wasm_public_key, byte_string, wrong_signature).unwrap(),
         JsValue::FALSE
     );
 }

@@ -130,14 +130,10 @@ impl From<&OperationFields> for PlainFields {
         for (name, value) in fields.iter() {
             let raw_value = match value {
                 OperationValue::Boolean(bool) => PlainValue::Boolean(*bool),
-                OperationValue::Bytes(bytes) => {
-                    PlainValue::Bytes(ByteBuf::from(bytes.to_owned()))
-                }
+                OperationValue::Bytes(bytes) => PlainValue::Bytes(ByteBuf::from(bytes.to_owned())),
                 OperationValue::Integer(int) => PlainValue::Integer(*int),
                 OperationValue::Float(float) => PlainValue::Float(*float),
-                OperationValue::String(str) => {
-                    PlainValue::Bytes(ByteBuf::from(str.to_owned()))
-                }
+                OperationValue::String(str) => PlainValue::Bytes(ByteBuf::from(str.to_owned())),
                 OperationValue::Relation(relation) => relation.document_id().to_owned().into(),
                 OperationValue::RelationList(list) => list.document_ids().to_vec().into(),
                 OperationValue::PinnedRelation(relation) => relation.view_id().to_owned().into(),
