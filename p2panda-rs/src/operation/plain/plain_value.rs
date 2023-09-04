@@ -53,6 +53,9 @@ impl PlainValue {
         }
     }
 
+    /// Attempt converting this value into a string from bytes.
+    ///
+    /// Only succeeds if the value if bytes _and_ the bytes are valid utf8.
     pub fn try_into_string_from_utf8_bytes(&self) -> Result<String, PlainValueError> {
         let result = match &self {
             PlainValue::ByteString(bytes) => String::from_utf8(bytes.to_vec()).ok(),
