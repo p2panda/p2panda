@@ -222,11 +222,12 @@ mod tests {
             encode_entry(&entry).unwrap().to_string(),
             concat!(
                 "002f8e50c2ede6d936ecc3144187ff1c273808185cfbc5ff3d3748d1ff7353fc",
-                "960001f902a00020dc12d68523c3bdfa065786d58414315ee69a8490b4cb82ee",
-                "18947601fee567fb762867a32b3d9b4dc2a302dda5c6b1027bc7546d4309d32e",
-                "7948fe401a04c6bef179ede92d182785b48ad41d5d4cdb2c1d9337e672353b5a",
-                "ec04123d6cc91e04"
+                "960001f902a000205431af655bb810c63d2d9f1ef83be9da5813096186d32c4b",
+                "5198a3e8d80a551ddd932393944661be25ea27088a172401ffb7ccd2af191536",
+                "a7f9a1b2f5b2dac0848a337550907b2fe2775c1b9c2e112a9e979f7c6730b48b",
+                "83e0ebc04d67c907"
             )
+            
         )
     }
 

@@ -30,6 +30,9 @@ pub enum PlainValue {
     /// Float value.
     Float(f64),
 
+    /// Float value.
+    String(String),
+
     /// Byte string which can be bytes, a string, or an empty relation/pinned relation list.
     Bytes(ByteBuf),
 
@@ -48,26 +51,12 @@ impl PlainValue {
     pub fn field_type(&self) -> &str {
         match self {
             PlainValue::Boolean(_) => "bool",
-            PlainValue::Bytes(_) => "bytes",
             PlainValue::Integer(_) => "int",
             PlainValue::Float(_) => "float",
+            PlainValue::String(_) => "str",
+            PlainValue::Bytes(_) => "bytes",
             PlainValue::AmbiguousRelation(_) => "str[]",
             PlainValue::PinnedRelationList(_) => "str[][]",
-        }
-    }
-
-    /// Attempt converting this value into a string from bytes.
-    ///
-    /// Only succeeds if the value if bytes _and_ the bytes are valid utf8.
-    pub fn try_into_string_from_utf8_bytes(&self) -> Result<String, PlainValueError> {
-        let result = match &self {
-            PlainValue::Bytes(bytes) => String::from_utf8(bytes.to_vec()).ok(),
-            _ => None,
-        };
-
-        match result {
-            Some(str_value) => Ok(str_value),
-            None => Err(PlainValueError::BytesNotUtf8),
         }
     }
 }
@@ -111,7 +100,7 @@ impl From<i64> for PlainValue {
 
 impl From<String> for PlainValue {
     fn from(value: String) -> Self {
-        PlainValue::Bytes(ByteBuf::from(value.as_bytes()))
+        PlainValue::String(value)
     }
 }
 
@@ -123,13 +112,13 @@ impl From<Vec<String>> for PlainValue {
 
 impl From<&str> for PlainValue {
     fn from(value: &str) -> Self {
-        PlainValue::Bytes(ByteBuf::from(value.as_bytes()))
+        PlainValue::String(value.to_owned())
     }
 }
 
 impl From<DocumentId> for PlainValue {
     fn from(value: DocumentId) -> Self {
-        PlainValue::Bytes(ByteBuf::from(value.to_string()))
+        PlainValue::String(value.to_string())
     }
 }
 
@@ -249,6 +238,7 @@ mod tests {
             "bytes",
             PlainValue::Bytes(ByteBuf::from("test")).field_type()
         );
+        assert_eq!("str", PlainValue::String("test".into()).field_type());
         assert_eq!(
             "str[]",
             PlainValue::AmbiguousRelation(vec!["test".to_string()]).field_type()
@@ -261,11 +251,15 @@ mod tests {
         assert_eq!(PlainValue::Boolean(true), true.into());
         assert_eq!(PlainValue::Float(1.5), 1.5.into());
         assert_eq!(PlainValue::Integer(3), 3.into());
-        assert_eq!(PlainValue::Bytes(ByteBuf::from("hellö")), "hellö".into());
+        assert_eq!(
+            PlainValue::Bytes(ByteBuf::from("hellö")),
+            ByteBuf::from("hellö").into()
+        );
+        assert_eq!(PlainValue::String("hellö".to_string()), "hellö".into());
 
         // Relation types
         assert_eq!(
-            PlainValue::Bytes(ByteBuf::from(document_id.to_string())),
+            PlainValue::String(document_id.to_string()),
             document_id.clone().into()
         );
         assert_eq!(
@@ -318,6 +312,11 @@ mod tests {
         );
 
         assert_eq!(
+            serialize_from(PlainValue::String("username".to_string())),
+            serialize_value(cbor!("username"))
+        );
+
+        assert_eq!(
             serialize_from(PlainValue::AmbiguousRelation(vec![])),
             serialize_value(cbor!([]))
         );
@@ -341,8 +340,8 @@ mod tests {
             PlainValue::Bytes(ByteBuf::from(vec![0, 1, 2, 3]))
         );
         assert_eq!(
-            deserialize_into::<PlainValue>(&serialize_value(cbor!("Piep"))).unwrap(),
-            PlainValue::Bytes(ByteBuf::from("Piep"))
+            deserialize_into::<PlainValue>(&serialize_value(cbor!("hello"))).unwrap(),
+            PlainValue::String("hello".to_string())
         );
         assert_eq!(
             deserialize_into::<PlainValue>(&serialize_value(cbor!([]))).unwrap(),

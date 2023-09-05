@@ -61,6 +61,9 @@ mod tests {
         let from_operation = encode_operation(&operation).unwrap();
         let from_plain_operation = encode_plain_operation(&plain_operation).unwrap();
 
+        println!("{from_operation}");
+        println!("{from_plain_operation}");
+
         assert_eq!(from_operation.to_string(), from_plain_operation.to_string());
         assert_eq!(
             serialize_value(cbor!(
@@ -89,8 +92,8 @@ mod tests {
                             "0020475488c0e2bbb9f5a81929e2fe11de81c1f83c8045de41da43899d25ad0d4afa",
                             "0020f7a17e14b9a5e87435decdbc28d562662fbf37da39b94e8469d8e1873336e80e"
                         ],
-                        "profile_picture" => ByteBuf::from("0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543"),
-                        "username" => ByteBuf::from("bubu")
+                        "profile_picture" => "0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543",
+                        "username" => "bubu"
                     }
             ])),
             from_operation.into_bytes()

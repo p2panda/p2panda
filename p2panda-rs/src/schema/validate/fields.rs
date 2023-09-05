@@ -207,9 +207,8 @@ fn validate_field_value(
             }
         }
         FieldType::String => {
-            if let PlainValue::Bytes(_) = plain_value {
-                let string_value = plain_value.try_into_string_from_utf8_bytes()?;
-                Ok(OperationValue::String(string_value.to_owned()))
+            if let PlainValue::String(string) = plain_value {
+                Ok(OperationValue::String(string.to_owned()))
             } else {
                 Err(ValidationError::InvalidType(
                     plain_value.field_type().to_owned(),
@@ -218,13 +217,11 @@ fn validate_field_value(
             }
         }
         FieldType::Relation(_) => {
-            if let PlainValue::Bytes(_) = plain_value {
+            if let PlainValue::String(string) = plain_value {
                 // Convert byte string to document id, check for correctness
-                let string_value = plain_value.try_into_string_from_utf8_bytes()?;
-                let document_id: DocumentId =
-                    string_value.parse().map_err(|err: DocumentIdError| {
-                        ValidationError::InvalidValue(err.to_string())
-                    })?;
+                let document_id: DocumentId = string.parse().map_err(|err: DocumentIdError| {
+                    ValidationError::InvalidValue(err.to_string())
+                })?;
 
                 Ok(OperationValue::Relation(Relation::new(document_id)))
             } else {
@@ -359,7 +356,7 @@ mod tests {
         assert!(validate_field(
             (
                 &"cutest_animal_in_zoo".to_owned(),
-                &PlainValue::Bytes(ByteBuf::from("Panda")),
+                &PlainValue::String("Panda".to_string()),
             ),
             (&"cutest_animal_in_zoo".to_owned(), &FieldType::String)
         )
@@ -369,7 +366,7 @@ mod tests {
         assert!(validate_field(
             (
                 &"most_boring_animal_in_zoo".to_owned(),
-                &PlainValue::Bytes(ByteBuf::from("Llama")),
+                &PlainValue::String("Panda".to_string()),
             ),
             (&"cutest_animal_in_zoo".to_owned(), &FieldType::String)
         )
@@ -396,12 +393,13 @@ mod tests {
     }
 
     #[rstest]
-    #[case(PlainValue::Bytes(ByteBuf::from("Handa")), FieldType::String)]
+    #[case(PlainValue::Bytes(ByteBuf::from("Handa")), FieldType::Bytes)]
+    #[case(PlainValue::String("Handa".to_string()), FieldType::String)]
     #[case(PlainValue::Integer(512), FieldType::Integer)]
     #[case(PlainValue::Float(1024.32), FieldType::Float)]
     #[case(PlainValue::Boolean(true), FieldType::Boolean)]
     #[case(
-        PlainValue::Bytes(ByteBuf::from(HASH)),
+        PlainValue::String(HASH.to_string()),
         FieldType::Relation(schema_id(SCHEMA_ID))
     )]
     #[case(
@@ -476,7 +474,7 @@ mod tests {
             ("fans", FieldType::RelationList(schema_id(SCHEMA_ID))),
         ],
         vec![
-            ("message", PlainValue::Bytes(ByteBuf::from("Hello, Mr. Handa!"))),
+            ("message", PlainValue::String("Hello, Mr. Handa!".to_string())),
             ("age", PlainValue::Integer(41)),
             ("fans", PlainValue::AmbiguousRelation(vec![HASH.to_owned()])),
         ],
@@ -489,7 +487,7 @@ mod tests {
         ],
         vec![
             ("c", PlainValue::Boolean(false)),
-            ("b", PlainValue::Bytes(ByteBuf::from("Panda-San!"))),
+            ("b", PlainValue::String("Panda-San!".to_string())),
             ("a", PlainValue::Integer(6)),
         ],
     )]
@@ -614,7 +612,7 @@ mod tests {
             ("is_cute", FieldType::Boolean),
         ],
         vec![
-            ("message", PlainValue::Bytes(ByteBuf::from("Hello, Mr. Handa!"))),
+            ("message", PlainValue::String("Hello, Mr. Handa!".to_string())),
         ],
     )]
     #[case(
@@ -625,7 +623,7 @@ mod tests {
         ],
         vec![
             ("age", PlainValue::Integer(41)),
-            ("message", PlainValue::Bytes(ByteBuf::from("Hello, Mr. Handa!"))),
+            ("message", PlainValue::String("Hello, Mr. Handa!".to_string())),
         ],
     )]
     fn correct_only_given_fields(
@@ -751,7 +749,7 @@ mod tests {
         // Construct plain fields
         let mut plain_fields = PlainFields::new();
         plain_fields
-            .insert("icecream", PlainValue::Bytes(ByteBuf::from("Almond")))
+            .insert("icecream", PlainValue::String("Almond".to_string()))
             .unwrap();
         plain_fields
             .insert("degree", PlainValue::Float(6.12))
@@ -789,7 +787,7 @@ mod tests {
             ("description", "A short description".into()),
             ("fields", "This is not a pinned relation list".into()),
         ],
-        "field 'fields' does not match schema: invalid field type 'bytes', expected 'pinned_relation_list(schema_field_definition_v1)'"
+        "field 'fields' does not match schema: invalid field type 'str', expected 'pinned_relation_list(schema_field_definition_v1)'"
     )]
     #[case::invalid_name(
         SchemaId::SchemaDefinition(1),

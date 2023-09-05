@@ -5,7 +5,7 @@ use std::str::FromStr;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::operation::plain::PlainFields;
+use crate::operation::plain::{PlainFields, PlainValue};
 use crate::schema::validate::error::SchemaFieldDefinitionError;
 use crate::schema::SchemaId;
 
@@ -105,9 +105,8 @@ pub fn validate_schema_field_definition_v1_fields(
     let field_name = fields.get("name");
 
     match field_name {
-        Some(value) => {
-            let string_value = value.try_into_string_from_utf8_bytes()?;
-            if validate_field_name(&string_value) {
+        Some(PlainValue::String(value)) => {
+            if validate_field_name(value) {
                 Ok(())
             } else {
                 Err(SchemaFieldDefinitionError::NameInvalid)
@@ -120,9 +119,8 @@ pub fn validate_schema_field_definition_v1_fields(
     let field_type = fields.get("type");
 
     match field_type {
-        Some(value) => {
-            let string_value = value.try_into_string_from_utf8_bytes()?;
-            if validate_type(&string_value) {
+        Some(PlainValue::String(value)) => {
+            if validate_type(&value) {
                 Ok(())
             } else {
                 Err(SchemaFieldDefinitionError::TypeInvalid)

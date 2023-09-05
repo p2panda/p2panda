@@ -12,7 +12,7 @@ use crate::schema::validate::error::SchemaDefinitionError;
 /// 2. It begins with a letter
 /// 3. It uses only alphanumeric characters, digits and the underscore character
 /// 4. It doesn't end with an underscore
-pub fn validate_name(value: &str) -> bool {
+pub fn validate_name(value: &String) -> bool {
     static NAME_REGEX: Lazy<Regex> = Lazy::new(|| {
         // Unwrap as we checked the regular expression for correctness
         Regex::new("^[A-Za-z]{1}[A-Za-z0-9_]{0,62}[A-Za-z0-9]{1}$").unwrap()
@@ -51,9 +51,8 @@ pub fn validate_schema_definition_v1_fields(
     let schema_name = fields.get("name");
 
     match schema_name {
-        Some(value) => {
-            let string_value = value.try_into_string_from_utf8_bytes()?;
-            if validate_name(&string_value) {
+        Some(PlainValue::String(value)) => {
+            if validate_name(value) {
                 Ok(())
             } else {
                 Err(SchemaDefinitionError::NameInvalid)
@@ -66,9 +65,8 @@ pub fn validate_schema_definition_v1_fields(
     let schema_description = fields.get("description");
 
     match schema_description {
-        Some(value) => {
-            let string_value = value.try_into_string_from_utf8_bytes()?;
-            if validate_description(&string_value) {
+        Some(PlainValue::String(value)) => {
+            if validate_description(value) {
                 Ok(())
             } else {
                 Err(SchemaDefinitionError::DescriptionInvalid)
@@ -189,6 +187,6 @@ mod test {
     #[should_panic]
     #[case("specification-says-no")]
     fn check_name_field(#[case] name_str: &str) {
-        assert!(validate_name(name_str));
+        assert!(validate_name(&name_str.to_string()));
     }
 }

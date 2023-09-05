@@ -177,7 +177,7 @@ mod tests {
             )),
             serialize_value(cbor!(
                 [1, 0, format!("{schema_name}_{document_view_id}"), {
-                    "name" => ByteBuf::from("Hericium coralloides".as_bytes())
+                    "name" => "Hericium coralloides"
                 }]
             ))
         );
@@ -192,7 +192,7 @@ mod tests {
         assert_eq!(
             deserialize_into::<PlainOperation>(&serialize_value(cbor!(
                 [1, 1, format!("{schema_name}_{document_view_id}"), [random_operation_id.to_string()], {
-                    "name" => ByteBuf::from("Lycoperdon echinatum".as_bytes())
+                    "name" => "Lycoperdon echinatum".to_string()
                 }]
             )))
             .unwrap(),
