@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::convert::{TryFrom, TryInto};
+
+use ciborium::Value;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 
@@ -15,7 +18,7 @@ use crate::{
 ///
 /// Latest when combining the plain values with a schema, the inner types, especially the
 /// relations, get checked against their correct format.
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+#[derive(Serialize, Debug, PartialEq, Clone)]
 #[serde(untagged)]
 pub enum PlainValue {
     /// Boolean value.
@@ -69,9 +72,28 @@ impl PlainValue {
     }
 }
 
+impl<'de> Deserialize<'de> for PlainValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let cbor_value: Value = Deserialize::deserialize(deserializer)?;
+
+        cbor_value.try_into().map_err(|err| {
+            serde::de::Error::custom(format!("error deserializing plain value: {}", err))
+        })
+    }
+}
+
 impl From<bool> for PlainValue {
     fn from(value: bool) -> Self {
         PlainValue::Boolean(value)
+    }
+}
+
+impl From<ByteBuf> for PlainValue {
+    fn from(value: ByteBuf) -> Self {
+        PlainValue::Bytes(value)
     }
 }
 
@@ -90,6 +112,12 @@ impl From<i64> for PlainValue {
 impl From<String> for PlainValue {
     fn from(value: String) -> Self {
         PlainValue::Bytes(ByteBuf::from(value.as_bytes()))
+    }
+}
+
+impl From<Vec<String>> for PlainValue {
+    fn from(value: Vec<String>) -> Self {
+        PlainValue::AmbiguousRelation(value)
     }
 }
 
@@ -140,6 +168,64 @@ impl From<Vec<DocumentViewId>> for PlainValue {
                 })
                 .collect(),
         )
+    }
+}
+
+impl TryFrom<Value> for PlainValue {
+    type Error = PlainValueError;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        let result: Result<PlainValue, PlainValueError> = match value {
+            Value::Integer(int) => {
+                let int: i64 = int.try_into()?;
+                Ok(int.into())
+            }
+            Value::Bytes(bytes) => Ok(ByteBuf::from(bytes).into()),
+            Value::Float(float) => Ok(float.into()),
+            Value::Text(text) => Ok(text.into()),
+            Value::Bool(bool) => Ok(bool.into()),
+            Value::Array(array) => array.try_into(),
+            _ => return Err(PlainValueError::UnsupportedValue),
+        };
+
+        result
+    }
+}
+
+impl TryFrom<Vec<Value>> for PlainValue {
+    type Error = PlainValueError;
+
+    fn try_from(array: Vec<Value>) -> Result<Self, Self::Error> {
+        let result: Result<Vec<String>, _> = array
+            .iter()
+            .map(|value| match value.as_text() {
+                Some(text) => Ok(text.to_string()),
+                None => Err(PlainValueError::UnsupportedValue),
+            })
+            .collect();
+
+        if let Ok(strings) = result {
+            return Ok(strings.into());
+        };
+
+        let mut pinned_relations = Vec::new();
+        for inner_array in array {
+            let inner_array = match inner_array.as_array() {
+                Some(array) => Ok(array),
+                None => Err(PlainValueError::UnsupportedValue),
+            }?;
+            let result: Result<Vec<String>, _> = inner_array
+                .iter()
+                .map(|value| match value.as_text() {
+                    Some(text) => Ok(text.to_string()),
+                    None => Err(PlainValueError::UnsupportedValue),
+                })
+                .collect();
+
+            pinned_relations.push(result?);
+        }
+
+        Ok(Self::PinnedRelationList(pinned_relations))
     }
 }
 
@@ -260,7 +346,7 @@ mod tests {
         );
         assert_eq!(
             deserialize_into::<PlainValue>(&serialize_value(cbor!([]))).unwrap(),
-            PlainValue::Bytes(ByteBuf::from([]))
+            PlainValue::AmbiguousRelation(vec![])
         );
     }
 
@@ -275,11 +361,9 @@ mod tests {
             PlainValue::Float(f64::MAX)
         );
 
-        // It deserializes a too large integer into a float and passes which is not the expected
-        // behaviour, latest when checking against a schema it should fail though!
+        // It errors when deserializing a too large number
         let bytes = serialize_value(cbor!(u64::MAX));
         let value = deserialize_into::<PlainValue>(&bytes);
-        assert!(value.is_ok());
-        assert_eq!(value.unwrap().field_type(), "float");
+        assert!(value.is_err());
     }
 }

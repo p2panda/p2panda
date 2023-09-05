@@ -250,20 +250,6 @@ fn validate_field_value(
                     // is semantic!
                     Ok(OperationValue::RelationList(relation_list))
                 }
-                PlainValue::Bytes(bytes) => {
-                    // The only case where a bytes is expected is when this value represents
-                    // an empty relation list, so we validate here that this is indeed an empty
-                    // vec of bytes.
-
-                    if !bytes.is_empty() {
-                        Err(ValidationError::InvalidType(
-                            plain_value.field_type().to_owned(),
-                            schema_field_type.to_string(),
-                        ))
-                    } else {
-                        Ok(OperationValue::RelationList(RelationList::new(vec![])))
-                    }
-                }
                 _ => Err(ValidationError::InvalidType(
                     plain_value.field_type().to_owned(),
                     schema_field_type.to_string(),
@@ -318,20 +304,10 @@ fn validate_field_value(
                         document_view_ids?,
                     )))
                 }
-                PlainValue::Bytes(bytes) => {
-                    // The only case where a bytes is expected is when this value represents
-                    // an empty relation list, so we validate here that this is indeed an empty
-                    // vec of bytes.
-
-                    if !bytes.is_empty() {
-                        Err(ValidationError::InvalidType(
-                            plain_value.field_type().to_owned(),
-                            schema_field_type.to_string(),
-                        ))
-                    } else {
-                        Ok(OperationValue::RelationList(RelationList::new(vec![])))
-                    }
-                }
+                // If an ambiguous relation is present, then this must be an empty pinned relation list.
+                PlainValue::AmbiguousRelation(_) => Ok(OperationValue::PinnedRelationList(
+                    PinnedRelationList::new(vec![]),
+                )),
                 _ => Err(ValidationError::InvalidType(
                     plain_value.field_type().to_owned(),
                     schema_field_type.to_string(),
@@ -523,14 +499,6 @@ mod tests {
         ],
         vec![
             ("a", PlainValue::PinnedRelationList(vec![])),
-        ],
-    )]
-    #[case(
-        vec![
-            ("a", FieldType::PinnedRelationList(schema_id(SCHEMA_ID))),
-        ],
-        vec![
-            ("a", PlainValue::Bytes(ByteBuf::from([]))),
         ],
     )]
     fn correct_all_fields(

@@ -205,11 +205,11 @@ mod tests {
     )]
     #[case::invalid_fields_key_type_2(
         cbor!([1, 0, SCHEMA_ID, { "a" => "value", "b" => { "nested" => "wrong " } }]),
-        "data did not match any variant of untagged enum PlainValue"
+        "error deserializing plain value: data did not match any variant of untagged enum PlainValue"
     )]
     #[case::invalid_fields_value_type(
         cbor!([1, 0, SCHEMA_ID, { "some" => { "nested" => "map" } }]),
-        "data did not match any variant of untagged enum PlainValue"
+        "error deserializing plain value: data did not match any variant of untagged enum PlainValue"
     )]
     #[case::missing_schema_create(
         cbor!([1, 0, { "is_cute" => true }]),
