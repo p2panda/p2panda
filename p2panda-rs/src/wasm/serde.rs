@@ -5,6 +5,8 @@ use serde::ser::Serialize;
 use serde_wasm_bindgen::{Deserializer, Error, Serializer};
 use wasm_bindgen::JsValue;
 
+use crate::wasm::error::jserr;
+
 /// Serializes Rust type into JavaScript value (`JsValue`).
 ///
 /// Note that this will NOT serialize into a JSON string but an actual JavaScript object
@@ -21,6 +23,13 @@ pub fn serialize_to_js<T: Serialize + ?Sized>(value: &T) -> Result<JsValue, Erro
         //
         // https://github.com/p2panda/p2panda/issues/516
         .serialize_bytes_as_arrays(true);
+    let output = value.serialize(&serializer)?;
+    Ok(output)
+}
+
+pub fn serialize_to_js_with_byte_arrays<T: Serialize + ?Sized>(value: &T) -> Result<JsValue, Error> {
+    let serializer = Serializer::new()
+        .serialize_large_number_types_as_bigints(true);
     let output = value.serialize(&serializer)?;
     Ok(output)
 }
