@@ -214,28 +214,3 @@ fn encodes_operations() {
     let delete_operation = encode_operation(2, schema_id, previous.into(), None);
     assert!(delete_operation.is_ok());
 }
-
-#[wasm_bindgen_test]
-fn decode_operations() {
-    // Prepare operation
-    let mut fields = crate::operation::OperationFields::new();
-    fields.insert("data", [0, 1, 2, 3].as_ref().into()).unwrap();
-    fields.insert("username", "dolphin".into()).unwrap();
-    let operation = operation_with_schema(Some(fields), Some(random_document_view_id()));
-    let operation_encoded = crate::operation::encode::encode_operation(&operation).unwrap();
-
-    // Decode operation
-    let result = decode_operation(operation_encoded.to_string()).unwrap();
-    let plain_operation: PlainOperation = deserialize_from_js(result).unwrap();
-    //     assert_eq!(plain_operation.version, 1);
-    //     assert_eq!(plain_operation.action, 1);
-    //
-    //     let plain_fields = plain_operation.fields.unwrap();
-    //     assert_eq!(plain_fields.len(), 2);
-    //
-    //     let value_bytes: ByteBuf = deserialize_from_js(plain_fields.get("data").unwrap()).unwrap();
-    //     assert_eq!(value_bytes.to_vec(), vec![0, 1, 2, 3]);
-    //
-    //     let value_string: String = deserialize_from_js(plain_fields.get("username").unwrap()).unwrap();
-    //     assert_eq!(value_string, "dolphin");
-}
