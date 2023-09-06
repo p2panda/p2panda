@@ -30,14 +30,14 @@ pub enum PlainValue {
     /// Float value.
     Float(f64),
 
-    /// Float value.
+    /// String value which can be either a text or relation (document id).
     String(String),
 
-    /// Byte string which can be bytes, a string, or an empty relation/pinned relation list.
+    /// Byte array.
     Bytes(ByteBuf),
 
-    /// List of strings which can either be a pinned relation (list of operation ids) or a relation
-    /// list (list of document ids).
+    /// List of strings which can either be a pinned relation (list of operation ids) a relation
+    /// list (list of document ids) or an empty pinned relation list.
     AmbiguousRelation(Vec<String>),
 
     /// List of a list of strings which is a pinned relation list.
