@@ -105,7 +105,7 @@ pub fn validate_schema_field_definition_v1_fields(
     let field_name = fields.get("name");
 
     match field_name {
-        Some(PlainValue::String(value)) => {
+        Some(PlainValue::StringOrRelation(value)) => {
             if validate_field_name(value) {
                 Ok(())
             } else {
@@ -119,7 +119,7 @@ pub fn validate_schema_field_definition_v1_fields(
     let field_type = fields.get("type");
 
     match field_type {
-        Some(PlainValue::String(value)) => {
+        Some(PlainValue::StringOrRelation(value)) => {
             if validate_type(value) {
                 Ok(())
             } else {

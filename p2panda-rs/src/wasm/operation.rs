@@ -47,7 +47,7 @@ fn plain_to_js_value(plain_value: &PlainValue) -> Result<JsValue, JsValue> {
         PlainValue::Integer(value) => Ok(JsValue::from(value.to_owned())),
         PlainValue::Float(value) => Ok(JsValue::from_f64(value.to_owned())),
         PlainValue::Bytes(value) => Ok(jserr!(serialize_to_js(&ByteBuf::from(value.to_owned())))),
-        PlainValue::String(value) => Ok(JsValue::from_str(value)),
+        PlainValue::StringOrRelation(value) => Ok(JsValue::from_str(value)),
         PlainValue::AmbiguousRelation(value) => Ok(jserr!(serialize_to_js(value))),
         PlainValue::PinnedRelationList(value) => Ok(jserr!(serialize_to_js(value))),
     }

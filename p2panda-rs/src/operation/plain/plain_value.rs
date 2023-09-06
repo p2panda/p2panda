@@ -28,7 +28,7 @@ pub enum PlainValue {
     Float(f64),
 
     /// String value which can be either a text or relation (document id).
-    String(String),
+    StringOrRelation(String),
 
     /// Byte array.
     #[serde(with = "serde_bytes")]
@@ -51,7 +51,7 @@ impl PlainValue {
             PlainValue::Boolean(_) => "bool",
             PlainValue::Integer(_) => "int",
             PlainValue::Float(_) => "float",
-            PlainValue::String(_) => "str",
+            PlainValue::StringOrRelation(_) => "str",
             PlainValue::Bytes(_) => "bytes",
             PlainValue::AmbiguousRelation(_) => "str[]",
             PlainValue::PinnedRelationList(_) => "str[][]",
@@ -104,7 +104,7 @@ impl From<i64> for PlainValue {
 
 impl From<String> for PlainValue {
     fn from(value: String) -> Self {
-        PlainValue::String(value)
+        PlainValue::StringOrRelation(value)
     }
 }
 
@@ -116,13 +116,13 @@ impl From<Vec<String>> for PlainValue {
 
 impl From<&str> for PlainValue {
     fn from(value: &str) -> Self {
-        PlainValue::String(value.to_owned())
+        PlainValue::StringOrRelation(value.to_owned())
     }
 }
 
 impl From<DocumentId> for PlainValue {
     fn from(value: DocumentId) -> Self {
-        PlainValue::String(value.to_string())
+        PlainValue::StringOrRelation(value.to_string())
     }
 }
 
@@ -244,7 +244,10 @@ mod tests {
             "bytes",
             PlainValue::Bytes("test".as_bytes().into()).field_type()
         );
-        assert_eq!("str", PlainValue::String("test".into()).field_type());
+        assert_eq!(
+            "str",
+            PlainValue::StringOrRelation("test".into()).field_type()
+        );
         assert_eq!(
             "str[]",
             PlainValue::AmbiguousRelation(vec!["test".to_string()]).field_type()
@@ -261,11 +264,14 @@ mod tests {
             PlainValue::Bytes("hellö".as_bytes().to_vec()),
             "hellö".as_bytes().into()
         );
-        assert_eq!(PlainValue::String("hellö".to_string()), "hellö".into());
+        assert_eq!(
+            PlainValue::StringOrRelation("hellö".to_string()),
+            "hellö".into()
+        );
 
         // Relation types
         assert_eq!(
-            PlainValue::String(document_id.to_string()),
+            PlainValue::StringOrRelation(document_id.to_string()),
             document_id.clone().into()
         );
         assert_eq!(
@@ -313,7 +319,7 @@ mod tests {
         );
 
         assert_eq!(
-            serialize_from(PlainValue::String("username".to_string())),
+            serialize_from(PlainValue::StringOrRelation("username".to_string())),
             serialize_value(cbor!("username"))
         );
 
@@ -342,7 +348,7 @@ mod tests {
         );
         assert_eq!(
             deserialize_into::<PlainValue>(&serialize_value(cbor!("hello"))).unwrap(),
-            PlainValue::String("hello".to_string())
+            PlainValue::StringOrRelation("hello".to_string())
         );
         assert_eq!(
             deserialize_into::<PlainValue>(&serialize_value(cbor!([]))).unwrap(),
