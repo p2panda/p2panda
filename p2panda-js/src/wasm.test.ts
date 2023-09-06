@@ -52,7 +52,7 @@ describe('WebAssembly interface', () => {
       fields.insert('description', 'str', 'Hello, Panda');
       fields.insert('temperature', 'int', '32');
       fields.insert('isCute', 'bool', true);
-      fields.insert('data', 'bytes', [0, 1, 2, 3]);
+      fields.insert('data', 'bytes', new Uint8Array([0, 1, 2, 3]));
       fields.insert('degree', 'float', 12.322);
       fields.insert('username', 'relation', TEST_HASH);
       fields.insert('locations', 'relation_list', [TEST_HASH]);
@@ -69,7 +69,7 @@ describe('WebAssembly interface', () => {
       expect(fields.get('description')).toBe('Hello, Panda');
       expect(fields.get('temperature')).toEqual(BigInt(32));
       expect(fields.get('isCute')).toBe(true);
-      expect(fields.get('data')).toEqual([0, 1, 2, 3]);
+      expect(fields.get('data')).toEqual(new Uint8Array([0, 1, 2, 3]));
       expect(fields.get('degree')).toBe(12.322);
       expect(fields.get('username')).toEqual(TEST_HASH);
       expect(fields.get('locations')).toEqual([TEST_HASH]);
