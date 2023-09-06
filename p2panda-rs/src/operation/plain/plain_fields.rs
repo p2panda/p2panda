@@ -7,7 +7,6 @@ use std::fmt;
 
 use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
-use serde_bytes::ByteBuf;
 
 use crate::operation::error::FieldsError;
 use crate::operation::plain::PlainValue;
@@ -130,7 +129,7 @@ impl From<&OperationFields> for PlainFields {
         for (name, value) in fields.iter() {
             let raw_value = match value {
                 OperationValue::Boolean(bool) => PlainValue::Boolean(*bool),
-                OperationValue::Bytes(bytes) => PlainValue::Bytes(ByteBuf::from(bytes.to_owned())),
+                OperationValue::Bytes(bytes) => PlainValue::Bytes(bytes.to_owned()),
                 OperationValue::Integer(int) => PlainValue::Integer(*int),
                 OperationValue::Float(float) => PlainValue::Float(*float),
                 OperationValue::String(str) => PlainValue::String(str.to_owned()),

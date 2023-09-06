@@ -142,7 +142,6 @@ mod tests {
     use ciborium::cbor;
     use ciborium::value::{Error, Value};
     use rstest::rstest;
-    use serde_bytes::ByteBuf;
 
     use crate::document::DocumentViewId;
     use crate::operation::traits::{Actionable, Schematic};

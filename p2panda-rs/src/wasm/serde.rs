@@ -22,14 +22,7 @@ pub fn serialize_to_js<T: Serialize + ?Sized>(value: &T) -> Result<JsValue, Erro
         // work during deserialization.
         //
         // https://github.com/p2panda/p2panda/issues/516
-        .serialize_bytes_as_arrays(true);
-    let output = value.serialize(&serializer)?;
-    Ok(output)
-}
-
-pub fn serialize_to_js_with_byte_arrays<T: Serialize + ?Sized>(value: &T) -> Result<JsValue, Error> {
-    let serializer = Serializer::new()
-        .serialize_large_number_types_as_bigints(true);
+        .serialize_bytes_as_arrays(false);
     let output = value.serialize(&serializer)?;
     Ok(output)
 }

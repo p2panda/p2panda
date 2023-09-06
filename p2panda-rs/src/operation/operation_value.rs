@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use serde_bytes::ByteBuf;
+
 use crate::document::{DocumentId, DocumentViewId};
 use crate::operation::{PinnedRelation, PinnedRelationList, Relation, RelationList};
 
@@ -10,7 +12,7 @@ pub enum OperationValue {
     Boolean(bool),
 
     /// Bytes value.
-    Bytes(Vec<u8>),
+    Bytes(ByteBuf),
 
     /// Signed integer value.
     Integer(i64),
@@ -83,7 +85,7 @@ impl From<&str> for OperationValue {
 
 impl From<&[u8]> for OperationValue {
     fn from(value: &[u8]) -> Self {
-        OperationValue::Bytes(value.to_owned())
+        OperationValue::Bytes(ByteBuf::from(value))
     }
 }
 

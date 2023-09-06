@@ -24,7 +24,7 @@ export type OperationValue =
   | string
   | bigint
   | boolean
-  | number[]
+  | Uint8Array
   | string[]
   | string[][];
 
@@ -36,7 +36,7 @@ export type OperationValue =
  * "int", "float" and "bool" can be used here
  */
 export type EasyValues = {
-  [fieldName: string]: string | number | bigint | boolean;
+  [fieldName: string]: string | Uint8Array | number | bigint | boolean;
 };
 
 export { OperationFields } from './operationFields';

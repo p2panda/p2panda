@@ -23,8 +23,6 @@ use crate::wasm::error::jserr;
 use crate::wasm::serde::{deserialize_from_js, serialize_to_js};
 use crate::Validate;
 
-use super::serde::serialize_to_js_with_byte_arrays;
-
 /// Helper method to convert from `OperationValue` to `JsValue`.
 fn operation_to_js_value(operation_value: &OperationValue) -> Result<JsValue, JsValue> {
     match operation_value {
@@ -46,7 +44,7 @@ fn plain_to_js_value(plain_value: &PlainValue) -> Result<JsValue, JsValue> {
         PlainValue::Boolean(value) => Ok(JsValue::from_bool(value.to_owned())),
         PlainValue::Integer(value) => Ok(JsValue::from(value.to_owned())),
         PlainValue::Float(value) => Ok(JsValue::from_f64(value.to_owned())),
-        PlainValue::Bytes(value) => Ok(jserr!(serialize_to_js_with_byte_arrays(value))),
+        PlainValue::Bytes(value) => Ok(jserr!(serialize_to_js(value))),
         PlainValue::String(value) => Ok(JsValue::from_str(value)),
         PlainValue::AmbiguousRelation(value) => Ok(jserr!(serialize_to_js(value))),
         PlainValue::PinnedRelationList(value) => Ok(jserr!(serialize_to_js(value))),
@@ -148,7 +146,7 @@ impl OperationFields {
                 Ok(())
             }
             "bytes" => {
-                let value_bytes: Vec<u8> =
+                let value_bytes: ByteBuf =
                     jserr!(deserialize_from_js(value), "Expected a byte array");
                 jserr!(self.0.insert(name, OperationValue::Bytes(value_bytes)));
                 Ok(())

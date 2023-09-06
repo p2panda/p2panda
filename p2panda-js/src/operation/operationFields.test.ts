@@ -19,12 +19,14 @@ describe('OperationFields', () => {
     const hash7 =
       '0020fc29afb2f0620bf7417fda043dd13b8e2ef60a47b3f99f47bf8019f68c17411e';
 
+    const bytes = new Uint8Array([0, 1, 2, 3]);
+
     const fields = new OperationFields();
     fields.insert('a', 'str', 'Hello, World!');
     fields.insert('b', 'int', 123);
     fields.insert('c', 'float', 12.3);
     fields.insert('d', 'bool', true);
-    fields.insert('e', 'bytes', [0, 1, 2, 3]);
+    fields.insert('e', 'bytes', bytes);
     fields.insert('f', 'relation', hash1);
     fields.insert('g', 'pinned_relation', [hash2, hash3]);
     fields.insert('h', 'relation_list', [hash4]);
@@ -34,7 +36,7 @@ describe('OperationFields', () => {
     expect(fields.get('b')).toEqual(BigInt(123));
     expect(fields.get('c')).toEqual(12.3);
     expect(fields.get('d')).toEqual(true);
-    expect(fields.get('e')).toEqual([0, 1, 2, 3]);
+    expect(fields.get('e')).toEqual(bytes);
     expect(fields.get('f')).toEqual(hash1);
     expect(fields.get('g')).toEqual([hash2, hash3]);
     expect(fields.get('h')).toEqual([hash4]);
@@ -143,9 +145,9 @@ describe('OperationFields', () => {
       new OperationFields({
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-ignore
-        a: [
+        a: new Array([
           '0020fc29afb2f0620bf7417fda043dd13b8e2ef60a47b3f99f47bf8019f68c17411e',
-        ],
+        ]),
       });
     }).toThrow();
   });

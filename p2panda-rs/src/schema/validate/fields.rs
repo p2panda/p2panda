@@ -178,7 +178,7 @@ fn validate_field_value(
         }
         FieldType::Bytes => {
             if let PlainValue::Bytes(bytes) = plain_value {
-                Ok(OperationValue::Bytes(bytes.to_vec()))
+                Ok(OperationValue::Bytes(bytes.to_owned()))
             } else {
                 Err(ValidationError::InvalidType(
                     plain_value.field_type().to_owned(),
