@@ -227,7 +227,6 @@ mod tests {
                 "a7f9a1b2f5b2dac0848a337550907b2fe2775c1b9c2e112a9e979f7c6730b48b",
                 "83e0ebc04d67c907"
             )
-            
         )
     }
 
