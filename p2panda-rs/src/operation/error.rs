@@ -2,7 +2,6 @@
 
 //! Error types for encoding, decoding and validating operations with schemas and regarding data
 //! types like operation fields, relations or plain operations.
-
 use thiserror::Error;
 
 /// Errors from `OperationBuilder` struct.

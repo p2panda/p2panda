@@ -5,10 +5,8 @@ use std::convert::TryInto;
 use ciborium::Value;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    document::{DocumentId, DocumentViewId},
-    operation::error::PlainValueError,
-};
+use crate::document::{DocumentId, DocumentViewId};
+use crate::operation::error::PlainValueError;
 
 /// Operation field values which have not been checked against a schema yet.
 ///
@@ -185,8 +183,14 @@ fn cbor_value_to_plain_value(value: Value) -> Result<PlainValue, PlainValueError
 }
 
 /// Helper for converting a cbor array into a plain operation list value.
+/// 
+/// This method can fail which means the passed value is not an `AmbiguousRelation` or
+/// `PinnedRelation` plain value variant.
 fn cbor_array_to_plain_value_list(array: Vec<Value>) -> Result<PlainValue, PlainValueError> {
-    let result: Result<Vec<String>, _> = array
+
+    // First attempt to parse this vec of values into a vec of strings. If this succeeds it means
+    // this is an `AmbiguousRelation`
+    let ambiguous_relation: Result<Vec<String>, _> = array
         .iter()
         .map(|value| match value.as_text() {
             Some(text) => Ok(text.to_string()),
@@ -194,17 +198,20 @@ fn cbor_array_to_plain_value_list(array: Vec<Value>) -> Result<PlainValue, Plain
         })
         .collect();
 
-    if let Ok(strings) = result {
+    // If this was successful we stop here and return the value.
+    if let Ok(strings) = ambiguous_relation {
         return Ok(strings.into());
     };
 
+    // Next we try and parse into a vec of `Vec<String>` which means this is a
+    // `PinnedRelationList` value
     let mut pinned_relations = Vec::new();
     for inner_array in array {
         let inner_array = match inner_array.as_array() {
             Some(array) => Ok(array),
             None => Err(PlainValueError::UnsupportedValue),
         }?;
-        let result: Result<Vec<String>, _> = inner_array
+        let pinned_relation: Result<Vec<String>, _> = inner_array
             .iter()
             .map(|value| match value.as_text() {
                 Some(text) => Ok(text.to_string()),
@@ -212,7 +219,7 @@ fn cbor_array_to_plain_value_list(array: Vec<Value>) -> Result<PlainValue, Plain
             })
             .collect();
 
-        pinned_relations.push(result?);
+        pinned_relations.push(pinned_relation?);
     }
 
     Ok(PlainValue::PinnedRelationList(pinned_relations))

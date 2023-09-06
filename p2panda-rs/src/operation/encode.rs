@@ -61,9 +61,6 @@ mod tests {
         let from_operation = encode_operation(&operation).unwrap();
         let from_plain_operation = encode_plain_operation(&plain_operation).unwrap();
 
-        println!("{from_operation}");
-        println!("{from_plain_operation}");
-
         assert_eq!(from_operation.to_string(), from_plain_operation.to_string());
         assert_eq!(
             serialize_value(cbor!(
