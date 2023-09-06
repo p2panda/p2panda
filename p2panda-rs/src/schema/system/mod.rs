@@ -8,6 +8,8 @@ use once_cell::sync::Lazy;
 
 use crate::schema::Schema;
 
+mod blob;
+mod blob_piece;
 mod error;
 mod schema_definition;
 mod schema_field_definition;
@@ -16,6 +18,8 @@ mod schema_views;
 pub use error::SystemSchemaError;
 pub use schema_views::{SchemaFieldView, SchemaView};
 
+pub(super) use blob::get_blob;
+pub(super) use blob_piece::get_blob_piece;
 pub(super) use schema_definition::get_schema_definition;
 pub(super) use schema_field_definition::get_schema_field_definition;
 
@@ -25,6 +29,8 @@ pub static SYSTEM_SCHEMAS: Lazy<Vec<&'static Schema>> = Lazy::new(|| {
     vec![
         get_schema_definition(1).unwrap(),
         get_schema_field_definition(1).unwrap(),
+        get_blob(1).unwrap(),
+        get_blob_piece(1).unwrap(),
     ]
 });
 
@@ -34,6 +40,6 @@ mod test {
 
     #[test]
     fn test_static_system_schemas() {
-        assert_eq!(SYSTEM_SCHEMAS.len(), 2);
+        assert_eq!(SYSTEM_SCHEMAS.len(), 4);
     }
 }

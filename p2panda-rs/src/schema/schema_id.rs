@@ -20,6 +20,12 @@ pub(super) const SCHEMA_DEFINITION_NAME: &str = "schema_definition";
 /// Spelling of _schema field definition_ schema
 pub(super) const SCHEMA_FIELD_DEFINITION_NAME: &str = "schema_field_definition";
 
+/// Spelling of _blob_ schema
+pub(super) const BLOB_NAME: &str = "blob";
+
+/// Spelling of _blob piece_ schema
+pub(super) const BLOB_PIECE_NAME: &str = "blob_piece";
+
 /// Represent a schema's version.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SchemaVersion {
@@ -44,6 +50,12 @@ pub enum SchemaId {
 
     /// A schema definition field.
     SchemaFieldDefinition(u8),
+
+    /// A blob.
+    Blob(u8),
+
+    /// A blob piece.
+    BlobPiece(u8),
 }
 
 impl SchemaId {
@@ -91,6 +103,8 @@ impl SchemaId {
         match self {
             SchemaId::Application(name, _) => name.to_owned(),
             // We unwrap here as we know system schema names are valid names.
+            SchemaId::Blob(_) => SchemaName::new(BLOB_NAME).unwrap(),
+            SchemaId::BlobPiece(_) => SchemaName::new(BLOB_PIECE_NAME).unwrap(),
             SchemaId::SchemaDefinition(_) => SchemaName::new(SCHEMA_DEFINITION_NAME).unwrap(),
             SchemaId::SchemaFieldDefinition(_) => {
                 SchemaName::new(SCHEMA_FIELD_DEFINITION_NAME).unwrap()
@@ -102,6 +116,8 @@ impl SchemaId {
     pub fn version(&self) -> SchemaVersion {
         match self {
             SchemaId::Application(_, view_id) => SchemaVersion::Application(view_id.clone()),
+            SchemaId::Blob(version) => SchemaVersion::System(*version),
+            SchemaId::BlobPiece(version) => SchemaVersion::System(*version),
             SchemaId::SchemaDefinition(version) => SchemaVersion::System(*version),
             SchemaId::SchemaFieldDefinition(version) => SchemaVersion::System(*version),
         }
@@ -123,6 +139,8 @@ impl SchemaId {
         match name {
             SCHEMA_DEFINITION_NAME => Ok(Self::SchemaDefinition(version)),
             SCHEMA_FIELD_DEFINITION_NAME => Ok(Self::SchemaFieldDefinition(version)),
+            BLOB_NAME => Ok(Self::Blob(version)),
+            BLOB_PIECE_NAME => Ok(Self::BlobPiece(version)),
             _ => Err(SchemaIdError::UnknownSystemSchema(name.to_string())),
         }
     }
@@ -185,6 +203,12 @@ impl Display for SchemaId {
                     .try_for_each(|op_id| write!(f, "_{}", op_id.as_str()))?;
 
                 Ok(())
+            }
+            SchemaId::Blob(version) => {
+                write!(f, "{}_v{}", BLOB_NAME, version)
+            }
+            SchemaId::BlobPiece(version) => {
+                write!(f, "{}_v{}", BLOB_PIECE_NAME, version)
             }
             SchemaId::SchemaDefinition(version) => {
                 write!(f, "{}_v{}", SCHEMA_DEFINITION_NAME, version)
@@ -266,6 +290,8 @@ mod test {
     )]
     #[case(SchemaId::SchemaDefinition(1), "schema_definition_v1")]
     #[case(SchemaId::SchemaFieldDefinition(1), "schema_field_definition_v1")]
+    #[case(SchemaId::Blob(1), "blob_v1")]
+    #[case(SchemaId::BlobPiece(1), "blob_piece_v1")]
     fn serialize(#[case] schema_id: SchemaId, #[case] expected_schema_id_string: &str) {
         let mut cbor_bytes = Vec::new();
         let mut expected_cbor_bytes = Vec::new();
@@ -284,6 +310,8 @@ mod test {
     )]
     #[case(SchemaId::SchemaDefinition(1), "schema_definition_v1")]
     #[case(SchemaId::SchemaFieldDefinition(1), "schema_field_definition_v1")]
+    #[case(SchemaId::Blob(1), "blob_v1")]
+    #[case(SchemaId::BlobPiece(1), "blob_piece_v1")]
     fn deserialize(#[case] schema_id: SchemaId, #[case] expected_schema_id_string: &str) {
         let parsed_app_schema: SchemaId = expected_schema_id_string.parse().unwrap();
         assert_eq!(schema_id, parsed_app_schema);
@@ -385,6 +413,8 @@ mod test {
             format!("{}", schema_id),
             "venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b"
         );
+        assert_eq!(format!("{}", SchemaId::Blob(1)), "blob_v1");
+        assert_eq!(format!("{}", SchemaId::BlobPiece(1)), "blob_piece_v1");
         assert_eq!(
             format!("{}", SchemaId::SchemaDefinition(1)),
             "schema_definition_v1"
