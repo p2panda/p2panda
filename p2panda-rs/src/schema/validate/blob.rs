@@ -33,7 +33,7 @@ pub fn validate_blob_v1_fields(fields: &PlainFields) -> Result<(), BlobError> {
     let blob_mime_type = fields.get("mime_type");
 
     match blob_mime_type {
-        Some(PlainValue::StringOrRelation(value)) => {
+        Some(PlainValue::String(value)) => {
             if validate_mime_type(value) {
                 Ok(())
             } else {

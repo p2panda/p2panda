@@ -25,7 +25,7 @@ pub fn validate_blob_piece_v1_fields(fields: &PlainFields) -> Result<(), BlobPie
     let blob_piece_data = fields.get("data");
 
     match blob_piece_data {
-        Some(PlainValue::StringOrRelation(value)) => {
+        Some(PlainValue::String(value)) => {
             if validate_data(value) {
                 Ok(())
             } else {
