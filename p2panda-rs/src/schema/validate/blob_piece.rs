@@ -43,22 +43,14 @@ mod test {
     use rstest::rstest;
 
     use crate::operation::plain::PlainFields;
+    use crate::test_utils::generate_random_bytes;
 
     use super::validate_blob_piece_v1_fields;
 
     #[rstest]
-    #[case(vec![
-        ("data", "aGVsbG8gbXkgbmFtZSBpcyBzYW0=".into()),
-     ].into())]
+    #[case(vec![("data", "aGVsbG8gbXkgbmFtZSBpcyBzYW0=".into())].into())]
     #[should_panic]
-    #[case(vec![
-        ("data", "aGVsbG8gbXkgbmFtZSBpcyBzYW1oZWxsbyBteSBuYW1lIGlzIHNhbWhlbGxvIG15IG5hbW \
-                  UgaXMgc2FtaGVsbG8gbXkgbmFtZSBpcyBzYW1oZWxsbyBteSBuYW1lIGlzIHNhbWhlbGxv \
-                  G15IG5hbWUgaXMgc2FtaGVsbG8gbXkgbmFtZSBpcyBzYW1oZWxsbyBteSBuYW1lIGlzIHN \
-                  hbWhlbGxvIG15IG5hbWUgaXMgc2FtaGVsbG8gbXkgbmFtZSBpcyBzYW1oZWxsbyBteSBuY \
-                  W1lIGlzIHNhbWhlbGxvIG15IG5hbWUgaXMgc2FtaGVsbG8gbXkgbmFtZSBpcyBzYW1oZWx \
-                  sbyBteSBuYW1lIGlzIHNhbWhlbGxvIG15IG5hbWUgaXMgc2FtaGVsbG8gbXkgbmFtZS".into()),
-     ].into())]
+    #[case(vec![("data", generate_random_bytes(512 * 1000).into())].into())]
     fn check_fields(#[case] fields: PlainFields) {
         assert!(validate_blob_piece_v1_fields(&fields).is_ok());
     }

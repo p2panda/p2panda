@@ -8,3 +8,10 @@ pub mod constants;
 pub mod fixtures;
 pub mod memory_store;
 pub mod templates;
+
+// @TODO: Change this to bytes as soon as we have byte operation values
+/// Generates random bytes of given length.
+pub fn generate_random_bytes(len: usize) -> String {
+    let random_bytes: Vec<u8> = (0..len).map(|_| rand::random::<u8>()).collect();
+    String::from_utf8_lossy(&random_bytes).to_string()
+}

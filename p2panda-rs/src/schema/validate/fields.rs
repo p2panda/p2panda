@@ -343,6 +343,7 @@ mod tests {
     use crate::test_utils::constants::{HASH, SCHEMA_ID};
     use crate::test_utils::fixtures::document_view_id;
     use crate::test_utils::fixtures::schema_id;
+    use crate::test_utils::generate_random_bytes;
 
     use super::{
         validate_all_fields, validate_field, validate_field_name, validate_field_value,
@@ -823,12 +824,7 @@ mod tests {
     #[case::invalid_blob_piece_data(
         SchemaId::BlobPiece(1),
         vec![
-            ("data", "aGVsbG8gbXkgbmFtZSBpcyBzYW1oZWxsbyBteSBuYW1lIGlzIHNhbWhlbGxvIG15IG5hbW \
-                      UgaXMgc2FtaGVsbG8gbXkgbmFtZSBpcyBzYW1oZWxsbyBteSBuYW1lIGlzIHNhbWhlbGxv \
-                      G15IG5hbWUgaXMgc2FtaGVsbG8gbXkgbmFtZSBpcyBzYW1oZWxsbyBteSBuYW1lIGlzIHN \
-                      hbWhlbGxvIG15IG5hbWUgaXMgc2FtaGVsbG8gbXkgbmFtZSBpcyBzYW1oZWxsbyBteSBuY \
-                      W1lIGlzIHNhbWhlbGxvIG15IG5hbWUgaXMgc2FtaGVsbG8gbXkgbmFtZSBpcyBzYW1oZWx \
-                      sbyBteSBuYW1lIGlzIHNhbWhlbGxvIG15IG5hbWUgaXMgc2FtaGVsbG8gbXkgbmFtZS".into()),
+            ("data", generate_random_bytes(512 * 1000).into()),
         ],
         "invalid 'blob_piece_v1' operation: 'data' field in blob is over maximum allowed length"
     )]
