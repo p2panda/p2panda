@@ -148,7 +148,9 @@ impl OperationFields {
             "bytes" => {
                 let value_bytes: ByteBuf =
                     jserr!(deserialize_from_js(value), "Expected a byte array");
-                jserr!(self.0.insert(name, OperationValue::Bytes(value_bytes.to_vec())));
+                jserr!(self
+                    .0
+                    .insert(name, OperationValue::Bytes(value_bytes.to_vec())));
                 Ok(())
             }
             "bool" => {
