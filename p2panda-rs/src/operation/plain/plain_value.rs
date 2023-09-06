@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 
 use ciborium::Value;
 use serde::{Deserialize, Serialize};
@@ -68,7 +68,7 @@ impl<'de> Deserialize<'de> for PlainValue {
     {
         let cbor_value: Value = Deserialize::deserialize(deserializer)?;
 
-        cbor_value.try_into().map_err(|err| {
+        cbor_value_to_plain_value(cbor_value).map_err(|err| {
             serde::de::Error::custom(format!("error deserializing plain value: {}", err))
         })
     }
@@ -160,32 +160,45 @@ impl From<Vec<DocumentViewId>> for PlainValue {
     }
 }
 
-impl TryFrom<Value> for PlainValue {
-    type Error = PlainValueError;
+/// Helper for converting a cbor value into a plain operation value.
+fn cbor_value_to_plain_value(value: Value) -> Result<PlainValue, PlainValueError> {
+    let result: Result<PlainValue, PlainValueError> = match value {
+        Value::Integer(int) => {
+            let int: i64 = int.try_into()?;
+            Ok(int.into())
+        }
+        Value::Bytes(bytes) => Ok(ByteBuf::from(bytes).into()),
+        Value::Float(float) => Ok(float.into()),
+        Value::Text(text) => Ok(text.into()),
+        Value::Bool(bool) => Ok(bool.into()),
+        Value::Array(array) => cbor_array_to_plain_value_list(array),
+        _ => return Err(PlainValueError::UnsupportedValue),
+    };
 
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        let result: Result<PlainValue, PlainValueError> = match value {
-            Value::Integer(int) => {
-                let int: i64 = int.try_into()?;
-                Ok(int.into())
-            }
-            Value::Bytes(bytes) => Ok(ByteBuf::from(bytes).into()),
-            Value::Float(float) => Ok(float.into()),
-            Value::Text(text) => Ok(text.into()),
-            Value::Bool(bool) => Ok(bool.into()),
-            Value::Array(array) => array.try_into(),
-            _ => return Err(PlainValueError::UnsupportedValue),
-        };
-
-        result
-    }
+    result
 }
 
-impl TryFrom<Vec<Value>> for PlainValue {
-    type Error = PlainValueError;
+/// Helper for converting a cbor array into a plain operation list value.
+fn cbor_array_to_plain_value_list(array: Vec<Value>) -> Result<PlainValue, PlainValueError> {
+    let result: Result<Vec<String>, _> = array
+        .iter()
+        .map(|value| match value.as_text() {
+            Some(text) => Ok(text.to_string()),
+            None => Err(PlainValueError::UnsupportedValue),
+        })
+        .collect();
 
-    fn try_from(array: Vec<Value>) -> Result<Self, Self::Error> {
-        let result: Result<Vec<String>, _> = array
+    if let Ok(strings) = result {
+        return Ok(strings.into());
+    };
+
+    let mut pinned_relations = Vec::new();
+    for inner_array in array {
+        let inner_array = match inner_array.as_array() {
+            Some(array) => Ok(array),
+            None => Err(PlainValueError::UnsupportedValue),
+        }?;
+        let result: Result<Vec<String>, _> = inner_array
             .iter()
             .map(|value| match value.as_text() {
                 Some(text) => Ok(text.to_string()),
@@ -193,29 +206,10 @@ impl TryFrom<Vec<Value>> for PlainValue {
             })
             .collect();
 
-        if let Ok(strings) = result {
-            return Ok(strings.into());
-        };
-
-        let mut pinned_relations = Vec::new();
-        for inner_array in array {
-            let inner_array = match inner_array.as_array() {
-                Some(array) => Ok(array),
-                None => Err(PlainValueError::UnsupportedValue),
-            }?;
-            let result: Result<Vec<String>, _> = inner_array
-                .iter()
-                .map(|value| match value.as_text() {
-                    Some(text) => Ok(text.to_string()),
-                    None => Err(PlainValueError::UnsupportedValue),
-                })
-                .collect();
-
-            pinned_relations.push(result?);
-        }
-
-        Ok(Self::PinnedRelationList(pinned_relations))
+        pinned_relations.push(result?);
     }
+
+    Ok(PlainValue::PinnedRelationList(pinned_relations))
 }
 
 #[cfg(test)]
