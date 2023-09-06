@@ -183,11 +183,10 @@ fn cbor_value_to_plain_value(value: Value) -> Result<PlainValue, PlainValueError
 }
 
 /// Helper for converting a cbor array into a plain operation list value.
-/// 
+///
 /// This method can fail which means the passed value is not an `AmbiguousRelation` or
 /// `PinnedRelation` plain value variant.
 fn cbor_array_to_plain_value_list(array: Vec<Value>) -> Result<PlainValue, PlainValueError> {
-
     // First attempt to parse this vec of values into a vec of strings. If this succeeds it means
     // this is an `AmbiguousRelation`
     let ambiguous_relation: Result<Vec<String>, _> = array
