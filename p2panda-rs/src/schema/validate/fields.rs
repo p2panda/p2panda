@@ -883,7 +883,7 @@ mod tests {
     #[case(
         SchemaId::BlobPiece(1),
         vec![
-            ("data", "aGVsbG8gbXkgbmFtZSBpcyBzYW0=".into()),
+            ("data", "aGVsbG8gbXkgbmFtZSBpcyBzYW0=".as_bytes().into()),
         ]
     )]
     fn correct_system_schema_operations(
