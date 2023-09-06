@@ -199,7 +199,7 @@ fn cbor_array_to_plain_value_list(array: Vec<Value>) -> Result<PlainValue, Plain
 
     // If this was successful we stop here and return the value.
     if let Ok(strings) = ambiguous_relation {
-        return Ok(strings.into());
+        return Ok(PlainValue::AmbiguousRelation(strings));
     };
 
     // Next we try and parse into a vec of `Vec<String>` which means this is a
