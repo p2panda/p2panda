@@ -4,7 +4,6 @@ use std::convert::TryInto;
 
 use ciborium::Value;
 use serde::{Deserialize, Serialize};
-use serde_bytes::ByteBuf;
 
 use crate::{
     document::{DocumentId, DocumentViewId},
@@ -34,7 +33,8 @@ pub enum PlainValue {
     String(String),
 
     /// Byte array.
-    Bytes(ByteBuf),
+    #[serde(with = "serde_bytes")]
+    Bytes(Vec<u8>),
 
     /// List of strings which can either be a pinned relation (list of operation ids) a relation
     /// list (list of document ids) or an empty pinned relation list.
@@ -80,9 +80,15 @@ impl From<bool> for PlainValue {
     }
 }
 
-impl From<ByteBuf> for PlainValue {
-    fn from(value: ByteBuf) -> Self {
+impl From<Vec<u8>> for PlainValue {
+    fn from(value: Vec<u8>) -> Self {
         PlainValue::Bytes(value)
+    }
+}
+
+impl From<&[u8]> for PlainValue {
+    fn from(value: &[u8]) -> Self {
+        PlainValue::Bytes(value.to_owned())
     }
 }
 
@@ -167,7 +173,7 @@ fn cbor_value_to_plain_value(value: Value) -> Result<PlainValue, PlainValueError
             let int: i64 = int.try_into()?;
             Ok(int.into())
         }
-        Value::Bytes(bytes) => Ok(ByteBuf::from(bytes).into()),
+        Value::Bytes(bytes) => Ok(bytes.into()),
         Value::Float(float) => Ok(float.into()),
         Value::Text(text) => Ok(text.into()),
         Value::Bool(bool) => Ok(bool.into()),
@@ -230,7 +236,7 @@ mod tests {
         assert_eq!("bool", PlainValue::Boolean(false).field_type());
         assert_eq!(
             "bytes",
-            PlainValue::Bytes(ByteBuf::from("test")).field_type()
+            PlainValue::Bytes("test".as_bytes().into()).field_type()
         );
         assert_eq!("str", PlainValue::String("test".into()).field_type());
         assert_eq!(
@@ -246,8 +252,8 @@ mod tests {
         assert_eq!(PlainValue::Float(1.5), 1.5.into());
         assert_eq!(PlainValue::Integer(3), 3.into());
         assert_eq!(
-            PlainValue::Bytes(ByteBuf::from("hellö")),
-            ByteBuf::from("hellö").into()
+            PlainValue::Bytes("hellö".as_bytes().to_vec()),
+            "hellö".as_bytes().into()
         );
         assert_eq!(PlainValue::String("hellö".to_string()), "hellö".into());
 
@@ -296,13 +302,8 @@ mod tests {
         );
 
         assert_eq!(
-            serialize_from(PlainValue::Bytes(ByteBuf::from(vec![0, 1, 2, 3]))),
+            serialize_from(PlainValue::Bytes(vec![0, 1, 2, 3])),
             serialize_value(cbor!(ByteBuf::from(vec![0, 1, 2, 3])))
-        );
-
-        assert_eq!(
-            serialize_from(PlainValue::Bytes(ByteBuf::from("Piep"))),
-            serialize_value(cbor!(ByteBuf::from("Piep")))
         );
 
         assert_eq!(
@@ -331,7 +332,7 @@ mod tests {
                 0, 1, 2, 3
             ]))))
             .unwrap(),
-            PlainValue::Bytes(ByteBuf::from(vec![0, 1, 2, 3]))
+            PlainValue::Bytes(vec![0, 1, 2, 3])
         );
         assert_eq!(
             deserialize_into::<PlainValue>(&serialize_value(cbor!("hello"))).unwrap(),

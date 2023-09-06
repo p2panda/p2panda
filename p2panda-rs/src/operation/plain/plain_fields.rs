@@ -193,7 +193,7 @@ mod tests {
             ("it_works", PlainValue::Boolean(true)),
             (
                 "it_works",
-                PlainValue::Bytes(ByteBuf::from("... and ignores duplicates")),
+                PlainValue::Bytes("... and ignores duplicates".as_bytes().to_vec()),
             ),
         ]);
         assert_eq!(fields.len(), 1);
@@ -208,7 +208,7 @@ mod tests {
             .insert("it_works", PlainValue::Boolean(true))
             .unwrap();
         fields
-            .insert("message", PlainValue::Bytes(ByteBuf::from("mjau")))
+            .insert("message", PlainValue::Bytes("mjau".as_bytes().to_vec()))
             .unwrap();
 
         // This field was inserted last but will be ordered first

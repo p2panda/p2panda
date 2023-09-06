@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Constants used across the `test_utils` module for default values.
-use serde_bytes::ByteBuf;
 
 use crate::operation::{
     OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
@@ -66,7 +65,7 @@ pub fn test_fields() -> Vec<(&'static str, OperationValue)> {
             OperationValue::Relation(Relation::new(document_id_1)),
         ),
         ("username", OperationValue::String("bubu".to_owned())),
-        ("data", OperationValue::Bytes(ByteBuf::from([0, 1, 2, 3]))),
+        ("data", OperationValue::Bytes(vec![0, 1, 2, 3])),
     ]
     .to_vec()
 }

@@ -344,7 +344,6 @@ fn validate_system_schema_fields(
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
-    use serde_bytes::ByteBuf;
 
     use crate::document::DocumentViewId;
     use crate::operation::plain::{PlainFields, PlainValue};
@@ -386,7 +385,7 @@ mod tests {
         assert!(validate_field(
             (
                 &"most_boring_animal_in_zoo".to_owned(),
-                &PlainValue::Bytes(ByteBuf::from("Llama")),
+                &PlainValue::Bytes("Llama".as_bytes().to_vec()),
             ),
             (
                 &"most_boring_animal_in_zoo".to_owned(),
@@ -403,7 +402,7 @@ mod tests {
     }
 
     #[rstest]
-    #[case(PlainValue::Bytes(ByteBuf::from("Handa")), FieldType::Bytes)]
+    #[case(PlainValue::Bytes("Handa".as_bytes().to_vec()), FieldType::Bytes)]
     #[case(PlainValue::String("Handa".to_string()), FieldType::String)]
     #[case(PlainValue::Integer(512), FieldType::Integer)]
     #[case(PlainValue::Float(1024.32), FieldType::Float)]
@@ -439,7 +438,7 @@ mod tests {
 
     #[rstest]
     #[case(
-        PlainValue::Bytes(ByteBuf::from("The Zookeeper")),
+        PlainValue::Bytes("The Zookeeper".as_bytes().to_vec()),
         FieldType::Integer,
         "invalid field type 'bytes', expected 'int'"
     )]
@@ -459,7 +458,7 @@ mod tests {
         "invalid field type 'float', expected 'int'"
     )]
     #[case(
-        PlainValue::Bytes(ByteBuf::from(HASH)),
+        PlainValue::Bytes(HASH.as_bytes().to_vec()),
         FieldType::RelationList(schema_id(SCHEMA_ID)),
         "invalid field type 'bytes', expected 'relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)'",
     )]
@@ -543,7 +542,7 @@ mod tests {
         ],
         vec![
             ("fans", PlainValue::AmbiguousRelation(vec![HASH.to_owned()])),
-            ("message", PlainValue::Bytes(ByteBuf::from("Hello, Mr. Handa!"))),
+            ("message", PlainValue::Bytes("Hello, Mr. Handa!".as_bytes().to_vec())),
         ],
         "field 'fans' does not match schema: expected field name 'message'"
     )]
@@ -554,7 +553,7 @@ mod tests {
             ("message", FieldType::String),
         ],
         vec![
-            ("message", PlainValue::Bytes(ByteBuf::from("Panda-San!"))),
+            ("message", PlainValue::Bytes("Panda-San!".as_bytes().to_vec())),
         ],
         "field 'message' does not match schema: expected field name 'age'"
     )]
@@ -567,8 +566,8 @@ mod tests {
         ],
         vec![
             ("is_boring", PlainValue::Boolean(false)),
-            ("cuteness_level", PlainValue::Bytes(ByteBuf::from("Very high! I promise!"))),
-            ("name", PlainValue::Bytes(ByteBuf::from("The really not boring Llama!!!"))),
+            ("cuteness_level", PlainValue::Bytes("Very high! I promise!".as_bytes().to_vec())),
+            ("name", PlainValue::Bytes("The really not boring Llama!!!".as_bytes().to_vec())),
         ],
         "field 'cuteness_level' does not match schema: invalid field type 'bytes', expected 'float'"
     )]
@@ -671,7 +670,7 @@ mod tests {
             ("is_cute", FieldType::Boolean),
         ],
         vec![
-            ("spam", PlainValue::Bytes(ByteBuf::from("PANDA IS THE CUTEST!"))),
+            ("spam", PlainValue::Bytes("PANDA IS THE CUTEST!".as_bytes().to_vec())),
         ],
         "unexpected fields found: 'spam'",
     )]
@@ -684,8 +683,8 @@ mod tests {
         vec![
             ("is_cute", PlainValue::Boolean(false)),
             ("age", PlainValue::Integer(41)),
-            ("message", PlainValue::Bytes(ByteBuf::from("Hello, Mr. Handa!"))),
-            ("response", PlainValue::Bytes(ByteBuf::from("Good bye!"))),
+            ("message", PlainValue::Bytes("Hello, Mr. Handa!".as_bytes().to_vec())),
+            ("response", PlainValue::Bytes("Good bye!".as_bytes().to_vec())),
         ],
         "unexpected fields found: 'message', 'response'",
     )]
