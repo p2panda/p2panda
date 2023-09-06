@@ -120,7 +120,7 @@ pub fn validate_schema_field_definition_v1_fields(
 
     match field_type {
         Some(PlainValue::String(value)) => {
-            if validate_type(&value) {
+            if validate_type(value) {
                 Ok(())
             } else {
                 Err(SchemaFieldDefinitionError::TypeInvalid)
