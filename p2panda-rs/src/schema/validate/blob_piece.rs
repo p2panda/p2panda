@@ -3,7 +3,8 @@
 use crate::operation::plain::{PlainFields, PlainValue};
 use crate::schema::validate::error::BlobPieceError;
 
-const MAX_BLOB_PIECE_LENGTH: usize = 256;
+/// Maximum number of bytes a single blob piece can contain.
+pub const MAX_BLOB_PIECE_LENGTH: usize = 256 * 1000; // 256kb as per specification
 
 /// Checks "data" field of operations with "blob_piece_v1" schema id.
 ///
