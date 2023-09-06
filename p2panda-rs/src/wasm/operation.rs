@@ -27,7 +27,9 @@ use crate::Validate;
 fn operation_to_js_value(operation_value: &OperationValue) -> Result<JsValue, JsValue> {
     match operation_value {
         OperationValue::Boolean(value) => Ok(JsValue::from_bool(value.to_owned())),
-        OperationValue::Bytes(value) => Ok(jserr!(serialize_to_js(&ByteBuf::from(value.to_owned())))),
+        OperationValue::Bytes(value) => {
+            Ok(jserr!(serialize_to_js(&ByteBuf::from(value.to_owned()))))
+        }
         OperationValue::Integer(value) => Ok(JsValue::from(value.to_owned())),
         OperationValue::Float(value) => Ok(JsValue::from_f64(value.to_owned())),
         OperationValue::String(value) => Ok(JsValue::from_str(value)),
