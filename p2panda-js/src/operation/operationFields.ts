@@ -15,6 +15,7 @@ export type FieldType =
   | 'int'
   | 'float'
   | 'bool'
+  | 'bytes'
   | 'relation'
   | 'pinned_relation'
   | 'relation_list'
@@ -166,7 +167,8 @@ export class OperationFields {
       },
     );
 
-    return this.__internal.get(fieldName);
+    const value = this.__internal.get(fieldName);
+    return value;
   }
 
   /**

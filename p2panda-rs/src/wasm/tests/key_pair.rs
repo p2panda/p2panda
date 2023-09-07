@@ -23,7 +23,7 @@ fn verifies_data() {
     assert_eq!(wasm_public_key, public_key);
 
     let bytes = b"test";
-    let byte_string = String::from_utf8(bytes.to_vec()).unwrap();
+    let byte_string: String = String::from_utf8(bytes.to_vec()).unwrap();
 
     let wasm_signature_string = wasm_key_pair.sign(byte_string.clone());
     let signature_string = hex::encode(key_pair.sign(bytes));
@@ -47,12 +47,12 @@ fn verifies_data() {
 
     // Passing wrong bytes should return false.
     let wrong_bytes = b"poop";
-    let wrong_byte_string = String::from_utf8(wrong_bytes.to_vec()).unwrap();
+    let wrong_bytes = String::from_utf8(wrong_bytes.to_vec()).unwrap();
 
     assert_eq!(
         verify_signature(
             wasm_public_key.clone(),
-            wrong_byte_string,
+            wrong_bytes,
             wasm_signature_string.clone()
         )
         .unwrap(),

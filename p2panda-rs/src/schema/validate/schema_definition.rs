@@ -187,6 +187,6 @@ mod test {
     #[should_panic]
     #[case("specification-says-no")]
     fn check_name_field(#[case] name_str: &str) {
-        assert!(validate_name(name_str));
+        assert!(validate_name(&name_str.to_string()));
     }
 }

@@ -33,6 +33,7 @@ pub fn schema_field_type(
 ) -> FieldType {
     match value {
         OperationValue::Boolean(_) => FieldType::Boolean,
+        OperationValue::Bytes(_) => FieldType::Bytes,
         OperationValue::Integer(_) => FieldType::Integer,
         OperationValue::Float(_) => FieldType::Float,
         OperationValue::String(_) => FieldType::String,

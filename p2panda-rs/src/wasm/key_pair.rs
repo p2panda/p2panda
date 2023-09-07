@@ -65,12 +65,12 @@ impl Default for KeyPair {
 #[wasm_bindgen(js_name = verifySignature)]
 pub fn verify_signature(
     public_key: String,
-    byte_string: String,
+    bytes: String,
     signature: String,
 ) -> Result<JsValue, JsValue> {
     // Convert all strings to byte sequences
     let public_key_bytes = jserr!(hex::decode(public_key));
-    let unsigned_bytes = byte_string.as_bytes();
+    let unsigned_bytes = bytes.as_bytes();
     let signature_bytes = jserr!(hex::decode(signature));
 
     // Create `PublicKey` and `Signature` instances from bytes

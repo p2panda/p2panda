@@ -3,6 +3,8 @@
 //! Error types for validating operation fields against schemas.
 use thiserror::Error;
 
+use crate::operation::error::PlainValueError;
+
 /// Custom error types for validating raw operations with schemas.
 #[derive(Error, Debug)]
 pub enum ValidationError {
@@ -42,6 +44,10 @@ pub enum ValidationError {
     #[error("invalid 'schema_field_definition_v1' operation: {0}")]
     InvalidSchemaFieldDefinition(#[from] SchemaFieldDefinitionError),
 
+    /// Error from conversion of PlainValues.
+    #[error(transparent)]
+    NotStringValue(#[from] PlainValueError),
+
     /// Error from validating system schema: `blob_v1`.
     #[error("invalid 'blob_v1' operation: {0}")]
     InvalidBlob(#[from] BlobError),
@@ -62,6 +68,10 @@ pub enum SchemaFieldDefinitionError {
     /// "type" is not correctly formatted as per specification.
     #[error("'type' field in schema field definitions is wrongly formatted")]
     TypeInvalid,
+
+    /// Error from conversion of PlainValues.
+    #[error(transparent)]
+    NotStringValue(#[from] PlainValueError),
 }
 
 /// Custom error types for validating operations against `schema_field_definition_v1` schema.
@@ -79,6 +89,10 @@ pub enum SchemaDefinitionError {
     /// "fields" is not correctly formatted as per specification.
     #[error("'fields' field in schema field definitions is wrongly formatted")]
     FieldsInvalid,
+
+    /// Error from conversion of PlainValues.
+    #[error(transparent)]
+    NotStringValue(#[from] PlainValueError),
 }
 
 /// Custom error types for validating operations against `blob_v1` schema.

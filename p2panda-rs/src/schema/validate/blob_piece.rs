@@ -9,7 +9,7 @@ pub const MAX_BLOB_PIECE_LENGTH: usize = 256 * 1000; // 256kb as per specificati
 /// Checks "data" field of operations with "blob_piece_v1" schema id.
 ///
 /// 1. It must be less than `MAX_BLOB_PIECE_LENGTH`
-pub fn validate_data(value: &String) -> bool {
+pub fn validate_data(value: &Vec<u8>) -> bool {
     value.len() <= MAX_BLOB_PIECE_LENGTH
 }
 
@@ -25,7 +25,7 @@ pub fn validate_blob_piece_v1_fields(fields: &PlainFields) -> Result<(), BlobPie
     let blob_piece_data = fields.get("data");
 
     match blob_piece_data {
-        Some(PlainValue::StringOrRelation(value)) => {
+        Some(PlainValue::Bytes(value)) => {
             if validate_data(value) {
                 Ok(())
             } else {
@@ -48,7 +48,7 @@ mod test {
     use super::validate_blob_piece_v1_fields;
 
     #[rstest]
-    #[case(vec![("data", "aGVsbG8gbXkgbmFtZSBpcyBzYW0=".into())].into())]
+    #[case(vec![("data", "aGVsbG8gbXkgbmFtZSBpcyBzYW0=".as_bytes().into())].into())]
     #[should_panic]
     #[case(vec![("data", generate_random_bytes(512 * 1000).into())].into())]
     fn check_fields(#[case] fields: PlainFields) {

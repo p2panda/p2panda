@@ -96,6 +96,22 @@ pub enum OperationIdError {
     HashError(#[from] crate::hash::error::HashError),
 }
 
+/// Errors from `PlainValue` enum.
+#[derive(Error, Debug)]
+pub enum PlainValueError {
+    /// Error resulting from failure to parsing a byte string into a String.
+    #[error("attempted to parse non-utf8 bytes into string")]
+    BytesNotUtf8,
+
+    /// Handle errors when converting from an integer.
+    #[error(transparent)]
+    IntError(#[from] std::num::TryFromIntError),
+
+    /// Tried to parse a PlainValue from an unsupported cbor value.
+    #[error("data did not match any variant of untagged enum PlainValue")]
+    UnsupportedValue,
+}
+
 /// Errors from `Relation` struct.
 #[derive(Error, Debug)]
 pub enum RelationError {

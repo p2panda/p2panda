@@ -12,7 +12,12 @@ import {
 
 const TEST_HASH =
   '0020ddc99aca776df0ca9d1b5871ba39d4edacc752a0a3426b12c3958971b6c847ac';
-const TEST_SCHEMA_ID = `test_${TEST_HASH}`;
+export const TEST_SCHEMA_ID = `test_${TEST_HASH}`;
+
+export function stringToBytes(str: string): number[] {
+  const utf8EncodeText = new TextEncoder();
+  return Array.from(utf8EncodeText.encode(str));
+}
 
 describe('WebAssembly interface', () => {
   describe('KeyPair', () => {
@@ -47,6 +52,7 @@ describe('WebAssembly interface', () => {
       fields.insert('description', 'str', 'Hello, Panda');
       fields.insert('temperature', 'int', '32');
       fields.insert('isCute', 'bool', true);
+      fields.insert('data', 'bytes', new Uint8Array([0, 1, 2, 3]));
       fields.insert('degree', 'float', 12.322);
       fields.insert('username', 'relation', TEST_HASH);
       fields.insert('locations', 'relation_list', [TEST_HASH]);
@@ -63,6 +69,7 @@ describe('WebAssembly interface', () => {
       expect(fields.get('description')).toBe('Hello, Panda');
       expect(fields.get('temperature')).toEqual(BigInt(32));
       expect(fields.get('isCute')).toBe(true);
+      expect(fields.get('data')).toEqual(new Uint8Array([0, 1, 2, 3]));
       expect(fields.get('degree')).toBe(12.322);
       expect(fields.get('username')).toEqual(TEST_HASH);
       expect(fields.get('locations')).toEqual([TEST_HASH]);
@@ -178,9 +185,32 @@ describe('WebAssembly interface', () => {
   describe('Operations', () => {
     it('encodes and decodes operations', () => {
       // Create operation with fields
+      const hash1 =
+        '0020da3590fbac19a90bda5618dbcd1799ce6e3bf6e3cd74b7cd41d5d4cb4077af55';
+      const hash2 =
+        '002020e572c9e4cb884754c047d3d6fec0ff9e700e446cb5f62167575475f7e31bd2';
+      const hash3 =
+        '00206ebac2127506d3855abc76316299534ee1f695c52e6ac3ae105004b3b968a341';
+      const hash4 =
+        '002049ed4a0a6cb7308ec13c029e1b559bb1cddccd5c40710cbead900d2fa2ee86c2';
+      const hash5 =
+        '00206ec876ee8e56acc1e2d5d0d3390f1b02cb4807ade58ca71e885c3943e5287b96';
+      const hash6 =
+        '0020cf369d24676ba5ae8e74f259f9682607e3e6d01047e31b2b53d3a1cf5f31722e';
+      const hash7 =
+        '0020fc29afb2f0620bf7417fda043dd13b8e2ef60a47b3f99f47bf8019f68c17411e';
+
       const fields = new OperationFields();
-      fields.insert('description', 'str', 'Hello, Panda');
-      expect(fields.get('description')).toBe('Hello, Panda');
+      fields.insert('a', 'str', 'Hello, Panda!');
+      // Int values expected as string
+      fields.insert('b', 'int', '123');
+      fields.insert('c', 'float', 12.3);
+      fields.insert('d', 'bool', true);
+      fields.insert('e', 'bytes', new Uint8Array([0, 1, 2, 3]));
+      fields.insert('f', 'relation', hash1);
+      fields.insert('g', 'pinned_relation', [hash2, hash3]);
+      fields.insert('h', 'relation_list', [hash4]);
+      fields.insert('i', 'pinned_relation_list', [[hash5], [hash6, hash7]]);
 
       const operationEncoded = encodeOperation(
         BigInt(0),
@@ -196,7 +226,17 @@ describe('WebAssembly interface', () => {
 
       // Test operation fields map
       const operationFields = plainOperation.fields;
-      expect(operationFields.get('description')).toBe('Hello, Panda');
+
+      /// String values get decoded as bytes
+      expect(operationFields.get('a')).toEqual('Hello, Panda!');
+      expect(operationFields.get('b')).toEqual(BigInt(123));
+      expect(operationFields.get('c')).toEqual(12.3);
+      expect(operationFields.get('d')).toEqual(true);
+      expect(operationFields.get('e')).toEqual(new Uint8Array([0, 1, 2, 3]));
+      expect(operationFields.get('f')).toEqual(hash1);
+      expect(operationFields.get('g')).toEqual([hash2, hash3]);
+      expect(operationFields.get('h')).toEqual([hash4]);
+      expect(operationFields.get('i')).toEqual([[hash5], [hash6, hash7]]);
     });
 
     it('encodes and decodes large integers correctly', () => {

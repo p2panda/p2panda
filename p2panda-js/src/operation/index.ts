@@ -20,7 +20,13 @@ export type OperationMeta = {
 /**
  * Possible operation values.
  */
-export type OperationValue = string | bigint | boolean | string[] | string[][];
+export type OperationValue =
+  | string
+  | bigint
+  | boolean
+  | Uint8Array
+  | string[]
+  | string[][];
 
 /**
  * "Easy operation values" to populate the operation with basic data types.
@@ -30,7 +36,7 @@ export type OperationValue = string | bigint | boolean | string[] | string[][];
  * "int", "float" and "bool" can be used here
  */
 export type EasyValues = {
-  [fieldName: string]: string | number | bigint | boolean;
+  [fieldName: string]: string | Uint8Array | number | bigint | boolean;
 };
 
 export { OperationFields } from './operationFields';

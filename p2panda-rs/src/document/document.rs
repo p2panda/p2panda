@@ -312,16 +312,16 @@ mod tests {
 
         assert_eq!(
             document.to_string(),
-            "00206a28f82fc8d27671b31948117af7501a5a0de709b0cf9bc3586b67abe67ac29a"
+            "00206272e88f4225a6f502f4fc5ec3ecf95773e2d47b3b7035278e33bad32297c553"
         );
 
         // Short string representation
-        assert_eq!(document.display(), "<Document 7ac29a>");
+        assert_eq!(document.display(), "<Document 97c553>");
 
         // Make sure the id is matching
         assert_eq!(
             document.id().as_str(),
-            "00206a28f82fc8d27671b31948117af7501a5a0de709b0cf9bc3586b67abe67ac29a"
+            "00206272e88f4225a6f502f4fc5ec3ecf95773e2d47b3b7035278e33bad32297c553"
         );
     }
 

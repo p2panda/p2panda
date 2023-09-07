@@ -191,7 +191,7 @@ mod tests {
         assert_eq!(
             deserialize_into::<PlainOperation>(&serialize_value(cbor!(
                 [1, 1, format!("{schema_name}_{document_view_id}"), [random_operation_id.to_string()], {
-                    "name" => "Lycoperdon echinatum"
+                    "name" => "Lycoperdon echinatum".to_string()
                 }]
             )))
             .unwrap(),

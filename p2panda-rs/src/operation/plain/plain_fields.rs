@@ -129,6 +129,7 @@ impl From<&OperationFields> for PlainFields {
         for (name, value) in fields.iter() {
             let raw_value = match value {
                 OperationValue::Boolean(bool) => PlainValue::Boolean(*bool),
+                OperationValue::Bytes(bytes) => PlainValue::Bytes(bytes.to_owned()),
                 OperationValue::Integer(int) => PlainValue::Integer(*int),
                 OperationValue::Float(float) => PlainValue::Float(*float),
                 OperationValue::String(str) => PlainValue::StringOrRelation(str.to_owned()),
@@ -153,6 +154,7 @@ impl From<&OperationFields> for PlainFields {
 mod tests {
     use ciborium::cbor;
     use rstest::rstest;
+    use serde_bytes::ByteBuf;
 
     use crate::operation::plain::PlainValue;
     use crate::operation::OperationFields;
@@ -182,7 +184,7 @@ mod tests {
     #[rstest]
     fn from_operation_fields(operation_fields: OperationFields) {
         let fields = PlainFields::from(&operation_fields);
-        assert_eq!(fields.len(), 8);
+        assert_eq!(fields.len(), 9);
     }
 
     #[test]
@@ -191,7 +193,7 @@ mod tests {
             ("it_works", PlainValue::Boolean(true)),
             (
                 "it_works",
-                PlainValue::StringOrRelation("... and ignores duplicates".into()),
+                PlainValue::Bytes("... and ignores duplicates".as_bytes().to_vec()),
             ),
         ]);
         assert_eq!(fields.len(), 1);
@@ -206,7 +208,7 @@ mod tests {
             .insert("it_works", PlainValue::Boolean(true))
             .unwrap();
         fields
-            .insert("message", PlainValue::StringOrRelation("mjau".into()))
+            .insert("message", PlainValue::Bytes("mjau".as_bytes().to_vec()))
             .unwrap();
 
         // This field was inserted last but will be ordered first
@@ -221,7 +223,7 @@ mod tests {
             serialize_value(cbor!({
                 "a_first_field" => 5,
                 "it_works" => true,
-                "message" => "mjau",
+                "message" => ByteBuf::from("mjau".as_bytes()),
             }))
         );
     }

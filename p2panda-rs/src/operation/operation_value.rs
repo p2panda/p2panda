@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use serde::Serialize;
+
 use crate::document::{DocumentId, DocumentViewId};
 use crate::operation::{PinnedRelation, PinnedRelationList, Relation, RelationList};
 
 /// Enum of possible data types which can be added to the operations fields as values.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum OperationValue {
     /// Boolean value.
     Boolean(bool),
+
+    /// Bytes value.
+    #[serde(with = "serde_bytes")]
+    Bytes(Vec<u8>),
 
     /// Signed integer value.
     Integer(i64),
@@ -36,6 +42,7 @@ impl OperationValue {
     pub fn field_type(&self) -> &str {
         match self {
             OperationValue::Boolean(_) => "bool",
+            OperationValue::Bytes(_) => "bytes",
             OperationValue::Integer(_) => "int",
             OperationValue::Float(_) => "float",
             OperationValue::String(_) => "str",
@@ -74,6 +81,12 @@ impl From<String> for OperationValue {
 impl From<&str> for OperationValue {
     fn from(value: &str) -> Self {
         OperationValue::String(value.to_string())
+    }
+}
+
+impl From<&[u8]> for OperationValue {
+    fn from(value: &[u8]) -> Self {
+        OperationValue::Bytes(value.to_owned())
     }
 }
 

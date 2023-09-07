@@ -517,7 +517,7 @@ mod tests {
 
     #[rstest]
     #[should_panic(
-        expected = "Operation 00206a28f82fc8d27671b31948117af7501a5a0de709b0cf9bc3586b67abe67ac29a claims incorrect schema my_wrong_schema_"
+        expected = "Operation 00206272e88f4225a6f502f4fc5ec3ecf95773e2d47b3b7035278e33bad32297c553 claims incorrect schema my_wrong_schema_"
     )]
     #[tokio::test]
     async fn validates_incorrect_schema_id(

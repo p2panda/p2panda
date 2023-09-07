@@ -8,7 +8,7 @@ use crate::schema::{FieldType, Schema, SchemaDescription, SchemaFields, SchemaId
 const DESCRIPTION: &str = "Representation of the (partial) binary data of a file.";
 
 pub static BLOB_PIECE_V1: Lazy<Schema> = Lazy::new(|| {
-    let fields = SchemaFields::new(&[("data", FieldType::String)])
+    let fields = SchemaFields::new(&[("data", FieldType::Bytes)])
         // Unwrap as we know the fields are valid.
         .unwrap();
 
