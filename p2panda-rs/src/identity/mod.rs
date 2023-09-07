@@ -4,6 +4,8 @@
 pub mod error;
 mod key_pair;
 mod public_key;
+mod private_key;
 
 pub use key_pair::KeyPair;
+pub use private_key::PrivateKey;
 pub use public_key::PublicKey;

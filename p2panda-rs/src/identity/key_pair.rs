@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use ed25519_dalek::{
-    Keypair as Ed25519Keypair, PublicKey as Ed25519PubicKey, SecretKey, Signature, Signer, Verifier,
-};
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 
 use crate::identity::error::KeyPairError;
-use crate::identity::PublicKey;
+use crate::identity::{PublicKey, PrivateKey};
 
 /// Ed25519 key pair for authors to sign Bamboo entries with.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct KeyPair(Ed25519Keypair);
+pub struct KeyPair(PrivateKey);
 
 impl KeyPair {
     /// Generates a new key pair using the systems random number generator (CSPRNG) as a seed.
@@ -41,9 +39,7 @@ impl KeyPair {
     /// # }
     /// ```
     pub fn new() -> Self {
-        let mut csprng: OsRng = OsRng {};
-        let key_pair = Ed25519Keypair::generate(&mut csprng);
-        Self(key_pair)
+        Self(PrivateKey::new())
     }
 
     /// Derives a key pair from a private key.
@@ -72,7 +68,7 @@ impl KeyPair {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn from_private_key(private_key: &SecretKey) -> Result<Self, KeyPairError> {
+    pub fn from_private_key(private_key: &PrivateKey) -> Result<Self, KeyPairError> {
         // Derive public part from secret part
         let public_key: Ed25519PubicKey = private_key.into();
 
