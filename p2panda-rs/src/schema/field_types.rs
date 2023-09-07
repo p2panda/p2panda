@@ -97,6 +97,7 @@ impl FromStr for FieldType {
             "int" => Ok(FieldType::Integer),
             "float" => Ok(FieldType::Float),
             "str" => Ok(FieldType::String),
+            "bytes" => Ok(FieldType::Bytes),
             _ => Err(FieldTypeError::InvalidFieldType(s.into())),
         };
 
@@ -146,6 +147,7 @@ mod tests {
         assert_eq!(FieldType::Integer.to_string(), "int");
         assert_eq!(FieldType::Float.to_string(), "float");
         assert_eq!(FieldType::String.to_string(), "str");
+        assert_eq!(FieldType::Bytes.to_string(), "bytes");
         assert_eq!(
             FieldType::Relation(SchemaId::SchemaFieldDefinition(1)).to_string(),
             "relation(schema_field_definition_v1)"
@@ -170,6 +172,7 @@ mod tests {
         assert_eq!(FieldType::Integer, "int".parse().unwrap());
         assert_eq!(FieldType::Float, "float".parse().unwrap());
         assert_eq!(FieldType::String, "str".parse().unwrap());
+        assert_eq!(FieldType::Bytes, "bytes".parse().unwrap());
         assert_eq!(
             FieldType::Relation(SchemaId::SchemaFieldDefinition(1)),
             "relation(schema_field_definition_v1)".parse().unwrap()
