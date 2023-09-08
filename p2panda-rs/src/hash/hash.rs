@@ -7,11 +7,12 @@ use std::str::FromStr;
 
 use arrayvec::ArrayVec;
 use bamboo_rs_core_ed25519_yasmf::yasmf_hash::new_blake3;
-use serde::{Deserialize, Serialize};
 use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
+use serde::{Deserialize, Serialize};
 
 use crate::hash::error::HashError;
 use crate::{Human, Validate};
+use crate::serde::serialize_hex_string;
 
 /// Size of p2panda entries' hashes.
 pub const HASH_SIZE: usize = BLAKE3_HASH_SIZE;
@@ -25,8 +26,8 @@ pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
 /// to the Bamboo specification.
 ///
 /// [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
-#[derive(Clone, Debug, Ord, PartialOrd, Serialize, PartialEq, Eq, StdHash)]
-pub struct Hash(String);
+#[derive(Clone, Debug, Ord, PartialOrd, PartialEq, Eq, StdHash, Serialize)]
+pub struct Hash(#[serde(serialize_with = "serialize_hex_string")] String);
 
 impl Hash {
     /// Validates and wraps encoded hash string into new `Hash` instance.
