@@ -5,7 +5,7 @@ use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
 /// encoding (JSON, GraphQL), otherwise it serializes the bytes directly (CBOR).
-pub fn serialize_hex<S>(value: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+pub fn serialize_hex_bytes<S>(value: &[u8], serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
@@ -30,15 +30,30 @@ where
     }
 }
 
+/// Helper method for `serde` to serialize a hex string to bytes only when the target is not human
+/// readable output.
+pub fn serialize_hex_string<S>(value: &String, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    if serializer.is_human_readable() {
+        hex::serde::serialize(value, serializer)
+    } else {
+        let bytes =
+            hex::decode(value).map_err(|err| serde::ser::Error::custom(format!("{err}")))?;
+        SerdeBytes::new(&bytes).serialize(serializer)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use serde::{Deserialize, Serialize};
 
-    use super::{deserialize_hex, serialize_hex};
+    use super::{deserialize_hex, serialize_hex_bytes};
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Test(
-        #[serde(serialize_with = "serialize_hex", deserialize_with = "deserialize_hex")] Vec<u8>,
+        #[serde(serialize_with = "serialize_hex_bytes", deserialize_with = "deserialize_hex")] Vec<u8>,
     );
 
     #[test]
