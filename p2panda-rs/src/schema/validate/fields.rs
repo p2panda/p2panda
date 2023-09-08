@@ -493,8 +493,10 @@ mod tests {
             ("b", FieldType::String),
             ("a", FieldType::Integer),
             ("c", FieldType::Boolean),
+            ("d", FieldType::Bytes),
         ],
         vec![
+            ("d", PlainValue::Bytes(generate_random_bytes(100))),
             ("c", PlainValue::Boolean(false)),
             ("b", PlainValue::StringOrRelation("Panda-San!".to_string())),
             ("a", PlainValue::Integer(6)),

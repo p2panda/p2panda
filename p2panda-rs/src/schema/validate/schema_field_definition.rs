@@ -30,7 +30,7 @@ pub fn validate_field_name(value: &str) -> bool {
 /// 2. Relations need to specify a valid and canonical schema id
 fn validate_type(value: &str) -> bool {
     match value {
-        "bool" | "int" | "float" | "str" => true,
+        "bool" | "int" | "float" | "str" | "bytes" => true,
         relation => validate_relation_type(relation),
     }
 }
@@ -199,6 +199,7 @@ mod test {
     #[case("bool")]
     #[case("int")]
     #[case("str")]
+    #[case("bytes")]
     #[case("float")]
     #[case("relation(schema_field_definition_v1)")]
     #[case("relation(schema_definition_v1)")]
