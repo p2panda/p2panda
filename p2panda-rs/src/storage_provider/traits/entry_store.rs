@@ -8,7 +8,6 @@ use crate::entry::{EncodedEntry, Entry as P2pandaEntry, LogId};
 use crate::hash::Hash;
 use crate::identity::PublicKey;
 use crate::operation::EncodedOperation;
-use crate::schema::SchemaId;
 use crate::storage_provider::error::EntryStorageError;
 
 /// Storage interface for storing and querying `Entries`.
@@ -66,36 +65,4 @@ pub trait EntryStore {
         public_key: &PublicKey,
         log_id: &LogId,
     ) -> Result<Option<Self::Entry>, EntryStorageError>;
-
-    /// Get all `Entries` for the passed `SchemaId`.
-    ///
-    /// Returns a result containing a vector of `Entries` or None if no schema with this id could be found
-    /// or if a schema was found but no `Entries`. Errors when a fatal storage error occurs.
-    async fn get_entries_by_schema(
-        &self,
-        schema: &SchemaId,
-    ) -> Result<Vec<Self::Entry>, EntryStorageError>;
-
-    /// Get all `Entries` of a log from a specified sequence number up to passed max number of `Entries`.
-    ///
-    /// Returns a vector of `Entries` the length of which will not be greater than the max number
-    /// passed into the method. Fewer may be returned if the end of the log is reached.
-    async fn get_paginated_log_entries(
-        &self,
-        public_key: &PublicKey,
-        log_id: &LogId,
-        seq_num: &SeqNum,
-        max_number_of_entries: usize,
-    ) -> Result<Vec<Self::Entry>, EntryStorageError>;
-
-    /// Get all `Entries` which make up the certificate pool for the given `Entry`.
-    ///
-    /// Returns a result containing vector of `Entries` or None if no `Entry` could be found at
-    /// this `PublicKey` - `LogId` - `SeqNum` location. Errors when a fatal storage error occurs.
-    async fn get_certificate_pool(
-        &self,
-        author_id: &PublicKey,
-        log_id: &LogId,
-        seq_num: &SeqNum,
-    ) -> Result<Vec<Self::Entry>, EntryStorageError>;
 }

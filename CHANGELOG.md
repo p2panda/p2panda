@@ -9,6 +9,16 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+- Remove unused methods from `EntryStore` [#521](https://github.com/p2panda/p2panda/pull/521) `rs`
+
+### Fixed
+
+- Fix missing bytes field validation in schema field definition [#519](https://github.com/p2panda/p2panda/pull/519) `rs`
+
 ## [0.7.1]
 
 Released on 2023-07-27: :package: `p2panda-js` and :package: `p2panda-rs`
@@ -28,7 +38,6 @@ Released on 2023-07-27: :package: `p2panda-js` and :package: `p2panda-rs`
 ### Fixed
 
 - Handle parsing empty pinned relation lists from `PlainOperation` [#489](https://github.com/p2panda/p2panda/pull/489) `rs`
-- Fix missing bytes field validation in schema field definition [#519](https://github.com/p2panda/p2panda/pull/519) `rs`
 
 ### Lion on the street
 
