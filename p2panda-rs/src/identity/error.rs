@@ -13,6 +13,12 @@ pub enum KeyPairError {
     /// Handle errors from `hex` crate.
     #[error(transparent)]
     HexEncoding(#[from] hex::FromHexError),
+
+    #[error(transparent)]
+    PrivateKey(#[from] PrivateKeyError),
+
+    #[error(transparent)]
+    PublicKey(#[from] PublicKeyError),
 }
 
 /// Custom error types for `PublicKey`.
@@ -30,4 +36,13 @@ pub enum PublicKeyError {
     /// PublicKey string contains invalid hex characters.
     #[error("invalid hex encoding in public key string")]
     InvalidHexEncoding,
+}
+
+/// Custom error types for `PrivateKey`.
+#[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
+pub enum PrivateKeyError {
+    /// PrivateKey string does not have the right length.
+    #[error("invalid private key length")]
+    InvalidLength,
 }

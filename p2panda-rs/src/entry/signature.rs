@@ -24,9 +24,9 @@ impl From<BambooSignature<&[u8]>> for Signature {
     }
 }
 
-impl From<Ed25519Signature> for Signature {
-    fn from(signature: Ed25519Signature) -> Self {
-        Self(signature)
+impl From<&Ed25519Signature> for Signature {
+    fn from(signature: &Ed25519Signature) -> Self {
+        Self(signature.to_owned())
     }
 }
 

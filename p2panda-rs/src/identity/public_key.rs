@@ -4,16 +4,17 @@ use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
-use ed25519_dalek::{PublicKey as Ed25519PublicKey, PUBLIC_KEY_LENGTH};
+use ed25519_dalek::{VerifyingKey, PUBLIC_KEY_LENGTH};
 use serde::{Deserialize, Serialize};
 
+use crate::entry::Signature;
 use crate::identity::error::PublicKeyError;
 use crate::serde::{deserialize_hex, serialize_hex};
 use crate::Human;
 
 /// Authors are hex encoded Ed25519 public key strings.
 #[derive(Clone, Debug, Copy)]
-pub struct PublicKey(Ed25519PublicKey);
+pub struct PublicKey(VerifyingKey);
 
 impl PublicKey {
     /// Validates and wraps Ed25519 public key string into a new `PublicKey` instance.
@@ -49,7 +50,7 @@ impl PublicKey {
             }
         };
 
-        let ed25519_public_key = Ed25519PublicKey::from_bytes(&bytes)?;
+        let ed25519_public_key = VerifyingKey::from_bytes(&bytes)?;
         let public_key = Self(ed25519_public_key);
         Ok(public_key)
     }
@@ -57,6 +58,10 @@ impl PublicKey {
     /// Returns public_key represented as bytes.
     pub fn to_bytes(&self) -> [u8; PUBLIC_KEY_LENGTH] {
         self.0.to_bytes()
+    }
+
+    pub fn verify(&self, bytes: &[u8], signature: &Signature) -> bool {
+        self.0.verify_strict(bytes, signature.into()).is_ok()
     }
 }
 
@@ -81,7 +86,7 @@ impl<'de> Deserialize<'de> for PublicKey {
         D: serde::Deserializer<'de>,
     {
         let bytes = deserialize_hex(deserializer)?;
-        let ed25519_public_key = Ed25519PublicKey::from_bytes(&bytes).map_err(|err| {
+        let ed25519_public_key = VerifyingKey::from_bytes(&bytes).map_err(|err| {
             serde::de::Error::custom(format!("invalid public key bytes, {}", err))
         })?;
         let public_key = Self(ed25519_public_key);
@@ -108,24 +113,24 @@ impl Human for PublicKey {
 }
 
 /// Convert ed25519_dalek `PublicKey` to `PublicKey` instance.
-impl From<&Ed25519PublicKey> for PublicKey {
-    fn from(public_key: &Ed25519PublicKey) -> Self {
+impl From<VerifyingKey> for PublicKey {
+    fn from(public_key: VerifyingKey) -> Self {
         // Unwrap as we already trust that `PublicKey` is correct
         Self::new(&hex::encode(public_key.to_bytes())).unwrap()
     }
 }
 
-impl From<&PublicKey> for Ed25519PublicKey {
+impl From<&PublicKey> for VerifyingKey {
     fn from(public_key: &PublicKey) -> Self {
         // Unwrap as we already trust that `PublicKey` is correct
-        Ed25519PublicKey::from_bytes(&public_key.to_bytes()).unwrap()
+        VerifyingKey::from_bytes(&public_key.to_bytes()).unwrap()
     }
 }
 
-impl From<PublicKey> for Ed25519PublicKey {
+impl From<PublicKey> for VerifyingKey {
     fn from(public_key: PublicKey) -> Self {
         // Unwrap as we already trust that `PublicKey` is correct
-        Ed25519PublicKey::from_bytes(&public_key.to_bytes()).unwrap()
+        VerifyingKey::from_bytes(&public_key.to_bytes()).unwrap()
     }
 }
 
@@ -156,7 +161,7 @@ impl Eq for PublicKey {}
 #[cfg(test)]
 mod tests {
     use ciborium::cbor;
-    use ed25519_dalek::{PublicKey as Ed25519PublicKey, PUBLIC_KEY_LENGTH};
+    use ed25519_dalek::{VerifyingKey, PUBLIC_KEY_LENGTH};
     use serde_bytes::Bytes;
 
     use crate::identity::error::PublicKeyError;
@@ -225,7 +230,7 @@ mod tests {
             215, 90, 152, 1, 130, 177, 10, 183, 213, 75, 254, 211, 201, 100, 7, 58, 14, 225, 114,
             243, 218, 166, 35, 37, 175, 2, 26, 104, 247, 7, 81, 26,
         ];
-        let public_key = Ed25519PublicKey::from_bytes(&public_key_bytes).unwrap();
+        let public_key = VerifyingKey::from_bytes(&public_key_bytes).unwrap();
 
         // Convert `ed25519_dalek` `PublicKey` into `PublicKey` instance
         let public_key: PublicKey = (&public_key).into();

@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
-use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 
+use crate::entry::Signature;
 use crate::identity::error::KeyPairError;
-use crate::identity::{PublicKey, PrivateKey};
+use crate::identity::{PrivateKey, PublicKey};
 
 /// Ed25519 key pair for authors to sign Bamboo entries with.
 #[derive(Debug, Serialize, Deserialize)]
@@ -69,34 +68,25 @@ impl KeyPair {
     /// # }
     /// ```
     pub fn from_private_key(private_key: &PrivateKey) -> Result<Self, KeyPairError> {
-        // Derive public part from secret part
-        let public_key: Ed25519PubicKey = private_key.into();
-
-        // Assemble key pair from both parts
-        let bytes = [private_key.to_bytes(), public_key.to_bytes()].concat();
-        let key_pair = Ed25519Keypair::from_bytes(&bytes)?;
-
-        Ok(KeyPair(key_pair))
+        Ok(Self(private_key.to_owned()))
     }
 
     /// Derives a key pair from a private key (encoded as hex string for better handling in browser
     /// contexts).
     pub fn from_private_key_str(private_key: &str) -> Result<Self, KeyPairError> {
         let secret_key_bytes = hex::decode(private_key)?;
-        let secret_key = SecretKey::from_bytes(&secret_key_bytes)?;
+        let secret_key = PrivateKey::from_bytes(&secret_key_bytes)?;
         Self::from_private_key(&secret_key)
     }
 
     /// Returns the public half of the key pair.
     pub fn public_key(&self) -> PublicKey {
-        let public_key = &self.0.public;
-        let public_key: PublicKey = public_key.into();
-        public_key
+        self.0.public_key()
     }
 
     /// Returns the private half of the key pair.
-    pub fn private_key(&self) -> &SecretKey {
-        &self.0.secret
+    pub fn private_key(&self) -> PrivateKey {
+        self.0.clone()
     }
 
     /// Sign any data using this key pair.
@@ -129,7 +119,7 @@ impl KeyPair {
         bytes: &[u8],
         signature: &Signature,
     ) -> Result<(), KeyPairError> {
-        let public_key: Ed25519PubicKey = public_key.into();
+        let public_key: PublicKey = (*public_key).into();
         public_key.verify(bytes, signature)?;
         Ok(())
     }
