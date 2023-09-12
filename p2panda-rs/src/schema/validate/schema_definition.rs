@@ -42,8 +42,8 @@ fn validate_fields(value: &Vec<Vec<String>>) -> bool {
 /// limitations defined by the p2panda specification.
 ///
 /// Please note that this does not check type field type or the operation fields in general, as
-/// this should be handled by other validation methods. This method is only checking the
-/// special requirements of this particular system schema.
+/// this should be handled by other validation methods. This method is only checking the special
+/// requirements of this particular system schema.
 pub fn validate_schema_definition_v1_fields(
     fields: &PlainFields,
 ) -> Result<(), SchemaDefinitionError> {
