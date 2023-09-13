@@ -18,26 +18,43 @@ pub fn validate_mime_type(value: &str) -> bool {
     NAME_REGEX.is_match(value)
 }
 
+/// Checks "pieces" field of operations with "blob_v1" schema id.
+///
+/// 1. It is not empty
+pub fn validate_pieces(value: &Vec<Vec<String>>) -> bool {
+    !value.is_empty()
+}
+
 /// Validate formatting for operations following `blob_v1` system schemas.
 ///
 /// These operations contain a "length", "mime_type" and "pieces" field some of which have special
 /// limitations defined by the p2panda specification.
 ///
 /// Please note that this does not check type field type or the operation fields in general, as
-/// this should be handled by other validation methods. This method is only checking the
-/// special requirements of this particular system schema.
+/// this should be handled by other validation methods. This method is only checking the special
+/// requirements of this particular system schema.
 pub fn validate_blob_v1_fields(fields: &PlainFields) -> Result<(), BlobError> {
-    // `pieces` and `length` fields don't have any special requirements.
+    // `length` field doesn't have any special requirements.
 
     // Check "mime_type" field
-    let blob_mime_type = fields.get("mime_type");
-
-    match blob_mime_type {
+    match fields.get("mime_type") {
         Some(PlainValue::StringOrRelation(value)) => {
             if validate_mime_type(value) {
                 Ok(())
             } else {
                 Err(BlobError::MimeTypeInvalid)
+            }
+        }
+        _ => Ok(()),
+    }?;
+
+    // Check "pieces" field
+    match fields.get("pieces") {
+        Some(PlainValue::PinnedRelationList(value)) => {
+            if validate_pieces(value) {
+                Ok(())
+            } else {
+                Err(BlobError::PiecesEmpty)
             }
         }
         _ => Ok(()),
@@ -50,6 +67,7 @@ pub fn validate_blob_v1_fields(fields: &PlainFields) -> Result<(), BlobError> {
 mod test {
     use rstest::rstest;
 
+    use crate::document::DocumentViewId;
     use crate::operation::plain::PlainFields;
     use crate::test_utils::fixtures::random_document_view_id;
 
@@ -66,17 +84,18 @@ mod test {
         ("mime_type", "application/x-zip-compressed".into()),
         ("pieces", vec![random_document_view_id()].into()),
      ].into())]
-    #[case(vec![
-        ("length", 99999.into()),
-        ("mime_type", "application/vnd.openxmlformats-officedocument.presentationml.slideshow".into()),
-        ("pieces", vec![random_document_view_id()].into()),
-     ].into())]
     #[should_panic]
-    #[case(vec![
+    #[case::invalid_mime_type(vec![
         ("length", 100.into()),
         ("mime_type", "not a mime type".into()),
         ("pieces", vec![random_document_view_id()].into()),
      ].into())]
+    #[should_panic]
+    #[case::empty_pieces(vec![
+       ("length", 1.into()),
+       ("mime_type", "image/png".into()),
+       ("pieces", Vec::<DocumentViewId>::new().into()),
+    ].into())]
     fn check_fields(#[case] fields: PlainFields) {
         assert!(validate_blob_v1_fields(&fields).is_ok());
     }

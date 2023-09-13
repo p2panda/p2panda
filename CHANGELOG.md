@@ -18,6 +18,7 @@ Highlights are marked with a pancake 🥞
 ### Fixed
 
 - Fix missing bytes field validation in schema field definition [#519](https://github.com/p2panda/p2panda/pull/519) `rs`
+- Make sure that pieces field in `blob_v1` is not empty [#523](https://github.com/p2panda/p2panda/pull/523)
 
 ## [0.7.1]
 
