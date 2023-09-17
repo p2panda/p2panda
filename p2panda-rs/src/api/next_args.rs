@@ -226,7 +226,7 @@ mod tests {
         KeyPair::new()
     )]
     #[should_panic(
-        expected = "Previous operation 002029ad6c38c96bbfb0089631c70ded165c77dd270cb832f83cf696dfa6849b8b9a not found in store"
+        expected = "Previous operation 00202df2f7c15280a319f42f1b2df51cd8dcaa79286428ff48301309d3bb37868981 not found in store"
     )]
     #[case::previous_operation_missing(
         &[(0, 8)],
@@ -234,7 +234,7 @@ mod tests {
         KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
     )]
     #[should_panic(
-        expected = "Previous operation 00207c3281b9acdbcbeeb14ca3c323b36a3ae8ca93e5599106906380d3dd8554fef6 not found in store"
+        expected = "Previous operation 0020397d5f246d6124d1aa6fb5fcdb2a0f202bafe0aecb6ff1423fa2164ae4403204 not found in store"
     )]
     #[case::one_of_some_previous_missing(
         &[(0, 7)],
@@ -242,7 +242,7 @@ mod tests {
         KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
     )]
     #[should_panic(
-        expected = "Previous operation 002029ad6c38c96bbfb0089631c70ded165c77dd270cb832f83cf696dfa6849b8b9a not found in store"
+        expected = "Previous operation 00202df2f7c15280a319f42f1b2df51cd8dcaa79286428ff48301309d3bb37868981 not found in store"
     )]
     #[case::one_of_some_previous_missing(
         &[(0, 8)],
@@ -250,7 +250,7 @@ mod tests {
         KeyPair::from_private_key_str(PRIVATE_KEY).unwrap()
     )]
     #[should_panic(
-        expected = "Previous operation 002029ad6c38c96bbfb0089631c70ded165c77dd270cb832f83cf696dfa6849b8b9a not found in store"
+        expected = "Previous operation 00202df2f7c15280a319f42f1b2df51cd8dcaa79286428ff48301309d3bb37868981 not found in store"
     )]
     #[case::missing_previous_operation_multi_writer(
         &[(0, 8)],

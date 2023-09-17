@@ -144,6 +144,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::DocumentViewId;
+    use crate::hash::HashId;
     use crate::operation::traits::{Actionable, Schematic};
     use crate::operation::{Operation, OperationAction, OperationId, OperationVersion};
     use crate::schema::{SchemaId, SchemaName};
@@ -190,7 +191,7 @@ mod tests {
     ) {
         assert_eq!(
             deserialize_into::<PlainOperation>(&serialize_value(cbor!(
-                [1, 1, format!("{schema_name}_{}", document_view_id.to_string()), [random_operation_id], {
+                [1, 1, format!("{schema_name}_{}", document_view_id.to_string()), [random_operation_id.to_bytes()], {
                     "name" => "Lycoperdon echinatum".to_string()
                 }]
             )))

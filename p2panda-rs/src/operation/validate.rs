@@ -271,6 +271,7 @@ mod tests {
     use crate::test_utils::constants::{HASH, SCHEMA_ID};
     use crate::test_utils::fixtures::{document_id, document_view_id, schema, schema_id, Fixture};
     use crate::test_utils::templates::version_fixtures;
+    use crate::serde::hex_string_to_bytes;
 
     use super::validate_operation;
 
@@ -294,7 +295,7 @@ mod tests {
         cbor!([
             1, 0, SCHEMA_ID,
             {
-                "country" => HASH,
+                "country" => hex_string_to_bytes(HASH),
                 "national_dish" => "Pumpkin",
                 "vegan_friendly" => true,
                 "yummyness" => 8,
@@ -330,7 +331,7 @@ mod tests {
         cbor!([
             1, 0, SCHEMA_ID,
             {
-                "country" => "0020",
+                "country" => hex_string_to_bytes("0020"),
             },
         ]),
         "field 'country' does not match schema: invalid hash length 2 bytes, expected 34 bytes"
