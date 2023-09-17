@@ -6,9 +6,8 @@ use ciborium::Value;
 use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentId, DocumentViewId};
-use crate::hash::Hash;
+use crate::hash::{Hash, HashId};
 use crate::operation::error::PlainValueError;
-use crate::operation::OperationId;
 
 /// Operation field values which have not been checked against a schema yet.
 ///
@@ -130,7 +129,7 @@ impl From<DocumentId> for PlainValue {
 
 impl From<Vec<DocumentId>> for PlainValue {
     fn from(value: Vec<DocumentId>) -> Self {
-        PlainValue::AmbiguousRelation(value.into())
+        PlainValue::AmbiguousRelation(value.iter().map(HashId::as_hash).cloned().collect())
     }
 }
 
@@ -142,7 +141,7 @@ impl From<DocumentViewId> for PlainValue {
 
 impl From<Vec<DocumentViewId>> for PlainValue {
     fn from(value: Vec<DocumentViewId>) -> Self {
-        PlainValue::PinnedRelationList(value.into())
+        PlainValue::PinnedRelationList(value.iter().cloned().map(Into::<Vec<Hash>>::into).collect())
     }
 }
 
@@ -222,7 +221,7 @@ mod tests {
     use serde_bytes::ByteBuf;
 
     use crate::document::{DocumentId, DocumentViewId};
-    use crate::hash::Hash;
+    use crate::hash::{Hash, HashId};
     use crate::serde::{deserialize_into, hex_string_to_bytes, serialize_from, serialize_value};
     use crate::test_utils::fixtures::{document_id, document_view_id, random_hash};
 
@@ -267,15 +266,15 @@ mod tests {
             document_id.clone().into()
         );
         assert_eq!(
-            PlainValue::AmbiguousRelation(vec![document_id.into()]),
+            PlainValue::AmbiguousRelation(vec![document_id.clone().into()]),
             vec![document_id].into()
         );
         assert_eq!(
-            PlainValue::AmbiguousRelation(document_view_id.into()),
+            PlainValue::AmbiguousRelation(document_view_id.clone().into()),
             document_view_id.clone().into()
         );
         assert_eq!(
-            PlainValue::PinnedRelationList(document_view_id.into()),
+            PlainValue::PinnedRelationList(vec![document_view_id.clone().into()]),
             vec![document_view_id].into()
         );
     }

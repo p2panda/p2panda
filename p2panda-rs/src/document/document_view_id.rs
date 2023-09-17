@@ -9,7 +9,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::document::error::DocumentViewIdError;
-use crate::hash::Hash;
+use crate::hash::{Hash, HashId};
 use crate::operation::error::OperationIdError;
 use crate::operation::OperationId;
 use crate::{Human, Validate};
@@ -166,6 +166,36 @@ impl TryFrom<&[String]> for DocumentViewId {
             .collect();
 
         Self::from_untrusted(operation_ids?)
+    }
+}
+
+impl<T: HashId> TryFrom<&[T]> for DocumentViewId {
+    type Error = DocumentViewIdError;
+
+    fn try_from(str_list: &[T]) -> Result<Self, Self::Error> {
+        let operation_ids: Vec<OperationId> = str_list
+            .iter()
+            .map(|hash_id| hash_id.as_hash().clone().into())
+            .collect();
+
+        Self::from_untrusted(operation_ids)
+    }
+}
+
+impl TryFrom<&[Hash]> for DocumentViewId {
+    type Error = DocumentViewIdError;
+
+    fn try_from(str_list: &[Hash]) -> Result<Self, Self::Error> {
+        let operation_ids: Vec<OperationId> =
+            str_list.iter().map(|hash| hash.clone().into()).collect();
+
+        Self::from_untrusted(operation_ids)
+    }
+}
+
+impl Into<Vec<Hash>> for DocumentViewId {
+    fn into(self) -> Vec<Hash> {
+        self.iter().map(HashId::as_hash).cloned().collect()
     }
 }
 

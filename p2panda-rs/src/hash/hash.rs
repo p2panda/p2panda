@@ -69,12 +69,6 @@ impl Hash {
     }
 }
 
-impl HashId for Hash {
-    fn as_hash(&self) -> &Hash {
-        &self
-    }
-}
-
 impl Validate for Hash {
     type Error = HashError;
 
@@ -182,6 +176,12 @@ impl TryFrom<String> for Hash {
 
     fn try_from(str: String) -> Result<Self, Self::Error> {
         Self::new(&str)
+    }
+}
+
+impl<T: HashId> From<T> for Hash {
+    fn from(hash_id: T) -> Hash {
+        hash_id.as_hash().to_owned()
     }
 }
 
