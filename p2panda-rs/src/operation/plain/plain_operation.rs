@@ -190,7 +190,7 @@ mod tests {
     ) {
         assert_eq!(
             deserialize_into::<PlainOperation>(&serialize_value(cbor!(
-                [1, 1, format!("{schema_name}_{document_view_id}"), [random_operation_id.to_string()], {
+                [1, 1, format!("{schema_name}_{}", document_view_id.to_string()), [random_operation_id], {
                     "name" => "Lycoperdon echinatum".to_string()
                 }]
             )))
@@ -217,6 +217,8 @@ mod tests {
     #[should_panic(expected = "missing fields for this operation action")]
     #[case::missing_fields(cbor!([1, 0, "schema_field_definition_v1"]))]
     #[should_panic(expected = "invalid hash length 2 bytes, expected 34 bytes")]
+    #[case::hash_too_small(cbor!([1, 1, "schema_field_definition_v1", [[0, 1]]]))]
+    #[should_panic(expected = "invalid type: string, expected byte buf")]
     #[case::hash_too_small(cbor!([1, 1, "schema_field_definition_v1", ["0020"]]))]
     #[should_panic(expected = "invalid type: map, expected array")]
     #[case::fields_wrong_type(cbor!([1, 1, "schema_field_definition_v1", { "type" => "int" }]))]
