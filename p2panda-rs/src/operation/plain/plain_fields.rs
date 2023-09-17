@@ -133,7 +133,9 @@ impl From<&OperationFields> for PlainFields {
                 OperationValue::Integer(int) => PlainValue::Integer(*int),
                 OperationValue::Float(float) => PlainValue::Float(*float),
                 OperationValue::String(str) => PlainValue::StringOrRelation(str.to_owned()),
-                OperationValue::Relation(relation) => relation.document_id().to_owned().into(),
+                OperationValue::Relation(relation) => {
+                    PlainValue::Bytes(hex::decode(relation.document_id().as_str()).unwrap())
+                }
                 OperationValue::RelationList(list) => list.document_ids().to_vec().into(),
                 OperationValue::PinnedRelation(relation) => relation.view_id().to_owned().into(),
                 OperationValue::PinnedRelationList(list) => {
