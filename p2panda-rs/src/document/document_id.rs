@@ -7,7 +7,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 use crate::document::error::DocumentIdError;
-use crate::hash::Hash;
+use crate::hash::{Hash, HashId};
 use crate::operation::OperationId;
 use crate::{Human, Validate};
 
@@ -37,6 +37,13 @@ impl DocumentId {
     /// Returns the string representation of the document id.
     pub fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+}
+
+impl HashId for DocumentId {
+    /// Access the inner [`crate::hash::Hash`] value of this document id.
+    fn as_hash(&self) -> &Hash {
+        self.0.as_hash()
     }
 }
 

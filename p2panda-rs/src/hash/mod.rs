@@ -11,7 +11,9 @@
 pub mod error;
 #[allow(clippy::module_inception)]
 mod hash;
+mod traits;
 
 #[cfg(any(feature = "test-utils", test))]
 pub use hash::Blake3ArrayVec;
 pub use hash::{Hash, HASH_SIZE};
+pub use traits::HashId;

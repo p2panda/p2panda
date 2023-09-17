@@ -12,6 +12,7 @@ use serde_bytes::ByteBuf;
 use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
 use crate::hash::error::HashError;
+use crate::hash::HashId;
 use crate::serde::serialize_hex_string;
 use crate::{Human, Validate};
 
@@ -65,6 +66,12 @@ impl Hash {
     /// Returns hash as `&str`.
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+impl HashId for Hash {
+    fn as_hash(&self) -> &Hash {
+        &self
     }
 }
 
