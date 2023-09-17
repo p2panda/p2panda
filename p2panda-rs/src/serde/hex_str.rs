@@ -45,6 +45,11 @@ where
     }
 }
 
+#[cfg(any(feature = "test-utils", test))]
+pub fn hex_string_to_bytes(string: &str) -> SerdeByteBuf {
+    let bytes: Vec<u8> = hex::decode(string).expect("Valid hex string");
+    SerdeByteBuf::from(bytes)
+}
 
 #[cfg(test)]
 mod tests {
@@ -54,7 +59,11 @@ mod tests {
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Test(
-        #[serde(serialize_with = "serialize_hex_bytes", deserialize_with = "deserialize_hex")] Vec<u8>,
+        #[serde(
+            serialize_with = "serialize_hex_bytes",
+            deserialize_with = "deserialize_hex"
+        )]
+        Vec<u8>,
     );
 
     #[test]
