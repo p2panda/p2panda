@@ -52,7 +52,7 @@ pub fn validate_schema_definition_v1_fields(
     let schema_name = fields.get("name");
 
     match schema_name {
-        Some(PlainValue::StringOrRelation(value)) => {
+        Some(PlainValue::String(value)) => {
             if validate_name(value) {
                 Ok(())
             } else {
@@ -66,7 +66,7 @@ pub fn validate_schema_definition_v1_fields(
     let schema_description = fields.get("description");
 
     match schema_description {
-        Some(PlainValue::StringOrRelation(value)) => {
+        Some(PlainValue::String(value)) => {
             if validate_description(value) {
                 Ok(())
             } else {

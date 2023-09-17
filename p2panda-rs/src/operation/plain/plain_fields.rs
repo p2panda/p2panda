@@ -129,12 +129,12 @@ impl From<&OperationFields> for PlainFields {
         for (name, value) in fields.iter() {
             let raw_value = match value {
                 OperationValue::Boolean(bool) => PlainValue::Boolean(*bool),
-                OperationValue::Bytes(bytes) => PlainValue::Bytes(bytes.to_owned()),
+                OperationValue::Bytes(bytes) => PlainValue::BytesOrRelation(bytes.to_owned()),
                 OperationValue::Integer(int) => PlainValue::Integer(*int),
                 OperationValue::Float(float) => PlainValue::Float(*float),
-                OperationValue::String(str) => PlainValue::StringOrRelation(str.to_owned()),
+                OperationValue::String(str) => PlainValue::String(str.to_owned()),
                 OperationValue::Relation(relation) => {
-                    PlainValue::Bytes(hex::decode(relation.document_id().as_str()).unwrap())
+                    PlainValue::BytesOrRelation(hex::decode(relation.document_id().as_str()).unwrap())
                 }
                 OperationValue::RelationList(list) => list.document_ids().to_vec().into(),
                 OperationValue::PinnedRelation(relation) => relation.view_id().to_owned().into(),
@@ -195,7 +195,7 @@ mod tests {
             ("it_works", PlainValue::Boolean(true)),
             (
                 "it_works",
-                PlainValue::Bytes("... and ignores duplicates".as_bytes().to_vec()),
+                PlainValue::BytesOrRelation("... and ignores duplicates".as_bytes().to_vec()),
             ),
         ]);
         assert_eq!(fields.len(), 1);
@@ -210,7 +210,7 @@ mod tests {
             .insert("it_works", PlainValue::Boolean(true))
             .unwrap();
         fields
-            .insert("message", PlainValue::Bytes("mjau".as_bytes().to_vec()))
+            .insert("message", PlainValue::BytesOrRelation("mjau".as_bytes().to_vec()))
             .unwrap();
 
         // This field was inserted last but will be ordered first

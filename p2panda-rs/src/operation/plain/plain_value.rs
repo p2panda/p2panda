@@ -28,18 +28,19 @@ pub enum PlainValue {
     /// Float value.
     Float(f64),
 
-    /// String value which can be either a text or relation (document id).
-    StringOrRelation(String),
+    /// String value.
+    String(String),
 
-    /// Byte array.
+    /// Byte array value which can either represent raw bytes or a relation (document id)
+    /// encoded as bytes.
     #[serde(with = "serde_bytes")]
-    Bytes(Vec<u8>),
+    BytesOrRelation(Vec<u8>),
 
-    /// List of strings which can either be a pinned relation (list of operation ids) a relation
+    /// List of hashes which can either be a pinned relation (list of operation ids) a relation
     /// list (list of document ids) or an empty pinned relation list.
     AmbiguousRelation(Vec<Hash>),
 
-    /// List of a list of strings which is a pinned relation list.
+    /// List of a list of hashes which is a pinned relation list.
     PinnedRelationList(Vec<Vec<Hash>>),
 }
 
@@ -52,10 +53,10 @@ impl PlainValue {
             PlainValue::Boolean(_) => "bool",
             PlainValue::Integer(_) => "int",
             PlainValue::Float(_) => "float",
-            PlainValue::StringOrRelation(_) => "str",
-            PlainValue::Bytes(_) => "bytes",
-            PlainValue::AmbiguousRelation(_) => "str[]",
-            PlainValue::PinnedRelationList(_) => "str[][]",
+            PlainValue::String(_) => "str",
+            PlainValue::BytesOrRelation(_) => "bytes",
+            PlainValue::AmbiguousRelation(_) => "hash[]",
+            PlainValue::PinnedRelationList(_) => "hash[][]",
         }
     }
 }
@@ -81,13 +82,13 @@ impl From<bool> for PlainValue {
 
 impl From<Vec<u8>> for PlainValue {
     fn from(value: Vec<u8>) -> Self {
-        PlainValue::Bytes(value)
+        PlainValue::BytesOrRelation(value)
     }
 }
 
 impl From<&[u8]> for PlainValue {
     fn from(value: &[u8]) -> Self {
-        PlainValue::Bytes(value.to_owned())
+        PlainValue::BytesOrRelation(value.to_owned())
     }
 }
 
@@ -105,7 +106,7 @@ impl From<i64> for PlainValue {
 
 impl From<String> for PlainValue {
     fn from(value: String) -> Self {
-        PlainValue::StringOrRelation(value)
+        PlainValue::String(value)
     }
 }
 
@@ -117,13 +118,13 @@ impl From<Vec<Hash>> for PlainValue {
 
 impl From<&str> for PlainValue {
     fn from(value: &str) -> Self {
-        PlainValue::StringOrRelation(value.to_owned())
+        PlainValue::String(value.to_owned())
     }
 }
 
 impl From<DocumentId> for PlainValue {
     fn from(value: DocumentId) -> Self {
-        PlainValue::Bytes(hex::decode(value.as_str()).unwrap())
+        PlainValue::BytesOrRelation(hex::decode(value.as_str()).unwrap())
     }
 }
 
@@ -233,14 +234,14 @@ mod tests {
         assert_eq!("bool", PlainValue::Boolean(false).field_type());
         assert_eq!(
             "bytes",
-            PlainValue::Bytes("test".as_bytes().into()).field_type()
+            PlainValue::BytesOrRelation("test".as_bytes().into()).field_type()
         );
         assert_eq!(
             "str",
-            PlainValue::StringOrRelation("test".into()).field_type()
+            PlainValue::String("test".into()).field_type()
         );
         assert_eq!(
-            "str[]",
+            "hash[]",
             PlainValue::AmbiguousRelation(vec![random_hash()]).field_type()
         );
     }
@@ -252,17 +253,17 @@ mod tests {
         assert_eq!(PlainValue::Float(1.5), 1.5.into());
         assert_eq!(PlainValue::Integer(3), 3.into());
         assert_eq!(
-            PlainValue::Bytes("hellö".as_bytes().to_vec()),
+            PlainValue::BytesOrRelation("hellö".as_bytes().to_vec()),
             "hellö".as_bytes().into()
         );
         assert_eq!(
-            PlainValue::StringOrRelation("hellö".to_string()),
+            PlainValue::String("hellö".to_string()),
             "hellö".into()
         );
 
         // Relation types
         assert_eq!(
-            PlainValue::Bytes(document_id.to_bytes()),
+            PlainValue::BytesOrRelation(document_id.to_bytes()),
             document_id.clone().into()
         );
         assert_eq!(
@@ -307,12 +308,12 @@ mod tests {
         );
 
         assert_eq!(
-            serialize_from(PlainValue::Bytes(vec![0, 1, 2, 3])),
+            serialize_from(PlainValue::BytesOrRelation(vec![0, 1, 2, 3])),
             serialize_value(cbor!(ByteBuf::from(vec![0, 1, 2, 3])))
         );
 
         assert_eq!(
-            serialize_from(PlainValue::StringOrRelation("username".to_string())),
+            serialize_from(PlainValue::String("username".to_string())),
             serialize_value(cbor!("username"))
         );
 
@@ -337,11 +338,11 @@ mod tests {
                 0, 1, 2, 3
             ]))))
             .unwrap(),
-            PlainValue::Bytes(vec![0, 1, 2, 3])
+            PlainValue::BytesOrRelation(vec![0, 1, 2, 3])
         );
         assert_eq!(
             deserialize_into::<PlainValue>(&serialize_value(cbor!("hello"))).unwrap(),
-            PlainValue::StringOrRelation("hello".to_string())
+            PlainValue::String("hello".to_string())
         );
         assert_eq!(
             deserialize_into::<PlainValue>(&serialize_value(cbor!([]))).unwrap(),

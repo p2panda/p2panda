@@ -179,7 +179,7 @@ fn validate_field_value(
             }
         }
         FieldType::Bytes => {
-            if let PlainValue::Bytes(bytes) = plain_value {
+            if let PlainValue::BytesOrRelation(bytes) = plain_value {
                 Ok(OperationValue::Bytes(bytes.to_owned()))
             } else {
                 Err(ValidationError::InvalidType(
@@ -209,7 +209,7 @@ fn validate_field_value(
             }
         }
         FieldType::String => {
-            if let PlainValue::StringOrRelation(string) = plain_value {
+            if let PlainValue::String(string) = plain_value {
                 Ok(OperationValue::String(string.to_owned()))
             } else {
                 Err(ValidationError::InvalidType(
@@ -219,7 +219,7 @@ fn validate_field_value(
             }
         }
         FieldType::Relation(_) => {
-            if let PlainValue::Bytes(bytes) = plain_value {
+            if let PlainValue::BytesOrRelation(bytes) = plain_value {
                 // Convert bytes to document id, check for correctness
                 let hex_str = hex::encode(bytes);
                 let hash = Hash::new(&hex_str)
@@ -364,7 +364,7 @@ mod tests {
         assert!(validate_field(
             (
                 &"cutest_animal_in_zoo".to_owned(),
-                &PlainValue::StringOrRelation("Panda".to_string()),
+                &PlainValue::String("Panda".to_string()),
             ),
             (&"cutest_animal_in_zoo".to_owned(), &FieldType::String)
         )
@@ -374,7 +374,7 @@ mod tests {
         assert!(validate_field(
             (
                 &"most_boring_animal_in_zoo".to_owned(),
-                &PlainValue::StringOrRelation("Panda".to_string()),
+                &PlainValue::String("Panda".to_string()),
             ),
             (&"cutest_animal_in_zoo".to_owned(), &FieldType::String)
         )
@@ -384,7 +384,7 @@ mod tests {
         assert!(validate_field(
             (
                 &"most_boring_animal_in_zoo".to_owned(),
-                &PlainValue::Bytes("Llama".as_bytes().to_vec()),
+                &PlainValue::BytesOrRelation("Llama".as_bytes().to_vec()),
             ),
             (
                 &"most_boring_animal_in_zoo".to_owned(),
@@ -401,13 +401,13 @@ mod tests {
     }
 
     #[rstest]
-    #[case(PlainValue::Bytes("Handa".as_bytes().to_vec()), FieldType::Bytes)]
-    #[case(PlainValue::StringOrRelation("Handa".to_string()), FieldType::String)]
+    #[case(PlainValue::BytesOrRelation("Handa".as_bytes().to_vec()), FieldType::Bytes)]
+    #[case(PlainValue::String("Handa".to_string()), FieldType::String)]
     #[case(PlainValue::Integer(512), FieldType::Integer)]
     #[case(PlainValue::Float(1024.32), FieldType::Float)]
     #[case(PlainValue::Boolean(true), FieldType::Boolean)]
     #[case(
-        PlainValue::Bytes(random_hash().to_bytes()),
+        PlainValue::BytesOrRelation(random_hash().to_bytes()),
         FieldType::Relation(schema_id(SCHEMA_ID))
     )]
     #[case(
@@ -437,7 +437,7 @@ mod tests {
 
     #[rstest]
     #[case(
-        PlainValue::Bytes("The Zookeeper".as_bytes().to_vec()),
+        PlainValue::BytesOrRelation("The Zookeeper".as_bytes().to_vec()),
         FieldType::Integer,
         "invalid field type 'bytes', expected 'int'"
     )]
@@ -457,7 +457,7 @@ mod tests {
         "invalid field type 'float', expected 'int'"
     )]
     #[case(
-        PlainValue::Bytes(HASH.as_bytes().to_vec()),
+        PlainValue::BytesOrRelation(HASH.as_bytes().to_vec()),
         FieldType::RelationList(schema_id(SCHEMA_ID)),
         "invalid field type 'bytes', expected 'relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)'",
     )]
@@ -482,7 +482,7 @@ mod tests {
             ("fans", FieldType::RelationList(schema_id(SCHEMA_ID))),
         ],
         vec![
-            ("message", PlainValue::StringOrRelation("Hello, Mr. Handa!".to_string())),
+            ("message", PlainValue::String("Hello, Mr. Handa!".to_string())),
             ("age", PlainValue::Integer(41)),
             ("fans", PlainValue::AmbiguousRelation(vec![random_hash()])),
         ],
@@ -495,9 +495,9 @@ mod tests {
             ("d", FieldType::Bytes),
         ],
         vec![
-            ("d", PlainValue::Bytes(generate_random_bytes(100))),
+            ("d", PlainValue::BytesOrRelation(generate_random_bytes(100))),
             ("c", PlainValue::Boolean(false)),
-            ("b", PlainValue::StringOrRelation("Panda-San!".to_string())),
+            ("b", PlainValue::String("Panda-San!".to_string())),
             ("a", PlainValue::Integer(6)),
         ],
     )]
@@ -543,7 +543,7 @@ mod tests {
         ],
         vec![
             ("fans", PlainValue::AmbiguousRelation(vec![random_hash()])),
-            ("message", PlainValue::Bytes("Hello, Mr. Handa!".as_bytes().to_vec())),
+            ("message", PlainValue::BytesOrRelation("Hello, Mr. Handa!".as_bytes().to_vec())),
         ],
         "field 'fans' does not match schema: expected field name 'message'"
     )]
@@ -554,7 +554,7 @@ mod tests {
             ("message", FieldType::String),
         ],
         vec![
-            ("message", PlainValue::Bytes("Panda-San!".as_bytes().to_vec())),
+            ("message", PlainValue::BytesOrRelation("Panda-San!".as_bytes().to_vec())),
         ],
         "field 'message' does not match schema: expected field name 'age'"
     )]
@@ -567,8 +567,8 @@ mod tests {
         ],
         vec![
             ("is_boring", PlainValue::Boolean(false)),
-            ("cuteness_level", PlainValue::Bytes("Very high! I promise!".as_bytes().to_vec())),
-            ("name", PlainValue::Bytes("The really not boring Llama!!!".as_bytes().to_vec())),
+            ("cuteness_level", PlainValue::BytesOrRelation("Very high! I promise!".as_bytes().to_vec())),
+            ("name", PlainValue::BytesOrRelation("The really not boring Llama!!!".as_bytes().to_vec())),
         ],
         "field 'cuteness_level' does not match schema: invalid field type 'bytes', expected 'float'"
     )]
@@ -622,7 +622,7 @@ mod tests {
             ("is_cute", FieldType::Boolean),
         ],
         vec![
-            ("message", PlainValue::StringOrRelation("Hello, Mr. Handa!".to_string())),
+            ("message", PlainValue::String("Hello, Mr. Handa!".to_string())),
         ],
     )]
     #[case(
@@ -633,7 +633,7 @@ mod tests {
         ],
         vec![
             ("age", PlainValue::Integer(41)),
-            ("message", PlainValue::StringOrRelation("Hello, Mr. Handa!".to_string())),
+            ("message", PlainValue::String("Hello, Mr. Handa!".to_string())),
         ],
     )]
     fn correct_only_given_fields(
@@ -671,7 +671,7 @@ mod tests {
             ("is_cute", FieldType::Boolean),
         ],
         vec![
-            ("spam", PlainValue::Bytes("PANDA IS THE CUTEST!".as_bytes().to_vec())),
+            ("spam", PlainValue::BytesOrRelation("PANDA IS THE CUTEST!".as_bytes().to_vec())),
         ],
         "unexpected fields found: 'spam'",
     )]
@@ -684,8 +684,8 @@ mod tests {
         vec![
             ("is_cute", PlainValue::Boolean(false)),
             ("age", PlainValue::Integer(41)),
-            ("message", PlainValue::Bytes("Hello, Mr. Handa!".as_bytes().to_vec())),
-            ("response", PlainValue::Bytes("Good bye!".as_bytes().to_vec())),
+            ("message", PlainValue::BytesOrRelation("Hello, Mr. Handa!".as_bytes().to_vec())),
+            ("response", PlainValue::BytesOrRelation("Good bye!".as_bytes().to_vec())),
         ],
         "unexpected fields found: 'message', 'response'",
     )]
@@ -761,7 +761,7 @@ mod tests {
         plain_fields
             .insert(
                 "icecream",
-                PlainValue::StringOrRelation("Almond".to_string()),
+                PlainValue::String("Almond".to_string()),
             )
             .unwrap();
         plain_fields
