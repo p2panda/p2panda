@@ -19,7 +19,11 @@ use crate::serde::{deserialize_hex, serialize_hex_bytes};
 /// `validate_operation`. Read the module-level documentation for more information.
 #[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub struct EncodedOperation(
-    #[serde(serialize_with = "serialize_hex_bytes", deserialize_with = "deserialize_hex")] Vec<u8>,
+    #[serde(
+        serialize_with = "serialize_hex_bytes",
+        deserialize_with = "deserialize_hex"
+    )]
+    Vec<u8>,
 );
 
 impl EncodedOperation {

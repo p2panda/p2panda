@@ -23,7 +23,11 @@ pub const SIGNATURE_SIZE: usize = ED25519_SIGNATURE_SIZE;
 /// instance. Read the module-level documentation for more information.
 #[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub struct EncodedEntry(
-    #[serde(serialize_with = "serialize_hex_bytes", deserialize_with = "deserialize_hex")] Vec<u8>,
+    #[serde(
+        serialize_with = "serialize_hex_bytes",
+        deserialize_with = "deserialize_hex"
+    )]
+    Vec<u8>,
 );
 
 impl EncodedEntry {

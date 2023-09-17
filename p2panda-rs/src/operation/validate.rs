@@ -268,10 +268,10 @@ mod tests {
     use crate::operation::plain::PlainOperation;
     use crate::operation::{EncodedOperation, OperationAction, OperationBuilder};
     use crate::schema::{FieldType, Schema, SchemaId};
+    use crate::serde::hex_string_to_bytes;
     use crate::test_utils::constants::{HASH, SCHEMA_ID};
     use crate::test_utils::fixtures::{document_id, document_view_id, schema, schema_id, Fixture};
     use crate::test_utils::templates::version_fixtures;
-    use crate::serde::hex_string_to_bytes;
 
     use super::validate_operation;
 
