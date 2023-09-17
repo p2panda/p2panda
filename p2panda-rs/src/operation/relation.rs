@@ -408,7 +408,10 @@ mod tests {
         let bytes = serialize_from(PinnedRelation::new(
             DocumentViewId::from_str(hash_str).unwrap(),
         ));
-        assert_eq!(bytes, serialize_value(cbor!([hash_str])));
+        assert_eq!(
+            bytes,
+            serialize_value(cbor!([[Hash::new(hash_str).unwrap()]]))
+        );
     }
 
     #[test]
