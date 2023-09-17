@@ -3,7 +3,7 @@
 use std::fmt::Display;
 use std::str::FromStr;
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::hash::{Hash, HashId};
 use crate::operation::error::OperationIdError;
@@ -70,7 +70,7 @@ impl Human for OperationId {
         format!("<Operation {}>", &self.0.as_str()[offset..])
     }
 }
-// 
+//
 // impl<'de> Deserialize<'de> for OperationId {
 //     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 //     where
@@ -78,11 +78,11 @@ impl Human for OperationId {
 //     {
 //         // Deserialize into `Hash` struct
 //         let hash: Hash = Deserialize::deserialize(deserializer)?;
-// 
+//
 //         // Check format
 //         hash.validate()
 //             .map_err(|err| serde::de::Error::custom(format!("invalid operation id, {}", err)))?;
-// 
+//
 //         Ok(Self(hash))
 //     }
 // }

@@ -133,9 +133,9 @@ impl From<&OperationFields> for PlainFields {
                 OperationValue::Integer(int) => PlainValue::Integer(*int),
                 OperationValue::Float(float) => PlainValue::Float(*float),
                 OperationValue::String(str) => PlainValue::String(str.to_owned()),
-                OperationValue::Relation(relation) => {
-                    PlainValue::BytesOrRelation(hex::decode(relation.document_id().as_str()).unwrap())
-                }
+                OperationValue::Relation(relation) => PlainValue::BytesOrRelation(
+                    hex::decode(relation.document_id().as_str()).unwrap(),
+                ),
                 OperationValue::RelationList(list) => list.document_ids().to_vec().into(),
                 OperationValue::PinnedRelation(relation) => relation.view_id().to_owned().into(),
                 OperationValue::PinnedRelationList(list) => {
@@ -210,7 +210,10 @@ mod tests {
             .insert("it_works", PlainValue::Boolean(true))
             .unwrap();
         fields
-            .insert("message", PlainValue::BytesOrRelation("mjau".as_bytes().to_vec()))
+            .insert(
+                "message",
+                PlainValue::BytesOrRelation("mjau".as_bytes().to_vec()),
+            )
             .unwrap();
 
         // This field was inserted last but will be ordered first

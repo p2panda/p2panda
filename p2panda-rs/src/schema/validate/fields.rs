@@ -759,10 +759,7 @@ mod tests {
         // Construct plain fields
         let mut plain_fields = PlainFields::new();
         plain_fields
-            .insert(
-                "icecream",
-                PlainValue::String("Almond".to_string()),
-            )
+            .insert("icecream", PlainValue::String("Almond".to_string()))
             .unwrap();
         plain_fields
             .insert("degree", PlainValue::Float(6.12))

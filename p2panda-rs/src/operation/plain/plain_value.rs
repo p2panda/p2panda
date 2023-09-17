@@ -236,10 +236,7 @@ mod tests {
             "bytes",
             PlainValue::BytesOrRelation("test".as_bytes().into()).field_type()
         );
-        assert_eq!(
-            "str",
-            PlainValue::String("test".into()).field_type()
-        );
+        assert_eq!("str", PlainValue::String("test".into()).field_type());
         assert_eq!(
             "hash[]",
             PlainValue::AmbiguousRelation(vec![random_hash()]).field_type()
@@ -256,10 +253,7 @@ mod tests {
             PlainValue::BytesOrRelation("hellö".as_bytes().to_vec()),
             "hellö".as_bytes().into()
         );
-        assert_eq!(
-            PlainValue::String("hellö".to_string()),
-            "hellö".into()
-        );
+        assert_eq!(PlainValue::String("hellö".to_string()), "hellö".into());
 
         // Relation types
         assert_eq!(
