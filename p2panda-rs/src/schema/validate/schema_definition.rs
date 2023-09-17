@@ -3,6 +3,7 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
+use crate::hash::Hash;
 use crate::operation::plain::{PlainFields, PlainValue};
 use crate::schema::validate::error::SchemaDefinitionError;
 
@@ -32,7 +33,7 @@ pub fn validate_description(value: &str) -> bool {
 /// Checks "fields" field of operations with "schema_definition_v1" schema id.
 ///
 /// 1. A schema must have at most 1024 fields
-fn validate_fields(value: &Vec<Vec<String>>) -> bool {
+fn validate_fields(value: &Vec<Vec<Hash>>) -> bool {
     value.len() <= 1024
 }
 
@@ -97,8 +98,7 @@ mod test {
     use rstest::rstest;
 
     use crate::operation::plain::{PlainFields, PlainValue};
-    use crate::test_utils::constants::HASH;
-    use crate::test_utils::fixtures::random_document_view_id;
+    use crate::test_utils::fixtures::{random_document_view_id, random_hash};
 
     use super::{
         validate_description, validate_fields, validate_name, validate_schema_definition_v1_fields,
@@ -130,13 +130,14 @@ mod test {
     #[test]
     fn check_schema_fields() {
         let mut many_fields = Vec::new();
+        let hash = random_hash();
 
         for _ in 0..1200 {
-            many_fields.push(vec![HASH.to_owned()]);
+            many_fields.push(vec![hash.clone()]);
         }
 
         assert!(!validate_fields(&many_fields));
-        assert!(validate_fields(&vec![vec![HASH.to_owned()]]));
+        assert!(validate_fields(&vec![vec![hash]]));
     }
 
     #[rstest]
