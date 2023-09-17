@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::fmt;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
 use arrayvec::ArrayVec;
 use bamboo_rs_core_ed25519_yasmf::yasmf_hash::new_blake3;
-use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 use serde::{Deserialize, Serialize};
+use serde_bytes::ByteBuf;
+use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
 use crate::hash::error::HashError;
-use crate::{Human, Validate};
 use crate::serde::serialize_hex_string;
+use crate::{Human, Validate};
 
 /// Size of p2panda entries' hashes.
 pub const HASH_SIZE: usize = BLAKE3_HASH_SIZE;
@@ -120,11 +121,11 @@ impl<'de> Deserialize<'de> for Hash {
         D: serde::Deserializer<'de>,
     {
         // Deserialize hash string
-        let hash: String = Deserialize::deserialize(deserializer)?;
+        let hash_bytes: ByteBuf = Deserialize::deserialize(deserializer)?;
+        let hash_str = hex::encode(hash_bytes);
 
         // Convert and validate format
-        hash.try_into()
-            .map_err(|err: HashError| serde::de::Error::custom(err.to_string()))
+        Hash::new(&hash_str).map_err(|err: HashError| serde::de::Error::custom(err.to_string()))
     }
 }
 
@@ -182,8 +183,11 @@ mod tests {
     use std::collections::HashMap;
     use std::convert::{TryFrom, TryInto};
 
+    use ciborium::cbor;
+    use serde_bytes::ByteBuf;
     use yasmf_hash::YasmfHash;
 
+    use crate::serde::{deserialize_into, serialize_from, serialize_value};
     use crate::Human;
 
     use super::{Blake3ArrayVec, Hash};
@@ -261,5 +265,35 @@ mod tests {
         let hash = Hash::new(hash_str).unwrap();
 
         assert_eq!(hash.display(), "<Hash 496543>");
+    }
+
+    #[test]
+    fn serialize() {
+        let bytes = serialize_from(
+            Hash::new("0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805")
+                .unwrap(),
+        );
+        assert_eq!(
+            bytes,
+            vec![
+                88, 34, 0, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159, 251,
+                204, 40, 19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 5
+            ]
+        );
+    }
+
+    #[test]
+    fn deserialize() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let hash_bytes = hex::decode(hash_str).unwrap();
+        let hash: Hash =
+            deserialize_into(&serialize_value(cbor!(ByteBuf::from(hash_bytes)))).unwrap();
+        assert_eq!(Hash::new(hash_str).unwrap(), hash);
+
+        // Invalid hashes
+        let invalid_hash = deserialize_into::<Hash>(&serialize_value(cbor!("1234")));
+        assert!(invalid_hash.is_err());
+        let invalid_hash = deserialize_into::<Hash>(&serialize_value(cbor!("xyz".as_bytes())));
+        assert!(invalid_hash.is_err(), "{:#?}", invalid_hash);
     }
 }
