@@ -169,12 +169,6 @@ impl TryFrom<&[String]> for DocumentViewId {
     }
 }
 
-impl From<&[OperationId]> for DocumentViewId {
-    fn from(operation_ids: &[OperationId]) -> Self {
-        Self::new(operation_ids)
-    }
-}
-
 /// Convenience method converting a single [`OperationId`] into a document view id.
 ///
 /// Converts an `OperationId` instance into a `DocumentViewId`, assuming that this document view
