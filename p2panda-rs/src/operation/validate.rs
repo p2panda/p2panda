@@ -261,6 +261,7 @@ mod tests {
     use ciborium::value::{Error, Value};
     use rstest::rstest;
     use rstest_reuse::apply;
+    use serde_bytes::ByteBuf;
 
     use crate::document::{DocumentId, DocumentViewId};
     use crate::operation::decode::decode_operation;
@@ -341,10 +342,10 @@ mod tests {
         cbor!([
             1, 0, SCHEMA_ID,
             {
-                "country" => "xyz",
+                "country" => ByteBuf::from("xyz"),
             },
         ]),
-        "field 'country' does not match schema: invalid hex encoding in hash string"
+        "field 'country' does not match schema: invalid hash length 3 bytes, expected 34 bytes"
     )]
     #[case::missing_field(
         vec![
