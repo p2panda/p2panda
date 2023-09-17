@@ -13,7 +13,6 @@ use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
 use crate::hash::error::HashError;
 use crate::hash::HashId;
-use crate::serde::serialize_hex_string;
 use crate::{Human, Validate};
 
 /// Size of p2panda entries' hashes.
@@ -28,8 +27,8 @@ pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
 /// to the Bamboo specification.
 ///
 /// [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
-#[derive(Clone, Debug, Ord, PartialOrd, PartialEq, Eq, StdHash, Serialize)]
-pub struct Hash(#[serde(serialize_with = "serialize_hex_string")] String);
+#[derive(Clone, Debug, Ord, PartialOrd, PartialEq, Eq, StdHash)]
+pub struct Hash(String);
 
 impl Hash {
     /// Validates and wraps encoded hash string into new `Hash` instance.
@@ -116,13 +115,32 @@ impl Human for Hash {
     }
 }
 
+impl Serialize for Hash {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if serializer.is_human_readable() {
+            self.as_str().serialize(serializer)
+        } else {
+            ByteBuf::from(self.to_bytes()).serialize(serializer)
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for Hash {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         // Deserialize hash string
-        let hash_bytes: ByteBuf = Deserialize::deserialize(deserializer)?;
+        let hash_bytes: ByteBuf = if deserializer.is_human_readable() {
+            let bytes: Vec<u8> = hex::serde::deserialize(deserializer)?;
+            ByteBuf::from(bytes)
+        } else {
+            <ByteBuf>::deserialize(deserializer)?
+        };
+
         let hash_str = hex::encode(hash_bytes);
 
         // Convert and validate format

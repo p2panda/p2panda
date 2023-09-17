@@ -30,21 +30,6 @@ where
     }
 }
 
-/// Helper method for `serde` to serialize a hex string to bytes only when the target is not human
-/// readable output.
-pub fn serialize_hex_string<S>(value: &impl ToString, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    if serializer.is_human_readable() {
-        hex::serde::serialize(value.to_string(), serializer)
-    } else {
-        let bytes = hex::decode(value.to_string())
-            .map_err(|err| serde::ser::Error::custom(format!("{err}")))?;
-        SerdeBytes::new(&bytes).serialize(serializer)
-    }
-}
-
 #[cfg(any(feature = "test-utils", test))]
 /// Test helper for decoding hex strings into bytes.
 pub fn hex_string_to_bytes(string: &str) -> SerdeByteBuf {

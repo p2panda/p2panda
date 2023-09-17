@@ -10,5 +10,5 @@ mod u64_str;
 pub use cbor::{deserialize_into, serialize_from, serialize_value};
 #[cfg(any(feature = "test-utils", test))]
 pub use hex_str::hex_string_to_bytes;
-pub use hex_str::{deserialize_hex, serialize_hex_bytes, serialize_hex_string};
+pub use hex_str::{deserialize_hex, serialize_hex_bytes};
 pub use u64_str::StringOrU64;

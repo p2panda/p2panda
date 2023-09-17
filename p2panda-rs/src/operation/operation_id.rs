@@ -13,7 +13,7 @@ use crate::{Human, Validate};
 ///
 /// An `OperationId` is the hash of the [`Entry`](crate::entry::Entry) with which an operation was
 /// published.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialOrd, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct OperationId(Hash);
 
 impl OperationId {
@@ -70,22 +70,22 @@ impl Human for OperationId {
         format!("<Operation {}>", &self.0.as_str()[offset..])
     }
 }
-
-impl<'de> Deserialize<'de> for OperationId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Deserialize into `Hash` struct
-        let hash: Hash = Deserialize::deserialize(deserializer)?;
-
-        // Check format
-        hash.validate()
-            .map_err(|err| serde::de::Error::custom(format!("invalid operation id, {}", err)))?;
-
-        Ok(Self(hash))
-    }
-}
+// 
+// impl<'de> Deserialize<'de> for OperationId {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//     where
+//         D: Deserializer<'de>,
+//     {
+//         // Deserialize into `Hash` struct
+//         let hash: Hash = Deserialize::deserialize(deserializer)?;
+// 
+//         // Check format
+//         hash.validate()
+//             .map_err(|err| serde::de::Error::custom(format!("invalid operation id, {}", err)))?;
+// 
+//         Ok(Self(hash))
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
