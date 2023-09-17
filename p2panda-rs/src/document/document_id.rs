@@ -82,23 +82,6 @@ impl FromStr for DocumentId {
         Ok(Self(s.parse::<OperationId>()?))
     }
 }
-//
-// impl<'de> Deserialize<'de> for DocumentId {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         D: serde::Deserializer<'de>,
-//     {
-//         // Deserialize into `OperationId` struct
-//         let operation_id: OperationId = Deserialize::deserialize(deserializer)?;
-//
-//         // Check format
-//         operation_id
-//             .validate()
-//             .map_err(|err| serde::de::Error::custom(format!("invalid operation id, {}", err)))?;
-//
-//         Ok(Self(operation_id))
-//     }
-// }
 
 #[cfg(test)]
 mod tests {

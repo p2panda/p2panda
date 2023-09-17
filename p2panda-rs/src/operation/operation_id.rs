@@ -70,22 +70,6 @@ impl Human for OperationId {
         format!("<Operation {}>", &self.0.as_str()[offset..])
     }
 }
-//
-// impl<'de> Deserialize<'de> for OperationId {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         D: Deserializer<'de>,
-//     {
-//         // Deserialize into `Hash` struct
-//         let hash: Hash = Deserialize::deserialize(deserializer)?;
-//
-//         // Check format
-//         hash.validate()
-//             .map_err(|err| serde::de::Error::custom(format!("invalid operation id, {}", err)))?;
-//
-//         Ok(Self(hash))
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
