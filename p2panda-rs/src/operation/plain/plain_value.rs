@@ -6,7 +6,9 @@ use ciborium::Value;
 use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentId, DocumentViewId};
+use crate::hash::Hash;
 use crate::operation::error::PlainValueError;
+use crate::operation::OperationId;
 
 /// Operation field values which have not been checked against a schema yet.
 ///
@@ -36,10 +38,10 @@ pub enum PlainValue {
 
     /// List of strings which can either be a pinned relation (list of operation ids) a relation
     /// list (list of document ids) or an empty pinned relation list.
-    AmbiguousRelation(Vec<String>),
+    AmbiguousRelation(Vec<Hash>),
 
     /// List of a list of strings which is a pinned relation list.
-    PinnedRelationList(Vec<Vec<String>>),
+    PinnedRelationList(Vec<Vec<Hash>>),
 }
 
 impl PlainValue {
@@ -108,8 +110,8 @@ impl From<String> for PlainValue {
     }
 }
 
-impl From<Vec<String>> for PlainValue {
-    fn from(value: Vec<String>) -> Self {
+impl From<Vec<Hash>> for PlainValue {
+    fn from(value: Vec<Hash>) -> Self {
         PlainValue::AmbiguousRelation(value)
     }
 }
@@ -122,45 +124,25 @@ impl From<&str> for PlainValue {
 
 impl From<DocumentId> for PlainValue {
     fn from(value: DocumentId) -> Self {
-        PlainValue::StringOrRelation(value.to_string())
+        PlainValue::Bytes(hex::decode(value.as_str()).unwrap())
     }
 }
 
 impl From<Vec<DocumentId>> for PlainValue {
     fn from(value: Vec<DocumentId>) -> Self {
-        PlainValue::AmbiguousRelation(
-            value
-                .iter()
-                .map(|document_id| document_id.to_string())
-                .collect(),
-        )
+        PlainValue::AmbiguousRelation(value.into())
     }
 }
 
 impl From<DocumentViewId> for PlainValue {
     fn from(value: DocumentViewId) -> Self {
-        PlainValue::AmbiguousRelation(
-            value
-                .iter()
-                .map(|operation_id| operation_id.to_string())
-                .collect(),
-        )
+        PlainValue::AmbiguousRelation(value.into())
     }
 }
 
 impl From<Vec<DocumentViewId>> for PlainValue {
     fn from(value: Vec<DocumentViewId>) -> Self {
-        PlainValue::PinnedRelationList(
-            value
-                .iter()
-                .map(|document_view_id| {
-                    document_view_id
-                        .iter()
-                        .map(|operation_id| operation_id.to_string())
-                        .collect()
-                })
-                .collect(),
-        )
+        PlainValue::PinnedRelationList(value.into())
     }
 }
 
@@ -189,17 +171,21 @@ fn cbor_value_to_plain_value(value: Value) -> Result<PlainValue, PlainValueError
 fn cbor_array_to_plain_value_list(array: Vec<Value>) -> Result<PlainValue, PlainValueError> {
     // First attempt to parse this vec of values into a vec of strings. If this succeeds it means
     // this is an `AmbiguousRelation`
-    let ambiguous_relation: Result<Vec<String>, _> = array
+    let ambiguous_relation: Result<Vec<Hash>, _> = array
         .iter()
-        .map(|value| match value.as_text() {
-            Some(text) => Ok(text.to_string()),
+        .map(|value| match value.as_bytes() {
+            Some(bytes) => {
+                let hex_str = hex::encode(bytes);
+                let hash = Hash::new(&hex_str).map_err(|_| PlainValueError::UnsupportedValue)?;
+                Ok(hash)
+            }
             None => Err(PlainValueError::UnsupportedValue),
         })
         .collect();
 
     // If this was successful we stop here and return the value.
-    if let Ok(strings) = ambiguous_relation {
-        return Ok(PlainValue::AmbiguousRelation(strings));
+    if let Ok(hashes) = ambiguous_relation {
+        return Ok(PlainValue::AmbiguousRelation(hashes));
     };
 
     // Next we try and parse into a vec of `Vec<String>` which means this is a
@@ -210,10 +196,15 @@ fn cbor_array_to_plain_value_list(array: Vec<Value>) -> Result<PlainValue, Plain
             Some(array) => Ok(array),
             None => Err(PlainValueError::UnsupportedValue),
         }?;
-        let pinned_relation: Result<Vec<String>, _> = inner_array
+        let pinned_relation: Result<Vec<Hash>, _> = inner_array
             .iter()
-            .map(|value| match value.as_text() {
-                Some(text) => Ok(text.to_string()),
+            .map(|value| match value.as_bytes() {
+                Some(bytes) => {
+                    let hex_str = hex::encode(bytes);
+                    let hash =
+                        Hash::new(&hex_str).map_err(|_| PlainValueError::UnsupportedValue)?;
+                    Ok(hash)
+                }
                 None => Err(PlainValueError::UnsupportedValue),
             })
             .collect();
@@ -231,8 +222,9 @@ mod tests {
     use serde_bytes::ByteBuf;
 
     use crate::document::{DocumentId, DocumentViewId};
-    use crate::serde::{deserialize_into, serialize_from, serialize_value};
-    use crate::test_utils::fixtures::{document_id, document_view_id};
+    use crate::hash::Hash;
+    use crate::serde::{deserialize_into, hex_string_to_bytes, serialize_from, serialize_value};
+    use crate::test_utils::fixtures::{document_id, document_view_id, random_hash};
 
     use super::PlainValue;
 
@@ -250,7 +242,7 @@ mod tests {
         );
         assert_eq!(
             "str[]",
-            PlainValue::AmbiguousRelation(vec!["test".to_string()]).field_type()
+            PlainValue::AmbiguousRelation(vec![random_hash()]).field_type()
         );
     }
 
@@ -271,19 +263,19 @@ mod tests {
 
         // Relation types
         assert_eq!(
-            PlainValue::StringOrRelation(document_id.to_string()),
+            PlainValue::Bytes(document_id.to_bytes()),
             document_id.clone().into()
         );
         assert_eq!(
-            PlainValue::AmbiguousRelation(vec![document_id.to_string()]),
+            PlainValue::AmbiguousRelation(vec![document_id.into()]),
             vec![document_id].into()
         );
         assert_eq!(
-            PlainValue::AmbiguousRelation(vec![document_view_id.to_string()]),
+            PlainValue::AmbiguousRelation(document_view_id.into()),
             document_view_id.clone().into()
         );
         assert_eq!(
-            PlainValue::PinnedRelationList(vec![vec![document_view_id.to_string()]]),
+            PlainValue::PinnedRelationList(document_view_id.into()),
             vec![document_view_id].into()
         );
     }
@@ -296,21 +288,23 @@ mod tests {
         );
 
         assert_eq!(
-            serialize_from(PlainValue::AmbiguousRelation(vec![
-                "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4".to_string()
-            ])),
-            serialize_value(cbor!([
+            serialize_from(PlainValue::AmbiguousRelation(vec![Hash::new(
                 "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4"
-            ]))
+            )
+            .unwrap()])),
+            serialize_value(cbor!([hex_string_to_bytes(
+                "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4"
+            )]))
         );
 
         assert_eq!(
-            serialize_from(PlainValue::PinnedRelationList(vec![vec![
-                "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4".to_string()
-            ]])),
-            serialize_value(cbor!([[
+            serialize_from(PlainValue::PinnedRelationList(vec![vec![Hash::new(
                 "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4"
-            ]]))
+            )
+            .unwrap()]])),
+            serialize_value(cbor!([[hex_string_to_bytes(
+                "002089e5c6f0cbc0e8d8c92050dffc60e3217b556d62eace0d2e5d374c70a1d0c2d4"
+            )]]))
         );
 
         assert_eq!(
