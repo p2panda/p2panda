@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import { hexToBytes } from './utils';
 import {
   KeyPair,
   OperationFields,
@@ -227,13 +228,13 @@ describe('WebAssembly interface', () => {
       // Test operation fields map
       const operationFields = plainOperation.fields;
 
-      /// String values get decoded as bytes
       expect(operationFields.get('a')).toEqual('Hello, Panda!');
       expect(operationFields.get('b')).toEqual(BigInt(123));
       expect(operationFields.get('c')).toEqual(12.3);
       expect(operationFields.get('d')).toEqual(true);
       expect(operationFields.get('e')).toEqual(new Uint8Array([0, 1, 2, 3]));
-      expect(operationFields.get('f')).toEqual(hash1);
+      // The hash of a relation on plain operation field is encoded to bytes.
+      expect(operationFields.get('f')).toEqual(hexToBytes(hash1));
       expect(operationFields.get('g')).toEqual([hash2, hash3]);
       expect(operationFields.get('h')).toEqual([hash4]);
       expect(operationFields.get('i')).toEqual([[hash5], [hash6, hash7]]);
