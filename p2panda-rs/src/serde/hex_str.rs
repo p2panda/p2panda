@@ -39,13 +39,14 @@ where
     if serializer.is_human_readable() {
         hex::serde::serialize(value.to_string(), serializer)
     } else {
-        let bytes =
-            hex::decode(value.to_string()).map_err(|err| serde::ser::Error::custom(format!("{err}")))?;
+        let bytes = hex::decode(value.to_string())
+            .map_err(|err| serde::ser::Error::custom(format!("{err}")))?;
         SerdeBytes::new(&bytes).serialize(serializer)
     }
 }
 
 #[cfg(any(feature = "test-utils", test))]
+/// Test helper for decoding hex strings into bytes.
 pub fn hex_string_to_bytes(string: &str) -> SerdeByteBuf {
     let bytes: Vec<u8> = hex::decode(string).expect("Valid hex string");
     SerdeByteBuf::from(bytes)

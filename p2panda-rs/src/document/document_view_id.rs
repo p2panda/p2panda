@@ -193,9 +193,9 @@ impl TryFrom<&[Hash]> for DocumentViewId {
     }
 }
 
-impl Into<Vec<Hash>> for DocumentViewId {
-    fn into(self) -> Vec<Hash> {
-        self.iter().map(HashId::as_hash).cloned().collect()
+impl From<DocumentViewId> for Vec<Hash> {
+    fn from(value: DocumentViewId) -> Self {
+        value.iter().map(HashId::as_hash).cloned().collect()
     }
 }
 

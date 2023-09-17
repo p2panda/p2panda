@@ -3,6 +3,7 @@
 //! Interfaces for interactions for hash-like structs.
 use crate::hash::Hash;
 
+/// Trait implemented on types which are derived from a hash.
 pub trait HashId {
     /// Return the hash this id is derived from.
     fn as_hash(&self) -> &Hash;

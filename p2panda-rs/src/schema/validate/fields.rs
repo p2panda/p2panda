@@ -3,11 +3,10 @@
 //! Various methods to validate an operation against a schema.
 use std::convert::TryInto;
 
-use crate::document::error::{DocumentIdError, DocumentViewIdError};
+use crate::document::error::DocumentViewIdError;
 use crate::document::{DocumentId, DocumentViewId};
 use crate::hash::error::HashError;
 use crate::hash::Hash;
-use crate::operation::error::RelationListError;
 use crate::operation::plain::{PlainFields, PlainValue};
 use crate::operation::{
     OperationFields, OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
