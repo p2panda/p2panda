@@ -11,6 +11,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
 use crate::document::DocumentViewId;
+use crate::hash::{Hash, HashId};
 use crate::operation::plain::PlainValue;
 use crate::operation::traits::{Actionable, Schematic};
 use crate::operation::validate::validate_operation_format;
@@ -46,7 +47,9 @@ fn plain_to_js_value(plain_value: &PlainValue) -> Result<JsValue, JsValue> {
         PlainValue::Boolean(value) => Ok(JsValue::from_bool(value.to_owned())),
         PlainValue::Integer(value) => Ok(JsValue::from(value.to_owned())),
         PlainValue::Float(value) => Ok(JsValue::from_f64(value.to_owned())),
-        PlainValue::BytesOrRelation(value) => Ok(jserr!(serialize_to_js(&ByteBuf::from(value.to_owned())))),
+        PlainValue::BytesOrRelation(value) => {
+            Ok(jserr!(serialize_to_js(&ByteBuf::from(value.to_owned()))))
+        }
         PlainValue::String(value) => Ok(JsValue::from_str(value)),
         PlainValue::AmbiguousRelation(value) => Ok(jserr!(serialize_to_js(value))),
         PlainValue::PinnedRelationList(value) => Ok(jserr!(serialize_to_js(value))),
@@ -196,7 +199,7 @@ impl OperationFields {
             "pinned_relation" => {
                 let operation_ids: Vec<OperationId> = jserr!(
                     deserialize_from_js(value),
-                    "Expected an array of operation ids for field of type pinned relation list"
+                    "Expected an array of operation ids for field of type pinned relation"
                 );
 
                 // De-duplicate and sort operation ids as the data comes via the programmatic API
