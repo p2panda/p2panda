@@ -132,7 +132,7 @@ mod tests {
             )
             .unwrap(),
         );
-        println!("{}", hex::encode(&bytes));
+
         assert_eq!(
             bytes,
             vec![
