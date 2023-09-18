@@ -13,6 +13,7 @@ use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
 use crate::hash::error::HashError;
 use crate::hash::HashId;
+use crate::serde::deserialize_hex;
 use crate::{Human, Validate};
 
 /// Size of p2panda entries' hashes.
@@ -133,17 +134,11 @@ impl<'de> Deserialize<'de> for Hash {
     where
         D: serde::Deserializer<'de>,
     {
-        // Deserialize hash string
-        let hash_bytes: ByteBuf = if deserializer.is_human_readable() {
-            let bytes: Vec<u8> = hex::serde::deserialize(deserializer)?;
-            ByteBuf::from(bytes)
-        } else {
-            <ByteBuf>::deserialize(deserializer)?
-        };
-
-        let hash_str = hex::encode(hash_bytes);
+        // Deserialize hash bytes.
+        let hash_bytes = deserialize_hex(deserializer)?;
 
         // Convert and validate format
+        let hash_str = hex::encode(hash_bytes);
         Hash::new(&hash_str).map_err(|err: HashError| serde::de::Error::custom(err.to_string()))
     }
 }
