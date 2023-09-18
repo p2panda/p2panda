@@ -289,10 +289,9 @@ mod tests {
 
     #[test]
     fn serialize() {
-        let bytes = serialize_from(
-            Hash::new("0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805")
-                .unwrap(),
-        );
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let hash = Hash::new(hash_str).unwrap();
+        let bytes = serialize_from(hash.clone());
         assert_eq!(
             bytes,
             vec![
@@ -300,6 +299,11 @@ mod tests {
                 204, 40, 19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 5
             ]
         );
+
+        // The `cbor` macro serializes to human readable formats, in this case, hex encoded bytes.
+        let human_readable_cbor = cbor!(hash).unwrap();
+        assert!(human_readable_cbor.is_text());
+        assert_eq!(human_readable_cbor.as_text().unwrap(), hash_str)
     }
 
     #[test]
