@@ -99,17 +99,13 @@ pub enum SchemaDefinitionError {
 #[derive(Error, Debug)]
 #[allow(missing_copy_implementations)]
 pub enum BlobError {
-    /// "length" is greater than the maximum allowed as per specification.
-    #[error("'length' field in blob is over maximum allowed length")]
-    LengthInvalid,
-
     /// "mime_type" is not correctly formatted as per specification.
     #[error("'mime_type' field in blob is wrongly formatted")]
     MimeTypeInvalid,
 
-    /// "pieces" is not correctly formatted as per specification.
-    #[error("'pieces' field in blob is wrongly formatted")]
-    PiecesInvalid,
+    /// "pieces" can not be empty as per specification.
+    #[error("'pieces' field can not be empty")]
+    PiecesEmpty,
 }
 
 /// Custom error types for validating operations against `blob_piece_v1` schema.
