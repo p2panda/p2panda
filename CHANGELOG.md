@@ -14,6 +14,7 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - Remove unused methods from `EntryStore` [#521](https://github.com/p2panda/p2panda/pull/521) `rs`
+- Serialize `Hash` and derived id types from bytes [#525](https://github.com/p2panda/p2panda/pull/525) `rs`
 
 ### Fixed
 

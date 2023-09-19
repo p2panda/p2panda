@@ -21,4 +21,8 @@ pub enum HashError {
     /// Internal error from `yasmf_hash` crate.
     #[error(transparent)]
     YasmfHashError(#[from] yasmf_hash::error::Error),
+
+    /// Internal error from `hex` crate.
+    #[error(transparent)]
+    FromHexError(#[from] hex::FromHexError),
 }

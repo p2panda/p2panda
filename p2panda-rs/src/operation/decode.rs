@@ -51,7 +51,7 @@ mod tests {
     use rstest_reuse::apply;
 
     use crate::operation::EncodedOperation;
-    use crate::serde::serialize_value;
+    use crate::serde::{hex_string_to_bytes, serialize_value};
     use crate::test_utils::constants::{HASH, SCHEMA_ID};
     use crate::test_utils::fixtures::Fixture;
     use crate::test_utils::templates::version_fixtures;
@@ -173,11 +173,11 @@ mod tests {
         "encountered invalid document view id while parsing application schema id: expected sorted operation ids in document view id"
     )]
     #[case::invalid_previous_operations_hex(
-        cbor!([1, 2, SCHEMA_ID, ["this is not a hash"] ]),
-        "invalid hex encoding in hash string"
+        cbor!([1, 2, SCHEMA_ID, [serde_bytes::ByteBuf::from("_correct_num_of_bytes_but_not_hex_")] ]),
+        "can not decode YASMF BLAKE3 hash"
     )]
     #[case::invalid_previous_operations_incomplete(
-        cbor!([1, 2, SCHEMA_ID, ["0020"] ]),
+        cbor!([1, 2, SCHEMA_ID, [hex_string_to_bytes("0020")] ]),
         "invalid hash length 2 bytes, expected 34 bytes"
     )]
     #[case::invalid_previous_operations_array(
@@ -186,16 +186,16 @@ mod tests {
     )]
     #[case::non_canonic_previous_operations_unsorted(
         cbor!([1, 2, SCHEMA_ID, [
-              "0020f0b5a6e87e1a039f18857ee1c0792fd24fe1b3ad962c8950cba6c10290b619e3",
-              "002044ed67b81c26cf2f7c3eb908cf4620d18a0ac3d79bf70d64b2f02d965466a8f0"
+            hex_string_to_bytes("0020f0b5a6e87e1a039f18857ee1c0792fd24fe1b3ad962c8950cba6c10290b619e3"),
+            hex_string_to_bytes("002044ed67b81c26cf2f7c3eb908cf4620d18a0ac3d79bf70d64b2f02d965466a8f0")
         ]]),
         "expected sorted operation ids in document view id"
     )]
     #[case::non_canonic_previous_operations_duplicates(
         cbor!([1, 2, SCHEMA_ID, [
-              "002044ed67b81c26cf2f7c3eb908cf4620d18a0ac3d79bf70d64b2f02d965466a8f0",
-              "0020f0b5a6e87e1a039f18857ee1c0792fd24fe1b3ad962c8950cba6c10290b619e3",
-              "002044ed67b81c26cf2f7c3eb908cf4620d18a0ac3d79bf70d64b2f02d965466a8f0"
+              hex_string_to_bytes("002044ed67b81c26cf2f7c3eb908cf4620d18a0ac3d79bf70d64b2f02d965466a8f0"),
+              hex_string_to_bytes("0020f0b5a6e87e1a039f18857ee1c0792fd24fe1b3ad962c8950cba6c10290b619e3"),
+              hex_string_to_bytes("002044ed67b81c26cf2f7c3eb908cf4620d18a0ac3d79bf70d64b2f02d965466a8f0")
         ]]),
         "expected sorted operation ids in document view id"
     )]
@@ -216,15 +216,15 @@ mod tests {
         "invalid type: map, expected schema id as string"
     )]
     #[case::missing_schema_update(
-        cbor!([1, 1, [HASH, HASH], { "is_cute" => true }]),
+        cbor!([1, 1, [hex_string_to_bytes(HASH), hex_string_to_bytes(HASH)], { "is_cute" => true }]),
         "invalid type: sequence, expected schema id as string"
     )]
     #[case::missing_schema_delete(
-        cbor!([1, 2, [HASH]]),
+        cbor!([1, 2, [hex_string_to_bytes(HASH)]]),
         "invalid type: sequence, expected schema id as string"
     )]
     #[case::invalid_previous_operations_create(
-        cbor!([1, 0, SCHEMA_ID, [HASH], { "is_cute" => true }]),
+        cbor!([1, 0, SCHEMA_ID, [hex_string_to_bytes(HASH)], { "is_cute" => true }]),
         "invalid type: sequence, expected map"
     )]
     #[case::missing_previous_operations_update(
@@ -240,11 +240,11 @@ mod tests {
         "missing fields for this operation action"
     )]
     #[case::missing_fields_update(
-        cbor!([1, 1, SCHEMA_ID, [HASH] ]),
+        cbor!([1, 1, SCHEMA_ID, [hex_string_to_bytes(HASH)] ]),
         "missing fields for this operation action"
     )]
     #[case::invalid_fields_delete(
-        cbor!([1, 2, SCHEMA_ID, [HASH], { "is_wrong" => true }]),
+        cbor!([1, 2, SCHEMA_ID, [hex_string_to_bytes(HASH)], { "is_wrong" => true }]),
         "too many items for this operation action"
     )]
     #[case::too_many_items_create(

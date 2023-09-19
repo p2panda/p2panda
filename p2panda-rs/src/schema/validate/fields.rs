@@ -3,9 +3,10 @@
 //! Various methods to validate an operation against a schema.
 use std::convert::TryInto;
 
-use crate::document::error::{DocumentIdError, DocumentViewIdError};
+use crate::document::error::DocumentViewIdError;
 use crate::document::{DocumentId, DocumentViewId};
-use crate::operation::error::RelationListError;
+use crate::hash::error::HashError;
+use crate::hash::Hash;
 use crate::operation::plain::{PlainFields, PlainValue};
 use crate::operation::{
     OperationFields, OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
@@ -178,7 +179,7 @@ fn validate_field_value(
             }
         }
         FieldType::Bytes => {
-            if let PlainValue::Bytes(bytes) = plain_value {
+            if let PlainValue::BytesOrRelation(bytes) = plain_value {
                 Ok(OperationValue::Bytes(bytes.to_owned()))
             } else {
                 Err(ValidationError::InvalidType(
@@ -208,7 +209,7 @@ fn validate_field_value(
             }
         }
         FieldType::String => {
-            if let PlainValue::StringOrRelation(string) = plain_value {
+            if let PlainValue::String(string) = plain_value {
                 Ok(OperationValue::String(string.to_owned()))
             } else {
                 Err(ValidationError::InvalidType(
@@ -218,11 +219,12 @@ fn validate_field_value(
             }
         }
         FieldType::Relation(_) => {
-            if let PlainValue::StringOrRelation(string) = plain_value {
-                // Convert byte string to document id, check for correctness
-                let document_id: DocumentId = string.parse().map_err(|err: DocumentIdError| {
-                    ValidationError::InvalidValue(err.to_string())
-                })?;
+            if let PlainValue::BytesOrRelation(bytes) = plain_value {
+                // Convert bytes to document id, check for correctness
+                let hex_str = hex::encode(bytes);
+                let hash = Hash::new(&hex_str)
+                    .map_err(|err: HashError| ValidationError::InvalidValue(err.to_string()))?;
+                let document_id: DocumentId = hash.into();
 
                 Ok(OperationValue::Relation(Relation::new(document_id)))
             } else {
@@ -234,19 +236,16 @@ fn validate_field_value(
         }
         FieldType::RelationList(_) => {
             match plain_value {
-                PlainValue::AmbiguousRelation(document_ids_str) => {
-                    // Convert list of strings to list of document ids aka a relation list
-                    let relation_list: RelationList = document_ids_str
-                        .as_slice()
-                        .try_into()
-                        .map_err(|err: RelationListError| {
-                            // Detected an invalid document id
-                            ValidationError::InvalidValue(err.to_string())
-                        })?;
+                PlainValue::AmbiguousRelation(hashes) => {
+                    // Convert list of hashes to list of document ids aka a relation list
+                    let document_ids: Vec<DocumentId> =
+                        hashes.iter().cloned().map(DocumentId::from).collect();
 
                     // Note that we do NOT check for duplicates and ordering here as this information
                     // is semantic!
-                    Ok(OperationValue::RelationList(relation_list))
+                    Ok(OperationValue::RelationList(RelationList::new(
+                        document_ids,
+                    )))
                 }
                 _ => Err(ValidationError::InvalidType(
                     plain_value.field_type().to_owned(),
@@ -255,15 +254,16 @@ fn validate_field_value(
             }
         }
         FieldType::PinnedRelation(_) => {
-            if let PlainValue::AmbiguousRelation(operation_ids_str) = plain_value {
-                // Convert list of strings to list of operation ids aka a document view id, this
+            if let PlainValue::AmbiguousRelation(hashes) = plain_value {
+                // Convert list of hashes to list of operation ids aka a document view id, this
                 // checks if list of operation ids is sorted and without any duplicates
-                let document_view_id: DocumentViewId = operation_ids_str
-                    .as_slice()
-                    .try_into()
-                    .map_err(|err: DocumentViewIdError| {
-                        ValidationError::InvalidDocumentViewId(err.to_string())
-                    })?;
+                let document_view_id: DocumentViewId =
+                    hashes
+                        .as_slice()
+                        .try_into()
+                        .map_err(|err: DocumentViewIdError| {
+                            ValidationError::InvalidDocumentViewId(err.to_string())
+                        })?;
 
                 Ok(OperationValue::PinnedRelation(PinnedRelation::new(
                     document_view_id,
@@ -281,11 +281,11 @@ fn validate_field_value(
                     let document_view_ids: Result<Vec<DocumentViewId>, ValidationError> =
                         document_view_ids_vec
                             .iter()
-                            .map(|operation_ids_str| {
-                                // Convert list of strings to list of operation ids aka a document view
+                            .map(|hashes| {
+                                // Convert list of hashes to list of operation ids aka a document view
                                 // id, this checks if list of operation ids is sorted and without any
                                 // duplicates
-                                let document_view_id: DocumentViewId = operation_ids_str
+                                let document_view_id: DocumentViewId = hashes
                                     .as_slice()
                                     .try_into()
                                     .map_err(|err: DocumentViewIdError| {
@@ -350,8 +350,7 @@ mod tests {
     use crate::operation::{OperationFields, OperationValue};
     use crate::schema::{FieldType, Schema, SchemaId, SchemaName};
     use crate::test_utils::constants::{HASH, SCHEMA_ID};
-    use crate::test_utils::fixtures::document_view_id;
-    use crate::test_utils::fixtures::schema_id;
+    use crate::test_utils::fixtures::{document_view_id, random_hash, schema_id};
     use crate::test_utils::generate_random_bytes;
 
     use super::{
@@ -365,7 +364,7 @@ mod tests {
         assert!(validate_field(
             (
                 &"cutest_animal_in_zoo".to_owned(),
-                &PlainValue::StringOrRelation("Panda".to_string()),
+                &PlainValue::String("Panda".to_string()),
             ),
             (&"cutest_animal_in_zoo".to_owned(), &FieldType::String)
         )
@@ -375,7 +374,7 @@ mod tests {
         assert!(validate_field(
             (
                 &"most_boring_animal_in_zoo".to_owned(),
-                &PlainValue::StringOrRelation("Panda".to_string()),
+                &PlainValue::String("Panda".to_string()),
             ),
             (&"cutest_animal_in_zoo".to_owned(), &FieldType::String)
         )
@@ -385,7 +384,7 @@ mod tests {
         assert!(validate_field(
             (
                 &"most_boring_animal_in_zoo".to_owned(),
-                &PlainValue::Bytes("Llama".as_bytes().to_vec()),
+                &PlainValue::BytesOrRelation("Llama".as_bytes().to_vec()),
             ),
             (
                 &"most_boring_animal_in_zoo".to_owned(),
@@ -402,21 +401,21 @@ mod tests {
     }
 
     #[rstest]
-    #[case(PlainValue::Bytes("Handa".as_bytes().to_vec()), FieldType::Bytes)]
-    #[case(PlainValue::StringOrRelation("Handa".to_string()), FieldType::String)]
+    #[case(PlainValue::BytesOrRelation("Handa".as_bytes().to_vec()), FieldType::Bytes)]
+    #[case(PlainValue::String("Handa".to_string()), FieldType::String)]
     #[case(PlainValue::Integer(512), FieldType::Integer)]
     #[case(PlainValue::Float(1024.32), FieldType::Float)]
     #[case(PlainValue::Boolean(true), FieldType::Boolean)]
     #[case(
-        PlainValue::StringOrRelation(HASH.to_string()),
+        PlainValue::BytesOrRelation(random_hash().to_bytes()),
         FieldType::Relation(schema_id(SCHEMA_ID))
     )]
     #[case(
-        PlainValue::AmbiguousRelation(vec![HASH.to_owned()]),
+        PlainValue::AmbiguousRelation(vec![random_hash()]),
         FieldType::PinnedRelation(schema_id(SCHEMA_ID))
     )]
     #[case(
-        PlainValue::AmbiguousRelation(vec![HASH.to_owned()]),
+        PlainValue::AmbiguousRelation(vec![random_hash()]),
         FieldType::RelationList(schema_id(SCHEMA_ID))
     )]
     #[case(
@@ -424,7 +423,7 @@ mod tests {
         FieldType::RelationList(schema_id(SCHEMA_ID))
     )]
     #[case(
-        PlainValue::PinnedRelationList(vec![vec![HASH.to_owned()]]),
+        PlainValue::PinnedRelationList(vec![vec![random_hash()]]),
         FieldType::PinnedRelationList(schema_id(SCHEMA_ID))
     )]
     #[case(
@@ -438,7 +437,7 @@ mod tests {
 
     #[rstest]
     #[case(
-        PlainValue::Bytes("The Zookeeper".as_bytes().to_vec()),
+        PlainValue::BytesOrRelation("The Zookeeper".as_bytes().to_vec()),
         FieldType::Integer,
         "invalid field type 'bytes', expected 'int'"
     )]
@@ -458,7 +457,7 @@ mod tests {
         "invalid field type 'float', expected 'int'"
     )]
     #[case(
-        PlainValue::Bytes(HASH.as_bytes().to_vec()),
+        PlainValue::BytesOrRelation(HASH.as_bytes().to_vec()),
         FieldType::RelationList(schema_id(SCHEMA_ID)),
         "invalid field type 'bytes', expected 'relation_list(venue_0020c65567ae37efea293e34a9c7d13f8f2bf23dbdc3b5c7b9ab46293111c48fc78b)'",
     )]
@@ -483,9 +482,9 @@ mod tests {
             ("fans", FieldType::RelationList(schema_id(SCHEMA_ID))),
         ],
         vec![
-            ("message", PlainValue::StringOrRelation("Hello, Mr. Handa!".to_string())),
+            ("message", PlainValue::String("Hello, Mr. Handa!".to_string())),
             ("age", PlainValue::Integer(41)),
-            ("fans", PlainValue::AmbiguousRelation(vec![HASH.to_owned()])),
+            ("fans", PlainValue::AmbiguousRelation(vec![random_hash()])),
         ],
     )]
     #[case(
@@ -496,9 +495,9 @@ mod tests {
             ("d", FieldType::Bytes),
         ],
         vec![
-            ("d", PlainValue::Bytes(generate_random_bytes(100))),
+            ("d", PlainValue::BytesOrRelation(generate_random_bytes(100))),
             ("c", PlainValue::Boolean(false)),
-            ("b", PlainValue::StringOrRelation("Panda-San!".to_string())),
+            ("b", PlainValue::String("Panda-San!".to_string())),
             ("a", PlainValue::Integer(6)),
         ],
     )]
@@ -543,8 +542,8 @@ mod tests {
             ("message", FieldType::String),
         ],
         vec![
-            ("fans", PlainValue::AmbiguousRelation(vec![HASH.to_owned()])),
-            ("message", PlainValue::Bytes("Hello, Mr. Handa!".as_bytes().to_vec())),
+            ("fans", PlainValue::AmbiguousRelation(vec![random_hash()])),
+            ("message", PlainValue::BytesOrRelation("Hello, Mr. Handa!".as_bytes().to_vec())),
         ],
         "field 'fans' does not match schema: expected field name 'message'"
     )]
@@ -555,7 +554,7 @@ mod tests {
             ("message", FieldType::String),
         ],
         vec![
-            ("message", PlainValue::Bytes("Panda-San!".as_bytes().to_vec())),
+            ("message", PlainValue::BytesOrRelation("Panda-San!".as_bytes().to_vec())),
         ],
         "field 'message' does not match schema: expected field name 'age'"
     )]
@@ -568,8 +567,8 @@ mod tests {
         ],
         vec![
             ("is_boring", PlainValue::Boolean(false)),
-            ("cuteness_level", PlainValue::Bytes("Very high! I promise!".as_bytes().to_vec())),
-            ("name", PlainValue::Bytes("The really not boring Llama!!!".as_bytes().to_vec())),
+            ("cuteness_level", PlainValue::BytesOrRelation("Very high! I promise!".as_bytes().to_vec())),
+            ("name", PlainValue::BytesOrRelation("The really not boring Llama!!!".as_bytes().to_vec())),
         ],
         "field 'cuteness_level' does not match schema: invalid field type 'bytes', expected 'float'"
     )]
@@ -623,7 +622,7 @@ mod tests {
             ("is_cute", FieldType::Boolean),
         ],
         vec![
-            ("message", PlainValue::StringOrRelation("Hello, Mr. Handa!".to_string())),
+            ("message", PlainValue::String("Hello, Mr. Handa!".to_string())),
         ],
     )]
     #[case(
@@ -634,7 +633,7 @@ mod tests {
         ],
         vec![
             ("age", PlainValue::Integer(41)),
-            ("message", PlainValue::StringOrRelation("Hello, Mr. Handa!".to_string())),
+            ("message", PlainValue::String("Hello, Mr. Handa!".to_string())),
         ],
     )]
     fn correct_only_given_fields(
@@ -672,7 +671,7 @@ mod tests {
             ("is_cute", FieldType::Boolean),
         ],
         vec![
-            ("spam", PlainValue::Bytes("PANDA IS THE CUTEST!".as_bytes().to_vec())),
+            ("spam", PlainValue::BytesOrRelation("PANDA IS THE CUTEST!".as_bytes().to_vec())),
         ],
         "unexpected fields found: 'spam'",
     )]
@@ -685,8 +684,8 @@ mod tests {
         vec![
             ("is_cute", PlainValue::Boolean(false)),
             ("age", PlainValue::Integer(41)),
-            ("message", PlainValue::Bytes("Hello, Mr. Handa!".as_bytes().to_vec())),
-            ("response", PlainValue::Bytes("Good bye!".as_bytes().to_vec())),
+            ("message", PlainValue::BytesOrRelation("Hello, Mr. Handa!".as_bytes().to_vec())),
+            ("response", PlainValue::BytesOrRelation("Good bye!".as_bytes().to_vec())),
         ],
         "unexpected fields found: 'message', 'response'",
     )]
@@ -760,10 +759,7 @@ mod tests {
         // Construct plain fields
         let mut plain_fields = PlainFields::new();
         plain_fields
-            .insert(
-                "icecream",
-                PlainValue::StringOrRelation("Almond".to_string()),
-            )
+            .insert("icecream", PlainValue::String("Almond".to_string()))
             .unwrap();
         plain_fields
             .insert("degree", PlainValue::Float(6.12))
@@ -790,7 +786,7 @@ mod tests {
     #[case::unknown_fields(
         SchemaId::SchemaDefinition(1),
         vec![
-            ("fans", PlainValue::AmbiguousRelation(vec![HASH.to_owned()])),
+            ("fans", PlainValue::AmbiguousRelation(vec![random_hash()])),
         ],
         "field 'fans' does not match schema: expected field name 'description'"
     )]
@@ -808,7 +804,7 @@ mod tests {
         vec![
             ("name", "__invalid_name__".into()),
             ("description", "A short description".into()),
-            ("fields", PlainValue::PinnedRelationList(vec![vec![HASH.to_owned()]]))
+            ("fields", PlainValue::PinnedRelationList(vec![vec![random_hash()]]))
         ],
         "invalid 'schema_definition_v1' operation: 'name' field in schema field definitions is wrongly formatted"
     )]
@@ -825,7 +821,7 @@ mod tests {
         vec![
             ("length", 100.into()),
             ("mime_type", "wrong/mime/type/format".into()),
-            ("pieces", PlainValue::PinnedRelationList(vec![vec![HASH.to_owned()]])),
+            ("pieces", PlainValue::PinnedRelationList(vec![vec![random_hash()]])),
          ],
          "invalid 'blob_v1' operation: 'mime_type' field in blob is wrongly formatted"
     )]
@@ -867,7 +863,7 @@ mod tests {
         vec![
             ("name", "venue".into()),
             ("description", "A short description".into()),
-            ("fields", PlainValue::PinnedRelationList(vec![vec![HASH.to_owned()]]))
+            ("fields", PlainValue::PinnedRelationList(vec![vec![random_hash()]]))
         ],
     )]
     #[case(
@@ -882,7 +878,7 @@ mod tests {
         vec![
             ("length", 1.into()),
             ("mime_type", "image/png".into()),
-            ("pieces", PlainValue::PinnedRelationList(vec![vec![HASH.to_owned()]])),
+            ("pieces", PlainValue::PinnedRelationList(vec![vec![random_hash()]])),
          ]
     )]
     #[case(

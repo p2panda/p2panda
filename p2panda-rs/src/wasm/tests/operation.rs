@@ -6,8 +6,12 @@ use serde_wasm_bindgen::to_value;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::*;
 
+use crate::document::{DocumentId, DocumentViewId};
 use crate::hash::Hash;
-use crate::operation::EncodedOperation;
+use crate::operation::{
+    EncodedOperation, PinnedRelation, PinnedRelationList, Relation, RelationList,
+};
+use crate::serde::hex_string_to_bytes;
 use crate::test_utils::fixtures::{operation_with_schema, random_document_view_id};
 use crate::wasm::serde::deserialize_from_js;
 use crate::wasm::{decode_operation, encode_operation, OperationFields, PlainOperation};
@@ -21,8 +25,11 @@ fn add_operation_fields() {
     let relation =
         JsValue::from_str("00205d23607adf6490033cc319cd2b193b2674243f7dd56912432978684ed4fbf12e");
 
-    let list = Array::new();
-    list.push(&relation);
+    let relation_list = Array::new();
+    relation_list.push(&relation);
+
+    let pinned_relation_list = Array::new();
+    pinned_relation_list.push(&relation_list);
 
     let bytes = to_value(&[0, 1, 2, 3]).unwrap();
 
@@ -46,7 +53,23 @@ fn add_operation_fields() {
         .unwrap();
 
     fields
-        .insert("locations", "relation_list", list.clone().into())
+        .insert("locations", "relation_list", relation_list.clone().into())
+        .unwrap();
+
+    fields
+        .insert(
+            "pinned_favorite_cafe",
+            "pinned_relation",
+            relation_list.clone().into(),
+        )
+        .unwrap();
+
+    fields
+        .insert(
+            "pinned_list_of_cafes",
+            "pinned_relation_list",
+            pinned_relation_list.clone().into(),
+        )
         .unwrap();
 
     // Make sure they have been added successfully
@@ -58,18 +81,38 @@ fn add_operation_fields() {
     assert_eq!(fields.get("height_cm").unwrap(), 167.8);
 
     // Note: A `==` comparison of two "equal" objects will still result in `false` in JavaScript,
-    // this is why we compare the string representations instead.
+    // this is why we compare the rust representations instead.
+    let document_id: DocumentId =
+        "00205d23607adf6490033cc319cd2b193b2674243f7dd56912432978684ed4fbf12e"
+            .parse()
+            .unwrap();
+
+    let document_view_id: DocumentViewId =
+        "00205d23607adf6490033cc319cd2b193b2674243f7dd56912432978684ed4fbf12e"
+            .parse()
+            .unwrap();
+
+    let value_from_js: Relation =
+        deserialize_from_js(fields.get("favorite_cafe").unwrap()).unwrap();
+    assert_eq!(value_from_js, Relation::new(document_id.clone()));
+
+    let value_from_js: RelationList =
+        deserialize_from_js(fields.get("locations").unwrap()).unwrap();
+    assert_eq!(value_from_js, RelationList::new(vec![document_id]));
+
+    let value_from_js: PinnedRelation =
+        deserialize_from_js(fields.get("pinned_favorite_cafe").unwrap()).unwrap();
+    assert_eq!(value_from_js, PinnedRelation::new(document_view_id.clone()));
+
+    let value_from_js: PinnedRelationList =
+        deserialize_from_js(fields.get("pinned_list_of_cafes").unwrap()).unwrap();
     assert_eq!(
-        fields.get("favorite_cafe").unwrap().as_string(),
-        relation.as_string()
-    );
-    assert_eq!(
-        fields.get("locations").unwrap().as_string(),
-        list.as_string()
+        value_from_js,
+        PinnedRelationList::new(vec![document_view_id])
     );
 
     // Check if number of fields is correct
-    assert_eq!(fields.len(), 6);
+    assert_eq!(fields.len(), 8);
 }
 
 #[wasm_bindgen_test]

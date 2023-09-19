@@ -3,9 +3,9 @@
 use std::fmt::Display;
 use std::str::FromStr;
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
-use crate::hash::Hash;
+use crate::hash::{Hash, HashId};
 use crate::operation::error::OperationIdError;
 use crate::{Human, Validate};
 
@@ -13,7 +13,7 @@ use crate::{Human, Validate};
 ///
 /// An `OperationId` is the hash of the [`Entry`](crate::entry::Entry) with which an operation was
 /// published.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialOrd, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct OperationId(Hash);
 
 impl OperationId {
@@ -26,9 +26,11 @@ impl OperationId {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
+}
 
+impl HashId for OperationId {
     /// Access the inner [`crate::hash::Hash`] value of this operation id.
-    pub fn as_hash(&self) -> &Hash {
+    fn as_hash(&self) -> &Hash {
         &self.0
     }
 }
@@ -69,22 +71,6 @@ impl Human for OperationId {
     }
 }
 
-impl<'de> Deserialize<'de> for OperationId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Deserialize into `Hash` struct
-        let hash: Hash = Deserialize::deserialize(deserializer)?;
-
-        // Check format
-        hash.validate()
-            .map_err(|err| serde::de::Error::custom(format!("invalid operation id, {}", err)))?;
-
-        Ok(Self(hash))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
@@ -93,7 +79,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::hash::Hash;
-    use crate::serde::{deserialize_into, serialize_from, serialize_value};
+    use crate::serde::{deserialize_into, hex_string_to_bytes, serialize_from, serialize_value};
     use crate::test_utils::fixtures::random_hash;
     use crate::Human;
 
@@ -146,13 +132,12 @@ mod tests {
             )
             .unwrap(),
         );
+
         assert_eq!(
             bytes,
             vec![
-                120, 68, 48, 48, 50, 48, 99, 102, 98, 48, 102, 97, 51, 55, 102, 51, 54, 100, 48,
-                56, 50, 102, 97, 97, 100, 51, 56, 56, 54, 97, 57, 102, 102, 98, 99, 99, 50, 56, 49,
-                51, 98, 55, 97, 102, 101, 57, 48, 102, 48, 54, 48, 57, 97, 53, 53, 54, 100, 52, 50,
-                53, 102, 49, 97, 55, 54, 101, 99, 56, 48, 53
+                88, 34, 0, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159, 251,
+                204, 40, 19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 5
             ]
         );
     }
@@ -160,10 +145,11 @@ mod tests {
     #[test]
     fn deserialize() {
         let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
-        let operation_id: OperationId = deserialize_into(&serialize_value(cbor!(
-            "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805"
-        )))
-        .unwrap();
+        let operation_id: OperationId =
+            deserialize_into(&serialize_value(cbor!(hex_string_to_bytes(
+                "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805"
+            ))))
+            .unwrap();
         assert_eq!(OperationId::from_str(hash_str).unwrap(), operation_id);
 
         // Invalid hashes

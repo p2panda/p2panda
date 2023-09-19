@@ -296,7 +296,7 @@ mod tests {
     use crate::document::{DocumentId, DocumentViewId};
     use crate::hash::Hash;
     use crate::operation::OperationId;
-    use crate::serde::{deserialize_into, serialize_from, serialize_value};
+    use crate::serde::{deserialize_into, hex_string_to_bytes, serialize_from, serialize_value};
     use crate::test_utils::fixtures::random_document_id;
     use crate::test_utils::fixtures::random_hash;
     use crate::Validate;
@@ -383,22 +383,25 @@ mod tests {
     fn serialize_relation() {
         let hash_str = "0020b50b06774f909483c9c18e31b3bb17ff8f7d23088e9cc5a39260392259f34d42";
         let bytes = serialize_from(Relation::new(DocumentId::from_str(hash_str).unwrap()));
-        assert_eq!(bytes, serialize_value(cbor!(hash_str)));
+        assert_eq!(bytes, serialize_value(cbor!(hex_string_to_bytes(hash_str))));
     }
 
     #[test]
     fn deserialize_relation() {
         let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
-        let relation: Relation = deserialize_into(&serialize_value(cbor!(hash_str))).unwrap();
+        let relation: Relation =
+            deserialize_into(&serialize_value(cbor!(hex_string_to_bytes(hash_str)))).unwrap();
         assert_eq!(
             Relation::new(DocumentId::from_str(hash_str).unwrap()),
             relation
         );
 
         // Invalid hashes
-        let invalid_hash = deserialize_into::<Relation>(&serialize_value(cbor!("1234")));
+        let invalid_hash =
+            deserialize_into::<Relation>(&serialize_value(cbor!(hex_string_to_bytes("1234"))));
         assert!(invalid_hash.is_err());
-        let empty_hash = deserialize_into::<Relation>(&serialize_value(cbor!("")));
+        let empty_hash =
+            deserialize_into::<Relation>(&serialize_value(cbor!(hex_string_to_bytes(""))));
         assert!(empty_hash.is_err());
     }
 
@@ -408,23 +411,30 @@ mod tests {
         let bytes = serialize_from(PinnedRelation::new(
             DocumentViewId::from_str(hash_str).unwrap(),
         ));
-        assert_eq!(bytes, serialize_value(cbor!([hash_str])));
+        assert_eq!(
+            bytes,
+            serialize_value(cbor!([hex_string_to_bytes(hash_str)]))
+        );
     }
 
     #[test]
     fn deserialize_pinned_relation() {
         let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
-        let pinned_relation: PinnedRelation = deserialize_into(&serialize_value(cbor!([
-            "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805"
-        ])))
-        .unwrap();
+        let pinned_relation: PinnedRelation =
+            deserialize_into(&serialize_value(cbor!([hex_string_to_bytes(
+                "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805"
+            )])))
+            .unwrap();
         assert_eq!(
             PinnedRelation::new(DocumentViewId::from_str(hash_str).unwrap()),
             pinned_relation
         );
 
         // Invalid hashes
-        let invalid_hash = deserialize_into::<PinnedRelation>(&serialize_value(cbor!(["1234"])));
+        let invalid_hash =
+            deserialize_into::<PinnedRelation>(&serialize_value(cbor!([hex_string_to_bytes(
+                "1234"
+            )])));
         assert!(invalid_hash.is_err());
         let empty_hash = deserialize_into::<PinnedRelation>(&serialize_value(cbor!([])));
         assert!(empty_hash.is_err());
@@ -450,7 +460,10 @@ mod tests {
         let bytes = serialize_from(RelationList::new(vec![
             DocumentId::from_str(hash_str).unwrap()
         ]));
-        assert_eq!(bytes, serialize_value(cbor!([hash_str])));
+        assert_eq!(
+            bytes,
+            serialize_value(cbor!([hex_string_to_bytes(hash_str)]))
+        );
     }
 
     #[test]
@@ -458,8 +471,11 @@ mod tests {
         let hash_str_1 = "0020deb1356bcdec02e05ce4f1fce51561bbfda68d1c4537c98c592b9e2bf9917122";
         let hash_str_2 = "002051044a3cfec6fea09759133dbae95dce9b49aa172df7fbb085c9b932694b2805";
 
-        let relation_list: RelationList =
-            deserialize_into(&serialize_value(cbor!([hash_str_1, hash_str_2]))).unwrap();
+        let relation_list: RelationList = deserialize_into(&serialize_value(cbor!([
+            hex_string_to_bytes(hash_str_1),
+            hex_string_to_bytes(hash_str_2)
+        ])))
+        .unwrap();
         assert_eq!(
             RelationList::new(vec![
                 DocumentId::from_str(hash_str_1).unwrap(),
@@ -469,7 +485,10 @@ mod tests {
         );
 
         // Invalid hash
-        let invalid_hash = deserialize_into::<RelationList>(&serialize_value(cbor!(["1234"])));
+        let invalid_hash =
+            deserialize_into::<RelationList>(&serialize_value(cbor!([hex_string_to_bytes(
+                "1234"
+            )])));
         assert!(invalid_hash.is_err());
     }
 
@@ -488,7 +507,13 @@ mod tests {
         ]));
         assert_eq!(
             bytes,
-            serialize_value(cbor!([[hash_str_1, hash_str_2], [hash_str_3]]))
+            serialize_value(cbor!([
+                [
+                    hex_string_to_bytes(hash_str_1),
+                    hex_string_to_bytes(hash_str_2)
+                ],
+                [hex_string_to_bytes(hash_str_3)]
+            ]))
         );
 
         let bytes = serialize_from(PinnedRelationList::new(vec![]));
@@ -502,8 +527,11 @@ mod tests {
         let hash_str_3 = "002084d3c7eb7085c920879da6ea6c94cf89777e8f427a32f49d441fcda80cd39483";
 
         let pinned_relation_list: PinnedRelationList = deserialize_into(&serialize_value(cbor!([
-            [hash_str_1, hash_str_2],
-            [hash_str_3]
+            [
+                hex_string_to_bytes(hash_str_1),
+                hex_string_to_bytes(hash_str_2)
+            ],
+            [hex_string_to_bytes(hash_str_3)]
         ])))
         .unwrap();
         assert_eq!(
@@ -522,21 +550,26 @@ mod tests {
         assert_eq!(PinnedRelationList::new(vec![]), pinned_relation_list);
 
         // Invalid hash
-        let invalid_hash =
-            deserialize_into::<PinnedRelationList>(&serialize_value(cbor!([["1234"]])));
+        let invalid_hash = deserialize_into::<PinnedRelationList>(&serialize_value(cbor!([[
+            hex_string_to_bytes("1234")
+        ]])));
         assert!(invalid_hash.is_err());
 
         // Invalid (non-canonic) order of operation ids
         let unordered = deserialize_into::<PinnedRelationList>(&serialize_value(cbor!([[
-            "0020f1ab6d8114c0e7ab0af3bfd6862daf6ee0c510bbdf129e1780edfa505e860ff7",
-            "0020a19353e7dfeb2f9031087c3428a2467bb684e25321f09298c64ce1a2fd5787d1",
+            hex_string_to_bytes(
+                "0020f1ab6d8114c0e7ab0af3bfd6862daf6ee0c510bbdf129e1780edfa505e860ff7"
+            ),
+            hex_string_to_bytes(
+                "0020a19353e7dfeb2f9031087c3428a2467bb684e25321f09298c64ce1a2fd5787d1"
+            ),
         ]])));
         assert!(unordered.is_err());
 
         // Duplicate operation ids
         let duplicate = deserialize_into::<PinnedRelationList>(&serialize_value(cbor!([[
-            "05018634222cc8c9d49c5f48e8aecf0412c2cd2082a6712676373eaa1660e7af",
-            "05018634222cc8c9d49c5f48e8aecf0412c2cd2082a6712676373eaa1660e7af",
+            hex_string_to_bytes("05018634222cc8c9d49c5f48e8aecf0412c2cd2082a6712676373eaa1660e7af"),
+            hex_string_to_bytes("05018634222cc8c9d49c5f48e8aecf0412c2cd2082a6712676373eaa1660e7af"),
         ]])));
         assert!(duplicate.is_err());
     }

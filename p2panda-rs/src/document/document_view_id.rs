@@ -9,7 +9,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::document::error::DocumentViewIdError;
-use crate::hash::Hash;
+use crate::hash::{Hash, HashId};
 use crate::operation::error::OperationIdError;
 use crate::operation::OperationId;
 use crate::{Human, Validate};
@@ -169,9 +169,33 @@ impl TryFrom<&[String]> for DocumentViewId {
     }
 }
 
-impl From<&[OperationId]> for DocumentViewId {
-    fn from(operation_ids: &[OperationId]) -> Self {
-        Self::new(operation_ids)
+impl<T: HashId> TryFrom<&[T]> for DocumentViewId {
+    type Error = DocumentViewIdError;
+
+    fn try_from(str_list: &[T]) -> Result<Self, Self::Error> {
+        let operation_ids: Vec<OperationId> = str_list
+            .iter()
+            .map(|hash_id| hash_id.as_hash().clone().into())
+            .collect();
+
+        Self::from_untrusted(operation_ids)
+    }
+}
+
+impl TryFrom<&[Hash]> for DocumentViewId {
+    type Error = DocumentViewIdError;
+
+    fn try_from(str_list: &[Hash]) -> Result<Self, Self::Error> {
+        let operation_ids: Vec<OperationId> =
+            str_list.iter().map(|hash| hash.clone().into()).collect();
+
+        Self::from_untrusted(operation_ids)
+    }
+}
+
+impl From<DocumentViewId> for Vec<Hash> {
+    fn from(value: DocumentViewId) -> Self {
+        value.iter().map(HashId::as_hash).cloned().collect()
     }
 }
 
@@ -225,6 +249,7 @@ mod tests {
 
     use crate::hash::Hash;
     use crate::operation::OperationId;
+    use crate::serde::hex_string_to_bytes;
     use crate::test_utils::constants::HASH;
     use crate::test_utils::fixtures::random_hash;
     use crate::test_utils::fixtures::{document_view_id, random_operation_id};
@@ -382,8 +407,12 @@ mod tests {
     ) {
         // Unsorted operation ids in document view id array:
         let unsorted_hashes = [
-            "0020c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa72ec8",
-            "00202dce4b32cd35d61cf54634b93a526df333c5ed3d93230c2f026f8d1ecabc0cd7",
+            hex_string_to_bytes(
+                "0020c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa72ec8",
+            ),
+            hex_string_to_bytes(
+                "00202dce4b32cd35d61cf54634b93a526df333c5ed3d93230c2f026f8d1ecabc0cd7",
+            ),
         ];
         let mut cbor_bytes = Vec::new();
         ciborium::ser::into_writer(&unsorted_hashes, &mut cbor_bytes).unwrap();
@@ -418,8 +447,10 @@ mod tests {
     fn deserialize_invalid_view_id() {
         // The second operation id is missing 4 characters
         let invalid_hashes = [
-            "0020c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa72ec8",
-            "2dce4b32cd35d61cf54634b93a526df333c5ed3d93230c2f026f8d1ecabc0cd7",
+            hex_string_to_bytes(
+                "0020c13cdc58dfc6f4ebd32992ff089db79980363144bdb2743693a019636fa72ec8",
+            ),
+            hex_string_to_bytes("2dce4b32cd35d61cf54634b93a526df333c5ed3d93230c2f026f8d1ecabc0cd7"),
         ];
         let mut cbor_bytes = Vec::new();
         ciborium::ser::into_writer(&invalid_hashes, &mut cbor_bytes).unwrap();

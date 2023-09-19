@@ -8,5 +8,7 @@ mod u64_str;
 
 #[cfg(any(feature = "test-utils", test))]
 pub use cbor::{deserialize_into, serialize_from, serialize_value};
+#[cfg(any(feature = "test-utils", test))]
+pub use hex_str::hex_string_to_bytes;
 pub use hex_str::{deserialize_hex, serialize_hex};
 pub use u64_str::StringOrU64;

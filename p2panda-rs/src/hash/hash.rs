@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::fmt;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
@@ -8,9 +8,12 @@ use std::str::FromStr;
 use arrayvec::ArrayVec;
 use bamboo_rs_core_ed25519_yasmf::yasmf_hash::new_blake3;
 use serde::{Deserialize, Serialize};
+use serde_bytes::ByteBuf;
 use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
 use crate::hash::error::HashError;
+use crate::hash::HashId;
+use crate::serde::deserialize_hex;
 use crate::{Human, Validate};
 
 /// Size of p2panda entries' hashes.
@@ -25,7 +28,7 @@ pub type Blake3ArrayVec = ArrayVec<[u8; HASH_SIZE]>;
 /// to the Bamboo specification.
 ///
 /// [`YASMF`]: https://github.com/bamboo-rs/yasmf-hash
-#[derive(Clone, Debug, Ord, PartialOrd, Serialize, PartialEq, Eq, StdHash)]
+#[derive(Clone, Debug, Ord, PartialOrd, PartialEq, Eq, StdHash)]
 pub struct Hash(String);
 
 impl Hash {
@@ -113,17 +116,30 @@ impl Human for Hash {
     }
 }
 
+impl Serialize for Hash {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if serializer.is_human_readable() {
+            self.as_str().serialize(serializer)
+        } else {
+            ByteBuf::from(self.to_bytes()).serialize(serializer)
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for Hash {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        // Deserialize hash string
-        let hash: String = Deserialize::deserialize(deserializer)?;
+        // Deserialize hash bytes.
+        let hash_bytes = deserialize_hex(deserializer)?;
 
         // Convert and validate format
-        hash.try_into()
-            .map_err(|err: HashError| serde::de::Error::custom(err.to_string()))
+        let hash_str = hex::encode(hash_bytes);
+        Hash::new(&hash_str).map_err(|err: HashError| serde::de::Error::custom(err.to_string()))
     }
 }
 
@@ -176,13 +192,22 @@ impl TryFrom<String> for Hash {
     }
 }
 
+impl<T: HashId> From<T> for Hash {
+    fn from(hash_id: T) -> Hash {
+        hash_id.as_hash().to_owned()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
     use std::convert::{TryFrom, TryInto};
 
+    use ciborium::cbor;
+    use serde_bytes::ByteBuf;
     use yasmf_hash::YasmfHash;
 
+    use crate::serde::{deserialize_into, serialize_from, serialize_value};
     use crate::Human;
 
     use super::{Blake3ArrayVec, Hash};
@@ -260,5 +285,39 @@ mod tests {
         let hash = Hash::new(hash_str).unwrap();
 
         assert_eq!(hash.display(), "<Hash 496543>");
+    }
+
+    #[test]
+    fn serialize() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let hash = Hash::new(hash_str).unwrap();
+        let bytes = serialize_from(hash.clone());
+        assert_eq!(
+            bytes,
+            vec![
+                88, 34, 0, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159, 251,
+                204, 40, 19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 5
+            ]
+        );
+
+        // The `cbor` macro serializes to human readable formats, in this case, hex encoded bytes.
+        let human_readable_cbor = cbor!(hash).unwrap();
+        assert!(human_readable_cbor.is_text());
+        assert_eq!(human_readable_cbor.as_text().unwrap(), hash_str)
+    }
+
+    #[test]
+    fn deserialize() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let hash_bytes = hex::decode(hash_str).unwrap();
+        let hash: Hash =
+            deserialize_into(&serialize_value(cbor!(ByteBuf::from(hash_bytes)))).unwrap();
+        assert_eq!(Hash::new(hash_str).unwrap(), hash);
+
+        // Invalid hashes
+        let invalid_hash = deserialize_into::<Hash>(&serialize_value(cbor!("1234")));
+        assert!(invalid_hash.is_err());
+        let invalid_hash = deserialize_into::<Hash>(&serialize_value(cbor!("xyz".as_bytes())));
+        assert!(invalid_hash.is_err(), "{:#?}", invalid_hash);
     }
 }

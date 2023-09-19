@@ -261,12 +261,14 @@ mod tests {
     use ciborium::value::{Error, Value};
     use rstest::rstest;
     use rstest_reuse::apply;
+    use serde_bytes::ByteBuf;
 
     use crate::document::{DocumentId, DocumentViewId};
     use crate::operation::decode::decode_operation;
     use crate::operation::plain::PlainOperation;
     use crate::operation::{EncodedOperation, OperationAction, OperationBuilder};
     use crate::schema::{FieldType, Schema, SchemaId};
+    use crate::serde::hex_string_to_bytes;
     use crate::test_utils::constants::{HASH, SCHEMA_ID};
     use crate::test_utils::fixtures::{document_id, document_view_id, schema, schema_id, Fixture};
     use crate::test_utils::templates::version_fixtures;
@@ -293,7 +295,7 @@ mod tests {
         cbor!([
             1, 0, SCHEMA_ID,
             {
-                "country" => HASH,
+                "country" => hex_string_to_bytes(HASH),
                 "national_dish" => "Pumpkin",
                 "vegan_friendly" => true,
                 "yummyness" => 8,
@@ -329,7 +331,7 @@ mod tests {
         cbor!([
             1, 0, SCHEMA_ID,
             {
-                "country" => "0020",
+                "country" => hex_string_to_bytes("0020"),
             },
         ]),
         "field 'country' does not match schema: invalid hash length 2 bytes, expected 34 bytes"
@@ -341,10 +343,10 @@ mod tests {
         cbor!([
             1, 0, SCHEMA_ID,
             {
-                "country" => "xyz",
+                "country" => ByteBuf::from("xyz"),
             },
         ]),
-        "field 'country' does not match schema: invalid hex encoding in hash string"
+        "field 'country' does not match schema: invalid hash length 3 bytes, expected 34 bytes"
     )]
     #[case::missing_field(
         vec![

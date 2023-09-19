@@ -3,7 +3,7 @@
 use std::fmt::Display;
 
 use crate::document::DocumentViewId;
-use crate::hash::Hash;
+use crate::hash::{Hash, HashId};
 
 /// Contains a hash over the sorted graph tips constituting this view id.
 ///
@@ -44,7 +44,7 @@ impl From<&DocumentViewId> for DocumentViewHash {
     fn from(document_view_id: &DocumentViewId) -> Self {
         let graph_tip_bytes: Vec<u8> = document_view_id
             .iter()
-            .flat_map(|graph_tip| graph_tip.as_hash().to_bytes())
+            .flat_map(|graph_tip| graph_tip.to_bytes())
             .collect();
 
         Self::new(Hash::new_from_bytes(&graph_tip_bytes))
