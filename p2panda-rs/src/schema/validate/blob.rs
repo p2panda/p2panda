@@ -3,6 +3,7 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
+use crate::hash::Hash;
 use crate::operation::plain::{PlainFields, PlainValue};
 use crate::schema::validate::error::BlobError;
 
@@ -21,7 +22,7 @@ pub fn validate_mime_type(value: &str) -> bool {
 /// Checks "pieces" field of operations with "blob_v1" schema id.
 ///
 /// 1. It is not empty
-pub fn validate_pieces(value: &Vec<Vec<String>>) -> bool {
+pub fn validate_pieces(value: &Vec<Vec<Hash>>) -> bool {
     !value.is_empty()
 }
 
