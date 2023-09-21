@@ -88,7 +88,7 @@ export class KeyPair {
   sign(value: string): string;
 }
 /**
-* Interface to create, update and retreive values from operation fields.
+* Interface to create, update and retrieve values from operation fields.
 */
 export class OperationFields {
   free(): void;
@@ -138,7 +138,7 @@ export class OperationFields {
   isEmpty(): boolean;
 }
 /**
-* Interface to create, update and retreive values from operation fields.
+* Interface to create, update and retrieve values from operation fields.
 */
 export class PlainFields {
   free(): void;

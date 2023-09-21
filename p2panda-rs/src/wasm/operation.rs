@@ -78,7 +78,7 @@ pub struct PlainOperation {
     pub(crate) fields: Option<PlainFields>,
 }
 
-/// Interface to create, update and retreive values from operation fields.
+/// Interface to create, update and retrieve values from operation fields.
 #[wasm_bindgen]
 #[derive(Clone, Serialize, Debug)]
 #[cfg_attr(test, derive(Deserialize))]
@@ -92,7 +92,7 @@ impl PlainFields {
         match self.0.get(name) {
             Some(value) => Ok(jserr!(
                 plain_to_js_value(value),
-                "Could not retreive value from plain field"
+                "Could not retrieve value from plain field"
             )),
             None => Ok(JsValue::NULL),
         }
@@ -111,7 +111,7 @@ impl PlainFields {
     }
 }
 
-/// Interface to create, update and retreive values from operation fields.
+/// Interface to create, update and retrieve values from operation fields.
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
 pub struct OperationFields(crate::operation::OperationFields);
@@ -238,7 +238,7 @@ impl OperationFields {
         match self.0.get(name) {
             Some(value) => Ok(jserr!(
                 operation_to_js_value(value),
-                "Could not retreive value from operation field"
+                "Could not retrieve value from operation field"
             )),
             None => Ok(JsValue::NULL),
         }
