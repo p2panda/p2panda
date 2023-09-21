@@ -8,8 +8,10 @@ use crate::entry::error::ValidateEntryError;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::{Entry, Signature};
 use crate::hash::Hash;
-use crate::identity::{KeyPair, PublicKey};
+use crate::identity::PublicKey;
 use crate::operation::EncodedOperation;
+
+use super::error::SignatureError;
 
 /// Checks if backlink- and skiplink are correctly set for the given sequence number (#E3).
 ///
@@ -105,11 +107,10 @@ pub fn validate_signature(
     signature: &Signature,
     encoded_entry: &impl AsEncodedEntry,
 ) -> Result<(), ValidateEntryError> {
-    KeyPair::verify(
-        public_key,
-        &encoded_entry.unsigned_bytes(),
-        &signature.into(),
-    )?;
+    match public_key.verify(&encoded_entry.unsigned_bytes(), signature.into()) {
+        true => Ok(()),
+        false => Err(SignatureError::SignatureInvalid),
+    }?;
 
     Ok(())
 }

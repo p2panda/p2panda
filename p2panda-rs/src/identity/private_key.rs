@@ -51,7 +51,7 @@ impl PrivateKey {
     }
 
     pub fn sign(&self, bytes: &[u8]) -> Signature {
-        self.0.sign(bytes).into()
+        (&self.0.sign(bytes)).into()
     }
 }
 

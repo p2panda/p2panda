@@ -112,17 +112,6 @@ impl KeyPair {
     pub fn sign(&self, bytes: &[u8]) -> Signature {
         self.0.sign(bytes)
     }
-
-    /// Verify the integrity of signed data.
-    pub fn verify(
-        public_key: &PublicKey,
-        bytes: &[u8],
-        signature: &Signature,
-    ) -> Result<(), KeyPairError> {
-        let public_key: PublicKey = (*public_key).into();
-        public_key.verify(bytes, signature)?;
-        Ok(())
-    }
 }
 
 impl Default for KeyPair {
@@ -147,22 +136,7 @@ mod tests {
     #[test]
     fn key_pair_from_private_key() {
         let key_pair = KeyPair::new();
-        let key_pair2 = KeyPair::from_private_key(key_pair.private_key()).unwrap();
+        let key_pair2 = KeyPair::from_private_key(&key_pair.private_key()).unwrap();
         assert_eq!(key_pair.public_key(), key_pair2.public_key());
-    }
-
-    #[test]
-    fn signing() {
-        let key_pair = KeyPair::new();
-        let bytes = b"test";
-        let signature = key_pair.sign(bytes);
-        assert!(KeyPair::verify(&key_pair.public_key(), bytes, &signature).is_ok());
-
-        // Invalid data
-        assert!(KeyPair::verify(&key_pair.public_key(), b"not test", &signature).is_err());
-
-        // Invalid public key
-        let key_pair_2 = KeyPair::new();
-        assert!(KeyPair::verify(&key_pair_2.public_key(), bytes, &signature).is_err());
     }
 }

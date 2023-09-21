@@ -180,7 +180,11 @@ impl From<BambooEntry<&[u8], &[u8]>> for Entry {
         let payload_hash: Hash = (&entry.payload_hash).into();
 
         // Unwrap as we assume that there IS a signature coming from bamboo struct at this point
-        let signature = entry.sig.expect("signature expected").into();
+        let signature = entry
+            .sig
+            .expect("signature expected")
+            .try_into()
+            .expect("this signature was already validated");
 
         // Unwrap as the sequence number was already checked when decoding the bytes into the
         // bamboo struct

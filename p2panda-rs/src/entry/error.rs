@@ -80,14 +80,12 @@ pub enum ValidateEntryError {
     #[error("claimed hash does not match skiplink entry")]
     WrongSkiplinkHash,
 
-    /// Could not verify authorship of entry.
-    #[error("signature invalid")]
-    KeyPairError(#[from] crate::identity::error::KeyPairError),
+    #[error(transparent)]
+    SignatureError(#[from] SignatureError),
 }
 
 /// Errors from `SeqNum` struct.
 #[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
 pub enum SeqNumError {
     /// Sequence numbers are always positive.
     #[error("sequence number can not be zero or negative")]
@@ -100,9 +98,19 @@ pub enum SeqNumError {
 
 /// Errors from `LogId` struct.
 #[derive(Error, Debug)]
-#[allow(missing_copy_implementations)]
 pub enum LogIdError {
     /// Conversion to u64 from string failed.
     #[error("string contains invalid u64 value")]
     InvalidU64String,
+}
+
+/// Errors from `Signature` struct.
+#[derive(Error, Debug)]
+pub enum SignatureError {
+    /// Could not verify authorship of data.
+    #[error("signature invalid")]
+    SignatureInvalid,
+
+    #[error("expected length of 64 bytes for signature")]
+    InvalidLength,
 }

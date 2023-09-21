@@ -65,7 +65,6 @@ mod tests {
     use crate::entry::encode::encode_entry;
     use crate::entry::traits::{AsEncodedEntry, AsEntry};
     use crate::entry::{EncodedEntry, Entry};
-    use crate::identity::KeyPair;
     use crate::operation::encode::encode_operation;
     use crate::operation::EncodedOperation;
     use crate::test_utils::constants::{HASH, PRIVATE_KEY};
@@ -81,11 +80,9 @@ mod tests {
     fn test_entry_signed(entry: Entry) {
         let encoded_entry = encode_entry(&entry).unwrap();
 
-        let verification = KeyPair::verify(
-            entry.public_key(),
-            &encoded_entry.unsigned_bytes(),
-            &entry.signature().into(),
-        );
+        let verification = entry
+            .public_key()
+            .verify(&encoded_entry.unsigned_bytes(), &entry.signature().into());
 
         assert!(verification.is_ok(), "{:?}", verification.unwrap_err())
     }
