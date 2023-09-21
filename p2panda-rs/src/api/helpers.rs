@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Helper methods for working with p2panda data types.
 use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
 
 use crate::api::validation::get_expected_skiplink;
@@ -10,7 +11,8 @@ use crate::hash::Hash;
 use crate::identity::PublicKey;
 use crate::storage_provider::traits::EntryStore;
 
-/// Retrieve the expected skiplink for the entry identified by public key, log id and sequence number.
+/// Retrieve the expected skiplink for the entry identified by public key, log id and sequence
+/// number.
 pub async fn get_skiplink_for_entry<S: EntryStore>(
     store: &S,
     seq_num: &SeqNum,

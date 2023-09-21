@@ -17,7 +17,7 @@ exclude = [".gitignore"]
 categories = ["web-programming", "wasm", "cryptography"]
 
 [package.metadata.docs.rs]
-all-features = true
+features = ["secret-group", "storage-provider"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]

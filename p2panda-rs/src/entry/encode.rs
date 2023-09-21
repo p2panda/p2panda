@@ -272,7 +272,7 @@ mod tests {
         let key_value = "Value identified by a hash".to_string();
         hash_map.insert(&encoded_entry, key_value.clone());
 
-        // Check if we can retreive it again with that key
+        // Check if we can retrieve it again with that key
         let key_value_retrieved = hash_map.get(&encoded_entry).unwrap().to_owned();
         assert_eq!(key_value, key_value_retrieved)
     }
