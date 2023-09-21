@@ -31,8 +31,11 @@ storage-provider = ["dep:async-trait"]
 arrayvec = "0.5.2"
 async-trait = { version = "0.1.64", optional = true }
 bamboo-rs-core-ed25519-yasmf = "0.1.1"
+blake3 = "1.5.0"
 ciborium = "0.2.0"
 ed25519-dalek = "1.0.1"
+# @TODO: Merge back if refactor has finished
+ed25519-dalek_v2 = { package = "ed25519-dalek", version = "2.0.0", features = ["serde", "rand_core"] }
 hex = { version = "0.4.3", features = ["serde"] }
 lipmaa-link = "0.2.2"
 log = "0.4.17"
@@ -42,6 +45,7 @@ openmls_memory_keystore = { version = "0.1.0", optional = true }
 openmls_rust_crypto = { version = "0.1.0", optional = true }
 openmls_traits = { version = "0.1.0", optional = true }
 rand = "0.7.3"
+rand_v2 = { package = "rand", version = "0.8.5" }
 regex = "1.7.1"
 rstest = { version = "0.16.0", optional = true }
 rstest_reuse = { version = "0.5.0", optional = true }
