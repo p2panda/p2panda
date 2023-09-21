@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::operation_v2::body::error::OperationBuilderError;
 use crate::operation_v2::body::plain::PlainFields;
-use crate::operation_v2::traits::Schematic;
+use crate::operation_v2::operation::error::OperationBuilderError;
+use crate::operation_v2::operation::traits::Schematic;
 // use crate::operation_v2::body::validate::validate_body_format;
-use crate::operation_v2::body::{
+use crate::operation_v2::operation::{
     OperationAction, OperationFields, OperationValue, OperationVersion,
 };
 use crate::schema::SchemaId;

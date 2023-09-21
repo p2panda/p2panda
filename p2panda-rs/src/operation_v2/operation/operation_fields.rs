@@ -3,8 +3,8 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
-use crate::operation_v2::body::error::FieldsError;
-use crate::operation_v2::body::OperationValue;
+use crate::operation_v2::operation::error::FieldsError;
+use crate::operation_v2::operation::OperationValue;
 
 /// Operation fields are used to store application data. They are implemented as a simple key/value
 /// store with support for a limited number of data types (see [`OperationValue`] for further

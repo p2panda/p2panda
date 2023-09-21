@@ -2,7 +2,4 @@
 
 pub mod body;
 pub mod header;
-mod operation;
-pub mod traits;
-
-pub use operation::Operation;
+pub mod operation;

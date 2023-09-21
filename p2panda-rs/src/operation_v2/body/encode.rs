@@ -11,13 +11,13 @@
 //! │Operation│ ───encode_operation()───► │EncodedOperation│ ────► bytes
 //! └─────────┘                           └────────────────┘
 //! ```
-use crate::operation_v2::body::error::EncodeOperationError;
+use crate::operation_v2::operation::error::EncodeOperationError;
 use crate::operation_v2::body::plain::PlainOperation;
-use crate::operation_v2::body::EncodedOperation;
-use crate::operation_v2::Operation;
+use crate::operation_v2::body::EncodedBody;
+use crate::operation_v2::operation::Operation;
 
 /// Encodes an operation in canonic format.
-pub fn encode_operation(operation: &Operation) -> Result<EncodedOperation, EncodeOperationError> {
+pub fn encode_operation(operation: &Operation) -> Result<EncodedBody, EncodeOperationError> {
     // Convert to plain operation format
     let plain: PlainOperation = operation.into();
 
@@ -30,7 +30,7 @@ pub fn encode_operation(operation: &Operation) -> Result<EncodedOperation, Encod
 /// Encodes a `PlainOperation` instance in canonic format.
 pub fn encode_plain_operation(
     plain: &PlainOperation,
-) -> Result<EncodedOperation, EncodeOperationError> {
+) -> Result<EncodedBody, EncodeOperationError> {
     let mut cbor_bytes = Vec::new();
 
     ciborium::ser::into_writer(&plain, &mut cbor_bytes).map_err(|err| match err {
@@ -38,7 +38,7 @@ pub fn encode_plain_operation(
         ciborium::ser::Error::Value(err) => EncodeOperationError::EncoderFailed(err),
     })?;
 
-    Ok(EncodedOperation::from_bytes(&cbor_bytes))
+    Ok(EncodedBody::from_bytes(&cbor_bytes))
 }
 
 /*#[cfg(test)]

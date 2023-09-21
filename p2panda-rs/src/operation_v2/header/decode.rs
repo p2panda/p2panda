@@ -11,12 +11,9 @@
 //!  bytes ───► │EncodedEntry│ ────decode_entry()────► │Entry│
 //!             └────────────┘                         └─────┘
 //! ```
-use bamboo_rs_core_ed25519_yasmf::decode;
-
 use crate::entry::error::DecodeEntryError;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::validate::{validate_links, validate_signature};
-use crate::entry::Entry;
 use crate::operation_v2::header::Header;
 
 /// Method to decode an entry.

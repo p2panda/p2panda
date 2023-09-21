@@ -15,9 +15,9 @@
 //!
 //! Move on to `operation::validate` for methods to check the `PlainOperation` against the claimed
 //! `Schema` instance to eventually get the `Operation` instance.
-use crate::operation_v2::body::error::DecodeOperationError;
+use crate::operation_v2::operation::error::DecodeOperationError;
 use crate::operation_v2::body::plain::PlainOperation;
-use crate::operation_v2::body::EncodedOperation;
+use crate::operation_v2::body::EncodedBody;
 
 /// Method to decode an operation.
 ///
@@ -26,7 +26,7 @@ use crate::operation_v2::body::EncodedOperation;
 /// 1. Correct canonic operation format as per specification (#OP2)
 /// 2. Ensures canonic field values format (sorted arrays, no duplicates) (#OP3)
 pub fn decode_operation(
-    encoded_operation: &EncodedOperation,
+    encoded_operation: &EncodedBody,
 ) -> Result<PlainOperation, DecodeOperationError> {
     let bytes = encoded_operation.into_bytes();
 

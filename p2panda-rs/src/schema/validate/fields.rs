@@ -8,7 +8,7 @@ use crate::document::{DocumentId, DocumentViewId};
 use crate::hash::error::HashError;
 use crate::hash::Hash;
 use crate::operation_v2::body::plain::{PlainFields, PlainValue};
-use crate::operation_v2::body::{
+use crate::operation_v2::operation::{
     OperationFields, OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
 use crate::schema::validate::error::ValidationError;

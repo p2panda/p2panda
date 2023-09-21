@@ -6,7 +6,7 @@ use std::{convert::TryFrom, fmt};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::operation_v2::body::error::OperationActionError;
+use crate::operation_v2::operation::error::OperationActionError;
 
 /// Operations are categorised by their action type.
 ///

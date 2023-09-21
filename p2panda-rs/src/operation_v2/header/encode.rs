@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::hash_v2::Hash;
 use crate::identity_v2::KeyPair;
-use crate::operation_v2::body::EncodedOperation;
+use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::header::error::EncodeEntryError;
-use crate::operation_v2::header::traits::AsEntry;
-use crate::operation_v2::header::validate::validate_links;
 use crate::operation_v2::header::{EncodedHeader, Header, HeaderExtension};
 
 /// Takes entry arguments (log id, sequence number, etc.), operation payload and a [`KeyPair`],
@@ -18,7 +15,7 @@ use crate::operation_v2::header::{EncodedHeader, Header, HeaderExtension};
 /// basic checks if the backlink and skiplink is correctly set for the given sequence number (#E3).
 /// Please note though that this method not check for correct log integrity!
 pub fn sign_header(
-    payload: &EncodedOperation,
+    body: &EncodedBody,
     extension: &HeaderExtension,
     key_pair: &KeyPair,
 ) -> Result<Header, EncodeEntryError> {
@@ -39,11 +36,11 @@ pub fn encode_header(entry: &Header) -> Result<EncodedHeader, EncodeEntryError> 
 ///
 /// See low-level methods for details.
 pub fn sign_and_encode_entry(
-    payload: &EncodedOperation,
+    body: &EncodedBody,
     extension: &HeaderExtension,
     key_pair: &KeyPair,
 ) -> Result<EncodedHeader, EncodeEntryError> {
-    let entry = sign_header(payload, extension, key_pair)?;
+    let entry = sign_header(body, extension, key_pair)?;
 
     let encoded_header = encode_header(&entry)?;
 

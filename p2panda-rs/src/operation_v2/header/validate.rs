@@ -5,7 +5,7 @@
 //! You will not find methods here to check the encoding of Bamboo entries, as this is handled
 //! inside the external bamboo-rs crate.
 use crate::identity_v2::{PublicKey, Signature};
-use crate::operation_v2::body::EncodedOperation;
+use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::header::error::ValidateEntryError;
 use crate::operation_v2::header::traits::{AsEncodedEntry, AsEntry};
 
@@ -25,7 +25,7 @@ pub fn validate_signature(
 /// Checks if the claimed payload hash and size matches the actual data (#E6).
 pub fn validate_payload(
     entry: &impl AsEntry,
-    payload: &EncodedOperation,
+    payload: &EncodedBody,
 ) -> Result<(), ValidateEntryError> {
     if entry.payload_hash() != &payload.hash() {
         return Err(ValidateEntryError::PayloadHashMismatch);

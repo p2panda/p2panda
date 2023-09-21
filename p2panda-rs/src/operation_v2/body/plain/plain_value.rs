@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentId, DocumentViewId};
 use crate::hash::{Hash, HashId};
-use crate::operation_v2::body::error::PlainValueError;
+use crate::operation_v2::operation::error::PlainValueError;
 
 /// Operation field values which have not been checked against a schema yet.
 ///

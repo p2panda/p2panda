@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::document::DocumentViewId;
-use crate::operation_v2::body::error::OperationBuilderError;
 use crate::operation_v2::body::plain::PlainFields;
-use crate::operation_v2::body::validate::validate_operation_format;
-use crate::operation_v2::body::{
+use crate::operation_v2::operation::{
     OperationAction, OperationFields, OperationValue, OperationVersion,
 };
-use crate::operation_v2::traits::{Actionable, AsOperation, Schematic};
+use crate::operation_v2::operation::error::OperationBuilderError;
+use crate::operation_v2::operation::traits::{Actionable, AsOperation, Schematic};
+use crate::operation_v2::operation::validate::validate_operation_format;
 use crate::schema::SchemaId;
 
 pub struct Operation {

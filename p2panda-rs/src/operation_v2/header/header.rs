@@ -5,7 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::document::DocumentViewId;
 use crate::hash_v2::Hash;
 use crate::identity_v2::{KeyPair, PublicKey, Signature};
-use crate::operation_v2::body::EncodedOperation;
+use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::header::encode::sign_header;
 use crate::operation_v2::header::error::EntryBuilderError;
 use crate::operation_v2::header::traits::AsEntry;
@@ -105,7 +105,7 @@ impl HeaderBuilder {
 
     pub fn sign(
         &self,
-        encoded_body: &EncodedOperation,
+        encoded_body: &EncodedBody,
         key_pair: &KeyPair,
     ) -> Result<Header, EntryBuilderError> {
         let extension = HeaderExtension::default();

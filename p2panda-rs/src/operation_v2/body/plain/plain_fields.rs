@@ -8,9 +8,9 @@ use std::fmt;
 use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 
-use crate::operation_v2::body::error::FieldsError;
 use crate::operation_v2::body::plain::PlainValue;
-use crate::operation_v2::body::{OperationFields, OperationValue};
+use crate::operation_v2::operation::error::FieldsError;
+use crate::operation_v2::operation::{OperationFields, OperationValue};
 use crate::schema::FieldName;
 
 /// Operation fields which have not been checked against a schema yet.

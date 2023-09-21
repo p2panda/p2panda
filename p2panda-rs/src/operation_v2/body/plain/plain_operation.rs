@@ -7,10 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::document::DocumentViewId;
 use crate::operation_v2::body::plain::PlainFields;
-use crate::operation_v2::body::{OperationAction, OperationVersion};
-use crate::operation_v2::traits::AsOperation;
-use crate::operation_v2::traits::{Actionable, Schematic};
-use crate::operation_v2::Operation;
+use crate::operation_v2::operation::traits::{Actionable, AsOperation, Schematic};
+use crate::operation_v2::operation::{Operation, OperationAction, OperationVersion};
 use crate::schema::SchemaId;
 
 /// Intermediate operation type which has been decoded, but not checked against a schema.

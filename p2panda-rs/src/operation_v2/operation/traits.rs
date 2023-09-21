@@ -4,7 +4,7 @@
 use crate::document::DocumentViewId;
 use crate::identity::PublicKey;
 use crate::operation_v2::body::plain::PlainFields;
-use crate::operation_v2::body::{OperationAction, OperationFields, OperationVersion};
+use crate::operation_v2::operation::{OperationAction, OperationFields, OperationVersion};
 use crate::schema::SchemaId;
 
 /// Trait representing a struct encapsulating data which has been signed by an author.
