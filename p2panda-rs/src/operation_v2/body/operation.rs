@@ -1,30 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::document::DocumentViewId;
-use crate::identity_v2::PrivateKey;
-use crate::operation::Operation;
-use crate::operation_v2::body::traits::{Actionable, AsOperation, Schematic};
-use crate::operation_v2::body::validate::validate_operation_format;
+use crate::operation_v2::body::error::OperationBuilderError;
+use crate::operation_v2::body::plain::PlainFields;
+use crate::operation_v2::body::traits::{Actionable, AsBody, Schematic};
+use crate::operation_v2::body::validate::validate_body_format;
 use crate::operation_v2::body::{
     OperationAction, OperationFields, OperationValue, OperationVersion,
 };
-use crate::operation_v2::error::OperationBuilderError;
 use crate::operation_v2::header::Header;
 use crate::schema::SchemaId;
 
-/// Create new operations.
-///
-/// Creating operations with the `OperationBuilder` does not validate them yet against their
-/// claimed schemas. You can use `validate_operation` for this.
 #[derive(Clone, Debug)]
-pub struct OperationBuilder {
-    /// Previous field which contains the last known view id for the target document.
-    previous: Option<DocumentViewId>,
-
-    seq_num: Option<u64>,
-
-    timestamp: Option<u64>,
-
+pub struct BodyBuilder {
     /// Action of this operation.
     action: OperationAction,
 
@@ -35,16 +23,10 @@ pub struct OperationBuilder {
     fields: Option<OperationFields>,
 }
 
-impl OperationBuilder {
-    /// Returns a new instance of `OperationBuilder`.
+impl BodyBuilder {
+    /// Returns a new instance of `BodyBuilder`.
     pub fn new(schema_id: &SchemaId) -> Self {
         Self {
-            // Header
-            previous: None,
-            seq_num: None,
-            timestamp: None,
-
-            // Body
             action: OperationAction::Create,
             schema_id: schema_id.to_owned(),
             fields: None,
@@ -60,22 +42,6 @@ impl OperationBuilder {
     /// Set operation schema.
     pub fn schema_id(mut self, schema_id: SchemaId) -> Self {
         self.schema_id = schema_id;
-        self
-    }
-
-    /// Set previous operations.
-    pub fn previous(mut self, previous: &DocumentViewId) -> Self {
-        self.previous = Some(previous.to_owned());
-        self
-    }
-
-    pub fn seq_num(mut self, seq_num: u64) -> Self {
-        self.seq_num = Some(seq_num);
-        self
-    }
-
-    pub fn timestamp(mut self, timestamp: u64) -> Self {
-        self.timestamp = Some(timestamp);
         self
     }
 
@@ -97,45 +63,22 @@ impl OperationBuilder {
         self
     }
 
-    /// Builds and returns a new `Operation` instance.
-    ///
-    /// This method checks if the given previous operations and operation fields are matching the
-    /// regarding operation action.
-    pub fn sign(
-        &self,
-        private_key: &PrivateKey,
-    ) -> Result<(Header, Operation), OperationBuilderError> {
-        let header = Header();
-
-        let operation = Operation {
+    pub fn build(&self) -> Result<Body, OperationBuilderError> {
+        let body = Body {
             action: self.action,
             version: OperationVersion::V1,
             schema_id: self.schema_id.to_owned(),
-            previous: self.previous.to_owned(),
             fields: self.fields.to_owned(),
         };
 
-        validate_operation_format(&operation)?;
+        validate_body_format(&body)?;
 
-        Ok(operation)
+        Ok(body)
     }
 }
-/// Operations describe data mutations of "documents" in the p2panda network. Authors send
-/// operations to CREATE, UPDATE or DELETE documents.
-///
-/// The data itself lives in the "fields" object and is formed after an operation schema.
-///
-/// Starting from an initial CREATE operation, the following collection of UPDATE operations build
-/// up a causal graph of mutations which can be resolved into a single object during a
-/// "materialisation" process. If a DELETE operation is published it signals the deletion of the
-/// entire graph and no more UPDATE operations should be published.
-///
-/// All UPDATE and DELETE operations have a `previous` field which contains a vector of
-/// operation ids which identify the known branch tips at the time of publication. These allow us
-/// to build the graph and retain knowledge of the graph state at the time the specific operation
-/// was published.
+
 #[derive(Clone, Debug, PartialEq)]
-pub struct Operation {
+pub struct Body {
     /// Version of this operation.
     pub(crate) version: OperationVersion,
 
@@ -149,7 +92,7 @@ pub struct Operation {
     pub(crate) fields: Option<OperationFields>,
 }
 
-impl AsOperation for Operation {
+impl AsOperation for Body {
     /// Returns version of operation.
     fn version(&self) -> OperationVersion {
         self.version.to_owned()
@@ -165,18 +108,13 @@ impl AsOperation for Operation {
         self.schema_id.to_owned()
     }
 
-    /// Returns known previous operations vector of this operation.
-    fn previous(&self) -> Option<DocumentViewId> {
-        self.previous.clone()
-    }
-
     /// Returns application data fields of operation.
     fn fields(&self) -> Option<OperationFields> {
         self.fields.clone()
     }
 }
 
-impl Actionable for Operation {
+impl Actionable for Body {
     fn version(&self) -> OperationVersion {
         self.version
     }
@@ -184,13 +122,9 @@ impl Actionable for Operation {
     fn action(&self) -> OperationAction {
         self.action
     }
-
-    fn previous(&self) -> Option<&DocumentViewId> {
-        self.previous.as_ref()
-    }
 }
 
-impl Schematic for Operation {
+impl Schematic for Body {
     fn schema_id(&self) -> &SchemaId {
         &self.schema_id
     }
@@ -205,12 +139,12 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::DocumentViewId;
-    use crate::operation::traits::AsOperation;
+    use crate::operation::traits::AsBody;
     use crate::operation::{OperationAction, OperationFields, OperationValue, OperationVersion};
     use crate::schema::SchemaId;
     use crate::test_utils::fixtures::{document_view_id, schema_id};
 
-    use super::OperationBuilder;
+    use super::BodyBuilder;
 
     #[rstest]
     fn operation_builder(schema_id: SchemaId, document_view_id: DocumentViewId) {
@@ -220,7 +154,7 @@ mod tests {
             ("year", 2020.into()),
         ];
 
-        let operation = OperationBuilder::new(&schema_id)
+        let operation = BodyBuilder::new(&schema_id)
             .action(OperationAction::Update)
             .previous(&document_view_id)
             .fields(&fields)
@@ -237,13 +171,13 @@ mod tests {
     #[rstest]
     fn operation_builder_validation(schema_id: SchemaId, document_view_id: DocumentViewId) {
         // Correct CREATE operation
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(BodyBuilder::new(&schema_id)
             .fields(&[("year", 2020.into())])
             .build()
             .is_ok());
 
         // CREATE operations must not contain previous
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(BodyBuilder::new(&schema_id)
             .action(OperationAction::Create)
             .fields(&[("year", 2020.into())])
             .previous(&document_view_id)
@@ -251,13 +185,13 @@ mod tests {
             .is_err());
 
         // CREATE operations must contain fields
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(BodyBuilder::new(&schema_id)
             .action(OperationAction::Create)
             .build()
             .is_err());
 
         // correct UPDATE operation
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(BodyBuilder::new(&schema_id)
             .action(OperationAction::Update)
             .fields(&[("year", 2020.into())])
             .previous(&document_view_id)
@@ -265,28 +199,28 @@ mod tests {
             .is_ok());
 
         // UPDATE operations must have fields
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(BodyBuilder::new(&schema_id)
             .action(OperationAction::Update)
             .previous(&document_view_id)
             .build()
             .is_err());
 
         // UPDATE operations must have previous
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(BodyBuilder::new(&schema_id)
             .action(OperationAction::Update)
             .fields(&[("year", 2020.into())])
             .build()
             .is_err());
 
         // correct DELETE operation
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(BodyBuilder::new(&schema_id)
             .action(OperationAction::Delete)
             .previous(&document_view_id)
             .build()
             .is_ok());
 
         // DELETE operations must not have fields
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(BodyBuilder::new(&schema_id)
             .action(OperationAction::Delete)
             .previous(&document_view_id)
             .fields(&[("year", 2020.into())])
@@ -294,7 +228,7 @@ mod tests {
             .is_err());
 
         // DELETE operations must have previous
-        assert!(OperationBuilder::new(&schema_id)
+        assert!(BodyBuilder::new(&schema_id)
             .action(OperationAction::Update)
             .build()
             .is_err());
@@ -303,12 +237,12 @@ mod tests {
     #[rstest]
     fn field_ordering(schema_id: SchemaId) {
         // Create first test operation
-        let operation_1 = OperationBuilder::new(&schema_id)
+        let operation_1 = BodyBuilder::new(&schema_id)
             .fields(&[("a", "sloth".into()), ("b", "penguin".into())])
             .build();
 
         // Create second test operation with same values but different order of fields
-        let operation_2 = OperationBuilder::new(&schema_id)
+        let operation_2 = BodyBuilder::new(&schema_id)
             .fields(&[("b", "penguin".into()), ("a", "sloth".into())])
             .build();
 

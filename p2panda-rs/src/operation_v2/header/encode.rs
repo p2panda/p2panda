@@ -1,27 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Methods to sign and encode an entry.
-//!
-//! Create a new `Entry` instance using the `EntryBuilder` or the alternative low-level
-//! `sign_entry` method which takes in the entry arguments and `KeyPair` for signing. Use
-//! `encode_entry` to create an `EncodedEntry` instance which can then be serialised and sent to a
-//! p2panda node.
-//!
-//! ```text
-//! ┌─────┐                     ┌────────────┐
-//! │Entry│ ──encode_entry()──► │EncodedEntry│ ─────► bytes
-//! └─────┘                     └────────────┘
-//! ```
-use bamboo_rs_core_ed25519_yasmf::entry::{is_lipmaa_required, MAX_ENTRY_SIZE};
-use bamboo_rs_core_ed25519_yasmf::{Entry as BambooEntry, Signature as BambooSignature};
-
-use crate::entry::error::EncodeEntryError;
-use crate::entry::traits::AsEntry;
-use crate::entry::validate::validate_links;
-use crate::entry::{EncodedEntry, Entry, LogId, SeqNum};
-use crate::hash::Hash;
-use crate::identity::KeyPair;
-use crate::operation::EncodedOperation;
+use crate::hash_v2::Hash;
+use crate::identity_v2::KeyPair;
+use crate::operation_v2::body::EncodedOperation;
+use crate::operation_v2::header::error::EncodeEntryError;
+use crate::operation_v2::header::traits::AsEntry;
+use crate::operation_v2::header::validate::validate_links;
+use crate::operation_v2::header::{EncodedHeader, Header, HeaderExtension, LogId, SeqNum};
 
 /// Takes entry arguments (log id, sequence number, etc.), operation payload and a [`KeyPair`],
 /// returns signed `Entry` instance.
@@ -32,66 +17,12 @@ use crate::operation::EncodedOperation;
 /// Using this method we can assume that the entry will be correctly signed. This applies only
 /// basic checks if the backlink and skiplink is correctly set for the given sequence number (#E3).
 /// Please note though that this method not check for correct log integrity!
-pub fn sign_entry(
-    log_id: &LogId,
-    seq_num: &SeqNum,
-    skiplink_hash: Option<&Hash>,
-    backlink_hash: Option<&Hash>,
+pub fn sign_header(
     payload: &EncodedOperation,
+    extension: &HeaderExtension,
     key_pair: &KeyPair,
-) -> Result<Entry, EncodeEntryError> {
-    // Generate payload hash and size from operation bytes
-    let payload_hash = payload.hash();
-    let payload_size = payload.size();
-
-    // Convert entry links to bamboo-rs `YasmfHash` type
-    let backlink = backlink_hash.map(|link| link.into());
-    let lipmaa_link = if is_lipmaa_required(seq_num.as_u64()) {
-        skiplink_hash.map(|link| link.into())
-    } else {
-        // Omit skiplink when it is the same as backlink, this saves us some bytes
-        None
-    };
-
-    // Create Bamboo entry instance.
-    //
-    // See: https://github.com/AljoschaMeyer/bamboo#encoding for encoding details and definition of
-    // entry fields.
-    let entry: BambooEntry<_, &[u8]> = BambooEntry {
-        is_end_of_feed: false,
-        author: key_pair.public_key().into(),
-        log_id: log_id.as_u64(),
-        seq_num: seq_num.as_u64(),
-        lipmaa_link,
-        backlink,
-        payload_size,
-        payload_hash: (&payload_hash).into(),
-        sig: None,
-    };
-
-    let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
-
-    // Get unsigned entry bytes
-    let entry_size = entry.encode(&mut entry_bytes)?;
-
-    // Sign entry
-    let signature = key_pair.sign(&entry_bytes[..entry_size]);
-
-    let signed_entry = Entry {
-        public_key: key_pair.public_key(),
-        log_id: log_id.to_owned(),
-        seq_num: seq_num.to_owned(),
-        skiplink: skiplink_hash.cloned(),
-        backlink: backlink_hash.cloned(),
-        payload_size,
-        payload_hash,
-        signature: signature.into(),
-    };
-
-    // Make sure the links are correct (#E3)
-    validate_links(&signed_entry)?;
-
-    Ok(signed_entry)
+) -> Result<Header, EncodeEntryError> {
+    Ok(signed_header)
 }
 
 /// Encodes an entry into bytes and returns them as `EncodedEntry` instance. After encoding this is

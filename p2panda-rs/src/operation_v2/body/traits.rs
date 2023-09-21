@@ -41,7 +41,7 @@ pub trait Schematic {
 }
 
 /// Trait to be implemented on "operation-like" structs.
-pub trait AsOperation {
+pub trait AsBody {
     /// Returns action type of operation.
     fn action(&self) -> OperationAction;
 
@@ -54,17 +54,9 @@ pub trait AsOperation {
     /// Returns application data fields of operation.
     fn fields(&self) -> Option<OperationFields>;
 
-    /// Returns vector of this operation's previous operation ids
-    fn previous(&self) -> Option<DocumentViewId>;
-
     /// Returns true if operation contains fields.
     fn has_fields(&self) -> bool {
         self.fields().is_some()
-    }
-
-    /// Returns true if previous contains a document view id.
-    fn has_previous_operations(&self) -> bool {
-        self.previous().is_some()
     }
 
     /// Returns true when instance is CREATE operation.
