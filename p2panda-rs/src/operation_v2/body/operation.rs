@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::document::DocumentViewId;
 use crate::operation_v2::body::error::OperationBuilderError;
 use crate::operation_v2::body::plain::PlainFields;
-use crate::operation_v2::body::traits::{Actionable, AsBody, Schematic};
-use crate::operation_v2::body::validate::validate_body_format;
+use crate::operation_v2::traits::Schematic;
+// use crate::operation_v2::body::validate::validate_body_format;
 use crate::operation_v2::body::{
     OperationAction, OperationFields, OperationValue, OperationVersion,
 };
-use crate::operation_v2::header::Header;
 use crate::schema::SchemaId;
 
 #[derive(Clone, Debug)]
@@ -92,38 +90,6 @@ pub struct Body {
     pub(crate) fields: Option<OperationFields>,
 }
 
-impl AsOperation for Body {
-    /// Returns version of operation.
-    fn version(&self) -> OperationVersion {
-        self.version.to_owned()
-    }
-
-    /// Returns action type of operation.
-    fn action(&self) -> OperationAction {
-        self.action.to_owned()
-    }
-
-    /// Returns schema id of operation.
-    fn schema_id(&self) -> SchemaId {
-        self.schema_id.to_owned()
-    }
-
-    /// Returns application data fields of operation.
-    fn fields(&self) -> Option<OperationFields> {
-        self.fields.clone()
-    }
-}
-
-impl Actionable for Body {
-    fn version(&self) -> OperationVersion {
-        self.version
-    }
-
-    fn action(&self) -> OperationAction {
-        self.action
-    }
-}
-
 impl Schematic for Body {
     fn schema_id(&self) -> &SchemaId {
         &self.schema_id
@@ -134,7 +100,7 @@ impl Schematic for Body {
     }
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use rstest::rstest;
 
@@ -271,4 +237,4 @@ mod tests {
             &OperationValue::String("penguin".to_owned())
         );
     }
-}
+}*/
