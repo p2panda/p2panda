@@ -17,6 +17,7 @@ use crate::entry::error::DecodeEntryError;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::entry::validate::{validate_links, validate_signature};
 use crate::entry::Entry;
+use crate::operation_v2::header::Header;
 
 /// Method to decode an entry.
 ///
@@ -36,26 +37,13 @@ use crate::entry::Entry;
 ///
 /// Check out the `decode_operation_with_entry` method in the `operation` module if you're
 /// interested in full verification of both entries and operations.
-pub fn decode_entry(entry_encoded: &impl AsEncodedEntry) -> Result<Entry, DecodeEntryError> {
-    let bytes = entry_encoded.into_bytes();
+pub fn decode_header(encoded_header: &impl AsEncodedEntry) -> Result<Header, DecodeEntryError> {
+    let bytes = encoded_header.into_bytes();
 
-    // Decode the bamboo entry as per specification (#E2)
-    let bamboo_entry = decode(&bytes)?;
-
-    // Convert from external crate type to our `Entry` struct
-    let entry: Entry = bamboo_entry.into();
-
-    // Validate links (#E3). The bamboo-rs crate does check for valid links but not if back- &
-    // skiplinks are identical (this is optional but we enforce it)
-    validate_links(&entry)?;
-
-    // Check the signature (#E5)
-    validate_signature(entry.public_key(), entry.signature(), entry_encoded)?;
-
-    Ok(entry)
+    todo!()
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use std::convert::TryInto;
 
@@ -263,4 +251,4 @@ mod tests {
         assert_eq!(entry.skiplink(), fixture.entry.skiplink());
         assert_eq!(entry.backlink(), fixture.entry.backlink());
     }
-}
+}*/

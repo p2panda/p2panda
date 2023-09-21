@@ -6,7 +6,7 @@ use crate::operation_v2::body::EncodedOperation;
 use crate::operation_v2::header::error::EncodeEntryError;
 use crate::operation_v2::header::traits::AsEntry;
 use crate::operation_v2::header::validate::validate_links;
-use crate::operation_v2::header::{EncodedHeader, Header, HeaderExtension, LogId, SeqNum};
+use crate::operation_v2::header::{EncodedHeader, Header, HeaderExtension};
 
 /// Takes entry arguments (log id, sequence number, etc.), operation payload and a [`KeyPair`],
 /// returns signed `Entry` instance.
@@ -22,7 +22,7 @@ pub fn sign_header(
     extension: &HeaderExtension,
     key_pair: &KeyPair,
 ) -> Result<Header, EncodeEntryError> {
-    Ok(signed_header)
+    todo!()
 }
 
 /// Encodes an entry into bytes and returns them as `EncodedEntry` instance. After encoding this is
@@ -30,31 +30,8 @@ pub fn sign_header(
 ///
 /// This method only fails if something went wrong with the encoder or if a backlink was provided
 /// on an entry with sequence number 1 (#E3).
-pub fn encode_entry(entry: &Entry) -> Result<EncodedEntry, EncodeEntryError> {
-    let signature_bytes = entry.signature().into_bytes();
-
-    let entry: BambooEntry<_, &[u8]> = BambooEntry {
-        is_end_of_feed: false,
-        author: entry.public_key().into(),
-        log_id: entry.log_id().as_u64(),
-        seq_num: entry.seq_num().as_u64(),
-        lipmaa_link: entry.skiplink().map(|link| link.into()),
-        backlink: entry.backlink().map(|link| link.into()),
-        payload_size: entry.payload_size(),
-        payload_hash: entry.payload_hash().into(),
-        sig: Some(BambooSignature(&signature_bytes[..])),
-    };
-
-    let mut entry_bytes = [0u8; MAX_ENTRY_SIZE];
-
-    // Together with signing the entry before, one could think that encoding the entry a second
-    // time is a waste, but actually it is the only way to do signatures. This step is not
-    // redundant.
-    //
-    // Calling this also checks if the backlink is not set for the first entry (#E3).
-    let signed_entry_size = entry.encode(&mut entry_bytes)?;
-
-    Ok(EncodedEntry::from_bytes(&entry_bytes[..signed_entry_size]))
+pub fn encode_header(entry: &Header) -> Result<EncodedHeader, EncodeEntryError> {
+    todo!()
 }
 
 /// High-level method which applies both signing and encoding an entry into one step, returns an
@@ -62,28 +39,18 @@ pub fn encode_entry(entry: &Entry) -> Result<EncodedEntry, EncodeEntryError> {
 ///
 /// See low-level methods for details.
 pub fn sign_and_encode_entry(
-    log_id: &LogId,
-    seq_num: &SeqNum,
-    skiplink_hash: Option<&Hash>,
-    backlink_hash: Option<&Hash>,
     payload: &EncodedOperation,
+    extension: &HeaderExtension,
     key_pair: &KeyPair,
-) -> Result<EncodedEntry, EncodeEntryError> {
-    let entry = sign_entry(
-        log_id,
-        seq_num,
-        skiplink_hash,
-        backlink_hash,
-        payload,
-        key_pair,
-    )?;
+) -> Result<EncodedHeader, EncodeEntryError> {
+    let entry = sign_header(payload, extension, key_pair)?;
 
-    let encoded_entry = encode_entry(&entry)?;
+    let encoded_header = encode_header(&entry)?;
 
-    Ok(encoded_entry)
+    Ok(encoded_header)
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use std::collections::HashMap;
     use std::convert::TryInto;
@@ -221,4 +188,4 @@ mod tests {
     fn fixture_encode_valid_entries(#[case] entry: Entry) {
         assert!(encode_entry(&entry).is_ok());
     }
-}
+}*/
