@@ -13,11 +13,10 @@ mod operation_value;
 mod operation_version;
 pub mod plain;
 mod relation;
-pub mod traits;
 pub mod validate;
 
 pub use encoded_operation::EncodedOperation;
-pub use operation::Operation;
+pub use operation::{Body, BodyBuilder};
 pub use operation_action::OperationAction;
 pub use operation_fields::OperationFields;
 pub use operation_id::OperationId;
