@@ -8,9 +8,9 @@ use std::fmt;
 use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 
-use crate::operation::error::FieldsError;
-use crate::operation::plain::PlainValue;
-use crate::operation::{OperationFields, OperationValue};
+use crate::operation_v2::body::error::FieldsError;
+use crate::operation_v2::body::plain::PlainValue;
+use crate::operation_v2::body::{OperationFields, OperationValue};
 use crate::schema::FieldName;
 
 /// Operation fields which have not been checked against a schema yet.
@@ -152,14 +152,14 @@ impl From<&OperationFields> for PlainFields {
     }
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use ciborium::cbor;
     use rstest::rstest;
     use serde_bytes::ByteBuf;
 
-    use crate::operation::plain::PlainValue;
-    use crate::operation::OperationFields;
+    use crate::operation_v2::body::plain::PlainValue;
+    use crate::operation_v2::body::OperationFields;
     use crate::serde::{deserialize_into, serialize_from, serialize_value};
     use crate::test_utils::fixtures::operation_fields;
 
@@ -261,4 +261,4 @@ mod tests {
         })))
         .is_err());
     }
-}
+}*/

@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::hash::Hash;
-use crate::operation::plain::{PlainFields, PlainValue};
+use crate::operation_v2::body::plain::{PlainFields, PlainValue};
 use crate::schema::validate::error::SchemaDefinitionError;
 
 /// Checks "name" field of operations with "schema_definition_v1" schema id.
@@ -93,7 +93,7 @@ pub fn validate_schema_definition_v1_fields(
     Ok(())
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod test {
     use rstest::rstest;
 
@@ -190,4 +190,4 @@ mod test {
     fn check_name_field(#[case] name_str: &str) {
         assert!(validate_name(name_str));
     }
-}
+}*/

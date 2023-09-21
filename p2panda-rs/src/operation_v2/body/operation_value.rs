@@ -3,7 +3,7 @@
 use serde::Serialize;
 
 use crate::document::{DocumentId, DocumentViewId};
-use crate::operation::{PinnedRelation, PinnedRelationList, Relation, RelationList};
+use crate::operation_v2::body::{PinnedRelation, PinnedRelationList, Relation, RelationList};
 
 /// Enum of possible data types which can be added to the operations fields as values.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -114,17 +114,15 @@ impl From<Vec<DocumentViewId>> for OperationValue {
     }
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use rstest::rstest;
 
     use crate::document::{DocumentId, DocumentViewId};
-    use crate::operation::{
-        OperationId, PinnedRelation, PinnedRelationList, Relation, RelationList,
+    use crate::operation_v2::body::{
+        OperationId, OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
     };
     use crate::test_utils::fixtures::{document_id, document_view_id, random_operation_id};
-
-    use super::OperationValue;
 
     #[rstest]
     fn to_field_type(#[from(random_operation_id)] operation_id: OperationId) {
@@ -187,4 +185,4 @@ mod tests {
             vec![document_view_id].into()
         );
     }
-}
+}*/

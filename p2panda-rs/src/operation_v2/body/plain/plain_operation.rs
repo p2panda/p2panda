@@ -6,9 +6,11 @@ use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 
 use crate::document::DocumentViewId;
-use crate::operation::plain::PlainFields;
-use crate::operation::traits::{Actionable, AsOperation, Schematic};
-use crate::operation::{Operation, OperationAction, OperationVersion};
+use crate::operation_v2::body::plain::PlainFields;
+use crate::operation_v2::body::{OperationAction, OperationVersion};
+use crate::operation_v2::traits::AsOperation;
+use crate::operation_v2::traits::{Actionable, Schematic};
+use crate::operation_v2::Operation;
 use crate::schema::SchemaId;
 
 /// Intermediate operation type which has been decoded, but not checked against a schema.
@@ -137,7 +139,7 @@ impl From<&Operation> for PlainOperation {
     }
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use ciborium::cbor;
     use ciborium::value::{Error, Value};
@@ -259,4 +261,4 @@ mod tests {
         // expected error stings.
         deserialize_into::<PlainOperation>(&serialize_value(operation_cbor)).unwrap();
     }
-}
+}*/

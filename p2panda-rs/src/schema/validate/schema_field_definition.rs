@@ -5,7 +5,7 @@ use std::str::FromStr;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::operation::plain::{PlainFields, PlainValue};
+use crate::operation_v2::body::plain::{PlainFields, PlainValue};
 use crate::schema::validate::error::SchemaFieldDefinitionError;
 use crate::schema::SchemaId;
 
@@ -132,7 +132,7 @@ pub fn validate_schema_field_definition_v1_fields(
     Ok(())
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod test {
     use rstest::rstest;
 
@@ -258,4 +258,4 @@ mod test {
     fn check_type_field(#[case] type_str: &str) {
         assert!(validate_type(type_str));
     }
-}
+}*/

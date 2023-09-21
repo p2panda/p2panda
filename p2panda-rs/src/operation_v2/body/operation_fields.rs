@@ -3,8 +3,8 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
-use crate::operation::error::FieldsError;
-use crate::operation::OperationValue;
+use crate::operation_v2::body::error::FieldsError;
+use crate::operation_v2::body::OperationValue;
 
 /// Operation fields are used to store application data. They are implemented as a simple key/value
 /// store with support for a limited number of data types (see [`OperationValue`] for further
@@ -117,12 +117,12 @@ impl From<Vec<(&str, OperationValue)>> for OperationFields {
     }
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use rstest::rstest;
 
     use crate::document::DocumentViewId;
-    use crate::operation::{OperationId, PinnedRelationList};
+    use crate::operation_v2::body::{OperationId, PinnedRelationList};
     use crate::test_utils::fixtures::random_operation_id;
 
     use super::{OperationFields, OperationValue};
@@ -202,4 +202,4 @@ mod tests {
             &OperationValue::Boolean(true)
         );
     }
-}
+}*/

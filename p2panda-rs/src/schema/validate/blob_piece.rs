@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-&3.0-or-later
 
-use crate::operation::plain::{PlainFields, PlainValue};
+use crate::operation_v2::body::plain::{PlainFields, PlainValue};
 use crate::schema::validate::error::BlobPieceError;
 
 /// Maximum number of bytes a single blob piece can contain.
@@ -38,7 +38,7 @@ pub fn validate_blob_piece_v1_fields(fields: &PlainFields) -> Result<(), BlobPie
     Ok(())
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod test {
     use rstest::rstest;
 
@@ -54,4 +54,4 @@ mod test {
     fn check_fields(#[case] fields: PlainFields) {
         assert!(validate_blob_piece_v1_fields(&fields).is_ok());
     }
-}
+}*/

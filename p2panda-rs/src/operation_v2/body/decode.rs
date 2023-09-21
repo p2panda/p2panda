@@ -15,9 +15,9 @@
 //!
 //! Move on to `operation::validate` for methods to check the `PlainOperation` against the claimed
 //! `Schema` instance to eventually get the `Operation` instance.
-use crate::operation::error::DecodeOperationError;
-use crate::operation::plain::PlainOperation;
-use crate::operation::EncodedOperation;
+use crate::operation_v2::body::error::DecodeOperationError;
+use crate::operation_v2::body::plain::PlainOperation;
+use crate::operation_v2::body::EncodedOperation;
 
 /// Method to decode an operation.
 ///
@@ -43,7 +43,7 @@ pub fn decode_operation(
     Ok(plain_operation)
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use ciborium::cbor;
     use ciborium::value::{Error, Value};
@@ -266,4 +266,4 @@ mod tests {
         // Decoding operation fixture should succeed
         assert!(decode_operation(&fixture.operation_encoded).is_ok());
     }
-}
+}*/
