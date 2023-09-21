@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::document::DocumentViewId;
-use crate::operation::error::OperationBuilderError;
-use crate::operation::plain::PlainFields;
-use crate::operation::traits::{Actionable, AsOperation, Schematic};
-use crate::operation::validate::validate_operation_format;
-use crate::operation::{OperationAction, OperationFields, OperationValue, OperationVersion};
+use crate::identity_v2::PrivateKey;
+use crate::operation::Operation;
+use crate::operation_v2::body::traits::{Actionable, AsOperation, Schematic};
+use crate::operation_v2::body::validate::validate_operation_format;
+use crate::operation_v2::body::{
+    OperationAction, OperationFields, OperationValue, OperationVersion,
+};
+use crate::operation_v2::error::OperationBuilderError;
+use crate::operation_v2::header::Header;
 use crate::schema::SchemaId;
 
 /// Create new operations.
@@ -14,14 +18,18 @@ use crate::schema::SchemaId;
 /// claimed schemas. You can use `validate_operation` for this.
 #[derive(Clone, Debug)]
 pub struct OperationBuilder {
+    /// Previous field which contains the last known view id for the target document.
+    previous: Option<DocumentViewId>,
+
+    seq_num: Option<u64>,
+
+    timestamp: Option<u64>,
+
     /// Action of this operation.
     action: OperationAction,
 
     /// Schema instance of this operation.
     schema_id: SchemaId,
-
-    /// Previous field which contains the last known view id for the target document.
-    previous: Option<DocumentViewId>,
 
     /// Operation fields.
     fields: Option<OperationFields>,
@@ -31,9 +39,14 @@ impl OperationBuilder {
     /// Returns a new instance of `OperationBuilder`.
     pub fn new(schema_id: &SchemaId) -> Self {
         Self {
+            // Header
+            previous: None,
+            seq_num: None,
+            timestamp: None,
+
+            // Body
             action: OperationAction::Create,
             schema_id: schema_id.to_owned(),
-            previous: None,
             fields: None,
         }
     }
@@ -53,6 +66,16 @@ impl OperationBuilder {
     /// Set previous operations.
     pub fn previous(mut self, previous: &DocumentViewId) -> Self {
         self.previous = Some(previous.to_owned());
+        self
+    }
+
+    pub fn seq_num(mut self, seq_num: u64) -> Self {
+        self.seq_num = Some(seq_num);
+        self
+    }
+
+    pub fn timestamp(mut self, timestamp: u64) -> Self {
+        self.timestamp = Some(timestamp);
         self
     }
 
@@ -78,7 +101,12 @@ impl OperationBuilder {
     ///
     /// This method checks if the given previous operations and operation fields are matching the
     /// regarding operation action.
-    pub fn build(&self) -> Result<Operation, OperationBuilderError> {
+    pub fn sign(
+        &self,
+        private_key: &PrivateKey,
+    ) -> Result<(Header, Operation), OperationBuilderError> {
+        let header = Header();
+
         let operation = Operation {
             action: self.action,
             version: OperationVersion::V1,
@@ -92,7 +120,6 @@ impl OperationBuilder {
         Ok(operation)
     }
 }
-
 /// Operations describe data mutations of "documents" in the p2panda network. Authors send
 /// operations to CREATE, UPDATE or DELETE documents.
 ///
@@ -117,10 +144,6 @@ pub struct Operation {
 
     /// The id of the schema for this operation.
     pub(crate) schema_id: SchemaId,
-
-    /// Optional document view id containing the operation ids directly preceding this one in the
-    /// document.
-    pub(crate) previous: Option<DocumentViewId>,
 
     /// Optional fields map holding the operation data.
     pub(crate) fields: Option<OperationFields>,
