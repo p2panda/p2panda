@@ -85,6 +85,11 @@ pub mod test_utils;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 
+// @TODO: Merge these back into original modules as soon as refactor finished
+pub mod hash_v2;
+pub mod identity_v2;
+pub mod operation_v2;
+
 /// Trait used by p2panda structs to validate data formats.
 ///
 /// Use this trait to check against (canonic) formats of data (like document ids or yasmf hashes)
