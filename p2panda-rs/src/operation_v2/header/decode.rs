@@ -11,9 +11,8 @@
 //!  bytes ───► │EncodedEntry│ ────decode_entry()────► │Entry│
 //!             └────────────┘                         └─────┘
 //! ```
-use crate::entry::error::DecodeEntryError;
-use crate::entry::traits::{AsEncodedEntry, AsEntry};
-use crate::entry::validate::{validate_links, validate_signature};
+use crate::operation_v2::header::error::DecodeEntryError;
+use crate::operation_v2::header::traits::AsEncodedHeader;
 use crate::operation_v2::header::Header;
 
 /// Method to decode an entry.
@@ -34,9 +33,8 @@ use crate::operation_v2::header::Header;
 ///
 /// Check out the `decode_operation_with_entry` method in the `operation` module if you're
 /// interested in full verification of both entries and operations.
-pub fn decode_header(encoded_header: &impl AsEncodedEntry) -> Result<Header, DecodeEntryError> {
+pub fn decode_header(encoded_header: &impl AsEncodedHeader) -> Result<Header, DecodeEntryError> {
     let bytes = encoded_header.into_bytes();
-
     todo!()
 }
 
