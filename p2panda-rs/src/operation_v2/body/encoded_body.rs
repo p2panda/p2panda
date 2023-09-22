@@ -5,7 +5,7 @@ use std::hash::Hash as StdHash;
 
 use serde::{Deserialize, Serialize};
 
-use crate::hash::Hash;
+use crate::hash_v2::Hash;
 use crate::serde::{deserialize_hex, serialize_hex};
 
 /// Wrapper type for operation bytes.

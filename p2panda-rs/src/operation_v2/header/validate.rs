@@ -7,15 +7,17 @@
 use crate::identity_v2::{PublicKey, Signature};
 use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::header::error::ValidateEntryError;
-use crate::operation_v2::header::traits::{AsEncodedEntry, AsEntry};
+use crate::operation_v2::header::traits::AsEncodedHeader;
+
+use super::traits::AsHeader;
 
 /// Checks if the entry is authentic by verifying the public key with the given signature (#E5).
 pub fn validate_signature(
     public_key: &PublicKey,
     signature: &Signature,
-    encoded_entry: &impl AsEncodedEntry,
+    encoded_header: &impl AsEncodedHeader,
 ) -> Result<(), ValidateEntryError> {
-    if !PublicKey::verify(public_key, &encoded_entry.unsigned_bytes(), &signature) {
+    if !PublicKey::verify(public_key, &encoded_header.unsigned_bytes(), &signature) {
         todo!()
     };
 
@@ -23,15 +25,12 @@ pub fn validate_signature(
 }
 
 /// Checks if the claimed payload hash and size matches the actual data (#E6).
-pub fn validate_payload(
-    entry: &impl AsEntry,
-    payload: &EncodedBody,
-) -> Result<(), ValidateEntryError> {
-    if entry.payload_hash() != &payload.hash() {
+pub fn validate_payload(header: &impl AsHeader, payload: &EncodedBody) -> Result<(), ValidateEntryError> {
+    if header.payload_hash() != &payload.hash() {
         return Err(ValidateEntryError::PayloadHashMismatch);
     }
 
-    if entry.payload_size() != payload.size() {
+    if header.payload_size() != payload.size() {
         return Err(ValidateEntryError::PayloadSizeMismatch);
     }
 

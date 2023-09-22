@@ -73,7 +73,7 @@ pub enum ValidateOperationError {
 
     /// Handle errors from `entry::validate` module.
     #[error(transparent)]
-    ValidateEntryError(#[from] crate::entry::error::ValidateEntryError),
+    ValidateEntryError(#[from] crate::operation_v2::header::error::ValidateEntryError),
 }
 
 /// Error types for methods of plain fields or operation fields.

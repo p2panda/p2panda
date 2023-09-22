@@ -3,10 +3,10 @@
 //! Collection of low-level validation methods for operations.
 use crate::document::DocumentViewId;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
-use crate::entry::validate::{validate_log_integrity, validate_payload};
 use crate::hash::Hash;
 use crate::operation_v2::body::plain::{PlainFields, PlainOperation};
 use crate::operation_v2::body::{Body, EncodedBody};
+use crate::operation_v2::header::validate::validate_payload;
 use crate::operation_v2::header::{EncodedHeader, Header};
 use crate::operation_v2::operation::error::ValidateOperationError;
 use crate::operation_v2::operation::traits::{Actionable, Schematic};
@@ -82,28 +82,22 @@ use crate::Human;
 /// ```
 #[allow(clippy::too_many_arguments)]
 pub fn validate_operation_with_entry(
-    entry: &impl AsEntry,
-    entry_encoded: &impl AsEncodedEntry,
-    skiplink: Option<(&impl AsEntry, &Hash)>,
-    backlink: Option<(&impl AsEntry, &Hash)>,
+    header: &Header,
+    encoded_header: &EncodedHeader,
     plain_operation: &PlainOperation,
-    operation_body: &EncodedBody,
+    encoded_body: &EncodedBody,
     schema: &Schema,
 ) -> Result<(Operation, OperationId), ValidateOperationError> {
-    todo!()
-    //     // Verify that the entry belongs to this operation
-    //     validate_payload(entry, operation_encoded)?;
-    //
-    //     // Verify that the entries links are correct
-    //     validate_log_integrity(entry, skiplink, backlink)?;
-    //
-    //     // The operation id is the result of a hashing function over the entry bytes.
-    //     let operation_id = entry_encoded.hash().into();
-    //
-    //     // Validate and convert plain operation with the help of a schema
-    //     let operation = validate_operation(plain_operation, schema)?;
-    //
-    //     Ok((operation, operation_id))
+    // Verify that the entry belongs to this operation
+    validate_payload(header, encoded_body)?;
+
+    // The operation id is the result of a hashing function over the entry bytes.
+    let operation_id = encoded_header.hash().into();
+
+    // Validate and convert plain operation with the help of a schema
+    let operation = validate_operation(plain_operation, schema)?;
+
+    Ok((operation, operation_id))
 }
 
 /// Check the format of an operation-like data type.

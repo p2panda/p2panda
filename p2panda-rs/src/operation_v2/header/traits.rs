@@ -1,29 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Interfaces for interactions for entry-like structs.
-use bamboo_rs_core_ed25519_yasmf::entry::is_lipmaa_required;
-
 use crate::entry::SIGNATURE_SIZE;
-use crate::entry::{LogId, SeqNum, Signature};
-use crate::hash::Hash;
-use crate::identity::PublicKey;
+use crate::hash_v2::Hash;
+use crate::identity_v2::{PublicKey, Signature};
+use crate::operation_v2::header::{HeaderExtension, HeaderVersion};
 
 /// Trait representing an "entry-like" struct.
-pub trait AsEntry {
+pub trait AsHeader {
+    fn version(&self) -> HeaderVersion;
+
     /// Returns public key of entry.
     fn public_key(&self) -> &PublicKey;
-
-    /// Returns log id of entry.
-    fn log_id(&self) -> &LogId;
-
-    /// Returns sequence number of entry.
-    fn seq_num(&self) -> &SeqNum;
-
-    /// Returns hash of skiplink entry when given.
-    fn skiplink(&self) -> Option<&Hash>;
-
-    /// Returns hash of backlink entry when given.
-    fn backlink(&self) -> Option<&Hash>;
 
     /// Returns payload size of operation.
     fn payload_size(&self) -> u64;
@@ -34,24 +22,12 @@ pub trait AsEntry {
     /// Returns signature of entry.
     fn signature(&self) -> &Signature;
 
-    /// Calculates sequence number of backlink entry.
-    fn seq_num_backlink(&self) -> Option<SeqNum> {
-        self.seq_num().backlink_seq_num()
-    }
-
-    /// Calculates sequence number of skiplink entry.
-    fn seq_num_skiplink(&self) -> Option<SeqNum> {
-        self.seq_num().skiplink_seq_num()
-    }
-
-    /// Returns true if skiplink has to be given.
-    fn is_skiplink_required(&self) -> bool {
-        is_lipmaa_required(self.seq_num().as_u64())
-    }
+    /// Returns sequence number of entry.
+    fn extensions(&self) -> &HeaderExtension;
 }
 
 /// Trait representing an "encoded entry-like" struct.
-pub trait AsEncodedEntry {
+pub trait AsEncodedHeader {
     /// Generates and returns hash of encoded entry.
     fn hash(&self) -> Hash;
 

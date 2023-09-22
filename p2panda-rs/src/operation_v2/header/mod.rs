@@ -10,4 +10,4 @@ pub mod traits;
 pub mod validate;
 
 pub use encoded_header::EncodedHeader;
-pub use header::{Header, HeaderBuilder, HeaderExtension};
+pub use header::{Header, HeaderBuilder, HeaderExtension, HeaderVersion};

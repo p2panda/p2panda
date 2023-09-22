@@ -69,7 +69,9 @@ impl BodyBuilder {
             fields: self.fields.to_owned(),
         };
 
-        validate_body_format(&body)?;
+        // @TODO: We need a new method for validating the body, it's different from validating the
+        // operation as we are missing the previous field now.
+        // validate_body_format(&body)?;
 
         Ok(body)
     }

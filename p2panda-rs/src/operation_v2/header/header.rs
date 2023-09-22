@@ -8,7 +8,7 @@ use crate::identity_v2::{KeyPair, PublicKey, Signature};
 use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::header::encode::sign_header;
 use crate::operation_v2::header::error::EntryBuilderError;
-use crate::operation_v2::header::traits::AsEntry;
+use crate::operation_v2::header::traits::AsHeader;
 
 pub type PayloadHash = Hash;
 
@@ -23,6 +23,38 @@ pub struct Header(
     pub(crate) HeaderExtension,
     pub(crate) Signature,
 );
+
+impl AsHeader for Header {
+    /// Returns public key of entry.
+    fn version(&self) -> HeaderVersion {
+        self.0
+    }
+
+    /// Returns public key of entry.
+    fn public_key(&self) -> &PublicKey {
+        &self.1
+    }
+
+    /// Returns payload hash of operation.
+    fn payload_hash(&self) -> &Hash {
+        &self.2
+    }
+
+    /// Returns payload size of operation.
+    fn payload_size(&self) -> u64 {
+        self.3
+    }
+
+    /// Returns sequence number of entry.
+    fn extensions(&self) -> &HeaderExtension {
+        &self.4
+    }
+
+    /// Returns signature of entry.
+    fn signature(&self) -> &Signature {
+        &self.5
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum HeaderVersion {
