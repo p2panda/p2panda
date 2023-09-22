@@ -16,7 +16,7 @@
 //! Move on to `operation::validate` for methods to check the `PlainOperation` against the claimed
 //! `Schema` instance to eventually get the `Operation` instance.
 use crate::operation_v2::operation::error::DecodeOperationError;
-use crate::operation_v2::body::plain::PlainOperation;
+use crate::operation_v2::body::plain::PlainBody;
 use crate::operation_v2::body::EncodedBody;
 
 /// Method to decode an operation.
@@ -27,10 +27,10 @@ use crate::operation_v2::body::EncodedBody;
 /// 2. Ensures canonic field values format (sorted arrays, no duplicates) (#OP3)
 pub fn decode_operation(
     encoded_operation: &EncodedBody,
-) -> Result<PlainOperation, DecodeOperationError> {
+) -> Result<PlainBody, DecodeOperationError> {
     let bytes = encoded_operation.into_bytes();
 
-    let plain_operation: PlainOperation =
+    let plain_operation: PlainBody =
         ciborium::de::from_reader(&bytes[..]).map_err(|err| match err {
             ciborium::de::Error::Io(err) => DecodeOperationError::DecoderIOFailed(err.to_string()),
             ciborium::de::Error::Syntax(pos) => DecodeOperationError::InvalidCBOREncoding(pos),

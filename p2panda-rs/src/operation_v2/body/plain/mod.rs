@@ -6,10 +6,10 @@
 //! which has not been checked against a `Schema` instance yet. This allows us to a) already read
 //! header information from it, like the schema id, operation action or -version b) efficiently
 //! deserialize even when we don't know the schema.
+mod plain_body;
 mod plain_fields;
-mod plain_operation;
 mod plain_value;
 
+pub use plain_body::PlainBody;
 pub use plain_fields::PlainFields;
-pub use plain_operation::PlainOperation;
 pub use plain_value::PlainValue;

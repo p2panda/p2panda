@@ -12,14 +12,14 @@
 //! └─────────┘                           └────────────────┘
 //! ```
 use crate::operation_v2::operation::error::EncodeOperationError;
-use crate::operation_v2::body::plain::PlainOperation;
+use crate::operation_v2::body::plain::PlainBody;
 use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::operation::Operation;
 
 /// Encodes an operation in canonic format.
 pub fn encode_operation(operation: &Operation) -> Result<EncodedBody, EncodeOperationError> {
     // Convert to plain operation format
-    let plain: PlainOperation = operation.into();
+    let plain: PlainBody = operation.into();
 
     // Encode as CBOR byte sequence
     let encoded_operation = encode_plain_operation(&plain)?;
@@ -27,9 +27,9 @@ pub fn encode_operation(operation: &Operation) -> Result<EncodedBody, EncodeOper
     Ok(encoded_operation)
 }
 
-/// Encodes a `PlainOperation` instance in canonic format.
+/// Encodes a `PlainBody` instance in canonic format.
 pub fn encode_plain_operation(
-    plain: &PlainOperation,
+    plain: &PlainBody,
 ) -> Result<EncodedBody, EncodeOperationError> {
     let mut cbor_bytes = Vec::new();
 

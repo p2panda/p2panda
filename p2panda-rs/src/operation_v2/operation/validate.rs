@@ -4,7 +4,7 @@
 use crate::document::DocumentViewId;
 use crate::entry::traits::{AsEncodedEntry, AsEntry};
 use crate::hash::Hash;
-use crate::operation_v2::body::plain::{PlainFields, PlainOperation};
+use crate::operation_v2::body::plain::{PlainFields, PlainBody};
 use crate::operation_v2::body::{Body, EncodedBody};
 use crate::operation_v2::header::validate::validate_payload;
 use crate::operation_v2::header::{EncodedHeader, Header};
@@ -84,7 +84,7 @@ use crate::Human;
 pub fn validate_operation_with_entry(
     header: &Header,
     encoded_header: &EncodedHeader,
-    plain_operation: &PlainOperation,
+    plain_operation: &PlainBody,
     encoded_body: &EncodedBody,
     schema: &Schema,
 ) -> Result<(Operation, OperationId), ValidateOperationError> {

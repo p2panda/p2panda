@@ -16,7 +16,7 @@ use crate::schema::SchemaId;
 /// Use plain operations to already read important data from them, like the schema id or operation
 /// action.
 #[derive(Serialize, Debug, PartialEq)]
-pub struct PlainOperation(
+pub struct PlainBody(
     OperationVersion,
     OperationAction,
     SchemaId,
@@ -24,7 +24,7 @@ pub struct PlainOperation(
     #[serde(skip_serializing_if = "Option::is_none")] Option<PlainFields>,
 );
 
-impl Actionable for PlainOperation {
+impl Actionable for PlainBody {
     fn version(&self) -> OperationVersion {
         self.0
     }
@@ -38,7 +38,7 @@ impl Actionable for PlainOperation {
     }
 }
 
-impl Schematic for PlainOperation {
+impl Schematic for PlainBody {
     fn schema_id(&self) -> &SchemaId {
         &self.2
     }
@@ -48,7 +48,7 @@ impl Schematic for PlainOperation {
     }
 }
 
-impl<'de> Deserialize<'de> for PlainOperation {
+impl<'de> Deserialize<'de> for PlainBody {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -56,7 +56,7 @@ impl<'de> Deserialize<'de> for PlainOperation {
         struct RawOperationVisitor;
 
         impl<'de> Visitor<'de> for RawOperationVisitor {
-            type Value = PlainOperation;
+            type Value = PlainBody;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("p2panda operation")
@@ -115,7 +115,7 @@ impl<'de> Deserialize<'de> for PlainOperation {
                     }
                 };
 
-                Ok(PlainOperation(version, action, schema_id, previous, fields))
+                Ok(PlainBody(version, action, schema_id, previous, fields))
             }
         }
 
@@ -123,9 +123,9 @@ impl<'de> Deserialize<'de> for PlainOperation {
     }
 }
 
-impl From<&Operation> for PlainOperation {
+impl From<&Operation> for PlainBody {
     fn from(operation: &Operation) -> Self {
-        PlainOperation(
+        PlainBody(
             AsOperation::version(operation),
             AsOperation::action(operation),
             AsOperation::schema_id(operation),
