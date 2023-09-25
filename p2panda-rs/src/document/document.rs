@@ -135,6 +135,7 @@ where
     }
 }
 
+/// Struct which implements a Reducer used during document building.
 #[derive(Debug)]
 struct DocumentReducer {
     document: Option<Document>,
@@ -150,17 +151,23 @@ impl Default for DocumentReducer {
     }
 }
 
+/// Implementation of the `Reduce` trait for collections of authored operations.
 impl Reducer<(OperationId, Operation, PublicKey)> for DocumentReducer {
+    /// Combine a visited operation with the existing document.
     fn combine(&mut self, value: &(OperationId, Operation, PublicKey)) {
+        // Extract the values.
         let (operation_id, operation, public_key) = value;
 
+        // If we already experienced an error then do nothing.
         if self.result.is_err() {
             return;
         }
 
+        // Get the current document.
         let document = self.document.clone();
 
         match document {
+            // If it has already been instantiated perform the commit.
             Some(mut document) => {
                 match document.commit(operation_id, operation) {
                     Ok(_) => (),
@@ -175,21 +182,29 @@ impl Reducer<(OperationId, Operation, PublicKey)> for DocumentReducer {
                             // Perform the commit in any case.
                             document.commit_unchecked(operation_id, operation);
                         }
+                        // These errors are serious and we should signal that the reducing failed
+                        // by storing the error.
                         err => self.result = Err(err.into()),
                     },
                 };
+                // Set the updated document.
                 self.document = Some(document);
             }
+            // If the document wasn't instantiated yet, then do so.
             None => {
+                // Error if this operation is _not_ a CREATE operation.
                 if !operation.is_create() {
                     self.result = Err(DocumentReducerError::FirstOperationNotCreate);
                     return;
                 }
+
+                // Construct the document view fields.
                 let document_fields = DocumentViewFields::new_from_operation_fields(
                     &operation_id,
                     &operation.fields().unwrap(),
                 );
 
+                // Construct the document.
                 let document = Document {
                     id: operation_id.as_hash().clone().into(),
                     fields: Some(document_fields),
@@ -199,6 +214,7 @@ impl Reducer<(OperationId, Operation, PublicKey)> for DocumentReducer {
                     operations: vec![(operation_id.clone(), operation.clone())],
                 };
 
+                // Set the newly instantiated document.
                 self.document = Some(document)
             }
         }
