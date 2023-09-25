@@ -9,7 +9,7 @@ use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::header::encode::sign_header;
 use crate::operation_v2::header::error::EncodeHeaderError;
 use crate::operation_v2::header::traits::AsHeader;
-use crate::operation_v2::OperationVersion;
+use crate::operation_v2::{OperationAction, OperationVersion};
 
 pub type PayloadHash = Hash;
 
@@ -60,6 +60,9 @@ pub struct HeaderExtension {
     #[serde(rename = "p", skip_serializing_if = "Option::is_none")]
     previous: Option<DocumentViewId>,
 
+    #[serde(rename = "a", skip_serializing_if = "Option::is_none")]
+    action: Option<OperationAction>,
+
     #[serde(rename = "t", skip_serializing_if = "Option::is_none")]
     timestamp: Option<u64>,
 }
@@ -70,6 +73,11 @@ pub struct HeaderBuilder(HeaderExtension);
 impl HeaderBuilder {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn action(mut self, action: OperationAction) -> Self {
+        self.0.action = Some(action);
+        self
     }
 
     pub fn seq_num(mut self, seq_num: u64) -> Self {
