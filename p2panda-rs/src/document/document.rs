@@ -14,6 +14,8 @@ use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::{Human, WithId};
 
+use super::error::DocumentError;
+
 /// High-level datatype representing data published to the p2panda network as key-value pairs.
 ///
 /// Documents are multi-writer and have automatic conflict resolution strategies which produce deterministic
@@ -160,9 +162,22 @@ impl Reducer<(OperationId, Operation, PublicKey)> for DocumentReducer {
 
         match document {
             Some(mut document) => {
-                self.result = document
-                    .commit(operation_id, operation)
-                    .map_err(DocumentReducerError::from);
+                match document.commit(operation_id, operation) {
+                    Ok(_) => (),
+                    Err(err) => match err {
+                        DocumentError::PreviousDoesNotMatch(_) => {
+                            // We accept this error as we are reducing the document while walking
+                            // the operation graph in DocumentBuilder. In this situation the
+                            // operations are being visited in their topologically sorted order
+                            // and in the case of branches, `previous` may not match the documents
+                            // current document view id.
+                            //
+                            // Perform the commit in any case.
+                            document.commit_unchecked(operation_id, operation);
+                        }
+                        err => self.result = Err(err.into()),
+                    },
+                };
                 self.document = Some(document);
             }
             None => {

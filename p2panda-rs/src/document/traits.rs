@@ -88,14 +88,22 @@ pub trait AsDocument {
         // Unwrap as all other operation types contain `previous`.
         let previous = operation.previous().unwrap();
 
-        if self.view_id() != &previous {
-            return Err(DocumentError::PreviousDoesNotMatch(operation_id.to_owned()));
-        }
-
         if self.is_deleted() {
             return Err(DocumentError::UpdateOnDeleted);
         }
 
+        if self.view_id() != &previous {
+            return Err(DocumentError::PreviousDoesNotMatch(operation_id.to_owned()));
+        }
+
+        // We performed all validation commit the operation.
+        self.commit_unchecked(operation_id, operation);
+
+        Ok(())
+    }
+
+    /// Commit an new operation to the document without performing any validation.
+    fn commit_unchecked<T: AsOperation>(&mut self, operation_id: &OperationId, operation: &T) {
         let next_fields = match operation.fields() {
             // If the operation contains fields it's an UPDATE and so we want to apply the changes
             // to the designated fields.
@@ -131,7 +139,5 @@ pub trait AsDocument {
         // Push the new operation to the operations list.
         self.get_operations_mut()
             .push((operation_id.to_owned(), operation.into()));
-
-        Ok(())
     }
 }
