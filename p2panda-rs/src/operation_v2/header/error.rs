@@ -3,12 +3,6 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum HeaderBuilderError {
-    #[error(transparent)]
-    EncodeHeaderError(#[from] EncodeHeaderError),
-}
-
-#[derive(Error, Debug)]
 pub enum EncodeHeaderError {
     /// CBOR encoder failed critically due to an IO issue.
     #[error("cbor encoder failed {0}")]
@@ -43,12 +37,12 @@ pub enum DecodeHeaderError {
 
 #[derive(Error, Debug)]
 pub enum ValidateHeaderError {
-    /// Operation needs to match payload hash of encoded header.
-    #[error("body needs to match payload hash of encoded header")]
+    /// Payload needs to match claimed hash in header.
+    #[error("body doesn't match claimed payload hash of header")]
     PayloadHashMismatch,
 
-    /// Operation needs to match payload size of encoded header.
-    #[error("body needs to match payload size of encoded header")]
+    /// Payload needs to match claimed size in header.
+    #[error("body doesn't match claimed payload size in header")]
     PayloadSizeMismatch,
 
     /// Could not verify authorship of operation.

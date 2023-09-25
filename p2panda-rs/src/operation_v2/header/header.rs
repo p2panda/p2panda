@@ -7,7 +7,7 @@ use crate::hash_v2::Hash;
 use crate::identity_v2::{KeyPair, PublicKey, Signature};
 use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::header::encode::sign_header;
-use crate::operation_v2::header::error::HeaderBuilderError;
+use crate::operation_v2::header::error::EncodeHeaderError;
 use crate::operation_v2::header::traits::AsHeader;
 
 pub type PayloadHash = Hash;
@@ -126,11 +126,10 @@ impl HeaderBuilder {
     }
 
     pub fn sign(
-        &self,
+        self,
         encoded_body: &EncodedBody,
         key_pair: &KeyPair,
-    ) -> Result<Header, HeaderBuilderError> {
-        let header = sign_header(&self.0, encoded_body, key_pair)?;
-        Ok(header)
+    ) -> Result<Header, EncodeHeaderError> {
+        sign_header(self.0, encoded_body, key_pair)
     }
 }
