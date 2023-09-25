@@ -3,7 +3,8 @@
 use crate::document::DocumentViewId;
 use crate::identity_v2::KeyPair;
 use crate::operation_v2::body::encode::encode_body;
-use crate::operation_v2::body::{Body, PlainFields};
+use crate::operation_v2::body::plain::PlainFields;
+use crate::operation_v2::body::Body;
 use crate::operation_v2::error::OperationBuilderError;
 use crate::operation_v2::header::encode::sign_header;
 use crate::operation_v2::header::traits::AsHeader;
@@ -13,7 +14,7 @@ use crate::operation_v2::validate::validate_operation_format;
 use crate::operation_v2::{OperationAction, OperationFields, OperationValue, OperationVersion};
 use crate::schema::SchemaId;
 
-pub struct Operation(Header, Body);
+pub struct Operation(pub(crate) Header, pub(crate) Body);
 
 impl Operation {
     pub fn header(&self) -> &Header {
@@ -75,7 +76,7 @@ impl OperationBuilder {
             }
         }
 
-        self.body.1 = Some((&operation_fields).into());
+        self.body.1 = Some(operation_fields);
         self
     }
 
@@ -95,19 +96,12 @@ impl OperationBuilder {
 impl AsOperation for Operation {
     /// Returns version of operation.
     fn version(&self) -> OperationVersion {
-        self.header().version()
+        AsHeader::version(self.header())
     }
 
     /// Returns action type of operation.
     fn action(&self) -> OperationAction {
-        let extensions = self.header().extensions();
-        match (extensions.action, extensions.previous) {
-            (None, None) => OperationAction::Create,
-            (None, Some(_)) => OperationAction::Update,
-            (Some(HeaderAction::Delete), Some(_)) => OperationAction::Delete,
-            // @TODO: This should never happen if we've validated it properly before?
-            (Some(HeaderAction::Delete), None) => unreachable!("Invalid case"),
-        }
+        self.header().action()
     }
 
     /// Returns schema id of operation.
@@ -128,18 +122,11 @@ impl AsOperation for Operation {
 
 impl Actionable for Operation {
     fn version(&self) -> OperationVersion {
-        self.header().version()
+        AsHeader::version(self.header())
     }
 
     fn action(&self) -> OperationAction {
-        let extensions = self.header().extensions();
-        match (extensions.action, extensions.previous) {
-            (None, None) => OperationAction::Create,
-            (None, Some(_)) => OperationAction::Update,
-            (Some(HeaderAction::Delete), Some(_)) => OperationAction::Delete,
-            // @TODO: This should never happen if we've validated it properly before?
-            (Some(HeaderAction::Delete), None) => unreachable!("Invalid case"),
-        }
+        self.header().action()
     }
 
     fn previous(&self) -> Option<&DocumentViewId> {

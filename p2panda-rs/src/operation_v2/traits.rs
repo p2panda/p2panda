@@ -3,7 +3,7 @@
 //! Interfaces for interactions for operation-like structs.
 use crate::document::DocumentViewId;
 use crate::identity_v2::PublicKey;
-use crate::operation_v2::body::PlainFields;
+use crate::operation_v2::body::plain::PlainFields;
 use crate::operation_v2::{OperationAction, OperationFields, OperationVersion};
 use crate::schema::SchemaId;
 

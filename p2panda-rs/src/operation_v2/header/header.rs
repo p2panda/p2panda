@@ -10,7 +10,8 @@ use crate::operation_v2::header::action::HeaderAction;
 use crate::operation_v2::header::encode::sign_header;
 use crate::operation_v2::header::error::EncodeHeaderError;
 use crate::operation_v2::header::traits::AsHeader;
-use crate::operation_v2::OperationVersion;
+use crate::operation_v2::traits::Actionable;
+use crate::operation_v2::{OperationAction, OperationVersion};
 
 pub type PayloadHash = Hash;
 
@@ -50,6 +51,26 @@ impl AsHeader for Header {
     fn signature(&self) -> &Signature {
         // We never use an unsigned header outside of our API
         &self.5.expect("signature needs to be given at this point")
+    }
+}
+
+impl Actionable for Header {
+    fn version(&self) -> OperationVersion {
+        self.0.to_owned()
+    }
+
+    fn action(&self) -> OperationAction {
+        match (self.4.action, self.4.previous) {
+            (None, None) => OperationAction::Create,
+            (None, Some(_)) => OperationAction::Update,
+            (Some(HeaderAction::Delete), Some(_)) => OperationAction::Delete,
+            // @TODO: This should never happen if we've validated it properly before?
+            (Some(HeaderAction::Delete), None) => unreachable!("Invalid case"),
+        }
+    }
+
+    fn previous(&self) -> Option<&DocumentViewId> {
+        self.4.previous.as_ref()
     }
 }
 

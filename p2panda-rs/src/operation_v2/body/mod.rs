@@ -6,10 +6,7 @@ pub mod decode;
 pub mod encode;
 mod encoded_body;
 pub mod error;
-mod fields;
-mod value;
+pub mod plain;
 
 pub use body::Body;
 pub use encoded_body::EncodedBody;
-pub use fields::PlainFields;
-pub use value::PlainValue;
