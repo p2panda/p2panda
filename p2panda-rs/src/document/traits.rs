@@ -8,7 +8,7 @@ use crate::document::{
 };
 use crate::identity::PublicKey;
 use crate::operation::traits::AsOperation;
-use crate::operation::{Operation, OperationId, OperationValue};
+use crate::operation::{OperationId, OperationValue};
 use crate::schema::SchemaId;
 
 /// Trait representing an "document-like" struct.
@@ -60,12 +60,6 @@ pub trait AsDocument {
         }
         None
     }
-
-    /// Get a mutable reference to the current operations in this document.
-    fn get_operations_mut(&mut self) -> &mut Vec<(OperationId, Operation)>;
-
-    /// Get a reference to the current operations in this document.
-    fn get_operations(&self) -> &Vec<(OperationId, Operation)>;
 
     /// Update a documents current view with a single operation.
     ///
@@ -135,9 +129,5 @@ pub trait AsDocument {
 
         // Update the documents' view, edited/deleted state and view id.
         self.update_view(&document_view_id, next_fields.as_ref());
-
-        // Push the new operation to the operations list.
-        self.get_operations_mut()
-            .push((operation_id.to_owned(), operation.into()));
     }
 }

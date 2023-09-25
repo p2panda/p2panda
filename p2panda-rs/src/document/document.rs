@@ -51,8 +51,6 @@ pub struct Document {
 
     /// The public key of the author who created this document.
     author: PublicKey,
-
-    operations: Vec<(OperationId, Operation)>,
 }
 
 impl AsDocument for Document {
@@ -85,16 +83,6 @@ impl AsDocument for Document {
     fn update_view(&mut self, id: &DocumentViewId, view: Option<&DocumentViewFields>) {
         self.view_id = id.to_owned();
         self.fields = view.cloned();
-    }
-
-    /// Get a mutable reference to the current operations in this document.
-    fn get_operations_mut(&mut self) -> &mut Vec<(OperationId, Operation)> {
-        &mut self.operations
-    }
-
-    /// Get a reference to the current operations in this document.
-    fn get_operations(&self) -> &Vec<(OperationId, Operation)> {
-        &self.operations
     }
 }
 
@@ -211,7 +199,6 @@ impl Reducer<(OperationId, Operation, PublicKey)> for DocumentReducer {
                     schema_id: operation.schema_id(),
                     view_id: DocumentViewId::new(&[operation_id.to_owned()]),
                     author: public_key.to_owned(),
-                    operations: vec![(operation_id.clone(), operation.clone())],
                 };
 
                 // Set the newly instantiated document.
