@@ -6,17 +6,23 @@ use crate::operation_v2::body::encode::encode_body;
 use crate::operation_v2::body::{Body, PlainFields};
 use crate::operation_v2::error::OperationBuilderError;
 use crate::operation_v2::header::encode::sign_header;
-use crate::operation_v2::header::{Header, HeaderExtension};
+use crate::operation_v2::header::traits::AsHeader;
+use crate::operation_v2::header::{Header, HeaderAction, HeaderExtension};
 use crate::operation_v2::traits::{Actionable, AsOperation, Schematic};
 use crate::operation_v2::validate::validate_operation_format;
 use crate::operation_v2::{OperationAction, OperationFields, OperationValue, OperationVersion};
 use crate::schema::SchemaId;
 
-use super::header::traits::AsHeader;
+pub struct Operation(Header, Body);
 
-pub struct Operation {
-    pub(crate) header: Header,
-    pub(crate) body: Body,
+impl Operation {
+    pub fn header(&self) -> &Header {
+        &self.0
+    }
+
+    pub fn body(&self) -> &Body {
+        &self.1
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -38,7 +44,7 @@ impl OperationBuilder {
     }
 
     /// Set operation action.
-    pub fn action(mut self, action: OperationAction) -> Self {
+    pub fn action(mut self, action: HeaderAction) -> Self {
         self.header_extension.action = Some(action);
         self
     }
@@ -78,16 +84,9 @@ impl OperationBuilder {
     /// This method checks if the given previous operations and operation fields are matching the
     /// regarding operation action.
     pub fn sign(self, key_pair: &KeyPair) -> Result<Operation, OperationBuilderError> {
-        let payload = encode_body(&self.body);
-        let header = sign_header(self.header_extension, payload, key_pair);
-
-        let operation = Operation {
-            header,
-            body: self.body,
-        };
-
+        let header = sign_header(self.header_extension, encode_body(&self.body), key_pair);
+        let operation = Operation(header, self.body);
         validate_operation_format(&operation)?;
-
         Ok(operation)
     }
 }
@@ -95,189 +94,62 @@ impl OperationBuilder {
 impl AsOperation for Operation {
     /// Returns version of operation.
     fn version(&self) -> OperationVersion {
-        self.header.0
+        self.header.version()
     }
 
     /// Returns action type of operation.
-    fn action(&self) -> Option<OperationAction> {
-        self.header.extensions().action()
+    fn action(&self) -> OperationAction {
+        match (self.0.extensions().action, self.0.extensions.previous) {
+            (None, None) => OperationAction::Create,
+            (None, Some(_)) => OperationAction::Update,
+            (Some(HeaderAction::Delete), Some(_)) => OperationAction::Delete,
+            // @TODO: This should never happen if we've validated it properly before?
+            (Some(HeaderAction::Delete), None) => unreachable!("Invalid case"),
+        }
     }
 
     /// Returns schema id of operation.
     fn schema_id(&self) -> SchemaId {
-        self.body.0
+        self.body().schema_id()
     }
 
     /// Returns known previous operations vector of this operation.
     fn previous(&self) -> Option<DocumentViewId> {
-        self.header.extensions().previous()
+        self.header().extensions().previous
     }
 
     /// Returns application data fields of operation.
     fn fields(&self) -> Option<OperationFields> {
-        self.fields
+        self.body().fields()
     }
 }
 
 impl Actionable for Operation {
     fn version(&self) -> OperationVersion {
-        self.version
+        self.header().version()
     }
 
     fn action(&self) -> OperationAction {
-        self.action
+        match (self.0.extensions().action, self.0.extensions.previous) {
+            (None, None) => OperationAction::Create,
+            (None, Some(_)) => OperationAction::Update,
+            (Some(HeaderAction::Delete), Some(_)) => OperationAction::Delete,
+            // @TODO: This should never happen if we've validated it properly before?
+            (Some(HeaderAction::Delete), None) => unreachable!("Invalid case"),
+        }
     }
 
     fn previous(&self) -> Option<&DocumentViewId> {
-        self.previous.as_ref()
+        self.header().extensions().previous
     }
 }
 
 impl Schematic for Operation {
     fn schema_id(&self) -> &SchemaId {
-        &self.schema_id
+        &self.body().schema_id()
     }
 
     fn fields(&self) -> Option<PlainFields> {
-        self.fields.as_ref().map(PlainFields::from)
+        self.body().fields().as_ref().map(PlainFields::from)
     }
 }
-
-/*#[cfg(test)]
-mod tests {
-    use rstest::rstest;
-
-    use crate::document::DocumentViewId;
-    use crate::operation::traits::AsOperation;
-    use crate::operation::{OperationAction, OperationFields, OperationValue, OperationVersion};
-    use crate::schema::SchemaId;
-    use crate::test_utils::fixtures::{document_view_id, schema_id};
-
-    use super::OperationBuilder;
-
-    #[rstest]
-    fn operation_builder(schema_id: SchemaId, document_view_id: DocumentViewId) {
-        let fields = vec![
-            ("firstname", "Peter".into()),
-            ("lastname", "Panda".into()),
-            ("year", 2020.into()),
-        ];
-
-        let operation = OperationBuilder::new(&schema_id)
-            .action(OperationAction::Update)
-            .previous(&document_view_id)
-            .fields(&fields)
-            .build()
-            .unwrap();
-
-        assert_eq!(operation.action(), OperationAction::Update);
-        assert_eq!(operation.previous(), Some(document_view_id));
-        assert_eq!(operation.fields(), Some(fields.into()));
-        assert_eq!(operation.version(), OperationVersion::V1);
-        assert_eq!(operation.schema_id(), schema_id);
-    }
-
-    #[rstest]
-    fn operation_builder_validation(schema_id: SchemaId, document_view_id: DocumentViewId) {
-        // Correct CREATE operation
-        assert!(OperationBuilder::new(&schema_id)
-            .fields(&[("year", 2020.into())])
-            .build()
-            .is_ok());
-
-        // CREATE operations must not contain previous
-        assert!(OperationBuilder::new(&schema_id)
-            .action(OperationAction::Create)
-            .fields(&[("year", 2020.into())])
-            .previous(&document_view_id)
-            .build()
-            .is_err());
-
-        // CREATE operations must contain fields
-        assert!(OperationBuilder::new(&schema_id)
-            .action(OperationAction::Create)
-            .build()
-            .is_err());
-
-        // correct UPDATE operation
-        assert!(OperationBuilder::new(&schema_id)
-            .action(OperationAction::Update)
-            .fields(&[("year", 2020.into())])
-            .previous(&document_view_id)
-            .build()
-            .is_ok());
-
-        // UPDATE operations must have fields
-        assert!(OperationBuilder::new(&schema_id)
-            .action(OperationAction::Update)
-            .previous(&document_view_id)
-            .build()
-            .is_err());
-
-        // UPDATE operations must have previous
-        assert!(OperationBuilder::new(&schema_id)
-            .action(OperationAction::Update)
-            .fields(&[("year", 2020.into())])
-            .build()
-            .is_err());
-
-        // correct DELETE operation
-        assert!(OperationBuilder::new(&schema_id)
-            .action(OperationAction::Delete)
-            .previous(&document_view_id)
-            .build()
-            .is_ok());
-
-        // DELETE operations must not have fields
-        assert!(OperationBuilder::new(&schema_id)
-            .action(OperationAction::Delete)
-            .previous(&document_view_id)
-            .fields(&[("year", 2020.into())])
-            .build()
-            .is_err());
-
-        // DELETE operations must have previous
-        assert!(OperationBuilder::new(&schema_id)
-            .action(OperationAction::Update)
-            .build()
-            .is_err());
-    }
-
-    #[rstest]
-    fn field_ordering(schema_id: SchemaId) {
-        // Create first test operation
-        let operation_1 = OperationBuilder::new(&schema_id)
-            .fields(&[("a", "sloth".into()), ("b", "penguin".into())])
-            .build();
-
-        // Create second test operation with same values but different order of fields
-        let operation_2 = OperationBuilder::new(&schema_id)
-            .fields(&[("b", "penguin".into()), ("a", "sloth".into())])
-            .build();
-
-        assert_eq!(operation_1.unwrap(), operation_2.unwrap());
-    }
-
-    #[test]
-    fn field_iteration() {
-        // Create first test operation
-        let mut fields = OperationFields::new();
-        fields
-            .insert("a", OperationValue::String("sloth".to_owned()))
-            .unwrap();
-        fields
-            .insert("b", OperationValue::String("penguin".to_owned()))
-            .unwrap();
-
-        let mut field_iterator = fields.iter();
-
-        assert_eq!(
-            field_iterator.next().unwrap().1,
-            &OperationValue::String("sloth".to_owned())
-        );
-        assert_eq!(
-            field_iterator.next().unwrap().1,
-            &OperationValue::String("penguin".to_owned())
-        );
-    }
-}*/

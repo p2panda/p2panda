@@ -49,3 +49,11 @@ pub enum ValidateHeaderError {
     #[error("signature invalid")]
     KeyPairError(#[from] crate::identity_v2::error::KeyPairError),
 }
+
+#[derive(Error, Debug)]
+#[allow(missing_copy_implementations)]
+pub enum HeaderActionError {
+    /// Passed unknown operation action value.
+    #[error("unknown operation action {0}")]
+    UnknownAction(u64),
+}

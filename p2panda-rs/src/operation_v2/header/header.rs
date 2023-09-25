@@ -6,10 +6,11 @@ use crate::document::DocumentViewId;
 use crate::hash_v2::Hash;
 use crate::identity_v2::{KeyPair, PublicKey, Signature};
 use crate::operation_v2::body::EncodedBody;
+use crate::operation_v2::header::action::HeaderAction;
 use crate::operation_v2::header::encode::sign_header;
 use crate::operation_v2::header::error::EncodeHeaderError;
 use crate::operation_v2::header::traits::AsHeader;
-use crate::operation_v2::{OperationAction, OperationVersion};
+use crate::operation_v2::OperationVersion;
 
 pub type PayloadHash = Hash;
 
@@ -55,22 +56,16 @@ impl AsHeader for Header {
 #[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct HeaderExtension {
     #[serde(rename = "s", skip_serializing_if = "Option::is_none")]
-    seq_num: Option<u64>,
+    pub(crate) seq_num: Option<u64>,
 
     #[serde(rename = "p", skip_serializing_if = "Option::is_none")]
-    previous: Option<DocumentViewId>,
+    pub(crate) previous: Option<DocumentViewId>,
 
     #[serde(rename = "a", skip_serializing_if = "Option::is_none")]
-    action: Option<OperationAction>,
+    pub(crate) action: Option<HeaderAction>,
 
     #[serde(rename = "t", skip_serializing_if = "Option::is_none")]
-    timestamp: Option<u64>,
-}
-
-impl HeaderExtension {
-    pub fn action(&self) -> Option<&OperationAction> {
-        self.action
-    }
+    pub(crate) timestamp: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -81,7 +76,7 @@ impl HeaderBuilder {
         Self::default()
     }
 
-    pub fn action(mut self, action: OperationAction) -> Self {
+    pub fn action(mut self, action: HeaderAction) -> Self {
         self.0.action = Some(action);
         self
     }

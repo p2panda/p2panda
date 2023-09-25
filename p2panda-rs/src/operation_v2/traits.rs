@@ -43,7 +43,7 @@ pub trait Schematic {
 /// Trait to be implemented on "operation-like" structs.
 pub trait AsOperation {
     /// Returns action type of operation.
-    fn action(&self) -> Option<OperationAction>;
+    fn action(&self) -> OperationAction;
 
     /// Returns schema id of operation.
     fn schema_id(&self) -> SchemaId;
