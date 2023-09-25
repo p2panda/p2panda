@@ -5,8 +5,8 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use crate::hash::{Hash, HashId};
-use crate::operation_v2::operation::error::OperationIdError;
+use crate::hash_v2::{Hash, HashId};
+use crate::operation_v2::error::OperationIdError;
 use crate::{Human, Validate};
 
 /// Uniquely identifies an [`Operation`](crate::operation::Operation).

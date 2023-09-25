@@ -10,7 +10,7 @@ use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::document::error::DocumentViewIdError;
-use crate::hash::{Hash, HashId};
+use crate::hash_v2::{Hash, HashId};
 use crate::operation::error::OperationIdError;
 use crate::operation::OperationId;
 use crate::{Human, Validate};

@@ -7,7 +7,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 use crate::document::error::DocumentIdError;
-use crate::hash::{Hash, HashId};
+use crate::hash_v2::{Hash, HashId};
 use crate::operation::OperationId;
 use crate::{Human, Validate};
 

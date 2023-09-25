@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 use crate::document::DocumentViewId;
 use crate::hash_v2::Hash;
@@ -9,6 +9,7 @@ use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::header::encode::sign_header;
 use crate::operation_v2::header::error::EncodeHeaderError;
 use crate::operation_v2::header::traits::AsHeader;
+use crate::operation_v2::OperationVersion;
 
 pub type PayloadHash = Hash;
 
@@ -16,7 +17,7 @@ pub type PayloadSize = u64;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Header(
-    pub(crate) HeaderVersion,
+    pub(crate) OperationVersion,
     pub(crate) PublicKey,
     pub(crate) PayloadHash,
     pub(crate) PayloadSize,
@@ -25,7 +26,7 @@ pub struct Header(
 );
 
 impl AsHeader for Header {
-    fn version(&self) -> HeaderVersion {
+    fn version(&self) -> OperationVersion {
         self.0
     }
 
@@ -48,45 +49,6 @@ impl AsHeader for Header {
     fn signature(&self) -> &Signature {
         // We never use an unsigned header outside of our API
         &self.5.expect("signature needs to be given at this point")
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum HeaderVersion {
-    V1,
-}
-
-impl HeaderVersion {
-    pub fn as_u64(&self) -> u64 {
-        match self {
-            HeaderVersion::V1 => 1,
-        }
-    }
-}
-
-impl Serialize for HeaderVersion {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_u64(self.as_u64())
-    }
-}
-
-impl<'de> Deserialize<'de> for HeaderVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let version = u64::deserialize(deserializer)?;
-
-        match version {
-            1 => Ok(HeaderVersion::V1),
-            _ => Err(serde::de::Error::custom(format!(
-                "unsupported operation header version {}",
-                version
-            ))),
-        }
     }
 }
 

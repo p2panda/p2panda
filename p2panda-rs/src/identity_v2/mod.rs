@@ -10,4 +10,4 @@ mod signature;
 pub use key_pair::KeyPair;
 pub use private_key::PrivateKey;
 pub use public_key::PublicKey;
-pub use signature::Signature;
+pub use signature::{Signature, SIGNATURE_SIZE};

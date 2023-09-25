@@ -3,7 +3,7 @@
 use rand::Rng;
 use rstest::fixture;
 
-use crate::hash::Hash;
+use crate::hash_v2::Hash;
 
 /// Fixture which injects a random hash into a test method.
 #[fixture]

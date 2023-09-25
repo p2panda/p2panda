@@ -8,9 +8,9 @@ use std::fmt;
 use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 
-use crate::operation_v2::body::plain::PlainValue;
-use crate::operation_v2::operation::error::FieldsError;
-use crate::operation_v2::operation::{OperationFields, OperationValue};
+use crate::operation_v2::body::PlainValue;
+use crate::operation_v2::error::FieldsError;
+use crate::operation_v2::{OperationFields, OperationValue};
 use crate::schema::FieldName;
 
 /// Operation fields which have not been checked against a schema yet.
@@ -151,114 +151,3 @@ impl From<&OperationFields> for PlainFields {
         raw
     }
 }
-
-/*#[cfg(test)]
-mod tests {
-    use ciborium::cbor;
-    use rstest::rstest;
-    use serde_bytes::ByteBuf;
-
-    use crate::operation_v2::body::plain::PlainValue;
-    use crate::operation_v2::body::OperationFields;
-    use crate::serde::{deserialize_into, serialize_from, serialize_value};
-    use crate::test_utils::fixtures::operation_fields;
-
-    use super::PlainFields;
-
-    #[test]
-    fn insert_and_get_fields() {
-        let mut fields = PlainFields::new();
-        assert!(fields.is_empty());
-        assert_eq!(fields.len(), 0);
-
-        fields.insert("test", PlainValue::Boolean(true)).unwrap();
-        assert!(!fields.is_empty());
-        assert_eq!(fields.len(), 1);
-        assert_eq!(fields.get("test"), Some(&PlainValue::Boolean(true)));
-    }
-
-    #[test]
-    fn try_getting_inexistant_field() {
-        let fields = PlainFields::new();
-        assert!(fields.get("test").is_none());
-    }
-
-    #[rstest]
-    fn from_operation_fields(operation_fields: OperationFields) {
-        let fields = PlainFields::from(&operation_fields);
-        assert_eq!(fields.len(), 9);
-    }
-
-    #[test]
-    fn from_vec() {
-        let fields = PlainFields::from(vec![
-            ("it_works", PlainValue::Boolean(true)),
-            (
-                "it_works",
-                PlainValue::BytesOrRelation("... and ignores duplicates".as_bytes().to_vec()),
-            ),
-        ]);
-        assert_eq!(fields.len(), 1);
-        assert_eq!(fields.get("it_works"), Some(&PlainValue::Boolean(true)));
-    }
-
-    #[test]
-    fn serialize() {
-        let mut fields = PlainFields::new();
-
-        fields
-            .insert("it_works", PlainValue::Boolean(true))
-            .unwrap();
-        fields
-            .insert(
-                "message",
-                PlainValue::BytesOrRelation("mjau".as_bytes().to_vec()),
-            )
-            .unwrap();
-
-        // This field was inserted last but will be ordered first
-        fields
-            .insert("a_first_field", PlainValue::Integer(5))
-            .unwrap();
-
-        let bytes = serialize_from(fields);
-
-        assert_eq!(
-            bytes,
-            serialize_value(cbor!({
-                "a_first_field" => 5,
-                "it_works" => true,
-                "message" => ByteBuf::from("mjau".as_bytes()),
-            }))
-        );
-    }
-
-    #[test]
-    fn deserialize() {
-        let fields: PlainFields = deserialize_into(&serialize_value(cbor!({
-            "a_first_field" => 5,
-            "it_works" => true,
-        })))
-        .unwrap();
-        assert_eq!(fields.len(), 2);
-        assert_eq!(fields.get("it_works"), Some(&PlainValue::Boolean(true)));
-    }
-
-    #[test]
-    fn fail_on_unordered_keys() {
-        assert!(deserialize_into::<PlainValue>(&serialize_value(cbor!({
-            "it_works" => true,
-            "a_first_field" => 5,
-        })))
-        .is_err());
-    }
-
-    #[test]
-    fn fail_on_duplicate_fields() {
-        assert!(deserialize_into::<PlainValue>(&serialize_value(cbor!({
-            "it_works" => false,
-            "it_works" => "false",
-        })))
-        .is_err());
-    }
-}*/

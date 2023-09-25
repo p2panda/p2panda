@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-pub mod decode;
-pub mod encode;
-mod encoded_body;
 #[allow(clippy::module_inception)]
 mod body;
-pub mod plain;
+mod decode;
+mod encode;
+mod encoded_body;
+mod error;
+mod fields;
+mod value;
 
+pub use body::Body;
 pub use encoded_body::EncodedBody;
-pub use body::{Body, BodyBuilder};
+pub use fields::PlainFields;
+pub use value::PlainValue;

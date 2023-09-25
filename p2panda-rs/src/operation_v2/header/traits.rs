@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::entry::SIGNATURE_SIZE;
 use crate::hash_v2::Hash;
-use crate::identity_v2::{PublicKey, Signature};
-use crate::operation_v2::header::{HeaderExtension, HeaderVersion};
+use crate::identity_v2::{PublicKey, Signature, SIGNATURE_SIZE};
+use crate::operation_v2::header::HeaderExtension;
+use crate::operation_v2::OperationVersion;
 
 pub trait AsHeader {
-    fn version(&self) -> HeaderVersion;
+    fn version(&self) -> OperationVersion;
     fn public_key(&self) -> &PublicKey;
     fn payload_size(&self) -> u64;
     fn payload_hash(&self) -> &Hash;

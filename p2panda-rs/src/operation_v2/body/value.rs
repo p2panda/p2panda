@@ -6,16 +6,9 @@ use ciborium::Value;
 use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentId, DocumentViewId};
-use crate::hash::{Hash, HashId};
-use crate::operation_v2::operation::error::PlainValueError;
+use crate::hash_v2::{Hash, HashId};
+use crate::operation_v2::body::error::PlainValueError;
 
-/// Operation field values which have not been checked against a schema yet.
-///
-/// This enum expresses some operation field types as groups, since "String" or "Relation" are
-/// represented by the same internal data type (a simple string).
-///
-/// Latest when combining the plain values with a schema, the inner types, especially the
-/// relations, get checked against their correct format.
 #[derive(Serialize, Debug, PartialEq, Clone)]
 #[serde(untagged)]
 pub enum PlainValue {
@@ -222,7 +215,7 @@ mod tests {
     use serde_bytes::ByteBuf;
 
     use crate::document::{DocumentId, DocumentViewId};
-    use crate::hash::{Hash, HashId};
+    use crate::hash_v2::{Hash, HashId};
     use crate::serde::{deserialize_into, hex_string_to_bytes, serialize_from, serialize_value};
     use crate::test_utils::fixtures::{document_id, document_view_id, random_hash};
 

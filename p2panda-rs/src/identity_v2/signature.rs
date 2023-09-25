@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::identity_v2::error::SignatureError;
 
+pub const SIGNATURE_SIZE: usize = SIGNATURE_LENGTH;
+
 /// Ed25519 signature.
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct Signature(Ed25519Signature);

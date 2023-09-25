@@ -3,7 +3,7 @@
 use serde::Serialize;
 
 use crate::document::{DocumentId, DocumentViewId};
-use crate::operation_v2::operation::{PinnedRelation, PinnedRelationList, Relation, RelationList};
+use crate::operation_v2::{PinnedRelation, PinnedRelationList, Relation, RelationList};
 
 /// Enum of possible data types which can be added to the operations fields as values.
 #[derive(Clone, Debug, PartialEq, Serialize)]

@@ -7,10 +7,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::document::error::DocumentIdError;
 use crate::document::{DocumentId, DocumentViewId};
-use crate::operation::error::{
+use crate::operation_v2::error::{
     PinnedRelationError, PinnedRelationListError, RelationError, RelationListError,
 };
-use crate::operation::OperationId;
+use crate::operation_v2::OperationId;
 use crate::Validate;
 
 /// Field type representing references to other documents.
