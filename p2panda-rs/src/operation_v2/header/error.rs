@@ -10,8 +10,13 @@ pub enum HeaderBuilderError {
 
 #[derive(Error, Debug)]
 pub enum EncodeHeaderError {
-    #[error(transparent)]
-    ValidateHeaderError(#[from] ValidateHeaderError),
+    /// CBOR encoder failed critically due to an IO issue.
+    #[error("cbor encoder failed {0}")]
+    EncoderIOFailed(String),
+
+    /// CBOR encoder could not serialize this value.
+    #[error("cbor encoder failed serializing value {0}")]
+    EncoderFailed(String),
 }
 
 #[derive(Error, Debug)]
