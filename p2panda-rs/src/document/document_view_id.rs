@@ -12,7 +12,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::document::error::DocumentViewIdError;
 use crate::hash_v2::{Hash, HashId};
 use crate::operation::error::OperationIdError;
-use crate::operation::OperationId;
+use crate::operation_v2::OperationId;
 use crate::{Human, Validate};
 
 /// The identifier of a document view.
