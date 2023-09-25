@@ -120,5 +120,7 @@
 pub mod error;
 #[allow(clippy::module_inception)]
 mod graph;
+mod traits;
 
 pub use graph::Graph;
+pub use traits::Reducer;
