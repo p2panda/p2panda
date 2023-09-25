@@ -2,10 +2,9 @@
 
 //! Interfaces for interactions for operation-like structs.
 use crate::document::DocumentViewId;
-use crate::identity::PublicKey;
-use crate::operation_v2::body::plain::PlainFields;
-use crate::operation_v2::header::HeaderVersion;
-use crate::operation_v2::operation::OperationFields;
+use crate::identity_v2::PublicKey;
+use crate::operation_v2::body::PlainFields;
+use crate::operation_v2::{OperationAction, OperationFields, OperationVersion};
 use crate::schema::SchemaId;
 
 /// Trait representing a struct encapsulating data which has been signed by an author.
@@ -44,7 +43,7 @@ pub trait Schematic {
 /// Trait to be implemented on "operation-like" structs.
 pub trait AsOperation {
     /// Returns action type of operation.
-    fn action(&self) -> OperationAction;
+    fn action(&self) -> Option<OperationAction>;
 
     /// Returns schema id of operation.
     fn schema_id(&self) -> SchemaId;
@@ -68,17 +67,14 @@ pub trait AsOperation {
         self.previous().is_some()
     }
 
-    /// Returns true when instance is CREATE operation.
     fn is_create(&self) -> bool {
-        self.action() == OperationAction::Create
+        self.previous().is_none()
     }
 
-    /// Returns true when instance is UPDATE operation.
     fn is_update(&self) -> bool {
-        self.action() == OperationAction::Update
+        self.action() != OperationAction::Delete && self.previous().is_some()
     }
 
-    /// Returns true when instance is DELETE operation.
     fn is_delete(&self) -> bool {
         self.action() == OperationAction::Delete
     }

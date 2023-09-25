@@ -67,6 +67,12 @@ pub struct HeaderExtension {
     timestamp: Option<u64>,
 }
 
+impl HeaderExtension {
+    pub fn action(&self) -> Option<&OperationAction> {
+        self.action
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct HeaderBuilder(HeaderExtension);
 

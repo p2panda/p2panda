@@ -2,8 +2,8 @@
 
 #[allow(clippy::module_inception)]
 mod body;
-mod decode;
-mod encode;
+pub mod decode;
+pub mod encode;
 mod encoded_body;
 mod error;
 mod fields;

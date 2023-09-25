@@ -1,76 +1,57 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::document::DocumentViewId;
-use crate::operation_v2::body::PlainFields;
+use crate::identity_v2::KeyPair;
+use crate::operation_v2::body::encode::encode_body;
+use crate::operation_v2::body::{Body, PlainFields};
 use crate::operation_v2::error::OperationBuilderError;
+use crate::operation_v2::header::encode::sign_header;
+use crate::operation_v2::header::{Header, HeaderExtension};
 use crate::operation_v2::traits::{Actionable, AsOperation, Schematic};
 use crate::operation_v2::validate::validate_operation_format;
 use crate::operation_v2::{OperationAction, OperationFields, OperationValue, OperationVersion};
 use crate::schema::SchemaId;
 
+use super::header::traits::AsHeader;
+
 pub struct Operation {
-    /// Version of this operation.
-    pub(crate) version: OperationVersion,
-
-    /// Describes if this operation creates, updates or deletes data.
-    pub(crate) action: OperationAction,
-
-    /// The id of the schema for this operation.
-    pub(crate) schema_id: SchemaId,
-
-    /// Optional document view id containing the operation ids directly preceding this one in the
-    /// document.
-    pub(crate) previous: Option<DocumentViewId>,
-
-    /// Optional fields map holding the operation data.
-    pub(crate) fields: Option<OperationFields>,
+    pub(crate) header: Header,
+    pub(crate) body: Body,
 }
 
-/// Create new operations.
-///
-/// Creating operations with the `OperationBuilder` does not validate them yet against their
-/// claimed schemas. You can use `validate_operation` for this.
 #[derive(Clone, Debug)]
 pub struct OperationBuilder {
-    /// Action of this operation.
-    action: OperationAction,
-
-    /// Schema instance of this operation.
-    schema_id: SchemaId,
-
-    /// Previous field which contains the last known view id for the target document.
-    previous: Option<DocumentViewId>,
-
-    /// Operation fields.
-    fields: Option<OperationFields>,
+    header_extension: Header,
+    body: Body,
 }
 
 impl OperationBuilder {
     /// Returns a new instance of `OperationBuilder`.
     pub fn new(schema_id: &SchemaId) -> Self {
+        let header_extension = HeaderExtension::default();
+        let body = Body(schema_id.to_owned(), None);
+
         Self {
-            action: OperationAction::Create,
-            schema_id: schema_id.to_owned(),
-            previous: None,
-            fields: None,
+            header_extension,
+            body,
         }
     }
 
     /// Set operation action.
     pub fn action(mut self, action: OperationAction) -> Self {
-        self.action = action;
+        self.header_extension.action = Some(action);
         self
     }
 
     /// Set operation schema.
     pub fn schema_id(mut self, schema_id: SchemaId) -> Self {
-        self.schema_id = schema_id;
+        self.body.0 = Some(schema_id);
         self
     }
 
     /// Set previous operations.
     pub fn previous(mut self, previous: &DocumentViewId) -> Self {
-        self.previous = Some(previous.to_owned());
+        self.header_extension.previous = Some(previous.to_owned());
         self
     }
 
@@ -88,7 +69,7 @@ impl OperationBuilder {
             }
         }
 
-        self.fields = Some(operation_fields);
+        self.body.1 = Some(operation_fields);
         self
     }
 
@@ -96,13 +77,13 @@ impl OperationBuilder {
     ///
     /// This method checks if the given previous operations and operation fields are matching the
     /// regarding operation action.
-    pub fn build(&self) -> Result<Operation, OperationBuilderError> {
+    pub fn sign(self, key_pair: &KeyPair) -> Result<Operation, OperationBuilderError> {
+        let payload = encode_body(&self.body);
+        let header = sign_header(self.header_extension, payload, key_pair);
+
         let operation = Operation {
-            action: self.action,
-            version: OperationVersion::V1,
-            schema_id: self.schema_id.to_owned(),
-            previous: self.previous.to_owned(),
-            fields: self.fields.to_owned(),
+            header,
+            body: self.body,
         };
 
         validate_operation_format(&operation)?;
@@ -114,22 +95,22 @@ impl OperationBuilder {
 impl AsOperation for Operation {
     /// Returns version of operation.
     fn version(&self) -> OperationVersion {
-        self.version
+        self.header.0
     }
 
     /// Returns action type of operation.
-    fn action(&self) -> OperationAction {
-        self.action
+    fn action(&self) -> Option<OperationAction> {
+        self.header.extensions().action()
     }
 
     /// Returns schema id of operation.
     fn schema_id(&self) -> SchemaId {
-        self.schema_id
+        self.body.0
     }
 
     /// Returns known previous operations vector of this operation.
     fn previous(&self) -> Option<DocumentViewId> {
-        self.previous.clone()
+        self.header.extensions().previous()
     }
 
     /// Returns application data fields of operation.

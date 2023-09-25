@@ -12,8 +12,8 @@ use crate::schema::SchemaId;
 
 #[derive(Serialize, Debug, PartialEq)]
 pub struct Body(
-    SchemaId,
-    #[serde(skip_serializing_if = "Option::is_none")] Option<PlainFields>,
+    pub(crate) SchemaId,
+    #[serde(skip_serializing_if = "Option::is_none")] pub(crate) Option<PlainFields>,
 );
 
 impl Schematic for Body {

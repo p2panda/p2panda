@@ -2,6 +2,14 @@
 
 use thiserror::Error;
 
+/// Errors from `OperationBuilder` struct.
+#[derive(Error, Debug)]
+pub enum OperationBuilderError {
+    /// Handle errors from `operation::validate` module.
+    #[error(transparent)]
+    ValidateOperationError(#[from] ValidateBodyError),
+}
+
 #[derive(Error, Debug)]
 pub enum ValidateBodyError {
     /// Claimed schema id did not match given schema.

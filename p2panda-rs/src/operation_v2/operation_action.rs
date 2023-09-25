@@ -10,7 +10,6 @@ use crate::operation_v2::error::OperationActionError;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum OperationAction {
-    /// Operation deletes an existing document.
     Delete,
 }
 
