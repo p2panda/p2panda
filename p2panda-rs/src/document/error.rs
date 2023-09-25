@@ -9,18 +9,6 @@ use crate::operation::OperationId;
 /// Error types for methods of `DocumentBuilder` struct.
 #[derive(Error, Debug)]
 pub enum DocumentBuilderError {
-    /// No create operation found.
-    #[error("every document must contain one create operation")]
-    NoCreateOperation,
-
-    /// A document can only have one create operation.
-    #[error("multiple CREATE operations found")]
-    MoreThanOneCreateOperation,
-
-    /// All operations in a document must follow the same schema.
-    #[error("all operations in a document must follow the same schema")]
-    OperationSchemaNotMatching,
-
     /// To resolve a document the schema must be set.
     #[error("Schema must be set")]
     SchemaMustBeSet,
@@ -29,7 +17,43 @@ pub enum DocumentBuilderError {
     #[error("operation {0} cannot be connected to the document graph")]
     InvalidOperationLink(OperationId),
 
+    /// A document can only contain one CREATE operation.
+    #[error("multiple CREATE operations found when building operation graph")]
+    MultipleCreateOperations,
+
     /// Handle errors from validating CBOR schemas.
+    #[error(transparent)]
+    DocumentViewError(#[from] DocumentViewError),
+
+    /// Handle errors when sorting the graph.
+    #[error(transparent)]
+    GraphSortingError(#[from] crate::graph::error::GraphError),
+
+    /// Handle errors from DocumentReducer.
+    #[error(transparent)]
+    DocumentReducerError(#[from] DocumentReducerError),
+}
+
+/// Error types for methods of `Document` struct.
+#[derive(Error, Debug)]
+pub enum DocumentError {
+    /// Operation passed to commit does not refer to this documents current view.
+    #[error("operation {0} does not update the documents current view")]
+    PreviousDoesNotMatch(OperationId),
+
+    /// Operation passed to commit does not the same schema as the document.
+    #[error("Operation {0} does not match the documents schema")]
+    InvalidSchemaId(OperationId),
+
+    /// Cannot perform a commit on a deleted document.
+    #[error("Cannot perform a commit on a deleted document")]
+    UpdateOnDeleted,
+
+    /// Cannot perform a commit with a create operation.
+    #[error("Cannot update an existing document with a create operation")]
+    CommitCreate,
+
+    /// Handle errors coming from DocumentView.
     #[error(transparent)]
     DocumentViewError(#[from] DocumentViewError),
 
@@ -40,30 +64,14 @@ pub enum DocumentBuilderError {
 
 /// Error types for methods of `Document` struct.
 #[derive(Error, Debug)]
-pub enum DocumentError {
-    /// Operation passed to commit does not refer to this documents current view.
-    #[error("operation {0} does not update the documents current view")]
-    PreviousDoesNotMatch(OperationId),
+pub enum DocumentReducerError {
+    /// The first operation of a document must be a create.
+    #[error("The first operation of a document must be a create")]
+    FirstOperationNotCreate,
 
-    /// Operation passed to commit has incorrect operation type.
-    #[error("CREATE operation used to update document")]
-    InvalidOperationType,
-
-    /// Operation passed to commit does not the same schema as the document.
-    #[error("Operation {0} does not match the documents schema")]
-    InvalidSchemaId(OperationId),
-
-    /// Cannot perform a commit on a deleted document.
-    #[error("Cannot perform a commit on a deleted document")]
-    UpdateOnDeleted,
-
-    /// Handle errors from validating CBOR schemas.
+    /// Handle errors from Document.
     #[error(transparent)]
-    DocumentViewError(#[from] DocumentViewError),
-
-    /// Handle errors when sorting the graph.
-    #[error(transparent)]
-    GraphSortingError(#[from] crate::graph::error::GraphError),
+    DocumentError(#[from] DocumentError),
 }
 
 /// Custom error types for `DocumentView`.

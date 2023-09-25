@@ -141,7 +141,6 @@ mod document_view_fields;
 mod document_view_hash;
 mod document_view_id;
 pub mod error;
-pub mod materialization;
 pub mod traits;
 
 pub use document::{Document, DocumentBuilder};

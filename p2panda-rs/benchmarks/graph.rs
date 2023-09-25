@@ -12,7 +12,7 @@ const DEFAULT_SIZE: u64 = 100;
 struct TestReducer;
 
 impl Reducer<u64> for TestReducer {
-    fn combine(&mut self, value: &u64) -> () {}
+    fn combine(&mut self, _value: &u64) -> () {}
 }
 
 fn generate_random_p2panda_dag(size: u64, density: f32) -> Graph<String, u64> {

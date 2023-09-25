@@ -86,30 +86,29 @@ impl Human for DocumentView {
 mod tests {
     use rstest::rstest;
 
-    use crate::document::materialization::reduce;
-    use crate::document::DocumentViewValue;
+    use crate::document::traits::AsDocument;
+    use crate::document::{DocumentBuilder, DocumentViewId, DocumentViewValue};
     use crate::identity::PublicKey;
-    use crate::operation::{Operation, OperationFields, OperationId, OperationValue};
+    use crate::operation::traits::AsOperation;
+    use crate::operation::{
+        Operation, OperationAction, OperationBuilder, OperationFields, OperationId, OperationValue,
+    };
     use crate::test_utils::fixtures::{
-        create_operation, document_view_id, operation_fields, public_key, random_operation_id,
-        update_operation,
+        create_operation, operation_fields, public_key, random_operation_id,
     };
     use crate::Human;
-
-    use super::{DocumentView, DocumentViewId};
 
     #[rstest]
     fn from_single_create_op(
         create_operation: Operation,
         #[from(random_operation_id)] id: OperationId,
         public_key: PublicKey,
-        document_view_id: DocumentViewId,
         operation_fields: OperationFields,
     ) {
-        // Reduce a single CREATE `Operation`
-        let view = reduce(&[(id.clone(), create_operation, public_key)]);
-
-        let document_view = DocumentView::new(&document_view_id, &view.unwrap());
+        let document = DocumentBuilder::new(vec![(id.clone(), create_operation, public_key)])
+            .build()
+            .unwrap();
+        let document_view = document.view().unwrap();
 
         assert!(!document_view.is_empty());
         assert_eq!(document_view.len(), 9);
@@ -123,43 +122,33 @@ mod tests {
     }
 
     #[rstest]
-    fn with_update_op(
-        create_operation: Operation,
-        #[from(update_operation)]
-        #[with(vec![
-            ("username", OperationValue::String("yahoo".to_owned())),
-            ("height", OperationValue::Float(100.23)),
-            ("age", OperationValue::Integer(12)),
-            ("is_admin", OperationValue::Boolean(true)),
-        ])]
-        update_operation: Operation,
-        public_key: PublicKey,
-        document_view_id: DocumentViewId,
-    ) {
+    fn with_update_op(create_operation: Operation, public_key: PublicKey) {
+        let create_id = random_operation_id();
+        let update_operation = OperationBuilder::new(&create_operation.schema_id())
+            .action(OperationAction::Update)
+            .fields(&[(
+                "username",
+                OperationValue::String("Panda Cafe!!!!".to_string()),
+            )])
+            .previous(&DocumentViewId::new(&[create_id.clone()]))
+            .build()
+            .unwrap();
         let update_id = random_operation_id();
+
         let operations = vec![
-            (random_operation_id(), create_operation, public_key),
+            (create_id, create_operation, public_key),
             (update_id.clone(), update_operation, public_key),
         ];
-        let view = reduce(&operations);
 
-        let document_view = DocumentView::new(&document_view_id, &view.unwrap());
+        let document = DocumentBuilder::new(operations).build().unwrap();
+        let document_view = document.view().unwrap();
 
         assert_eq!(
             document_view.get("username").unwrap(),
-            &DocumentViewValue::new(&update_id, &OperationValue::String("yahoo".to_owned()),)
-        );
-        assert_eq!(
-            document_view.get("height").unwrap(),
-            &DocumentViewValue::new(&update_id, &OperationValue::Float(100.23)),
-        );
-        assert_eq!(
-            document_view.get("age").unwrap(),
-            &DocumentViewValue::new(&update_id, &OperationValue::Integer(12)),
-        );
-        assert_eq!(
-            document_view.get("is_admin").unwrap(),
-            &DocumentViewValue::new(&update_id, &OperationValue::Boolean(true))
+            &DocumentViewValue::new(
+                &update_id,
+                &OperationValue::String("Panda Cafe!!!!".to_owned()),
+            )
         );
     }
 
@@ -172,11 +161,16 @@ mod tests {
             .parse::<OperationId>()
             .unwrap();
 
-        let document_view_id = DocumentViewId::new(&[id_1.clone(), id_2.clone()]);
-        let view = reduce(&[(id_1.clone(), create_operation, public_key)]);
-        let document_view = DocumentView::new(&document_view_id, &view.unwrap());
+        let document = DocumentBuilder::new(vec![(id_1.clone(), create_operation, public_key)])
+            .build()
+            .unwrap();
 
-        assert_eq!(format!("{id_1}_{id_2}"), document_view.to_string());
-        assert_eq!(document_view.display(), "<DocumentView 496543_f16e79>");
+        // Fabricate a view id just for testing.
+        let mut view = document.view().unwrap();
+        let view_id = DocumentViewId::new(&[id_1.clone(), id_2.clone()]);
+        view.id = view_id;
+
+        assert_eq!(format!("{id_1}_{id_2}"), view.to_string());
+        assert_eq!(view.display(), "<DocumentView 496543_f16e79>");
     }
 }
