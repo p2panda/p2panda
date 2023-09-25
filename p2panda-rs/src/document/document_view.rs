@@ -105,7 +105,7 @@ mod tests {
         public_key: PublicKey,
         operation_fields: OperationFields,
     ) {
-        let document = DocumentBuilder::new(vec![(id.clone(), create_operation, public_key)])
+        let (document, _) = DocumentBuilder::new(vec![(id.clone(), create_operation, public_key)])
             .build()
             .unwrap();
         let document_view = document.view().unwrap();
@@ -140,7 +140,7 @@ mod tests {
             (update_id.clone(), update_operation, public_key),
         ];
 
-        let document = DocumentBuilder::new(operations).build().unwrap();
+        let (document, _) = DocumentBuilder::new(operations).build().unwrap();
         let document_view = document.view().unwrap();
 
         assert_eq!(
@@ -161,9 +161,10 @@ mod tests {
             .parse::<OperationId>()
             .unwrap();
 
-        let document = DocumentBuilder::new(vec![(id_1.clone(), create_operation, public_key)])
-            .build()
-            .unwrap();
+        let (document, _) =
+            DocumentBuilder::new(vec![(id_1.clone(), create_operation, public_key)])
+                .build()
+                .unwrap();
 
         // Fabricate a view id just for testing.
         let mut view = document.view().unwrap();

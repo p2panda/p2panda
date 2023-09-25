@@ -107,7 +107,8 @@ where
 
     fn try_from(operations: Vec<&T>) -> Result<Self, Self::Error> {
         let document_builder: DocumentBuilder = operations.into();
-        document_builder.build()
+        let (document, _) = document_builder.build()?;
+        Ok(document)
     }
 }
 
@@ -119,7 +120,8 @@ where
 
     fn try_from(operations: &Vec<T>) -> Result<Self, Self::Error> {
         let document_builder: DocumentBuilder = operations.into();
-        document_builder.build()
+        let (document, _) = document_builder.build()?;
+        Ok(document)
     }
 }
 
@@ -207,6 +209,10 @@ impl Reducer<(OperationId, Operation, PublicKey)> for DocumentReducer {
         }
     }
 }
+
+type PublishedOperation = (OperationId, Operation, PublicKey);
+type OperationGraph = Graph<OperationId, PublishedOperation>;
+
 /// A struct for building [documents][`Document`] from a collection of operations.
 #[derive(Debug, Clone)]
 pub struct DocumentBuilder(Vec<(OperationId, Operation, PublicKey)>);
@@ -217,9 +223,9 @@ impl DocumentBuilder {
         Self(operations)
     }
 
-    /// Get all operations for this document.
-    pub fn operations(&self) -> Vec<(OperationId, Operation, PublicKey)> {
-        self.0.clone()
+    /// Get all unsorted operations for this document.
+    pub fn operations(&self) -> &Vec<PublishedOperation> {
+        &self.0
     }
 
     /// Validates all contained operations and builds the document.
@@ -231,8 +237,9 @@ impl DocumentBuilder {
     /// - All operations are causally connected to the root operation.
     /// - All operations follow the same schema.
     /// - No cycles exist in the graph.
-    pub fn build(&self) -> Result<Document, DocumentBuilderError> {
-        self.build_to_view_id(None)
+    pub fn build(&self) -> Result<(Document, Vec<PublishedOperation>), DocumentBuilderError> {
+        let mut graph = self.construct_graph()?;
+        self.reduce_document(&mut graph)
     }
 
     /// Validates all contained operations and builds the document up to the
@@ -247,8 +254,16 @@ impl DocumentBuilder {
     /// - No cycles exist in the graph.
     pub fn build_to_view_id(
         &self,
-        document_view_id: Option<DocumentViewId>,
-    ) -> Result<Document, DocumentBuilderError> {
+        document_view_id: DocumentViewId,
+    ) -> Result<(Document, Vec<PublishedOperation>), DocumentBuilderError> {
+        let mut graph = self.construct_graph()?;
+        // Trim the graph to the requested view..
+        graph = graph.trim(document_view_id.graph_tips())?;
+        self.reduce_document(&mut graph)
+    }
+
+    /// Construct the document graph.
+    fn construct_graph(&self) -> Result<OperationGraph, DocumentBuilderError> {
         // Instantiate the graph.
         let mut graph = Graph::new();
 
@@ -281,11 +296,14 @@ impl DocumentBuilder {
             }
         }
 
-        // If a specific document view was requested then trim the graph to that point.
-        if let Some(id) = document_view_id {
-            graph = graph.trim(id.graph_tips())?;
-        }
+        Ok(graph)
+    }
 
+    /// Traverse the graph in order to reduce a document and sorted operations.
+    fn reduce_document(
+        &self,
+        graph: &mut OperationGraph,
+    ) -> Result<(Document, Vec<PublishedOperation>), DocumentBuilderError> {
         // Walk the graph, visiting nodes in their topologically sorted order.
         //
         // We pass in a DocumentReducer which will construct the document as nodes (which contain
@@ -309,7 +327,7 @@ impl DocumentBuilder {
         // already sorted order. It doesn't know about the state of the graphs tips.
         document.view_id = DocumentViewId::new(&graph_tips);
 
-        Ok(document)
+        Ok((document, graph_data.sorted()))
     }
 }
 
@@ -319,17 +337,11 @@ where
 {
     fn from(operations: Vec<&T>) -> Self {
         let operations = operations
-            .iter()
+            .into_iter()
             .map(|operation| {
                 (
                     operation.id().to_owned(),
-                    Operation {
-                        version: operation.version(),
-                        action: operation.action(),
-                        schema_id: operation.schema_id(),
-                        previous: operation.previous(),
-                        fields: operation.fields(),
-                    },
+                    operation.into(),
                     operation.public_key().to_owned(),
                 )
             })
@@ -349,13 +361,7 @@ where
             .map(|operation| {
                 (
                     operation.id().to_owned(),
-                    Operation {
-                        version: operation.version(),
-                        action: operation.action(),
-                        schema_id: operation.schema_id(),
-                        previous: operation.previous(),
-                        fields: operation.fields(),
-                    },
+                    operation.into(),
                     operation.public_key().to_owned(),
                 )
             })
@@ -767,51 +773,35 @@ mod tests {
 
         let document_builder = DocumentBuilder::new(operations);
 
+        let (document, _) = document_builder
+            .build_to_view_id(DocumentViewId::new(&[operation_1_id]))
+            .unwrap();
         assert_eq!(
-            document_builder
-                .build_to_view_id(Some(DocumentViewId::new(&[operation_1_id])))
-                .unwrap()
-                .fields()
-                .unwrap()
-                .get("name")
-                .unwrap()
-                .value(),
+            document.fields().unwrap().get("name").unwrap().value(),
             &OperationValue::String("Panda Cafe".to_string())
         );
 
+        let (document, _) = document_builder
+            .build_to_view_id(DocumentViewId::new(&[operation_2_id.clone()]))
+            .unwrap();
         assert_eq!(
-            document_builder
-                .build_to_view_id(Some(DocumentViewId::new(&[operation_2_id.clone()])))
-                .unwrap()
-                .fields()
-                .unwrap()
-                .get("name")
-                .unwrap()
-                .value(),
+            document.fields().unwrap().get("name").unwrap().value(),
             &OperationValue::String("Panda Cafe!".to_string())
         );
 
+        let (document, _) = document_builder
+            .build_to_view_id(DocumentViewId::new(&[operation_3_id.clone()]))
+            .unwrap();
         assert_eq!(
-            document_builder
-                .build_to_view_id(Some(DocumentViewId::new(&[operation_3_id.clone()])))
-                .unwrap()
-                .fields()
-                .unwrap()
-                .get("name")
-                .unwrap()
-                .value(),
+            document.fields().unwrap().get("name").unwrap().value(),
             &OperationValue::String("Penguin Cafe!!!".to_string())
         );
 
+        let (document, _) = document_builder
+            .build_to_view_id(DocumentViewId::new(&[operation_2_id, operation_3_id]))
+            .unwrap();
         assert_eq!(
-            document_builder
-                .build_to_view_id(Some(DocumentViewId::new(&[operation_2_id, operation_3_id])))
-                .unwrap()
-                .fields()
-                .unwrap()
-                .get("name")
-                .unwrap()
-                .value(),
+            document.fields().unwrap().get("name").unwrap().value(),
             &OperationValue::String("Penguin Cafe!!!".to_string())
         );
     }
