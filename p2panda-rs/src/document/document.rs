@@ -200,7 +200,7 @@ impl Reducer<(OperationId, Operation, PublicKey)> for DocumentReducer {
 
                 // Construct the document view fields.
                 let document_fields = DocumentViewFields::new_from_operation_fields(
-                    &operation_id,
+                    operation_id,
                     &operation.fields().unwrap(),
                 );
 

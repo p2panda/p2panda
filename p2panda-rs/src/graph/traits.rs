@@ -6,5 +6,5 @@
 /// It has one method `combine` which takes a generic value and mutable self.
 pub trait Reducer<V> {
     /// Takes a generic value and presumably combines it with some contained state.
-    fn combine(&mut self, value: &V) -> ();
+    fn combine(&mut self, value: &V);
 }
