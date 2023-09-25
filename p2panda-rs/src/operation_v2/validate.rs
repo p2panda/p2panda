@@ -3,8 +3,10 @@
 //! Collection of low-level validation methods for operations.
 use crate::document::DocumentViewId;
 use crate::hash_v2::Hash;
-use crate::operation_v2::body::{Body, EncodedBody, PlainFields};
+use crate::operation_v2::body::plain::{PlainFields, PlainOperation};
+use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::error::ValidateOperationError;
+use crate::operation_v2::header::traits::AsEncodedHeader;
 use crate::operation_v2::header::validate::validate_payload;
 use crate::operation_v2::header::{EncodedHeader, Header};
 use crate::operation_v2::traits::{Actionable, Schematic};
@@ -17,7 +19,7 @@ use crate::Human;
 pub fn validate_operation_with_header(
     header: &Header,
     encoded_header: &EncodedHeader,
-    plain_operation: &Body,
+    plain_operation: &PlainOperation,
     encoded_body: &EncodedBody,
     schema: &Schema,
 ) -> Result<(Operation, OperationId), ValidateOperationError> {
