@@ -5,7 +5,7 @@ mod body;
 pub mod decode;
 pub mod encode;
 mod encoded_body;
-mod error;
+pub mod error;
 mod fields;
 mod value;
 

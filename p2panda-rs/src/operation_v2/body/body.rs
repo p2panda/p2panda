@@ -10,7 +10,7 @@ use crate::operation_v2::traits::{AsOperation, Schematic};
 use crate::operation_v2::Operation;
 use crate::schema::SchemaId;
 
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Body(
     pub(crate) SchemaId,
     #[serde(skip_serializing_if = "Option::is_none")] pub(crate) Option<PlainFields>,

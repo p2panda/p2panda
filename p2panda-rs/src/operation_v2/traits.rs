@@ -68,11 +68,11 @@ pub trait AsOperation {
     }
 
     fn is_create(&self) -> bool {
-        self.previous().is_none()
+        self.action() == OperationAction::Create
     }
 
     fn is_update(&self) -> bool {
-        self.action() != OperationAction::Delete && self.previous().is_some()
+        self.action() == OperationAction::Update
     }
 
     fn is_delete(&self) -> bool {

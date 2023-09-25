@@ -27,7 +27,7 @@ impl Operation {
 
 #[derive(Clone, Debug)]
 pub struct OperationBuilder {
-    header_extension: Header,
+    header_extension: HeaderExtension,
     body: Body,
 }
 
@@ -51,7 +51,7 @@ impl OperationBuilder {
 
     /// Set operation schema.
     pub fn schema_id(mut self, schema_id: SchemaId) -> Self {
-        self.body.0 = Some(schema_id);
+        self.body.0 = schema_id;
         self
     }
 
@@ -75,7 +75,7 @@ impl OperationBuilder {
             }
         }
 
-        self.body.1 = Some(operation_fields);
+        self.body.1 = Some((&operation_fields).into());
         self
     }
 
@@ -84,7 +84,8 @@ impl OperationBuilder {
     /// This method checks if the given previous operations and operation fields are matching the
     /// regarding operation action.
     pub fn sign(self, key_pair: &KeyPair) -> Result<Operation, OperationBuilderError> {
-        let header = sign_header(self.header_extension, encode_body(&self.body), key_pair);
+        let payload = encode_body(&self.body)?;
+        let header = sign_header(self.header_extension, &payload, key_pair)?;
         let operation = Operation(header, self.body);
         validate_operation_format(&operation)?;
         Ok(operation)
@@ -94,12 +95,13 @@ impl OperationBuilder {
 impl AsOperation for Operation {
     /// Returns version of operation.
     fn version(&self) -> OperationVersion {
-        self.header.version()
+        self.header().version()
     }
 
     /// Returns action type of operation.
     fn action(&self) -> OperationAction {
-        match (self.0.extensions().action, self.0.extensions.previous) {
+        let extensions = self.header().extensions();
+        match (extensions.action, extensions.previous) {
             (None, None) => OperationAction::Create,
             (None, Some(_)) => OperationAction::Update,
             (Some(HeaderAction::Delete), Some(_)) => OperationAction::Delete,
@@ -110,7 +112,7 @@ impl AsOperation for Operation {
 
     /// Returns schema id of operation.
     fn schema_id(&self) -> SchemaId {
-        self.body().schema_id()
+        self.body().schema_id().to_owned()
     }
 
     /// Returns known previous operations vector of this operation.
@@ -120,7 +122,7 @@ impl AsOperation for Operation {
 
     /// Returns application data fields of operation.
     fn fields(&self) -> Option<OperationFields> {
-        self.body().fields()
+        todo!()
     }
 }
 
@@ -130,7 +132,8 @@ impl Actionable for Operation {
     }
 
     fn action(&self) -> OperationAction {
-        match (self.0.extensions().action, self.0.extensions.previous) {
+        let extensions = self.header().extensions();
+        match (extensions.action, extensions.previous) {
             (None, None) => OperationAction::Create,
             (None, Some(_)) => OperationAction::Update,
             (Some(HeaderAction::Delete), Some(_)) => OperationAction::Delete,
@@ -140,7 +143,7 @@ impl Actionable for Operation {
     }
 
     fn previous(&self) -> Option<&DocumentViewId> {
-        self.header().extensions().previous
+        self.header().extensions().previous.as_ref()
     }
 }
 
@@ -150,6 +153,6 @@ impl Schematic for Operation {
     }
 
     fn fields(&self) -> Option<PlainFields> {
-        self.body().fields().as_ref().map(PlainFields::from)
+        (&self.body().fields()).map(PlainFields::from)
     }
 }

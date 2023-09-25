@@ -7,11 +7,17 @@ use thiserror::Error;
 pub enum OperationBuilderError {
     /// Handle errors from `operation::validate` module.
     #[error(transparent)]
-    ValidateOperationError(#[from] ValidateBodyError),
+    ValidateOperationError(#[from] ValidateOperationError),
+
+    #[error(transparent)]
+    EncodeBody(#[from] crate::operation_v2::body::error::EncodeBodyError),
+
+    #[error(transparent)]
+    EncodeHeader(#[from] crate::operation_v2::header::error::EncodeHeaderError),
 }
 
 #[derive(Error, Debug)]
-pub enum ValidateBodyError {
+pub enum ValidateOperationError {
     /// Claimed schema id did not match given schema.
     #[error("operation schema id not matching with given schema: {0}, expected: {1}")]
     SchemaNotMatching(String, String),
@@ -19,6 +25,9 @@ pub enum ValidateBodyError {
     /// Handle errors from `schema::validate` module.
     #[error(transparent)]
     SchemaValidation(#[from] crate::schema::validate::error::ValidationError),
+
+    #[error(transparent)]
+    HeaderValidation(#[from] crate::operation_v2::header::error::ValidateHeaderError),
 }
 
 /// Error types for methods of plain fields or operation fields.
