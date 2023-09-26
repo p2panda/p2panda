@@ -14,6 +14,7 @@ use crate::operation_v2::validate::validate_operation_format;
 use crate::operation_v2::{OperationAction, OperationFields, OperationValue, OperationVersion};
 use crate::schema::SchemaId;
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct Operation(pub(crate) Header, pub(crate) Body);
 
 impl Operation {
