@@ -86,13 +86,10 @@ impl Human for DocumentView {
 mod tests {
     use rstest::rstest;
 
-    use crate::document::traits::AsDocument;
-    use crate::document::{DocumentBuilder, DocumentViewId, DocumentViewValue};
-    use crate::identity::PublicKey;
-    use crate::operation::traits::AsOperation;
-    use crate::operation::{
-        Operation, OperationAction, OperationBuilder, OperationFields, OperationId, OperationValue,
-    };
+    use crate::document::materialization::reduce;
+    use crate::document::DocumentViewValue;
+    use crate::identity_v2::PublicKey;
+    use crate::operation_v2::{Operation, OperationFields, OperationId, OperationValue};
     use crate::test_utils::fixtures::{
         create_operation, operation_fields, public_key, random_operation_id,
     };

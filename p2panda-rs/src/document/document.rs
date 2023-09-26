@@ -11,6 +11,9 @@ use crate::hash::HashId;
 use crate::identity::PublicKey;
 use crate::operation::traits::{AsOperation, WithPublicKey};
 use crate::operation::{Operation, OperationId};
+use crate::identity_v2::PublicKey;
+use crate::operation_v2::traits::{AsOperation, WithPublicKey};
+use crate::operation_v2::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::{Human, WithId};
 

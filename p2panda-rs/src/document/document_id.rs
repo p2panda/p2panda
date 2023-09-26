@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::document::error::DocumentIdError;
 use crate::hash_v2::{Hash, HashId};
-use crate::operation::OperationId;
+use crate::operation_v2::OperationId;
 use crate::{Human, Validate};
 
 /// Identifier of a document.

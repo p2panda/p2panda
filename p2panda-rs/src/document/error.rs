@@ -4,7 +4,7 @@
 //! format of document ids and document view ids.
 use thiserror::Error;
 
-use crate::operation::OperationId;
+use crate::operation_v2::OperationId;
 
 /// Error types for methods of `DocumentBuilder` struct.
 #[derive(Error, Debug)]

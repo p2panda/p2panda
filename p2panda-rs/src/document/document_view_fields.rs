@@ -3,8 +3,8 @@
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
-use crate::operation::traits::AsOperation;
-use crate::operation::{OperationFields, OperationId, OperationValue};
+use crate::operation_v2::traits::AsOperation;
+use crate::operation_v2::{OperationFields, OperationId, OperationValue};
 use crate::WithId;
 
 /// The current value of a document fiew field as well as the id of the operation it came from.
@@ -115,8 +115,8 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::{DocumentViewFields, DocumentViewValue};
-    use crate::operation::traits::AsOperation;
-    use crate::operation::{OperationId, OperationValue};
+    use crate::operation_v2::traits::AsOperation;
+    use crate::operation_v2::{OperationId, OperationValue};
     use crate::test_utils::fixtures::{published_operation, random_operation_id};
     use crate::test_utils::memory_store::PublishedOperation;
     use crate::WithId;

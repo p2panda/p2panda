@@ -6,9 +6,9 @@ use crate::document::error::DocumentError;
 use crate::document::{
     DocumentId, DocumentView, DocumentViewFields, DocumentViewId, DocumentViewValue,
 };
-use crate::identity::PublicKey;
-use crate::operation::traits::AsOperation;
-use crate::operation::{OperationId, OperationValue};
+use crate::identity_v2::PublicKey;
+use crate::operation_v2::traits::AsOperation;
+use crate::operation_v2::{OperationId, OperationValue};
 use crate::schema::SchemaId;
 
 /// Trait representing an "document-like" struct.

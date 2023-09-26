@@ -4,9 +4,9 @@
 use crate::document::error::DocumentBuilderError;
 use crate::document::{DocumentViewFields, DocumentViewValue};
 use crate::graph::Graph;
-use crate::identity::PublicKey;
-use crate::operation::traits::AsOperation;
-use crate::operation::{Operation, OperationId};
+use crate::identity_v2::PublicKey;
+use crate::operation_v2::traits::AsOperation;
+use crate::operation_v2::{Operation, OperationId};
 
 /// Construct a graph from a list of operations.
 pub fn build_graph(
@@ -63,8 +63,8 @@ pub fn reduce(
 mod tests {
     use rstest::rstest;
 
-    use crate::identity::PublicKey;
-    use crate::operation::{Operation, OperationValue};
+    use crate::identity_v2::PublicKey;
+    use crate::operation_v2::{Operation, OperationValue};
     use crate::test_utils::fixtures::{
         create_operation, delete_operation, public_key, random_operation_id, update_operation,
     };

@@ -3,7 +3,7 @@
 use std::fmt::Display;
 
 use crate::document::DocumentViewId;
-use crate::hash::{Hash, HashId};
+use crate::hash_v2::{Hash, HashId};
 
 /// Contains a hash over the sorted graph tips constituting this view id.
 ///
@@ -56,8 +56,8 @@ mod tests {
     use rstest::rstest;
 
     use crate::document::DocumentViewId;
-    use crate::hash::Hash;
-    use crate::operation::OperationId;
+    use crate::hash_v2::Hash;
+    use crate::operation_v2::OperationId;
     use crate::test_utils::fixtures::{random_hash, random_operation_id};
 
     use super::DocumentViewHash;
