@@ -27,10 +27,6 @@ pub struct Header(
 );
 
 impl Authored for Header {
-    fn version(&self) -> OperationVersion {
-        self.0
-    }
-
     fn public_key(&self) -> &PublicKey {
         &self.1
     }
@@ -41,10 +37,6 @@ impl Authored for Header {
 
     fn payload_size(&self) -> u64 {
         self.3
-    }
-
-    fn extensions(&self) -> &HeaderExtension {
-        &self.4
     }
 
     fn signature(&self) -> &Signature {
