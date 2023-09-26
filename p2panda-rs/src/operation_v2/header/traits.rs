@@ -1,33 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::document::DocumentViewId;
 use crate::hash_v2::Hash;
-use crate::identity_v2::{PublicKey, Signature, SIGNATURE_SIZE};
+use crate::identity_v2::{PublicKey, Signature};
 use crate::operation_v2::header::HeaderExtension;
-use crate::operation_v2::OperationVersion;
+use crate::operation_v2::{OperationVersion, OperationAction};
 
-pub trait AsHeader {
+pub trait Authored {
     fn version(&self) -> OperationVersion;
     fn public_key(&self) -> &PublicKey;
     fn payload_size(&self) -> u64;
     fn payload_hash(&self) -> &Hash;
     fn signature(&self) -> &Signature;
+
+    // @TODO: this is not related to being "authored"... 
     fn extensions(&self) -> &HeaderExtension;
 }
 
-pub trait AsEncodedHeader {
-    fn hash(&self) -> Hash;
+pub trait Actionable {
+    /// Returns the operation version.
+    fn version(&self) -> OperationVersion;
 
-    fn to_bytes(&self) -> Vec<u8>;
+    /// Returns the operation action.
+    fn action(&self) -> OperationAction;
 
-    fn size(&self) -> u64;
-
-    fn unsigned_bytes(&self) -> Vec<u8> {
-        let bytes = self.to_bytes();
-        let signature_offset = bytes.len() - SIGNATURE_SIZE;
-        bytes[..signature_offset].into()
-    }
-
-    fn to_hex(&self) -> String {
-        hex::encode(self.to_bytes())
-    }
+    /// Returns a list of previous operations.
+    fn previous(&self) -> Option<&DocumentViewId>;
 }

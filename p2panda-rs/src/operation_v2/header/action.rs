@@ -31,12 +31,12 @@ impl HeaderAction {
 }
 
 impl TryFrom<u64> for HeaderAction {
-    type Error = OperationActionError;
+    type Error = HeaderActionError;
 
     fn try_from(value: u64) -> Result<Self, Self::Error> {
         match value {
             2 => Ok(HeaderAction::Delete),
-            _ => Err(OperationActionError::UnknownAction(value)),
+            _ => Err(HeaderActionError::UnknownAction(value)),
         }
     }
 }

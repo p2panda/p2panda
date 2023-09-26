@@ -6,7 +6,7 @@ use std::hash::Hash as StdHash;
 use serde::{Deserialize, Serialize};
 
 use crate::hash_v2::Hash;
-use crate::operation_v2::header::traits::AsEncodedHeader;
+use crate::identity_v2::SIGNATURE_SIZE;
 use crate::serde::{deserialize_hex, serialize_hex};
 
 #[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
@@ -18,19 +18,27 @@ impl EncodedHeader {
     pub fn from_bytes(bytes: &[u8]) -> Self {
         Self(bytes.to_owned())
     }
-}
 
-impl AsEncodedHeader for EncodedHeader {
-    fn hash(&self) -> Hash {
+    pub fn hash(&self) -> Hash {
         Hash::new_from_bytes(&self.0)
     }
 
-    fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Vec<u8> {
         self.0.clone()
     }
 
-    fn size(&self) -> u64 {
+    pub fn size(&self) -> u64 {
         self.0.len() as u64
+    }
+
+    pub fn unsigned_bytes(&self) -> Vec<u8> {
+        let bytes = self.to_bytes();
+        let signature_offset = bytes.len() - SIGNATURE_SIZE;
+        bytes[..signature_offset].into()
+    }
+
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.to_bytes())
     }
 }
 

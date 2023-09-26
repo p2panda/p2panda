@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::operation_v2::body::plain::PlainFields;
 use crate::operation_v2::body::Body;
-use crate::operation_v2::traits::Schematic;
+use crate::operation_v2::body::traits::Schematic;
 use crate::schema::SchemaId;
 
 #[derive(Serialize, Debug, PartialEq)]

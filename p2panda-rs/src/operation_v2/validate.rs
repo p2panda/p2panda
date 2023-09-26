@@ -2,14 +2,13 @@
 
 //! Collection of low-level validation methods for operations.
 use crate::document::DocumentViewId;
-use crate::hash_v2::Hash;
 use crate::operation_v2::body::plain::{PlainFields, PlainOperation};
+use crate::operation_v2::body::traits::Schematic;
 use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::error::ValidateOperationError;
-use crate::operation_v2::header::traits::AsEncodedHeader;
+use crate::operation_v2::header::traits::Actionable;
 use crate::operation_v2::header::validate::validate_payload;
 use crate::operation_v2::header::{EncodedHeader, Header};
-use crate::operation_v2::traits::{Actionable, Schematic};
 use crate::operation_v2::{Operation, OperationAction, OperationId, OperationVersion};
 use crate::schema::validate::{validate_all_fields, validate_only_given_fields};
 use crate::schema::Schema;

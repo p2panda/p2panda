@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::identity_v2::KeyPair;
+use crate::operation_v2::OperationVersion;
 use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::header::error::EncodeHeaderError;
-use crate::operation_v2::header::traits::AsEncodedHeader;
-use crate::operation_v2::header::{EncodedHeader, Header, HeaderExtension, HeaderVersion};
+use crate::operation_v2::header::{EncodedHeader, Header, HeaderExtension};
 
 pub fn sign_header(
     extension: HeaderExtension,
@@ -12,7 +12,7 @@ pub fn sign_header(
     key_pair: &KeyPair,
 ) -> Result<Header, EncodeHeaderError> {
     let mut header = Header(
-        HeaderVersion::V1,
+        OperationVersion::V1,
         key_pair.public_key(),
         payload.hash(),
         payload.size(),

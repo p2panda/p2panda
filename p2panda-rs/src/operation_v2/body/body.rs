@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::operation_v2::body::plain::PlainFields;
-use crate::operation_v2::traits::Schematic;
+use crate::operation_v2::body::traits::Schematic;
 use crate::operation_v2::OperationFields;
 use crate::schema::SchemaId;
 

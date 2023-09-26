@@ -7,9 +7,8 @@ use crate::operation_v2::body::plain::PlainFields;
 use crate::operation_v2::body::Body;
 use crate::operation_v2::error::OperationBuilderError;
 use crate::operation_v2::header::encode::sign_header;
-use crate::operation_v2::header::traits::AsHeader;
 use crate::operation_v2::header::{Header, HeaderAction, HeaderExtension};
-use crate::operation_v2::traits::{Actionable, AsOperation, Schematic};
+use crate::operation_v2::header::traits::{Actionable, Authored};
 use crate::operation_v2::validate::validate_operation_format;
 use crate::operation_v2::{OperationAction, OperationFields, OperationValue, OperationVersion};
 use crate::schema::SchemaId;
@@ -94,53 +93,54 @@ impl OperationBuilder {
     }
 }
 
-impl AsOperation for Operation {
-    /// Returns version of operation.
-    fn version(&self) -> OperationVersion {
-        AsHeader::version(self.header())
-    }
-
-    /// Returns action type of operation.
-    fn action(&self) -> OperationAction {
-        self.header().action()
-    }
-
-    /// Returns schema id of operation.
-    fn schema_id(&self) -> SchemaId {
-        self.body().schema_id().to_owned()
-    }
-
-    /// Returns known previous operations vector of this operation.
-    fn previous(&self) -> Option<DocumentViewId> {
-        self.header().extensions().previous
-    }
-
-    /// Returns application data fields of operation.
-    fn fields(&self) -> Option<OperationFields> {
-        todo!()
-    }
-}
-
-impl Actionable for Operation {
-    fn version(&self) -> OperationVersion {
-        AsHeader::version(self.header())
-    }
-
-    fn action(&self) -> OperationAction {
-        self.header().action()
-    }
-
-    fn previous(&self) -> Option<&DocumentViewId> {
-        self.header().extensions().previous.as_ref()
-    }
-}
-
-impl Schematic for Operation {
-    fn schema_id(&self) -> &SchemaId {
-        &self.body().schema_id()
-    }
-
-    fn fields(&self) -> Option<PlainFields> {
-        (&self.body().fields()).map(PlainFields::from)
-    }
-}
+// 
+// impl AsOperation for Operation {
+//     /// Returns version of operation.
+//     fn version(&self) -> OperationVersion {
+//         Authored::version(self.header())
+//     }
+// 
+//     /// Returns action type of operation.
+//     fn action(&self) -> OperationAction {
+//         self.header().action()
+//     }
+// 
+//     /// Returns schema id of operation.
+//     fn schema_id(&self) -> SchemaId {
+//         self.body().schema_id().to_owned()
+//     }
+// 
+//     /// Returns known previous operations vector of this operation.
+//     fn previous(&self) -> Option<DocumentViewId> {
+//         self.header().extensions().previous
+//     }
+// 
+//     /// Returns application data fields of operation.
+//     fn fields(&self) -> Option<OperationFields> {
+//         todo!()
+//     }
+// }
+// 
+// impl Actionable for Operation {
+//     fn version(&self) -> OperationVersion {
+//         Authored::version(self.header())
+//     }
+// 
+//     fn action(&self) -> OperationAction {
+//         self.header().action()
+//     }
+// 
+//     fn previous(&self) -> Option<&DocumentViewId> {
+//         self.header().extensions().previous.as_ref()
+//     }
+// }
+// 
+// impl Schematic for Operation {
+//     fn schema_id(&self) -> &SchemaId {
+//         &self.body().schema_id()
+//     }
+// 
+//     fn fields(&self) -> Option<PlainFields> {
+//         (&self.body().fields()).map(PlainFields::from)
+//     }
+// }

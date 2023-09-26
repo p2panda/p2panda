@@ -9,8 +9,7 @@ use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::header::action::HeaderAction;
 use crate::operation_v2::header::encode::sign_header;
 use crate::operation_v2::header::error::EncodeHeaderError;
-use crate::operation_v2::header::traits::AsHeader;
-use crate::operation_v2::traits::Actionable;
+use crate::operation_v2::header::traits::{Authored, Actionable};
 use crate::operation_v2::{OperationAction, OperationVersion};
 
 pub type PayloadHash = Hash;
@@ -27,7 +26,7 @@ pub struct Header(
     #[serde(skip_serializing_if = "Option::is_none")] pub(crate) Option<Signature>,
 );
 
-impl AsHeader for Header {
+impl Authored for Header {
     fn version(&self) -> OperationVersion {
         self.0
     }
