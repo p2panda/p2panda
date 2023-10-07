@@ -62,10 +62,10 @@
 //! //  /--[B]<--[C]--\
 //! // [A]<--[G]<-----[H]<--[D]
 //!
-//! // We can sort it topologically and accumulate the visited values in order.
+//! // We can sort it topologically and reduce the visited values in order.
 //!
 //! let mut reducer = CharReducer::default();
-//! let sorted = graph.sort(&mut reducer)?;
+//! let sorted = graph.reduce(&mut reducer)?;
 //!
 //! assert_eq!(reducer.acc, "ABCGHDEF".to_string());
 //!
