@@ -60,7 +60,7 @@ use crate::graph::Reducer;
 /// // We can sort it topologically and pass in our reducer.
 ///
 /// let mut reducer = CharReducer::default();
-/// let nodes = graph.sort(&mut reducer)?;
+/// let nodes = graph.reduce(&mut reducer)?;
 ///
 /// assert_eq!(nodes.sorted(), vec!['A', 'B', 'C']);
 /// assert_eq!(reducer.acc, "ABC".to_string());
@@ -70,7 +70,7 @@ use crate::graph::Reducer;
 /// graph.add_link(&'b', &'a');
 ///
 /// let mut reducer = CharReducer::default();
-/// assert!(graph.sort(&mut reducer).is_err());
+/// assert!(graph.reduce(&mut reducer).is_err());
 ///
 /// # Ok(())
 /// # }
@@ -466,7 +466,7 @@ where
     ///
     /// Accepts a mutable reducer as an argument. As each node is sorted into topological order
     /// its value is passed into the `combine` method.
-    pub fn sort(&'a self, reducer: &mut impl Reducer<V>) -> Result<GraphData<V>, GraphError> {
+    pub fn reduce(&'a self, reducer: &mut impl Reducer<V>) -> Result<GraphData<V>, GraphError> {
         let root_node = self.root_node_key()?;
         self.walk_from(root_node, reducer)
     }
@@ -500,11 +500,11 @@ mod test {
     }
 
     #[derive(Default)]
-    struct StringReducer {
+    struct CountReducer {
         count: i32,
     }
 
-    impl Reducer<i32> for StringReducer {
+    impl Reducer<i32> for CountReducer {
         fn combine(&mut self, value: &i32) -> () {
             self.count += value
         }
@@ -629,7 +629,7 @@ mod test {
         graph.add_link(&'c', &'d');
         graph.add_link(&'d', &'b');
 
-        let mut reducer = StringReducer::default();
+        let mut reducer = CountReducer::default();
         assert!(graph.walk_from(&'a', &mut reducer).is_err());
     }
 
@@ -647,7 +647,7 @@ mod test {
         graph.add_link(&'d', &'b');
         graph.add_link(&'e', &'b'); // 'e' doesn't exist in the graph.
 
-        let mut reducer = StringReducer::default();
+        let mut reducer = CountReducer::default();
         assert!(graph.walk_from(&'a', &mut reducer).is_err())
     }
 
@@ -665,23 +665,23 @@ mod test {
         graph.add_link(&'c', &'d');
         graph.add_link(&'c', &'e');
 
-        let mut reducer = StringReducer::default();
-        let result = graph.trim(&['d', 'e']).unwrap().sort(&mut reducer);
+        let mut reducer = CountReducer::default();
+        let result = graph.trim(&['d', 'e']).unwrap().reduce(&mut reducer);
         assert_eq!(result.unwrap().sorted(), [1, 2, 3, 4, 5]);
         assert_eq!(reducer.count, 15);
 
-        let mut reducer = StringReducer::default();
-        let result = graph.trim(&['c']).unwrap().sort(&mut reducer);
+        let mut reducer = CountReducer::default();
+        let result = graph.trim(&['c']).unwrap().reduce(&mut reducer);
         assert_eq!(result.unwrap().sorted(), [1, 2, 3]);
         assert_eq!(reducer.count, 6);
 
-        let mut reducer = StringReducer::default();
-        let result = graph.trim(&['e']).unwrap().sort(&mut reducer);
+        let mut reducer = CountReducer::default();
+        let result = graph.trim(&['e']).unwrap().reduce(&mut reducer);
         assert_eq!(result.unwrap().sorted(), [1, 2, 3, 5]);
         assert_eq!(reducer.count, 11);
 
-        let mut reducer = StringReducer::default();
-        let result = graph.trim(&['d']).unwrap().sort(&mut reducer);
+        let mut reducer = CountReducer::default();
+        let result = graph.trim(&['d']).unwrap().reduce(&mut reducer);
         assert_eq!(result.unwrap().sorted(), [1, 2, 3, 4]);
         assert_eq!(reducer.count, 10);
     }
@@ -722,12 +722,12 @@ mod test {
         //
 
         let mut reducer = CharReducer::default();
-        let result = graph.trim(&['k']).unwrap().sort(&mut reducer);
+        let result = graph.trim(&['k']).unwrap().reduce(&mut reducer);
         assert_eq!(result.unwrap().sorted(), ['A', 'B', 'C', 'I', 'J', 'K']);
         assert_eq!(reducer.acc, "ABCIJK".to_string());
 
         let mut reducer = CharReducer::default();
-        let result = graph.trim(&['k', 'e']).unwrap().sort(&mut reducer);
+        let result = graph.trim(&['k', 'e']).unwrap().reduce(&mut reducer);
         assert_eq!(
             result.unwrap().sorted(),
             ['A', 'B', 'C', 'I', 'J', 'K', 'G', 'H', 'D', 'E']
@@ -735,7 +735,7 @@ mod test {
         assert_eq!(reducer.acc, "ABCIJKGHDE".to_string());
 
         let mut reducer = CharReducer::default();
-        let result = graph.trim(&['f']).unwrap().sort(&mut reducer);
+        let result = graph.trim(&['f']).unwrap().reduce(&mut reducer);
         assert_eq!(
             result.unwrap().sorted(),
             ['A', 'B', 'C', 'I', 'J', 'K', 'G', 'H', 'D', 'E', 'F']
@@ -743,7 +743,7 @@ mod test {
         assert_eq!(reducer.acc, "ABCIJKGHDEF".to_string());
 
         let mut reducer = CharReducer::default();
-        let result = graph.trim(&['k', 'g']).unwrap().sort(&mut reducer);
+        let result = graph.trim(&['k', 'g']).unwrap().reduce(&mut reducer);
         assert_eq!(
             result.unwrap().sorted(),
             ['A', 'B', 'C', 'I', 'J', 'K', 'G']
@@ -756,7 +756,7 @@ mod test {
         let result = graph
             .trim(&['a', 'b', 'c', 'j'])
             .unwrap()
-            .sort(&mut reducer);
+            .reduce(&mut reducer);
         assert_eq!(result.unwrap().sorted(), ['A', 'B', 'C', 'I', 'J']);
         assert_eq!(reducer.acc, "ABCIJ".to_string());
     }

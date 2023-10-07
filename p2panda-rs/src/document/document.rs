@@ -299,7 +299,8 @@ impl DocumentBuilder {
         Ok(graph)
     }
 
-    /// Traverse the graph in order to reduce a document and sorted operations.
+    /// Traverse the graph, visiting operations in their topologically sorted order and reduce
+    /// them into a single document.
     fn reduce_document(
         &self,
         graph: &mut OperationGraph,
@@ -309,7 +310,7 @@ impl DocumentBuilder {
         // We pass in a DocumentReducer which will construct the document as nodes (which contain
         // operations) are visited.
         let mut document_reducer = DocumentReducer::default();
-        let graph_data = graph.sort(&mut document_reducer)?;
+        let graph_data = graph.reduce(&mut document_reducer)?;
         let graph_tips: Vec<OperationId> = graph_data
             .current_graph_tips()
             .iter()
