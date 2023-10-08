@@ -3,6 +3,7 @@
 // Benchmarking tests adapted from
 // [https://github.com/declanvk/incremental-topo/tree/main/benches](https://github.com/declanvk/incremental-topo/tree/main/benches).
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use p2panda_rs::graph::error::ReducerError;
 use p2panda_rs::graph::{Graph, Reducer};
 
 const DEFAULT_DENSITY: f32 = 0.1;
@@ -12,7 +13,11 @@ const DEFAULT_SIZE: u64 = 100;
 struct TestReducer;
 
 impl Reducer<u64> for TestReducer {
-    fn combine(&mut self, _value: &u64) -> () {}
+    type Error = ReducerError;
+
+    fn combine(&mut self, _value: &u64) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 fn generate_random_p2panda_dag(size: u64, density: f32) -> Graph<String, u64> {

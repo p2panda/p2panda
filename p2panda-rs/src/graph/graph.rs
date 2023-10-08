@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use crate::graph::error::GraphError;
+use crate::graph::error::{GraphError, ReducerError};
 use crate::graph::Reducer;
 
 /// This struct contains all functionality implemented in this module. It is can be used for
@@ -393,7 +393,10 @@ where
             }
 
             // Pass node data into reducer.
-            reducer.combine(&current_node.data);
+            reducer
+                .combine(&current_node.data)
+                .map_err(|err| ReducerError::Custom(err.to_string()))?;
+
             debug!(
                 "{:?}: sorted to position {}",
                 current_node.key(),
@@ -450,7 +453,10 @@ where
                 }
 
                 // Pass node data into reducer.
-                reducer.combine(&next_node.data);
+                reducer
+                    .combine(&next_node.data)
+                    .map_err(|err| ReducerError::Custom(err.to_string()))?;
+
                 debug!(
                     "{:?}: sorted to position {}",
                     next_node.key(),
@@ -484,9 +490,10 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::graph::Reducer;
+    use crate::graph::error::ReducerError;
+    use crate::graph::{Graph, Reducer};
 
-    use super::{Graph, GraphData};
+    use super::GraphData;
 
     #[derive(Default)]
     struct CharReducer {
@@ -494,8 +501,11 @@ mod test {
     }
 
     impl Reducer<char> for CharReducer {
-        fn combine(&mut self, value: &char) -> () {
-            self.acc = format!("{}{}", self.acc, value)
+        type Error = ReducerError;
+
+        fn combine(&mut self, value: &char) -> Result<(), Self::Error> {
+            self.acc = format!("{}{}", self.acc, value);
+            Ok(())
         }
     }
 
@@ -505,8 +515,11 @@ mod test {
     }
 
     impl Reducer<i32> for CountReducer {
-        fn combine(&mut self, value: &i32) -> () {
-            self.count += value
+        type Error = ReducerError;
+
+        fn combine(&mut self, value: &i32) -> Result<(), Self::Error> {
+            self.count += value;
+            Ok(())
         }
     }
 
@@ -516,8 +529,11 @@ mod test {
     }
 
     impl Reducer<String> for PoeticReducer {
-        fn combine(&mut self, value: &String) -> () {
-            self.acc = format!("{}{}\n", self.acc, value)
+        type Error = ReducerError;
+
+        fn combine(&mut self, value: &String) -> Result<(), Self::Error> {
+            self.acc = format!("{}{}\n", self.acc, value);
+            Ok(())
         }
     }
 

@@ -126,32 +126,19 @@ where
 }
 
 /// Struct which implements a Reducer used during document building.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct DocumentReducer {
     document: Option<Document>,
-    result: Result<(), DocumentReducerError>,
-}
-
-impl Default for DocumentReducer {
-    fn default() -> Self {
-        Self {
-            document: None,
-            result: Ok(()),
-        }
-    }
 }
 
 /// Implementation of the `Reduce` trait for collections of authored operations.
 impl Reducer<(OperationId, Operation, PublicKey)> for DocumentReducer {
+    type Error = DocumentReducerError;
+
     /// Combine a visited operation with the existing document.
-    fn combine(&mut self, value: &(OperationId, Operation, PublicKey)) {
+    fn combine(&mut self, value: &(OperationId, Operation, PublicKey)) -> Result<(), Self::Error> {
         // Extract the values.
         let (operation_id, operation, public_key) = value;
-
-        // If we already experienced an error then do nothing.
-        if self.result.is_err() {
-            return;
-        }
 
         // Get the current document.
         let document = self.document.clone();
@@ -160,7 +147,7 @@ impl Reducer<(OperationId, Operation, PublicKey)> for DocumentReducer {
             // If it has already been instantiated perform the commit.
             Some(mut document) => {
                 match document.commit(operation_id, operation) {
-                    Ok(_) => (),
+                    Ok(_) => Ok(()),
                     Err(err) => match err {
                         DocumentError::PreviousDoesNotMatch(_) => {
                             // We accept this error as we are reducing the document while walking
@@ -171,21 +158,22 @@ impl Reducer<(OperationId, Operation, PublicKey)> for DocumentReducer {
                             //
                             // Perform the commit in any case.
                             document.commit_unchecked(operation_id, operation);
+                            Ok(())
                         }
                         // These errors are serious and we should signal that the reducing failed
                         // by storing the error.
-                        err => self.result = Err(err.into()),
+                        err => Err(err),
                     },
-                };
+                }?;
                 // Set the updated document.
                 self.document = Some(document);
+                Ok(())
             }
             // If the document wasn't instantiated yet, then do so.
             None => {
                 // Error if this operation is _not_ a CREATE operation.
                 if !operation.is_create() {
-                    self.result = Err(DocumentReducerError::FirstOperationNotCreate);
-                    return;
+                    return Err(DocumentReducerError::FirstOperationNotCreate);
                 }
 
                 // Construct the document view fields.
@@ -204,7 +192,8 @@ impl Reducer<(OperationId, Operation, PublicKey)> for DocumentReducer {
                 };
 
                 // Set the newly instantiated document.
-                self.document = Some(document)
+                self.document = Some(document);
+                Ok(())
             }
         }
     }
@@ -316,9 +305,6 @@ impl DocumentBuilder {
             .iter()
             .map(|(id, _, _)| id.to_owned())
             .collect();
-
-        // Check if the reducer produced an error.
-        document_reducer.result?;
 
         // Unwrap the document as if no error occurred it should be there.
         let mut document = document_reducer.document.unwrap();
@@ -673,7 +659,7 @@ mod tests {
 
         assert_eq!(
             document.unwrap_err().to_string(),
-            "Operation 0020b7674a56756183f7d2c6afa20e06041a9a9a30b0aec728e35acf281ecff2b544 does not match the documents schema".to_string()
+            "Could not perform reducer function: Operation 0020b7674a56756183f7d2c6afa20e06041a9a9a30b0aec728e35acf281ecff2b544 does not match the documents schema".to_string()
         );
     }
 
