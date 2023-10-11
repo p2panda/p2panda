@@ -65,8 +65,8 @@ pub enum DocumentError {
 /// Error types for methods of `Document` struct.
 #[derive(Error, Debug)]
 pub enum DocumentReducerError {
-    /// The first operation of a document must be a create.
-    #[error("The first operation of a document must be a create")]
+    /// The first operation of a document must be a CREATE.
+    #[error("The first operation of a document must be a CREATE")]
     FirstOperationNotCreate,
 
     /// Handle errors from Document.
