@@ -15,7 +15,7 @@ Highlights are marked with a pancake 🥞
 
 - Remove unused methods from `EntryStore` [#521](https://github.com/p2panda/p2panda/pull/521) `rs`
 - Serialize `Hash` and derived id types from bytes [#525](https://github.com/p2panda/p2panda/pull/525) `rs`
-- New `Reducer` trait used during document building [#](https://github.com/p2panda/p2panda/pull/527) `rs`
+- New `Reducer` trait used during document building [#527](https://github.com/p2panda/p2panda/pull/527) `rs`
 
 ### Fixed
 
