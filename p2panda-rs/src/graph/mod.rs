@@ -82,7 +82,7 @@
 //!
 //! impl Reducer<String> for PoeticReducer {
 //!     type Error = ReducerError;
-//! 
+//!
 //!     fn combine(&mut self, value: &String) -> Result<(), Self::Error> {
 //!         self.acc = format!("{}{}\n", self.acc, value);
 //!         Ok(())

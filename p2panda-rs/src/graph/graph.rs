@@ -21,7 +21,7 @@ use crate::graph::Reducer;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use p2panda_rs::graph::{Graph, Reducer};
 /// use p2panda_rs::graph::error::ReducerError;
-/// 
+///
 /// // First we define a reducer we will use later on.
 ///
 /// #[derive(Default)]
