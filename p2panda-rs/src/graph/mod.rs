@@ -17,6 +17,7 @@
 //! # extern crate p2panda_rs;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use p2panda_rs::graph::{Graph, Reducer};
+//! use p2panda_rs::graph::error::ReducerError;
 //!
 //! // First we need to define a reducer.
 //!
@@ -26,8 +27,11 @@
 //! }
 //!
 //! impl Reducer<char> for CharReducer {
-//!     fn combine(&mut self, value: &char) -> () {
-//!         self.acc = format!("{}{}", self.acc, value)
+//!     type Error = ReducerError;
+//!
+//!     fn combine(&mut self, value: &char) -> Result<(), Self::Error> {
+//!         self.acc = format!("{}{}", self.acc, value);
+//!         Ok(())
 //!     }
 //! }
 //!
@@ -77,8 +81,11 @@
 //! }
 //!
 //! impl Reducer<String> for PoeticReducer {
-//!     fn combine(&mut self, value: &String) -> () {
-//!         self.acc = format!("{}{}\n", self.acc, value)
+//!     type Error = ReducerError;
+//! 
+//!     fn combine(&mut self, value: &String) -> Result<(), Self::Error> {
+//!         self.acc = format!("{}{}\n", self.acc, value);
+//!         Ok(())
 //!     }
 //! }
 //!

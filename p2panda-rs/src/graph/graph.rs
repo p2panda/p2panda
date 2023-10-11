@@ -20,7 +20,8 @@ use crate::graph::Reducer;
 /// # extern crate p2panda_rs;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use p2panda_rs::graph::{Graph, Reducer};
-///
+/// use p2panda_rs::graph::error::ReducerError;
+/// 
 /// // First we define a reducer we will use later on.
 ///
 /// #[derive(Default)]
@@ -29,8 +30,11 @@ use crate::graph::Reducer;
 /// }
 ///
 /// impl Reducer<char> for CharReducer {
-///     fn combine(&mut self, value: &char) -> () {
-///         self.acc = format!("{}{}", self.acc, value)
+///     type Error = ReducerError;
+///
+///     fn combine(&mut self, value: &char) -> Result<(), Self::Error> {
+///         self.acc = format!("{}{}", self.acc, value);
+///         Ok(())
 ///     }
 /// }
 ///
