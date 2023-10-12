@@ -3,15 +3,18 @@
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display};
 
-use crate::document::error::DocumentBuilderError;
-use crate::document::materialization::{build_graph, reduce};
+use crate::document::error::{DocumentBuilderError, DocumentReducerError};
 use crate::document::traits::AsDocument;
 use crate::document::{DocumentId, DocumentViewFields, DocumentViewId};
+use crate::graph::{Graph, Reducer};
+use crate::hash::HashId;
 use crate::identity::PublicKey;
 use crate::operation::traits::{AsOperation, WithPublicKey};
 use crate::operation::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::{Human, WithId};
+
+use super::error::DocumentError;
 
 /// High-level datatype representing data published to the p2panda network as key-value pairs.
 ///
@@ -104,7 +107,8 @@ where
 
     fn try_from(operations: Vec<&T>) -> Result<Self, Self::Error> {
         let document_builder: DocumentBuilder = operations.into();
-        document_builder.build()
+        let (document, _) = document_builder.build()?;
+        Ok(document)
     }
 }
 
@@ -116,9 +120,87 @@ where
 
     fn try_from(operations: &Vec<T>) -> Result<Self, Self::Error> {
         let document_builder: DocumentBuilder = operations.into();
-        document_builder.build()
+        let (document, _) = document_builder.build()?;
+        Ok(document)
     }
 }
+
+/// Struct which implements a Reducer used during document building.
+#[derive(Debug, Default)]
+struct DocumentReducer {
+    document: Option<Document>,
+}
+
+/// Implementation of the `Reduce` trait for collections of authored operations.
+impl Reducer<(OperationId, Operation, PublicKey)> for DocumentReducer {
+    type Error = DocumentReducerError;
+
+    /// Combine a visited operation with the existing document.
+    fn combine(&mut self, value: &(OperationId, Operation, PublicKey)) -> Result<(), Self::Error> {
+        // Extract the values.
+        let (operation_id, operation, public_key) = value;
+
+        // Get the current document.
+        let document = self.document.clone();
+
+        match document {
+            // If it has already been instantiated perform the commit.
+            Some(mut document) => {
+                match document.commit(operation_id, operation) {
+                    Ok(_) => Ok(()),
+                    Err(err) => match err {
+                        DocumentError::PreviousDoesNotMatch(_) => {
+                            // We accept this error as we are reducing the document while walking
+                            // the operation graph in DocumentBuilder. In this situation the
+                            // operations are being visited in their topologically sorted order
+                            // and in the case of branches, `previous` may not match the documents
+                            // current document view id.
+                            //
+                            // Perform the commit in any case.
+                            document.commit_unchecked(operation_id, operation);
+                            Ok(())
+                        }
+                        // These errors are serious and we should signal that the reducing failed
+                        // by storing the error.
+                        err => Err(err),
+                    },
+                }?;
+                // Set the updated document.
+                self.document = Some(document);
+                Ok(())
+            }
+            // If the document wasn't instantiated yet, then do so.
+            None => {
+                // Error if this operation is _not_ a CREATE operation.
+                if !operation.is_create() {
+                    return Err(DocumentReducerError::FirstOperationNotCreate);
+                }
+
+                // Construct the document view fields.
+                let document_fields = DocumentViewFields::new_from_operation_fields(
+                    operation_id,
+                    &operation.fields().unwrap(),
+                );
+
+                // Construct the document.
+                let document = Document {
+                    id: operation_id.as_hash().clone().into(),
+                    fields: Some(document_fields),
+                    schema_id: operation.schema_id(),
+                    view_id: DocumentViewId::new(&[operation_id.to_owned()]),
+                    author: public_key.to_owned(),
+                };
+
+                // Set the newly instantiated document.
+                self.document = Some(document);
+                Ok(())
+            }
+        }
+    }
+}
+
+type PublishedOperation = (OperationId, Operation, PublicKey);
+type OperationGraph = Graph<OperationId, PublishedOperation>;
 
 /// A struct for building [documents][`Document`] from a collection of operations.
 #[derive(Debug, Clone)]
@@ -130,9 +212,9 @@ impl DocumentBuilder {
         Self(operations)
     }
 
-    /// Get all operations for this document.
-    pub fn operations(&self) -> Vec<(OperationId, Operation, PublicKey)> {
-        self.0.clone()
+    /// Get all unsorted operations for this document.
+    pub fn operations(&self) -> &Vec<PublishedOperation> {
+        &self.0
     }
 
     /// Validates all contained operations and builds the document.
@@ -144,8 +226,9 @@ impl DocumentBuilder {
     /// - All operations are causally connected to the root operation.
     /// - All operations follow the same schema.
     /// - No cycles exist in the graph.
-    pub fn build(&self) -> Result<Document, DocumentBuilderError> {
-        self.build_to_view_id(None)
+    pub fn build(&self) -> Result<(Document, Vec<PublishedOperation>), DocumentBuilderError> {
+        let mut graph = self.construct_graph()?;
+        self.reduce_document(&mut graph)
     }
 
     /// Validates all contained operations and builds the document up to the
@@ -160,73 +243,78 @@ impl DocumentBuilder {
     /// - No cycles exist in the graph.
     pub fn build_to_view_id(
         &self,
-        document_view_id: Option<DocumentViewId>,
-    ) -> Result<Document, DocumentBuilderError> {
-        // Find CREATE operation
-        let mut collect_create_operation: Vec<(OperationId, Operation, PublicKey)> = self
-            .operations()
-            .into_iter()
-            .filter(|(_, operation, _)| operation.is_create())
-            .collect();
+        document_view_id: DocumentViewId,
+    ) -> Result<(Document, Vec<PublishedOperation>), DocumentBuilderError> {
+        let mut graph = self.construct_graph()?;
+        // Trim the graph to the requested view..
+        graph = graph.trim(document_view_id.graph_tips())?;
+        self.reduce_document(&mut graph)
+    }
 
-        // Check we have only one CREATE operation in the document
-        let (create_operation_id, create_operation, create_operation_public_key) =
-            match collect_create_operation.len() {
-                0 => Err(DocumentBuilderError::NoCreateOperation),
-                1 => Ok(collect_create_operation.pop().unwrap()),
-                _ => Err(DocumentBuilderError::MoreThanOneCreateOperation),
-            }?;
+    /// Construct the document graph.
+    fn construct_graph(&self) -> Result<OperationGraph, DocumentBuilderError> {
+        // Instantiate the graph.
+        let mut graph = Graph::new();
 
-        // Get the document schema
-        let schema_id = create_operation.schema_id();
+        let mut create_seen = false;
 
-        // Get the document author (or rather, the public key of the author who created this
-        // document)
-        let author = create_operation_public_key;
+        // Add all operations to the graph.
+        for (id, operation, public_key) in &self.0 {
+            // Check if this is a create operation and we already saw one, this should trigger an error.
+            if operation.is_create() && create_seen {
+                return Err(DocumentBuilderError::MultipleCreateOperations);
+            };
 
-        // Check all operations match the document schema
-        let schema_error = self
-            .operations()
-            .iter()
-            .any(|(_, operation, _)| operation.schema_id() != schema_id);
+            // Set the operation_seen flag.
+            if operation.is_create() {
+                create_seen = true;
+            }
 
-        if schema_error {
-            return Err(DocumentBuilderError::OperationSchemaNotMatching);
+            graph.add_node(id, (id.to_owned(), operation.to_owned(), *public_key));
         }
 
-        let document_id = DocumentId::new(&create_operation_id);
-
-        // Build the graph.
-        let mut graph = build_graph(&self.0)?;
-
-        // If a specific document view was requested then trim the graph to that point.
-        if let Some(id) = document_view_id {
-            graph = graph.trim(id.graph_tips())?;
+        // Add links between operations in the graph.
+        for (id, operation, _public_key) in &self.0 {
+            if let Some(previous) = operation.previous() {
+                for previous in previous.iter() {
+                    let success = graph.add_link(previous, id);
+                    if !success {
+                        return Err(DocumentBuilderError::InvalidOperationLink(id.to_owned()));
+                    }
+                }
+            }
         }
 
-        // Topologically sort the operations in the graph.
-        let sorted_graph_data = graph.sort()?;
+        Ok(graph)
+    }
 
-        // These are the current graph tips, to be added to the document view id
-        let graph_tips: Vec<OperationId> = sorted_graph_data
+    /// Traverse the graph, visiting operations in their topologically sorted order and reduce
+    /// them into a single document.
+    fn reduce_document(
+        &self,
+        graph: &mut OperationGraph,
+    ) -> Result<(Document, Vec<PublishedOperation>), DocumentBuilderError> {
+        // Walk the graph, visiting nodes in their topologically sorted order.
+        //
+        // We pass in a DocumentReducer which will construct the document as nodes (which contain
+        // operations) are visited.
+        let mut document_reducer = DocumentReducer::default();
+        let graph_data = graph.reduce(&mut document_reducer)?;
+        let graph_tips: Vec<OperationId> = graph_data
             .current_graph_tips()
             .iter()
             .map(|(id, _, _)| id.to_owned())
             .collect();
 
-        // Reduce the sorted operations into a single key value map
-        let fields = reduce(&sorted_graph_data.sorted()[..]);
+        // Unwrap the document as if no error occurred it should be there.
+        let mut document = document_reducer.document.unwrap();
 
-        // Construct the document view id
-        let document_view_id = DocumentViewId::new(&graph_tips);
+        // One remaining task is to set the current document view id of the document. This is
+        // required as the document reducer only knows about the operations it visits in their
+        // already sorted order. It doesn't know about the state of the graphs tips.
+        document.view_id = DocumentViewId::new(&graph_tips);
 
-        Ok(Document {
-            id: document_id,
-            view_id: document_view_id,
-            schema_id,
-            author,
-            fields,
-        })
+        Ok((document, graph_data.sorted()))
     }
 }
 
@@ -236,17 +324,11 @@ where
 {
     fn from(operations: Vec<&T>) -> Self {
         let operations = operations
-            .iter()
+            .into_iter()
             .map(|operation| {
                 (
                     operation.id().to_owned(),
-                    Operation {
-                        version: operation.version(),
-                        action: operation.action(),
-                        schema_id: operation.schema_id(),
-                        previous: operation.previous(),
-                        fields: operation.fields(),
-                    },
+                    operation.into(),
                     operation.public_key().to_owned(),
                 )
             })
@@ -266,13 +348,7 @@ where
             .map(|operation| {
                 (
                     operation.id().to_owned(),
-                    Operation {
-                        version: operation.version(),
-                        action: operation.action(),
-                        schema_id: operation.schema_id(),
-                        previous: operation.previous(),
-                        fields: operation.fields(),
-                    },
+                    operation.into(),
                     operation.public_key().to_owned(),
                 )
             })
@@ -298,7 +374,8 @@ mod tests {
     use crate::schema::{FieldType, Schema, SchemaId, SchemaName};
     use crate::test_utils::constants::{self, PRIVATE_KEY};
     use crate::test_utils::fixtures::{
-        operation_fields, published_operation, random_document_view_id, random_operation_id, schema,
+        operation, operation_fields, published_operation, random_document_view_id,
+        random_operation_id, schema,
     };
     use crate::test_utils::memory_store::helpers::send_to_store;
     use crate::test_utils::memory_store::{MemoryStore, PublishedOperation};
@@ -437,12 +514,10 @@ mod tests {
             .unwrap();
 
         let operations = store.operations.lock().unwrap();
-
         let operations = operations.values().collect::<Vec<&PublishedOperation>>();
-
         let document = Document::try_from(operations.clone());
 
-        assert!(document.is_ok());
+        assert!(document.is_ok(), "{:#?}", document);
 
         // Document should resolve to expected value
         let document = document.unwrap();
@@ -526,7 +601,10 @@ mod tests {
         let document: Result<Document, _> = vec![&update_operation].try_into();
         assert_eq!(
             document.unwrap_err().to_string(),
-            "every document must contain one create operation".to_string()
+            format!(
+                "operation {} cannot be connected to the document graph",
+                WithId::<OperationId>::id(&update_operation)
+            )
         );
     }
 
@@ -581,7 +659,7 @@ mod tests {
 
         assert_eq!(
             document.unwrap_err().to_string(),
-            "all operations in a document must follow the same schema".to_string()
+            "Could not perform reducer function: Operation 0020b7674a56756183f7d2c6afa20e06041a9a9a30b0aec728e35acf281ecff2b544 does not match the documents schema".to_string()
         );
     }
 
@@ -619,7 +697,7 @@ mod tests {
 
         assert_eq!(
             document.unwrap_err().to_string(),
-            "multiple CREATE operations found".to_string()
+            "multiple CREATE operations found when building operation graph".to_string()
         );
     }
 
@@ -682,51 +760,35 @@ mod tests {
 
         let document_builder = DocumentBuilder::new(operations);
 
+        let (document, _) = document_builder
+            .build_to_view_id(DocumentViewId::new(&[operation_1_id]))
+            .unwrap();
         assert_eq!(
-            document_builder
-                .build_to_view_id(Some(DocumentViewId::new(&[operation_1_id])))
-                .unwrap()
-                .fields()
-                .unwrap()
-                .get("name")
-                .unwrap()
-                .value(),
+            document.fields().unwrap().get("name").unwrap().value(),
             &OperationValue::String("Panda Cafe".to_string())
         );
 
+        let (document, _) = document_builder
+            .build_to_view_id(DocumentViewId::new(&[operation_2_id.clone()]))
+            .unwrap();
         assert_eq!(
-            document_builder
-                .build_to_view_id(Some(DocumentViewId::new(&[operation_2_id.clone()])))
-                .unwrap()
-                .fields()
-                .unwrap()
-                .get("name")
-                .unwrap()
-                .value(),
+            document.fields().unwrap().get("name").unwrap().value(),
             &OperationValue::String("Panda Cafe!".to_string())
         );
 
+        let (document, _) = document_builder
+            .build_to_view_id(DocumentViewId::new(&[operation_3_id.clone()]))
+            .unwrap();
         assert_eq!(
-            document_builder
-                .build_to_view_id(Some(DocumentViewId::new(&[operation_3_id.clone()])))
-                .unwrap()
-                .fields()
-                .unwrap()
-                .get("name")
-                .unwrap()
-                .value(),
+            document.fields().unwrap().get("name").unwrap().value(),
             &OperationValue::String("Penguin Cafe!!!".to_string())
         );
 
+        let (document, _) = document_builder
+            .build_to_view_id(DocumentViewId::new(&[operation_2_id, operation_3_id]))
+            .unwrap();
         assert_eq!(
-            document_builder
-                .build_to_view_id(Some(DocumentViewId::new(&[operation_2_id, operation_3_id])))
-                .unwrap()
-                .fields()
-                .unwrap()
-                .get("name")
-                .unwrap()
-                .value(),
+            document.fields().unwrap().get("name").unwrap().value(),
             &OperationValue::String("Penguin Cafe!!!".to_string())
         );
     }
@@ -743,25 +805,23 @@ mod tests {
         let create_view_id =
             DocumentViewId::new(&[WithId::<OperationId>::id(&create_operation).clone()]);
 
-        let update_operation = published_operation(
+        let update_operation = operation(
             Some(operation_fields(vec![("age", OperationValue::Integer(21))])),
-            constants::schema(),
             Some(create_view_id.clone()),
-            KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
+            constants::schema().id().to_owned(),
         );
 
-        let update_view_id =
-            DocumentViewId::new(&[WithId::<OperationId>::id(&update_operation).clone()]);
+        let update_operation_id = random_operation_id();
+        let update_view_id = DocumentViewId::new(&[update_operation_id.clone()]);
 
-        let delete_operation = published_operation(
+        let delete_operation = operation(
             None,
-            constants::schema(),
             Some(update_view_id.clone()),
-            KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
+            constants::schema().id().to_owned(),
         );
 
-        let delete_view_id =
-            DocumentViewId::new(&[WithId::<OperationId>::id(&delete_operation).clone()]);
+        let delete_operation_id = random_operation_id();
+        let delete_view_id = DocumentViewId::new(&[delete_operation_id.clone()]);
 
         // Create the initial document from a single CREATE operation.
         let mut document: Document = vec![&create_operation].try_into().unwrap();
@@ -771,14 +831,18 @@ mod tests {
         assert_eq!(document.get("age").unwrap(), &OperationValue::Integer(28));
 
         // Apply a commit with an UPDATE operation.
-        document.commit(&update_operation).unwrap();
+        document
+            .commit(&update_operation_id, &update_operation)
+            .unwrap();
 
         assert_eq!(document.is_edited(), true);
         assert_eq!(document.view_id(), &update_view_id);
         assert_eq!(document.get("age").unwrap(), &OperationValue::Integer(21));
 
         // Apply a commit with a DELETE operation.
-        document.commit(&delete_operation).unwrap();
+        document
+            .commit(&delete_operation_id, &delete_operation)
+            .unwrap();
 
         assert_eq!(document.is_deleted(), true);
         assert_eq!(document.view_id(), &delete_view_id);
@@ -796,7 +860,9 @@ mod tests {
         let mut document: Document = vec![&create_operation].try_into().unwrap();
 
         // Committing a CREATE operation should fail.
-        assert!(document.commit(&create_operation).is_err());
+        assert!(document
+            .commit(create_operation.id(), &create_operation)
+            .is_err());
 
         let create_view_id =
             DocumentViewId::new(&[WithId::<OperationId>::id(&create_operation).clone()]);
@@ -814,7 +880,12 @@ mod tests {
         );
 
         // Apply a commit with an UPDATE operation containing the wrong schema id.
-        assert!(document.commit(&update_with_incorrect_schema_id).is_err());
+        assert!(document
+            .commit(
+                update_with_incorrect_schema_id.id(),
+                &update_with_incorrect_schema_id
+            )
+            .is_err());
 
         let update_not_referring_to_current_view = published_operation(
             Some(operation_fields(vec![("age", OperationValue::Integer(21))])),
@@ -825,7 +896,10 @@ mod tests {
 
         // Apply a commit with an UPDATE operation not pointing to the current view.
         assert!(document
-            .commit(&update_not_referring_to_current_view)
+            .commit(
+                update_not_referring_to_current_view.id(),
+                &update_not_referring_to_current_view
+            )
             .is_err());
 
         // Now we apply a correct delete operation.
@@ -836,7 +910,9 @@ mod tests {
             KeyPair::from_private_key_str(PRIVATE_KEY).unwrap(),
         );
 
-        assert!(document.commit(&delete_operation).is_ok());
+        assert!(document
+            .commit(&delete_operation.id(), &delete_operation)
+            .is_ok());
 
         let delete_view_id =
             DocumentViewId::new(&[WithId::<OperationId>::id(&delete_operation).clone()]);
@@ -849,6 +925,11 @@ mod tests {
         );
 
         // Apply a commit with an UPDATE operation on a deleted document.
-        assert!(document.commit(&update_on_a_deleted_document).is_err());
+        assert!(document
+            .commit(
+                &update_on_a_deleted_document.id(),
+                &update_on_a_deleted_document
+            )
+            .is_err());
     }
 }

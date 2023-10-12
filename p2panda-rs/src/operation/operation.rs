@@ -177,6 +177,18 @@ impl Schematic for Operation {
     }
 }
 
+impl<T: AsOperation> From<&T> for Operation {
+    fn from(operation: &T) -> Self {
+        Operation {
+            version: operation.version(),
+            action: operation.action(),
+            fields: operation.fields(),
+            previous: operation.previous(),
+            schema_id: operation.schema_id(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;

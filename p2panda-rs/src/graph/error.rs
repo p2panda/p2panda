@@ -30,4 +30,17 @@ pub enum GraphError {
     /// Requested trim nodes not found in graph.
     #[error("Requested trim nodes not found in graph")]
     InvalidTrimNodes,
+
+    /// Requested trim nodes not found in graph.
+    #[error(transparent)]
+    ReducerError(#[from] ReducerError),
+}
+
+/// Error types for `Reducer` trait.
+#[derive(Error, Debug, Clone)]
+#[allow(missing_copy_implementations)]
+pub enum ReducerError {
+    /// Error occurred when performing reducer function.
+    #[error("Could not perform reducer function: {0}")]
+    Custom(String),
 }

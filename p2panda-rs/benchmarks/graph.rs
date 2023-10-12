@@ -3,10 +3,22 @@
 // Benchmarking tests adapted from
 // [https://github.com/declanvk/incremental-topo/tree/main/benches](https://github.com/declanvk/incremental-topo/tree/main/benches).
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use p2panda_rs::graph::Graph;
+use p2panda_rs::graph::error::ReducerError;
+use p2panda_rs::graph::{Graph, Reducer};
 
 const DEFAULT_DENSITY: f32 = 0.1;
 const DEFAULT_SIZE: u64 = 100;
+
+#[derive(Default)]
+struct TestReducer;
+
+impl Reducer<u64> for TestReducer {
+    type Error = ReducerError;
+
+    fn combine(&mut self, _value: &u64) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
 
 fn generate_random_p2panda_dag(size: u64, density: f32) -> Graph<String, u64> {
     use rand::distributions::{Bernoulli, Distribution};
@@ -70,7 +82,8 @@ fn criterion_benchmark(c: &mut Criterion) {
             |b, dag| {
                 b.iter(|| {
                     let dag = dag.clone();
-                    let _ = dag.walk_from(&0.to_string());
+                    let mut reducer = TestReducer::default();
+                    let _ = dag.walk_from(&0.to_string(), &mut reducer);
                 });
             },
         );
@@ -87,7 +100,8 @@ fn criterion_benchmark(c: &mut Criterion) {
             |b, dag| {
                 b.iter(|| {
                     let dag = dag.clone();
-                    let _ = dag.walk_from(&0.to_string());
+                    let mut reducer = TestReducer::default();
+                    let _ = dag.walk_from(&0.to_string(), &mut reducer);
                 });
             },
         );

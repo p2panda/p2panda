@@ -10,7 +10,6 @@ use crate::identity::PublicKey;
 use crate::operation::traits::AsOperation;
 use crate::operation::{OperationId, OperationValue};
 use crate::schema::SchemaId;
-use crate::WithId;
 
 /// Trait representing an "document-like" struct.
 pub trait AsDocument {
@@ -66,32 +65,39 @@ pub trait AsDocument {
     ///
     /// For the update to be successful the passed operation must refer to this documents' current
     /// view id in it's previous field and must update a field which exists on this document.
-    fn commit<O>(&mut self, operation: &O) -> Result<(), DocumentError>
-    where
-        O: AsOperation + WithId<OperationId>,
-    {
+    fn commit<T: AsOperation>(
+        &mut self,
+        operation_id: &OperationId,
+        operation: &T,
+    ) -> Result<(), DocumentError> {
         // Validate operation passed to commit.
         if operation.is_create() {
-            return Err(DocumentError::InvalidOperationType);
+            return Err(DocumentError::CommitCreate);
         }
 
         if &operation.schema_id() != self.schema_id() {
-            return Err(DocumentError::InvalidSchemaId(operation.id().to_owned()));
+            return Err(DocumentError::InvalidSchemaId(operation_id.to_owned()));
         }
 
         // Unwrap as all other operation types contain `previous`.
         let previous = operation.previous().unwrap();
 
-        if self.view_id() != &previous {
-            return Err(DocumentError::PreviousDoesNotMatch(
-                operation.id().to_owned(),
-            ));
-        }
-
         if self.is_deleted() {
             return Err(DocumentError::UpdateOnDeleted);
         }
 
+        if self.view_id() != &previous {
+            return Err(DocumentError::PreviousDoesNotMatch(operation_id.to_owned()));
+        }
+
+        // We performed all validation commit the operation.
+        self.commit_unchecked(operation_id, operation);
+
+        Ok(())
+    }
+
+    /// Commit an new operation to the document without performing any validation.
+    fn commit_unchecked<T: AsOperation>(&mut self, operation_id: &OperationId, operation: &T) {
         let next_fields = match operation.fields() {
             // If the operation contains fields it's an UPDATE and so we want to apply the changes
             // to the designated fields.
@@ -103,7 +109,7 @@ pub trait AsDocument {
                 // For every field in the UPDATE operation update the relevant field in the
                 // current document fields.
                 for (name, value) in fields.iter() {
-                    let document_field_value = DocumentViewValue::new(operation.id(), value);
+                    let document_field_value = DocumentViewValue::new(operation_id, value);
 
                     // We know all the fields are correct for this document as we checked the
                     // schema id above.
@@ -119,11 +125,9 @@ pub trait AsDocument {
         };
 
         // Construct the new document view id.
-        let document_view_id = DocumentViewId::new(&[operation.id().to_owned()]);
+        let document_view_id = DocumentViewId::new(&[operation_id.to_owned()]);
 
         // Update the documents' view, edited/deleted state and view id.
         self.update_view(&document_view_id, next_fields.as_ref());
-
-        Ok(())
     }
 }

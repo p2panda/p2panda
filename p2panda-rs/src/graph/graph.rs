@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use crate::graph::error::GraphError;
+use crate::graph::error::{GraphError, ReducerError};
+use crate::graph::Reducer;
 
 /// This struct contains all functionality implemented in this module. It is can be used for
 /// building and sorting a graph of causally connected nodes.
@@ -18,7 +19,24 @@ use crate::graph::error::GraphError;
 /// ```
 /// # extern crate p2panda_rs;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// use p2panda_rs::graph::Graph;
+/// use p2panda_rs::graph::{Graph, Reducer};
+/// use p2panda_rs::graph::error::ReducerError;
+///
+/// // First we define a reducer we will use later on.
+///
+/// #[derive(Default)]
+/// struct CharReducer {
+///     acc: String,
+/// }
+///
+/// impl Reducer<char> for CharReducer {
+///     type Error = ReducerError;
+///
+///     fn combine(&mut self, value: &char) -> Result<(), Self::Error> {
+///         self.acc = format!("{}{}", self.acc, value);
+///         Ok(())
+///     }
+/// }
 ///
 /// // Instantiate the graph.
 ///
@@ -43,17 +61,20 @@ use crate::graph::error::GraphError;
 /// //  /--[B]
 /// // [A]<--[C]
 ///
-/// // We can sort it topologically.
+/// // We can sort it topologically and pass in our reducer.
 ///
-/// let nodes = graph.sort()?;
+/// let mut reducer = CharReducer::default();
+/// let nodes = graph.reduce(&mut reducer)?;
 ///
 /// assert_eq!(nodes.sorted(), vec!['A', 'B', 'C']);
+/// assert_eq!(reducer.acc, "ABC".to_string());
 ///
 /// // Add another link which creates a cycle (oh dear!).
 ///
 /// graph.add_link(&'b', &'a');
 ///
-/// assert!(graph.sort().is_err());
+/// let mut reducer = CharReducer::default();
+/// assert!(graph.reduce(&mut reducer).is_err());
 ///
 /// # Ok(())
 /// # }
@@ -346,7 +367,11 @@ where
     }
 
     /// Sorts the graph topologically and returns the result.
-    pub fn walk_from(&'a self, key: &K) -> Result<GraphData<V>, GraphError> {
+    pub fn walk_from(
+        &'a self,
+        key: &K,
+        reducer: &mut impl Reducer<V>,
+    ) -> Result<GraphData<V>, GraphError> {
         let root_node = match self.get_node(key) {
             Some(node) => Ok(node),
             None => Err(GraphError::NodeNotFound),
@@ -370,6 +395,12 @@ where
             if current_node.is_tip() {
                 graph_data.graph_tips.push(current_node.data())
             }
+
+            // Pass node data into reducer.
+            reducer
+                .combine(&current_node.data)
+                .map_err(|err| ReducerError::Custom(err.to_string()))?;
+
             debug!(
                 "{:?}: sorted to position {}",
                 current_node.key(),
@@ -425,6 +456,11 @@ where
                     graph_data.graph_tips.push(next_node.data());
                 }
 
+                // Pass node data into reducer.
+                reducer
+                    .combine(&next_node.data)
+                    .map_err(|err| ReducerError::Custom(err.to_string()))?;
+
                 debug!(
                     "{:?}: sorted to position {}",
                     next_node.key(),
@@ -437,9 +473,12 @@ where
     }
 
     /// Sort the entire graph, starting from the root node.
-    pub fn sort(&'a self) -> Result<GraphData<V>, GraphError> {
+    ///
+    /// Accepts a mutable reducer as an argument. As each node is sorted into topological order
+    /// its value is passed into the `combine` method.
+    pub fn reduce(&'a self, reducer: &mut impl Reducer<V>) -> Result<GraphData<V>, GraphError> {
         let root_node = self.root_node_key()?;
-        self.walk_from(root_node)
+        self.walk_from(root_node, reducer)
     }
 }
 
@@ -455,7 +494,52 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::{Graph, GraphData};
+    use crate::graph::error::ReducerError;
+    use crate::graph::{Graph, Reducer};
+
+    use super::GraphData;
+
+    #[derive(Default)]
+    struct CharReducer {
+        acc: String,
+    }
+
+    impl Reducer<char> for CharReducer {
+        type Error = ReducerError;
+
+        fn combine(&mut self, value: &char) -> Result<(), Self::Error> {
+            self.acc = format!("{}{}", self.acc, value);
+            Ok(())
+        }
+    }
+
+    #[derive(Default)]
+    struct CountReducer {
+        count: i32,
+    }
+
+    impl Reducer<i32> for CountReducer {
+        type Error = ReducerError;
+
+        fn combine(&mut self, value: &i32) -> Result<(), Self::Error> {
+            self.count += value;
+            Ok(())
+        }
+    }
+
+    #[derive(Default)]
+    struct PoeticReducer {
+        acc: String,
+    }
+
+    impl Reducer<String> for PoeticReducer {
+        type Error = ReducerError;
+
+        fn combine(&mut self, value: &String) -> Result<(), Self::Error> {
+            self.acc = format!("{}{}\n", self.acc, value);
+            Ok(())
+        }
+    }
 
     #[test]
     fn basics() {
@@ -487,13 +571,15 @@ mod test {
             graph_tips: vec!['F'],
         };
 
-        let graph_data = graph.walk_from(&'a').unwrap();
+        let mut reducer = CharReducer::default();
+        let graph_data = graph.walk_from(&'a', &mut reducer).unwrap();
 
         assert_eq!(graph_data.sorted(), expected.sorted());
         assert_eq!(
             graph_data.current_graph_tips(),
             expected.current_graph_tips()
         );
+        assert_eq!(reducer.acc, "ABCDEF".to_string());
 
         graph.add_link(&'a', &'g');
         graph.add_link(&'g', &'h');
@@ -507,13 +593,15 @@ mod test {
             graph_tips: vec!['F'],
         };
 
-        let graph_data = graph.walk_from(&'a').unwrap();
+        let mut reducer = CharReducer::default();
+        let graph_data = graph.walk_from(&'a', &mut reducer).unwrap();
 
         assert_eq!(graph_data.sorted(), expected.sorted());
         assert_eq!(
             graph_data.current_graph_tips(),
             expected.current_graph_tips()
         );
+        assert_eq!(reducer.acc, "ABCGHDEF".to_string());
 
         graph.add_link(&'c', &'i');
         graph.add_link(&'i', &'j');
@@ -530,13 +618,15 @@ mod test {
             graph_tips: vec!['F'],
         };
 
-        let graph_data = graph.walk_from(&'a').unwrap();
+        let mut reducer = CharReducer::default();
+        let graph_data = graph.walk_from(&'a', &mut reducer).unwrap();
 
         assert_eq!(graph_data.sorted(), expected.sorted());
         assert_eq!(
             graph_data.current_graph_tips(),
             expected.current_graph_tips()
         );
+        assert_eq!(reducer.acc, "ABCIJKGHDEF".to_string());
     }
 
     #[test]
@@ -559,7 +649,8 @@ mod test {
         graph.add_link(&'c', &'d');
         graph.add_link(&'d', &'b');
 
-        assert!(graph.walk_from(&'a').is_err())
+        let mut reducer = CountReducer::default();
+        assert!(graph.walk_from(&'a', &mut reducer).is_err());
     }
 
     #[test]
@@ -576,7 +667,8 @@ mod test {
         graph.add_link(&'d', &'b');
         graph.add_link(&'e', &'b'); // 'e' doesn't exist in the graph.
 
-        assert!(graph.walk_from(&'a').is_err())
+        let mut reducer = CountReducer::default();
+        assert!(graph.walk_from(&'a', &mut reducer).is_err())
     }
 
     #[test]
@@ -593,17 +685,25 @@ mod test {
         graph.add_link(&'c', &'d');
         graph.add_link(&'c', &'e');
 
-        let result = graph.trim(&['d', 'e']).unwrap().sort();
+        let mut reducer = CountReducer::default();
+        let result = graph.trim(&['d', 'e']).unwrap().reduce(&mut reducer);
         assert_eq!(result.unwrap().sorted(), [1, 2, 3, 4, 5]);
+        assert_eq!(reducer.count, 15);
 
-        let result = graph.trim(&['c']).unwrap().sort();
+        let mut reducer = CountReducer::default();
+        let result = graph.trim(&['c']).unwrap().reduce(&mut reducer);
         assert_eq!(result.unwrap().sorted(), [1, 2, 3]);
+        assert_eq!(reducer.count, 6);
 
-        let result = graph.trim(&['e']).unwrap().sort();
+        let mut reducer = CountReducer::default();
+        let result = graph.trim(&['e']).unwrap().reduce(&mut reducer);
         assert_eq!(result.unwrap().sorted(), [1, 2, 3, 5]);
+        assert_eq!(reducer.count, 11);
 
-        let result = graph.trim(&['d']).unwrap().sort();
+        let mut reducer = CountReducer::default();
+        let result = graph.trim(&['d']).unwrap().reduce(&mut reducer);
         assert_eq!(result.unwrap().sorted(), [1, 2, 3, 4]);
+        assert_eq!(reducer.count, 10);
     }
 
     #[test]
@@ -641,31 +741,44 @@ mod test {
         // [A]<--[G]<-----[H]<--[D]<--[E]<---[F]
         //
 
-        let result = graph.trim(&['k']).unwrap().sort();
+        let mut reducer = CharReducer::default();
+        let result = graph.trim(&['k']).unwrap().reduce(&mut reducer);
         assert_eq!(result.unwrap().sorted(), ['A', 'B', 'C', 'I', 'J', 'K']);
+        assert_eq!(reducer.acc, "ABCIJK".to_string());
 
-        let result = graph.trim(&['k', 'e']).unwrap().sort();
+        let mut reducer = CharReducer::default();
+        let result = graph.trim(&['k', 'e']).unwrap().reduce(&mut reducer);
         assert_eq!(
             result.unwrap().sorted(),
             ['A', 'B', 'C', 'I', 'J', 'K', 'G', 'H', 'D', 'E']
         );
+        assert_eq!(reducer.acc, "ABCIJKGHDE".to_string());
 
-        let result = graph.trim(&['f']).unwrap().sort();
+        let mut reducer = CharReducer::default();
+        let result = graph.trim(&['f']).unwrap().reduce(&mut reducer);
         assert_eq!(
             result.unwrap().sorted(),
             ['A', 'B', 'C', 'I', 'J', 'K', 'G', 'H', 'D', 'E', 'F']
         );
+        assert_eq!(reducer.acc, "ABCIJKGHDEF".to_string());
 
-        let result = graph.trim(&['k', 'g']).unwrap().sort();
+        let mut reducer = CharReducer::default();
+        let result = graph.trim(&['k', 'g']).unwrap().reduce(&mut reducer);
         assert_eq!(
             result.unwrap().sorted(),
             ['A', 'B', 'C', 'I', 'J', 'K', 'G']
         );
+        assert_eq!(reducer.acc, "ABCIJKG".to_string());
 
         // This is a weird case, many "tips" are passed, but they all exist in the same branch. It is valid though
         // and we process it correctly.
-        let result = graph.trim(&['a', 'b', 'c', 'j']).unwrap().sort();
+        let mut reducer = CharReducer::default();
+        let result = graph
+            .trim(&['a', 'b', 'c', 'j'])
+            .unwrap()
+            .reduce(&mut reducer);
         assert_eq!(result.unwrap().sorted(), ['A', 'B', 'C', 'I', 'J']);
+        assert_eq!(reducer.acc, "ABCIJ".to_string());
     }
 
     #[test]
@@ -738,21 +851,22 @@ mod test {
         graph.add_link(&'j', &'k');
         graph.add_link(&'k', &'f');
 
+        let mut reducer = PoeticReducer::default();
+        graph.walk_from(&'a', &mut reducer).unwrap();
+
         assert_eq!(
-            graph.walk_from(&'a').unwrap().sorted(),
-            [
-                "Wake Up".to_string(),
-                "Make Coffee".to_string(),
-                "Drink Coffee".to_string(),
-                "Brain Receives Caffeine".to_string(),
-                "Brain Starts Engine".to_string(),
-                "Brain Starts Thinking".to_string(),
-                "Cat Jumps Off Bed".to_string(),
-                "Cat Meows".to_string(),
-                "Stroke Cat".to_string(),
-                "Look Out The Window".to_string(),
-                "Start The Day".to_string()
-            ]
+            reducer.acc,
+            "Wake Up\n".to_string()
+                + "Make Coffee\n"
+                + "Drink Coffee\n"
+                + "Brain Receives Caffeine\n"
+                + "Brain Starts Engine\n"
+                + "Brain Starts Thinking\n"
+                + "Cat Jumps Off Bed\n"
+                + "Cat Meows\n"
+                + "Stroke Cat\n"
+                + "Look Out The Window\n"
+                + "Start The Day\n"
         )
     }
 }

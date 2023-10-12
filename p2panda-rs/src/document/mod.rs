@@ -44,7 +44,7 @@
 //!
 //! // Build a document from a single operation, we include it's id and the public key of the
 //! // author who published it.
-//! let document = DocumentBuilder::new(vec![(operation_id.clone(), operation, public_key)]).build()?;
+//! let (document, _) = DocumentBuilder::new(vec![(operation_id.clone(), operation, public_key)]).build()?;
 //! // The document view value contains the value we expect for the "name" field as well
 //! // as the id of the operation which last updated this field.
 //! assert_eq!(
@@ -110,7 +110,7 @@
 //! ]);
 //!
 //! // Build the document to it's latest view.
-//! let document = document_builder.build().unwrap();
+//! let (document, _) = document_builder.build().unwrap();
 //!
 //! // The document view value contains the value we expect for the "name" field as well
 //! // as the id of the operation which last updated this field.
@@ -122,7 +122,7 @@
 //! // Derive a document view id for the initial document state.
 //! let document_view_id_1 = DocumentViewId::new(&[operation_id_1.clone()]);
 //! // Build the document again but to this earlier state.
-//! let document = document_builder.build_to_view_id(Some(document_view_id_1)).unwrap();
+//! let (document, _) = document_builder.build_to_view_id(document_view_id_1).unwrap();
 //!
 //! assert_eq!(
 //!     document.view().unwrap().get("name"),
@@ -141,7 +141,6 @@ mod document_view_fields;
 mod document_view_hash;
 mod document_view_id;
 pub mod error;
-pub mod materialization;
 pub mod traits;
 
 pub use document::{Document, DocumentBuilder};

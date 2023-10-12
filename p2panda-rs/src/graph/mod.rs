@@ -16,7 +16,24 @@
 //! ```
 //! # extern crate p2panda_rs;
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! use p2panda_rs::graph::Graph;
+//! use p2panda_rs::graph::{Graph, Reducer};
+//! use p2panda_rs::graph::error::ReducerError;
+//!
+//! // First we need to define a reducer.
+//!
+//! #[derive(Default)]
+//! struct CharReducer {
+//!     acc: String,
+//! }
+//!
+//! impl Reducer<char> for CharReducer {
+//!     type Error = ReducerError;
+//!
+//!     fn combine(&mut self, value: &char) -> Result<(), Self::Error> {
+//!         self.acc = format!("{}{}", self.acc, value);
+//!         Ok(())
+//!     }
+//! }
 //!
 //! // Instantiate the graph.
 //!
@@ -49,13 +66,30 @@
 //! //  /--[B]<--[C]--\
 //! // [A]<--[G]<-----[H]<--[D]
 //!
-//! // We can sort it topologically.
+//! // We can sort it topologically and reduce the visited values in order.
 //!
-//! let sorted = graph.sort()?.sorted();
+//! let mut reducer = CharReducer::default();
+//! let sorted = graph.reduce(&mut reducer)?;
 //!
-//! assert_eq!(sorted, vec!['A', 'B', 'C', 'G', 'H', 'D', 'E', 'F']);
+//! assert_eq!(reducer.acc, "ABCGHDEF".to_string());
 //!
 //! // Or done more poetically:
+//!
+//! #[derive(Default)]
+//! struct PoeticReducer {
+//!     acc: String,
+//! }
+//!
+//! impl Reducer<String> for PoeticReducer {
+//!     type Error = ReducerError;
+//!
+//!     fn combine(&mut self, value: &String) -> Result<(), Self::Error> {
+//!         self.acc = format!("{}{}\n", self.acc, value);
+//!         Ok(())
+//!     }
+//! }
+//!
+//!
 //! let mut graph = Graph::new();
 //! graph.add_node(&'a', "Wake Up".to_string());
 //! graph.add_node(&'b', "Make Coffee".to_string());
@@ -97,21 +131,22 @@
 //! //                         ["Start The Day"]------>["Brain Starts Thinking"]
 //! //
 //!
+//! let mut reducer = PoeticReducer::default();
+//! graph.walk_from(&'a', &mut reducer);
+//!
 //! assert_eq!(
-//!     graph.walk_from(&'a')?.sorted(),
-//!     [
-//!         "Wake Up".to_string(),
-//!         "Make Coffee".to_string(),
-//!         "Drink Coffee".to_string(),
-//!         "Brain Receives Caffeine".to_string(),
-//!         "Brain Starts Engine".to_string(),
-//!         "Brain Starts Thinking".to_string(),
-//!         "Cat Jumps Off Bed".to_string(),
-//!         "Cat Meows".to_string(),
-//!         "Stroke Cat".to_string(),
-//!         "Look Out The Window".to_string(),
-//!         "Start The Day".to_string()
-//!     ]
+//!     reducer.acc,
+//!     "Wake Up\n".to_string()
+//!         + "Make Coffee\n"
+//!         + "Drink Coffee\n"
+//!         + "Brain Receives Caffeine\n"
+//!         + "Brain Starts Engine\n"
+//!         + "Brain Starts Thinking\n"
+//!         + "Cat Jumps Off Bed\n"
+//!         + "Cat Meows\n"
+//!         + "Stroke Cat\n"
+//!         + "Look Out The Window\n"
+//!         + "Start The Day\n"
 //! );
 //!
 //! # Ok(())
@@ -120,5 +155,7 @@
 pub mod error;
 #[allow(clippy::module_inception)]
 mod graph;
+mod traits;
 
 pub use graph::Graph;
+pub use traits::Reducer;

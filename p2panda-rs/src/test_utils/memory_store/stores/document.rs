@@ -56,8 +56,8 @@ impl DocumentStore for MemoryStore {
         }
 
         let document_builder: DocumentBuilder = (&operations).into();
-
-        Ok(Some(document_builder.build_to_view_id(Some(id.clone()))?))
+        let (document, _) = document_builder.build_to_view_id(id.clone())?;
+        Ok(Some(document))
     }
 
     /// Get all documents which contain data following the schema specified by the passed schema id.
