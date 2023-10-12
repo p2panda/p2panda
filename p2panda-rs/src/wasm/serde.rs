@@ -5,8 +5,6 @@ use serde::ser::Serialize;
 use serde_wasm_bindgen::{Deserializer, Error, Serializer};
 use wasm_bindgen::JsValue;
 
-use crate::wasm::error::jserr;
-
 /// Serializes Rust type into JavaScript value (`JsValue`).
 ///
 /// Note that this will NOT serialize into a JSON string but an actual JavaScript object

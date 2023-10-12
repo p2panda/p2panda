@@ -11,7 +11,6 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
 use crate::document::DocumentViewId;
-use crate::hash::{Hash, HashId};
 use crate::operation::plain::PlainValue;
 use crate::operation::traits::{Actionable, Schematic};
 use crate::operation::validate::validate_operation_format;
