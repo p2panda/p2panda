@@ -125,7 +125,7 @@ To quickly get started you can run `p2panda-js` in any modern browser as an ES m
 
 ```html
 <script type="module">
-  import { initWebAssembly, KeyPair } from 'https://cdn.jsdelivr.net/npm/p2panda-js@0.7.1/lib/esm/index.min.js';
+  import { initWebAssembly, KeyPair } from 'https://cdn.jsdelivr.net/npm/p2panda-js@0.8.0/lib/esm/index.min.js';
 
   // This only needs to be done once before using all `p2panda-js` methods.
   initWebAssembly().then(() => {
@@ -139,10 +139,10 @@ Or use the "slim" version if you want to provide the ".wasm" file manually:
 
 ```html
 <script type="module">
-  import { initWebAssembly, KeyPair } from 'https://cdn.jsdelivr.net/npm/p2panda-js@0.7.1/lib/esm-slim/index.min.js';
+  import { initWebAssembly, KeyPair } from 'https://cdn.jsdelivr.net/npm/p2panda-js@0.8.0/lib/esm-slim/index.min.js';
 
   // Pass external .wasm file manually for smaller file sizes
-  const wasmFile = 'https://cdn.jsdelivr.net/npm/p2panda-js@0.7.1/lib/p2panda.wasm';
+  const wasmFile = 'https://cdn.jsdelivr.net/npm/p2panda-js@0.8.0/lib/p2panda.wasm';
   initWebAssembly(wasmFile).then(() => {
     const keyPair = new KeyPair();
     console.log(keyPair.publicKey());
