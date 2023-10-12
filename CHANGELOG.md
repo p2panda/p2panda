@@ -13,8 +13,18 @@ Highlights are marked with a pancake 🥞
 
 ### Changed
 
+### Fixed
+
+## [0.8.0]
+
+Released on 2023-10-12: :package: `p2panda-js` and :package: `p2panda-rs`
+
+### Added
+
+### Changed
+
 - Remove unused methods from `EntryStore` [#521](https://github.com/p2panda/p2panda/pull/521) `rs`
-- Serialize `Hash` and derived id types from bytes [#525](https://github.com/p2panda/p2panda/pull/525) `rs`
+- Serialize `Hash` and derived id types from bytes [#525](https://github.com/p2panda/p2panda/pull/525) `rs` `js`
 - New `Reducer` trait used during document building [#527](https://github.com/p2panda/p2panda/pull/527) `rs`
 
 ### Fixed
@@ -311,7 +321,8 @@ Released on 2021-01-18: :package: `p2panda-js` and 2021-01-28: :package: `p2pand
 - JavaScript library export with WebAssembly running in browsers and NodeJS. [#21](https://github.com/p2panda/p2panda/pull/21) `js`
 - Ed25519 key pair generation. [#4](https://github.com/p2panda/p2panda/pull/4) `rs`
 
-[unreleased]: https://github.com/p2panda/p2panda/compare/v0.7.1...HEAD
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/p2panda/p2panda/releases/tag/v0.8.0
 [0.7.1]: https://github.com/p2panda/p2panda/releases/tag/v0.7.1
 [0.7.0]: https://github.com/p2panda/p2panda/releases/tag/v0.7.0
 [0.6.0]: https://github.com/p2panda/p2panda/releases/tag/v0.6.0
