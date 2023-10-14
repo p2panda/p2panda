@@ -1,7 +1,9 @@
 <h1 align="center">p2panda</h1>
 
 <div align="center">
+  <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-left.gif" width="auto" height="30px">
   <strong>All the things a panda needs</strong>
+  <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-right.gif" width="auto" height="30px">
 </div>
 
 <br />
