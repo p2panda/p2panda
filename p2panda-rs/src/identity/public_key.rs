@@ -171,7 +171,7 @@ mod tests {
             PublicKey::new("7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982")
                 .unwrap();
         assert_eq!(
-            serialize_from(public_key.clone()),
+            serialize_from(public_key),
             serialize_value(cbor!(Bytes::new(&public_key.to_bytes())))
         );
     }
@@ -182,7 +182,7 @@ mod tests {
             PublicKey::new("7cf4f58a2d89e93313f2de99604a814ecea9800cf217b140e9c3a7ba59a5d982")
                 .unwrap();
         assert_eq!(
-            deserialize_into::<PublicKey>(&serialize_from(public_key.clone())).unwrap(),
+            deserialize_into::<PublicKey>(&serialize_from(public_key)).unwrap(),
             public_key
         );
     }

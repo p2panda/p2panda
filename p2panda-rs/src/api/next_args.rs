@@ -107,7 +107,7 @@ async fn calculate_next_args_existing_log<S: EntryStore>(
     public_key: &PublicKey,
 ) -> Result<(Option<Backlink>, Option<Skiplink>, SeqNum, LogId), DomainError> {
     // Get the latest entry in this log.
-    let latest_entry = store.get_latest_entry(public_key, &log_id).await?;
+    let latest_entry = store.get_latest_entry(public_key, log_id).await?;
 
     // Determine the next sequence number by incrementing one from the latest entry seq
     // num.
@@ -126,12 +126,12 @@ async fn calculate_next_args_existing_log<S: EntryStore>(
     }?;
 
     // Check if skiplink is required and if it is get the entry and return its hash.
-    let skiplink = get_skiplink_for_entry(store, &seq_num, &log_id, public_key).await?;
+    let skiplink = get_skiplink_for_entry(store, &seq_num, log_id, public_key).await?;
 
     // Get the latest entry hash.
     let backlink = latest_entry.map(|entry| entry.hash());
 
-    Ok((backlink, skiplink, seq_num, log_id.clone()))
+    Ok((backlink, skiplink, seq_num, *log_id))
 }
 
 #[cfg(test)]

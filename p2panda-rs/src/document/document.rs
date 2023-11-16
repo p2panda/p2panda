@@ -826,7 +826,7 @@ mod tests {
         // Create the initial document from a single CREATE operation.
         let mut document: Document = vec![&create_operation].try_into().unwrap();
 
-        assert_eq!(document.is_edited(), false);
+        assert!(!document.is_edited());
         assert_eq!(document.view_id(), &create_view_id);
         assert_eq!(document.get("age").unwrap(), &OperationValue::Integer(28));
 
@@ -835,7 +835,7 @@ mod tests {
             .commit(&update_operation_id, &update_operation)
             .unwrap();
 
-        assert_eq!(document.is_edited(), true);
+        assert!(document.is_edited());
         assert_eq!(document.view_id(), &update_view_id);
         assert_eq!(document.get("age").unwrap(), &OperationValue::Integer(21));
 
@@ -844,7 +844,7 @@ mod tests {
             .commit(&delete_operation_id, &delete_operation)
             .unwrap();
 
-        assert_eq!(document.is_deleted(), true);
+        assert!(document.is_deleted());
         assert_eq!(document.view_id(), &delete_view_id);
         assert_eq!(document.fields(), None);
     }
@@ -911,7 +911,7 @@ mod tests {
         );
 
         assert!(document
-            .commit(&delete_operation.id(), &delete_operation)
+            .commit(delete_operation.id(), &delete_operation)
             .is_ok());
 
         let delete_view_id =
@@ -927,7 +927,7 @@ mod tests {
         // Apply a commit with an UPDATE operation on a deleted document.
         assert!(document
             .commit(
-                &update_on_a_deleted_document.id(),
+                update_on_a_deleted_document.id(),
                 &update_on_a_deleted_document
             )
             .is_err());

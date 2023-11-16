@@ -441,7 +441,7 @@ mod tests {
 
         // Validate the entry and operation.
         let operation = entry.payload().unwrap();
-        let plain_operation = decode_operation(&operation).unwrap();
+        let plain_operation = decode_operation(operation).unwrap();
         validate_entry_and_operation(&store, &schema, &entry, &entry, &plain_operation, operation)
             // Unwrap here causing a panic, we check the errors match what we expect.
             .await
@@ -1047,7 +1047,7 @@ mod tests {
         // If we publish this operation it should fail as it's claimed schema is different from
         // the one it points to in it's previous operations.
         let result =
-            send_to_store(&store, &update_with_different_schema_id, &schema, &key_pair).await;
+            send_to_store(&store, &update_with_different_schema_id, &schema, key_pair).await;
 
         result.map_err(|err| err.to_string()).unwrap();
     }

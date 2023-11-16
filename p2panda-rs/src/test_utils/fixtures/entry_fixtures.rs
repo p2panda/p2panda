@@ -167,7 +167,7 @@ pub fn entry_signed_encoded_unvalidated(
     // Attach signature
     let signature = key_pair.sign(&entry_bytes[..next_byte_num]);
     let signature_bytes = signature.to_bytes();
-    let sig = Some(BambooSignature(&signature_bytes[..])).unwrap();
+    let sig = BambooSignature(&signature_bytes[..]);
 
     // Trim bytes
     next_byte_num += sig.encode(&mut entry_bytes[next_byte_num..]).unwrap();
