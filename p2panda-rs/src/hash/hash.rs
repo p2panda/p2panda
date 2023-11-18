@@ -7,13 +7,13 @@ use std::str::FromStr;
 
 use arrayvec::ArrayVec;
 use bamboo_rs_core_ed25519_yasmf::yasmf_hash::new_blake3;
-use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
 use crate::hash::error::HashError;
 use crate::hash::HashId;
+use crate::serde::deserialize_hex;
 use crate::{Human, Validate};
 
 /// Size of p2panda entries' hashes.
@@ -134,76 +134,8 @@ impl<'de> Deserialize<'de> for Hash {
     where
         D: serde::Deserializer<'de>,
     {
-        struct HexOrBytesVisitor;
-
-        impl<'de> Visitor<'de> for HexOrBytesVisitor {
-            type Value = Vec<u8>;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("an hexadecimal-encoded string or byte sequence")
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                hex::decode(v).map_err(|err| serde::de::Error::custom(format!("{err}")))
-            }
-
-            fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                hex::decode(v).map_err(|err| serde::de::Error::custom(format!("{err}")))
-            }
-
-            fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                hex::decode(v).map_err(|err| serde::de::Error::custom(format!("{err}")))
-            }
-
-            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                Ok(v.to_owned())
-            }
-
-            fn visit_borrowed_bytes<E>(self, v: &'de [u8]) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                Ok(v.to_owned())
-            }
-
-            fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                Ok(v)
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
-                let len = std::cmp::min(seq.size_hint().unwrap_or(0), 4096);
-                let mut bytes = Vec::with_capacity(len);
-
-                while let Some(b) = seq.next_element()? {
-                    bytes.push(b);
-                }
-
-                Ok(bytes)
-            }
-        }
-
-        let hash_bytes = deserializer.deserialize_any(HexOrBytesVisitor)?;
-
         // Deserialize hash bytes.
-        // let hash_bytes = deserialize_hex(deserializer)?;
+        let hash_bytes = deserialize_hex(deserializer)?;
 
         // Convert and validate format
         let hash_str = hex::encode(hash_bytes);
@@ -376,16 +308,14 @@ mod tests {
 
     #[test]
     fn deserialize() {
-        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
-
-        // Deserialize from bytes
-        let hash_bytes = hex::decode(hash_str).unwrap();
+        // Deserialize from non human-readable CBOR bytes
+        let hash_bytes = [
+            0, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159, 251, 204, 40, 19,
+            183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 5,
+        ];
         let hash: Hash =
             deserialize_into(&serialize_value(cbor!(ByteBuf::from(hash_bytes)))).unwrap();
-        assert_eq!(Hash::new(hash_str).unwrap(), hash);
-
-        // Deserialize from string
-        let hash: Hash = deserialize_into(&serialize_value(cbor!(hash_str))).unwrap();
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         assert_eq!(Hash::new(hash_str).unwrap(), hash);
 
         // Invalid hashes
@@ -393,5 +323,32 @@ mod tests {
         assert!(invalid_hash.is_err());
         let invalid_hash = deserialize_into::<Hash>(&serialize_value(cbor!("xyz".as_bytes())));
         assert!(invalid_hash.is_err(), "{:#?}", invalid_hash);
+    }
+
+    #[test]
+    fn deserialize_human_readable() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+
+        #[derive(serde::Deserialize, Debug, PartialEq)]
+        struct Test {
+            hash: Hash,
+        }
+
+        // Deserialize from human-readable (hex-encoded) JSON string
+        let json = format!(
+            r#"
+            {{
+                "hash": "{hash_str}"
+            }}
+        "#
+        );
+
+        let result: Test = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            Test {
+                hash: Hash::new(hash_str).unwrap()
+            },
+            result
+        );
     }
 }
