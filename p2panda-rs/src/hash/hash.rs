@@ -7,13 +7,13 @@ use std::str::FromStr;
 
 use arrayvec::ArrayVec;
 use bamboo_rs_core_ed25519_yasmf::yasmf_hash::new_blake3;
+use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use yasmf_hash::{YasmfHash, BLAKE3_HASH_SIZE, MAX_YAMF_HASH_SIZE};
 
 use crate::hash::error::HashError;
 use crate::hash::HashId;
-use crate::serde::deserialize_hex;
 use crate::{Human, Validate};
 
 /// Size of p2panda entries' hashes.
@@ -134,8 +134,76 @@ impl<'de> Deserialize<'de> for Hash {
     where
         D: serde::Deserializer<'de>,
     {
+        struct HexOrBytesVisitor;
+
+        impl<'de> Visitor<'de> for HexOrBytesVisitor {
+            type Value = Vec<u8>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("an hexadecimal-encoded string or byte sequence")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                hex::decode(v).map_err(|err| serde::de::Error::custom(format!("{err}")))
+            }
+
+            fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                hex::decode(v).map_err(|err| serde::de::Error::custom(format!("{err}")))
+            }
+
+            fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                hex::decode(v).map_err(|err| serde::de::Error::custom(format!("{err}")))
+            }
+
+            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(v.to_owned())
+            }
+
+            fn visit_borrowed_bytes<E>(self, v: &'de [u8]) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(v.to_owned())
+            }
+
+            fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(v)
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let len = std::cmp::min(seq.size_hint().unwrap_or(0), 4096);
+                let mut bytes = Vec::with_capacity(len);
+
+                while let Some(b) = seq.next_element()? {
+                    bytes.push(b);
+                }
+
+                Ok(bytes)
+            }
+        }
+
+        let hash_bytes = deserializer.deserialize_any(HexOrBytesVisitor)?;
+
         // Deserialize hash bytes.
-        let hash_bytes = deserialize_hex(deserializer)?;
+        // let hash_bytes = deserialize_hex(deserializer)?;
 
         // Convert and validate format
         let hash_str = hex::encode(hash_bytes);
