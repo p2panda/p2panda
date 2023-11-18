@@ -467,4 +467,31 @@ mod tests {
 
         assert_eq!(result.unwrap_err().to_string(), expected_result.to_string());
     }
+
+    #[test]
+    fn deserialize_human_readable() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+
+        #[derive(serde::Deserialize, Debug, PartialEq)]
+        struct Test {
+            document_view_id: DocumentViewId,
+        }
+
+        // Deserialize from human-readable (hex-encoded) JSON string
+        let json = format!(
+            r#"
+            {{
+                "document_view_id": "{hash_str}"
+            }}
+        "#
+        );
+
+        let result: Test = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            Test {
+                document_view_id: Hash::new(hash_str).unwrap().into(),
+            },
+            result
+        );
+    }
 }
