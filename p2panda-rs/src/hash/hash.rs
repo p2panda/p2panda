@@ -309,9 +309,15 @@ mod tests {
     #[test]
     fn deserialize() {
         let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+
+        // Deserialize from bytes
         let hash_bytes = hex::decode(hash_str).unwrap();
         let hash: Hash =
             deserialize_into(&serialize_value(cbor!(ByteBuf::from(hash_bytes)))).unwrap();
+        assert_eq!(Hash::new(hash_str).unwrap(), hash);
+
+        // Deserialize from string
+        let hash: Hash = deserialize_into(&serialize_value(cbor!(hash_str))).unwrap();
         assert_eq!(Hash::new(hash_str).unwrap(), hash);
 
         // Invalid hashes
