@@ -158,9 +158,12 @@ impl<'de> Deserialize<'de> for DocumentViewId {
             type Value = DocumentViewId;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("schema id as string")
+                formatter.write_str("document view id as array or in string representation")
             }
 
+            /// Document view ids can be represented as strings, using underscores as separators
+            /// between the operation ids. This is especially useful when using arrays is not
+            /// possible or unergonomic (for example in GraphQL)
             fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
@@ -168,6 +171,7 @@ impl<'de> Deserialize<'de> for DocumentViewId {
                 DocumentViewId::from_str(value).map_err(serde::de::Error::custom)
             }
 
+            /// Document view ids can be represented as arrays of operation ids.
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
             where
                 A: serde::de::SeqAccess<'de>,

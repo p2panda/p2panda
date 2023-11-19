@@ -127,11 +127,11 @@ mod tests {
         "missing action field in operation format"
     )]
     #[case::invalid_action(
-        cbor!([1, "this is not an action", SCHEMA_ID, { "is_cute" => true } ]),
+        cbor!([1, "this is not an action", SCHEMA_ID, { "is_cute" => true }]),
         "invalid type: string, expected integer"
     )]
     #[case::unsupported_action(
-        cbor!([1, 100, SCHEMA_ID, { "is_cute" => true } ]),
+        cbor!([1, 100, SCHEMA_ID, { "is_cute" => true }]),
         "unknown operation action 100"
     )]
     #[case::missing_schema_id(
@@ -139,15 +139,15 @@ mod tests {
         "missing schema id field in operation format"
     )]
     #[case::invalid_schema_id_incomplete(
-        cbor!([1, 0, "venue_0020", { "name" => "Panda" } ]),
+        cbor!([1, 0, "venue_0020", { "name" => "Panda" }]),
         "encountered invalid hash while parsing application schema id: invalid hash length 2 bytes, expected 34 bytes"
     )]
     #[case::invalid_schema_id_hex(
-        cbor!([1, 0, "this is not a hash", { "name" => "Panda" } ]),
+        cbor!([1, 0, "this is not a hash", { "name" => "Panda" }]),
         "malformed schema id `this is not a hash`: doesn't contain an underscore"
     )]
     #[case::invalid_schema_id_name_missing(
-        cbor!([1, 0, HASH, { "name" => "Panda" } ]),
+        cbor!([1, 0, HASH, { "name" => "Panda" }]),
         "malformed schema id `0020b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543`: doesn't contain an underscore"
     )]
     #[case::non_canonic_schema_id_unsorted(
@@ -173,16 +173,16 @@ mod tests {
         "encountered invalid document view id while parsing application schema id: expected sorted operation ids in document view id"
     )]
     #[case::invalid_previous_operations_hex(
-        cbor!([1, 2, SCHEMA_ID, [serde_bytes::ByteBuf::from("_correct_num_of_bytes_but_not_hex_")] ]),
+        cbor!([1, 2, SCHEMA_ID, [serde_bytes::ByteBuf::from("_correct_num_of_bytes_but_not_hex_")]]),
         "can not decode YASMF BLAKE3 hash"
     )]
     #[case::invalid_previous_operations_incomplete(
-        cbor!([1, 2, SCHEMA_ID, [hex_string_to_bytes("0020")] ]),
+        cbor!([1, 2, SCHEMA_ID, [hex_string_to_bytes("0020")]]),
         "invalid hash length 2 bytes, expected 34 bytes"
     )]
     #[case::invalid_previous_operations_array(
-        cbor!([1, 2, SCHEMA_ID, {} ]),
-        "invalid type: map, expected array"
+        cbor!([1, 2, SCHEMA_ID, {}]),
+        "invalid type: map, expected document view id as array or in string representation"
     )]
     #[case::non_canonic_previous_operations_unsorted(
         cbor!([1, 2, SCHEMA_ID, [
@@ -200,11 +200,11 @@ mod tests {
         "expected sorted operation ids in document view id"
     )]
     #[case::invalid_fields_key_type_1(
-        cbor!([1, 0, SCHEMA_ID, { 12 => "Panda" } ]),
+        cbor!([1, 0, SCHEMA_ID, { 12 => "Panda" }]),
         "invalid type: integer `12`, expected string"
     )]
     #[case::invalid_fields_key_type_2(
-        cbor!([1, 0, SCHEMA_ID, { "a" => "value", "b" => { "nested" => "wrong " } }]),
+        cbor!([1, 0, SCHEMA_ID, { "a" => "value", "b" => { "nested" => "wrong " }}]),
         "error deserializing plain value: data did not match any variant of untagged enum PlainValue"
     )]
     #[case::invalid_fields_value_type(
@@ -228,8 +228,8 @@ mod tests {
         "invalid type: sequence, expected map"
     )]
     #[case::missing_previous_operations_update(
-        cbor!([1, 1, SCHEMA_ID, { "is_cute" => true } ]),
-        "invalid type: map, expected array"
+        cbor!([1, 1, SCHEMA_ID, { "is_cute" => true }]),
+        "invalid type: map, expected document view id as array or in string representation"
     )]
     #[case::missing_previous_operations_delete(
         cbor!([1, 2, SCHEMA_ID ]),
@@ -240,7 +240,7 @@ mod tests {
         "missing fields for this operation action"
     )]
     #[case::missing_fields_update(
-        cbor!([1, 1, SCHEMA_ID, [hex_string_to_bytes(HASH)] ]),
+        cbor!([1, 1, SCHEMA_ID, [hex_string_to_bytes(HASH)]]),
         "missing fields for this operation action"
     )]
     #[case::invalid_fields_delete(
