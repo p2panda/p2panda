@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
-use std::fmt::{Display, Write};
+use std::fmt::{self, Display, Write};
 use std::hash::Hash as StdHash;
 use std::slice::Iter;
 use std::str::FromStr;
 
+use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::document::error::DocumentViewIdError;
@@ -151,8 +152,46 @@ impl<'de> Deserialize<'de> for DocumentViewId {
     where
         D: Deserializer<'de>,
     {
-        let operation_ids: Vec<OperationId> = Deserialize::deserialize(deserializer)?;
-        Self::from_untrusted(operation_ids).map_err(serde::de::Error::custom)
+        struct DocumentViewIdVisitor;
+
+        impl<'de> Visitor<'de> for DocumentViewIdVisitor {
+            type Value = DocumentViewId;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("document view id as array or in string representation")
+            }
+
+            /// Document view ids can be represented as strings, using underscores as separators
+            /// between the operation ids. This is especially useful when using arrays is not
+            /// possible or unergonomic (for example in GraphQL)
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                DocumentViewId::from_str(value).map_err(serde::de::Error::custom)
+            }
+
+            /// Document view ids can be represented as arrays of operation ids.
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut operation_ids = Vec::new();
+
+                while let Some(operation_id) = seq.next_element::<OperationId>()? {
+                    operation_ids.push(operation_id);
+                }
+
+                let view_id = DocumentViewId::from_untrusted(operation_ids)
+                    .map_err(serde::de::Error::custom)?;
+
+                Ok(view_id)
+            }
+        }
+
+        let view_id = deserializer.deserialize_any(DocumentViewIdVisitor)?;
+
+        Ok(view_id)
     }
 }
 
@@ -244,12 +283,14 @@ impl FromStr for DocumentViewId {
 mod tests {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash as StdHash, Hasher};
+    use std::str::FromStr;
 
     use rstest::rstest;
+    use serde::{Deserialize, Serialize};
 
     use crate::hash::Hash;
     use crate::operation::OperationId;
-    use crate::serde::hex_string_to_bytes;
+    use crate::serde::{hex_string_to_bytes, serialize_from};
     use crate::test_utils::constants::HASH;
     use crate::test_utils::fixtures::random_hash;
     use crate::test_utils::fixtures::{document_view_id, random_operation_id};
@@ -466,5 +507,48 @@ mod tests {
         );
 
         assert_eq!(result.unwrap_err().to_string(), expected_result.to_string());
+    }
+
+    #[test]
+    fn deserialize_human_readable() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805_0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec808";
+
+        #[derive(Deserialize, Serialize, Debug, PartialEq)]
+        struct Test {
+            document_view_id: DocumentViewId,
+        }
+
+        // Deserialize from human-readable (hex-encoded) JSON string
+        let json = format!(
+            r#"
+            {{
+                "document_view_id": "{hash_str}"
+            }}
+        "#
+        );
+
+        let result: Test = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            Test {
+                document_view_id: DocumentViewId::from_str(hash_str).unwrap(),
+            },
+            result
+        );
+
+        // Serialize into non human-readable CBOR format (operation ids are encoded as bytes)
+        let bytes = serialize_from(result);
+        assert_eq!(
+            bytes,
+            [
+                // {"document_view_id":
+                // [h'0020CFB0FA37F36D082FAAD3886A9FFBCC2813B7AFE90F0609A556D425F1A76EC805',
+                // h'0020CFB0FA37F36D082FAAD3886A9FFBCC2813B7AFE90F0609A556D425F1A76EC808']}
+                161, 112, 100, 111, 99, 117, 109, 101, 110, 116, 95, 118, 105, 101, 119, 95, 105,
+                100, 130, 88, 34, 0, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106,
+                159, 251, 204, 40, 19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110,
+                200, 5, 88, 34, 0, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159,
+                251, 204, 40, 19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 8
+            ]
+        )
     }
 }

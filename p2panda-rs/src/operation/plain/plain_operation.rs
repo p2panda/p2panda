@@ -15,7 +15,7 @@ use crate::schema::SchemaId;
 ///
 /// Use plain operations to already read important data from them, like the schema id or operation
 /// action.
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct PlainOperation(
     OperationVersion,
     OperationAction,
@@ -221,7 +221,9 @@ mod tests {
     #[case::hash_too_small(cbor!([1, 1, "schema_field_definition_v1", [[0, 1]]]))]
     #[should_panic(expected = "invalid type: string, expected byte buf")]
     #[case::hash_too_small(cbor!([1, 1, "schema_field_definition_v1", ["0020"]]))]
-    #[should_panic(expected = "invalid type: map, expected array")]
+    #[should_panic(
+        expected = "invalid type: map, expected document view id as array or in string representation"
+    )]
     #[case::fields_wrong_type(cbor!([1, 1, "schema_field_definition_v1", { "type" => "int" }]))]
     fn deserialize_invalid_operations(#[case] cbor: Result<Value, Error>) {
         // Check the cbor is valid.

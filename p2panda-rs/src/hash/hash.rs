@@ -308,10 +308,14 @@ mod tests {
 
     #[test]
     fn deserialize() {
-        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
-        let hash_bytes = hex::decode(hash_str).unwrap();
+        // Deserialize from non human-readable CBOR bytes
+        let hash_bytes = [
+            0, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159, 251, 204, 40, 19,
+            183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 5,
+        ];
         let hash: Hash =
             deserialize_into(&serialize_value(cbor!(ByteBuf::from(hash_bytes)))).unwrap();
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
         assert_eq!(Hash::new(hash_str).unwrap(), hash);
 
         // Invalid hashes
@@ -319,5 +323,32 @@ mod tests {
         assert!(invalid_hash.is_err());
         let invalid_hash = deserialize_into::<Hash>(&serialize_value(cbor!("xyz".as_bytes())));
         assert!(invalid_hash.is_err(), "{:#?}", invalid_hash);
+    }
+
+    #[test]
+    fn deserialize_human_readable() {
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+
+        #[derive(serde::Deserialize, Debug, PartialEq)]
+        struct Test {
+            hash: Hash,
+        }
+
+        // Deserialize from human-readable (hex-encoded) JSON string
+        let json = format!(
+            r#"
+            {{
+                "hash": "{hash_str}"
+            }}
+        "#
+        );
+
+        let result: Test = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            Test {
+                hash: Hash::new(hash_str).unwrap()
+            },
+            result
+        );
     }
 }
