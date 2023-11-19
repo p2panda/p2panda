@@ -282,10 +282,11 @@ mod tests {
     use std::str::FromStr;
 
     use rstest::rstest;
+    use serde::{Deserialize, Serialize};
 
     use crate::hash::Hash;
     use crate::operation::OperationId;
-    use crate::serde::hex_string_to_bytes;
+    use crate::serde::{hex_string_to_bytes, serialize_from};
     use crate::test_utils::constants::HASH;
     use crate::test_utils::fixtures::random_hash;
     use crate::test_utils::fixtures::{document_view_id, random_operation_id};
@@ -508,7 +509,7 @@ mod tests {
     fn deserialize_human_readable() {
         let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805_0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec808";
 
-        #[derive(serde::Deserialize, Debug, PartialEq)]
+        #[derive(Deserialize, Serialize, Debug, PartialEq)]
         struct Test {
             document_view_id: DocumentViewId,
         }
@@ -529,5 +530,21 @@ mod tests {
             },
             result
         );
+
+        // Serialize into non human-readable CBOR format (operation ids are encoded as bytes)
+        let bytes = serialize_from(result);
+        assert_eq!(
+            bytes,
+            [
+                // {"document_view_id":
+                // [h'0020CFB0FA37F36D082FAAD3886A9FFBCC2813B7AFE90F0609A556D425F1A76EC805',
+                // h'0020CFB0FA37F36D082FAAD3886A9FFBCC2813B7AFE90F0609A556D425F1A76EC808']}
+                161, 112, 100, 111, 99, 117, 109, 101, 110, 116, 95, 118, 105, 101, 119, 95, 105,
+                100, 130, 88, 34, 0, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106,
+                159, 251, 204, 40, 19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110,
+                200, 5, 88, 34, 0, 32, 207, 176, 250, 55, 243, 109, 8, 47, 170, 211, 136, 106, 159,
+                251, 204, 40, 19, 183, 175, 233, 15, 6, 9, 165, 86, 212, 37, 241, 167, 110, 200, 8
+            ]
+        )
     }
 }
