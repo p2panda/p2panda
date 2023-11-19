@@ -9,17 +9,13 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
-### Added
-
-### Changed
-
 ### Fixed
+
+- Fix serialization for human-readable encodings [#529](https://github.com/p2panda/p2panda/pull/529)
 
 ## [0.8.0]
 
 Released on 2023-10-12: :package: `p2panda-js` and :package: `p2panda-rs`
-
-### Added
 
 ### Changed
 
