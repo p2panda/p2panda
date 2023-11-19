@@ -15,7 +15,7 @@ use crate::schema::SchemaId;
 ///
 /// Use plain operations to already read important data from them, like the schema id or operation
 /// action.
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct PlainOperation(
     OperationVersion,
     OperationAction,

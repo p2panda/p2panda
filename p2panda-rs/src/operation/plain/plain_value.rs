@@ -36,7 +36,7 @@ pub enum PlainValue {
     #[serde(with = "serde_bytes")]
     BytesOrRelation(Vec<u8>),
 
-    /// List of hashes which can either be a pinned relation (list of operation ids) a relation
+    /// List of hashes which can either be a pinned relation (list of operation ids), a relation
     /// list (list of document ids) or an empty pinned relation list.
     AmbiguousRelation(Vec<Hash>),
 
@@ -66,9 +66,10 @@ impl<'de> Deserialize<'de> for PlainValue {
     where
         D: serde::Deserializer<'de>,
     {
+        let is_human_readable = deserializer.is_human_readable();
         let cbor_value: Value = Deserialize::deserialize(deserializer)?;
 
-        cbor_value_to_plain_value(cbor_value).map_err(|err| {
+        to_plain_value(is_human_readable, cbor_value).map_err(|err| {
             serde::de::Error::custom(format!("error deserializing plain value: {}", err))
         })
     }
@@ -146,8 +147,8 @@ impl From<Vec<DocumentViewId>> for PlainValue {
     }
 }
 
-/// Helper for converting a cbor value into a plain operation value.
-fn cbor_value_to_plain_value(value: Value) -> Result<PlainValue, PlainValueError> {
+/// Helper for converting an encoded value into a plain operation value.
+fn to_plain_value(is_human_readable: bool, value: Value) -> Result<PlainValue, PlainValueError> {
     let result: Result<PlainValue, PlainValueError> = match value {
         Value::Integer(int) => {
             let int: i64 = int.try_into()?;
@@ -157,29 +158,48 @@ fn cbor_value_to_plain_value(value: Value) -> Result<PlainValue, PlainValueError
         Value::Float(float) => Ok(float.into()),
         Value::Text(text) => Ok(text.into()),
         Value::Bool(bool) => Ok(bool.into()),
-        Value::Array(array) => cbor_array_to_plain_value_list(array),
+        Value::Array(array) => to_plain_value_list(is_human_readable, array),
         _ => return Err(PlainValueError::UnsupportedValue),
     };
 
     result
 }
 
-/// Helper for converting a cbor array into a plain operation list value.
+/// Helper for converting an encoded array into a plain operation list value.
 ///
 /// This method can fail which means the passed value is not an `AmbiguousRelation` or
 /// `PinnedRelation` plain value variant.
-fn cbor_array_to_plain_value_list(array: Vec<Value>) -> Result<PlainValue, PlainValueError> {
-    // First attempt to parse this vec of values into a vec of strings. If this succeeds it means
-    // this is an `AmbiguousRelation`
-    let ambiguous_relation: Result<Vec<Hash>, _> = array
-        .iter()
-        .map(|value| match value.as_bytes() {
-            Some(bytes) => {
-                let hex_str = hex::encode(bytes);
-                let hash = Hash::new(&hex_str).map_err(|_| PlainValueError::UnsupportedValue)?;
-                Ok(hash)
+fn to_plain_value_list(
+    is_human_readable: bool,
+    array: Vec<Value>,
+) -> Result<PlainValue, PlainValueError> {
+    // Helper method to convert the given value to a hexadecimal string. 
+    //
+    // If we're working with a human-readable encoding format we can expect the value to already be
+    // a hexadecimal string, for non human-readable formats we need to encode it from the bytes
+    // first.
+    let to_hex_str = |value: &Value| -> Result<String, PlainValueError> {
+        if is_human_readable {
+            match value.as_text() {
+                Some(text) => Ok(text.to_owned()),
+                None => Err(PlainValueError::UnsupportedValue),
             }
-            None => Err(PlainValueError::UnsupportedValue),
+        } else {
+            match value.as_bytes() {
+                Some(bytes) => Ok(hex::encode(bytes)),
+                None => Err(PlainValueError::UnsupportedValue),
+            }
+        }
+    };
+
+    // First attempt to parse this list of encoded values into a list of hashes. If this succeeds
+    // it means this is an `AmbiguousRelation`
+    let ambiguous_relation: Result<Vec<Hash>, PlainValueError> = array
+        .iter()
+        .map(|value| {
+            let hex_str = to_hex_str(value)?;
+            let hash = Hash::new(&hex_str).map_err(|_| PlainValueError::UnsupportedValue)?;
+            Ok(hash)
         })
         .collect();
 
@@ -188,24 +208,21 @@ fn cbor_array_to_plain_value_list(array: Vec<Value>) -> Result<PlainValue, Plain
         return Ok(PlainValue::AmbiguousRelation(hashes));
     };
 
-    // Next we try and parse into a vec of `Vec<String>` which means this is a
-    // `PinnedRelationList` value
+    // Next we try and parse into a list of `Vec<Hash>` which means this is a `PinnedRelationList`
+    // value
     let mut pinned_relations = Vec::new();
     for inner_array in array {
         let inner_array = match inner_array.as_array() {
             Some(array) => Ok(array),
             None => Err(PlainValueError::UnsupportedValue),
         }?;
-        let pinned_relation: Result<Vec<Hash>, _> = inner_array
+
+        let pinned_relation: Result<Vec<Hash>, PlainValueError> = inner_array
             .iter()
-            .map(|value| match value.as_bytes() {
-                Some(bytes) => {
-                    let hex_str = hex::encode(bytes);
-                    let hash =
-                        Hash::new(&hex_str).map_err(|_| PlainValueError::UnsupportedValue)?;
-                    Ok(hash)
-                }
-                None => Err(PlainValueError::UnsupportedValue),
+            .map(|value| {
+                let hex_str = to_hex_str(value)?;
+                let hash = Hash::new(&hex_str).map_err(|_| PlainValueError::UnsupportedValue)?;
+                Ok(hash)
             })
             .collect();
 
