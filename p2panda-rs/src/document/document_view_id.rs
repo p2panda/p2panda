@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::convert::TryFrom;
-use std::fmt::{Display, Write};
+use std::fmt::{self, Display, Write};
 use std::hash::Hash as StdHash;
 use std::slice::Iter;
 use std::str::FromStr;
 
+use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::document::error::DocumentViewIdError;
@@ -151,8 +152,42 @@ impl<'de> Deserialize<'de> for DocumentViewId {
     where
         D: Deserializer<'de>,
     {
-        let operation_ids: Vec<OperationId> = Deserialize::deserialize(deserializer)?;
-        Self::from_untrusted(operation_ids).map_err(serde::de::Error::custom)
+        struct DocumentViewIdVisitor;
+
+        impl<'de> Visitor<'de> for DocumentViewIdVisitor {
+            type Value = DocumentViewId;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("schema id as string")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                DocumentViewId::from_str(value).map_err(serde::de::Error::custom)
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut operation_ids = Vec::new();
+
+                while let Some(operation_id) = seq.next_element::<OperationId>()? {
+                    operation_ids.push(operation_id);
+                }
+
+                let view_id = DocumentViewId::from_untrusted(operation_ids)
+                    .map_err(serde::de::Error::custom)?;
+
+                Ok(view_id)
+            }
+        }
+
+        let view_id = deserializer.deserialize_any(DocumentViewIdVisitor)?;
+
+        Ok(view_id)
     }
 }
 
@@ -244,6 +279,7 @@ impl FromStr for DocumentViewId {
 mod tests {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash as StdHash, Hasher};
+    use std::str::FromStr;
 
     use rstest::rstest;
 
@@ -470,7 +506,7 @@ mod tests {
 
     #[test]
     fn deserialize_human_readable() {
-        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805";
+        let hash_str = "0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec805_0020cfb0fa37f36d082faad3886a9ffbcc2813b7afe90f0609a556d425f1a76ec808";
 
         #[derive(serde::Deserialize, Debug, PartialEq)]
         struct Test {
@@ -489,7 +525,7 @@ mod tests {
         let result: Test = serde_json::from_str(&json).unwrap();
         assert_eq!(
             Test {
-                document_view_id: Hash::new(hash_str).unwrap().into(),
+                document_view_id: DocumentViewId::from_str(hash_str).unwrap(),
             },
             result
         );
