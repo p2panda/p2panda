@@ -173,7 +173,7 @@ fn to_plain_value_list(
     is_human_readable: bool,
     array: Vec<Value>,
 ) -> Result<PlainValue, PlainValueError> {
-    // Helper method to convert the given value to a hexadecimal string. 
+    // Helper method to convert the given value to a hexadecimal string.
     //
     // If we're working with a human-readable encoding format we can expect the value to already be
     // a hexadecimal string, for non human-readable formats we need to encode it from the bytes
@@ -358,6 +358,36 @@ mod tests {
         assert_eq!(
             deserialize_into::<PlainValue>(&serialize_value(cbor!([]))).unwrap(),
             PlainValue::AmbiguousRelation(vec![])
+        );
+    }
+
+    #[test]
+    fn deserialize_human_readable() {
+        assert_eq!(
+            serde_json::from_str::<PlainValue>("12").unwrap(),
+            PlainValue::Integer(12)
+        );
+        assert_eq!(
+            serde_json::from_str::<PlainValue>("12.0").unwrap(),
+            PlainValue::Float(12.0)
+        );
+        assert_eq!(
+            serde_json::from_str::<PlainValue>("\"hello\"").unwrap(),
+            PlainValue::String("hello".to_string())
+        );
+        assert_eq!(
+            serde_json::from_str::<PlainValue>("[]").unwrap(),
+            PlainValue::AmbiguousRelation(vec![])
+        );
+        assert_eq!(
+            serde_json::from_str::<PlainValue>(
+                "[[\"00200801063d8aaba76c283a2fb63cf5cd4ec86765424452ce7327fda04c5da80d62\"]]"
+            )
+            .unwrap(),
+            PlainValue::PinnedRelationList(vec![vec![Hash::new(
+                "00200801063d8aaba76c283a2fb63cf5cd4ec86765424452ce7327fda04c5da80d62"
+            )
+            .unwrap()]])
         );
     }
 
