@@ -11,7 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Fixed
 
-- Fix serialization for human-readable encodings [#529](https://github.com/p2panda/p2panda/pull/529)
+- Fix de-/serialization for human-readable encodings [#529](https://github.com/p2panda/p2panda/pull/529)
 
 ## [0.8.0]
 
