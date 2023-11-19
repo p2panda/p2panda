@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+## [0.8.1]
+
+Released on 2023-11-19: :package: `p2panda-js` and :package: `p2panda-rs`
+
 ### Fixed
 
 - Fix de-/serialization for human-readable encodings [#529](https://github.com/p2panda/p2panda/pull/529) `rs`
@@ -317,7 +321,8 @@ Released on 2021-01-18: :package: `p2panda-js` and 2021-01-28: :package: `p2pand
 - JavaScript library export with WebAssembly running in browsers and NodeJS. [#21](https://github.com/p2panda/p2panda/pull/21) `js`
 - Ed25519 key pair generation. [#4](https://github.com/p2panda/p2panda/pull/4) `rs`
 
-[unreleased]: https://github.com/p2panda/p2panda/compare/v0.8.0...HEAD
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/p2panda/p2panda/releases/tag/v0.8.0
 [0.8.0]: https://github.com/p2panda/p2panda/releases/tag/v0.8.0
 [0.7.1]: https://github.com/p2panda/p2panda/releases/tag/v0.7.1
 [0.7.0]: https://github.com/p2panda/p2panda/releases/tag/v0.7.0
