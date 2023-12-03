@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::{
+    convert::TryFrom,
     ffi::{CStr, CString},
-    ptr::NonNull,
 };
 
-use libc::c_char;
+use ed25519_dalek::Signature;
+use libc::{c_char, c_int};
 
-use crate::{identity::KeyPair as KeyPairNonC, test_utils::fixtures::private_key};
+use crate::identity::{KeyPair as KeyPairNonC, PublicKey};
 
 #[repr(C)]
 pub struct KeyPair(KeyPairNonC);
@@ -39,7 +40,7 @@ pub extern "C" fn key_pair_private_key(instance: &KeyPair) -> *const c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn sign(instance: &KeyPair, value: *mut c_char) -> *const c_char {
+pub extern "C" fn key_pair_sign(instance: &KeyPair, value: *mut c_char) -> *const c_char {
     let value = unsafe {
         assert!(!value.is_null());
 
@@ -53,6 +54,33 @@ pub extern "C" fn sign(instance: &KeyPair, value: *mut c_char) -> *const c_char 
 }
 
 #[no_mangle]
-pub extern "C" fn verify_signature(public_key: *const c_char, bytes: *const c_char, signature: *const c_char) {
-    todo!()
+pub extern "C" fn key_pair_verify_signature(
+    public_key: *const c_char,
+    bytes: *const c_char,
+    signature: *const c_char,
+) -> c_int {
+    let public_key = unsafe {
+        assert!(!public_key.is_null());
+
+        CStr::from_ptr(public_key)
+    };
+
+    let bytes = unsafe {
+        assert!(!bytes.is_null());
+
+        CStr::from_ptr(bytes)
+    };
+
+    let signature = unsafe {
+        assert!(!signature.is_null());
+
+        CStr::from_ptr(signature)
+    };
+
+    let public_key = PublicKey::new(public_key.to_str().unwrap()).unwrap();
+    let signature = Signature::try_from(signature.to_bytes()).unwrap();
+    match KeyPairNonC::verify(&public_key, bytes.to_bytes(), &signature) {
+        Ok(_) => 1,
+        Err(_) => 0,
+    }
 }
