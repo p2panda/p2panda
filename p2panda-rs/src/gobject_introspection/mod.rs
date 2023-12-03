@@ -5,3 +5,4 @@
 #![allow(unsafe_code)]
 
 mod hash;
+mod key_pair;
