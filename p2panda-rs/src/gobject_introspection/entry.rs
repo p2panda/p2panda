@@ -39,6 +39,59 @@ pub struct Entry {
     pub signature: *mut c_char,
 }
 
+/// Returns a signed Bamboo entry.
+#[no_mangle]
+pub extern fn sign_and_encode_entry(
+    log_id: u64,
+    seq_num: u64,
+    skiplink_hash: *const c_char,
+    backlink_hash: *const c_char,
+    payload: *const c_char,
+    key_pair: *mut KeyPair,
+) -> *mut c_char {
+    // If skiplink_hash exists construct `Hash`
+    let skiplink = unsafe {
+        match skiplink_hash.is_null() {
+            true => None,
+            false => Some(Hash::new(CStr::from_ptr(skiplink_hash).to_str().unwrap()).unwrap()),
+        }
+    };
+    // If backlink_hash exists construct `Hash`
+    let backlink = unsafe {
+        match backlink_hash.is_null() {
+            true => None,
+            false => Some(Hash::new(CStr::from_ptr(backlink_hash).to_str().unwrap()).unwrap()),
+        }
+    };
+
+    let c_payload = unsafe {
+        assert!(!payload.is_null());
+
+        CStr::from_ptr(payload)
+    };
+
+    // Convert `SeqNum` and `LogId`
+    let log_id = LogId::new(log_id);
+    let seq_num = SeqNum::new(seq_num).unwrap();
+
+    // Convert to `EncodedOperation`
+    let operation_bytes = hex::decode(c_payload.to_str().unwrap()).unwrap();
+    let operation_encoded = EncodedOperation::from_bytes(&operation_bytes);
+
+    // Sign and encode entry
+    let entry_encoded = crate::entry::encode::sign_and_encode_entry(
+        &log_id,
+        &seq_num,
+        skiplink.as_ref(),
+        backlink.as_ref(),
+        &operation_encoded,
+        key_pair.as_inner(),
+    ).unwrap();
+
+    // Return result as a hexadecimal string
+    CString::new(entry_encoded.to_string()).unwrap().into_raw()
+}
+
 /// Decodes an hexadecimal string into an `Entry`.
 #[no_mangle]
 pub extern fn decode_entry(encoded_entry: *const c_char) -> *mut Entry {
