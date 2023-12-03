@@ -10,11 +10,10 @@ use libc::{c_char, c_int};
 
 use crate::identity::{KeyPair as KeyPairNonC, PublicKey};
 
-#[repr(C)]
 pub struct KeyPair(KeyPairNonC);
 
 #[no_mangle]
-pub extern "C" fn key_pair_from_private_key(private_key: *const c_char) -> *mut KeyPair {
+pub extern "C" fn key_pair_new_from_private_key(private_key: *const c_char) -> *mut KeyPair {
     let private_key = unsafe {
         assert!(!private_key.is_null());
 
@@ -35,13 +34,13 @@ impl KeyPair {
 }
 
 #[no_mangle]
-pub extern "C" fn key_pair_public_key(instance: &KeyPair) -> *const c_char {
+pub extern "C" fn key_pair_get_public_key(instance: &KeyPair) -> *const c_char {
     let key = instance.0.public_key().to_bytes();
     CString::new(key).unwrap().into_raw()
 }
 
 #[no_mangle]
-pub extern "C" fn key_pair_private_key(instance: &KeyPair) -> *const c_char {
+pub extern "C" fn key_pair_get_private_key(instance: &KeyPair) -> *const c_char {
     let key = instance.0.private_key().to_bytes();
     CString::new(key).unwrap().into_raw()
 }

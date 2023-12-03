@@ -68,20 +68,31 @@ use rstest_reuse;
 
 #[cfg(any(feature = "storage-provider", test))]
 pub mod api;
+/// cbindgen:ignore
 pub mod document;
+/// cbindgen:ignore
 pub mod entry;
+/// cbindgen:ignore
 pub mod graph;
+/// cbindgen:ignore
 pub mod hash;
+/// cbindgen:ignore
 pub mod identity;
+/// cbindgen:ignore
 pub mod operation;
+/// cbindgen:ignore
 pub mod schema;
+/// cbindgen:ignore
 #[cfg(feature = "secret-group")]
 pub mod secret_group;
+/// cbindgen:ignore
 pub mod serde;
 #[cfg(any(feature = "storage-provider", test))]
 pub mod storage_provider;
+/// cbindgen:ignore
 #[cfg(any(feature = "test-utils", test))]
 pub mod test_utils;
+/// cbindgen:ignore
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 
