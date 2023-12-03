@@ -85,6 +85,8 @@ pub mod test_utils;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 
+pub mod gobject_introspection;
+
 /// Trait used by p2panda structs to validate data formats.
 ///
 /// Use this trait to check against (canonic) formats of data (like document ids or yasmf hashes)
