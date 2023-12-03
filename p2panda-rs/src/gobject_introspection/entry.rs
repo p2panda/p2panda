@@ -12,37 +12,57 @@ use crate::hash::Hash;
 use crate::operation::EncodedOperation;
 use crate::gobject_introspection::key_pair::KeyPair;
 
+/// Entrygfgfdsfsdfsfsfsfsf:
+///
 /// Return value of [`decode_entry`] that holds the decoded entry and plain operation.
 #[repr(C)]
 pub struct Entry {
-    /// PublicKey of this entry.
+    /// public_key:
+    ///
+    /// PublicKey of this entry
     pub public_key: *mut c_char,
 
+    /// log_id:
+    ///
     /// Used log for this entry.
     pub log_id: u64,
 
+    /// seq_num:
+    ///
     /// Sequence number of this entry.
     pub seq_num: u64,
 
+    /// skiplink:
+    ///
     /// Hash of skiplink Bamboo entry.
     pub skiplink: *mut c_char,
 
+    /// backlink:
+    ///
     /// Hash of previous Bamboo entry.
     pub backlink: *mut c_char,
 
+    /// payload_size:
+    ///
     /// Payload size of entry.
     pub payload_size: u64,
 
+    /// payload_hash:
+    ///
     /// Hash of payload.
     pub payload_hash: *mut c_char,
 
+    /// signature:
+    ///
     /// Ed25519 signature of entry.
     pub signature: *mut c_char,
 }
 
+/// sign_and_encode:
+///
 /// Returns a signed Bamboo entry.
 #[no_mangle]
-pub extern fn sign_and_encode_entry(
+pub extern fn p2panda_sign_and_encode_entry(
     log_id: u64,
     seq_num: u64,
     skiplink_hash: *const c_char,
@@ -95,9 +115,11 @@ pub extern fn sign_and_encode_entry(
     CString::new(entry_encoded.to_string()).unwrap().into_raw()
 }
 
+/// decode_entry:
+///
 /// Decodes an hexadecimal string into an `Entry`.
 #[no_mangle]
-pub extern fn decode_entry(encoded_entry: *const c_char) -> *mut Entry {
+pub extern fn p2panda_decode_entry(encoded_entry: *const c_char) -> *mut Entry {
     let c_str = unsafe {
         assert!(!encoded_entry.is_null());
 

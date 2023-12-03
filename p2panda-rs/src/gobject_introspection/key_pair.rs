@@ -13,7 +13,7 @@ use crate::identity::{KeyPair as KeyPairNonC, PublicKey};
 pub struct KeyPair(KeyPairNonC);
 
 #[no_mangle]
-pub extern "C" fn key_pair_new_from_private_key(private_key: *const c_char) -> *mut KeyPair {
+pub extern "C" fn p2panda_key_pair_new_from_private_key(private_key: *const c_char) -> *mut KeyPair {
     let private_key = unsafe {
         assert!(!private_key.is_null());
 
@@ -34,19 +34,19 @@ impl KeyPair {
 }
 
 #[no_mangle]
-pub extern "C" fn key_pair_get_public_key(instance: &KeyPair) -> *const c_char {
+pub extern "C" fn p2panda_key_pair_get_public_key(instance: &KeyPair) -> *const c_char {
     let key = instance.0.public_key().to_bytes();
     CString::new(key).unwrap().into_raw()
 }
 
 #[no_mangle]
-pub extern "C" fn key_pair_get_private_key(instance: &KeyPair) -> *const c_char {
+pub extern "C" fn p2panda_key_pair_get_private_key(instance: &KeyPair) -> *const c_char {
     let key = instance.0.private_key().to_bytes();
     CString::new(key).unwrap().into_raw()
 }
 
 #[no_mangle]
-pub extern "C" fn key_pair_sign(instance: &KeyPair, value: *mut c_char) -> *const c_char {
+pub extern "C" fn p2panda_key_pair_sign(instance: &KeyPair, value: *mut c_char) -> *const c_char {
     let value = unsafe {
         assert!(!value.is_null());
 
@@ -60,7 +60,7 @@ pub extern "C" fn key_pair_sign(instance: &KeyPair, value: *mut c_char) -> *cons
 }
 
 #[no_mangle]
-pub extern "C" fn key_pair_verify_signature(
+pub extern "C" fn p2panda_key_pair_verify_signature(
     public_key: *const c_char,
     bytes: *const c_char,
     signature: *const c_char,

@@ -6,9 +6,11 @@ use libc::c_char;
 use std::ffi::CStr;
 use std::ffi::CString;
 
-/// Returns hash of an hexadecimal encoded value.
+/// generate_hash:
+///
+/// Returns bub hash of an hexadecimal encoded value.
 #[no_mangle]
-pub extern fn generate_hash(value: *const c_char) -> *mut c_char {
+pub extern fn p2panda_generate_hash(value: *const c_char) -> *mut c_char {
     let c_str = unsafe {
         assert!(!value.is_null());
 
