@@ -6,3 +6,4 @@
 
 mod hash;
 mod entry;
+mod key_pair;
