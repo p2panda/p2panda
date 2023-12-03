@@ -10,6 +10,7 @@ use crate::entry::traits::AsEntry;
 use crate::entry::{EncodedEntry, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::operation::EncodedOperation;
+use crate::gobject_introspection::key_pair::KeyPair;
 
 /// Return value of [`decode_entry`] that holds the decoded entry and plain operation.
 #[repr(C)]
@@ -70,6 +71,8 @@ pub extern fn sign_and_encode_entry(
         CStr::from_ptr(payload)
     };
 
+    assert!(!key_pair.is_null());
+
     // Convert `SeqNum` and `LogId`
     let log_id = LogId::new(log_id);
     let seq_num = SeqNum::new(seq_num).unwrap();
@@ -85,7 +88,7 @@ pub extern fn sign_and_encode_entry(
         skiplink.as_ref(),
         backlink.as_ref(),
         &operation_encoded,
-        key_pair.as_inner(),
+        unsafe { key_pair.as_ref().unwrap().as_inner() },
     ).unwrap();
 
     // Return result as a hexadecimal string

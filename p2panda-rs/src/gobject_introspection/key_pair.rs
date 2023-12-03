@@ -14,7 +14,7 @@ use crate::identity::{KeyPair as KeyPairNonC, PublicKey};
 pub struct KeyPair(KeyPairNonC);
 
 #[no_mangle]
-pub extern "C" fn key_pair_from_private_key(private_key: *const c_char) -> KeyPair {
+pub extern "C" fn key_pair_from_private_key(private_key: *const c_char) -> *mut KeyPair {
     let private_key = unsafe {
         assert!(!private_key.is_null());
 
@@ -24,7 +24,14 @@ pub extern "C" fn key_pair_from_private_key(private_key: *const c_char) -> KeyPa
 
     let key_pair_inner = KeyPairNonC::from_private_key_str(private_key).expect("get a key pair");
 
-    KeyPair(key_pair_inner)
+    Box::into_raw(Box::new(KeyPair(key_pair_inner)))
+}
+
+impl KeyPair {
+    /// Internal method to access non-wasm instance of `KeyPair`.
+    pub(super) fn as_inner(&self) -> &KeyPairNonC {
+        &self.0
+    }
 }
 
 #[no_mangle]
