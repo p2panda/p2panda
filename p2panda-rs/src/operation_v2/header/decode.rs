@@ -2,8 +2,9 @@
 
 use crate::operation_v2::header::error::DecodeHeaderError;
 use crate::operation_v2::header::Header;
+use crate::operation_v2::header::encoded_header::EncodedHeader;
 
-pub fn decode_header(encoded_header: &Header) -> Result<Header, DecodeHeaderError> {
+pub fn decode_header(encoded_header: &EncodedHeader) -> Result<Header, DecodeHeaderError> {
     let bytes = encoded_header.to_bytes();
 
     let header: Header = ciborium::de::from_reader(&bytes[..]).map_err(|err| match err {
