@@ -11,8 +11,9 @@ use crate::entry::{EncodedEntry, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::operation::EncodedOperation;
 use crate::gobject_introspection::key_pair::KeyPair;
+use crate::gobject_introspection::string::string;
 
-/// Entrygfgfdsfsdfsfsfsfsf:
+/// p2panda_Entry:
 ///
 /// Return value of [`decode_entry`] that holds the decoded entry and plain operation.
 #[repr(C)]
@@ -58,7 +59,7 @@ pub struct Entry {
     pub signature: *mut c_char,
 }
 
-/// sign_and_encode:
+/// p2panda_sign_and_encode:
 ///
 /// Returns a signed Bamboo entry.
 #[no_mangle]
@@ -69,7 +70,7 @@ pub extern fn p2panda_sign_and_encode_entry(
     backlink_hash: *const c_char,
     payload: *const c_char,
     key_pair: *mut KeyPair,
-) -> *mut c_char {
+) -> string {
     // If skiplink_hash exists construct `Hash`
     let skiplink = unsafe {
         match skiplink_hash.is_null() {
@@ -112,10 +113,10 @@ pub extern fn p2panda_sign_and_encode_entry(
     ).unwrap();
 
     // Return result as a hexadecimal string
-    CString::new(entry_encoded.to_string()).unwrap().into_raw()
+    string::new(&entry_encoded.to_string().as_str())
 }
 
-/// decode_entry:
+/// p2panda_decode_entry:
 ///
 /// Decodes an hexadecimal string into an `Entry`.
 #[no_mangle]

@@ -6,7 +6,7 @@ use libc::c_char;
 use std::ffi::CStr;
 use std::ffi::CString;
 
-/// generate_hash:
+/// p2panda_generate_hash:
 ///
 /// Returns bub hash of an hexadecimal encoded value.
 #[no_mangle]

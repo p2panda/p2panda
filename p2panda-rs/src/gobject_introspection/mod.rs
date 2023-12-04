@@ -4,6 +4,7 @@
 
 #![allow(unsafe_code)]
 
+mod string;
 mod hash;
 mod entry;
 mod key_pair;
