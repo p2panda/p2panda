@@ -6,6 +6,7 @@ use crate::operation_v2::body::encode::encode_body;
 use crate::operation_v2::body::plain::PlainFields;
 use crate::operation_v2::body::traits::Schematic;
 use crate::operation_v2::body::Body;
+use crate::operation_v2::body::plain::PlainOperation;
 use crate::operation_v2::error::OperationBuilderError;
 use crate::operation_v2::header::encode::sign_header;
 use crate::operation_v2::header::traits::{Actionable, Authored};
@@ -92,9 +93,10 @@ impl OperationBuilder {
     /// regarding operation action.
     pub fn sign(self, key_pair: &KeyPair) -> Result<Operation, OperationBuilderError> {
         let payload = encode_body(&self.body)?;
+        let plain_operation: PlainOperation = (&self.body).into();
         let header = sign_header(self.header_extension, &payload, key_pair)?;
+        validate_operation_format(&header, &plain_operation)?;
         let operation = Operation::new(header, self.body);
-        validate_operation_format(&operation)?;
         Ok(operation)
     }
 }

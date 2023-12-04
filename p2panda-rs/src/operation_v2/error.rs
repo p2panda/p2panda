@@ -22,6 +22,22 @@ pub enum ValidateOperationError {
     #[error("operation schema id not matching with given schema: {0}, expected: {1}")]
     SchemaNotMatching(String, String),
 
+    /// Expected `fields` in CREATE or UPDATE operation.
+    #[error("expected 'fields' in CREATE or UPDATE operation")]
+    ExpectedFields,
+
+    /// Unexpected `fields` in DELETE operation.
+    #[error("unexpected 'fields' in DELETE operation")]
+    UnexpectedFields,
+
+    /// Expected `previous` in UPDATE or DELETE operation.
+    #[error("expected 'previous' in UPDATE or DELETE operation")]
+    ExpectedPreviousOperations,
+
+    /// Unexpected `previous` in CREATE operation.
+    #[error("unexpected 'previous' in CREATE operation")]
+    UnexpectedPreviousOperations,
+
     /// Handle errors from `schema::validate` module.
     #[error(transparent)]
     SchemaValidation(#[from] crate::schema::validate::error::ValidationError),

@@ -3,8 +3,7 @@
 //! Collection of low-level validation methods for operations.
 use crate::document::DocumentViewId;
 use crate::operation_v2::body::plain::{PlainFields, PlainOperation};
-use crate::operation_v2::body::traits::Schematic;
-use crate::operation_v2::body::EncodedBody;
+use crate::operation_v2::body::{Body, EncodedBody};
 use crate::operation_v2::error::ValidateOperationError;
 use crate::operation_v2::header::traits::Actionable;
 use crate::operation_v2::header::validate::validate_payload;
@@ -29,7 +28,7 @@ pub fn validate_operation_with_header(
     let operation_id = encoded_header.hash().into();
 
     // Validate and convert plain operation with the help of a schema
-    let operation = validate_operation(plain_operation, schema)?;
+    let operation = validate_operation(header, plain_operation, schema)?;
 
     Ok((operation, operation_id))
 }
@@ -40,22 +39,21 @@ pub fn validate_operation_with_header(
 ///
 /// 1. Correct operation format (#OP2)
 pub fn validate_operation_format(
-    operation: &(impl Actionable + Schematic),
+    header: &Header,
+    operation: &PlainOperation,
 ) -> Result<(), ValidateOperationError> {
-    match operation.action() {
+    match header.action() {
         OperationAction::Create => {
             // We don't want to return the fields here so we ignore them.
-            let _ = validate_create_operation_format(operation.previous(), operation.fields())?;
+            let _ = validate_create_operation_format(header.previous(), operation.1)?;
             Ok(())
         }
         OperationAction::Update => {
             // We don't want to return the fields here so we ignore them.
-            let _ = validate_update_operation_format(operation.previous(), operation.fields())?;
+            let _ = validate_update_operation_format(header.previous(), operation.1)?;
             Ok(())
         }
-        OperationAction::Delete => {
-            validate_delete_operation_format(operation.previous(), operation.fields())
-        }
+        OperationAction::Delete => validate_delete_operation_format(header.previous(), operation.1),
     }
 }
 
@@ -68,25 +66,28 @@ pub fn validate_operation_format(
 ///    duplicates, sorted) (#OP3)
 /// 3. Schema matches the given operation fields (#OP4)
 pub fn validate_operation(
-    operation: &(impl Actionable + Schematic),
+    header: &Header,
+    plain_operation: &PlainOperation,
     schema: &Schema,
 ) -> Result<Operation, ValidateOperationError> {
-    let previous = operation.previous();
-    let fields = operation.fields();
+    let previous = header.previous();
+    let schema_id = plain_operation.0;
 
     // Make sure the schema id and given schema matches
-    if operation.schema_id() != schema.id() {
+    if &schema_id != schema.id() {
         return Err(ValidateOperationError::SchemaNotMatching(
-            operation.schema_id().display(),
+            schema_id.display(),
             schema.id().display(),
         ));
     }
 
-    match operation.action() {
-        OperationAction::Create => validate_create_operation(previous, fields, schema),
-        OperationAction::Update => validate_update_operation(previous, fields, schema),
-        OperationAction::Delete => validate_delete_operation(previous, fields, schema),
-    }
+    let body = match header.action() {
+        OperationAction::Create => validate_create_operation(previous, plain_operation, schema),
+        OperationAction::Update => validate_update_operation(previous, plain_operation, schema),
+        OperationAction::Delete => validate_delete_operation(previous, plain_operation, schema),
+    }?;
+
+    Ok(Operation::new(*header, body))
 }
 
 /// Validate the header fields of a CREATE operation.
@@ -95,9 +96,9 @@ pub fn validate_operation(
 /// following step.
 fn validate_create_operation_format(
     plain_previous_operations: Option<&DocumentViewId>,
-    plain_fields: Option<PlainFields>,
+    plain_operation: Option<PlainFields>,
 ) -> Result<PlainFields, ValidateOperationError> {
-    match (plain_fields, plain_previous_operations) {
+    match (plain_operation, plain_previous_operations) {
         (None, _) => Err(ValidateOperationError::ExpectedFields),
         (Some(_), Some(_)) => Err(ValidateOperationError::UnexpectedPreviousOperations),
         (Some(fields), None) => Ok(fields),
@@ -134,52 +135,31 @@ fn validate_delete_operation_format(
 /// Validates a CREATE operation.
 fn validate_create_operation(
     plain_previous_operations: Option<&DocumentViewId>,
-    plain_fields: Option<PlainFields>,
+    plain_operation: &PlainOperation,
     schema: &Schema,
-) -> Result<Operation, ValidateOperationError> {
-    let fields = validate_create_operation_format(plain_previous_operations, plain_fields)?;
+) -> Result<Body, ValidateOperationError> {
+    let fields = validate_create_operation_format(plain_previous_operations, plain_operation.1)?;
     let validated_fields = validate_all_fields(&fields, schema)?;
-
-    Ok(Operation {
-        version: OperationVersion::V1,
-        action: OperationAction::Create,
-        schema_id: schema.id().to_owned(),
-        previous: None,
-        fields: Some(validated_fields),
-    })
+    Ok(Body(*schema.id(), validated_fields))
 }
 
 /// Validates an UPDATE operation.
 fn validate_update_operation(
     plain_previous_operations: Option<&DocumentViewId>,
-    plain_fields: Option<PlainFields>,
+    plain_operation: &PlainOperation,
     schema: &Schema,
-) -> Result<Operation, ValidateOperationError> {
-    let fields = validate_update_operation_format(plain_previous_operations, plain_fields)?;
+) -> Result<Body, ValidateOperationError> {
+    let fields = validate_update_operation_format(plain_previous_operations, plain_operation.1)?;
     let validated_fields = validate_only_given_fields(&fields, schema)?;
-
-    Ok(Operation {
-        version: OperationVersion::V1,
-        action: OperationAction::Update,
-        schema_id: schema.id().to_owned(),
-        previous: plain_previous_operations.cloned(),
-        fields: Some(validated_fields),
-    })
+    Ok(Body(*schema.id(), validated_fields))
 }
 
 /// Validates a DELETE operation.
 fn validate_delete_operation(
     plain_previous_operations: Option<&DocumentViewId>,
-    plain_fields: Option<PlainFields>,
+    plain_operation: &PlainOperation,
     schema: &Schema,
-) -> Result<Operation, ValidateOperationError> {
-    validate_delete_operation_format(plain_previous_operations, plain_fields)?;
-
-    Ok(Operation {
-        version: OperationVersion::V1,
-        action: OperationAction::Delete,
-        schema_id: schema.id().to_owned(),
-        previous: plain_previous_operations.cloned(),
-        fields: None,
-    })
+) -> Result<Body, ValidateOperationError> {
+    validate_delete_operation_format(plain_previous_operations, plain_operation.1)?;
+    Ok(Body(*schema.id(), None))
 }
