@@ -13,7 +13,7 @@ impl Schematic for Body {
         &self.0
     }
 
-    fn fields(&self) -> Option<PlainFields> {
+    fn plain_fields(&self) -> Option<PlainFields> {
         self.1.map(|fields| (&fields).into())
     }
 }

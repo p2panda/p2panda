@@ -10,5 +10,5 @@ pub trait Schematic {
     fn schema_id(&self) -> &SchemaId;
 
     /// Returns the fields holding the data.
-    fn fields(&self) -> Option<PlainFields>;
+    fn plain_fields(&self) -> Option<PlainFields>;
 }

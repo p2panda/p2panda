@@ -4,6 +4,7 @@ use crate::identity_v2::{PublicKey, Signature};
 use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::header::error::ValidateHeaderError;
 use crate::operation_v2::header::{EncodedHeader, Header};
+use crate::operation_v2::header::traits::Authored;
 
 /// Checks if the operation is authentic by verifying the public key with the given signature
 /// (#E5).

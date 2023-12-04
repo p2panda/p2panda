@@ -66,7 +66,7 @@ impl From<&Body> for PlainOperation {
     fn from(body: &Body) -> Self {
         PlainOperation(
             Schematic::schema_id(body).to_owned(),
-            Schematic::fields(body).to_owned(),
+            Schematic::plain_fields(body).to_owned(),
         )
     }
 }
