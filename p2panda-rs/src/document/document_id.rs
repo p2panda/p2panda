@@ -90,8 +90,8 @@ mod tests {
     use ciborium::cbor;
     use rstest::rstest;
 
-    use crate::hash::Hash;
-    use crate::operation::OperationId;
+    use crate::hash_v2::Hash;
+    use crate::operation_v2::OperationId;
     use crate::serde::{deserialize_into, hex_string_to_bytes, serialize_from, serialize_value};
     use crate::test_utils::fixtures::random_hash;
     use crate::Human;

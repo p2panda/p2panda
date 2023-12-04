@@ -2,14 +2,14 @@
 
 //! Interfaces for interactions for operation-like structs.
 use crate::identity_v2::PublicKey;
-use crate::operation_v2::{OperationAction, OperationFields};
+use crate::operation_v2::{OperationAction, OperationFields, OperationId};
 
 use super::body::traits::Schematic;
 use super::header::traits::{Actionable, Authored};
 
-/// @TODO: This can be removed in a later step as it duplicates the function of the 
+/// @TODO: This can be removed in a later step as it duplicates the function of the
 /// `Authored` trait.
-/// 
+///
 /// Trait representing a struct encapsulating data which has been signed by an author.
 ///
 /// The method returns the public key of the keypair used to perform signing.
@@ -23,6 +23,10 @@ pub trait WithPublicKey {
 /// Structs which "behave like" operations have a version and a distinct action. They can also
 /// relate to previous operations to form an operation graph.
 pub trait AsOperation: Actionable + Authored + Schematic {
+    fn id(&self) -> OperationId {
+        OperationId::new(self.payload_hash())
+    }
+
     /// Returns application data fields of operation.
     fn fields(&self) -> Option<&OperationFields>;
 

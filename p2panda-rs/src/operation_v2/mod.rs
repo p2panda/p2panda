@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-mod body;
+pub mod body;
 pub mod error;
-mod header;
+pub mod header;
 #[allow(clippy::module_inception)]
 mod operation;
 mod operation_action;
