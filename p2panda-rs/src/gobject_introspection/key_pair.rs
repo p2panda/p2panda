@@ -7,6 +7,7 @@ use std::{
 
 use ed25519_dalek::Signature;
 use libc::{c_char, c_int};
+use glib_sys::g_strdup;
 
 use crate::identity::{KeyPair as KeyPairNonC, PublicKey};
 
@@ -34,29 +35,30 @@ impl KeyPair {
 }
 
 #[no_mangle]
-pub extern "C" fn p2panda_key_pair_get_public_key(instance: &KeyPair) -> *const c_char {
+pub extern "C" fn p2panda_key_pair_get_public_key(instance: &KeyPair) -> *mut c_char {
     let key = instance.0.public_key().to_bytes();
-    CString::new(key).unwrap().into_raw()
+    let c_string = CString::new(key).unwrap();
+    unsafe { g_strdup(c_string.as_ptr()) }
 }
 
 #[no_mangle]
-pub extern "C" fn p2panda_key_pair_get_private_key(instance: &KeyPair) -> *const c_char {
+pub extern "C" fn p2panda_key_pair_get_private_key(instance: &KeyPair) -> *mut c_char {
     let key = instance.0.private_key().to_bytes();
-    CString::new(key).unwrap().into_raw()
+    let c_string = CString::new(key).unwrap();
+    unsafe { g_strdup(c_string.as_ptr()) }
 }
 
 #[no_mangle]
-pub extern "C" fn p2panda_key_pair_sign(instance: &KeyPair, value: *mut c_char) -> *const c_char {
-    let value = unsafe {
+pub extern "C" fn p2panda_key_pair_sign(instance: &KeyPair, value: *const c_char) -> *mut c_char {
+    let c_str = unsafe {
         assert!(!value.is_null());
 
         CStr::from_ptr(value)
     };
 
-    let value = value.to_str().unwrap();
-
-    let signature = instance.0.sign(value.as_bytes());
-    CString::new(signature.to_bytes()).unwrap().into_raw()
+    let signature = instance.0.sign(c_str.to_str().unwrap().as_bytes());
+    let c_string = CString::new(signature.to_bytes()).unwrap();
+    unsafe { g_strdup(c_string.as_ptr()) }
 }
 
 #[no_mangle]

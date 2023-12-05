@@ -5,13 +5,13 @@ extern crate libc;
 use libc::c_char;
 use std::ffi::CStr;
 use std::ffi::CString;
+use glib_sys::g_strdup;
 
 use crate::entry::traits::AsEntry;
 use crate::entry::{EncodedEntry, LogId, SeqNum};
 use crate::hash::Hash;
 use crate::operation::EncodedOperation;
 use crate::gobject_introspection::key_pair::KeyPair;
-use crate::gobject_introspection::string::string;
 
 /// p2panda_Entry:
 ///
@@ -70,7 +70,7 @@ pub extern fn p2panda_sign_and_encode_entry(
     backlink_hash: *const c_char,
     payload: *const c_char,
     key_pair: *mut KeyPair,
-) -> string {
+) -> *mut c_char {
     // If skiplink_hash exists construct `Hash`
     let skiplink = unsafe {
         match skiplink_hash.is_null() {
@@ -113,7 +113,8 @@ pub extern fn p2panda_sign_and_encode_entry(
     ).unwrap();
 
     // Return result as a hexadecimal string
-    string::new(&entry_encoded.to_string().as_str())
+    let c_string = CString::new(entry_encoded.to_string().as_str()).unwrap();
+    unsafe { g_strdup(c_string.as_ptr()) }
 }
 
 /// p2panda_decode_entry:
