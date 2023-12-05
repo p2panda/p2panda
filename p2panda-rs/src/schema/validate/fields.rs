@@ -5,10 +5,10 @@ use std::convert::TryInto;
 
 use crate::document::error::DocumentViewIdError;
 use crate::document::{DocumentId, DocumentViewId};
-use crate::hash::error::HashError;
-use crate::hash::Hash;
+use crate::hash_v2::error::HashError;
+use crate::hash_v2::Hash;
 use crate::operation_v2::body::plain::{PlainFields, PlainValue};
-use crate::operation_v2::operation::{
+use crate::operation_v2::{
     OperationFields, OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
 use crate::schema::validate::error::ValidationError;

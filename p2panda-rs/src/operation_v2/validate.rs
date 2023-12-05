@@ -137,7 +137,7 @@ fn validate_create_operation(
 ) -> Result<Body, ValidateOperationError> {
     let fields = validate_create_operation_format(plain_previous_operations, plain_operation.1)?;
     let validated_fields = validate_all_fields(&fields, schema)?;
-    Ok(Body(*schema.id(), validated_fields))
+    Ok(Body(*schema.id(), Some(validated_fields)))
 }
 
 /// Validates an UPDATE operation.
@@ -148,7 +148,7 @@ fn validate_update_operation(
 ) -> Result<Body, ValidateOperationError> {
     let fields = validate_update_operation_format(plain_previous_operations, plain_operation.1)?;
     let validated_fields = validate_only_given_fields(&fields, schema)?;
-    Ok(Body(*schema.id(), validated_fields))
+    Ok(Body(*schema.id(), Some(validated_fields)))
 }
 
 /// Validates a DELETE operation.

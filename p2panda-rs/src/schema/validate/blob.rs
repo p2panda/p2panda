@@ -3,7 +3,7 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::hash::Hash;
+use crate::hash_v2::Hash;
 use crate::operation_v2::body::plain::{PlainFields, PlainValue};
 use crate::schema::validate::error::BlobError;
 

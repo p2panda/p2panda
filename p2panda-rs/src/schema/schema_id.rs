@@ -9,7 +9,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use yasmf_hash::MAX_YAMF_HASH_SIZE;
 
 use crate::document::DocumentViewId;
-use crate::operation::OperationId;
+use crate::operation_v2::OperationId;
 use crate::schema::error::SchemaIdError;
 use crate::schema::SchemaName;
 use crate::Human;

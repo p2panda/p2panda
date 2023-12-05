@@ -14,7 +14,7 @@ mod relation;
 pub mod traits;
 pub mod validate;
 
-pub use operation::Operation;
+pub use operation::{Operation, OperationBuilder};
 pub use operation_action::OperationAction;
 pub use operation_fields::OperationFields;
 pub use operation_id::OperationId;
