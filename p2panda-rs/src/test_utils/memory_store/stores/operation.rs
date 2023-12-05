@@ -40,7 +40,7 @@ impl OperationStore for MemoryStore {
             return Err(OperationStorageError::InsertionError(id.clone()));
         }
 
-        operations.insert(id.clone(), (*document_id, *operation));
+        operations.insert(id.clone(), (document_id.to_owned(), operation.to_owned()));
 
         Ok(())
     }
@@ -79,7 +79,7 @@ impl OperationStore for MemoryStore {
             .values()
             .filter_map(|(document_id, operation)| {
                 if document_id == id {
-                    Some(*operation)
+                    Some(operation.to_owned())
                 } else {
                     None
                 }
@@ -98,7 +98,7 @@ impl OperationStore for MemoryStore {
             .values()
             .filter_map(|(_, operation)| {
                 if operation.schema_id() == id {
-                    Some(*operation)
+                    Some(operation.to_owned())
                 } else {
                     None
                 }

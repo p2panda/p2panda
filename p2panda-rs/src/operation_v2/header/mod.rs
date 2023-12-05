@@ -3,7 +3,7 @@
 pub mod action;
 pub mod decode;
 pub mod encode;
-mod encoded_header;
+pub mod encoded_header;
 pub mod error;
 #[allow(clippy::module_inception)]
 mod header;

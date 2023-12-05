@@ -83,7 +83,7 @@ impl DocumentStore for MemoryStore {
 
         let documents = operations_by_document
             .values()
-            .filter_map(|operations| DocumentBuilder::new(*operations).build().ok())
+            .filter_map(|operations| DocumentBuilder::new(operations.to_owned()).build().ok())
             .map(|(operation, _)| operation)
             .collect();
 
