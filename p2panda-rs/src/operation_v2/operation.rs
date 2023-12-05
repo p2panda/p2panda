@@ -128,7 +128,7 @@ impl Schematic for Operation {
     }
 
     fn plain_fields(&self) -> Option<PlainFields> {
-        (&self.body().plain_fields()).map(PlainFields::from)
+        self.body().plain_fields()
     }
 }
 
@@ -145,7 +145,7 @@ impl Authored for Operation {
         todo!()
     }
 
-    fn signature(&self) -> &crate::identity_v2::Signature {
+    fn signature(&self) -> crate::identity_v2::Signature {
         todo!()
     }
 }

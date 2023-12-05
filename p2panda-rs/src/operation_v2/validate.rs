@@ -3,6 +3,7 @@
 //! Collection of low-level validation methods for operations.
 use crate::document::DocumentViewId;
 use crate::operation_v2::body::plain::{PlainFields, PlainOperation};
+use crate::operation_v2::body::traits::Schematic;
 use crate::operation_v2::body::{Body, EncodedBody};
 use crate::operation_v2::error::ValidateOperationError;
 use crate::operation_v2::header::traits::Actionable;
@@ -12,23 +13,6 @@ use crate::operation_v2::{Operation, OperationAction, OperationId, OperationVers
 use crate::schema::validate::{validate_all_fields, validate_only_given_fields};
 use crate::schema::Schema;
 use crate::Human;
-
-#[allow(clippy::too_many_arguments)]
-pub fn validate_operation_with_header(
-    header: &Header,
-    encoded_header: &EncodedHeader,
-    plain_operation: &PlainOperation,
-    encoded_body: &EncodedBody,
-    schema: &Schema,
-) -> Result<Operation, ValidateOperationError> {
-    // Verify that the entry belongs to this operation
-    validate_payload(header, encoded_body)?;
-
-    // Validate and convert plain operation with the help of a schema
-    let operation = validate_operation(header, plain_operation, schema)?;
-
-    Ok(operation)
-}
 
 /// Check the format of an operation-like data type.
 ///
@@ -42,15 +26,17 @@ pub fn validate_operation_format(
     match header.action() {
         OperationAction::Create => {
             // We don't want to return the fields here so we ignore them.
-            let _ = validate_create_operation_format(header.previous(), operation.1)?;
+            let _ = validate_create_operation_format(header.previous(), operation.plain_fields())?;
             Ok(())
         }
         OperationAction::Update => {
             // We don't want to return the fields here so we ignore them.
-            let _ = validate_update_operation_format(header.previous(), operation.1)?;
+            let _ = validate_update_operation_format(header.previous(), operation.plain_fields())?;
             Ok(())
         }
-        OperationAction::Delete => validate_delete_operation_format(header.previous(), operation.1),
+        OperationAction::Delete => {
+            validate_delete_operation_format(header.previous(), operation.plain_fields())
+        }
     }
 }
 
@@ -68,12 +54,12 @@ pub fn validate_operation(
     schema: &Schema,
 ) -> Result<Operation, ValidateOperationError> {
     let previous = header.previous();
-    let schema_id = plain_operation.0;
+    let claimed_schema_id = plain_operation.schema_id();
 
     // Make sure the schema id and given schema matches
-    if &schema_id != schema.id() {
+    if claimed_schema_id != schema.id() {
         return Err(ValidateOperationError::SchemaNotMatching(
-            schema_id.display(),
+            claimed_schema_id.display(),
             schema.id().display(),
         ));
     }
@@ -84,7 +70,7 @@ pub fn validate_operation(
         OperationAction::Delete => validate_delete_operation(previous, plain_operation, schema),
     }?;
 
-    Ok(Operation::new(*header, body))
+    Ok(Operation::new(header.to_owned(), body))
 }
 
 /// Validate the header fields of a CREATE operation.
@@ -135,7 +121,10 @@ fn validate_create_operation(
     plain_operation: &PlainOperation,
     schema: &Schema,
 ) -> Result<Body, ValidateOperationError> {
-    let fields = validate_create_operation_format(plain_previous_operations, plain_operation.1)?;
+    let fields = validate_create_operation_format(
+        plain_previous_operations,
+        plain_operation.plain_fields(),
+    )?;
     let validated_fields = validate_all_fields(&fields, schema)?;
     Ok(Body(schema.id().to_owned(), Some(validated_fields)))
 }
@@ -146,7 +135,10 @@ fn validate_update_operation(
     plain_operation: &PlainOperation,
     schema: &Schema,
 ) -> Result<Body, ValidateOperationError> {
-    let fields = validate_update_operation_format(plain_previous_operations, plain_operation.1)?;
+    let fields = validate_update_operation_format(
+        plain_previous_operations,
+        plain_operation.plain_fields(),
+    )?;
     let validated_fields = validate_only_given_fields(&fields, schema)?;
     Ok(Body(schema.id().to_owned(), Some(validated_fields)))
 }
@@ -157,6 +149,6 @@ fn validate_delete_operation(
     plain_operation: &PlainOperation,
     schema: &Schema,
 ) -> Result<Body, ValidateOperationError> {
-    validate_delete_operation_format(plain_previous_operations, plain_operation.1)?;
+    validate_delete_operation_format(plain_previous_operations, plain_operation.plain_fields())?;
     Ok(Body(schema.id().to_owned(), None))
 }

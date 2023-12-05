@@ -155,7 +155,7 @@ impl<T: AsOperation> Reducer<T> for DocumentReducer {
                 let document = Document {
                     id: DocumentId::new(&operation.id()),
                     fields: Some(document_fields),
-                    schema_id: *operation.schema_id(),
+                    schema_id: operation.schema_id().to_owned(),
                     view_id: DocumentViewId::new(&[operation.id()]),
                     author: operation.public_key().to_owned(),
                 };
@@ -241,7 +241,7 @@ where
                 create_seen = true;
             }
 
-            graph.add_node(&operation.id(), *operation);
+            graph.add_node(&operation.id(), operation.to_owned());
         }
 
         // Add links between operations in the graph.

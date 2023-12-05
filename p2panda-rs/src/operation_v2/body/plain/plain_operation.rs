@@ -6,8 +6,8 @@ use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 
 use crate::operation_v2::body::plain::PlainFields;
-use crate::operation_v2::body::Body;
 use crate::operation_v2::body::traits::Schematic;
+use crate::operation_v2::body::Body;
 use crate::schema::SchemaId;
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -15,6 +15,16 @@ pub struct PlainOperation(
     pub(crate) SchemaId,
     #[serde(skip_serializing_if = "Option::is_none")] pub(crate) Option<PlainFields>,
 );
+
+impl Schematic for PlainOperation {
+    fn schema_id(&self) -> &SchemaId {
+        &self.0
+    }
+
+    fn plain_fields(&self) -> Option<PlainFields> {
+        self.1.clone()
+    }
+}
 
 impl<'de> Deserialize<'de> for PlainOperation {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

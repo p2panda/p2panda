@@ -9,7 +9,7 @@ pub trait Authored {
     fn public_key(&self) -> &PublicKey;
     fn payload_size(&self) -> u64;
     fn payload_hash(&self) -> &Hash;
-    fn signature(&self) -> &Signature;
+    fn signature(&self) -> Signature;
 }
 
 pub trait Actionable {

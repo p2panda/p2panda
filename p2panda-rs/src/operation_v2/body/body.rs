@@ -14,6 +14,6 @@ impl Schematic for Body {
     }
 
     fn plain_fields(&self) -> Option<PlainFields> {
-        self.1.map(|fields| (&fields).into())
+        self.1.clone().map(|fields| (&fields).into())
     }
 }

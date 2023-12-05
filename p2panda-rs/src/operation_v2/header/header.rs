@@ -39,9 +39,9 @@ impl Authored for Header {
         self.3
     }
 
-    fn signature(&self) -> &Signature {
+    fn signature(&self) -> Signature {
         // We never use an unsigned header outside of our API
-        &self.5.expect("signature needs to be given at this point")
+        self.5.clone().expect("signature needs to be given at this point")
     }
 }
 
@@ -51,7 +51,7 @@ impl Actionable for Header {
     }
 
     fn action(&self) -> OperationAction {
-        match (self.4.action, self.4.previous) {
+        match (self.4.action, self.previous()) {
             (None, None) => OperationAction::Create,
             (None, Some(_)) => OperationAction::Update,
             (Some(HeaderAction::Delete), Some(_)) => OperationAction::Delete,
