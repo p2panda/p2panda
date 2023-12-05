@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::operation_v2::error::ValidateOperationError;
-use crate::operation_v2::OperationId;
 use crate::operation_v2::header::error::DecodeHeaderError;
+use crate::operation_v2::OperationId;
 use crate::schema::SchemaId;
-use crate::storage_provider::error::{EntryStorageError, LogStorageError, OperationStorageError};
+use crate::storage_provider::error::OperationStorageError;
 
 /// Error type used in the validation module.
 #[derive(thiserror::Error, Debug)]
