@@ -27,6 +27,16 @@ pub extern "C" fn p2panda_key_pair_new_from_private_key(private_key: *const c_ch
     Box::into_raw(Box::new(KeyPair(key_pair_inner)))
 }
 
+#[no_mangle]
+pub extern "C" fn p2panda_key_pair_free(instance: *mut KeyPair) {
+    if instance.is_null() {
+        return;
+    }
+    unsafe {
+        drop(Box::from_raw(instance));
+    }
+}
+
 impl KeyPair {
     /// Internal method to access non-wasm instance of `KeyPair`.
     pub(super) fn as_inner(&self) -> &KeyPairNonC {
@@ -35,28 +45,40 @@ impl KeyPair {
 }
 
 #[no_mangle]
-pub extern "C" fn p2panda_key_pair_get_public_key(instance: &KeyPair) -> *mut c_char {
-    let key = instance.0.public_key().to_bytes();
+pub extern "C" fn p2panda_key_pair_get_public_key(instance: *mut KeyPair) -> *mut c_char {
+    let key_pair = unsafe {
+        assert!(!instance.is_null());
+        &mut *instance
+    };
+    let key = key_pair.0.public_key().to_bytes();
     let c_string = CString::new(key).unwrap();
     unsafe { g_strdup(c_string.as_ptr()) }
 }
 
 #[no_mangle]
-pub extern "C" fn p2panda_key_pair_get_private_key(instance: &KeyPair) -> *mut c_char {
-    let key = instance.0.private_key().to_bytes();
+pub extern "C" fn p2panda_key_pair_get_private_key(instance: *mut KeyPair) -> *mut c_char {
+    let key_pair = unsafe {
+        assert!(!instance.is_null());
+        &mut *instance
+    };
+    let key = key_pair.0.private_key().to_bytes();
     let c_string = CString::new(key).unwrap();
     unsafe { g_strdup(c_string.as_ptr()) }
 }
 
 #[no_mangle]
-pub extern "C" fn p2panda_key_pair_sign(instance: &KeyPair, value: *const c_char) -> *mut c_char {
+pub extern "C" fn p2panda_key_pair_sign(instance: *mut KeyPair, value: *const c_char) -> *mut c_char {
+    let key_pair = unsafe {
+        assert!(!instance.is_null());
+        &mut *instance
+    };
     let c_str = unsafe {
         assert!(!value.is_null());
 
         CStr::from_ptr(value)
     };
 
-    let signature = instance.0.sign(c_str.to_str().unwrap().as_bytes());
+    let signature = key_pair.0.sign(c_str.to_str().unwrap().as_bytes());
     let c_string = CString::new(signature.to_bytes()).unwrap();
     unsafe { g_strdup(c_string.as_ptr()) }
 }

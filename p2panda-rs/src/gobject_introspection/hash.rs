@@ -9,7 +9,7 @@ use glib_sys::g_strdup;
 ///
 /// Returns bub hash of an hexadecimal encoded value.
 #[no_mangle]
-pub extern fn p2panda_generate_hash(value: *const c_char) -> *mut c_char {
+pub extern "C" fn p2panda_generate_hash(value: *const c_char) -> *mut c_char {
     let c_str = unsafe {
         assert!(!value.is_null());
 

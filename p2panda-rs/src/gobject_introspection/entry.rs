@@ -92,7 +92,10 @@ pub extern fn p2panda_sign_and_encode_entry(
         CStr::from_ptr(payload)
     };
 
-    assert!(!key_pair.is_null());
+    let keypair = unsafe {
+        assert!(!key_pair.is_null());
+        &mut *key_pair
+    };
 
     // Convert `SeqNum` and `LogId`
     let log_id = LogId::new(log_id);
@@ -109,7 +112,7 @@ pub extern fn p2panda_sign_and_encode_entry(
         skiplink.as_ref(),
         backlink.as_ref(),
         &operation_encoded,
-        unsafe { key_pair.as_ref().unwrap().as_inner() },
+        keypair.as_inner(),
     ).unwrap();
 
     // Return result as a hexadecimal string
@@ -147,4 +150,14 @@ pub extern fn p2panda_decode_entry(encoded_entry: *const c_char) -> *mut Entry {
         signature: CString::new(entry.signature().to_string().as_str()).unwrap().into_raw(),
     };
     Box::into_raw(Box::new(c_entry))
+}
+
+#[no_mangle]
+pub extern "C" fn p2panda_entry_free(instance: *mut Entry) {
+    if instance.is_null() {
+        return;
+    }
+    unsafe {
+        drop(Box::from_raw(instance));
+    }
 }
