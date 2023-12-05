@@ -134,18 +134,18 @@ impl Schematic for Operation {
 
 impl Authored for Operation {
     fn public_key(&self) -> &crate::identity_v2::PublicKey {
-        self.public_key()
+        self.header().public_key()
     }
 
     fn payload_size(&self) -> u64 {
-        self.payload_size()
+        self.header().payload_size()
     }
 
     fn payload_hash(&self) -> &crate::hash_v2::Hash {
-        self.payload_hash()
+        self.header().payload_hash()
     }
 
     fn signature(&self) -> crate::identity_v2::Signature {
-        self.signature()
+        self.header().signature()
     }
 }
