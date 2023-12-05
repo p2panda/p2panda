@@ -4,9 +4,9 @@ use crate::document::DocumentViewId;
 use crate::identity_v2::KeyPair;
 use crate::operation_v2::body::encode::encode_body;
 use crate::operation_v2::body::plain::PlainFields;
+use crate::operation_v2::body::plain::PlainOperation;
 use crate::operation_v2::body::traits::Schematic;
 use crate::operation_v2::body::Body;
-use crate::operation_v2::body::plain::PlainOperation;
 use crate::operation_v2::error::OperationBuilderError;
 use crate::operation_v2::header::encode::sign_header;
 use crate::operation_v2::header::traits::{Actionable, Authored};
@@ -134,18 +134,18 @@ impl Schematic for Operation {
 
 impl Authored for Operation {
     fn public_key(&self) -> &crate::identity_v2::PublicKey {
-        todo!()
+        self.public_key()
     }
 
     fn payload_size(&self) -> u64 {
-        todo!()
+        self.payload_size()
     }
 
     fn payload_hash(&self) -> &crate::hash_v2::Hash {
-        todo!()
+        self.payload_hash()
     }
 
     fn signature(&self) -> crate::identity_v2::Signature {
-        todo!()
+        self.signature()
     }
 }
