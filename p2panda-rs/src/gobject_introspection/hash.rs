@@ -5,6 +5,7 @@ extern crate libc;
 use libc::c_char;
 use std::ffi::CStr;
 use std::ffi::CString;
+use glib_sys::g_strdup;
 
 /// p2panda_generate_hash:
 ///
@@ -23,5 +24,5 @@ pub extern fn p2panda_generate_hash(value: *const c_char) -> *mut c_char {
     // Hash the value and return it as a string
     let hash = crate::hash::Hash::new_from_bytes(&bytes);
     let c_str = CString::new(hash.to_string()).unwrap();
-    c_str.into_raw()
+    g_strdup(c_str.as_as_ptr())
 }
