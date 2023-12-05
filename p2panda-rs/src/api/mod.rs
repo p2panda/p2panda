@@ -2,7 +2,6 @@
 
 //! Common validation and API methods following the p2panda specification.
 mod errors;
-pub mod helpers;
 mod next_args;
 mod publish;
 pub mod validation;

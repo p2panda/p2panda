@@ -20,17 +20,14 @@ pub fn validate_operation_with_header(
     plain_operation: &PlainOperation,
     encoded_body: &EncodedBody,
     schema: &Schema,
-) -> Result<(Operation, OperationId), ValidateOperationError> {
+) -> Result<Operation, ValidateOperationError> {
     // Verify that the entry belongs to this operation
     validate_payload(header, encoded_body)?;
-
-    // The operation id is the result of a hashing function over the entry bytes.
-    let operation_id = encoded_header.hash().into();
 
     // Validate and convert plain operation with the help of a schema
     let operation = validate_operation(header, plain_operation, schema)?;
 
-    Ok((operation, operation_id))
+    Ok(operation)
 }
 
 /// Check the format of an operation-like data type.
