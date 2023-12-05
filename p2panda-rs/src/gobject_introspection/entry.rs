@@ -2,16 +2,16 @@
 
 extern crate libc;
 
+use glib_sys::g_strdup;
 use libc::c_char;
 use std::ffi::CStr;
 use std::ffi::CString;
-use glib_sys::g_strdup;
 
 use crate::entry::traits::AsEntry;
 use crate::entry::{EncodedEntry, LogId, SeqNum};
+use crate::gobject_introspection::key_pair::KeyPair;
 use crate::hash::Hash;
 use crate::operation::EncodedOperation;
-use crate::gobject_introspection::key_pair::KeyPair;
 
 /// p2panda_Entry: (free-func p2panda_entry_free)
 ///
@@ -119,7 +119,8 @@ pub extern "C" fn p2panda_sign_and_encode_entry(
         backlink.as_ref(),
         &operation_encoded,
         keypair.as_inner(),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Return result as a hexadecimal string
     let c_string = CString::new(entry_encoded.to_string().as_str()).unwrap();
@@ -149,14 +150,36 @@ pub extern "C" fn p2panda_decode_entry(encoded_entry: *const c_char) -> *mut Ent
 
     // Serialise result to C struct
     let c_entry = Entry {
-        public_key: CString::new(entry.public_key().to_string().as_str()).unwrap().into_raw(),
+        public_key: CString::new(entry.public_key().to_string().as_str())
+            .unwrap()
+            .into_raw(),
         seq_num: entry.seq_num().as_u64(),
         log_id: entry.log_id().as_u64(),
-        skiplink: CString::new(entry.skiplink().map(|hash| hash.to_string()).unwrap().as_str()).unwrap().into_raw(),
-        backlink: CString::new(entry.backlink().map(|hash| hash.to_string()).unwrap().as_str()).unwrap().into_raw(),
+        skiplink: CString::new(
+            entry
+                .skiplink()
+                .map(|hash| hash.to_string())
+                .unwrap()
+                .as_str(),
+        )
+        .unwrap()
+        .into_raw(),
+        backlink: CString::new(
+            entry
+                .backlink()
+                .map(|hash| hash.to_string())
+                .unwrap()
+                .as_str(),
+        )
+        .unwrap()
+        .into_raw(),
         payload_size: entry.payload_size(),
-        payload_hash: CString::new(entry.payload_hash().to_string().as_str()).unwrap().into_raw(),
-        signature: CString::new(entry.signature().to_string().as_str()).unwrap().into_raw(),
+        payload_hash: CString::new(entry.payload_hash().to_string().as_str())
+            .unwrap()
+            .into_raw(),
+        signature: CString::new(entry.signature().to_string().as_str())
+            .unwrap()
+            .into_raw(),
     };
     Box::into_raw(Box::new(c_entry))
 }

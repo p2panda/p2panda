@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use glib_sys::g_strdup;
 use libc::c_char;
 use std::ffi::CStr;
 use std::ffi::CString;
-use glib_sys::g_strdup;
 
 /// p2panda_generate_hash:
 /// @value: (transfer none): the string to hash

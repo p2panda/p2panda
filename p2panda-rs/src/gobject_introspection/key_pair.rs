@@ -6,8 +6,8 @@ use std::{
 };
 
 use ed25519_dalek::Signature;
-use libc::{c_char, c_int};
 use glib_sys::g_strdup;
+use libc::{c_char, c_int};
 
 use crate::identity::{KeyPair as KeyPairNonC, PublicKey};
 
@@ -19,7 +19,9 @@ pub struct KeyPair(KeyPairNonC);
 ///
 /// Returns: (transfer full): the created KeyPair
 #[no_mangle]
-pub extern "C" fn p2panda_key_pair_new_from_private_key(private_key: *const c_char) -> *mut KeyPair {
+pub extern "C" fn p2panda_key_pair_new_from_private_key(
+    private_key: *const c_char,
+) -> *mut KeyPair {
     let private_key = unsafe {
         assert!(!private_key.is_null());
 
@@ -72,7 +74,10 @@ pub extern "C" fn p2panda_key_pair_get_private_key(instance: *mut KeyPair) -> *m
 }
 
 #[no_mangle]
-pub extern "C" fn p2panda_key_pair_sign(instance: *mut KeyPair, value: *const c_char) -> *mut c_char {
+pub extern "C" fn p2panda_key_pair_sign(
+    instance: *mut KeyPair,
+    value: *const c_char,
+) -> *mut c_char {
     let key_pair = unsafe {
         assert!(!instance.is_null());
         &mut *instance
