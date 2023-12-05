@@ -26,7 +26,7 @@ crate-type = ["cdylib", "rlib"]
 test-utils = ["storage-provider", "dep:rstest", "dep:rstest_reuse", "dep:varu64", "dep:tokio", "dep:async-trait"]
 secret-group = ["dep:openmls", "dep:openmls_memory_keystore", "dep:openmls_rust_crypto", "dep:openmls_traits", "dep:tls_codec"]
 storage-provider = ["dep:async-trait"]
-capi = []
+c-api = ["dep:glib-sys", "dep:libc"]
 
 [dependencies]
 arrayvec = "0.5.2"
@@ -34,9 +34,9 @@ async-trait = { version = "0.1.64", optional = true }
 bamboo-rs-core-ed25519-yasmf = "0.1.1"
 ciborium = "0.2.0"
 ed25519-dalek = "1.0.1"
-glib-sys = "0.18.1"
+glib-sys = { version = "0.18.1", optional = true }
 hex = { version = "0.4.3", features = ["serde"] }
-libc = "0.2.150"
+libc = {version = "0.2.150", optional = true }
 lipmaa-link = "0.2.2"
 log = "0.4.17"
 once_cell = "1.17.0"

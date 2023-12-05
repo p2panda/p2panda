@@ -95,7 +95,7 @@ pub mod test_utils;
 /// cbindgen:ignore
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
-#[cfg(feature="capi")]
+#[cfg(feature="c-api")]
 pub mod gobject_introspection;
 
 /// Trait used by p2panda structs to validate data formats.
