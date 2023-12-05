@@ -14,54 +14,6 @@ use crate::operation_v2::OperationAction;
 use crate::schema::Schema;
 use crate::storage_provider::traits::OperationStore;
 
-/// Persist an entry and operation to storage after performing validation of claimed values against
-/// expected values retrieved from storage.
-///
-/// Returns the arguments required for constructing the next entry in a bamboo log for the
-/// specified public key and document.
-///
-/// This method is intended to be used behind a public API and so we assume all passed values are
-/// in themselves valid.
-///
-/// # Validation Steps Performed
-///
-/// Following is a list of the steps and validation checks that this method performs.
-///
-/// ## Validate Entry
-///
-/// Validate the values encoded on entry against what we expect based on our existing stored
-/// entries:
-///
-/// - Verify the claimed sequence number against the expected next sequence number for the public key
-/// and log.
-/// - Get the expected backlink from storage.
-/// - Get the expected skiplink from storage.
-/// - Verify the bamboo entry (requires the expected backlink and skiplink to do this).
-///
-/// ## Validate operation against it's claimed schema:
-///
-/// - verify the content of an operation against it's stated schema.
-///
-/// ## Determine document id
-///
-/// - If this is a create operation:
-///   - derive the document id from the entry hash.
-/// - In all other cases:
-///   - verify that all operations in previous exist in the database,
-///   - verify that all operations in previous are from the same document,
-///   - ensure that the document is not deleted.
-/// - Verify that the claimed log id matches the expected log id for this public key and log.
-///
-/// ## Persist data
-///
-/// - If this is a new document:
-///   - Store the new log.
-/// - Store the entry.
-/// - Store the operation.
-///
-/// ## Compute and return next entry arguments
-///
-/// - Done!
 pub async fn publish<S: OperationStore>(
     store: &S,
     schema: &Schema,

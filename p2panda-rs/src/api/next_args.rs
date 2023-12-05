@@ -8,39 +8,6 @@ use crate::storage_provider::traits::OperationStore;
 
 type Depth = ();
 
-/// Retrieve arguments required for constructing the next entry in a bamboo log for a specific
-/// public key and document.
-///
-/// We accept a `DocumentViewId` rather than a `DocumentId` as an argument and then identify the
-/// document id based on operations already existing in the store. Doing this means a document can
-/// be updated without knowing the document id itself.
-///
-/// This method is intended to be used behind a public API and so we assume all passed values are
-/// in themselves valid.
-///
-/// # Validation Steps Performed
-///
-/// ## Check if a document view id was passed
-///
-/// - if it wasn't, we are creating a new document, safely increment the latest log id for the
-/// passed public key and return args immediately
-/// - if it was, continue knowing we are updating an existing document
-///
-/// ## Determine the document id we are concerned with
-///
-/// - verify that all operations in the passed document view id exist in the database
-/// - verify that all operations in the passed document view id are from the same document
-/// - ensure the document is not deleted
-///
-/// ## Determine next arguments
-///
-/// - get the log id for this public key and document id, or if none is found safely increment this
-/// public keys latest log id
-/// - get the backlink entry (latest entry for this public key and log)
-/// - get the skiplink for this public key, log and next seq num
-/// - get the latest seq num for this public key and log and safely increment
-///
-/// Finally, return next arguments.
 pub async fn next_args<S: OperationStore>(
     store: &S,
     _public_key: &PublicKey,
@@ -54,7 +21,7 @@ pub async fn next_args<S: OperationStore>(
 
     Ok(()) // actually we return the depth here.
 }
-//
+
 // #[cfg(test)]
 // mod tests {
 //     use rstest::rstest;

@@ -168,8 +168,6 @@ impl<T: AsOperation> Reducer<T> for DocumentReducer {
     }
 }
 
-type OperationGraph<T: AsOperation> = Graph<OperationId, T>;
-
 /// A struct for building [documents][`Document`] from a collection of operations.
 #[derive(Debug, Clone)]
 pub struct DocumentBuilder<T>(Vec<T>);
@@ -223,7 +221,7 @@ where
     }
 
     /// Construct the document graph.
-    fn construct_graph(&self) -> Result<OperationGraph<T>, DocumentBuilderError> {
+    fn construct_graph(&self) -> Result<Graph<OperationId, T>, DocumentBuilderError> {
         // Instantiate the graph.
         let mut graph = Graph::new();
 
@@ -263,7 +261,7 @@ where
     /// them into a single document.
     fn reduce_document(
         &self,
-        graph: &mut OperationGraph<T>,
+        graph: &mut Graph<OperationId, T>,
     ) -> Result<(Document, Vec<T>), DocumentBuilderError> {
         // Walk the graph, visiting nodes in their topologically sorted order.
         //
