@@ -4,7 +4,7 @@ use crate::api::validation::get_checked_document_id_for_view_id;
 use crate::api::DomainError;
 use crate::document::DocumentViewId;
 use crate::identity_v2::PublicKey;
-use crate::storage_provider::traits::{EntryStore, LogStore, OperationStore};
+use crate::storage_provider::traits::OperationStore;
 
 type Depth = ();
 
@@ -41,7 +41,7 @@ type Depth = ();
 /// - get the latest seq num for this public key and log and safely increment
 ///
 /// Finally, return next arguments.
-pub async fn next_args<S: EntryStore + OperationStore + LogStore>(
+pub async fn next_args<S: OperationStore>(
     store: &S,
     _public_key: &PublicKey,
     document_view_id: &DocumentViewId,

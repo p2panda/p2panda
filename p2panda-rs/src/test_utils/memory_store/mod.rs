@@ -7,7 +7,5 @@
 pub mod helpers;
 mod provider;
 mod stores;
-mod types;
 
 pub use provider::MemoryStore;
-pub use types::{PublishedOperation, StorageEntry};

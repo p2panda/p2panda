@@ -3,12 +3,10 @@
 use async_trait::async_trait;
 
 use crate::document::DocumentId;
-use crate::identity::PublicKey;
-use crate::operation::traits::{AsOperation, WithPublicKey};
-use crate::operation::{Operation, OperationId};
+use crate::operation_v2::traits::AsOperation;
+use crate::operation_v2::{Operation, OperationId};
 use crate::schema::SchemaId;
 use crate::storage_provider::error::OperationStorageError;
-use crate::WithId;
 
 /// Storage interface for storing and querying `Operations`.
 ///
@@ -21,7 +19,7 @@ use crate::WithId;
 #[async_trait]
 pub trait OperationStore {
     /// Associated type representing an `Operation` in storage.
-    type Operation: AsOperation + WithId<OperationId> + WithId<DocumentId> + WithPublicKey + Sync;
+    type Operation: AsOperation + Sync;
 
     /// Insert an `Operation` into the store.
     ///
@@ -36,8 +34,6 @@ pub trait OperationStore {
     /// Returns an error if a fatal storage error occurred.
     async fn insert_operation(
         &self,
-        id: &OperationId,
-        public_key: &PublicKey,
         operation: &Operation,
         document_id: &DocumentId,
     ) -> Result<(), OperationStorageError>;
