@@ -13,7 +13,7 @@ use crate::hash::Hash;
 use crate::operation::EncodedOperation;
 use crate::gobject_introspection::key_pair::KeyPair;
 
-/// p2panda_Entry:
+/// p2panda_Entry: (free-func p2panda_entry_free)
 ///
 /// Return value of [`decode_entry`] that holds the decoded entry and plain operation.
 #[repr(C)]
@@ -60,10 +60,16 @@ pub struct Entry {
 }
 
 /// p2panda_sign_and_encode:
+/// @log_id:
+/// @seq_num:
+/// @skiplink_hash: (transfer none)
+/// @backlink_hash: (transfer none)
+/// @payload: (transfer none)
+/// @key_pair: (transfer full)
 ///
 /// Returns a signed Bamboo entry.
 #[no_mangle]
-pub extern fn p2panda_sign_and_encode_entry(
+pub extern "C" fn p2panda_sign_and_encode_entry(
     log_id: u64,
     seq_num: u64,
     skiplink_hash: *const c_char,
@@ -121,10 +127,13 @@ pub extern fn p2panda_sign_and_encode_entry(
 }
 
 /// p2panda_decode_entry:
+/// @encoded_entry: (transfer none): an encoded entry string
 ///
 /// Decodes an hexadecimal string into an `Entry`.
+///
+/// Returns: (transfer full): the decoded Entry
 #[no_mangle]
-pub extern fn p2panda_decode_entry(encoded_entry: *const c_char) -> *mut Entry {
+pub extern "C" fn p2panda_decode_entry(encoded_entry: *const c_char) -> *mut Entry {
     let c_str = unsafe {
         assert!(!encoded_entry.is_null());
 
@@ -152,6 +161,9 @@ pub extern fn p2panda_decode_entry(encoded_entry: *const c_char) -> *mut Entry {
     Box::into_raw(Box::new(c_entry))
 }
 
+/// p2panda_entry_free:
+///
+/// free the Entry instance
 #[no_mangle]
 pub extern "C" fn p2panda_entry_free(instance: *mut Entry) {
     if instance.is_null() {

@@ -6,8 +6,11 @@ use std::ffi::CString;
 use glib_sys::g_strdup;
 
 /// p2panda_generate_hash:
+/// @value: (transfer none): the string to hash
 ///
-/// Returns bub hash of an hexadecimal encoded value.
+/// Returns hash of an hexadecimal encoded value.
+///
+/// Returns: (transfer full): the generated hash string
 #[no_mangle]
 pub extern "C" fn p2panda_generate_hash(value: *const c_char) -> *mut c_char {
     let c_str = unsafe {

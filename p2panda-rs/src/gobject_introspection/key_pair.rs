@@ -11,8 +11,13 @@ use glib_sys::g_strdup;
 
 use crate::identity::{KeyPair as KeyPairNonC, PublicKey};
 
+/// p2panda_KeyPair: (free-func p2panda_key_pair_free)
 pub struct KeyPair(KeyPairNonC);
 
+/// p2panda_key_pair_new_from_private_key:
+/// @private_key: (transfer none): the private key string
+///
+/// Returns: (transfer full): the created KeyPair
 #[no_mangle]
 pub extern "C" fn p2panda_key_pair_new_from_private_key(private_key: *const c_char) -> *mut KeyPair {
     let private_key = unsafe {
