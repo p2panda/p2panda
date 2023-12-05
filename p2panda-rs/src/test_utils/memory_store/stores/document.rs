@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::HashMap;
-use std::convert::TryInto;
 
 use async_trait::async_trait;
 
@@ -12,7 +11,6 @@ use crate::schema::SchemaId;
 use crate::storage_provider::error::DocumentStorageError;
 use crate::storage_provider::traits::{DocumentStore, OperationStore};
 use crate::test_utils::memory_store::MemoryStore;
-use crate::WithId;
 
 /// This implementation of the DocumentStore trait does not use a caching layer to persist
 /// document state. Each document is materialised from it's contained operations on each query.

@@ -12,7 +12,6 @@ use crate::schema::SchemaId;
 use crate::storage_provider::error::OperationStorageError;
 use crate::storage_provider::traits::OperationStore;
 use crate::test_utils::memory_store::MemoryStore;
-use crate::WithId;
 
 #[async_trait]
 impl OperationStore for MemoryStore {

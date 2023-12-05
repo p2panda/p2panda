@@ -2,13 +2,9 @@
 
 //! Helper methods for working with a storage provider when testing.
 
-use crate::api::{next_args, publish};
+use crate::api::publish;
 use crate::document::{DocumentId, DocumentViewId};
-use crate::entry::encode::{encode_entry, sign_entry};
-use crate::entry::traits::{AsEncodedEntry, AsEntry};
-use crate::entry::{EncodedEntry, LogId, SeqNum};
-use crate::hash_v2::Hash;
-use crate::identity_v2::{KeyPair, PublicKey};
+use crate::identity_v2::KeyPair;
 use crate::operation_v2::body::encode::encode_body;
 use crate::operation_v2::header::encode::encode_header;
 use crate::operation_v2::header::HeaderAction;
@@ -18,8 +14,6 @@ use crate::schema::Schema;
 use crate::storage_provider::traits::OperationStore;
 use crate::storage_provider::utils::Result;
 use crate::test_utils::constants;
-
-use super::MemoryStore;
 
 /// Configuration used when populating the store for testing.
 #[derive(Debug)]
@@ -162,11 +156,11 @@ pub async fn send_to_store<S: OperationStore>(
 
     Ok(next_args)
 }
-// 
+//
 // #[cfg(test)]
 // mod tests {
 //     use rstest::rstest;
-// 
+//
 //     use crate::document::DocumentViewId;
 //     use crate::entry::traits::{AsEncodedEntry, AsEntry};
 //     use crate::entry::{LogId, SeqNum};
@@ -182,7 +176,7 @@ pub async fn send_to_store<S: OperationStore>(
 //         populate_store, send_to_store, PopulateStoreConfig,
 //     };
 //     use crate::test_utils::memory_store::MemoryStore;
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn correct_next_args(
@@ -192,22 +186,22 @@ pub async fn send_to_store<S: OperationStore>(
 //     ) {
 //         let store = MemoryStore::default();
 //         populate_store(&store, &config).await;
-// 
+//
 //         let entries = store.entries.lock().unwrap().clone();
 //         for seq_num in 1..17 {
 //             let entry = entries
 //                 .values()
 //                 .find(|entry| entry.seq_num().as_u64() as usize == seq_num)
 //                 .unwrap();
-// 
+//
 //             let expected_seq_num = SeqNum::new(seq_num as u64).unwrap();
 //             assert_eq!(expected_seq_num, *entry.seq_num());
-// 
+//
 //             let expected_log_id = LogId::default();
 //             assert_eq!(expected_log_id, *entry.log_id());
-// 
+//
 //             let mut expected_backlink_hash = None;
-// 
+//
 //             if seq_num != 1 {
 //                 expected_backlink_hash = Some(
 //                     entries
@@ -218,23 +212,23 @@ pub async fn send_to_store<S: OperationStore>(
 //                 );
 //             }
 //             assert_eq!(expected_backlink_hash.as_ref(), entry.backlink());
-// 
+//
 //             let mut expected_skiplink_hash = None;
-// 
+//
 //             if SKIPLINK_SEQ_NUMS.contains(&(seq_num as u64)) {
 //                 let skiplink_seq_num = entry.seq_num().skiplink_seq_num().unwrap().as_u64();
-// 
+//
 //                 let skiplink_entry = entries
 //                     .values()
 //                     .find(|entry| entry.seq_num().as_u64() == skiplink_seq_num)
 //                     .unwrap();
 //                 expected_skiplink_hash = Some(skiplink_entry.hash());
 //             };
-// 
+//
 //             assert_eq!(expected_skiplink_hash.as_ref(), entry.skiplink());
 //         }
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn correct_test_values(
@@ -245,7 +239,7 @@ pub async fn send_to_store<S: OperationStore>(
 //     ) {
 //         let store = MemoryStore::default();
 //         let (key_pairs, documents) = populate_store(&store, &config).await;
-// 
+//
 //         assert_eq!(key_pairs.len(), 2);
 //         assert_eq!(documents.len(), 8);
 //         assert_eq!(store.entries.lock().unwrap().len(), 80);
@@ -259,7 +253,7 @@ pub async fn send_to_store<S: OperationStore>(
 //             8
 //         );
 //     }
-// 
+//
 //     #[rstest]
 //     #[tokio::test]
 //     async fn sends_to_node(
@@ -269,55 +263,55 @@ pub async fn send_to_store<S: OperationStore>(
 //         #[from(random_key_pair)] another_key_pair: KeyPair,
 //     ) {
 //         let store = MemoryStore::default();
-// 
+//
 //         // Publish first entry and operation.
 //         let (encoded_entry, (backlink, skiplink, seq_num, log_id)) =
 //             send_to_store(&store, &operation, &schema, &key_pair)
 //                 .await
 //                 .unwrap();
-// 
+//
 //         assert_eq!(seq_num, SeqNum::new(2).unwrap());
 //         assert_eq!(log_id, LogId::new(0));
 //         assert!(backlink.is_some());
 //         assert_eq!(backlink.clone().unwrap(), encoded_entry.hash());
 //         assert!(skiplink.is_none());
-// 
+//
 //         let update = update_operation(
 //             test_fields(),
 //             backlink.map(DocumentViewId::from).unwrap(),
 //             schema.id().clone(),
 //         );
-// 
+//
 //         // Publish second entry and an update operation.
 //         let (encoded_entry, (backlink, skiplink, seq_num, log_id)) =
 //             send_to_store(&store, &update, &schema, &key_pair)
 //                 .await
 //                 .unwrap();
-// 
+//
 //         assert_eq!(seq_num, SeqNum::new(3).unwrap());
 //         assert_eq!(log_id, LogId::new(0));
 //         assert!(backlink.is_some());
 //         assert_eq!(backlink.unwrap(), encoded_entry.hash());
 //         assert!(skiplink.is_none());
-// 
+//
 //         // Publish an entry and operation to a new log.
 //         let (encoded_entry, (backlink, skiplink, seq_num, log_id)) =
 //             send_to_store(&store, &operation, &schema, &key_pair)
 //                 .await
 //                 .unwrap();
-// 
+//
 //         assert_eq!(seq_num, SeqNum::new(2).unwrap());
 //         assert_eq!(log_id, LogId::new(1));
 //         assert!(backlink.is_some());
 //         assert_eq!(backlink.clone().unwrap(), encoded_entry.hash());
 //         assert!(skiplink.is_none());
-// 
+//
 //         // Publish an entry and operation with a new key pair.
 //         let (encoded_entry, (backlink, skiplink, seq_num, log_id)) =
 //             send_to_store(&store, &operation, &schema, &another_key_pair)
 //                 .await
 //                 .unwrap();
-// 
+//
 //         assert_eq!(seq_num, SeqNum::new(2).unwrap());
 //         assert_eq!(log_id, LogId::new(0));
 //         assert!(backlink.is_some());

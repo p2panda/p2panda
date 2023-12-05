@@ -3,7 +3,7 @@
 use rstest::fixture;
 
 use crate::document::{DocumentId, DocumentViewId};
-use crate::operation::OperationId;
+use crate::operation_v2::OperationId;
 use crate::test_utils::constants::HASH;
 use crate::test_utils::fixtures::random_hash;
 

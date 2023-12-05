@@ -2,7 +2,7 @@
 
 //! Constants used across the `test_utils` module for default values.
 
-use crate::operation::{
+use crate::operation_v2::{
     OperationValue, PinnedRelation, PinnedRelationList, Relation, RelationList,
 };
 use crate::schema::{FieldType, Schema};
@@ -86,8 +86,9 @@ pub fn schema() -> Schema {
 
 #[cfg(test)]
 mod tests {
-    use crate::hash::Hash;
-    use crate::operation::OperationId;
+    use crate::document::DocumentViewId;
+    use crate::hash_v2::Hash;
+    use crate::operation_v2::OperationId;
     use crate::schema::{SchemaId, SchemaName};
 
     use super::*;
@@ -100,9 +101,9 @@ mod tests {
 
     #[test]
     fn default_schema() {
-        let venue_schema_hash: OperationId = Hash::new_from_bytes(&[3, 2, 1]).into();
+        let venue_operation_id: OperationId = Hash::new_from_bytes(&[3, 2, 1]).into();
         let venue_schema_name = SchemaName::new("venue").expect("Valid schema name");
-        let schema = SchemaId::new_application(&venue_schema_name, &venue_schema_hash.into());
+        let schema = SchemaId::new_application(&venue_schema_name, &DocumentViewId::new(&[venue_operation_id]));
         assert_eq!(schema.to_string(), SCHEMA_ID)
     }
 }

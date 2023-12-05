@@ -3,9 +3,7 @@
 //! Errors from storage provider and associated traits.
 use crate::document::error::DocumentBuilderError;
 use crate::document::{DocumentId, DocumentViewId};
-use crate::entry::error::{LogIdError, SeqNumError, ValidateEntryError};
 use crate::hash_v2::error::HashError;
-use crate::hash_v2::Hash;
 use crate::identity_v2::error::PublicKeyError;
 use crate::operation_v2::error::ValidateOperationError;
 use crate::operation_v2::OperationId;
@@ -21,21 +19,9 @@ pub enum ValidationError {
     #[error(transparent)]
     HashValidation(#[from] HashError),
 
-    /// Error returned from validating p2panda-rs `Entry` data types.
-    #[error(transparent)]
-    EntryValidation(#[from] ValidateEntryError),
-
     /// Error returned from validating p2panda-rs `Operation` data types.
     #[error(transparent)]
     OperationValidation(#[from] ValidateOperationError),
-
-    /// Error returned from validating p2panda-rs `LogId` data types.
-    #[error(transparent)]
-    LogIdValidation(#[from] LogIdError),
-
-    /// Error returned from validating p2panda-rs `SeqNum` data types.
-    #[error(transparent)]
-    SeqNumValidation(#[from] SeqNumError),
 
     /// Error returned from validating Bamboo entries.
     #[error(transparent)]
