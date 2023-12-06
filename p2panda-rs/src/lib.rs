@@ -72,7 +72,7 @@ pub mod api;
 pub mod document;
 /// cbindgen:ignore
 pub mod entry;
-#[cfg(feature = "c-api")]
+#[cfg(feature = "capi")]
 pub mod gobject_introspection;
 /// cbindgen:ignore
 pub mod graph;
