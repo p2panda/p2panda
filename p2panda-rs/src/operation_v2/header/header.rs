@@ -2,14 +2,14 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::document::DocumentViewId;
+use crate::document::{DocumentId, DocumentViewId};
 use crate::hash_v2::Hash;
 use crate::identity_v2::{KeyPair, PublicKey, Signature};
 use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::header::action::HeaderAction;
 use crate::operation_v2::header::encode::sign_header;
 use crate::operation_v2::header::error::EncodeHeaderError;
-use crate::operation_v2::header::traits::{Authored, Actionable};
+use crate::operation_v2::header::traits::{Actionable, Authored};
 use crate::operation_v2::{OperationAction, OperationVersion};
 
 pub type PayloadHash = Hash;
@@ -41,7 +41,9 @@ impl Authored for Header {
 
     fn signature(&self) -> Signature {
         // We never use an unsigned header outside of our API
-        self.5.clone().expect("signature needs to be given at this point")
+        self.5
+            .clone()
+            .expect("signature needs to be given at this point")
     }
 }
 
@@ -70,8 +72,14 @@ pub struct HeaderExtension {
     #[serde(rename = "s", skip_serializing_if = "Option::is_none")]
     pub(crate) seq_num: Option<u64>,
 
+    #[serde(rename = "d", skip_serializing_if = "Option::is_none")]
+    pub(crate) document_id: Option<DocumentId>,
+
     #[serde(rename = "p", skip_serializing_if = "Option::is_none")]
     pub(crate) previous: Option<DocumentViewId>,
+
+    #[serde(rename = "b", skip_serializing_if = "Option::is_none")]
+    pub(crate) backlink: Option<Hash>,
 
     #[serde(rename = "a", skip_serializing_if = "Option::is_none")]
     pub(crate) action: Option<HeaderAction>,
@@ -105,6 +113,16 @@ impl HeaderBuilder {
 
     pub fn previous(mut self, previous: &DocumentViewId) -> Self {
         self.0.previous = Some(previous.to_owned());
+        self
+    }
+
+    pub fn backlink(mut self, backlink: &Hash) -> Self {
+        self.0.backlink = Some(backlink.to_owned());
+        self
+    }
+
+    pub fn document_id(mut self, document_id: &DocumentId) -> Self {
+        self.0.document_id = Some(document_id.to_owned());
         self
     }
 
