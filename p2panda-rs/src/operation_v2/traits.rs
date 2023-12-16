@@ -23,8 +23,8 @@ pub trait WithPublicKey {
 /// Structs which "behave like" operations have a version and a distinct action. They can also
 /// relate to previous operations to form an operation graph.
 pub trait AsOperation: Actionable + Authored + Schematic {
-    fn id(&self) -> OperationId {
-        OperationId::new(self.payload_hash())
+    fn id(&self) -> &OperationId;
+
     }
 
     /// Returns application data fields of operation.

@@ -26,7 +26,7 @@ pub async fn publish<S: OperationStore>(
     validate_payload(&header, encoded_body)?;
 
     // Validate the header and plain operation against it's schema.
-    let operation = validate_operation(&header, &plain_operation, schema)?;
+    let operation = validate_operation(&header, &encoded_header, &plain_operation, schema)?;
 
     // Determine the document id.
     let document_id = determine_document_id(store, &operation).await?;

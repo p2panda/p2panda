@@ -17,19 +17,20 @@ use crate::operation_v2::{OperationAction, OperationFields, OperationValue, Oper
 use crate::schema::SchemaId;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Operation(Header, Body);
+pub struct Operation(OperationId, Header, Body);
 
 impl Operation {
-    pub(crate) fn new(header: Header, body: Body) -> Self {
-        Self(header, body)
+    pub(crate) fn new(id: OperationId, header: Header, body: Body) -> Self {
+        Self(id, header, body)
     }
 
     pub fn header(&self) -> &Header {
-        &self.0
+        &self.1
     }
 
     pub fn body(&self) -> &Body {
-        &self.1
+        &self.2
+    }
     }
 }
 
@@ -95,13 +96,17 @@ impl OperationBuilder {
         let payload = encode_body(&self.body)?;
         let plain_operation: PlainOperation = (&self.body).into();
         let header = sign_header(self.header_extension, &payload, key_pair)?;
+        let encoded_header = encode_header(&header)?;
         validate_operation_format(&header, &plain_operation)?;
-        let operation = Operation::new(header, self.body);
+        let operation = Operation::new(encoded_header.hash().into(), header, self.body);
         Ok(operation)
     }
 }
 
 impl AsOperation for Operation {
+    fn id(&self) -> &OperationId {
+        &self.0
+    }
     /// Returns application data fields of operation.
     fn fields(&self) -> Option<&OperationFields> {
         self.body().1.as_ref()

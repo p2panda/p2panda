@@ -49,6 +49,7 @@ pub fn validate_operation_format(
 /// 3. Schema matches the given operation fields (#OP4)
 pub fn validate_operation(
     header: &Header,
+    encoded_header: &EncodedHeader,
     plain_operation: &PlainOperation,
     schema: &Schema,
 ) -> Result<Operation, ValidateOperationError> {
@@ -69,7 +70,7 @@ pub fn validate_operation(
         OperationAction::Delete => validate_delete_operation(previous, plain_operation, schema),
     }?;
 
-    Ok(Operation::new(header.to_owned(), body))
+    Ok(Operation::new(encoded_header.hash().into(), header.to_owned(), body))
 }
 
 /// Validate the header fields of a CREATE operation.
