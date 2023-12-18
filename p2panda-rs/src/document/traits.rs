@@ -8,7 +8,7 @@ use crate::document::{
 };
 use crate::identity_v2::PublicKey;
 use crate::operation_v2::traits::AsOperation;
-use crate::operation_v2::{OperationId, OperationValue};
+use crate::operation_v2::OperationValue;
 use crate::schema::SchemaId;
 
 /// Trait representing an "document-like" struct.
@@ -65,17 +65,14 @@ pub trait AsDocument {
     ///
     /// For the update to be successful the passed operation must refer to this documents' current
     /// view id in it's previous field and must update a field which exists on this document.
-    fn commit<T: AsOperation>(
-        &mut self,
-        operation: &T,
-    ) -> Result<(), DocumentError> {
+    fn commit<T: AsOperation>(&mut self, operation: &T) -> Result<(), DocumentError> {
         // Validate operation passed to commit.
         if operation.is_create() {
             return Err(DocumentError::CommitCreate);
         }
 
         if operation.schema_id() != self.schema_id() {
-            return Err(DocumentError::InvalidSchemaId(operation.id()));
+            return Err(DocumentError::InvalidSchemaId(operation.id().to_owned()));
         }
 
         // Unwrap as all other operation types contain `previous`.
@@ -86,7 +83,9 @@ pub trait AsDocument {
         }
 
         if self.view_id() != previous {
-            return Err(DocumentError::PreviousDoesNotMatch(operation.id()));
+            return Err(DocumentError::PreviousDoesNotMatch(
+                operation.id().to_owned(),
+            ));
         }
 
         // We performed all validation commit the operation.

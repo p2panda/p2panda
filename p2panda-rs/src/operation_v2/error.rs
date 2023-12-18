@@ -5,6 +5,9 @@ use thiserror::Error;
 /// Errors from `OperationBuilder` struct.
 #[derive(Error, Debug)]
 pub enum OperationBuilderError {
+    #[error("required field 'document_id' missing from header extensions")]
+    MissingDocumentId,
+
     /// Handle errors from `operation::validate` module.
     #[error(transparent)]
     ValidateOperationError(#[from] ValidateOperationError),
@@ -22,6 +25,18 @@ pub enum ValidateOperationError {
     #[error("operation schema id not matching with given schema: {0}, expected: {1}")]
     SchemaNotMatching(String, String),
 
+    /// Claimed document id did not match CREATE operation id.
+    #[error("document id of CREATE operation must match operation id: {0}, expected: {1}")]
+    IncorrectDocumentId(String, String),
+
+    /// Expect `document_id` on all operations.
+    #[error("expected 'document_id' in operation header")]
+    ExpectedDocumentId,
+
+    /// Expect `timestamp` on all operations.
+    #[error("expected 'timestamp' in operation header")]
+    ExpectedTimestamp,
+
     /// Expected `fields` in CREATE or UPDATE operation.
     #[error("expected 'fields' in CREATE or UPDATE operation")]
     ExpectedFields,
@@ -38,12 +53,23 @@ pub enum ValidateOperationError {
     #[error("unexpected 'previous' in CREATE operation")]
     UnexpectedPreviousOperations,
 
+    /// Expected `backlink` in UPDATE or DELETE operation.
+    #[error("expected 'backlink' in UPDATE or DELETE operation")]
+    ExpectedBacklink,
+
+    /// Unexpected `backlink` in CREATE operation.
+    #[error("unexpected 'backlink' in CREATE operation")]
+    UnexpectedBacklink,
+
     /// Handle errors from `schema::validate` module.
     #[error(transparent)]
     SchemaValidation(#[from] crate::schema::validate::error::ValidationError),
 
     #[error(transparent)]
     HeaderValidation(#[from] crate::operation_v2::header::error::ValidateHeaderError),
+
+    #[error(transparent)]
+    EncodeHeader(#[from] crate::operation_v2::header::error::EncodeHeaderError),
 }
 
 /// Error types for methods of plain fields or operation fields.

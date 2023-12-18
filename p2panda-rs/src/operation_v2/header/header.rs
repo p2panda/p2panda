@@ -9,8 +9,8 @@ use crate::operation_v2::body::EncodedBody;
 use crate::operation_v2::header::action::HeaderAction;
 use crate::operation_v2::header::encode::sign_header;
 use crate::operation_v2::header::error::EncodeHeaderError;
-use crate::operation_v2::header::traits::{Actionable, Authored};
-use crate::operation_v2::{OperationAction, OperationVersion};
+use crate::operation_v2::header::traits::Authored;
+use crate::operation_v2::OperationVersion;
 
 pub type PayloadHash = Hash;
 
@@ -25,6 +25,12 @@ pub struct Header(
     pub(crate) HeaderExtension,
     #[serde(skip_serializing_if = "Option::is_none")] pub(crate) Option<Signature>,
 );
+
+impl Header {
+    pub fn extension(&self) -> &HeaderExtension {
+        &self.4
+    }
+}
 
 impl Authored for Header {
     fn public_key(&self) -> &PublicKey {
@@ -44,26 +50,6 @@ impl Authored for Header {
         self.5
             .clone()
             .expect("signature needs to be given at this point")
-    }
-}
-
-impl Actionable for Header {
-    fn version(&self) -> OperationVersion {
-        self.0.to_owned()
-    }
-
-    fn action(&self) -> OperationAction {
-        match (self.4.action, self.previous()) {
-            (None, None) => OperationAction::Create,
-            (None, Some(_)) => OperationAction::Update,
-            (Some(HeaderAction::Delete), Some(_)) => OperationAction::Delete,
-            // @TODO: This should never happen if we've validated it properly before?
-            (Some(HeaderAction::Delete), None) => unreachable!("Invalid case"),
-        }
-    }
-
-    fn previous(&self) -> Option<&DocumentViewId> {
-        self.4.previous.as_ref()
     }
 }
 

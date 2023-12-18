@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::document::DocumentViewId;
+use crate::document::{DocumentViewId, DocumentId};
 use crate::hash_v2::Hash;
 use crate::identity_v2::{PublicKey, Signature};
 use crate::operation_v2::{OperationVersion, OperationAction};
@@ -21,4 +21,7 @@ pub trait Actionable {
 
     /// Returns a list of previous operations.
     fn previous(&self) -> Option<&DocumentViewId>;
+
+    /// Returns the document id.
+    fn document_id(&self) -> &DocumentId;
 }

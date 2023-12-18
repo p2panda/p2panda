@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Interfaces for interactions for operation-like structs.
+use crate::hash_v2::Hash;
 use crate::identity_v2::PublicKey;
+use crate::operation_v2::body::traits::Schematic;
+use crate::operation_v2::header::traits::{Actionable, Authored};
 use crate::operation_v2::{OperationAction, OperationFields, OperationId};
-
-use super::body::traits::Schematic;
-use super::header::traits::{Actionable, Authored};
 
 /// @TODO: This can be removed in a later step as it duplicates the function of the
 /// `Authored` trait.
@@ -23,9 +23,14 @@ pub trait WithPublicKey {
 /// Structs which "behave like" operations have a version and a distinct action. They can also
 /// relate to previous operations to form an operation graph.
 pub trait AsOperation: Actionable + Authored + Schematic {
+    /// Id of this operation
     fn id(&self) -> &OperationId;
 
-    }
+    /// Timestamp
+    fn timestamp(&self) -> u64;
+
+    /// Hash of the preceding operation in an authors log, None if this is the first operation.
+    fn backlink(&self) -> Option<&Hash>;
 
     /// Returns application data fields of operation.
     fn fields(&self) -> Option<&OperationFields>;

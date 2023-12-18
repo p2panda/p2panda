@@ -156,7 +156,7 @@ impl<T: AsOperation> Reducer<T> for DocumentReducer {
                     id: DocumentId::new(&operation.id()),
                     fields: Some(document_fields),
                     schema_id: operation.schema_id().to_owned(),
-                    view_id: DocumentViewId::new(&[operation.id()]),
+                    view_id: DocumentViewId::new(&[operation.id().to_owned()]),
                     author: operation.public_key().to_owned(),
                 };
 
@@ -239,16 +239,16 @@ where
                 create_seen = true;
             }
 
-            graph.add_node(&operation.id(), operation.to_owned());
+            graph.add_node(operation.id(), operation.to_owned());
         }
 
         // Add links between operations in the graph.
         for operation in &self.0 {
             if let Some(previous) = operation.previous() {
                 for previous in previous.iter() {
-                    let success = graph.add_link(previous, &operation.id());
+                    let success = graph.add_link(previous, operation.id());
                     if !success {
-                        return Err(DocumentBuilderError::InvalidOperationLink(operation.id()));
+                        return Err(DocumentBuilderError::InvalidOperationLink(operation.id().to_owned()));
                     }
                 }
             }
@@ -272,7 +272,7 @@ where
         let graph_tips: Vec<OperationId> = graph_data
             .current_graph_tips()
             .iter()
-            .map(|operation| operation.id())
+            .map(|operation| operation.id().to_owned())
             .collect();
 
         // Unwrap the document as if no error occurred it should be there.
