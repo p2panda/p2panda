@@ -194,6 +194,12 @@ impl AsOperation for Operation {
         &self.0
     }
 
+    fn document_id(&self) -> &DocumentId {
+        // Safely unwrap as we validated already that the operation header contains required field
+        // document id.
+        self.header().extension().document_id.as_ref().unwrap()
+    }
+
     /// Timestamp
     fn timestamp(&self) -> u64 {
         // Safely unwrap as validation was performed already.
@@ -227,12 +233,6 @@ impl Actionable for Operation {
             // If correct validation was performed this case will not occur.
             (Some(HeaderAction::Delete), None) => unreachable!(),
         }
-    }
-
-    fn document_id(&self) -> &DocumentId {
-        // Safely unwrap as we validated already that the operation header contains required field
-        // document id.
-        self.header().extension().document_id.as_ref().unwrap()
     }
 
     fn previous(&self) -> Option<&DocumentViewId> {

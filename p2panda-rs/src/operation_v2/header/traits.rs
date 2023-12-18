@@ -21,7 +21,4 @@ pub trait Actionable {
 
     /// Returns a list of previous operations.
     fn previous(&self) -> Option<&DocumentViewId>;
-
-    /// Returns the document id.
-    fn document_id(&self) -> &DocumentId;
 }

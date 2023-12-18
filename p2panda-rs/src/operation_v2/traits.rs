@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Interfaces for interactions for operation-like structs.
+use crate::document::DocumentId;
 use crate::hash_v2::Hash;
 use crate::operation_v2::body::traits::Schematic;
 use crate::operation_v2::header::traits::{Actionable, Authored};
@@ -11,10 +12,13 @@ use crate::operation_v2::{OperationAction, OperationFields, OperationId};
 /// Structs which "behave like" operations have a version and a distinct action. They can also
 /// relate to previous operations to form an operation graph.
 pub trait AsOperation: Actionable + Authored + Schematic {
-    /// Id of this operation
+    /// Id of this operation.
     fn id(&self) -> &OperationId;
 
-    /// Timestamp
+    /// Id of the document this operation applies to.
+    fn document_id(&self) -> &DocumentId;
+    
+    /// Timestamp when this operation was published.
     fn timestamp(&self) -> u64;
 
     /// Hash of the preceding operation in an authors log, None if this is the first operation.
