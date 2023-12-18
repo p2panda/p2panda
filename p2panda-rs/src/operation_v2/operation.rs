@@ -150,6 +150,12 @@ impl OperationBuilder {
         self
     }
 
+    /// Set timestamp.
+    pub fn timestamp(mut self, timestamp: u64) -> Self {
+        self.header_extension.timestamp = Some(timestamp.to_owned());
+        self
+    }
+
     /// Set operation fields.
     pub fn fields(mut self, fields: &[(impl ToString, OperationValue)]) -> Self {
         let mut operation_fields = OperationFields::new();
