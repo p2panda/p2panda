@@ -119,7 +119,7 @@ pub async fn populate_store<S: OperationStore>(
                     .expect("Send to store");
 
                 // Set the previous based on the backlink
-                previous = Some(DocumentViewId::new(&[operation.id()]));
+                previous = Some(DocumentViewId::new(&[operation.id().to_owned()]));
 
                 // Push this document id to the test data.
                 if index == 0 {

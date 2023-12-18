@@ -18,11 +18,7 @@ impl OperationStore for MemoryStore {
     type Operation = Operation;
 
     /// Insert an `Operation` into the store.
-    async fn insert_operation(
-        &self,
-        operation: &Operation,
-        document_id: &DocumentId,
-    ) -> Result<(), OperationStorageError> {
+    async fn insert_operation(&self, operation: &Operation) -> Result<(), OperationStorageError> {
         let id = operation.id();
         debug!(
             "Inserting {} operation: {} into store",
@@ -32,15 +28,13 @@ impl OperationStore for MemoryStore {
 
         let mut operations = self.operations.lock().unwrap();
 
-        let is_duplicate_id = operations
-            .values()
-            .any(|(_, operation)| operation.id() == id);
+        let is_duplicate_id = operations.values().any(|operation| operation.id() == id);
 
         if is_duplicate_id {
             return Err(OperationStorageError::InsertionError(id.clone()));
         }
 
-        operations.insert(id.clone(), (document_id.to_owned(), operation.to_owned()));
+        operations.insert(id.clone(), operation.to_owned());
 
         Ok(())
     }
@@ -51,7 +45,7 @@ impl OperationStore for MemoryStore {
         id: &OperationId,
     ) -> Result<Option<Operation>, OperationStorageError> {
         let operations = self.operations.lock().unwrap();
-        let operation = operations.get(id).cloned().map(|(_, operation)| operation);
+        let operation = operations.get(id).cloned();
         Ok(operation)
     }
 
@@ -61,12 +55,14 @@ impl OperationStore for MemoryStore {
         id: &OperationId,
     ) -> Result<Option<DocumentId>, OperationStorageError> {
         let operations = self.operations.lock().unwrap();
-        let document_id = operations
-            .values()
-            .find(|(_, operation)| operation.id() == *id)
-            .cloned()
-            .map(|(document_id, _)| document_id);
-        Ok(document_id)
+        let document_id = operations.values().find_map(|operation| {
+            if operation.id() == id {
+                Some(operation.document_id())
+            } else {
+                None
+            }
+        });
+        Ok(document_id.cloned())
     }
 
     /// Get all `Operations` for a single `Document`.
@@ -77,13 +73,8 @@ impl OperationStore for MemoryStore {
         let operations = self.operations.lock().unwrap();
         let operations = operations
             .values()
-            .filter_map(|(document_id, operation)| {
-                if document_id == id {
-                    Some(operation.to_owned())
-                } else {
-                    None
-                }
-            })
+            .filter(|operation| operation.document_id() == id)
+            .cloned()
             .collect();
         Ok(operations)
     }
@@ -96,7 +87,7 @@ impl OperationStore for MemoryStore {
         let operations = self.operations.lock().unwrap();
         Ok(operations
             .values()
-            .filter_map(|(_, operation)| {
+            .filter_map(|operation| {
                 if operation.schema_id() == id {
                     Some(operation.to_owned())
                 } else {

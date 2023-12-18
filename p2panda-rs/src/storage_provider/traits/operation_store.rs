@@ -35,7 +35,6 @@ pub trait OperationStore {
     async fn insert_operation(
         &self,
         operation: &Operation,
-        document_id: &DocumentId,
     ) -> Result<(), OperationStorageError>;
 
     /// Get an `Operation` identified by it's `OperationId`, returns `None` if no `Operation` was found.
