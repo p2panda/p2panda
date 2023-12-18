@@ -28,7 +28,7 @@ pub fn validate_operation(
         (OperationAction::Create, Some(fields)) => validate_all_fields(&fields, schema),
         (OperationAction::Update, Some(fields)) => validate_only_given_fields(&fields, schema),
         (OperationAction::Delete, None) => return Ok(()),
-        // All other cases should not occur if correct validation of operation occured.
+        // All other cases should not occur if correct validation of operation has been performed.
         (_, _) => unreachable!(),
     }?;
 
