@@ -2,21 +2,9 @@
 
 //! Interfaces for interactions for operation-like structs.
 use crate::hash_v2::Hash;
-use crate::identity_v2::PublicKey;
 use crate::operation_v2::body::traits::Schematic;
 use crate::operation_v2::header::traits::{Actionable, Authored};
 use crate::operation_v2::{OperationAction, OperationFields, OperationId};
-
-/// @TODO: This can be removed in a later step as it duplicates the function of the
-/// `Authored` trait.
-///
-/// Trait representing a struct encapsulating data which has been signed by an author.
-///
-/// The method returns the public key of the keypair used to perform signing.
-pub trait WithPublicKey {
-    /// Returns the public key of the author of this entry or operation.
-    fn public_key(&self) -> &PublicKey;
-}
 
 /// Trait representing an "operation-like" struct.
 ///
