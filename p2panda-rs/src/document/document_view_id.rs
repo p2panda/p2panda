@@ -136,7 +136,7 @@ impl Display for DocumentViewId {
 impl Human for DocumentViewId {
     fn display(&self) -> String {
         let mut result = String::new();
-        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
+        let offset = blake3::KEY_LEN * 2 - 6;
 
         for (i, operation_id) in self.iter().enumerate() {
             let separator = if i == 0 { "" } else { "_" };

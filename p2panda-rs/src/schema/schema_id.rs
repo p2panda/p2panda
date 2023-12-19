@@ -6,7 +6,6 @@ use std::str::FromStr;
 
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use yasmf_hash::MAX_YAMF_HASH_SIZE;
 
 use crate::document::DocumentViewId;
 use crate::operation::OperationId;
@@ -85,7 +84,7 @@ impl SchemaId {
             .1;
 
         let is_system_schema =
-            rightmost_section.starts_with('v') && rightmost_section.len() < MAX_YAMF_HASH_SIZE * 2;
+            rightmost_section.starts_with('v') && rightmost_section.len() < blake3::KEY_LEN * 2;
 
         match is_system_schema {
             true => Self::parse_system_schema_str(id),
@@ -161,7 +160,7 @@ impl SchemaId {
             // If the remainder is no longer than an entry hash we assume that it's the schema
             // name. By breaking here we allow the schema name to contain underscores as well.
             remainder = left;
-            if remainder.len() < MAX_YAMF_HASH_SIZE * 2 {
+            if remainder.len() < blake3::KEY_LEN * 2 {
                 break;
             }
         }

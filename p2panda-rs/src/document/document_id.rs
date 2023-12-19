@@ -55,7 +55,7 @@ impl Display for DocumentId {
 
 impl Human for DocumentId {
     fn display(&self) -> String {
-        let offset = yasmf_hash::MAX_YAMF_HASH_SIZE * 2 - 6;
+        let offset = blake3::KEY_LEN * 2 - 6;
         format!("<DocumentId {}>", &self.0.as_str()[offset..])
     }
 }
