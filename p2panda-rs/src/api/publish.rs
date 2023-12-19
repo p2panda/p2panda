@@ -3,14 +3,16 @@
 use crate::api::validation::{get_checked_document_id_for_view_id, validate_claimed_schema_id};
 use crate::api::DomainError;
 use crate::document::DocumentId;
+use crate::operation_v2::body::decode::decode_body;
 use crate::operation_v2::body::plain::{self, PlainOperation};
 use crate::operation_v2::body::{Body, EncodedBody};
 use crate::operation_v2::header::decode::decode_header;
+use crate::operation_v2::header::traits::Actionable;
 use crate::operation_v2::header::validate::validate_payload;
 use crate::operation_v2::header::EncodedHeader;
 use crate::operation_v2::traits::AsOperation;
-use crate::operation_v2::validate::validate_operation;
-use crate::operation_v2::OperationAction;
+use crate::operation_v2::validate::validate_plain_operation;
+use crate::operation_v2::{Operation, OperationAction};
 use crate::schema::Schema;
 use crate::storage_provider::traits::OperationStore;
 
@@ -25,22 +27,19 @@ pub async fn publish<S: OperationStore>(
     let header = decode_header(encoded_header)?;
     validate_payload(&header, encoded_body)?;
 
-    // Validate the header and plain operation against it's schema.
-    let operation = validate_operation(&header, &encoded_header, &plain_operation, schema)?;
+    let plain_operation = decode_body(encoded_body)?;
+    let body = validate_plain_operation(&header.action(), &plain_operation, schema)?;
 
-    // Determine the document id.
-    let document_id = determine_document_id(store, &operation).await?;
+    let operation = Operation::new(encoded_header.hash().into(), header, body)?;
 
-    // @TODO: Verify the claimed sequence number / depth / nonce
+    // @TODO: Validate the claimed document id
+    // @TODO: Validate the claimed previous
+    // @TODO: Validate the claimed sequence number / depth / nonce
 
-    // @TODO: Store the operation.
-    // // Insert the operation into the store.
-    // store
-    //     .insert_operation(&operation_id, entry.public_key(), &operation, &document_id)
-    //     .await?;
+    // Insert the operation into the store.
+    store.insert_operation(&operation).await?;
 
-    // Construct and return next args.
-    // @TODO: Increment the claimed sequence number / depth / nonce
+    // @TODO: Construct and return next args.
     Ok(())
 }
 

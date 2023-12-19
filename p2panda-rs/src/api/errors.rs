@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::operation_v2::body::error::DecodeBodyError;
 use crate::operation_v2::error::ValidateOperationError;
 use crate::operation_v2::header::error::{DecodeHeaderError, ValidateHeaderError};
 use crate::operation_v2::OperationId;
@@ -40,6 +41,10 @@ pub enum DomainError {
     /// Error occurring when decoding header.
     #[error(transparent)]
     DecodeHeaderError(#[from] DecodeHeaderError),
+
+    /// Error occurring when decoding body.
+    #[error(transparent)]
+    DecodeBodyError(#[from] DecodeBodyError),
 
     /// Error occurring when validating operations.
     #[error(transparent)]
